@@ -12,7 +12,15 @@ export default function Home() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 w-full max-w-6xl">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full max-w-6xl">
+        <Link href="/2026-latest"
+          className="group block p-6 bg-blue-50 border border-blue-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300">
+          <h2 className="text-2xl font-bold mb-3 text-blue-700 group-hover:text-blue-800">🔥 2026년식 KDM 최신 리뷰 &rarr;</h2>
+          <p className="text-gray-700 leading-relaxed">
+            방금 출고된 EV3, 26년식 모델Y, 아이오닉9, BYD 시라이언7의 한국 차주 리얼 후기와 초기 결함 총정리! (출처 포함)
+          </p>
+        </Link>
+
         <Link href="/hyundai-kia"
           className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300">
           <h2 className="text-2xl font-bold mb-3 group-hover:text-blue-600">현대/기아 연식별 &rarr;</h2>
