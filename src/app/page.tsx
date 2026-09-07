@@ -12,12 +12,12 @@ export default function Home() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-5xl">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 w-full max-w-6xl">
         <Link href="/hyundai-kia"
           className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300">
           <h2 className="text-2xl font-bold mb-3 group-hover:text-blue-600">현대/기아 연식별 &rarr;</h2>
           <p className="text-gray-600 leading-relaxed">
-            아이오닉5, EV6, GV60의 초기형(21~22년식) ICCU 결함 피하는 법 및 구매 추천 연식(25년식).
+            아이오닉5, EV6, GV60의 초기형(21~22년식) ICCU 결함 피하는 법 및 구매 추천 연식.
           </p>
         </Link>
 
@@ -25,7 +25,7 @@ export default function Home() {
           className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300">
           <h2 className="text-2xl font-bold mb-3 group-hover:text-blue-600">테슬라 연식별 &rarr;</h2>
           <p className="text-gray-600 leading-relaxed">
-            모델3/모델Y의 히트펌프 고질병, 서스펜션 암 파손을 피하기 위해 반드시 확인해야 할 연식 가이드.
+            모델3/모델Y 히트펌프 사망 결함, 컨트롤 암 파손을 피하기 위한 연식 선택 가이드.
           </p>
         </Link>
 
@@ -33,7 +33,15 @@ export default function Home() {
           className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300">
           <h2 className="text-2xl font-bold mb-3 group-hover:text-blue-600">BYD 연식별 &rarr;</h2>
           <p className="text-gray-600 leading-relaxed">
-            아토3, 실(Seal)의 초기형 빗물 누수 및 LFP 배터리 셧다운을 피하는 추천 연식 매트릭스.
+            돌핀 에어컨 백색 가루 결함, 시라이언 07 CTB 파손 위험 등 주력 모델 피하기 매트릭스.
+          </p>
+        </Link>
+
+        <Link href="/global-brands"
+          className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300">
+          <h2 className="text-2xl font-bold mb-3 group-hover:text-blue-600">폭스바겐/벤츠/폴스타 &rarr;</h2>
+          <p className="text-gray-600 leading-relaxed">
+            볼트EV 화재 리콜, 폭스바겐 ID.4 주행 중 문열림, 벤츠 7,500만 원 배터리 교체비 리포트.
           </p>
         </Link>
       </div>

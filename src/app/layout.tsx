@@ -39,6 +39,7 @@ export default function RootLayout({
               <Link href="/hyundai-kia" className="hover:text-blue-400 transition">현대/기아 연식별</Link>
               <Link href="/tesla" className="hover:text-blue-400 transition">테슬라 연식별</Link>
               <Link href="/byd" className="hover:text-blue-400 transition">BYD 연식별</Link>
+              <Link href="/global-brands" className="hover:text-blue-400 transition">폭스바겐/벤츠/폴스타</Link>
             </div>
           </div>
         </nav>
