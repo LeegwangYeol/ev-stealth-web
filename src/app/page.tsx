@@ -8,7 +8,7 @@ export default function Home() {
           글로벌 EV 중고차 연식별 피하기 가이드
         </h1>
         <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-          "테슬라 사지 마라"가 아니라 <strong>"테슬라 모델3 2017~2020년식은 피해라"</strong>가 맞습니다. 특정 모델과 연식별(Model Year) 고질병을 정확하게 파헤칩니다.
+          &quot;테슬라 사지 마라&quot;가 아니라 <strong>&quot;테슬라 모델3 2017~2020년식은 피해라&quot;</strong>가 맞습니다. 특정 모델과 연식별(Model Year) 고질병을 정확하게 파헤칩니다.
         </p>
       </div>
 
