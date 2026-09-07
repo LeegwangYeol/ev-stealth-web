@@ -13,20 +13,20 @@ export default function GlobalEvPage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold text-red-600">🚨 현대/기아 (HMG) 핵심 불만 TOP 3</h2>
+        <h2 className="text-2xl font-semibold text-red-600">🚨 국내 전기차 (현대/기아) 핵심 결함 및 예상 수리비</h2>
         <ul className="list-disc pl-6 space-y-2 text-gray-700">
-          <li><strong>ICCU 주행 중 셧다운 (782회):</strong> 고속도로 주행 중 동력이 끊어지며 거북이 모드로 멈춰버리는 치명적 결함.</li>
-          <li><strong>배터리 하부 긁힘 통교체 (654회):</strong> 과속방지턱에 하부가 1~2mm만 긁혀도 배터리 팩 전체 교체(2,400만 원) 판정.</li>
-          <li><strong>완속 충전 3.5kW 꼼수 (472회):</strong> 화재 예방을 핑계로 완속 충전 속도를 강제로 반토막 내버리는 소프트웨어 업데이트.</li>
+          <li><strong>ICCU 주행 중 셧다운:</strong> 고속도로 주행 중 전력 반도체 열 스트레스로 12V 배터리 충전이 멈추고 셧다운되는 치명적 결함. 무상수리 기간(10년/16만km) 경과 시 수리비 <strong>346만 원 ~ 478만 원</strong>.</li>
+          <li><strong>배터리 팩 하부 2~3mm 긁힘 통교체:</strong> 과속방지턱에 배터리 커버가 2mm만 긁혀도 무조건 전체 교체 판정. 수리비 <strong>2,050만 원 ~ 3,700만 원</strong> (특약 없을 시 감가상각비 400~800만 원 별도 청구).</li>
+          <li><strong>구동 모터 및 감속기 갈림 (&apos;우주선 소리&apos;):</strong> 모터의 강력한 토크를 감속기가 버티지 못해 쇳가루 발생 및 베어링 손상. 모터+감속기 통교체 시 <strong>510만 원 ~ 650만 원</strong>.</li>
         </ul>
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-semibold text-red-600">🚨 수입 프리미엄 브랜드 핵심 불만</h2>
+        <h2 className="text-2xl font-semibold text-red-600">🚨 해외/수입 전기차 (테슬라, 벤츠, 포르쉐) 수리비 폭탄</h2>
         <ul className="list-disc pl-6 space-y-2 text-gray-700">
-          <li><strong>메르세데스 EQ (745회):</strong> 중국산 파라시스 배터리 논란 및 브레이크 스펀지 현상.</li>
-          <li><strong>BMW i 시리즈 (542회):</strong> 콘티넨탈사 통합 브레이크 모듈 결함으로 브레이크가 돌덩이처럼 굳어버리는 현상.</li>
-          <li><strong>포르쉐 타이칸 (498회):</strong> 겨울철 PTC 히터 사망 및 하부 스토퍼 긁힘에 8,500만 원 수리비 청구.</li>
+          <li><strong>메르세데스-벤츠 EQ 2mm 긁힘 룰:</strong> 중국산 파라시스 배터리 화재 논란. 하부 2mm 긁힘 시 배터리 팩 전체 교환 비용 <strong>7,000만 원 ~ 1억 원</strong> (중고차 가격 초과).</li>
+          <li><strong>포르쉐 타이칸 800V 배터리 셀 사망:</strong> 보증 종료 후 분리막 결함으로 쇼트 발생 시 배터리 교체 비용 <strong>6,700만 원 ~ 1억 1,700만 원</strong>.</li>
+          <li><strong>테슬라 보증 종료 후 배터리 사망 쇼크:</strong> 5~8년 주행 후 BMS_a066 에러 발생 시 리퍼 배터리 교체 비용 <strong>1,600만 원 ~ 3,100만 원</strong>.</li>
         </ul>
       </section>
     </div>

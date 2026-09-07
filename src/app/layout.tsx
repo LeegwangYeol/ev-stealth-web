@@ -16,8 +16,8 @@ const geistMono = localFont({
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "EV & Stealth Minivelo Hub",
-  description: "글로벌 전기차 결함 및 미니벨로 스텔스 개조 가이드",
+  title: "Global EV Critical Issues Hub",
+  description: "글로벌 전기차 결함 및 수리비 폭탄 리포트",
 };
 
 export default function RootLayout({
@@ -33,12 +33,12 @@ export default function RootLayout({
         <nav className="bg-slate-900 text-white p-4 shadow-md">
           <div className="max-w-6xl mx-auto flex justify-between items-center">
             <Link href="/" className="text-xl font-bold tracking-tight hover:text-blue-300 transition">
-              EV & Stealth Hub
+              Global EV Hub
             </Link>
             <div className="flex gap-6 text-sm font-medium">
-              <Link href="/global-ev" className="hover:text-blue-400 transition">글로벌 EV 결함</Link>
-              <Link href="/emerging-ev" className="hover:text-blue-400 transition">신흥 EV 트랩</Link>
-              <Link href="/stealth-minivelo" className="hover:text-blue-400 transition">스텔스 미니벨로 개조</Link>
+              <Link href="/byd-ev" className="hover:text-blue-400 transition">BYD 결함</Link>
+              <Link href="/global-ev" className="hover:text-blue-400 transition">국내/수입 결함</Link>
+              <Link href="/emerging-ev" className="hover:text-blue-400 transition">스타트업 EV 트랩</Link>
             </div>
           </div>
         </nav>
