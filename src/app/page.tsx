@@ -21,6 +21,14 @@ export default function Home() {
           </p>
         </Link>
 
+        <Link href="/pdi-checklist"
+          className="group block p-6 bg-green-50 border border-green-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300">
+          <h2 className="text-2xl font-bold mb-3 text-green-700 group-hover:text-green-800">✅ 신차 인수(PDI) 체크리스트 &rarr;</h2>
+          <p className="text-gray-700 leading-relaxed">
+            호갱 방지! 탁송된 전기차 서명 전 스마트폰으로 열어보고 하나씩 체크하세요. 하부 배터리팩 찍힘 등 필수 확인 항목.
+          </p>
+        </Link>
+
         <Link href="/hyundai-kia"
           className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300">
           <h2 className="text-2xl font-bold mb-3 group-hover:text-blue-600">현대/기아 연식별 &rarr;</h2>

@@ -35,12 +35,25 @@ export default function RootLayout({
             <Link href="/" className="text-xl font-bold tracking-tight hover:text-blue-300 transition">
               Global EV Hub
             </Link>
-            <div className="flex gap-4 text-sm font-medium">
-              <Link href="/2026-latest" className="text-yellow-400 hover:text-yellow-300 transition">2026 신차 리뷰</Link>
-              <Link href="/hyundai-kia" className="hover:text-blue-400 transition">현대/기아</Link>
-              <Link href="/tesla" className="hover:text-blue-400 transition">테슬라</Link>
-              <Link href="/byd" className="hover:text-blue-400 transition">BYD</Link>
-              <Link href="/global-brands" className="hover:text-blue-400 transition">폭스바겐/벤츠 등</Link>
+            <div className="flex gap-4">
+              <Link href="/2026-latest" className="text-slate-600 hover:text-slate-900 font-medium">
+                2026 최신 결함
+              </Link>
+              <Link href="/pdi-checklist" className="text-slate-600 hover:text-slate-900 font-medium">
+                PDI 체크리스트
+              </Link>
+              <Link href="/hyundai-kia" className="text-slate-600 hover:text-slate-900 font-medium">
+                현대/기아
+              </Link>
+              <Link href="/tesla" className="text-slate-600 hover:text-slate-900 font-medium">
+                테슬라
+              </Link>
+              <Link href="/byd" className="text-slate-600 hover:text-slate-900 font-medium">
+                BYD
+              </Link>
+              <Link href="/global-brands" className="text-slate-600 hover:text-slate-900 font-medium">
+                기타 글로벌
+              </Link>
             </div>
           </div>
         </nav>
