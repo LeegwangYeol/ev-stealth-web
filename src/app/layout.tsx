@@ -31,27 +31,27 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900`}
       >
         <nav className="bg-slate-900 text-white p-4 shadow-md">
-          <div className="max-w-6xl mx-auto flex justify-between items-center">
-            <Link href="/" className="text-xl font-bold tracking-tight hover:text-blue-300 transition">
+          <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-4">
+            <Link href="/" className="text-xl font-bold tracking-tight hover:text-blue-300 transition shrink-0">
               Global EV Hub
             </Link>
-            <div className="flex gap-4">
-              <Link href="/2026-latest" className="text-slate-600 hover:text-slate-900 font-medium">
+            <div className="flex flex-wrap items-center justify-center sm:justify-end gap-x-3 sm:gap-x-4 gap-y-2 text-sm sm:text-base">
+              <Link href="/2026-latest" className="text-slate-200 hover:text-white font-medium transition">
                 2026 최신 결함
               </Link>
-              <Link href="/pdi-checklist" className="text-slate-600 hover:text-slate-900 font-medium">
+              <Link href="/pdi-checklist" className="text-slate-200 hover:text-white font-medium transition">
                 PDI 체크리스트
               </Link>
-              <Link href="/hyundai-kia" className="text-slate-600 hover:text-slate-900 font-medium">
+              <Link href="/hyundai-kia" className="text-slate-200 hover:text-white font-medium transition">
                 현대/기아
               </Link>
-              <Link href="/tesla" className="text-slate-600 hover:text-slate-900 font-medium">
+              <Link href="/tesla" className="text-slate-200 hover:text-white font-medium transition">
                 테슬라
               </Link>
-              <Link href="/byd" className="text-slate-600 hover:text-slate-900 font-medium">
+              <Link href="/byd" className="text-slate-200 hover:text-white font-medium transition">
                 BYD
               </Link>
-              <Link href="/global-brands" className="text-slate-600 hover:text-slate-900 font-medium">
+              <Link href="/global-brands" className="text-slate-200 hover:text-white font-medium transition">
                 기타 글로벌
               </Link>
             </div>
@@ -61,7 +61,7 @@ export default function RootLayout({
           {children}
         </main>
         <footer className="bg-gray-200 text-center p-6 text-sm text-gray-600">
-          © 2026 Max - EV & Minivelo Customization Assistant
+          © 2026 EV Critical Issues & Safety Intelligence Hub
         </footer>
       </body>
     </html>

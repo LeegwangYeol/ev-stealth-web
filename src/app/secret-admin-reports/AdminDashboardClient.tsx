@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { DailyReportData, DefectReportItem } from '@/lib/getDailyReports';
 
 interface AdminDashboardClientProps {
@@ -30,6 +30,11 @@ const SOURCE_OPTIONS = [
 ];
 
 export default function AdminDashboardClient({ initialData }: AdminDashboardClientProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedSource, setSelectedSource] = useState('all');
@@ -260,8 +265,12 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             </div>
             <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
               <span className="block text-slate-500 font-mono">LAST GENERATED</span>
-              <span className="font-semibold text-slate-200">
-                {initialData.generated_at ? new Date(initialData.generated_at).toLocaleString('ko-KR') : '방금 전'}
+              <span className="font-semibold text-slate-200" suppressHydrationWarning>
+                {mounted && initialData.generated_at
+                  ? new Date(initialData.generated_at).toLocaleString('ko-KR')
+                  : initialData.generated_at
+                    ? initialData.generated_at.replace('T', ' ').substring(0, 19) + ' (UTC)'
+                    : '방금 전'}
               </span>
             </div>
           </div>
