@@ -13,6 +13,7 @@ import re
 import urllib.parse
 from typing import Any, Dict, List, Optional
 
+from crawlers.base_crawler import BaseCrawler
 from utils.http_client import SafeHttpClient, clean_html_text
 
 logger = logging.getLogger("DCInsideCrawler")
@@ -90,7 +91,7 @@ def _normalize_iso_timestamp(raw_date_str: str) -> str:
     return now.isoformat()
 
 
-class DCInsideCrawler:
+class DCInsideCrawler(BaseCrawler):
     """
     Crawler for DCInside galleries.
     Handles UTF-8 search queries, gallery pagination across car_new1 and electriccar,
@@ -443,12 +444,20 @@ class DCInsideCrawler:
                     },
                 )
                 if m_status == 200 and m_text:
-                    return self.parse_post_detail(m_text, post_url, gallery_id=gallery_id, post_id=post_id)
+                    try:
+                        return self.parse_post_detail(m_text, post_url, gallery_id=gallery_id, post_id=post_id)
+                    except Exception as e:
+                        logger.warning(f"Error parsing DCInside mobile post detail ({post_url}) on corrupt HTML: {e}")
+                        return None
 
             logger.warning(f"Failed to fetch DCInside post: {post_url} (status: {status})")
             return None
 
-        return self.parse_post_detail(text, post_url, gallery_id=gallery_id, post_id=post_id or "")
+        try:
+            return self.parse_post_detail(text, post_url, gallery_id=gallery_id, post_id=post_id or "")
+        except Exception as e:
+            logger.warning(f"Error parsing DCInside post detail ({post_url}) on corrupt HTML: {e}")
+            return None
 
     def crawl_gallery(
         self,

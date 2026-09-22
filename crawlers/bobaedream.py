@@ -11,6 +11,7 @@ import re
 import urllib.parse
 from typing import Any, Dict, List, Optional
 
+from crawlers.base_crawler import BaseCrawler
 from utils.http_client import SafeHttpClient, clean_html_text, encode_euc_kr_query
 
 logger = logging.getLogger("BobaeDreamCrawler")
@@ -77,7 +78,7 @@ def _normalize_iso_timestamp(raw_date_str: str) -> str:
     return now.isoformat()
 
 
-class BobaeDreamCrawler:
+class BobaeDreamCrawler(BaseCrawler):
     """
     Crawler for BobaeDream automotive community.
     Handles EUC-KR search queries, pagination across national/import/electric boards,
@@ -338,7 +339,11 @@ class BobaeDreamCrawler:
             logger.warning(f"Failed to fetch BobaeDream post: {post_url} (status: {status})")
             return None
 
-        return self.parse_post_detail(text, post_url, board_code=board_code, post_id=post_id or "")
+        try:
+            return self.parse_post_detail(text, post_url, board_code=board_code, post_id=post_id or "")
+        except Exception as e:
+            logger.warning(f"Error parsing BobaeDream post detail ({post_url}) on corrupt HTML: {e}")
+            return None
 
     def crawl_board(
         self,

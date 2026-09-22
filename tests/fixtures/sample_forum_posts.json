@@ -1,0 +1,119 @@
+{
+  "valid_defects": [
+    {
+      "id": "tc_battery_001",
+      "platform": "dcinside",
+      "title": "전기차 ICCU 터져서 고속도로에서 멈춤 ㅅㅂ",
+      "content": "고속도로에서 100km로 달리는데 갑자기 퍽 소리 나더니 배터리 경고등 뜨고 악셀 먹통됨 ㅋㅋㅋ 레알 황천길 갈 뻔했다 ㅅㅂ 출고한 지 6개월만에 ICCU 폭탄 당첨되고 완전 벽돌차 돼서 블루핸즈 견인차 어부바 실려감",
+      "expected_category": "BATTERY_CHARGING",
+      "expected_brand": "Hyundai",
+      "expected_model": "아이오닉5",
+      "expected_slang": ["ICCU폭탄", "벽돌차", "황천길"],
+      "expected_min_dsi": 8.0
+    },
+    {
+      "id": "tc_driving_002",
+      "platform": "bobaedream",
+      "title": "비 오는 날 고속도로에서 회생제동 피쉬테일 털려서 죽을 뻔했습니다",
+      "content": "어제 비 오는 날 EV6 몰고 고속도로 올렸는데 교량 이음새에서 회생제동 걸리며 피쉬테일 나서 차체 털림 오지게 겪고 뒤차 박을 뻔했습니다. 식은땀 줄줄 나고 오토큐 갔더니 정상이라고 개소리하네요.",
+      "expected_category": "DRIVING_POWERTRAIN",
+      "expected_brand": "Kia",
+      "expected_model": "EV6",
+      "expected_slang": ["피쉬테일", "차체털림"],
+      "expected_min_dsi": 7.5
+    },
+    {
+      "id": "tc_build_003",
+      "platform": "dcinside",
+      "title": "테슬라 모델Y 단차지옥에 비 오니까 트렁크 워터파크 개장 ㅋㅋㅋ",
+      "content": "출고받은 지 일주일 됐는데 도어랑 휀더 좌우 단차에 손가락 들어가더니 오늘 폭우 쏟아지자마자 트렁크 바닥에 물 차서 워터파크 개장함. 개슬라 AS 예약 잡으려니 3달 뒤라네 미쳤나 진짜.",
+      "expected_category": "BUILD_QUALITY",
+      "expected_brand": "Tesla",
+      "expected_model": "Model Y",
+      "expected_slang": ["단차지옥", "워터파크", "개슬라"],
+      "expected_min_dsi": 6.5
+    },
+    {
+      "id": "tc_software_004",
+      "platform": "bobaedream",
+      "title": "주행 중 계기판이랑 내비 화면 동시 블랙아웃 먹통 실화냐",
+      "content": "시속 100km로 고속도로 달리는데 메인 디스플레이랑 디지털 계기판 화면이 퍽 꺼지더니 시스템 먹통 됨. 속도계도 안 보이고 깜빡이 소리도 안 나고 식겁했다. OTA 업데이트 잘못 받아서 차 벽돌될 뻔.",
+      "expected_category": "SOFTWARE_ELECTRONICS",
+      "expected_brand": "Other",
+      "expected_model": "전기차",
+      "expected_slang": ["먹통", "블랙아웃", "벽돌"],
+      "expected_min_dsi": 7.0
+    },
+    {
+      "id": "tc_repair_005",
+      "platform": "bobaedream",
+      "title": "배터리 하부 살짝 긁혔는데 2800만원 통교체 견적 나와서 전손뜸",
+      "content": "방지턱 넘다 하부 커버 살짝 긁힌 거 가지고 직영 사업소 입고시켰더니 모듈 수리 불가라며 배터리 팩 통교체 갑질하네요. 견적 2800만원 나와서 바로 전손폭탄 맞고 폐차 위기입니다.",
+      "expected_category": "SERVICE_REPAIR_COST",
+      "expected_brand": "Other",
+      "expected_model": "전기차",
+      "expected_slang": ["통교체갑질", "전손폭탄", "전손"],
+      "expected_min_dsi": 7.5
+    },
+    {
+      "id": "tc_byd_006",
+      "platform": "dcinside",
+      "title": "BYD 아토3 샀더니 아파트에서 지하주차장 입차 거부당함",
+      "content": "입주자대표회의에서 중국산 전기차 화재 위험하다고 지상 주차만 하라며 입차 거부 현수막 붙임. 그 돈 주고 짱깨차 사서 이런 수모 겪으니 피눈물 난다.",
+      "expected_category": "BATTERY_CHARGING",
+      "expected_brand": "BYD",
+      "expected_model": "Atto 3",
+      "expected_slang": ["입차거부", "짱깨차"],
+      "expected_min_dsi": 6.0
+    }
+  ],
+  "negation_cases": [
+    {
+      "id": "tc_neg_001",
+      "title": "이번에 출고한 아이오닉6 단차 전혀 없고 누수도 1도 없음",
+      "content": "뽑기 대성공인 듯. 단차 전혀 없고 잡소리도 1도 안 남. 고속도로 200km 주행했는데 ICCU 문제 없고 완벽한 양품 받아서 너무 만족스럽다.",
+      "expected_is_defect": false,
+      "reason": "Negated defect terms (전혀 없고, 1도 안 남)"
+    },
+    {
+      "id": "tc_neg_002",
+      "title": "테슬라 하이랜드 잡소리 하나도 안 나네요",
+      "content": "이전 모델3에 비해 풍절음도 없고 잡소리 하나도 없음. 단차도 완벽함.",
+      "expected_is_defect": false,
+      "reason": "Negated defect terms"
+    }
+  ],
+  "sarcasm_cases": [
+    {
+      "id": "tc_sarcasm_001",
+      "title": "단차 예술이네 ㅋㅋㅋ 워터파크 개장함 짱깨차 폼 미쳤다",
+      "content": "단차가 아주 예술의 경지다 ㅋㅋㅋ 비 오는 날 서브트렁크에 워터파크 개장해서 수영해도 되겠음. 조립 퀄리티 폼 미쳤다 아주 대단해.",
+      "expected_is_defect": true,
+      "expected_category": "BUILD_QUALITY",
+      "reason": "Sarcastic praise inverted to strong defect"
+    }
+  ],
+  "noise_and_spam": [
+    {
+      "id": "tc_noise_news",
+      "title": "[단독] 현대차, 차세대 배터리 결함 리콜 착수 발표",
+      "content": "[연합뉴스] 현대자동차는 최근 발생한 전기차 배터리 제어 시스템 결함과 관련하여 자발적 리콜을 시행한다고 8일 밝혔다. 취재진에 따르면...",
+      "expected_is_defect": false,
+      "reason": "Journalistic news format filtered by Stage 1"
+    },
+    {
+      "id": "tc_noise_stock",
+      "title": "테슬라 주가 나스닥 실적발표 매수 평단 어닝",
+      "content": "오늘 테슬라 주가 폭등각이냐? 나스닥 매수 평단 210불인데 어닝 실적발표 보고 매도 타이밍 잡아야겠음.",
+      "expected_is_defect": false,
+      "reason": "Stock financial chatter filtered by Stage 1"
+    },
+    {
+      "id": "tc_noise_banter",
+      "title": "테슬람 현기충 둘 다 노답 ㅋㅋㅋ",
+      "content": "테슬람 흉기충 서로 싸우는 거 보면 존나 웃김 ㅋㅋㅋ 팝콘이나 뜯어야지",
+      "expected_is_defect": false,
+      "reason": "Pure bystander flaming without ownership or defect verification"
+    }
+  ]
+}

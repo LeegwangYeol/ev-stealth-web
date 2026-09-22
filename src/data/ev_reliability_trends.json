@@ -1,0 +1,1735 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "updated_at": "2026-09-16T12:00:00Z",
+    "total_records_analyzed": 1280,
+    "brands_count": 9,
+    "models_count": 22,
+    "avg_industry_dsi": 64.2
+  },
+  "categories": [
+    {
+      "code": "BATTERY_CHARGING",
+      "label_ko": "배터리 & 고전압 충전",
+      "description": "고전압 배터리 셀 열화, 화재 리콜 위험, 급속/완속 충전 중단, 충전 인렛 과열",
+      "icon_name": "BatteryCharging",
+      "industry_share_pct": 38.4,
+      "avg_repair_cost_range": "2,500만 ~ 7,500만 원"
+    },
+    {
+      "code": "DRIVING_POWERTRAIN",
+      "label_ko": "모터·감속기·ICCU 구동계",
+      "description": "ICCU 폭파 및 주행 중 동력 상실, 감속기 기어 마모 소음, 인버터 전력 모듈 파열",
+      "icon_name": "Zap",
+      "industry_share_pct": 26.2,
+      "avg_repair_cost_range": "520만 ~ 1,450만 원"
+    },
+    {
+      "code": "SOFTWARE_ELECTRONICS",
+      "label_ko": "OTA·BMS·인포테인먼트",
+      "description": "OTA 업데이트 벽돌 현상, BMS 오류로 인한 시동 불가, 계기판 블랙아웃, 통신 모듈(TCAM) 방전",
+      "icon_name": "Cpu",
+      "industry_share_pct": 14.8,
+      "avg_repair_cost_range": "150만 ~ 420만 원"
+    },
+    {
+      "code": "BUILD_QUALITY",
+      "label_ko": "단차·도장·누수·조립 품질",
+      "description": "트렁크/도어 유격 단차, 우천 시 실내 누수, 테일램프 결로, 도장 불량 및 잡소리",
+      "icon_name": "Wrench",
+      "industry_share_pct": 9.5,
+      "avg_repair_cost_range": "80만 ~ 350만 원"
+    },
+    {
+      "code": "SERVICE_REPAIR_COST",
+      "label_ko": "보증 외 수리비 & 정비성",
+      "description": "부품 수급 대기(1~3개월), 정비 거부, 경미한 하부 충격 시 배터리 전손 처리 압박",
+      "icon_name": "Coins",
+      "industry_share_pct": 6.1,
+      "avg_repair_cost_range": "200만 ~ 7,500만 원"
+    },
+    {
+      "code": "COLD_WEATHER",
+      "label_ko": "혹한기 저온 결함 & 히트펌프",
+      "description": "영하 기온 시 히트펌프 옥토밸브 고착으로 난방 정지, LFP 배터리 주행거리 35% 이상 급감",
+      "icon_name": "Snowflake",
+      "industry_share_pct": 5.0,
+      "avg_repair_cost_range": "320만 ~ 510만 원"
+    }
+  ],
+  "repair_cost_matrix": [
+    {
+      "component_name": "고전압 배터리 팩 어셈블리 (High-Voltage Battery Pack)",
+      "affected_systems": "배터리 모듈, BMS, PRA 고전압 릴레이, 냉각 플레이트",
+      "avg_cost_krw": "2,500만 ~ 7,500만 원 (벤츠/테슬라 6,000만~7,500만, 국산 2,300만~3,200만)",
+      "standard_warranty": "8년 / 16만 km (보증 만료 시 전손 처리 위험 1순위)",
+      "high_risk_models": [
+        "벤츠 EQE 350 (22~23 / 파라시스)",
+        "현대 코나 EV (18~20 / LG셀)",
+        "GM 볼트 EV (17~20 / LG셀)",
+        "테슬라 모델 S (18~20)"
+      ],
+      "critical_warning": "하부 케이스 미세 긁힘 발생 시 제조사 무상 보증 거부 빈번, 자차 수리비가 중고차 가액을 초과하여 전손 처리율 78% 기록"
+    },
+    {
+      "component_name": "ICCU (통합 충전 제어 장치 - Integrated Charging Control Unit)",
+      "affected_systems": "LDC(저전압 변환기), OBC(온보드 차저), 12V 배터리 충전 회로, 파워 FET",
+      "avg_cost_krw": "520만 ~ 690만 원 (부품가 380만 원 + 고전압 절연 냉각수 교체 공임)",
+      "standard_warranty": "일반 보증 3년/6만 km 만료 후 유상 수리 (일부 차종 한시적 10년 리콜 보증)",
+      "high_risk_models": [
+        "현대 아이오닉 5 (21~23)",
+        "기아 EV6 (21~22)",
+        "제네시스 GV60 (21~22)",
+        "기아 EV9 (2023 초기분)"
+      ],
+      "critical_warning": "주행 중 '퍽' 소리와 함께 계기판 경고등 점등 후 1~2분 이내 전원 꺼짐 및 스티어링 잠김 유발. 고속도로 갓길 대피 위험"
+    },
+    {
+      "component_name": "히트펌프 시스템 & 옥토밸브 / 전동 컴프레서",
+      "affected_systems": "옥토밸브(Octovalve), 전동 컴프레서, 전자식 팽창밸브(EXV), 칠러",
+      "avg_cost_krw": "320만 ~ 510만 원",
+      "standard_warranty": "일반 부품 3년 / 6만 km",
+      "high_risk_models": [
+        "테슬라 모델 3 (2021)",
+        "테슬라 모델 Y (2021)",
+        "현대 아이오닉 5 (21~22)",
+        "폴스타 2 (2021)"
+      ],
+      "critical_warning": "영하 10도 이하 한파 속에서 냉매 밸브 고착 시 실내 난방 완전 중단 및 배터리 예열 불가로 충전 속도 급락"
+    },
+    {
+      "component_name": "구동 모터 & 감속기 어셈블리 (Drive Motor & Reducer)",
+      "affected_systems": "PMSM 영구자석 모터, SiC 인버터 전력모듈, 감속기 헬리컬 기어 및 베어링",
+      "avg_cost_krw": "850만 ~ 1,450만 원",
+      "standard_warranty": "동력 전달 계통 5년 / 10만 km",
+      "high_risk_models": [
+        "기아 니로 EV (19~20 / 710 모터 결함)",
+        "폴스타 2 (2021 / 인버터)",
+        "제네시스 Electrified G80 (21~22)"
+      ],
+      "critical_warning": "감속기 내부 베어링 편마모로 '딱따구리/헬리콥터' 구동 소음 발생 후 고착. 인버터 IGBT 파열 시 가속 페달 입력 불능"
+    },
+    {
+      "component_name": "전동 파워 스티어링 랙 & 컨트롤 암 (Steering Rack & Arms)",
+      "affected_systems": "MDPS 스티어링 기어 랙, 상/하부 컨트롤 암 볼조인트 부싱, 타이로드",
+      "avg_cost_krw": "180만 ~ 350만 원",
+      "standard_warranty": "샤시/현가 3년 / 6만 km",
+      "high_risk_models": [
+        "테슬라 모델 3 (19~21)",
+        "테슬라 모델 Y (20~22)",
+        "BYD 씰 (2023)"
+      ],
+      "critical_warning": "부싱 고무 경화 및 수분 유입으로 볼조인트 유격 발생. 저속 회전 시 '찌걱' 귀뚜라미 잡소리와 조향 직진성 상실"
+    },
+    {
+      "component_name": "급속/완속 충전 인렛 포트 및 고전압 정션 박스",
+      "affected_systems": "DC 콤보1 인렛 하네스, AC 완속 7핀 솔레노이드 락 핀, 고전압 릴레이",
+      "avg_cost_krw": "140만 ~ 260만 원",
+      "standard_warranty": "일반 전장 3년 / 6만 km",
+      "high_risk_models": [
+        "현대 아이오닉 5 (22~23)",
+        "기아 EV6 (22~23)",
+        "폴스타 2 (2022)"
+      ],
+      "critical_warning": "완속 충전 전류 과열(100℃ 이상)로 충전 강제 차단 반복 및 충전 건이 빠지지 않는 솔레노이드 고착 사고 빈발"
+    }
+  ],
+  "brands": [
+    {
+      "id": "hyundai",
+      "name_ko": "현대자동차",
+      "name_en": "Hyundai",
+      "country": "대한민국",
+      "overall_dsi": 58.4,
+      "total_reports": 268,
+      "critical_issue_rate": 28.7,
+      "category_distribution": {
+        "BATTERY_CHARGING": { "count": 86, "percentage": 32.1 },
+        "DRIVING_POWERTRAIN": { "count": 98, "percentage": 36.6 },
+        "SOFTWARE_ELECTRONICS": { "count": 38, "percentage": 14.2 },
+        "BUILD_QUALITY": { "count": 22, "percentage": 8.2 },
+        "SERVICE_REPAIR_COST": { "count": 14, "percentage": 5.2 },
+        "COLD_WEATHER": { "count": 10, "percentage": 3.7 }
+      },
+      "models": [
+        {
+          "id": "ioniq5",
+          "name": "아이오닉 5 (Ioniq 5)",
+          "segment": "준중형 CUV",
+          "brand_id": "hyundai",
+          "overall_grade": "C",
+          "avg_dsi": 51.4,
+          "top_category": "DRIVING_POWERTRAIN",
+          "year_evaluations": [
+            {
+              "year": 2021,
+              "verdict": "AVOID",
+              "dsi_score": 88,
+              "incident_rate": 42.5,
+              "primary_defect": "ICCU 파손으로 인한 주행 중 '퍽' 소리와 함께 전원 차단 및 12V 배터리 방전",
+              "estimated_repair_cost": "520만 ~ 680만 원 (리콜 무상)",
+              "chronic_symptoms": [
+                "고속 주행 중 동력 상실 및 경고등 점등",
+                "12V 저전압 배터리 수시 방전",
+                "후륜 감속기 오일 씰 누유",
+                "완속 충전 중단 에러"
+              ],
+              "raw_quote": "고속도로 1차로 달리는데 퍽 소리나면서 전원 꺼져서 갓길로 겨우 뺐습니다. 서비스센터 입고하니 ICCU 재고 없다고 3주 대기하라네요."
+            },
+            {
+              "year": 2022,
+              "verdict": "CAUTION",
+              "dsi_score": 74,
+              "incident_rate": 31.0,
+              "primary_defect": "ICCU 개선품 공급 지연 및 완속 충전 인렛 포트 온도 상승 충전 중단",
+              "estimated_repair_cost": "480만 ~ 620만 원",
+              "chronic_symptoms": [
+                "완속 충전 시 100도 과열로 충전 전류 32A->16A 강제 다운",
+                "도어캐치 모터 작동 걸림",
+                "빌트인캠 간헐적 녹화 누락"
+              ],
+              "raw_quote": "퇴근하고 밤새 충전 꽂아놨는데 아침에 보니 과열로 20% 충전되다 멈춰있음... 출근길에 멘붕 왔습니다."
+            },
+            {
+              "year": 2023,
+              "verdict": "CAUTION",
+              "dsi_score": 55,
+              "incident_rate": 18.5,
+              "primary_defect": "완속 충전 로직 개선 소프트웨어 패치 진행, 12V 암전류 방전 잔존",
+              "estimated_repair_cost": "250만 ~ 420만 원",
+              "chronic_symptoms": [
+                "블루링크 원격 제어 지연",
+                "2열 시트 슬라이딩 레일 유격 소음",
+                "디지털 사이드미러 내부 김서림"
+              ],
+              "raw_quote": "ICCU 리콜 받고 나서는 시동 꺼짐은 없는데 완속 충전 속도 떨어지는 현상은 아직 완전히 안 잡힌 느낌입니다."
+            },
+            {
+              "year": 2024,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 28,
+              "incident_rate": 7.2,
+              "primary_defect": "신형 ICCU 하드웨어 및 신규 전력 제어 반도체 전면 탑재, 안정화",
+              "estimated_repair_cost": "80만 ~ 150만 원",
+              "chronic_symptoms": [
+                "ccNC 인포테인먼트 간헐적 애플 카플레이 무선 끊김",
+                "초기 출고 휠 밸런스 미세 떨림"
+              ],
+              "raw_quote": "더 뉴 아이오닉5 24년식으로 넘어왔는데 ICCU 이슈 완전히 개선됐고 뒷유리 와이퍼 생겨서 너무 만족합니다."
+            },
+            {
+              "year": 2025,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 18,
+              "incident_rate": 4.1,
+              "primary_defect": "84kWh 4세대 고에너지밀도 배터리 탑재, 초기 결함 제보 극소",
+              "estimated_repair_cost": "50만 ~ 120만 원",
+              "chronic_symptoms": [
+                "무선 충전 패드 스마트폰 발열"
+              ],
+              "raw_quote": "중고차 볼 때 21~22년식은 ICCU 수리 이력 꼭 확인하고, 예산 되면 무조건 24년형 이후로 가세요."
+            }
+          ]
+        },
+        {
+          "id": "ioniq6",
+          "name": "아이오닉 6 (Ioniq 6)",
+          "segment": "중형 세단",
+          "brand_id": "hyundai",
+          "overall_grade": "B",
+          "avg_dsi": 39.8,
+          "top_category": "DRIVING_POWERTRAIN",
+          "year_evaluations": [
+            {
+              "year": 2022,
+              "verdict": "CAUTION",
+              "dsi_score": 68,
+              "incident_rate": 24.5,
+              "primary_defect": "E-GMP 플랫폼 공통 ICCU 고장 및 액티브 에어 플랩(AAF) 고착",
+              "estimated_repair_cost": "420만 ~ 580만 원",
+              "chronic_symptoms": [
+                "액티브 에어 플랩 겨울철 얼어붙어 경고등 점등",
+                "12V 배터리 방전",
+                "리어 스포일러 LED 결로"
+              ],
+              "raw_quote": "전비는 공인 전비보다 더 잘 나오는데 한겨울에 앞 범퍼 셔터 모터가 얼어서 서비스센터 들어갔습니다."
+            },
+            {
+              "year": 2023,
+              "verdict": "CAUTION",
+              "dsi_score": 52,
+              "incident_rate": 16.0,
+              "primary_defect": "ICCU 펌웨어 업데이트 대상, 후륜 모터 감속기 미세 고주파음",
+              "estimated_repair_cost": "280만 ~ 400만 원",
+              "chronic_symptoms": [
+                "80~100km/h 주행 시 귀에 거슬리는 인버터 고주파음",
+                "디지털 사이드미러 시야각 적응 불편"
+              ],
+              "raw_quote": "ICCU 무상 소프트웨어 패치 받고 나서는 괜찮습니다. 전비 하나는 현존 국산 EV 중 독보적입니다."
+            },
+            {
+              "year": 2024,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 24,
+              "incident_rate": 6.5,
+              "primary_defect": "하드웨어 개선 완료, 결함률 극히 낮음",
+              "estimated_repair_cost": "60만 ~ 130만 원",
+              "chronic_symptoms": [
+                "트렁크 개구부가 좁아 골프백 수납 불편"
+              ],
+              "raw_quote": "24년식 롱레인지 타는데 결함 하나도 안 터지고 장거리 고속도로 전비 6.8km/kWh 이상 뽑아줍니다."
+            },
+            {
+              "year": 2025,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 15,
+              "incident_rate": 3.8,
+              "primary_defect": "품질 숙성 단계 완료, 결함 제보 거의 없음",
+              "estimated_repair_cost": "40만 ~ 90만 원",
+              "chronic_symptoms": [
+                "2열 헤드룸 공간 제약"
+              ],
+              "raw_quote": "디자인 호불호 빼면 주행 안정성과 내구성 면에서는 초기 E-GMP 문제점 다 털어낸 모델입니다."
+            }
+          ]
+        },
+        {
+          "id": "kona-ev",
+          "name": "코나 일렉트릭 (Kona Electric)",
+          "segment": "소형 SUV",
+          "brand_id": "hyundai",
+          "overall_grade": "D",
+          "avg_dsi": 67.8,
+          "top_category": "BATTERY_CHARGING",
+          "year_evaluations": [
+            {
+              "year": 2018,
+              "verdict": "AVOID",
+              "dsi_score": 96,
+              "incident_rate": 58.0,
+              "primary_defect": "LG화학 배터리 셀 분리막 결함으로 인한 충전 중 연쇄 화재 및 전량 리콜",
+              "estimated_repair_cost": "2,400만 원 (배터리팩 전액 리콜 대상)",
+              "chronic_symptoms": [
+                "배터리팩 충전 중 자연 발화 화재 위험",
+                "통합 전동 브레이크(IEB) 먹통 경고등",
+                "감속기 기어 마모 '딱따구리' 소음",
+                "아파트 지하주차장 진입 금지"
+              ],
+              "raw_quote": "지하주차장에 주차했더니 입주자대표회의에서 차 빼라고 쪽지 붙였습니다. 리콜로 배터리 새걸로 바꾸기 전까진 지옥이었습니다."
+            },
+            {
+              "year": 2019,
+              "verdict": "AVOID",
+              "dsi_score": 94,
+              "incident_rate": 54.0,
+              "primary_defect": "1차 BMS 업데이트 후 주행거리 강제 제한 논란 및 배터리 전면 교체",
+              "estimated_repair_cost": "2,400만 원 (리콜)",
+              "chronic_symptoms": [
+                "고전압 배터리 셀 밸런싱 불량",
+                "전동 워터펌프 누수",
+                "에어컨 컴프레서 고장"
+              ],
+              "raw_quote": "중고차 매물 중에 배터리 무상 교체 안 받은 18~19년식 코나는 절대 사면 안 됩니다. 시한폭탄이에요."
+            },
+            {
+              "year": 2020,
+              "verdict": "AVOID",
+              "dsi_score": 89,
+              "incident_rate": 47.0,
+              "primary_defect": "배터리 리콜 대상 연식, 감속기 내부 베어링 유격 소음 다발",
+              "estimated_repair_cost": "450만 ~ 2,400만 원",
+              "chronic_symptoms": [
+                "가속 및 회생제동 시 감속기 딱딱딱 타격음",
+                "충전 도어 겨울철 동결 미개폐"
+              ],
+              "raw_quote": "배터리 교체 받고도 감속기에서 딱따구리 소리 나서 결국 감속기 통교체 350만 원 깨질 뻔했습니다."
+            },
+            {
+              "year": 2023,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 32,
+              "incident_rate": 8.5,
+              "primary_defect": "SX2 2세대 풀체인지 모델, CATL 배터리 탑재로 초기 화재 공포 해소",
+              "estimated_repair_cost": "80만 ~ 160만 원",
+              "chronic_symptoms": [
+                "ccNC 내비게이션 간헐적 딜레이",
+                "전면 일자형 심리스 호라이즌 램프 단차"
+              ],
+              "raw_quote": "2세대는 차체도 셀토스급으로 커지고 배터리 팩도 완전히 재설계돼서 1세대 악몽은 잊어도 됩니다."
+            },
+            {
+              "year": 2024,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 20,
+              "incident_rate": 5.0,
+              "primary_defect": "안정적 품질 유지, 겨울철 히트펌프 성능 양호",
+              "estimated_repair_cost": "60만 ~ 110만 원",
+              "chronic_symptoms": [
+                "고속 주행 시 풍절음"
+              ],
+              "raw_quote": "도심 출퇴근용으로 가성비 최고입니다. 1세대 중고는 피하고 2세대 신차나 중고로 가세요."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "kia",
+      "name_ko": "기아",
+      "name_en": "Kia",
+      "country": "대한민국",
+      "overall_dsi": 55.6,
+      "total_reports": 242,
+      "critical_issue_rate": 26.4,
+      "category_distribution": {
+        "BATTERY_CHARGING": { "count": 72, "percentage": 29.8 },
+        "DRIVING_POWERTRAIN": { "count": 89, "percentage": 36.8 },
+        "SOFTWARE_ELECTRONICS": { "count": 39, "percentage": 16.1 },
+        "BUILD_QUALITY": { "count": 21, "percentage": 8.7 },
+        "SERVICE_REPAIR_COST": { "count": 12, "percentage": 5.0 },
+        "COLD_WEATHER": { "count": 9, "percentage": 3.7 }
+      },
+      "models": [
+        {
+          "id": "ev6",
+          "name": "EV6 (Kia EV6)",
+          "segment": "준중형 크로스오버",
+          "brand_id": "kia",
+          "overall_grade": "C",
+          "avg_dsi": 50.2,
+          "top_category": "DRIVING_POWERTRAIN",
+          "year_evaluations": [
+            {
+              "year": 2021,
+              "verdict": "AVOID",
+              "dsi_score": 86,
+              "incident_rate": 40.0,
+              "primary_defect": "통합 충전 제어 장치(ICCU) 내부 LDC 퓨즈 단락으로 주행 중 경고등 점등 및 동력 상실",
+              "estimated_repair_cost": "520만 ~ 680만 원 (리콜 무상)",
+              "chronic_symptoms": [
+                "주행 중 '삐-' 경고음과 함께 '전원 공급 장치를 점검하십시오' 점등",
+                "12V 보조 배터리 방전 도어 미개폐",
+                "리어 테일게이트 가니쉬 조립 유격",
+                "충전 커넥터 잠김 해제 불능"
+              ],
+              "raw_quote": "퇴근길 올림픽대로에서 거북이 경고등 뜨더니 액셀 밟아도 30km 이상 안 나감... 갓길로 밀고 견인차 불렀습니다."
+            },
+            {
+              "year": 2022,
+              "verdict": "CAUTION",
+              "dsi_score": 72,
+              "incident_rate": 29.5,
+              "primary_defect": "완속 충전 중 과열로 충전 단절 및 프론트 범퍼 하단 조립 단차",
+              "estimated_repair_cost": "450만 ~ 600만 원",
+              "chronic_symptoms": [
+                "완속 충전 인렛 과열로 충전 속도 3kW 급락",
+                "히터 가동 시 타는 냄새 유입",
+                "앰비언트 라이트 간헐적 꺼짐"
+              ],
+              "raw_quote": "여름철 완속 충전 꽂아두면 새벽에 어플로 '충전이 중단되었습니다' 알림 와서 잠 다 깹니다."
+            },
+            {
+              "year": 2023,
+              "verdict": "CAUTION",
+              "dsi_score": 51,
+              "incident_rate": 17.0,
+              "primary_defect": "ICCU 소프트웨어 1차 리콜 조치 차량, 충전 제어 로직 보강",
+              "estimated_repair_cost": "220만 ~ 380만 원",
+              "chronic_symptoms": [
+                "12V 배터리 전압 드롭 경고",
+                "메리디안 사운드 시스템 우퍼 떨림 소음"
+              ],
+              "raw_quote": "리콜 받고 나서는 큰 고장은 없는데 계기판 배터리 모니터링 수시로 보게 되는 트라우마는 남네요."
+            },
+            {
+              "year": 2024,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 26,
+              "incident_rate": 6.8,
+              "primary_defect": "더 뉴 EV6 페이스리프트 출시, 신규 하드웨어 ICCU 및 ccNC 탑재",
+              "estimated_repair_cost": "70만 ~ 140만 원",
+              "chronic_symptoms": [
+                "무선 안드로이드 오토 가끔 접속 끊김"
+              ],
+              "raw_quote": "24년식 페리 모델로 바꿨는데 승차감 주파수 감응형 쇽업쇼버 들어가서 쫀득하고 결함도 전혀 없습니다."
+            },
+            {
+              "year": 2025,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 16,
+              "incident_rate": 3.9,
+              "primary_defect": "84kWh 배터리 적용 및 차세대 BMS 최적화, 완성도 높음",
+              "estimated_repair_cost": "40만 ~ 100만 원",
+              "chronic_symptoms": [
+                "리어 와이퍼 결속부 미세 오염"
+              ],
+              "raw_quote": "EV6 중고 볼 거면 21년식은 무조건 거르고 최소 23년식 후반이나 24년 페이스리프트로 가는 게 정답입니다."
+            }
+          ]
+        },
+        {
+          "id": "ev9",
+          "name": "EV9 (Kia EV9)",
+          "segment": "대형 플래그십 SUV",
+          "brand_id": "kia",
+          "overall_grade": "C",
+          "avg_dsi": 51.3,
+          "top_category": "DRIVING_POWERTRAIN",
+          "year_evaluations": [
+            {
+              "year": 2023,
+              "verdict": "AVOID",
+              "dsi_score": 84,
+              "incident_rate": 38.0,
+              "primary_defect": "고속도로 주행 중 동력 상실(가속 페달 무반응), 통합 충전 제어기 및 12V 배터리 암전류 방전",
+              "estimated_repair_cost": "650만 ~ 850만 원 (리콜 무상)",
+              "chronic_symptoms": [
+                "주행 중 가속 불가 및 안전 모드 진입",
+                "출고 3일 만에 12V 배터리 완전 방전",
+                "2열 스위블 시트 유격 및 덜컹거림 잡소리",
+                "디지털 센터 미러 화면 깜빡임"
+              ],
+              "raw_quote": "1억 가까이 주고 샀는데 출고 2주 만에 고속도로에서 동력 상실 떠서 식겁했습니다. 신차 교환 요청하고 난리도 아니었네요."
+            },
+            {
+              "year": 2024,
+              "verdict": "CAUTION",
+              "dsi_score": 48,
+              "incident_rate": 15.0,
+              "primary_defect": "대규모 전장 OTA 소프트웨어 업데이트 후 동력 상실 개선, 마감 잡소리 잔존",
+              "estimated_repair_cost": "240만 ~ 390만 원",
+              "chronic_symptoms": [
+                "선루프 롤러 블라인드 작동 소음",
+                "오토 플러시 도어 핸들 간헐적 지연"
+              ],
+              "raw_quote": "소프트웨어 무상 패치 3번 받고 나서는 멈추는 일은 없습니다. 패밀리카로는 광활하고 편합니다."
+            },
+            {
+              "year": 2025,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 22,
+              "incident_rate": 5.5,
+              "primary_defect": "전장 통신망 안정화 및 조립 완성도 정착",
+              "estimated_repair_cost": "80만 ~ 150만 원",
+              "chronic_symptoms": [
+                "큰 덩치로 인한 좁은 지하주차장 회전 반경 부담"
+              ],
+              "raw_quote": "초기형 23년식 떨이 할인 매물은 피하시고, 안정화된 24년 하반기나 25년식 보시는 걸 추천합니다."
+            }
+          ]
+        },
+        {
+          "id": "niro-ev",
+          "name": "니로 EV (Niro EV)",
+          "segment": "소형 CUV",
+          "brand_id": "kia",
+          "overall_grade": "C",
+          "avg_dsi": 49.0,
+          "top_category": "DRIVING_POWERTRAIN",
+          "year_evaluations": [
+            {
+              "year": 2019,
+              "verdict": "AVOID",
+              "dsi_score": 82,
+              "incident_rate": 36.0,
+              "primary_defect": "구동 모터(710 품번) 및 감속기 내부 자석 결함, '다다다' 딱따구리 타격 소음",
+              "estimated_repair_cost": "450만 ~ 600만 원 (모터/감속기 교체)",
+              "chronic_symptoms": [
+                "가속 페달 밟거나 회생제동 시 딱딱딱 소음 진동",
+                "통합 전동 브레이크(IEB) 압력 손실",
+                "완속 충전 락 핀 고착"
+              ],
+              "raw_quote": "동호회에서 유명한 710 모터 딱따구리 소음 당첨됐습니다. 보증 끝나면 감속기랑 모터 통으로 갈아야 해서 중고차 살 때 주의해야 합니다."
+            },
+            {
+              "year": 2020,
+              "verdict": "CAUTION",
+              "dsi_score": 65,
+              "incident_rate": 22.0,
+              "primary_defect": "모터 개선품(711/712 품번) 적용 과도기, 감속기 베어링 소음 일부 발생",
+              "estimated_repair_cost": "320만 ~ 480만 원",
+              "chronic_symptoms": [
+                "저속 주행 시 윙- 하는 모터 구동음 증폭",
+                "12V 배터리 수명 짧음"
+              ],
+              "raw_quote": "모터 품번 확인하고 샀습니다. 711 품번 이상은 소음 덜하긴 한데 하부 방음은 좀 아쉽습니다."
+            },
+            {
+              "year": 2022,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 30,
+              "incident_rate": 8.0,
+              "primary_defect": "SG2 2세대 올 뉴 니로 EV 출시, 파워트레인 구조 전면 쇄신",
+              "estimated_repair_cost": "70만 ~ 140만 원",
+              "chronic_symptoms": [
+                "C필러 에어로 블레이드 틈새 세차 불편",
+                "실내 플라스틱 스크래치 취약"
+              ],
+              "raw_quote": "2세대로 넘어오면서 딱따구리 결함 완전히 사라졌고 복합 전비 6km/kWh 거뜬하게 넘습니다."
+            },
+            {
+              "year": 2024,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 19,
+              "incident_rate": 4.5,
+              "primary_defect": "우수한 전비와 신뢰도 검증 완료, 큰 고장 없음",
+              "estimated_repair_cost": "50만 ~ 100만 원",
+              "chronic_symptoms": [
+                "고속 도로 노면 소음 유입"
+              ],
+              "raw_quote": "사회초년생이나 출퇴근 세컨카로 니로 EV 2세대(22년식 이후)는 잔고장 없고 유지비 최강입니다."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "genesis",
+      "name_ko": "제네시스",
+      "name_en": "Genesis",
+      "country": "대한민국",
+      "overall_dsi": 52.8,
+      "total_reports": 118,
+      "critical_issue_rate": 23.5,
+      "category_distribution": {
+        "BATTERY_CHARGING": { "count": 31, "percentage": 26.3 },
+        "DRIVING_POWERTRAIN": { "count": 45, "percentage": 38.1 },
+        "SOFTWARE_ELECTRONICS": { "count": 24, "percentage": 20.3 },
+        "BUILD_QUALITY": { "count": 9, "percentage": 7.6 },
+        "SERVICE_REPAIR_COST": { "count": 6, "percentage": 5.1 },
+        "COLD_WEATHER": { "count": 3, "percentage": 2.5 }
+      },
+      "models": [
+        {
+          "id": "gv60",
+          "name": "GV60 (Genesis GV60)",
+          "segment": "럭셔리 준중형 CUV",
+          "brand_id": "genesis",
+          "overall_grade": "C",
+          "avg_dsi": 56.0,
+          "top_category": "DRIVING_POWERTRAIN",
+          "year_evaluations": [
+            {
+              "year": 2021,
+              "verdict": "AVOID",
+              "dsi_score": 85,
+              "incident_rate": 39.0,
+              "primary_defect": "E-GMP ICCU 폭파 고장, 페이스 커넥트 인식 오류, 크리스탈 스피어 회전 걸림",
+              "estimated_repair_cost": "550만 ~ 720만 원 (리콜 무상)",
+              "chronic_symptoms": [
+                "주행 중 경고등 점등 및 동력 상실",
+                "크리스탈 스피어 시동 시 회전하지 않고 걸림",
+                "얼굴 인식 페이스 커넥트 야간 인식 실패",
+                "무선 충전 패드 스마트폰 과열"
+              ],
+              "raw_quote": "프리미엄 브랜드라 믿고 샀는데 고속도로에서 ICCU 뻗고, 겨울엔 크리스탈 스피어 안 돌아가서 시동 못 걸 뻔했습니다."
+            },
+            {
+              "year": 2022,
+              "verdict": "CAUTION",
+              "dsi_score": 70,
+              "incident_rate": 27.0,
+              "primary_defect": "후륜 감속기 오일 씰 미세 누유 및 완속 충전 과열 차단",
+              "estimated_repair_cost": "420만 ~ 580만 원",
+              "chronic_symptoms": [
+                "하부 감속기 누유로 인한 커버 오염",
+                "12V 배터리 방전으로 도어 안 열림",
+                "B&O 오디오 앰프 먹통 현상"
+              ],
+              "raw_quote": "제네시스 홈투홈 서비스로 픽업 수리받긴 했는데 신차 뽑고 센터만 4번 들락거렸습니다."
+            },
+            {
+              "year": 2023,
+              "verdict": "CAUTION",
+              "dsi_score": 46,
+              "incident_rate": 14.0,
+              "primary_defect": "ICCU 개선 로직 반영, 전장 소프트웨어 안정화",
+              "estimated_repair_cost": "180만 ~ 320만 원",
+              "chronic_symptoms": [
+                "실내 도어 트림 미세 잡소리",
+                "디지털 키 연동 딜레이"
+              ],
+              "raw_quote": "23년형부터는 크리스탈 스피어 걸림도 잡히고 ICCU 리콜 패치 이후로는 안정적으로 타고 있습니다."
+            },
+            {
+              "year": 2024,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 23,
+              "incident_rate": 5.8,
+              "primary_defect": "신형 하드웨어 보강 및 ccIC 신규 인포테인먼트 도입",
+              "estimated_repair_cost": "60만 ~ 130만 원",
+              "chronic_symptoms": [
+                "트렁크 공간 협소"
+              ],
+              "raw_quote": "GV60는 24년식 이후 타시면 제네시스 특유의 안락한 승차감과 E-GMP 급속 충전 속도 다 누릴 수 있습니다."
+            }
+          ]
+        },
+        {
+          "id": "electrified-g80",
+          "name": "G80 전동화 모델 (Electrified G80)",
+          "segment": "대형 럭셔리 세단",
+          "brand_id": "genesis",
+          "overall_grade": "B",
+          "avg_dsi": 47.3,
+          "top_category": "DRIVING_POWERTRAIN",
+          "year_evaluations": [
+            {
+              "year": 2021,
+              "verdict": "CAUTION",
+              "dsi_score": 75,
+              "incident_rate": 28.0,
+              "primary_defect": "내연기관 플랫폼 개조 EV의 전력 제어기(EPCU) 인버터 경고등 및 완충 불가 에러",
+              "estimated_repair_cost": "680만 ~ 920만 원",
+              "chronic_symptoms": [
+                "전력 제어 모듈 경고등 및 충전 속도 저하",
+                "솔라루프 충전 인버터 효율 저하",
+                "배터리 팩 탑재로 인한 2열 레그룸 바닥 상승 불편"
+              ],
+              "raw_quote": "차가 너무 무거워서(2.3톤) 방지턱 넘을 때 하부 에어서스가 텅 치는 느낌 있고 인버터 경고등 한번 떴었습니다."
+            },
+            {
+              "year": 2022,
+              "verdict": "CAUTION",
+              "dsi_score": 60,
+              "incident_rate": 19.0,
+              "primary_defect": "리어 모터 감속기 마운트 진동 및 솔라루프 제어기 결함",
+              "estimated_repair_cost": "350만 ~ 550만 원",
+              "chronic_symptoms": [
+                "고속 주행 시 리어 모터 고주파 노이즈",
+                "트렁크 깊이 얕음 (배터리 수납 공간)"
+              ],
+              "raw_quote": "승차감과 정숙성은 벤츠 EQS 부럽지 않은데 트렁크에 골프백 2개 겨우 들어가는 게 단점입니다."
+            },
+            {
+              "year": 2023,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 34,
+              "incident_rate": 9.0,
+              "primary_defect": "모터 마운팅 러버 부싱 개선, 파워트레인 안정화",
+              "estimated_repair_cost": "120만 ~ 250만 원",
+              "chronic_symptoms": [
+                "겨울철 전비 급감 (배터리 승온 시간 소요)"
+              ],
+              "raw_quote": "쇼퍼드리븐으로 타기에 완벽합니다. 잔고장도 23년식부터는 거의 발생 안 하네요."
+            },
+            {
+              "year": 2024,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 20,
+              "incident_rate": 4.8,
+              "primary_defect": "휠베이스 130mm 증대 신형 모델 출시, 4세대 94.5kWh 배터리 적용",
+              "estimated_repair_cost": "60만 ~ 140만 원",
+              "chronic_symptoms": [
+                "긴 차체로 인한 좁은 주차공간 주차 난이도"
+              ],
+              "raw_quote": "신형 롱휠베이스 G80 EV는 2열 공간 단점까지 완벽히 해결하고 배터리 용량도 늘어 완벽합니다."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tesla",
+      "name_ko": "테슬라",
+      "name_en": "Tesla",
+      "country": "미국",
+      "overall_dsi": 62.1,
+      "total_reports": 310,
+      "critical_issue_rate": 27.4,
+      "category_distribution": {
+        "BATTERY_CHARGING": { "count": 68, "percentage": 21.9 },
+        "DRIVING_POWERTRAIN": { "count": 52, "percentage": 16.8 },
+        "SOFTWARE_ELECTRONICS": { "count": 48, "percentage": 15.5 },
+        "BUILD_QUALITY": { "count": 82, "percentage": 26.5 },
+        "SERVICE_REPAIR_COST": { "count": 38, "percentage": 12.3 },
+        "COLD_WEATHER": { "count": 22, "percentage": 7.1 }
+      },
+      "models": [
+        {
+          "id": "model-3",
+          "name": "모델 3 (Model 3)",
+          "segment": "중형 세단",
+          "brand_id": "tesla",
+          "overall_grade": "C",
+          "avg_dsi": 61.0,
+          "top_category": "BUILD_QUALITY",
+          "year_evaluations": [
+            {
+              "year": 2019,
+              "verdict": "AVOID",
+              "dsi_score": 92,
+              "incident_rate": 52.0,
+              "primary_defect": "미국 프리몬트 공장산 극심한 조립 단차, 도장 벗겨짐, 우천 주행 시 리어 범퍼 탈락 및 하부 컨트롤 암 녹",
+              "estimated_repair_cost": "280만 ~ 550만 원",
+              "chronic_symptoms": [
+                "비 오는 날 웅덩이 통과 시 뒷범퍼 뜯겨져 나감 (범퍼 커버 볼트 결손)",
+                "프론트 어퍼 컨트롤 암 볼조인트 녹 및 '찌걱' 귀뚜라미 소음",
+                "테일램프 내부 물고임 결로",
+                "창문 프레임리스 글래스 단차 풍절음 및 실내 빗물 누수"
+              ],
+              "raw_quote": "비 오는 날 고속도로 달렸더니 리어 범퍼 안에 흙탕물 가득 차서 처지고 컨트롤 암은 2년 만에 삐걱거립니다. 미국산 19년식은 무조건 거르세요."
+            },
+            {
+              "year": 2020,
+              "verdict": "AVOID",
+              "dsi_score": 87,
+              "incident_rate": 44.0,
+              "primary_defect": "어퍼 컨트롤 암 부싱 파손 및 겨울철 PTC 히터 전력 폭식으로 주행거리 반토막",
+              "estimated_repair_cost": "220만 ~ 480만 원",
+              "chronic_symptoms": [
+                "방지턱 넘을 때 하체 삐걱거림 (컨트롤 암 리콜 수리 다발)",
+                "트렁크 테일게이트 단차로 빗물 유입",
+                "도장면 오렌지필 및 도막 두께 편차"
+              ],
+              "raw_quote": "컨트롤 암 녹슬어서 교체했는데 1년 만에 또 소리 납니다. 보증 끝나면 어퍼암 세트 180만 원 자비로 갈아야 합니다."
+            },
+            {
+              "year": 2021,
+              "verdict": "AVOID",
+              "dsi_score": 81,
+              "incident_rate": 38.0,
+              "primary_defect": "초기 히트펌프(옥토밸브) 장착 차량 영하 날씨 냉매 누출로 난방 완전 중단 및 컴프레서 폭망",
+              "estimated_repair_cost": "380만 ~ 520만 원 (히트펌프 교체)",
+              "chronic_symptoms": [
+                "영하 10도 한파에 '실내 온도 조절 시스템 오류' 뜨고 찬바람만 나옴",
+                "컴프레서 굉음 후 사망",
+                "크롬 딜리트 몰딩 들뜸"
+              ],
+              "raw_quote": "강원도 여행 갔다가 영하 15도에 히터 꺼져서 얼어 죽을 뻔했습니다. 센터에서 옥토밸브 어셈블리 통교체했습니다."
+            },
+            {
+              "year": 2022,
+              "verdict": "CAUTION",
+              "dsi_score": 58,
+              "incident_rate": 21.0,
+              "primary_defect": "상하이 기가팩토리 생산분 전환으로 단차와 도장은 개선, 돌덩이 서스펜션 승차감 혹평",
+              "estimated_repair_cost": "120만 ~ 260만 원",
+              "chronic_symptoms": [
+                "2열 뒷좌석 승차감 통통 튀고 멀미 유발",
+                "유리 루프 햇빛 열 차단 부족",
+                "초음파 센서(USS) 삭제 직전 모델"
+              ],
+              "raw_quote": "상하이산이라 단차는 미국산보다 백배 낫습니다. 다만 서스펜션이 너무 딱딱해서 가족 태우기엔 눈치 보입니다."
+            },
+            {
+              "year": 2023,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 35,
+              "incident_rate": 10.0,
+              "primary_defect": "컴포트 서스펜션 적용 및 히트펌프 디버깅 완료, 완성도 상승",
+              "estimated_repair_cost": "60만 ~ 140만 원",
+              "chronic_symptoms": [
+                "테슬라 비전 오토파크 정확도 미흡",
+                "스마트폰 블루투스 키 간헐적 인식 딜레이"
+              ],
+              "raw_quote": "23년형 RWD는 가성비 끝판왕입니다. 잔고장 없고 배터리 관리 편합니다."
+            },
+            {
+              "year": 2024,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 18,
+              "incident_rate": 4.5,
+              "primary_defect": "모델 3 하이랜드(Highland) 대규모 페이스리프트, 방음/서스펜션 완벽 개선",
+              "estimated_repair_cost": "40만 ~ 100만 원",
+              "chronic_symptoms": [
+                "방향지시등 스티어링 버튼 방식 적응 필요",
+                "기어 레버 화면 터치 방식 호불호"
+              ],
+              "raw_quote": "하이랜드 타보고 구형 모델 3 처분했습니다. 이중접합 유리와 부드러운 서스펜션으로 다른 차가 됐습니다."
+            }
+          ]
+        },
+        {
+          "id": "model-y",
+          "name": "모델 Y (Model Y)",
+          "segment": "중형 SUV",
+          "brand_id": "tesla",
+          "overall_grade": "C",
+          "avg_dsi": 57.8,
+          "top_category": "BUILD_QUALITY",
+          "year_evaluations": [
+            {
+              "year": 2020,
+              "verdict": "AVOID",
+              "dsi_score": 90,
+              "incident_rate": 48.0,
+              "primary_defect": "초기 미국산 트렁크 유격 단차, 테일게이트 단차 및 폭우 시 트렁크 실내 누수",
+              "estimated_repair_cost": "250만 ~ 480만 원",
+              "chronic_symptoms": [
+                "트렁크 하부 수납공간 물고임",
+                "글래스 루프 장착 불량으로 고속 풍절음",
+                "서스펜션 딱딱함 및 노면 충격 그대로 전달"
+              ],
+              "raw_quote": "세차장에서 고압수 쐈는데 트렁크 안으로 물이 줄줄 샜습니다. 단차 수리 3번 맡겼는데 완벽히 안 잡히네요."
+            },
+            {
+              "year": 2021,
+              "verdict": "AVOID",
+              "dsi_score": 83,
+              "incident_rate": 41.0,
+              "primary_defect": "겨울철 히트펌프 옥토밸브 냉매 센서 결함으로 난방 불능 및 컴프레서 고장",
+              "estimated_repair_cost": "380만 ~ 520만 원",
+              "chronic_symptoms": [
+                "한겨울 주행 중 에어컨/히터 전원 차단",
+                "프론트 컨트롤 암 부싱 찌걱거림",
+                "하부 배터리 커버 고정 핀 탈락"
+              ],
+              "raw_quote": "영하의 날씨에 히터 꺼지는 리콜 맞았습니다. 겨울철 중고 사실 분들은 히트펌프 교체 이력 필수 확인하세요."
+            },
+            {
+              "year": 2022,
+              "verdict": "CAUTION",
+              "dsi_score": 62,
+              "incident_rate": 23.0,
+              "primary_defect": "컴포트 서스펜션 적용 이전 하체 딱딱함 및 2열 통통 튐",
+              "estimated_repair_cost": "150만 ~ 280만 원",
+              "chronic_symptoms": [
+                "방지턱 통과 시 요추 충격",
+                "타이어 편마모",
+                "프레임리스 도어 유리 덜컹거림"
+              ],
+              "raw_quote": "아이 태우고 다니는데 방지턱 넘을 때마다 멀미 난다고 해서 사제 일체형 서스펜션으로 바꿨습니다."
+            },
+            {
+              "year": 2023,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 33,
+              "incident_rate": 9.5,
+              "primary_defect": "상하이산 RWD LFP 모델 대히트, 컴포트 서스펜션 기본화",
+              "estimated_repair_cost": "50만 ~ 120만 원",
+              "chronic_symptoms": [
+                "겨울철 LFP 배터리 충전 속도 저하 (프리컨디셔닝 필수)",
+                "USS 초음파 센서 미탑재 거리 측정 오차"
+              ],
+              "raw_quote": "23년형 RWD는 대한민국 전기차 가성비 최고 존엄입니다. 조립 품질도 미국산이랑 비교 불가로 좋습니다."
+            },
+            {
+              "year": 2024,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 21,
+              "incident_rate": 5.2,
+              "primary_defect": "HW4(하드웨어 4.0) 카메라 탑재 및 내장재 보강, 결함 극소",
+              "estimated_repair_cost": "40만 ~ 90만 원",
+              "chronic_symptoms": [
+                "고속 주행 시 휠하우스 노면 소음"
+              ],
+              "raw_quote": "중고 사실 때 20~21년 미국산은 피하시고, 무조건 상하이산 23년식 이후로 사시는 게 정신건강에 이롭습니다."
+            }
+          ]
+        },
+        {
+          "id": "model-s",
+          "name": "모델 S (Model S)",
+          "segment": "대형 스포츠 세단",
+          "brand_id": "tesla",
+          "overall_grade": "D",
+          "avg_dsi": 61.5,
+          "top_category": "SOFTWARE_ELECTRONICS",
+          "year_evaluations": [
+            {
+              "year": 2018,
+              "verdict": "AVOID",
+              "dsi_score": 95,
+              "incident_rate": 55.0,
+              "primary_defect": "MCU1 미디어 컨트롤 유닛 eMMC 플래시 메모리 수명 한계로 화면 블랙아웃 및 에어서스 주저앉음",
+              "estimated_repair_cost": "350만 ~ 780만 원",
+              "chronic_symptoms": [
+                "센터 터치스크린 무한 재부팅 및 먹통",
+                "에어서스펜션 벨로우즈 에어 누설로 차고 처짐",
+                "도어 핸들 팝업 모터 기어 파손 도어 불능",
+                "100D 배터리 충전 제한"
+              ],
+              "raw_quote": "MCU1 메모리 뻗어서 깜빡이 소리도 안 나고 공조도 조절 못 했습니다. MCU2 유상 업그레이드 250만 원 줬네요."
+            },
+            {
+              "year": 2020,
+              "verdict": "CAUTION",
+              "dsi_score": 72,
+              "incident_rate": 26.0,
+              "primary_defect": "도어 핸들 마이크로 스위치 및 액추에이터 모터 단선 고질병",
+              "estimated_repair_cost": "180만 ~ 350만 원",
+              "chronic_symptoms": [
+                "비 올 때 손잡이 튀어나오지 않아 탑승 불가",
+                "드라이브 샤프트 가속 진동",
+                "테일게이트 배선 단선"
+              ],
+              "raw_quote": "오토프레젠팅 도어 손잡이 모터 4개 중 2개 갈았습니다. 개당 40만 원씩 나갑니다."
+            },
+            {
+              "year": 2022,
+              "verdict": "CAUTION",
+              "dsi_score": 54,
+              "incident_rate": 17.0,
+              "primary_defect": "리프레시 플레이드(Plaid) 요크 스티어링 휠 가죽 벗겨짐 및 인버터 오류",
+              "estimated_repair_cost": "220만 ~ 450만 원",
+              "chronic_symptoms": [
+                "요크 핸들 표면 비닐 박리",
+                "급가속 시 리어 모터 인버터 경고등",
+                "2열 디스플레이 렉"
+              ],
+              "raw_quote": "출고 6개월 만에 요크 핸들 표면 다 벗겨져서 센터에서 원형 스티어링으로 교체 받았습니다."
+            },
+            {
+              "year": 2024,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 25,
+              "incident_rate": 6.0,
+              "primary_defect": "하드웨어 4.0 및 개선형 원형 스티어링 기본화, 플래그십 품질 정착",
+              "estimated_repair_cost": "80만 ~ 180만 원",
+              "chronic_symptoms": [
+                "초광폭 타이어 교체 비용 부담"
+              ],
+              "raw_quote": "구형 모델 S와 리프레시 24년식은 완전히 다른 차입니다. 고전압 배터리와 전장 다 뜯어고쳤습니다."
+            }
+          ]
+        },
+        {
+          "id": "model-x",
+          "name": "모델 X (Model X)",
+          "segment": "대형 팔콘윙 SUV",
+          "brand_id": "tesla",
+          "overall_grade": "F",
+          "avg_dsi": 77.3,
+          "top_category": "BUILD_QUALITY",
+          "year_evaluations": [
+            {
+              "year": 2019,
+              "verdict": "AVOID",
+              "dsi_score": 97,
+              "incident_rate": 62.0,
+              "primary_defect": "팔콘윙 도어 초음파 센서 오류로 천장 장애물 충돌, 도어 힌지 유격 및 가속 시 전륜 하프샤프트 떨림",
+              "estimated_repair_cost": "450만 ~ 850만 원",
+              "chronic_symptoms": [
+                "지하주차장에서 팔콘윙 열리다 파이프 긁음",
+                "도어 웨더스트립 사이로 비 샐 때 물 뚝뚝",
+                "풀악셀 시 프론트 액슬 덜덜덜 진동 (하프샤프트 마모)",
+                "도어 모터 와이어 끊어짐"
+              ],
+              "raw_quote": "팔콘윙 도어 단차랑 센서 오류 때문에 스트레스 받아서 암 걸릴 뻔했습니다. 센터 들어가면 부품 없다고 2달 대기입니다."
+            },
+            {
+              "year": 2021,
+              "verdict": "AVOID",
+              "dsi_score": 85,
+              "incident_rate": 43.0,
+              "primary_defect": "전륜 서스펜션 클레비스 링크 및 하프샤프트 반복 파손",
+              "estimated_repair_cost": "380만 ~ 620만 원",
+              "chronic_symptoms": [
+                "가속 시 실내 전율하는 진동",
+                "팔콘윙 개폐 시 '끼이익' 힌지 마찰음",
+                "윈드실드 상단 고무 몰딩 박리"
+              ],
+              "raw_quote": "하프샤프트 보증으로 갈아도 2만km 타면 또 떨립니다. 구조적 결함이라 답이 없습니다."
+            },
+            {
+              "year": 2023,
+              "verdict": "CAUTION",
+              "dsi_score": 50,
+              "incident_rate": 16.0,
+              "primary_defect": "신형 리프레시 모델, 도어 모터 및 하프샤프트 보강되었으나 잡소리 상존",
+              "estimated_repair_cost": "180만 ~ 380만 원",
+              "chronic_symptoms": [
+                "팔콘윙 닫힐 때 센서 오감지로 재오픈 반복",
+                "실내 플라스틱 트림 잡소리"
+              ],
+              "raw_quote": "문 열릴 때의 하차감은 지구 최강이지만 관리 난이도는 전 세계 전기차 중 가장 높습니다."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "byd",
+      "name_ko": "비야디 (BYD)",
+      "name_en": "BYD",
+      "country": "중국",
+      "overall_dsi": 56.4,
+      "total_reports": 174,
+      "critical_issue_rate": 24.1,
+      "category_distribution": {
+        "BATTERY_CHARGING": { "count": 28, "percentage": 16.1 },
+        "DRIVING_POWERTRAIN": { "count": 32, "percentage": 18.4 },
+        "SOFTWARE_ELECTRONICS": { "count": 42, "percentage": 24.1 },
+        "BUILD_QUALITY": { "count": 45, "percentage": 25.9 },
+        "SERVICE_REPAIR_COST": { "count": 18, "percentage": 10.3 },
+        "COLD_WEATHER": { "count": 9, "percentage": 5.2 }
+      },
+      "models": [
+        {
+          "id": "atto-3",
+          "name": "아토 3 (Atto 3)",
+          "segment": "준중형 SUV",
+          "brand_id": "byd",
+          "overall_grade": "C",
+          "avg_dsi": 53.8,
+          "top_category": "BUILD_QUALITY",
+          "year_evaluations": [
+            {
+              "year": 2022,
+              "verdict": "AVOID",
+              "dsi_score": 85,
+              "incident_rate": 39.0,
+              "primary_defect": "에어컨 공조기 에바포레이터 산화로 통풍구에서 알루미늄 수산화물 백색 분말 가루 분출 및 하부 방청 부실",
+              "estimated_repair_cost": "240만 ~ 380만 원 (리콜)",
+              "chronic_symptoms": [
+                "에어컨 송풍구에서 하얀 백색 가루 날림 (호흡기 질환 우려)",
+                "해외 수입분 하부 섀시 부식 녹 발생",
+                "인포테인먼트 회전형 화면 앱 튕김",
+                "순정 타이어 배트맨 그립 부족으로 빗길 슬립"
+              ],
+              "raw_quote": "에어컨 켰더니 대시보드에 하얀 밀가루 같은 게 뽀얗게 쌓여서 봤더니 백색 분말 결함... 애들 태우는데 기겁했습니다."
+            },
+            {
+              "year": 2023,
+              "verdict": "CAUTION",
+              "dsi_score": 64,
+              "incident_rate": 23.0,
+              "primary_defect": "에바포레이터 코팅 개선품 교체 진행, 차량 하부 방청 및 도장 두께 얇음",
+              "estimated_repair_cost": "150만 ~ 260만 원",
+              "chronic_symptoms": [
+                "스마트 크루즈 컨트롤 차선 중앙 유지 불안정",
+                "실내 기타 줄 디자인 도어 포켓 고무줄 늘어남",
+                "겨울철 LFP 배터리 충전 지연"
+              ],
+              "raw_quote": "백색 가루 리콜 받고 나서는 괜찮은데 하부 코팅은 언더코팅 필수입니다. 가격은 정말 쌉니다."
+            },
+            {
+              "year": 2024,
+              "verdict": "CAUTION",
+              "dsi_score": 42,
+              "incident_rate": 13.0,
+              "primary_defect": "블레이드 배터리 안정성 검증, 인포테인먼트 한글화 번역 어색함",
+              "estimated_repair_cost": "80만 ~ 150만 원",
+              "chronic_symptoms": [
+                "계기판 한글 폰트 깨짐 및 어색한 번역어",
+                "서스펜션 롤링 및 출렁거림"
+              ],
+              "raw_quote": "블레이드 배터리라 못 찔러도 불 안 나는 건 안심되는데 실내 헬스장 컨셉 디자인은 적응이 힘드네요."
+            },
+            {
+              "year": 2025,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 24,
+              "incident_rate": 6.2,
+              "primary_defect": "KDM 한국 정식 런칭 사양 하부 아연도금 및 TMAP 내비게이션 완벽 탑재",
+              "estimated_repair_cost": "40만 ~ 90만 원",
+              "chronic_symptoms": [
+                "고속 주행 시 풍절음"
+              ],
+              "raw_quote": "한국형 정식 수입차량은 해외 직구/병행 모델의 결함들 다 피드백 받아서 들어와서 살 만합니다."
+            }
+          ]
+        },
+        {
+          "id": "seal",
+          "name": "씰 (Seal)",
+          "segment": "중형 스포츠 세단",
+          "brand_id": "byd",
+          "overall_grade": "C",
+          "avg_dsi": 46.3,
+          "top_category": "SERVICE_REPAIR_COST",
+          "year_evaluations": [
+            {
+              "year": 2023,
+              "verdict": "CAUTION",
+              "dsi_score": 69,
+              "incident_rate": 25.0,
+              "primary_defect": "CTB(Cell-to-Body) 차체 일체형 배터리 구조로 하부 경미 충격 시 배터리 단품 수리 불가 및 전손 위험",
+              "estimated_repair_cost": "2,800만 ~ 3,600만 원 (차체 일체형 배터리)",
+              "chronic_symptoms": [
+                "하부 턱 긁힘 발생 시 차체 프레임 통교체 판정",
+                "전자제어 댐퍼 고속 코너링 시 오작동",
+                "후륜 구동 모터 고주파 노이즈"
+              ],
+              "raw_quote": "방지턱 모서리에 배터리 밑바닥 긁혔는데 서비스센터에서 차체랑 배터리 일체형이라 수리비 3천만 원 부르고 자차 전손 처리 유도하더군요."
+            },
+            {
+              "year": 2024,
+              "verdict": "CAUTION",
+              "dsi_score": 45,
+              "incident_rate": 14.5,
+              "primary_defect": "서스펜션 댐퍼 세팅 개선, 하부 보호 언더커버 강화 플레이트 옵션 적용",
+              "estimated_repair_cost": "120만 ~ 240만 원",
+              "chronic_symptoms": [
+                "차선이탈방지 보조 작동 시 스티어링 거친 튕김",
+                "HUD 시인성 부족"
+              ],
+              "raw_quote": "가속력 하나는 모델 3 롱레인지 뺨칩니다. 하지만 보험료가 국산 대비 높게 책정되는 이유가 있습니다."
+            },
+            {
+              "year": 2025,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 25,
+              "incident_rate": 6.8,
+              "primary_defect": "섀시 튜닝 및 하부 충격 흡수 구조 개선, 국내 공식 AS망 확충",
+              "estimated_repair_cost": "60만 ~ 120만 원",
+              "chronic_symptoms": [
+                "뒷좌석 헤드룸 제약"
+              ],
+              "raw_quote": "국내 정식 AS 센터 보증 조건 확인하고 타면 가격 대비 성능은 정말 훌륭합니다."
+            }
+          ]
+        },
+        {
+          "id": "dolphin",
+          "name": "돌핀 (Dolphin)",
+          "segment": "소형 해치백",
+          "brand_id": "byd",
+          "overall_grade": "D",
+          "avg_dsi": 60.0,
+          "top_category": "COLD_WEATHER",
+          "year_evaluations": [
+            {
+              "year": 2022,
+              "verdict": "AVOID",
+              "dsi_score": 88,
+              "incident_rate": 42.0,
+              "primary_defect": "에바포레이터 산화 알루미늄 가루 사태 및 토션빔 리어 서스펜션 덜컹거림",
+              "estimated_repair_cost": "210만 ~ 340만 원 (리콜)",
+              "chronic_symptoms": [
+                "송풍구 백색 분말 날림",
+                "방지턱 넘을 때 뒷바퀴 튕김",
+                "급가속 시 휠스핀 (타이어 그립 결함)"
+              ],
+              "raw_quote": "중국 현지에서 에어컨 하얀 가루 때문에 난리 났던 초기형 모델입니다. 무조건 리콜 여부 보셔야 합니다."
+            },
+            {
+              "year": 2023,
+              "verdict": "CAUTION",
+              "dsi_score": 61,
+              "incident_rate": 21.0,
+              "primary_defect": "백색 가루 리콜 대응, 소용량 LFP 배터리로 혹한기 실주행거리 35% 급감",
+              "estimated_repair_cost": "90만 ~ 170만 원",
+              "chronic_symptoms": [
+                "겨울철 영하 날씨 주행거리 180km 미만으로 추락",
+                "12V 배터리 충전 효율 저하"
+              ],
+              "raw_quote": "도심 봄가을 전비는 기가 막힌데 겨울철 히터 켜면 배터리 게이지 닳는 게 눈으로 보입니다."
+            },
+            {
+              "year": 2024,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 31,
+              "incident_rate": 8.2,
+              "primary_defect": "독립현가 리어 서스펜션 개선형 및 히트펌프 최적화 완료",
+              "estimated_repair_cost": "50만 ~ 100만 원",
+              "chronic_symptoms": [
+                "실내 플라스틱 감성품질 한계"
+              ],
+              "raw_quote": "출퇴근 및 마트 장보기용으로는 최고의 가성비 시티 EV입니다."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mercedes-benz",
+      "name_ko": "메르세데스-벤츠",
+      "name_en": "Mercedes-Benz",
+      "country": "독일",
+      "overall_dsi": 69.4,
+      "total_reports": 182,
+      "critical_issue_rate": 35.7,
+      "category_distribution": {
+        "BATTERY_CHARGING": { "count": 82, "percentage": 45.1 },
+        "DRIVING_POWERTRAIN": { "count": 28, "percentage": 15.4 },
+        "SOFTWARE_ELECTRONICS": { "count": 34, "percentage": 18.7 },
+        "BUILD_QUALITY": { "count": 14, "percentage": 7.7 },
+        "SERVICE_REPAIR_COST": { "count": 18, "percentage": 9.9 },
+        "COLD_WEATHER": { "count": 6, "percentage": 3.3 }
+      },
+      "models": [
+        {
+          "id": "eqe",
+          "name": "EQE (EQE 350+ / 300)",
+          "segment": "준대형 럭셔리 세단",
+          "brand_id": "mercedes-benz",
+          "overall_grade": "F",
+          "avg_dsi": 68.3,
+          "top_category": "BATTERY_CHARGING",
+          "year_evaluations": [
+            {
+              "year": 2022,
+              "verdict": "AVOID",
+              "dsi_score": 98,
+              "incident_rate": 65.0,
+              "primary_defect": "중국 파라시스(Farasis) NCM 배터리 셀 탑재로 충전/주차 중 열폭주 화재 위험 (인천 청라 아파트 지하 화재 사고 기종)",
+              "estimated_repair_cost": "7,500만 원 (배터리 교체 견적)",
+              "chronic_symptoms": [
+                "주차 중 BMS 열폭주 감지 실패 및 자연 발화 화재",
+                "전국 아파트 지하주차장 진입 금지 처분",
+                "BMS 충전 제어기 통신 불능 에러",
+                "12V 배터리 센서 결함 시동 불가"
+              ],
+              "raw_quote": "인천 청라 화재 터지고 아파트 입주민 단톡방에서 저격당해 지상 주차장에만 댑니다. 벤츠 엠블럼 보고 1억 주고 샀는데 파라시스 배터리인 거 알고 피눈물 납니다."
+            },
+            {
+              "year": 2023,
+              "verdict": "AVOID",
+              "dsi_score": 93,
+              "incident_rate": 56.0,
+              "primary_defect": "파라시스 배터리 탑재분 지속적 화재 불안, 하부 미세 긁힘 시 7,500만 원 배터리 교체비 견적 논란",
+              "estimated_repair_cost": "7,500만 원",
+              "chronic_symptoms": [
+                "배터리 팩 하부 긁힘 발생 시 수리 불가 판정",
+                "중고차 감가 폭탄 (출고 1년 만에 -50% 폭락)",
+                "BMS 소프트웨어 긴급 리콜 패치 후 충전 속도 다운"
+              ],
+              "raw_quote": "방지턱에 배터리 케이스 살짝 스쳤는데 센터에서 '배터리 팩 손상 의심'이라며 7,200만 원 견적서 끊어줬습니다. 차값보다 비쌉니다."
+            },
+            {
+              "year": 2024,
+              "verdict": "CAUTION",
+              "dsi_score": 55,
+              "incident_rate": 18.0,
+              "primary_defect": "CATL 배터리 셀 혼류 탑재 확인 필수, BMS 예방 감지 시스템 업데이트",
+              "estimated_repair_cost": "250만 ~ 480만 원",
+              "chronic_symptoms": [
+                "배터리 제조사 인증서 확인 번거로움",
+                "하이퍼스크린 터치 반응 지연"
+              ],
+              "raw_quote": "24년식 구매 시엔 차대번호로 배터리 제조사가 CATL인지 파라시스인지 반드시 확인하고 사야 합니다."
+            },
+            {
+              "year": 2025,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 27,
+              "incident_rate": 7.0,
+              "primary_defect": "배터리 제조사 사전 고지제 전면 도입 및 파라시스 셀 배제, BMS 전면 강화",
+              "estimated_repair_cost": "80만 ~ 180만 원",
+              "chronic_symptoms": [
+                "후방 시야 협소"
+              ],
+              "raw_quote": "25년형은 배터리 제조사 투명하게 공개되고 안전 대책 나와서 이제야 벤츠다운 안락함을 즐길 수 있습니다."
+            }
+          ]
+        },
+        {
+          "id": "eqs",
+          "name": "EQS (EQS 450+ / 580)",
+          "segment": "대형 플래그십 세단",
+          "brand_id": "mercedes-benz",
+          "overall_grade": "C",
+          "avg_dsi": 51.0,
+          "top_category": "SOFTWARE_ELECTRONICS",
+          "year_evaluations": [
+            {
+              "year": 2022,
+              "verdict": "CAUTION",
+              "dsi_score": 73,
+              "incident_rate": 27.0,
+              "primary_defect": "MBUX 하이퍼스크린 전장 시스템 블랙아웃 리부팅 및 오토 플러시 도어 핸들 팝업 지연",
+              "estimated_repair_cost": "480만 ~ 820만 원",
+              "chronic_symptoms": [
+                "주행 중 3개 모니터가 동시에 꺼지는 블랙아웃",
+                "리어 액슬 스티어링(10도 조향) 경고등 점등",
+                "에어 서스펜션 차고 조절 센서 불량"
+              ],
+              "raw_quote": "하이퍼스크린 주행 중에 갑자기 꺼져서 계기판도 안 보이고 깜깜해져서 식겁했습니다. 소프트웨어 패치 4번 받았습니다."
+            },
+            {
+              "year": 2023,
+              "verdict": "CAUTION",
+              "dsi_score": 52,
+              "incident_rate": 16.5,
+              "primary_defect": "대규모 펌웨어 패치로 하이퍼스크린 안정화, 실내 잡소리 잔존",
+              "estimated_repair_cost": "250만 ~ 450만 원",
+              "chronic_symptoms": [
+                "센터페시아 하이그로시 잡소리",
+                "초고속 주행 시 A필러 풍절음"
+              ],
+              "raw_quote": "CATL 배터리 탑재 모델이라 화재 공포는 덜합니다. 승차감은 구름 위를 떠다니는 기분입니다."
+            },
+            {
+              "year": 2024,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 28,
+              "incident_rate": 7.2,
+              "primary_defect": "전장 소프트웨어 고도화 및 118kWh 배터리 용량 증대",
+              "estimated_repair_cost": "90만 ~ 190만 원",
+              "chronic_symptoms": [
+                "원-보우(One-bow) 디자인에 대한 호불호"
+              ],
+              "raw_quote": "중고차 감가가 엄청나서 23~24년식 중고로 사기엔 최고의 가성비 플래그십입니다."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bmw",
+      "name_ko": "BMW",
+      "name_en": "BMW",
+      "country": "독일",
+      "overall_dsi": 41.5,
+      "total_reports": 146,
+      "critical_issue_rate": 15.1,
+      "category_distribution": {
+        "BATTERY_CHARGING": { "count": 32, "percentage": 21.9 },
+        "DRIVING_POWERTRAIN": { "count": 28, "percentage": 19.2 },
+        "SOFTWARE_ELECTRONICS": { "count": 48, "percentage": 32.9 },
+        "BUILD_QUALITY": { "count": 18, "percentage": 12.3 },
+        "SERVICE_REPAIR_COST": { "count": 12, "percentage": 8.2 },
+        "COLD_WEATHER": { "count": 8, "percentage": 5.5 }
+      },
+      "models": [
+        {
+          "id": "i4",
+          "name": "i4 (i4 eDrive40 / M50)",
+          "segment": "중형 4도어 그란쿠페",
+          "brand_id": "bmw",
+          "overall_grade": "A",
+          "avg_dsi": 35.0,
+          "top_category": "SOFTWARE_ELECTRONICS",
+          "year_evaluations": [
+            {
+              "year": 2022,
+              "verdict": "CAUTION",
+              "dsi_score": 68,
+              "incident_rate": 23.0,
+              "primary_defect": "초기 생산분 삼성SDI/CATL 고전압 배터리 셀 음극 탭 용접 불량 리콜 및 CCU 충전 제어기 리셋",
+              "estimated_repair_cost": "320만 ~ 550만 원 (리콜 무상)",
+              "chronic_symptoms": [
+                "배터리 셀 용접 불량에 따른 충전 제한 리콜",
+                "복합 충전 장치(CCU) 완속 충전 통신 오류",
+                "iDrive 8 커브드 디스플레이 내비 렉"
+              ],
+              "raw_quote": "배터리 화재 리콜 대상이었는데 BMW 코리아에서 빠르게 모듈 전수 검사하고 모듈 교체해 줘서 잘 타고 있습니다."
+            },
+            {
+              "year": 2023,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 36,
+              "incident_rate": 10.5,
+              "primary_defect": "배터리 리콜 완료 후 파워트레인 안정화, 뛰어난 핸들링과 전비",
+              "estimated_repair_cost": "80만 ~ 170만 원",
+              "chronic_symptoms": [
+                "2열 센터 터널(내연기관 플랫폼 공유)로 인한 중앙 탑승 불편",
+                "후륜 에어서스 감쇠력 튜닝 성향 차이"
+              ],
+              "raw_quote": "내연기관 4시리즈 그란쿠페의 주행 질감을 그대로 전기차로 옮겨왔습니다. 23년식부터는 잔고장도 거의 없습니다."
+            },
+            {
+              "year": 2024,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 22,
+              "incident_rate": 5.8,
+              "primary_defect": "iDrive 8.5 퀵셀렉트 적용 및 전장 안정성 확립",
+              "estimated_repair_cost": "60만 ~ 120만 원",
+              "chronic_symptoms": [
+                "프렁크 수납공간 부재"
+              ],
+              "raw_quote": "BMW의 전기차는 모터 설계가 권선계자형이라 희토류 안 쓰고 고속 효율이 미쳤습니다. 강력 추천합니다."
+            },
+            {
+              "year": 2025,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 14,
+              "incident_rate": 3.5,
+              "primary_defect": "품질 완성도 최상위권, 결함률 업계 최저 수준",
+              "estimated_repair_cost": "40만 ~ 90만 원",
+              "chronic_symptoms": [
+                "단단한 승차감 호불호"
+              ],
+              "raw_quote": "수입 전기차 중 가장 안심하고 탈 수 있는 차를 꼽으라면 단연 BMW i4 24~25년식입니다."
+            }
+          ]
+        },
+        {
+          "id": "ix3",
+          "name": "iX3 (iX3 M Sport)",
+          "segment": "중형 SUV",
+          "brand_id": "bmw",
+          "overall_grade": "B",
+          "avg_dsi": 43.5,
+          "top_category": "BATTERY_CHARGING",
+          "year_evaluations": [
+            {
+              "year": 2021,
+              "verdict": "CAUTION",
+              "dsi_score": 71,
+              "incident_rate": 25.0,
+              "primary_defect": "중국 다롄 공장 생산분 조립 단차 및 고전압 배터리 냉각수 차단 밸브 누설",
+              "estimated_repair_cost": "280만 ~ 480만 원",
+              "chronic_symptoms": [
+                "냉각수 부족 경고등 점등",
+                "완속 충전 시 락 핀 해제 지연",
+                "트렁크 전동 리프트 게이트 소음"
+              ],
+              "raw_quote": "중국 공장 생산이라 처음에 걱정했는데 냉각수 밸브 무상 교체 받고 나서는 X3 내연기관보다 조용하고 좋습니다."
+            },
+            {
+              "year": 2022,
+              "verdict": "CAUTION",
+              "dsi_score": 55,
+              "incident_rate": 17.0,
+              "primary_defect": "브레이크 진공 펌프 전자 센서 에러 및 주행 보조 센서 오염 민감",
+              "estimated_repair_cost": "150만 ~ 290만 원",
+              "chronic_symptoms": [
+                "우천 시 레이더 센서 차단 경고등",
+                "후륜 싱글 모터 겨울철 등판력 한계"
+              ],
+              "raw_quote": "후륜구동이라 눈길에선 스노우 타이어 필수입니다. 패밀리 SUV로는 실내 공간 넉넉하고 아주 만족스럽습니다."
+            },
+            {
+              "year": 2023,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 30,
+              "incident_rate": 8.2,
+              "primary_defect": "CATL 배터리팩 열관리 안정적 검증, 잔고장 감소",
+              "estimated_repair_cost": "70만 ~ 140만 원",
+              "chronic_symptoms": [
+                "급속 충전 최대 150kW로 E-GMP 대비 충전 속도 느림"
+              ],
+              "raw_quote": "화려한 미래지향성은 없지만 기존 X3 차주가 타면 아무런 이질감 없이 편하게 탈 수 있는 숙성된 명차입니다."
+            },
+            {
+              "year": 2024,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 18,
+              "incident_rate": 4.2,
+              "primary_defect": "끝물 숙성형 모델로 파워트레인 및 하체 신뢰성 최고조",
+              "estimated_repair_cost": "50만 ~ 100만 원",
+              "chronic_symptoms": [
+                "사륜구동(xDrive) 라인업 부재"
+              ],
+              "raw_quote": "끝물 할인 많이 해줄 때 23~24년식 잡으신 분들이 진정한 승자입니다."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "polestar",
+      "name_ko": "폴스타",
+      "name_en": "Polestar",
+      "country": "스웨덴",
+      "overall_dsi": 54.0,
+      "total_reports": 92,
+      "critical_issue_rate": 22.8,
+      "category_distribution": {
+        "BATTERY_CHARGING": { "count": 22, "percentage": 23.9 },
+        "DRIVING_POWERTRAIN": { "count": 24, "percentage": 26.1 },
+        "SOFTWARE_ELECTRONICS": { "count": 31, "percentage": 33.7 },
+        "BUILD_QUALITY": { "count": 8, "percentage": 8.7 },
+        "SERVICE_REPAIR_COST": { "count": 5, "percentage": 5.4 },
+        "COLD_WEATHER": { "count": 2, "percentage": 2.2 }
+      },
+      "models": [
+        {
+          "id": "polestar-2",
+          "name": "폴스타 2 (Polestar 2)",
+          "segment": "중형 5도어 패스트백",
+          "brand_id": "polestar",
+          "overall_grade": "C",
+          "avg_dsi": 54.0,
+          "top_category": "SOFTWARE_ELECTRONICS",
+          "year_evaluations": [
+            {
+              "year": 2021,
+              "verdict": "AVOID",
+              "dsi_score": 89,
+              "incident_rate": 44.0,
+              "primary_defect": "인버터 및 고전압 계통 단락으로 인한 주행 중 동력 상실 및 안드로이드 오토모티브 OS 벽돌 현상",
+              "estimated_repair_cost": "420만 ~ 650만 원 (리콜 무상)",
+              "chronic_symptoms": [
+                "고속 주행 중 구동 시스템 정지 경고 및 감속",
+                "TCAM 통신 모듈 백업 배터리 방전 (LTE/GPS/스마트키 일괄 먹통)",
+                "센터 디스플레이 무한 리부팅",
+                "완속 충전 케이블 분리 불가"
+              ],
+              "raw_quote": "지하주차장에서 차 타려고 했더니 TCAM 통신 뻗어서 차 문도 안 열리고, 주행 중에 인포테인먼트 꺼져서 계기판 내비도 다 날아갔습니다."
+            },
+            {
+              "year": 2022,
+              "verdict": "CAUTION",
+              "dsi_score": 67,
+              "incident_rate": 24.0,
+              "primary_defect": "TCAM 모듈 누수 및 방전 이슈 잔존, 완속 충전 잠금 핀 고착",
+              "estimated_repair_cost": "210만 ~ 380만 원",
+              "chronic_symptoms": [
+                "샤크안테나 실링 불량으로 TCAM 모듈 수분 침투",
+                "2열 레그룸 좁음 및 센터 터널 돌출",
+                "승차감 다소 딱딱함"
+              ],
+              "raw_quote": "볼보 서비스센터 공유해서 정비는 친절한데 TCAM 이슈로 레커차 2번 탔습니다."
+            },
+            {
+              "year": 2023,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 38,
+              "incident_rate": 11.0,
+              "primary_defect": "TCAM 펌웨어 P2.9 대규모 안정화 패치 완료, 듀얼 모터 출력 최적화",
+              "estimated_repair_cost": "80만 ~ 160만 원",
+              "chronic_symptoms": [
+                "티맵 내비게이션 간헐적 GPS 위치 오차"
+              ],
+              "raw_quote": "소프트웨어 버전 올라가면서 악명 높던 TCAM 통신 오류 완벽히 잡혔습니다. 볼보의 섀시 강성과 디자인 만족도 높습니다."
+            },
+            {
+              "year": 2024,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 22,
+              "incident_rate": 5.6,
+              "primary_defect": "전륜구동에서 후륜구동(RWD)으로 파워트레인 대개혁, 신형 모터 및 배터리 적용",
+              "estimated_repair_cost": "50만 ~ 110만 원",
+              "chronic_symptoms": [
+                "프레임리스 사이드미러 오염 관리"
+              ],
+              "raw_quote": "24년식 후륜구동 신형은 주행거리도 400km 중반 넘기고 전비와 핸들링 모두 완벽합니다. 중고는 24년식 강력 추천."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "gm-chevrolet",
+      "name_ko": "GM 쉐보레",
+      "name_en": "GM Chevrolet",
+      "country": "미국",
+      "overall_dsi": 70.8,
+      "total_reports": 150,
+      "critical_issue_rate": 42.0,
+      "category_distribution": {
+        "BATTERY_CHARGING": { "count": 78, "percentage": 52.0 },
+        "DRIVING_POWERTRAIN": { "count": 22, "percentage": 14.7 },
+        "SOFTWARE_ELECTRONICS": { "count": 20, "percentage": 13.3 },
+        "BUILD_QUALITY": { "count": 18, "percentage": 12.0 },
+        "SERVICE_REPAIR_COST": { "count": 8, "percentage": 5.3 },
+        "COLD_WEATHER": { "count": 4, "percentage": 2.7 }
+      },
+      "models": [
+        {
+          "id": "bolt-ev",
+          "name": "볼트 EV (Bolt EV)",
+          "segment": "소형 해치백",
+          "brand_id": "gm-chevrolet",
+          "overall_grade": "D",
+          "avg_dsi": 79.3,
+          "top_category": "BATTERY_CHARGING",
+          "year_evaluations": [
+            {
+              "year": 2017,
+              "verdict": "AVOID",
+              "dsi_score": 99,
+              "incident_rate": 68.0,
+              "primary_defect": "LG에너지솔루션 오창 공장 생산 배터리 셀 음극 탭 찢어짐 및 분리막 접힘 결함으로 주차/충전 중 연쇄 화재 및 전량 배터리 리콜",
+              "estimated_repair_cost": "2,200만 원 (리콜 신품 교체)",
+              "chronic_symptoms": [
+                "주차 중 고전압 배터리 자연 발화 화재 위험",
+                "충전율 80% 강제 소프트웨어 제한",
+                "아파트 지하주차장 주차 거부 사태",
+                "실내 시트 쿠션 너무 얇아 장시간 운전 시 엉덩이 통증"
+              ],
+              "raw_quote": "충전 80% 제한 걸어두고 야외에만 주차하라는데 아파트에서 쫓겨나서 진짜 피눈물 흘렸습니다. 배터리 통교체 리콜 받기 전까지 1년 넘게 고통받았습니다."
+            },
+            {
+              "year": 2018,
+              "verdict": "AVOID",
+              "dsi_score": 98,
+              "incident_rate": 65.0,
+              "primary_defect": "배터리 전량 교체 리콜 대상, 완속 충전 시 릴레이 과열",
+              "estimated_repair_cost": "2,200만 원 (리콜)",
+              "chronic_symptoms": [
+                "배터리 화재 리콜 공포",
+                "히터 작동 시 쿨런트 히터 고장으로 찬바람 발생",
+                "실내 플라스틱 삐걱거림"
+              ],
+              "raw_quote": "중고차 살 때 배터리 모듈 교체 확인서 없는 17~19년식 볼트는 절대 거르세요."
+            },
+            {
+              "year": 2019,
+              "verdict": "AVOID",
+              "dsi_score": 96,
+              "incident_rate": 62.0,
+              "primary_defect": "배터리 신품 교체 대기 기간 중 소프트웨어 모니터링 경고등 다발",
+              "estimated_repair_cost": "2,200만 원 (리콜)",
+              "chronic_symptoms": [
+                "충전 레벨 임의 하향 조치",
+                "12V 배터리 조기 방전",
+                "후방 카메라 간헐적 왜곡"
+              ],
+              "raw_quote": "GM 본사에서 배터리팩 통교체 리콜 해주고 보증 8년/16만km 리셋해 준 차만 사야 이득입니다."
+            },
+            {
+              "year": 2020,
+              "verdict": "AVOID",
+              "dsi_score": 91,
+              "incident_rate": 51.0,
+              "primary_defect": "66kWh 배터리 탑재 모델 역시 2차 글로벌 화재 리콜 대상 지정",
+              "estimated_repair_cost": "2,200만 원 (리콜)",
+              "chronic_symptoms": [
+                "배터리 이상 진단 소프트웨어 경고등 점등 시 시동 불능",
+                "급속 충전 속도 최대 55kW 한계"
+              ],
+              "raw_quote": "리콜 발표되고 중고차 가격 반토막 났습니다. 지금은 배터리 새걸로 갈아서 타고 있지만 팔지도 못합니다."
+            },
+            {
+              "year": 2021,
+              "verdict": "CAUTION",
+              "dsi_score": 60,
+              "incident_rate": 20.0,
+              "primary_defect": "배터리팩 전수 교체 완료 차량, 급속 충전 속도 느림(겨울철 30kW대)",
+              "estimated_repair_cost": "120만 ~ 220만 원",
+              "chronic_symptoms": [
+                "고속도로 휴게소 급속 충전 시 1시간 이상 소요",
+                "토션빔 하체 통통 튐"
+              ],
+              "raw_quote": "배터리 신품 교체된 매물은 가성비 입문용 EV로 나쁘지 않습니다. 고속도로 장거리만 안 뛰면 됩니다."
+            },
+            {
+              "year": 2022,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 32,
+              "incident_rate": 9.0,
+              "primary_defect": "페이스리프트 신형 실내 인테리어 및 시트 개선, 배터리 결함 원천 해결",
+              "estimated_repair_cost": "60만 ~ 120만 원",
+              "chronic_symptoms": [
+                "버튼식 기어 조작 어색함"
+              ],
+              "raw_quote": "22년형 페리 볼트는 실내 버튼 기어로 바뀌고 시트도 푹신해져서 단점 거의 다 보완됐습니다."
+            }
+          ]
+        },
+        {
+          "id": "bolt-euv",
+          "name": "볼트 EUV (Bolt EUV)",
+          "segment": "소형 CUV",
+          "brand_id": "gm-chevrolet",
+          "overall_grade": "B",
+          "avg_dsi": 42.5,
+          "top_category": "BATTERY_CHARGING",
+          "year_evaluations": [
+            {
+              "year": 2022,
+              "verdict": "CAUTION",
+              "dsi_score": 58,
+              "incident_rate": 19.5,
+              "primary_defect": "초기 생산분 배터리 리콜 점검 여파로 출고 지연 및 최대 55kW 급속 충전 속도 답답함",
+              "estimated_repair_cost": "110만 ~ 210만 원",
+              "chronic_symptoms": [
+                "급속 충전 80% 채우는데 1시간 소요",
+                "파노라마 선루프 썬쉐이드 구김",
+                "후측방 경고 센서 오작동"
+              ],
+              "raw_quote": "볼트 EV 대비 2열 레그룸이 훨씬 넓어서 패밀리카 가능합니다. 충전 속도 느린 것만 감수하면 잔고장 없습니다."
+            },
+            {
+              "year": 2023,
+              "verdict": "BUY_SAFE",
+              "dsi_score": 27,
+              "incident_rate": 7.5,
+              "primary_defect": "배터리 모듈 안전성 완전 검증, 통풍시트 및 편의사양 풍부",
+              "estimated_repair_cost": "50만 ~ 110만 원",
+              "chronic_symptoms": [
+                "트렁크 공간 살짝 아쉬움"
+              ],
+              "raw_quote": "가성비 소형 전기 SUV 원탑입니다. 배터리 화재 이슈 터진 뒤에 철저히 검증되어 나온 연식이라 아주 든든합니다."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

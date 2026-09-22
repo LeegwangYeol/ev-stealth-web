@@ -1,3 +1,10 @@
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: '현대/기아 전기차 연식별 결함 및 구매 가이드 | Global EV Hub',
+  description: '아이오닉5, EV6, EV9 등 현대/기아 전기차 연식별(2021~2026) ICCU 결함, 고질병 분석 및 피해야 할 연식 가이드',
+};
+
 export default function HyundaiKiaPage() {
   return (
     <div className="space-y-8 py-10 max-w-4xl mx-auto">

@@ -59,12 +59,33 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     (re.compile(r"(봉고\s*(ev|전기차|일렉트릭)|bongo\s*ev)", re.IGNORECASE), "봉고 EV", BRAND_KIA),
 
     # -----------------------------------------------------------------
+    # BMW M3 (Precedes Tesla Model 3 to prevent M3 Competition collision)
+    # -----------------------------------------------------------------
+    (re.compile(r"(bmw\s*m3|비엠\s*m3|\bm3\s*컴페티션|bmw의\s*m3|비엠더블유\s*m3)", re.IGNORECASE), "BMW M3", BRAND_OTHER),
+
+    # -----------------------------------------------------------------
     # Tesla Models
     # -----------------------------------------------------------------
     (re.compile(r"(모델\s*3\s*하이랜드|model\s*3\s*highland|하이랜드|highland)", re.IGNORECASE), "Model 3 Highland", BRAND_TESLA),
-    (re.compile(r"(모델\s*3|model\s*3|\bm3\b)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "Model 3", BRAND_TESLA),
+    (re.compile(
+        r"(모델\s*3|model\s*3"
+        r"|(?<!bmw)(?<!bmw\s)(?<!bmw\s\s)(?<!bmw\s\s\s)(?<!bmw\s\s\s\s)(?<!bmw\s\s\s\s\s)"
+        r"(?<!bmw의)(?<!bmw의\s)(?<!bmw의\s\s)"
+        r"(?<!비엠)(?<!비엠\s)(?<!비엠\s\s)(?<!비엠\s\s\s)(?<!비엠\s\s\s\s)(?<!비엠\s\s\s\s\s)"
+        r"(?<!비엠더블유)(?<!비엠더블유\s)(?<!비엠더블유\s\s)(?<!비엠더블유\s\s\s)(?<!비엠더블유\s\s\s\s)(?<!비엠더블유\s\s\s\s\s)"
+        r"\bm3\b"
+        r")(?=[은는이가을를의에과와도만로]|으로|입|했|하|(?:\s|$)|[^a-zA-Z0-9가-힣]|$)",
+        re.IGNORECASE,
+    ), "Model 3", BRAND_TESLA),
     (re.compile(r"(모델\s*y\s*주니퍼|model\s*y\s*juniper|주니퍼|juniper)", re.IGNORECASE), "Model Y Juniper", BRAND_TESLA),
-    (re.compile(r"(모델\s*y|model\s*y|\bmy\b)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "Model Y", BRAND_TESLA),
+    (re.compile(
+        r"(모델\s*y|model\s*y"
+        r"|(?:테슬라\s*|tesla\s*)my"
+        r"|\bmy(?=[은는이가을를의에과와도만로]|으로)"
+        r"|\bmy\s*(?:rwd|awd|lwd|lr|p|롱레인지|롱레|스탠다드|스탠|퍼포먼스|퍼포|주니퍼|juniper|차주|오너|출고|인도|계약|단차|결함|승차감)"
+        r")(?=[은는이가을를의에과와도만로]|으로|입|했|하|(?:\s|$)|[^a-zA-Z0-9가-힣]|$)",
+        re.IGNORECASE,
+    ), "Model Y", BRAND_TESLA),
     (re.compile(r"(모델\s*s|model\s*s|\bms\b)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "Model S", BRAND_TESLA),
     (re.compile(r"(모델\s*x|model\s*x|\bmx\b)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "Model X", BRAND_TESLA),
     (re.compile(r"(사이버트럭|cybertruck)", re.IGNORECASE), "Cybertruck", BRAND_TESLA),
@@ -74,7 +95,13 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     # -----------------------------------------------------------------
     (re.compile(r"(아토\s*3|atto\s*3|atto3)", re.IGNORECASE), "Atto 3", BRAND_BYD),
     (re.compile(r"(돌핀|dolphin)", re.IGNORECASE), "돌핀", BRAND_BYD),
-    (re.compile(r"(?<![a-zA-Z0-9가-힣])(씰|seal)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "씰", BRAND_BYD),
+    (re.compile(
+        r"((?:byd|비야디)\s*(?:의\s*)?(?:신차\s*|전기차\s*|세단\s*)?(?:씰|seal)"
+        r"|(?<!도어\s)(?<!도어)(?<!오일\s)(?<!오일)(?<!고무\s)(?<!고무)(?<!웨더스트립\s)(?<!웨더스트립)(?<!유리\s)(?<!유리)(?<!윈도우\s)(?<!윈도우)(?<!트렁크\s)(?<!트렁크)(?<!방수\s)(?<!방수)(?<!엔진\s)(?<!모터\s)"
+        r"(?:byd\s*)?(?:씰|seal)\s*(?:ev|전기차|세단|오너|차주|출고|시승|인도|사전계약)"
+        r")(?=[은는이가을를의에과와도만로]|으로|입|했|하|(?:\s|$)|[^a-zA-Z0-9가-힣]|$)",
+        re.IGNORECASE,
+    ), "씰", BRAND_BYD),
     (re.compile(r"(시라이언\s*7?|sealion\s*7?)", re.IGNORECASE), "시라이언", BRAND_BYD),
     (re.compile(r"\b(byd\s*한|byd\s*han)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "한", BRAND_BYD),
     (re.compile(r"\b(byd\s*탕|byd\s*tang)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "탕", BRAND_BYD),

@@ -36,6 +36,16 @@ DEFAULT_OUTPUT_PATH = str(
 )
 
 
+def _safe_float(val: Any, default: float) -> float:
+    """Safely convert value to float, returning default on None, ValueError, or TypeError."""
+    if val is None:
+        return default
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+
+
 def format_daily_report_payload(
     complaints: Iterable[Union[ComplaintRecord, Dict[str, Any]]],
     total_scraped: Optional[int] = None,
@@ -73,9 +83,19 @@ def format_daily_report_payload(
             if "raw_quote" not in record_dict and "verbatim_quote" in record_dict:
                 record_dict["raw_quote"] = record_dict["verbatim_quote"]
 
-            neg_score = float(record_dict.get("negativity_score", record_dict.get("sentiment_score", 0.5)))
-            is_critical = record_dict.get("severity") == "CRITICAL" or float(record_dict.get("severity_index", 0.0)) >= 8.0
-            category = str(record_dict.get("defect_category", "BUILD_QUALITY"))
+            def _safe_float(val: Any, default: float) -> float:
+                if val is None:
+                    return default
+                try:
+                    return float(val)
+                except (ValueError, TypeError):
+                    return default
+
+            neg_score = _safe_float(record_dict.get("negativity_score") or record_dict.get("sentiment_score"), 0.5)
+            sev_idx = _safe_float(record_dict.get("severity_index"), 0.0)
+            is_critical = record_dict.get("severity") == "CRITICAL" or sev_idx >= 8.0
+            raw_cat = record_dict.get("defect_category")
+            category = str(raw_cat) if raw_cat and str(raw_cat) != "None" else "BUILD_QUALITY"
         else:
             continue
 
@@ -122,13 +142,72 @@ def write_daily_reports(
     total_scraped: Optional[int] = None,
     pipeline_version: str = "1.0.0",
     generated_at: Optional[str] = None,
+    merge_existing: bool = True,
 ) -> str:
     """Format and atomically write daily reports JSON to the destination path.
 
+    Deduplicates by ID/URL and merges newly discovered defects with existing
+    historical reports when merge_existing is True and output_path exists.
     Returns the absolute path written.
     """
+    items_to_write: List[Union[ComplaintRecord, Dict[str, Any]]] = list(complaints)
+
+    existing_reports: List[Dict[str, Any]] = []
+    existing_total_scraped = 0
+    if merge_existing and os.path.exists(output_path):
+        try:
+            existing_data = read_daily_reports(output_path)
+            existing_reports = existing_data.get("reports", [])
+            existing_total_scraped = existing_data.get("statistics", {}).get("total_scraped", 0)
+        except Exception:
+            existing_reports = []
+            existing_total_scraped = 0
+
+    # Extract new complaint dicts to index by id and url
+    new_payload = format_daily_report_payload(
+        complaints=items_to_write,
+        total_scraped=total_scraped,
+        pipeline_version=pipeline_version,
+        generated_at=generated_at,
+    )
+    new_reports = new_payload.reports
+
+    seen_ids = set()
+    seen_urls = set()
+    merged_reports: List[Dict[str, Any]] = []
+
+    for nr in new_reports:
+        nid = nr.get("id")
+        nurl = nr.get("url")
+        if (nid and nid in seen_ids) or (nurl and nurl in seen_urls):
+            continue
+        if nid:
+            seen_ids.add(nid)
+        if nurl:
+            seen_urls.add(nurl)
+        merged_reports.append(nr)
+
+    for er in existing_reports:
+        eid = er.get("id")
+        eurl = er.get("url")
+        if (eid and eid in seen_ids) or (eurl and eurl in seen_urls):
+            continue
+        if eid:
+            seen_ids.add(eid)
+        if eurl:
+            seen_urls.add(eurl)
+        merged_reports.append(er)
+
+    combined_total_scraped = (
+        (existing_total_scraped + total_scraped)
+        if total_scraped is not None
+        else max(existing_total_scraped, len(merged_reports))
+    )
+    items_to_write = merged_reports
+    total_scraped = combined_total_scraped
+
     payload = format_daily_report_payload(
-        complaints=complaints,
+        complaints=items_to_write,
         total_scraped=total_scraped,
         pipeline_version=pipeline_version,
         generated_at=generated_at,

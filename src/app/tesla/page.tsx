@@ -1,3 +1,10 @@
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: '테슬라 연식별 결함 및 구매 가이드 | Global EV Hub',
+  description: '테슬라 모델 3, 모델 Y 연식별(2017~2026) 히터 파괴, 컨트롤 암, 옥토밸브 히트펌프 결함 분석 및 중고차 구매 가이드',
+};
+
 export default function TeslaPage() {
   return (
     <div className="space-y-8 py-10 max-w-4xl mx-auto">

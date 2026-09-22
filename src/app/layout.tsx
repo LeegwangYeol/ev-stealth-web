@@ -30,33 +30,121 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900`}
       >
-        <nav className="bg-slate-900 text-white p-4 shadow-md">
-          <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-4">
-            <Link href="/" className="text-xl font-bold tracking-tight hover:text-blue-300 transition shrink-0">
-              Global EV Hub
+        <header className="bg-slate-900 text-white shadow-md sticky top-0 z-50">
+          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+            <Link href="/" className="text-xl font-bold tracking-tight hover:text-blue-300 transition shrink-0 flex items-center gap-2">
+              <span>⚡</span> Global EV Hub
             </Link>
-            <div className="flex flex-wrap items-center justify-center sm:justify-end gap-x-3 sm:gap-x-4 gap-y-2 text-sm sm:text-base">
-              <Link href="/2026-latest" className="text-slate-200 hover:text-white font-medium transition">
+
+            {/* Desktop Navigation Bar */}
+            <nav aria-label="데스크톱 내비게이션" data-testid="desktop-nav" className="hidden md:flex flex-wrap items-center justify-end gap-x-2 lg:gap-x-3 gap-y-1 text-xs lg:text-sm font-medium">
+              <Link href="/depreciation-calculator" className="text-emerald-400 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800">
+                <span>📉</span> 감가·배터리 계산기
+              </Link>
+              <Link href="/reliability-analytics" className="text-blue-300 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800">
+                <span>📊</span> 결함·신뢰성 통계
+              </Link>
+              <Link href="/recall-portal" className="text-slate-200 hover:text-white font-medium transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800">
+                <span>🚨</span> 공식 리콜 포털
+              </Link>
+              <Link href="/2026-latest" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800">
                 2026 최신 결함
               </Link>
-              <Link href="/pdi-checklist" className="text-slate-200 hover:text-white font-medium transition">
+              <Link href="/pdi-checklist" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800">
                 PDI 체크리스트
               </Link>
-              <Link href="/hyundai-kia" className="text-slate-200 hover:text-white font-medium transition">
+              <Link href="/hyundai-kia" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800">
                 현대/기아
               </Link>
-              <Link href="/tesla" className="text-slate-200 hover:text-white font-medium transition">
+              <Link href="/tesla" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800">
                 테슬라
               </Link>
-              <Link href="/byd" className="text-slate-200 hover:text-white font-medium transition">
+              <Link href="/byd" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800">
                 BYD
               </Link>
-              <Link href="/global-brands" className="text-slate-200 hover:text-white font-medium transition">
+              <Link href="/global-brands" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800">
                 기타 글로벌
               </Link>
-            </div>
+            </nav>
+
+            {/* Mobile Drawer Menu Toggle */}
+            <details className="md:hidden relative group" id="mobile-nav-drawer" data-testid="mobile-drawer-toggle">
+              <summary
+                aria-label="모바일 메뉴 열기"
+                className="list-none flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-sm font-medium cursor-pointer border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 select-none"
+              >
+                <svg className="w-5 h-5 block group-open:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                <svg className="w-5 h-5 hidden group-open:block" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                <span>메뉴</span>
+              </summary>
+
+              {/* Mobile Drawer Content */}
+              <nav
+                aria-label="모바일 서랍 메뉴"
+                data-testid="mobile-drawer"
+                className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-2rem)] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-4 flex flex-col gap-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-200 text-sm"
+              >
+                <div className="text-xs font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider border-b border-slate-800 pb-2 flex items-center justify-between">
+                  <span>모바일 메뉴</span>
+                  <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded border border-blue-500/30">Global EV</span>
+                </div>
+                <Link
+                  href="/depreciation-calculator"
+                  className="px-3 py-2 rounded-lg bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 hover:text-white font-semibold transition flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>📉</span> 감가·배터리 계산기
+                  </span>
+                  <span className="text-[10px] bg-emerald-400 text-slate-950 font-extrabold px-1.5 py-0.5 rounded">신규</span>
+                </Link>
+                <Link
+                  href="/reliability-analytics"
+                  className="px-3 py-2 rounded-lg hover:bg-slate-800 text-blue-300 hover:text-white font-semibold transition flex items-center gap-2"
+                >
+                  <span>📊</span> 신뢰성 통계
+                </Link>
+                <Link
+                  href="/recall-portal"
+                  className="px-3 py-2 rounded-lg hover:bg-slate-800 text-slate-200 hover:text-white font-medium transition flex items-center gap-2"
+                >
+                  <span>🚨</span> 리콜 포털
+                </Link>
+                <Link
+                  href="/2026-latest"
+                  className="px-3 py-2 rounded-lg hover:bg-slate-800 text-slate-200 hover:text-white font-medium transition flex items-center gap-2"
+                >
+                  <span>🔥</span> 2026 최신 결함
+                </Link>
+                <Link
+                  href="/pdi-checklist"
+                  className="px-3 py-2 rounded-lg hover:bg-slate-800 text-slate-200 hover:text-white font-medium transition flex items-center gap-2"
+                >
+                  <span>✅</span> PDI 체크리스트
+                </Link>
+                <div className="h-px border-t border-slate-800 my-1" />
+                <div className="text-[11px] font-semibold text-slate-400 px-2 py-0.5">제조사별 피하기 가이드</div>
+                <div className="grid grid-cols-2 gap-1">
+                  <Link href="/hyundai-kia" className="px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition">
+                    현대/기아
+                  </Link>
+                  <Link href="/tesla" className="px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition">
+                    테슬라
+                  </Link>
+                  <Link href="/byd" className="px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition">
+                    BYD
+                  </Link>
+                  <Link href="/global-brands" className="px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition">
+                    기타 글로벌
+                  </Link>
+                </div>
+              </nav>
+            </details>
           </div>
-        </nav>
+        </header>
         <main className="max-w-6xl mx-auto p-6 min-h-screen">
           {children}
         </main>

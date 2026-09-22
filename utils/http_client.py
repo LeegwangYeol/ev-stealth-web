@@ -4,6 +4,8 @@ Pure Python Standard Library implementation with User-Agent rotation, configurab
 jitter (1.5s~3.5s), exponential backoff, cookie jar session handling, and error logging.
 """
 
+import datetime
+import email.utils
 import html
 import http.cookiejar
 import logging
@@ -25,7 +27,7 @@ if not logger.handlers:
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
 
-# User-Agent Pool (Modern Desktop and Mobile browsers)
+# User-Agent Pool (Modern Desktop browsers only - prevents mobile redirect loops on Korean forums)
 USER_AGENT_POOL = [
     # Chrome macOS
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
@@ -40,9 +42,6 @@ USER_AGENT_POOL = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.6; rv:129.0) Gecko/20100101 Firefox/129.0",
     # Edge Windows
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0",
-    # Mobile (iOS Safari & Android Chrome)
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Mobile/15E148 Safari/604.1",
-    "Mozilla/5.0 (Linux; Android 14; SM-S918N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36",
 ]
 
 
@@ -233,7 +232,7 @@ class SafeHttpClient:
             elif isinstance(data, str):
                 payload_bytes = data.encode("utf-8")
 
-        req_timeout = timeout or self.timeout
+        req_timeout = timeout if timeout is not None else self.timeout
 
         for attempt in range(1, self.max_retries + 1):
             try:
@@ -258,19 +257,36 @@ class SafeHttpClient:
                 logger.warning(
                     f"HTTPError {he.code} ({he.reason}) on {url} (Attempt {attempt}/{self.max_retries})"
                 )
-                # Retry on rate limiting or server errors
-                if he.code in [429, 403, 500, 502, 503, 504] and attempt < self.max_retries:
-                    backoff = self._calc_backoff(attempt)
-                    logger.info(f"Backing off for {backoff:.2f}s before retry (status {he.code})...")
-                    time.sleep(backoff)
-                else:
-                    # Return error content if not retrying
+                try:
+                    # Retry on rate limiting or server errors
+                    if he.code in [429, 403, 500, 502, 503, 504] and attempt < self.max_retries:
+                        retry_after = self._parse_retry_after(he) if he.code == 429 else None
+                        backoff = self._calc_backoff(attempt, retry_after=retry_after)
+                        logger.info(f"Backing off for {backoff:.2f}s before retry (status {he.code})...")
+                        try:
+                            he.close()
+                        except Exception:
+                            pass
+                        time.sleep(backoff)
+                    else:
+                        # Return error content if not retrying
+                        try:
+                            raw_bytes = he.read()
+                            decoded_text = robust_decode(raw_bytes, declared_encoding=encoding or "utf-8")
+                            return he.code, decoded_text, raw_bytes
+                        except Exception:
+                            return he.code, "", b""
+                        finally:
+                            try:
+                                he.close()
+                            except Exception:
+                                pass
+                finally:
+                    # Guarantee HTTPError response object is closed under Python 3.14
                     try:
-                        raw_bytes = he.read()
-                        decoded_text = robust_decode(raw_bytes, declared_encoding=encoding or "utf-8")
-                        return he.code, decoded_text, raw_bytes
+                        he.close()
                     except Exception:
-                        return he.code, "", b""
+                        pass
 
             except Exception as ex:
                 logger.warning(
@@ -286,8 +302,52 @@ class SafeHttpClient:
         logger.error(f"Failed to fetch {url} after {self.max_retries} attempts.")
         return 0, "", b""
 
-    def _calc_backoff(self, attempt: int) -> float:
-        """Calculate exponential backoff time with jitter."""
+    def _parse_retry_after(self, he: urllib.error.HTTPError) -> Optional[float]:
+        """
+        Parse standard HTTP Retry-After header if present on HTTPError response.
+        Supports integer/float delay seconds or HTTP-date string (RFC 9110 / RFC 7231).
+        """
+        if not hasattr(he, "headers") or not he.headers:
+            return None
+
+        val = he.headers.get("Retry-After")
+        if not val:
+            return None
+
+        val_str = str(val).strip()
+        # 1. Delay seconds
+        try:
+            sec = float(val_str)
+            if sec >= 0:
+                return sec
+        except ValueError:
+            pass
+
+        # 2. HTTP-date
+        try:
+            parsed_dt = email.utils.parsedate_to_datetime(val_str)
+            now = datetime.datetime.now(datetime.timezone.utc)
+            if parsed_dt.tzinfo is None:
+                parsed_dt = parsed_dt.replace(tzinfo=datetime.timezone.utc)
+            delta = (parsed_dt - now).total_seconds()
+            return max(0.0, delta)
+        except Exception:
+            pass
+
+        return None
+
+    def _calc_backoff(self, attempt: int, retry_after: Optional[float] = None) -> float:
+        """
+        Calculate backoff time in seconds.
+        If retry_after is provided by server (e.g. on HTTP 429), honor it.
+        Otherwise calculate exponential backoff with jitter.
+        """
+        if retry_after is not None and retry_after >= 0:
+            if not self.enable_jitter:
+                return float(retry_after)
+            jitter = random.uniform(0.1, 0.5)
+            return min(60.0, float(retry_after) + jitter)
+
         if not self.enable_jitter:
             return float(2 ** attempt)
         base = (2 ** attempt) * 1.5

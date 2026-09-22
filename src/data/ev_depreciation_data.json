@@ -1,0 +1,1366 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "generated_at": "2026-09-22T01:10:00Z",
+    "total_models": 15,
+    "brands_count": 8,
+    "currency": "KRW",
+    "baseline_annual_mileage_km": 15000,
+    "sources": [
+      "Encar (엔카닷컴) 2024-2026 Resale Transaction Index",
+      "K Car (케이카) Monthly Used EV Price Index",
+      "KIDI (보험개발원) Vehicle Loss & Valuation Table",
+      "MOLIT (국토교통부) EV Registration Statistics",
+      "iSeeCars 2024-2026 Global EV Depreciation Study",
+      "Ministry of Environment (환경부) CleanSys EV Subsidy Guidelines",
+      "Local Tax Act (지방세법) Article 127 Automobile Tax Schedule"
+    ]
+  },
+  "market_context": {
+    "korean_market_status": "2024년 하반기 인천 청라 벤츠 화재와 캐즘으로 급락했던 중고 전기차 시세는 2026년 들어 거래량 급증 및 고유가 지속으로 반등 및 차별화 양상으로 정착. 인기 국산 및 테슬라 모델은 감가 방어율이 내연기관 대비 대등하거나 근접함.",
+    "cheongna_fire_impact_summary": "파라시스(Farasis) NCM 배터리가 탑재된 벤츠 EQE/EQS 모델은 시장 퇴출 수준의 낙폭(-44% 1년 감가)을 겪었으며 지하주차장 출입 제한 등의 사회적 낙인으로 인해 최저 감가 방어 등급(D) 기록.",
+    "subsidy_clawback_rules": "국내 매매 시 동일 지자체 관내 이전의 경우 매수인이 2년 잔여 의무운행기간을 자동 승계하므로 환수액 0원. 타 지자체 관외 이전 시 지방비 보조금만 잔여기간별 70%~20% 환수. 해외 수출 또는 임의 말소 시 국비 및 지방비 전액 환수."
+  },
+  "adjustment_factors": {
+    "warranty_cliff": {
+      "safe_period_multiplier": 1.0,
+      "approaching_cliff_1_2_years_penalty": -0.06,
+      "expired_warranty_penalty": -0.14,
+      "description": "배터리 교체 비용(2,300만~7,500만 원)으로 인해 보증 만료 2년 전부터 감가 가속, 만료 시 -14% 추가 급락"
+    },
+    "battery_chemistry": {
+      "LFP": {
+        "cycle_life_bonus_yr3_5": 0.025,
+        "winter_seasonal_discount": -0.035,
+        "fire_safety_reputation_bonus": 0.03,
+        "description": "올리빈 구조의 높은 열적 안정성 및 수명(3,000사이클)으로 장기 잔존가치 우수하나 혹한기 충전 및 주행거리 저하"
+      },
+      "NCM_622": {
+        "cycle_life_bonus_yr3_5": 0.0,
+        "winter_seasonal_discount": -0.015,
+        "fire_safety_reputation_bonus": 0.01,
+        "description": "균형 잡힌 중밀도 3원계 셀로 열화율이 완만하며 상대적으로 안정적인 방어율 유지"
+      },
+      "NCM_811": {
+        "cycle_life_bonus_yr3_5": -0.01,
+        "winter_seasonal_discount": -0.01,
+        "fire_safety_reputation_bonus": 0.0,
+        "description": "고에너지밀도 하이니켈 셀로 저온 효율 우수하나 고충전율 및 급속충전에 따른 미세 크랙 위험"
+      },
+      "NCMA": {
+        "cycle_life_bonus_yr3_5": 0.015,
+        "winter_seasonal_discount": -0.01,
+        "fire_safety_reputation_bonus": 0.015,
+        "description": "알루미늄 도핑 4원계 양극재로 하이니켈 안정성 강화 및 사이클 수명 개선"
+      },
+      "NCA": {
+        "cycle_life_bonus_yr3_5": -0.015,
+        "winter_seasonal_discount": -0.01,
+        "fire_safety_reputation_bonus": -0.005,
+        "description": "원통형 고출력 특화 양극재로 초기 성능 우수하나 캘린더 열화 속도가 상대적으로 빠름"
+      }
+    },
+    "facelift_hardware": {
+      "platform_800V_premium": 0.035,
+      "platform_400V_penalty": -0.025,
+      "major_facelift_compute_shift_penalty": -0.06,
+      "description": "E-GMP 800V 초고속 충전(18분 완충) 대비 400V 구형 플랫폼 충전 격차 확대 및 ccNC/HW4 신형 전환에 따른 구형 감가 심화"
+    },
+    "software_ota": {
+      "FULL_STACK": 0.05,
+      "ADVANCED_CCB": 0.0,
+      "INFOTAINMENT_ONLY": -0.04,
+      "BASIC": -0.06
+    },
+    "mileage_sensitivity": {
+      "base_km_per_year": 15000,
+      "penalty_per_10000km_excess": -0.03,
+      "bonus_per_10000km_deficit": 0.025
+    }
+  },
+  "chemistries": {
+    "LFP": {
+      "id": "LFP",
+      "name": "Lithium Iron Phosphate (LiFePO4)",
+      "cathode_structure": "Olivine",
+      "nominal_cell_voltage_v": 3.2,
+      "voltage_cutoff_v": 2.5,
+      "energy_density_wh_kg": 160,
+      "cycle_life_to_80_soh": 3000,
+      "calendar_baseline_annual_loss_pct": 1.2,
+      "calendar_arrhenius_ea_j_mol": 28000.0,
+      "soc_stress_coefficient_beta": 0.30,
+      "calendar_time_exponent_z": 0.65,
+      "cyclic_exponent_w": 0.90,
+      "dod_exponent_u": 0.80,
+      "dcfc_acceleration_multiplier_max": 1.25,
+      "cold_charge_sensitivity_gamma": 0.25,
+      "thermal_runaway_temp_c": 270,
+      "ocv_profile_type": "FLAT_PLATEAU",
+      "cell_balancing_requirement": "MANDATORY_WEEKLY_100_PERCENT"
+    },
+    "NCM_622": {
+      "id": "NCM_622",
+      "name": "Nickel Cobalt Manganese 6:2:2",
+      "cathode_structure": "Layered Oxide",
+      "nominal_cell_voltage_v": 3.65,
+      "voltage_cutoff_v": 2.8,
+      "energy_density_wh_kg": 230,
+      "cycle_life_to_80_soh": 1500,
+      "calendar_baseline_annual_loss_pct": 1.6,
+      "calendar_arrhenius_ea_j_mol": 30000.0,
+      "soc_stress_coefficient_beta": 0.70,
+      "calendar_time_exponent_z": 0.65,
+      "cyclic_exponent_w": 0.90,
+      "dod_exponent_u": 0.83,
+      "dcfc_acceleration_multiplier_max": 1.35,
+      "cold_charge_sensitivity_gamma": 0.30,
+      "thermal_runaway_temp_c": 230,
+      "ocv_profile_type": "SLOPING",
+      "cell_balancing_requirement": "DYNAMIC_PASSIVE_BMS"
+    },
+    "NCM_811": {
+      "id": "NCM_811",
+      "name": "Nickel Cobalt Manganese 8:1:1 (High-Nickel)",
+      "cathode_structure": "Layered Oxide",
+      "nominal_cell_voltage_v": 3.70,
+      "voltage_cutoff_v": 2.85,
+      "energy_density_wh_kg": 270,
+      "cycle_life_to_80_soh": 1300,
+      "calendar_baseline_annual_loss_pct": 1.8,
+      "calendar_arrhenius_ea_j_mol": 32000.0,
+      "soc_stress_coefficient_beta": 0.85,
+      "calendar_time_exponent_z": 0.65,
+      "cyclic_exponent_w": 0.90,
+      "dod_exponent_u": 0.85,
+      "dcfc_acceleration_multiplier_max": 1.40,
+      "cold_charge_sensitivity_gamma": 0.35,
+      "thermal_runaway_temp_c": 210,
+      "ocv_profile_type": "SLOPING",
+      "cell_balancing_requirement": "DYNAMIC_PASSIVE_BMS"
+    },
+    "NCMA": {
+      "id": "NCMA",
+      "name": "Nickel Cobalt Manganese Aluminum (Quaternary)",
+      "cathode_structure": "Doped Layered Oxide",
+      "nominal_cell_voltage_v": 3.70,
+      "voltage_cutoff_v": 2.85,
+      "energy_density_wh_kg": 290,
+      "cycle_life_to_80_soh": 1600,
+      "calendar_baseline_annual_loss_pct": 1.5,
+      "calendar_arrhenius_ea_j_mol": 31000.0,
+      "soc_stress_coefficient_beta": 0.75,
+      "calendar_time_exponent_z": 0.65,
+      "cyclic_exponent_w": 0.90,
+      "dod_exponent_u": 0.82,
+      "dcfc_acceleration_multiplier_max": 1.30,
+      "cold_charge_sensitivity_gamma": 0.28,
+      "thermal_runaway_temp_c": 225,
+      "ocv_profile_type": "SLOPING",
+      "cell_balancing_requirement": "DYNAMIC_PASSIVE_BMS"
+    },
+    "NCA": {
+      "id": "NCA",
+      "name": "Nickel Cobalt Aluminum",
+      "cathode_structure": "Layered Oxide",
+      "nominal_cell_voltage_v": 3.65,
+      "voltage_cutoff_v": 2.80,
+      "energy_density_wh_kg": 280,
+      "cycle_life_to_80_soh": 1100,
+      "calendar_baseline_annual_loss_pct": 2.0,
+      "calendar_arrhenius_ea_j_mol": 33000.0,
+      "soc_stress_coefficient_beta": 0.90,
+      "calendar_time_exponent_z": 0.65,
+      "cyclic_exponent_w": 0.90,
+      "dod_exponent_u": 0.88,
+      "dcfc_acceleration_multiplier_max": 1.45,
+      "cold_charge_sensitivity_gamma": 0.35,
+      "thermal_runaway_temp_c": 200,
+      "ocv_profile_type": "SLOPING",
+      "cell_balancing_requirement": "DYNAMIC_PASSIVE_BMS"
+    }
+  },
+  "battery_replacement_costs": [
+    {
+      "tier_id": "TIER_50KWH",
+      "segment_name": "Small (35-60 kWh)",
+      "pack_size_kwh_nominal": 50.0,
+      "pack_size_range": "35 kWh - 60 kWh",
+      "representative_models": ["Tesla Model 3 RWD", "Hyundai Kona EV Standard", "Kia Ray EV", "BYD Dolphin"],
+      "costs": {
+        "new_pack_krw": 16000000,
+        "new_pack_usd": 12000,
+        "reman_pack_krw": 11000000,
+        "reman_pack_usd": 8270,
+        "labor_coolant_krw": 1200000,
+        "labor_coolant_usd": 900,
+        "total_new_installed_krw": 17200000,
+        "total_new_installed_usd": 12900,
+        "total_reman_installed_krw": 12200000,
+        "total_reman_installed_usd": 9170,
+        "cost_per_kwh_usd": 258
+      }
+    },
+    {
+      "tier_id": "TIER_77KWH",
+      "segment_name": "Midsize (70-84 kWh)",
+      "pack_size_kwh_nominal": 77.4,
+      "pack_size_range": "70 kWh - 84 kWh",
+      "representative_models": ["Hyundai Ioniq 5 Long Range", "Kia EV6 Long Range", "Tesla Model Y Long Range", "Polestar 2", "Genesis GV60"],
+      "costs": {
+        "new_pack_krw": 24000000,
+        "new_pack_usd": 18000,
+        "reman_pack_krw": 17000000,
+        "reman_pack_usd": 12780,
+        "labor_coolant_krw": 1600000,
+        "labor_coolant_usd": 1200,
+        "total_new_installed_krw": 25600000,
+        "total_new_installed_usd": 19200,
+        "total_reman_installed_krw": 18600000,
+        "total_reman_installed_usd": 13980,
+        "cost_per_kwh_usd": 248
+      }
+    },
+    {
+      "tier_id": "TIER_100KWH",
+      "segment_name": "Large / Luxury (90-118 kWh)",
+      "pack_size_kwh_nominal": 100.0,
+      "pack_size_range": "90 kWh - 118 kWh",
+      "representative_models": ["Kia EV9", "Genesis Electrified G80", "Mercedes-Benz EQE/EQS", "Tesla Model S / Model X"],
+      "costs": {
+        "new_pack_krw": 32000000,
+        "new_pack_usd": 24000,
+        "reman_pack_krw": 23000000,
+        "reman_pack_usd": 17300,
+        "labor_coolant_krw": 2200000,
+        "labor_coolant_usd": 1650,
+        "total_new_installed_krw": 34200000,
+        "total_new_installed_usd": 25650,
+        "total_reman_installed_krw": 25200000,
+        "total_reman_installed_usd": 18950,
+        "cost_per_kwh_usd": 256
+      }
+    }
+  ],
+  "subsidy_clawback_schedule": {
+    "mandatory_operation_months": 24,
+    "legal_basis": "대기환경보전법 제58조 제3항 및 동법 시행규칙 제79조의4 [별표 21의2]",
+    "tiers": [
+      { "min_months": 0, "max_months_exclusive": 3, "clawback_rate": 0.70, "label_ko": "3개월 미만 (70% 회수)" },
+      { "min_months": 3, "max_months_exclusive": 6, "clawback_rate": 0.65, "label_ko": "3개월 이상 6개월 미만 (65% 회수)" },
+      { "min_months": 6, "max_months_exclusive": 9, "clawback_rate": 0.60, "label_ko": "6개월 이상 9개월 미만 (60% 회수)" },
+      { "min_months": 9, "max_months_exclusive": 12, "clawback_rate": 0.55, "label_ko": "9개월 이상 12개월 미만 (55% 회수)" },
+      { "min_months": 12, "max_months_exclusive": 15, "clawback_rate": 0.50, "label_ko": "12개월 이상 15개월 미만 (50% 회수)" },
+      { "min_months": 15, "max_months_exclusive": 18, "clawback_rate": 0.40, "label_ko": "15개월 이상 18개월 미만 (40% 회수)" },
+      { "min_months": 18, "max_months_exclusive": 21, "clawback_rate": 0.30, "label_ko": "18개월 이상 21개월 미만 (30% 회수)" },
+      { "min_months": 21, "max_months_exclusive": 24, "clawback_rate": 0.20, "label_ko": "21개월 이상 24개월 미만 (20% 회수)" },
+      { "min_months": 24, "max_months_exclusive": null, "clawback_rate": 0.00, "label_ko": "24개월 이상 (0% 의무운행기간 만료 면제)" }
+    ],
+    "transfer_rules": {
+      "intra": {
+        "scenario": "관내 이전 (동일 지자체 내 매매)",
+        "clawback_local": false,
+        "clawback_national": false,
+        "description": "매수인이 매도인의 잔여 의무운행기간을 자동 승계하므로 환수금액 0원 (환수 면제)."
+      },
+      "inter": {
+        "scenario": "관외 이전 (타 시·도 및 타 지자체 매매)",
+        "clawback_local": true,
+        "clawback_national": false,
+        "description": "지자체 지방비 보조금에 대해 사용기간별 회수요율(70%~20%)을 적용하여 반납. 국비는 국내 승계로 면제."
+      },
+      "export": {
+        "scenario": "해외 수출 목적 등록 말소",
+        "clawback_local": true,
+        "clawback_national": true,
+        "description": "국내 대기질 개선 취지 상실로 국비 및 지방비 총 보조금 전액에 대해 회수요율 적용 환수."
+      }
+    }
+  },
+  "tco_parameters": {
+    "fuel_tariffs": {
+      "ev_slow_charging_krw_per_kwh": 250.0,
+      "ev_fast_charging_krw_per_kwh": 347.2,
+      "ice_gasoline_krw_per_liter": 1700.0,
+      "ice_diesel_krw_per_liter": 1550.0
+    },
+    "efficiency_baselines": {
+      "ev_efficiency_km_per_kwh": 5.2,
+      "ice_gasoline_economy_km_per_liter": 12.0,
+      "ice_diesel_economy_km_per_liter": 15.0
+    },
+    "tax_parameters": {
+      "ev_annual_tax_krw": 130000,
+      "ev_base_tax_krw": 100000,
+      "ev_education_tax_krw": 30000,
+      "ice_displacement_tiers": [
+        { "max_cc": 1000, "rate_per_cc_krw": 80, "name": "경차 (1,000cc 이하)" },
+        { "max_cc": 1600, "rate_per_cc_krw": 140, "name": "소형/준중형 (1,001~1,600cc)" },
+        { "max_cc": null, "rate_per_cc_krw": 200, "name": "중형/대형 (1,601cc 초과)" }
+      ],
+      "education_tax_multiplier": 0.30,
+      "ice_age_discount_start_year": 3,
+      "ice_age_discount_rate_per_year": 0.05,
+      "ice_age_discount_max": 0.50
+    },
+    "auxiliary_benefits": {
+      "expressway_toll_discount_rate": 0.50,
+      "annual_toll_savings_krw": 250000,
+      "public_parking_discount_rate": 0.50,
+      "annual_parking_savings_krw": 150000,
+      "maintenance_annual_savings_krw": 200000
+    }
+  },
+  "models": [
+    {
+      "id": "model-3",
+      "brand_id": "tesla",
+      "brand_name_en": "Tesla",
+      "brand_name_ko": "테슬라",
+      "model_name": "Model 3 (Long Range / RWD)",
+      "segment": "중형 전기 세단",
+      "msrp_krw_baseline": 56000000,
+      "avg_subsidy_krw": 4500000,
+      "net_purchase_price_krw": 51500000,
+      "battery_specs": {
+        "capacity_kwh": 60.0,
+        "chemistry": "LFP",
+        "cell_supplier": "CATL (RWD) / LG (Long Range)",
+        "voltage_architecture": "400V"
+      },
+      "warranty": {
+        "years": 8,
+        "km": 160000,
+        "guarantee_retention_pct": 70
+      },
+      "factor_weights": {
+        "warranty_cliff": 1.0,
+        "chemistry_aging": 0.025,
+        "architecture_800v": -0.025,
+        "ota_maturity": 0.05,
+        "net_factor_adjustment": 0.05
+      },
+      "software_ota_level": "FULL_STACK",
+      "resale_defense_tier": "S",
+      "depreciation_curve": {
+        "year_1": {
+          "residual_pct_msrp": 86.0,
+          "depreciation_pct_msrp": 14.0,
+          "residual_pct_effective": 93.5,
+          "avg_used_price_krw": 48160000,
+          "annual_drop_pct": 14.0
+        },
+        "year_2": {
+          "residual_pct_msrp": 76.5,
+          "depreciation_pct_msrp": 23.5,
+          "residual_pct_effective": 83.2,
+          "avg_used_price_krw": 42840000,
+          "annual_drop_pct": 9.5
+        },
+        "year_3": {
+          "residual_pct_msrp": 66.0,
+          "depreciation_pct_msrp": 34.0,
+          "residual_pct_effective": 71.8,
+          "avg_used_price_krw": 36960000,
+          "annual_drop_pct": 10.5
+        },
+        "year_4": {
+          "residual_pct_msrp": 56.0,
+          "depreciation_pct_msrp": 44.0,
+          "residual_pct_effective": 60.9,
+          "avg_used_price_krw": 31360000,
+          "annual_drop_pct": 10.0
+        },
+        "year_5": {
+          "residual_pct_msrp": 46.0,
+          "depreciation_pct_msrp": 54.0,
+          "residual_pct_effective": 50.0,
+          "avg_used_price_krw": 25760000,
+          "annual_drop_pct": 10.0
+        }
+      },
+      "key_pros_resale": "전 영역 풀 OTA 업데이트로 구형 차량도 최신 소프트웨어 UI 및 주행 기능 유지, 슈퍼차저 접근성, 국내외 최고 수준의 유동성",
+      "key_cons_resale": "하이랜드 페이스리프트(통풍시트/승차감 대폭 개선)로 인한 2019-2022 구형 모델의 추가 감가 압력, 잦은 테슬라 신차가격 인하"
+    },
+    {
+      "id": "model-y",
+      "brand_id": "tesla",
+      "brand_name_en": "Tesla",
+      "brand_name_ko": "테슬라",
+      "model_name": "Model Y (RWD / Long Range)",
+      "segment": "중형 전기 SUV",
+      "msrp_krw_baseline": 57000000,
+      "avg_subsidy_krw": 3800000,
+      "net_purchase_price_krw": 53200000,
+      "battery_specs": {
+        "capacity_kwh": 60.0,
+        "chemistry": "LFP",
+        "cell_supplier": "CATL (RWD) / LG (Long Range)",
+        "voltage_architecture": "400V"
+      },
+      "warranty": {
+        "years": 8,
+        "km": 160000,
+        "guarantee_retention_pct": 70
+      },
+      "factor_weights": {
+        "warranty_cliff": 1.0,
+        "chemistry_aging": 0.025,
+        "architecture_800v": -0.025,
+        "ota_maturity": 0.05,
+        "net_factor_adjustment": 0.05
+      },
+      "software_ota_level": "FULL_STACK",
+      "resale_defense_tier": "S",
+      "depreciation_curve": {
+        "year_1": {
+          "residual_pct_msrp": 85.5,
+          "depreciation_pct_msrp": 14.5,
+          "residual_pct_effective": 91.6,
+          "avg_used_price_krw": 48735000,
+          "annual_drop_pct": 14.5
+        },
+        "year_2": {
+          "residual_pct_msrp": 75.5,
+          "depreciation_pct_msrp": 24.5,
+          "residual_pct_effective": 80.9,
+          "avg_used_price_krw": 43035000,
+          "annual_drop_pct": 10.0
+        },
+        "year_3": {
+          "residual_pct_msrp": 65.0,
+          "depreciation_pct_msrp": 35.0,
+          "residual_pct_effective": 69.6,
+          "avg_used_price_krw": 37050000,
+          "annual_drop_pct": 10.5
+        },
+        "year_4": {
+          "residual_pct_msrp": 55.0,
+          "depreciation_pct_msrp": 45.0,
+          "residual_pct_effective": 58.9,
+          "avg_used_price_krw": 31350000,
+          "annual_drop_pct": 10.0
+        },
+        "year_5": {
+          "residual_pct_msrp": 45.0,
+          "depreciation_pct_msrp": 55.0,
+          "residual_pct_effective": 48.2,
+          "avg_used_price_krw": 25650000,
+          "annual_drop_pct": 10.0
+        }
+      },
+      "key_pros_resale": "국내 수입 전기차 판매 압도적 1위, 패밀리 SUV로서의 광활한 적재 공간과 차박 최적화, 최상위 중고차 회전율(매물 등록 후 15일 이내 완판)",
+      "key_cons_resale": "주니퍼(Juniper) 페이스리프트 출시에 따른 구형 모델 감가 가속, LFP 탑재 트림의 겨울철 주행거리 저하 이슈"
+    },
+    {
+      "id": "ioniq5",
+      "brand_id": "hyundai",
+      "brand_name_en": "Hyundai",
+      "brand_name_ko": "현대자동차",
+      "model_name": "Ioniq 5 (Long Range 2WD/AWD)",
+      "segment": "준중형 전기 CUV",
+      "msrp_krw_baseline": 55000000,
+      "avg_subsidy_krw": 7500000,
+      "net_purchase_price_krw": 47500000,
+      "battery_specs": {
+        "capacity_kwh": 77.4,
+        "chemistry": "NCM 811",
+        "cell_supplier": "SK On / LG Energy Solution",
+        "voltage_architecture": "800V"
+      },
+      "warranty": {
+        "years": 10,
+        "km": 160000,
+        "guarantee_retention_pct": 70
+      },
+      "factor_weights": {
+        "warranty_cliff": 1.0,
+        "chemistry_aging": -0.01,
+        "architecture_800v": 0.035,
+        "ota_maturity": 0.0,
+        "net_factor_adjustment": 0.025
+      },
+      "software_ota_level": "ADVANCED_CCB",
+      "resale_defense_tier": "A",
+      "depreciation_curve": {
+        "year_1": {
+          "residual_pct_msrp": 82.5,
+          "depreciation_pct_msrp": 17.5,
+          "residual_pct_effective": 95.5,
+          "avg_used_price_krw": 45375000,
+          "annual_drop_pct": 17.5
+        },
+        "year_2": {
+          "residual_pct_msrp": 72.0,
+          "depreciation_pct_msrp": 28.0,
+          "residual_pct_effective": 83.4,
+          "avg_used_price_krw": 39600000,
+          "annual_drop_pct": 10.5
+        },
+        "year_3": {
+          "residual_pct_msrp": 62.0,
+          "depreciation_pct_msrp": 38.0,
+          "residual_pct_effective": 71.8,
+          "avg_used_price_krw": 34100000,
+          "annual_drop_pct": 10.0
+        },
+        "year_4": {
+          "residual_pct_msrp": 52.0,
+          "depreciation_pct_msrp": 48.0,
+          "residual_pct_effective": 60.2,
+          "avg_used_price_krw": 28600000,
+          "annual_drop_pct": 10.0
+        },
+        "year_5": {
+          "residual_pct_msrp": 42.5,
+          "depreciation_pct_msrp": 57.5,
+          "residual_pct_effective": 49.2,
+          "avg_used_price_krw": 23375000,
+          "annual_drop_pct": 9.5
+        }
+      },
+      "key_pros_resale": "800V 초급속 충전(18분 완충) 인프라 호환성, 10년 16만km 고전압 배터리 보증의 절대적 신뢰, 블루핸즈 전국 정비망",
+      "key_cons_resale": "2024년 페이스리프트(84kWh 배터리 확대, 리어 와이퍼 탑재, ccNC 변경)로 21~23년식 구형(Gen5W) 모델의 감가 격차 발생, ICCU 리콜 이력"
+    },
+    {
+      "id": "ioniq6",
+      "brand_id": "hyundai",
+      "brand_name_en": "Hyundai",
+      "brand_name_ko": "현대자동차",
+      "model_name": "Ioniq 6 (Long Range)",
+      "segment": "중형 전기 세단",
+      "msrp_krw_baseline": 56000000,
+      "avg_subsidy_krw": 7500000,
+      "net_purchase_price_krw": 48500000,
+      "battery_specs": {
+        "capacity_kwh": 77.4,
+        "chemistry": "NCM 811",
+        "cell_supplier": "SK On / LG Energy Solution",
+        "voltage_architecture": "800V"
+      },
+      "warranty": {
+        "years": 10,
+        "km": 160000,
+        "guarantee_retention_pct": 70
+      },
+      "factor_weights": {
+        "warranty_cliff": 1.0,
+        "chemistry_aging": -0.01,
+        "architecture_800v": 0.035,
+        "ota_maturity": 0.0,
+        "net_factor_adjustment": 0.025
+      },
+      "software_ota_level": "ADVANCED_CCB",
+      "resale_defense_tier": "B+",
+      "depreciation_curve": {
+        "year_1": {
+          "residual_pct_msrp": 79.0,
+          "depreciation_pct_msrp": 21.0,
+          "residual_pct_effective": 91.2,
+          "avg_used_price_krw": 44240000,
+          "annual_drop_pct": 21.0
+        },
+        "year_2": {
+          "residual_pct_msrp": 68.0,
+          "depreciation_pct_msrp": 32.0,
+          "residual_pct_effective": 78.5,
+          "avg_used_price_krw": 38080000,
+          "annual_drop_pct": 11.0
+        },
+        "year_3": {
+          "residual_pct_msrp": 57.5,
+          "depreciation_pct_msrp": 42.5,
+          "residual_pct_effective": 66.4,
+          "avg_used_price_krw": 32200000,
+          "annual_drop_pct": 10.5
+        },
+        "year_4": {
+          "residual_pct_msrp": 47.0,
+          "depreciation_pct_msrp": 53.0,
+          "residual_pct_effective": 54.3,
+          "avg_used_price_krw": 26320000,
+          "annual_drop_pct": 10.5
+        },
+        "year_5": {
+          "residual_pct_msrp": 37.5,
+          "depreciation_pct_msrp": 62.5,
+          "residual_pct_effective": 43.3,
+          "avg_used_price_krw": 21000000,
+          "annual_drop_pct": 9.5
+        }
+      },
+      "key_pros_resale": "공기저항계수 0.21Cd 기반 1회 충전 524km에 달하는 압도적인 고속 주행 효율, 800V 초고속 충전",
+      "key_cons_resale": "호불호 강한 유선형 후면 디자인, 세단 특유의 2열 헤드룸 제약 및 좁은 트렁크 개구부로 인해 SUV 선호 중고 시장에서 아이오닉 5 대비 빠른 감가"
+    },
+    {
+      "id": "ev6",
+      "brand_id": "kia",
+      "brand_name_en": "Kia",
+      "brand_name_ko": "기아",
+      "model_name": "EV6 (Long Range)",
+      "segment": "준중형 전기 크로스오버",
+      "msrp_krw_baseline": 54500000,
+      "avg_subsidy_krw": 7200000,
+      "net_purchase_price_krw": 47300000,
+      "battery_specs": {
+        "capacity_kwh": 77.4,
+        "chemistry": "NCM 811",
+        "cell_supplier": "SK On",
+        "voltage_architecture": "800V"
+      },
+      "warranty": {
+        "years": 10,
+        "km": 160000,
+        "guarantee_retention_pct": 70
+      },
+      "factor_weights": {
+        "warranty_cliff": 1.0,
+        "chemistry_aging": -0.01,
+        "architecture_800v": 0.035,
+        "ota_maturity": 0.0,
+        "net_factor_adjustment": 0.025
+      },
+      "software_ota_level": "ADVANCED_CCB",
+      "resale_defense_tier": "A",
+      "depreciation_curve": {
+        "year_1": {
+          "residual_pct_msrp": 82.0,
+          "depreciation_pct_msrp": 18.0,
+          "residual_pct_effective": 94.5,
+          "avg_used_price_krw": 44690000,
+          "annual_drop_pct": 18.0
+        },
+        "year_2": {
+          "residual_pct_msrp": 71.0,
+          "depreciation_pct_msrp": 29.0,
+          "residual_pct_effective": 81.8,
+          "avg_used_price_krw": 38695000,
+          "annual_drop_pct": 11.0
+        },
+        "year_3": {
+          "residual_pct_msrp": 60.5,
+          "depreciation_pct_msrp": 39.5,
+          "residual_pct_effective": 69.7,
+          "avg_used_price_krw": 32972500,
+          "annual_drop_pct": 10.5
+        },
+        "year_4": {
+          "residual_pct_msrp": 50.5,
+          "depreciation_pct_msrp": 49.5,
+          "residual_pct_effective": 58.2,
+          "avg_used_price_krw": 27522500,
+          "annual_drop_pct": 10.0
+        },
+        "year_5": {
+          "residual_pct_msrp": 41.0,
+          "depreciation_pct_msrp": 59.0,
+          "residual_pct_effective": 47.2,
+          "avg_used_price_krw": 22345000,
+          "annual_drop_pct": 9.5
+        }
+      },
+      "key_pros_resale": "스포티한 익스테리어 디자인과 젊은 층 중심의 탄탄한 중고차 수요층, E-GMP 800V 시스템, 10년 보증",
+      "key_cons_resale": "더 뉴 EV6(스타맵 시그니처 라이팅, 84kWh 배터리) 페이스리프트 출시로 21-23년식 구형 매물의 시세 추가 조정"
+    },
+    {
+      "id": "ev9",
+      "brand_id": "kia",
+      "brand_name_en": "Kia",
+      "brand_name_ko": "기아",
+      "model_name": "EV9 (Air / Earth / GT-Line)",
+      "segment": "대형 3열 플래그십 전기 SUV",
+      "msrp_krw_baseline": 79000000,
+      "avg_subsidy_krw": 3500000,
+      "net_purchase_price_krw": 75500000,
+      "battery_specs": {
+        "capacity_kwh": 99.8,
+        "chemistry": "NCM 811",
+        "cell_supplier": "SK On",
+        "voltage_architecture": "800V"
+      },
+      "warranty": {
+        "years": 10,
+        "km": 160000,
+        "guarantee_retention_pct": 70
+      },
+      "factor_weights": {
+        "warranty_cliff": 1.0,
+        "chemistry_aging": -0.01,
+        "architecture_800v": 0.035,
+        "ota_maturity": 0.0,
+        "net_factor_adjustment": 0.025
+      },
+      "software_ota_level": "ADVANCED_CCB",
+      "resale_defense_tier": "B-",
+      "depreciation_curve": {
+        "year_1": {
+          "residual_pct_msrp": 75.5,
+          "depreciation_pct_msrp": 24.5,
+          "residual_pct_effective": 79.0,
+          "avg_used_price_krw": 59645000,
+          "annual_drop_pct": 24.5
+        },
+        "year_2": {
+          "residual_pct_msrp": 63.5,
+          "depreciation_pct_msrp": 36.5,
+          "residual_pct_effective": 66.4,
+          "avg_used_price_krw": 50165000,
+          "annual_drop_pct": 12.0
+        },
+        "year_3": {
+          "residual_pct_msrp": 52.5,
+          "depreciation_pct_msrp": 47.5,
+          "residual_pct_effective": 54.9,
+          "avg_used_price_krw": 41475000,
+          "annual_drop_pct": 11.0
+        },
+        "year_4": {
+          "residual_pct_msrp": 43.0,
+          "depreciation_pct_msrp": 57.0,
+          "residual_pct_effective": 45.0,
+          "avg_used_price_krw": 33970000,
+          "annual_drop_pct": 9.5
+        },
+        "year_5": {
+          "residual_pct_msrp": 34.5,
+          "depreciation_pct_msrp": 65.5,
+          "residual_pct_effective": 36.1,
+          "avg_used_price_krw": 27255000,
+          "annual_drop_pct": 8.5
+        }
+      },
+      "key_pros_resale": "국산 유일의 3열 6/7인승 패밀리 대형 전기 SUV 독점 지위, 99.8kWh 대용량 배터리, 800V 초고속 충전",
+      "key_cons_resale": "출시 초기 8,000만 원대 고분양가 논란 및 2023년 말 최대 1,500만 원에 달했던 딜러 재고 떨이 할인으로 초기 구매자 잔존가치 폭락"
+    },
+    {
+      "id": "gv60",
+      "brand_id": "genesis",
+      "brand_name_en": "Genesis",
+      "brand_name_ko": "제네시스",
+      "model_name": "GV60 (Standard 2WD / AWD / Performance)",
+      "segment": "럭셔리 준중형 크로스오버",
+      "msrp_krw_baseline": 71000000,
+      "avg_subsidy_krw": 3800000,
+      "net_purchase_price_krw": 67200000,
+      "battery_specs": {
+        "capacity_kwh": 77.4,
+        "chemistry": "NCMA",
+        "cell_supplier": "SK On",
+        "voltage_architecture": "800V"
+      },
+      "warranty": {
+        "years": 10,
+        "km": 160000,
+        "guarantee_retention_pct": 70
+      },
+      "factor_weights": {
+        "warranty_cliff": 1.0,
+        "chemistry_aging": 0.015,
+        "architecture_800v": 0.035,
+        "ota_maturity": 0.0,
+        "net_factor_adjustment": 0.05
+      },
+      "software_ota_level": "ADVANCED_CCB",
+      "resale_defense_tier": "B",
+      "depreciation_curve": {
+        "year_1": {
+          "residual_pct_msrp": 77.0,
+          "depreciation_pct_msrp": 23.0,
+          "residual_pct_effective": 81.4,
+          "avg_used_price_krw": 54670000,
+          "annual_drop_pct": 23.0
+        },
+        "year_2": {
+          "residual_pct_msrp": 65.0,
+          "depreciation_pct_msrp": 35.0,
+          "residual_pct_effective": 68.7,
+          "avg_used_price_krw": 46150000,
+          "annual_drop_pct": 12.0
+        },
+        "year_3": {
+          "residual_pct_msrp": 53.0,
+          "depreciation_pct_msrp": 47.0,
+          "residual_pct_effective": 56.0,
+          "avg_used_price_krw": 37630000,
+          "annual_drop_pct": 12.0
+        },
+        "year_4": {
+          "residual_pct_msrp": 43.0,
+          "depreciation_pct_msrp": 57.0,
+          "residual_pct_effective": 45.4,
+          "avg_used_price_krw": 30530000,
+          "annual_drop_pct": 10.0
+        },
+        "year_5": {
+          "residual_pct_msrp": 34.5,
+          "depreciation_pct_msrp": 65.5,
+          "residual_pct_effective": 36.5,
+          "avg_used_price_krw": 24495000,
+          "annual_drop_pct": 8.5
+        }
+      },
+      "key_pros_resale": "페이스커넥트/지문인식 첨단 생체인식 사양, 크리스탈 스피어 감성 조작계, 800V 초고속 충전, 제네시스 인증 중고차 지원",
+      "key_cons_resale": "차체 크기 대비 7,000만 원을 상회하는 높은 출고가로 인해 중고 시장 진입 시 대형차(GV70/80) 대비 가격 경쟁력 열세"
+    },
+    {
+      "id": "electrified-g80",
+      "brand_id": "genesis",
+      "brand_name_en": "Genesis",
+      "brand_name_ko": "제네시스",
+      "model_name": "Electrified G80 (G80 EV)",
+      "segment": "럭셔리 대형 전기 세단",
+      "msrp_krw_baseline": 89000000,
+      "avg_subsidy_krw": 3200000,
+      "net_purchase_price_krw": 85800000,
+      "battery_specs": {
+        "capacity_kwh": 87.2,
+        "chemistry": "NCM 811",
+        "cell_supplier": "SK On",
+        "voltage_architecture": "800V"
+      },
+      "warranty": {
+        "years": 10,
+        "km": 160000,
+        "guarantee_retention_pct": 70
+      },
+      "factor_weights": {
+        "warranty_cliff": 1.0,
+        "chemistry_aging": -0.01,
+        "architecture_800v": 0.035,
+        "ota_maturity": -0.04,
+        "net_factor_adjustment": -0.015
+      },
+      "software_ota_level": "INFOTAINMENT_ONLY",
+      "resale_defense_tier": "C",
+      "depreciation_curve": {
+        "year_1": {
+          "residual_pct_msrp": 72.5,
+          "depreciation_pct_msrp": 27.5,
+          "residual_pct_effective": 75.2,
+          "avg_used_price_krw": 64525000,
+          "annual_drop_pct": 27.5
+        },
+        "year_2": {
+          "residual_pct_msrp": 59.5,
+          "depreciation_pct_msrp": 40.5,
+          "residual_pct_effective": 61.7,
+          "avg_used_price_krw": 52955000,
+          "annual_drop_pct": 13.0
+        },
+        "year_3": {
+          "residual_pct_msrp": 47.0,
+          "depreciation_pct_msrp": 53.0,
+          "residual_pct_effective": 48.8,
+          "avg_used_price_krw": 41830000,
+          "annual_drop_pct": 12.5
+        },
+        "year_4": {
+          "residual_pct_msrp": 37.0,
+          "depreciation_pct_msrp": 63.0,
+          "residual_pct_effective": 38.4,
+          "avg_used_price_krw": 32930000,
+          "annual_drop_pct": 10.0
+        },
+        "year_5": {
+          "residual_pct_msrp": 29.0,
+          "depreciation_pct_msrp": 71.0,
+          "residual_pct_effective": 30.1,
+          "avg_used_price_krw": 25810000,
+          "annual_drop_pct": 8.0
+        }
+      },
+      "key_pros_resale": "국내 최고 수준의 프리미엄 쇼퍼드리븐 정숙성, VIP 리어 시트 옵션, 솔라루프",
+      "key_cons_resale": "내연기관 파생 플랫폼 한계(트렁크 배터리 턱 돌출), 2024년 휠베이스 130mm 연장 신형 출시로 인한 구형 단축 모델의 시세 직격탄, 법인 리스 매물 대량 덤핑"
+    },
+    {
+      "id": "atto-3",
+      "brand_id": "byd",
+      "brand_name_en": "BYD",
+      "brand_name_ko": "비야디",
+      "model_name": "Atto 3 (Yuan PLUS)",
+      "segment": "소형/준중형 전기 SUV",
+      "msrp_krw_baseline": 44000000,
+      "avg_subsidy_krw": 5800000,
+      "net_purchase_price_krw": 38200000,
+      "battery_specs": {
+        "capacity_kwh": 60.48,
+        "chemistry": "LFP",
+        "cell_supplier": "FinDreams (BYD Blade)",
+        "voltage_architecture": "400V"
+      },
+      "warranty": {
+        "years": 8,
+        "km": 160000,
+        "guarantee_retention_pct": 70
+      },
+      "factor_weights": {
+        "warranty_cliff": 1.0,
+        "chemistry_aging": 0.025,
+        "architecture_800v": -0.025,
+        "ota_maturity": -0.06,
+        "net_factor_adjustment": -0.06
+      },
+      "software_ota_level": "BASIC",
+      "resale_defense_tier": "B",
+      "depreciation_curve": {
+        "year_1": {
+          "residual_pct_msrp": 80.0,
+          "depreciation_pct_msrp": 20.0,
+          "residual_pct_effective": 92.1,
+          "avg_used_price_krw": 35200000,
+          "annual_drop_pct": 20.0
+        },
+        "year_2": {
+          "residual_pct_msrp": 67.5,
+          "depreciation_pct_msrp": 32.5,
+          "residual_pct_effective": 77.7,
+          "avg_used_price_krw": 29700000,
+          "annual_drop_pct": 12.5
+        },
+        "year_3": {
+          "residual_pct_msrp": 55.0,
+          "depreciation_pct_msrp": 45.0,
+          "residual_pct_effective": 63.4,
+          "avg_used_price_krw": 24200000,
+          "annual_drop_pct": 12.5
+        },
+        "year_4": {
+          "residual_pct_msrp": 44.0,
+          "depreciation_pct_msrp": 56.0,
+          "residual_pct_effective": 50.7,
+          "avg_used_price_krw": 19360000,
+          "annual_drop_pct": 11.0
+        },
+        "year_5": {
+          "residual_pct_msrp": 34.0,
+          "depreciation_pct_msrp": 66.0,
+          "residual_pct_effective": 39.2,
+          "avg_used_price_krw": 14960000,
+          "annual_drop_pct": 10.0
+        }
+      },
+      "key_pros_resale": "블레이드 LFP 배터리의 독보적 화재 안전성 및 수명 내구성, 글로벌 누적 50만 대 이상 검증된 파워트레인",
+      "key_cons_resale": "BYD의 공격적인 글로벌 신차 가격 인하(Honor Edition 출혈 경쟁)로 인한 기존 중고차 가치 훼손, 한국 시장 내 중국 브랜드에 대한 정서적 진입 장벽"
+    },
+    {
+      "id": "seal",
+      "brand_id": "byd",
+      "brand_name_en": "BYD",
+      "brand_name_ko": "비야디",
+      "model_name": "Seal (Dynamic / Excellence AWD)",
+      "segment": "중형 스포츠 전기 세단",
+      "msrp_krw_baseline": 53000000,
+      "avg_subsidy_krw": 4800000,
+      "net_purchase_price_krw": 48200000,
+      "battery_specs": {
+        "capacity_kwh": 82.56,
+        "chemistry": "LFP",
+        "cell_supplier": "FinDreams (BYD Blade CTB)",
+        "voltage_architecture": "550V/800V"
+      },
+      "warranty": {
+        "years": 8,
+        "km": 160000,
+        "guarantee_retention_pct": 70
+      },
+      "factor_weights": {
+        "warranty_cliff": 1.0,
+        "chemistry_aging": 0.025,
+        "architecture_800v": 0.015,
+        "ota_maturity": -0.06,
+        "net_factor_adjustment": -0.02
+      },
+      "software_ota_level": "BASIC",
+      "resale_defense_tier": "C+",
+      "depreciation_curve": {
+        "year_1": {
+          "residual_pct_msrp": 78.0,
+          "depreciation_pct_msrp": 22.0,
+          "residual_pct_effective": 85.8,
+          "avg_used_price_krw": 41340000,
+          "annual_drop_pct": 22.0
+        },
+        "year_2": {
+          "residual_pct_msrp": 64.5,
+          "depreciation_pct_msrp": 35.5,
+          "residual_pct_effective": 70.9,
+          "avg_used_price_krw": 34185000,
+          "annual_drop_pct": 13.5
+        },
+        "year_3": {
+          "residual_pct_msrp": 51.5,
+          "depreciation_pct_msrp": 48.5,
+          "residual_pct_effective": 56.6,
+          "avg_used_price_krw": 27295000,
+          "annual_drop_pct": 13.0
+        },
+        "year_4": {
+          "residual_pct_msrp": 41.0,
+          "depreciation_pct_msrp": 59.0,
+          "residual_pct_effective": 45.1,
+          "avg_used_price_krw": 21730000,
+          "annual_drop_pct": 10.5
+        },
+        "year_5": {
+          "residual_pct_msrp": 31.5,
+          "depreciation_pct_msrp": 68.5,
+          "residual_pct_effective": 34.6,
+          "avg_used_price_krw": 16695000,
+          "annual_drop_pct": 9.5
+        }
+      },
+      "key_pros_resale": "CTB(Cell-to-Body) 고강성 섀시 및 530마력의 압도적 가성비 제원, 회전식 15.6인치 스크린",
+      "key_cons_resale": "테슬라 모델 3 및 현대 아이오닉 6와의 치열한 삼파전에서의 브랜드 파워 열세, 빈번한 연식 변경에 따른 구형화 가속"
+    },
+    {
+      "id": "eqe",
+      "brand_id": "mercedes-benz",
+      "brand_name_en": "Mercedes-Benz",
+      "brand_name_ko": "메르세데스-벤츠",
+      "model_name": "EQE (EQE 300 / 350+ / 350 4MATIC)",
+      "segment": "준대형 럭셔리 전기 세단",
+      "msrp_krw_baseline": 103000000,
+      "avg_subsidy_krw": 0,
+      "net_purchase_price_krw": 103000000,
+      "battery_specs": {
+        "capacity_kwh": 88.8,
+        "chemistry": "NCM 811",
+        "cell_supplier": "Farasis Energy (일부 CATL)",
+        "voltage_architecture": "400V"
+      },
+      "warranty": {
+        "years": 8,
+        "km": 160000,
+        "guarantee_retention_pct": 70
+      },
+      "factor_weights": {
+        "warranty_cliff": 1.0,
+        "chemistry_aging": -0.12,
+        "architecture_800v": -0.025,
+        "ota_maturity": -0.04,
+        "net_factor_adjustment": -0.185
+      },
+      "software_ota_level": "INFOTAINMENT_ONLY",
+      "resale_defense_tier": "D",
+      "depreciation_curve": {
+        "year_1": {
+          "residual_pct_msrp": 64.0,
+          "depreciation_pct_msrp": 36.0,
+          "residual_pct_effective": 64.0,
+          "avg_used_price_krw": 65920000,
+          "annual_drop_pct": 36.0
+        },
+        "year_2": {
+          "residual_pct_msrp": 52.0,
+          "depreciation_pct_msrp": 48.0,
+          "residual_pct_effective": 52.0,
+          "avg_used_price_krw": 53560000,
+          "annual_drop_pct": 12.0
+        },
+        "year_3": {
+          "residual_pct_msrp": 42.0,
+          "depreciation_pct_msrp": 58.0,
+          "residual_pct_effective": 42.0,
+          "avg_used_price_krw": 43260000,
+          "annual_drop_pct": 10.0
+        },
+        "year_4": {
+          "residual_pct_msrp": 33.0,
+          "depreciation_pct_msrp": 67.0,
+          "residual_pct_effective": 33.0,
+          "avg_used_price_krw": 33990000,
+          "annual_drop_pct": 9.0
+        },
+        "year_5": {
+          "residual_pct_msrp": 25.0,
+          "depreciation_pct_msrp": 75.0,
+          "residual_pct_effective": 25.0,
+          "avg_used_price_krw": 25750000,
+          "annual_drop_pct": 8.0
+        }
+      },
+      "key_pros_resale": "삼각별 브랜드 가치, MBUX 하이퍼스크린(상위 트림), 극상의 차음 및 고속 주행 안정성",
+      "key_cons_resale": "2024년 8월 인천 청라 화재 사고(파라시스 배터리 열폭주)로 인한 극심한 기피 현상, 수도권 아파트 지하주차장 진입 제한, 중고 딜러 매입 거부"
+    },
+    {
+      "id": "eqs",
+      "brand_id": "mercedes-benz",
+      "brand_name_en": "Mercedes-Benz",
+      "brand_name_ko": "메르세데스-벤츠",
+      "model_name": "EQS (EQS 450+ / 450 4MATIC)",
+      "segment": "대형 플래그십 럭셔리 전기 세단",
+      "msrp_krw_baseline": 163000000,
+      "avg_subsidy_krw": 0,
+      "net_purchase_price_krw": 163000000,
+      "battery_specs": {
+        "capacity_kwh": 107.8,
+        "chemistry": "NCM 811",
+        "cell_supplier": "CATL",
+        "voltage_architecture": "400V"
+      },
+      "warranty": {
+        "years": 10,
+        "km": 250000,
+        "guarantee_retention_pct": 70
+      },
+      "factor_weights": {
+        "warranty_cliff": 1.0,
+        "chemistry_aging": -0.06,
+        "architecture_800v": -0.025,
+        "ota_maturity": -0.04,
+        "net_factor_adjustment": -0.125
+      },
+      "software_ota_level": "INFOTAINMENT_ONLY",
+      "resale_defense_tier": "D",
+      "depreciation_curve": {
+        "year_1": {
+          "residual_pct_msrp": 67.0,
+          "depreciation_pct_msrp": 33.0,
+          "residual_pct_effective": 67.0,
+          "avg_used_price_krw": 109210000,
+          "annual_drop_pct": 33.0
+        },
+        "year_2": {
+          "residual_pct_msrp": 52.0,
+          "depreciation_pct_msrp": 48.0,
+          "residual_pct_effective": 52.0,
+          "avg_used_price_krw": 84760000,
+          "annual_drop_pct": 15.0
+        },
+        "year_3": {
+          "residual_pct_msrp": 40.0,
+          "depreciation_pct_msrp": 60.0,
+          "residual_pct_effective": 40.0,
+          "avg_used_price_krw": 65200000,
+          "annual_drop_pct": 12.0
+        },
+        "year_4": {
+          "residual_pct_msrp": 30.5,
+          "depreciation_pct_msrp": 69.5,
+          "residual_pct_effective": 30.5,
+          "avg_used_price_krw": 49715000,
+          "annual_drop_pct": 9.5
+        },
+        "year_5": {
+          "residual_pct_msrp": 23.0,
+          "depreciation_pct_msrp": 77.0,
+          "residual_pct_effective": 23.0,
+          "avg_used_price_krw": 37490000,
+          "annual_drop_pct": 7.5
+        }
+      },
+      "key_pros_resale": "107.8kWh 대용량 배터리 기반 500km 이상 실주행거리, 에어서스펜션 기반의 승차감, 10년 25만km 보증",
+      "key_cons_resale": "3년 만에 1억 원 가까이 증발하는 역대 최대 절대 감가액, S클래스 전통 오너들의 원보우(원박스형 달걀형) 디자인 거부감, EQE 연쇄 이미지 타격"
+    },
+    {
+      "id": "i4",
+      "brand_id": "bmw",
+      "brand_name_en": "BMW",
+      "brand_name_ko": "BMW",
+      "model_name": "i4 (eDrive40 / M50 Gran Coupe)",
+      "segment": "중형 4도어 전기 쿠페",
+      "msrp_krw_baseline": 74000000,
+      "avg_subsidy_krw": 3100000,
+      "net_purchase_price_krw": 70900000,
+      "battery_specs": {
+        "capacity_kwh": 83.9,
+        "chemistry": "NCM 811",
+        "cell_supplier": "Samsung SDI",
+        "voltage_architecture": "400V"
+      },
+      "warranty": {
+        "years": 8,
+        "km": 160000,
+        "guarantee_retention_pct": 70
+      },
+      "factor_weights": {
+        "warranty_cliff": 1.0,
+        "chemistry_aging": 0.0,
+        "architecture_800v": -0.025,
+        "ota_maturity": 0.0,
+        "net_factor_adjustment": -0.025
+      },
+      "software_ota_level": "ADVANCED_CCB",
+      "resale_defense_tier": "A-",
+      "depreciation_curve": {
+        "year_1": {
+          "residual_pct_msrp": 80.0,
+          "depreciation_pct_msrp": 20.0,
+          "residual_pct_effective": 83.5,
+          "avg_used_price_krw": 59200000,
+          "annual_drop_pct": 20.0
+        },
+        "year_2": {
+          "residual_pct_msrp": 68.5,
+          "depreciation_pct_msrp": 31.5,
+          "residual_pct_effective": 71.5,
+          "avg_used_price_krw": 50690000,
+          "annual_drop_pct": 11.5
+        },
+        "year_3": {
+          "residual_pct_msrp": 57.0,
+          "depreciation_pct_msrp": 43.0,
+          "residual_pct_effective": 59.5,
+          "avg_used_price_krw": 42180000,
+          "annual_drop_pct": 11.5
+        },
+        "year_4": {
+          "residual_pct_msrp": 46.5,
+          "depreciation_pct_msrp": 53.5,
+          "residual_pct_effective": 48.5,
+          "avg_used_price_krw": 34410000,
+          "annual_drop_pct": 10.5
+        },
+        "year_5": {
+          "residual_pct_msrp": 36.0,
+          "depreciation_pct_msrp": 64.0,
+          "residual_pct_effective": 37.6,
+          "avg_used_price_krw": 26640000,
+          "annual_drop_pct": 10.5
+        }
+      },
+      "key_pros_resale": "전통적인 4시리즈 그란쿠페 비율 유지, 칼같은 코너링 핸들링 감각, 삼성SDI 각형 배터리의 높은 안전성 평판",
+      "key_cons_resale": "내연기관 CLAR 공유 플랫폼 한계(후열 센터터널 돌출), 200kW 급속 충전 상한(400V 전압 한계)"
+    },
+    {
+      "id": "ix3",
+      "brand_id": "bmw",
+      "brand_name_en": "BMW",
+      "brand_name_ko": "BMW",
+      "model_name": "iX3 (M Sport)",
+      "segment": "중형 럭셔리 전기 SAV",
+      "msrp_krw_baseline": 77000000,
+      "avg_subsidy_krw": 2900000,
+      "net_purchase_price_krw": 74100000,
+      "battery_specs": {
+        "capacity_kwh": 80.0,
+        "chemistry": "NCM 811",
+        "cell_supplier": "CATL",
+        "voltage_architecture": "400V"
+      },
+      "warranty": {
+        "years": 8,
+        "km": 160000,
+        "guarantee_retention_pct": 70
+      },
+      "factor_weights": {
+        "warranty_cliff": 1.0,
+        "chemistry_aging": 0.0,
+        "architecture_800v": -0.025,
+        "ota_maturity": 0.0,
+        "net_factor_adjustment": -0.025
+      },
+      "software_ota_level": "ADVANCED_CCB",
+      "resale_defense_tier": "B+",
+      "depreciation_curve": {
+        "year_1": {
+          "residual_pct_msrp": 79.0,
+          "depreciation_pct_msrp": 21.0,
+          "residual_pct_effective": 82.1,
+          "avg_used_price_krw": 60830000,
+          "annual_drop_pct": 21.0
+        },
+        "year_2": {
+          "residual_pct_msrp": 67.5,
+          "depreciation_pct_msrp": 32.5,
+          "residual_pct_effective": 70.1,
+          "avg_used_price_krw": 51975000,
+          "annual_drop_pct": 11.5
+        },
+        "year_3": {
+          "residual_pct_msrp": 56.0,
+          "depreciation_pct_msrp": 44.0,
+          "residual_pct_effective": 58.2,
+          "avg_used_price_krw": 43120000,
+          "annual_drop_pct": 11.5
+        },
+        "year_4": {
+          "residual_pct_msrp": 45.0,
+          "depreciation_pct_msrp": 55.0,
+          "residual_pct_effective": 46.8,
+          "avg_used_price_krw": 34650000,
+          "annual_drop_pct": 11.0
+        },
+        "year_5": {
+          "residual_pct_msrp": 35.0,
+          "depreciation_pct_msrp": 65.0,
+          "residual_pct_effective": 36.4,
+          "avg_used_price_krw": 26950000,
+          "annual_drop_pct": 10.0
+        }
+      },
+      "key_pros_resale": "베스트셀러 X3와 완벽히 동일한 실내 공간과 패밀리 거주성, M 스포츠 패키지 기본 적용",
+      "key_cons_resale": "후륜구동 단일 트림(사륜 xDrive 미지원), 150kW 급속 충전 상한, 노이에 클라세(Neue Klasse) 2세대 iX3 발표로 인한 1세대 감가 가속"
+    },
+    {
+      "id": "polestar-2",
+      "brand_id": "polestar",
+      "brand_name_en": "Polestar",
+      "brand_name_ko": "폴스타",
+      "model_name": "Polestar 2 (Long Range Single / Dual Motor)",
+      "segment": "패스트백 크로스오버 전기차",
+      "msrp_krw_baseline": 55900000,
+      "avg_subsidy_krw": 4200000,
+      "net_purchase_price_krw": 51700000,
+      "battery_specs": {
+        "capacity_kwh": 78.0,
+        "chemistry": "NCM 622",
+        "cell_supplier": "LG Energy Solution / CATL",
+        "voltage_architecture": "400V"
+      },
+      "warranty": {
+        "years": 8,
+        "km": 160000,
+        "guarantee_retention_pct": 70
+      },
+      "factor_weights": {
+        "warranty_cliff": 1.0,
+        "chemistry_aging": 0.0,
+        "architecture_800v": -0.025,
+        "ota_maturity": 0.0,
+        "net_factor_adjustment": -0.025
+      },
+      "software_ota_level": "ADVANCED_CCB",
+      "resale_defense_tier": "B",
+      "depreciation_curve": {
+        "year_1": {
+          "residual_pct_msrp": 78.0,
+          "depreciation_pct_msrp": 22.0,
+          "residual_pct_effective": 84.3,
+          "avg_used_price_krw": 43602000,
+          "annual_drop_pct": 22.0
+        },
+        "year_2": {
+          "residual_pct_msrp": 65.0,
+          "depreciation_pct_msrp": 35.0,
+          "residual_pct_effective": 70.3,
+          "avg_used_price_krw": 36335000,
+          "annual_drop_pct": 13.0
+        },
+        "year_3": {
+          "residual_pct_msrp": 53.0,
+          "depreciation_pct_msrp": 47.0,
+          "residual_pct_effective": 57.3,
+          "avg_used_price_krw": 29627000,
+          "annual_drop_pct": 12.0
+        },
+        "year_4": {
+          "residual_pct_msrp": 42.5,
+          "depreciation_pct_msrp": 57.5,
+          "residual_pct_effective": 46.0,
+          "avg_used_price_krw": 23757500,
+          "annual_drop_pct": 10.5
+        },
+        "year_5": {
+          "residual_pct_msrp": 33.0,
+          "depreciation_pct_msrp": 67.0,
+          "residual_pct_effective": 35.7,
+          "avg_used_price_krw": 18447000,
+          "annual_drop_pct": 9.5
+        }
+      },
+      "key_pros_resale": "안드로이드 오토모티브 OS 기반 티맵(TMAP) 완벽 내장, 볼보 안전 섀시 DNA, 2천만 원 후반대 진입으로 2026년 중고 시장 가성비 급부상",
+      "key_cons_resale": "2024년 구동 방식 전면 교체(전륜 FWD -> 후륜 RWD 모터 전환)로 인한 2022-2023 초기 전륜 모델 가치 급락, 좁은 2열 레그룸"
+    }
+  ]
+}

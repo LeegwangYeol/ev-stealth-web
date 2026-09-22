@@ -187,13 +187,13 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     }
     if (sev === 'WARNING') {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500 text-white">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400 text-slate-950 shadow-sm">
           WARNING
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-500 text-white">
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-200 text-amber-950 border border-amber-300 shadow-sm">
         CAUTION
       </span>
     );
@@ -260,11 +260,11 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 text-xs text-slate-400">
             <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
-              <span className="block text-slate-500 font-mono">PIPELINE VER</span>
+              <span className="block text-slate-400 font-mono">PIPELINE VER</span>
               <span className="font-semibold text-slate-200">v{initialData.pipeline_version}</span>
             </div>
             <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
-              <span className="block text-slate-500 font-mono">LAST GENERATED</span>
+              <span className="block text-slate-400 font-mono">LAST GENERATED</span>
               <span className="font-semibold text-slate-200" suppressHydrationWarning>
                 {mounted && initialData.generated_at
                   ? new Date(initialData.generated_at).toLocaleString('ko-KR')
@@ -331,7 +331,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             </span>
             <span className="text-sm font-bold text-rose-600">건 위험</span>
           </div>
-          <div className="mt-2 text-xs text-rose-500 font-medium">
+          <div className="mt-2 text-xs text-rose-700 font-medium">
             동력상실 · 화재위험 · 급제동 긴급 모니터링
           </div>
         </div>
@@ -418,6 +418,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="전기차 결함 제보 및 은어 검색"
               placeholder="제목, 요약, 실차주 원문 코멘트, 차종, 은어(#ICCU폭탄 등) 실시간 검색..."
               className="w-full pl-10 pr-10 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
             />
@@ -527,7 +528,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                     <span>{src.label}</span>
                     <span
                       className={`text-[10px] px-1 rounded ${
-                        isSelected ? 'bg-blue-700 text-blue-100' : 'bg-slate-100 text-slate-500'
+                        isSelected ? 'bg-blue-700 text-blue-100' : 'bg-slate-100 text-slate-600'
                       }`}
                     >
                       {count}
@@ -622,7 +623,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                   {getSourceBadge(report.source, report.url)}
 
                   {/* Date */}
-                  <span className="text-xs text-slate-400 font-mono">{report.date}</span>
+                  <span className="text-xs text-slate-600 font-mono">{report.date}</span>
                 </div>
               </div>
 
@@ -650,7 +651,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                     </svg>
                     실제 커뮤니티 유저 날것의 코멘트 (Raw Verbatim Quote)
                   </span>
-                  <span className="text-[11px] font-mono text-rose-400">원문 보존</span>
+                  <span className="text-[11px] font-mono text-rose-700">원문 보존</span>
                 </div>
                 <p className="text-sm font-sans text-slate-900 leading-relaxed italic bg-white/80 p-3 rounded-lg border border-rose-200/60">
                   &ldquo;{report.verbatim_quote}&rdquo;
@@ -661,7 +662,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100 text-xs">
                 {/* Slang Tags */}
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-slate-400 font-semibold mr-1">감지된 은어/키워드:</span>
+                  <span className="text-slate-600 font-semibold mr-1">감지된 은어/키워드:</span>
                   {report.slang_tags.map((tag) => (
                     <button
                       key={tag}

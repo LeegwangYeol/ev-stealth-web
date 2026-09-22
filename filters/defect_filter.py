@@ -156,14 +156,37 @@ class ContextualDefectFilter:
         if len(matched_stock_terms) >= 2:
             return True, f"Financial / stock discussion: {matched_stock_terms}"
 
+        # Check if text mentions ANY technical component or symptom (case-insensitive)
+        text_lower = text.lower()
+        has_component = False
+        for cats in CATEGORY_KEYWORD_MAP.values():
+            if any(k.lower() in text_lower for k in cats):
+                has_component = True
+                break
+
         # 3. Prospective Buyer Queries / General Inquiries Filter (~나요?, ~가요?, 살까요, 궁금)
         inquiry_terms = ["살까요", "궁금"]
+        if any(term in text for term in inquiry_terms):
+            return True, "Prospective buyer inquiry or advice-seeking question rather than defect complaint"
+
         inquiry_patterns = [
             r"(?:나요|가요)\s*[\?？]",
             r"(?:나요|가요)\s*$",
         ]
-        if any(term in text for term in inquiry_terms) or any(re.search(pat, text) for pat in inquiry_patterns):
-            return True, "Prospective buyer inquiry or advice-seeking question rather than defect complaint"
+        if any(re.search(pat, text) for pat in inquiry_patterns):
+            # Retain authentic owner defect complaints ending with question markers
+            # (e.g. ICCU, 퍽, 멈춤, 누수, 화재, 고장, 결함, etc.)
+            defect_question_keywords = [
+                "iccu", "퍽", "멈춤", "누수", "화재", "고장", "결함",
+                "오작동", "버그", "불량", "하자", "방전", "단차", "잡소리",
+                "급발진", "먹통", "블랙아웃", "물 새", "물이 흥건", "물 고이",
+                "물 차", "경고등", "시동", "꺼짐", "수리비", "전손", "에러",
+                "불통", "워터파크", "피쉬테일", "덜컹", "찌걱", "동력 상실"
+            ]
+            has_defect_keyword = any(dk in text_lower for dk in defect_question_keywords)
+            has_defect_slang = any(e.defect_category is not None for e in find_matching_slang(text))
+            if not (has_defect_keyword or has_defect_slang or has_component):
+                return True, "Prospective buyer inquiry or advice-seeking question rather than defect complaint"
 
         # 4. Pure Brand Flaming / Tribalism without technical basis
         brand_pejoratives = ["테슬람", "현기충", "흉기차", "흉기", "짱깨차", "짱차", "개슬라", "개스라"]
@@ -174,14 +197,6 @@ class ContextualDefectFilter:
         flame_curses = ["타죽어", "불타죽", "망해라", "개돼지"]
         if has_pejorative and any(fc in text for fc in flame_curses):
             return True, "Malicious non-owner flame curse without authentic defect experience"
-
-        # Check if text mentions ANY technical component or symptom (case-insensitive)
-        text_lower = text.lower()
-        has_component = False
-        for cats in CATEGORY_KEYWORD_MAP.values():
-            if any(k.lower() in text_lower for k in cats):
-                has_component = True
-                break
 
         if has_pejorative and has_laughter and not has_component:
             return True, "Baseless brand flaming without technical defect basis"
@@ -205,7 +220,11 @@ class ContextualDefectFilter:
         if any(e.defect_category is not None for e in matched_slang):
             has_symptom = True
 
-        defect_keywords = ["고장", "결함", "오작동", "버그", "불량", "하자", "긁", "안 닦", "튕김", "에러", "불통"]
+        defect_keywords = [
+            "고장", "결함", "오작동", "버그", "불량", "하자", "긁", "안 닦",
+            "튕김", "에러", "불통", "누수", "화재", "멈춤", "물이 흥건", "물 고이",
+            "물 차", "물 새", "워터파크", "동력 상실", "경고등"
+        ]
         if any(dk in text for dk in defect_keywords):
             has_symptom = True
 
