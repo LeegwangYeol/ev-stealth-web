@@ -38,6 +38,9 @@ export default function RootLayout({
 
             {/* Desktop Navigation Bar */}
             <nav aria-label="데스크톱 내비게이션" data-testid="desktop-nav" className="hidden md:flex flex-wrap items-center justify-end gap-x-2 lg:gap-x-3 gap-y-1 text-xs lg:text-sm font-medium">
+              <Link href="/subsidy-tracker" className="text-amber-400 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800">
+                <span>⚡</span> 보조금 실시간 소진율
+              </Link>
               <Link href="/depreciation-calculator" className="text-emerald-400 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800">
                 <span>📉</span> 감가·배터리 계산기
               </Link>
@@ -92,6 +95,15 @@ export default function RootLayout({
                   <span>모바일 메뉴</span>
                   <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded border border-blue-500/30">Global EV</span>
                 </div>
+                <Link
+                  href="/subsidy-tracker"
+                  className="px-3 py-2 rounded-lg bg-amber-950/60 border border-amber-500/50 text-amber-300 hover:text-white font-semibold transition flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>⚡</span> [실시간] 전국 보조금 소진율 추적기
+                  </span>
+                  <span className="text-[10px] bg-amber-400 text-slate-950 font-extrabold px-1.5 py-0.5 rounded">LIVE</span>
+                </Link>
                 <Link
                   href="/depreciation-calculator"
                   className="px-3 py-2 rounded-lg bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 hover:text-white font-semibold transition flex items-center justify-between"

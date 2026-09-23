@@ -13,6 +13,32 @@ export default function Home() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full max-w-6xl">
+        <Link href="/subsidy-tracker"
+          className="group block p-6 bg-gradient-to-br from-amber-950 via-slate-900 to-yellow-950 text-white border border-amber-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-amber-400 transition-all duration-300 md:col-span-2 lg:col-span-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 bg-amber-500/30 text-amber-300 border border-amber-400/40 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping inline-block" />
+                스케줄러 실시간 연동
+              </span>
+              <span className="text-xs text-amber-200 font-medium">전국 17개 광역시도 · 73개 지자체 보조금 실시간 소진율</span>
+            </div>
+            <span className="text-xs text-amber-300 font-semibold">5,500만/8,500만 원 상한제 실구매가 자동 계산</span>
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-extrabold mb-2 text-white group-hover:text-amber-300 transition">
+            ⚡ 전국 지자체별 전기차 실시간 보조금 소진율 추적기 &rarr;
+          </h2>
+          <p className="text-slate-300 leading-relaxed text-sm sm:text-base">
+            환경부 무공해차 통합누리집(ev.or.kr) 실시간 공고 쿼터와 연동하여, 내 거주지의 <strong>전기승용·화물 보조금 잔여량과 5단계 소진 경보</strong>(원활·주의·경고·위험·마감)를 실시간 추적합니다. 선택한 차종의 <strong>국비+지방비 매칭 지원금과 최종 실구매 체감가</strong>를 원클릭으로 계산하세요.
+          </p>
+          <div className="mt-4 pt-3 border-t border-amber-900/60 flex flex-wrap gap-2 text-xs text-amber-200/90">
+            <span className="px-2.5 py-1 rounded-md bg-amber-900/40 border border-amber-700/30">✓ 17개 시도 실시간 쿼터 소진율</span>
+            <span className="px-2.5 py-1 rounded-md bg-amber-900/40 border border-amber-700/30">✓ 5단계 긴급 소진 경보 배지</span>
+            <span className="px-2.5 py-1 rounded-md bg-amber-900/40 border border-amber-700/30">✓ 55M/85M 슬라이딩 실구매가 계산</span>
+            <span className="px-2.5 py-1 rounded-md bg-amber-900/40 border border-amber-700/30">✓ 지자체별 거주 요건 알림</span>
+          </div>
+        </Link>
+
         <Link href="/depreciation-calculator"
           className="group block p-6 bg-gradient-to-br from-emerald-950 via-slate-900 to-teal-950 text-white border border-emerald-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-emerald-400 transition-all duration-300 md:col-span-2 lg:col-span-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">

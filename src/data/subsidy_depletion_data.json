@@ -1,0 +1,2169 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "generated_at": "2026-09-23T15:20:10.258505+00:00",
+    "policy_year": 2026,
+    "data_sources": [
+      "환경부 무공해차 통합누리집 (ev.or.kr)",
+      "한국환경공단 (KECO) CleanSys",
+      "17개 광역시도 무공해차 보급 촉진 고시공고"
+    ],
+    "total_regions_tracked": 17,
+    "total_municipalities_tracked": 73,
+    "currency": "KRW"
+  },
+  "alert_thresholds": {
+    "HEALTHY": {
+      "min_percent": 0.0,
+      "max_percent": 59.9,
+      "label_ko": "원활 (신청 여유)",
+      "severity": "HEALTHY",
+      "color_hex": "#10B981",
+      "badge_class": "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+      "recommended_action": "보조금 잔여량이 충분하여 신청 접수 후 통상 1~2주 내 교부 결정됩니다."
+    },
+    "CAUTION": {
+      "min_percent": 60.0,
+      "max_percent": 79.9,
+      "label_ko": "주의 (소진 가속)",
+      "severity": "CAUTION",
+      "color_hex": "#F59E0B",
+      "badge_class": "bg-amber-500/10 text-amber-400 border-amber-500/20",
+      "recommended_action": "출고 예정 시기가 1~2개월 이내인 경우 조속한 서류 접수를 권장합니다."
+    },
+    "WARNING": {
+      "min_percent": 80.0,
+      "max_percent": 94.9,
+      "label_ko": "경고 (마감 임박)",
+      "severity": "WARNING",
+      "color_hex": "#F97316",
+      "badge_class": "bg-orange-500/10 text-orange-400 border-orange-500/20",
+      "recommended_action": "잔여 예산 소진이 임박했습니다. 즉시 출고 가능한 실재고 매칭이 필요합니다."
+    },
+    "CRITICAL": {
+      "min_percent": 95.0,
+      "max_percent": 99.9,
+      "label_ko": "위험 (잔여 극소)",
+      "severity": "CRITICAL",
+      "color_hex": "#EF4444",
+      "badge_class": "bg-rose-500/10 text-rose-400 border-rose-500/20",
+      "recommended_action": "선착순 마감 직전입니다. 담당 지자체 문의 및 추경 예산 편성 여부를 확인하세요."
+    },
+    "DEPLETED": {
+      "min_percent": 100.0,
+      "max_percent": 999.0,
+      "label_ko": "마감 (접수 종료)",
+      "severity": "DEPLETED",
+      "color_hex": "#6B7280",
+      "badge_class": "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
+      "recommended_action": "2026년 공고 예산이 전액 소진되었습니다. 취소분 대기 접수 또는 차년도 사업을 준비하세요."
+    }
+  },
+  "nationwide_summary": {
+    "total_announced_units": 148510,
+    "total_applied_units": 132766,
+    "total_delivered_units": 122515,
+    "total_remaining_units": 15744,
+    "nationwide_depletion_rate": 89.4,
+    "total_budget_billion_krw": 2105.1,
+    "disbursed_budget_billion_krw": 1893.4,
+    "category_totals": {
+      "passenger": {
+        "announced_units": 110400,
+        "applied_units": 97035,
+        "delivered_units": 88960,
+        "remaining_units": 13365,
+        "depletion_rate": 87.9,
+        "delivery_rate": 80.6,
+        "status": "WARNING"
+      },
+      "commercial": {
+        "announced_units": 34800,
+        "applied_units": 32754,
+        "delivered_units": 30780,
+        "remaining_units": 2046,
+        "depletion_rate": 94.1,
+        "delivery_rate": 88.4,
+        "status": "WARNING"
+      },
+      "bus": {
+        "announced_units": 3310,
+        "applied_units": 2977,
+        "delivered_units": 2775,
+        "remaining_units": 333,
+        "depletion_rate": 89.9,
+        "delivery_rate": 83.8,
+        "status": "WARNING"
+      }
+    },
+    "alert_region_counts": {
+      "healthy": 0,
+      "caution": 1,
+      "warning": 12,
+      "critical": 4,
+      "depleted": 0
+    }
+  },
+  "regions": [
+    {
+      "region_id": "KR-11",
+      "iso_code": "KR-11",
+      "name_ko": "서울특별시",
+      "name_en": "Seoul",
+      "tier": "special_city",
+      "overall_depletion_rate": 87.8,
+      "overall_status": "WARNING",
+      "residency_requirement_days": 30,
+      "supplementary_budget_added": false,
+      "categories": {
+        "passenger": {
+          "announced_units": 11500,
+          "applied_units": 9890,
+          "delivered_units": 8900,
+          "remaining_units": 1610,
+          "depletion_rate": 86.0,
+          "delivery_rate": 77.4,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 1500000,
+          "max_total_subsidy_krw": 8000000,
+          "total_budget_krw": 92000000000,
+          "remaining_budget_krw": 12880000000
+        },
+        "commercial": {
+          "announced_units": 2800,
+          "applied_units": 2660,
+          "delivered_units": 2450,
+          "remaining_units": 140,
+          "depletion_rate": 95.0,
+          "delivery_rate": 87.5,
+          "status": "CRITICAL",
+          "max_local_subsidy_krw": 4000000,
+          "max_total_subsidy_krw": 14500000,
+          "total_budget_krw": 40600000000,
+          "remaining_budget_krw": 2030000000
+        },
+        "bus": {
+          "announced_units": 450,
+          "applied_units": 396,
+          "delivered_units": 360,
+          "remaining_units": 54,
+          "depletion_rate": 88.0,
+          "delivery_rate": 80.0,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 35000000,
+          "max_total_subsidy_krw": 105000000,
+          "total_budget_krw": 45000000000,
+          "remaining_budget_krw": 5400000000
+        }
+      },
+      "notes": "잔여 1,610대 소진 임박, 10월 초 일반 승용 마감 유력. 법인 물량 조기 마감.",
+      "municipalities": [
+        {
+          "name_ko": "종로구",
+          "announced_units": 280,
+          "applied_units": 241,
+          "remaining_units": 39,
+          "depletion_rate": 86.1,
+          "status": "WARNING",
+          "local_subsidy_krw": 1500000
+        },
+        {
+          "name_ko": "강남구",
+          "announced_units": 1200,
+          "applied_units": 1068,
+          "remaining_units": 132,
+          "depletion_rate": 89.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 1500000
+        },
+        {
+          "name_ko": "송파구",
+          "announced_units": 950,
+          "applied_units": 826,
+          "remaining_units": 124,
+          "depletion_rate": 86.9,
+          "status": "WARNING",
+          "local_subsidy_krw": 1500000
+        },
+        {
+          "name_ko": "서초구",
+          "announced_units": 890,
+          "applied_units": 783,
+          "remaining_units": 107,
+          "depletion_rate": 88.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 1500000
+        },
+        {
+          "name_ko": "마포구",
+          "announced_units": 620,
+          "applied_units": 527,
+          "remaining_units": 93,
+          "depletion_rate": 85.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 1500000
+        },
+        {
+          "name_ko": "영등포구",
+          "announced_units": 710,
+          "applied_units": 603,
+          "remaining_units": 107,
+          "depletion_rate": 84.9,
+          "status": "WARNING",
+          "local_subsidy_krw": 1500000
+        }
+      ]
+    },
+    {
+      "region_id": "KR-41",
+      "iso_code": "KR-41",
+      "name_ko": "경기도",
+      "name_en": "Gyeonggi",
+      "tier": "province",
+      "overall_depletion_rate": 92.1,
+      "overall_status": "WARNING",
+      "residency_requirement_days": 30,
+      "supplementary_budget_added": true,
+      "categories": {
+        "passenger": {
+          "announced_units": 28000,
+          "applied_units": 25480,
+          "delivered_units": 23200,
+          "remaining_units": 2520,
+          "depletion_rate": 91.0,
+          "delivery_rate": 82.9,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 3500000,
+          "max_total_subsidy_krw": 10000000,
+          "total_budget_krw": 280000000000,
+          "remaining_budget_krw": 25200000000
+        },
+        "commercial": {
+          "announced_units": 7500,
+          "applied_units": 7200,
+          "delivered_units": 6800,
+          "remaining_units": 300,
+          "depletion_rate": 96.0,
+          "delivery_rate": 90.7,
+          "status": "CRITICAL",
+          "max_local_subsidy_krw": 5000000,
+          "max_total_subsidy_krw": 15500000,
+          "total_budget_krw": 116250000000,
+          "remaining_budget_krw": 4650000000
+        },
+        "bus": {
+          "announced_units": 900,
+          "applied_units": 855,
+          "delivered_units": 810,
+          "remaining_units": 45,
+          "depletion_rate": 95.0,
+          "delivery_rate": 90.0,
+          "status": "CRITICAL",
+          "max_local_subsidy_krw": 40000000,
+          "max_total_subsidy_krw": 110000000,
+          "total_budget_krw": 94500000000,
+          "remaining_budget_krw": 4725000000
+        }
+      },
+      "notes": "수원·성남·용인 95% 초과(위험), 평택·화성 등 경기남부 잔여 물량 소량 유지.",
+      "municipalities": [
+        {
+          "name_ko": "수원시",
+          "announced_units": 2800,
+          "applied_units": 2688,
+          "remaining_units": 112,
+          "depletion_rate": 96.0,
+          "status": "CRITICAL",
+          "local_subsidy_krw": 3500000
+        },
+        {
+          "name_ko": "성남시",
+          "announced_units": 2200,
+          "applied_units": 2134,
+          "remaining_units": 66,
+          "depletion_rate": 97.0,
+          "status": "CRITICAL",
+          "local_subsidy_krw": 3500000
+        },
+        {
+          "name_ko": "용인시",
+          "announced_units": 2600,
+          "applied_units": 2522,
+          "remaining_units": 78,
+          "depletion_rate": 97.0,
+          "status": "CRITICAL",
+          "local_subsidy_krw": 3500000
+        },
+        {
+          "name_ko": "고양시",
+          "announced_units": 2400,
+          "applied_units": 2208,
+          "remaining_units": 192,
+          "depletion_rate": 92.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 3500000
+        },
+        {
+          "name_ko": "화성시",
+          "announced_units": 2900,
+          "applied_units": 2639,
+          "remaining_units": 261,
+          "depletion_rate": 91.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 3500000
+        },
+        {
+          "name_ko": "평택시",
+          "announced_units": 1600,
+          "applied_units": 1424,
+          "remaining_units": 176,
+          "depletion_rate": 89.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 4500000
+        },
+        {
+          "name_ko": "안산시",
+          "announced_units": 1500,
+          "applied_units": 1365,
+          "remaining_units": 135,
+          "depletion_rate": 91.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 3500000
+        },
+        {
+          "name_ko": "부천시",
+          "announced_units": 1400,
+          "applied_units": 1288,
+          "remaining_units": 112,
+          "depletion_rate": 92.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 3500000
+        },
+        {
+          "name_ko": "남양주시",
+          "announced_units": 1500,
+          "applied_units": 1350,
+          "remaining_units": 150,
+          "depletion_rate": 90.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 4000000
+        },
+        {
+          "name_ko": "가평군",
+          "announced_units": 350,
+          "applied_units": 280,
+          "remaining_units": 70,
+          "depletion_rate": 80.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 5000000
+        }
+      ]
+    },
+    {
+      "region_id": "KR-26",
+      "iso_code": "KR-26",
+      "name_ko": "부산광역시",
+      "name_en": "Busan",
+      "tier": "metropolitan_city",
+      "overall_depletion_rate": 80.8,
+      "overall_status": "WARNING",
+      "residency_requirement_days": 90,
+      "supplementary_budget_added": false,
+      "categories": {
+        "passenger": {
+          "announced_units": 6200,
+          "applied_units": 4836,
+          "delivered_units": 4400,
+          "remaining_units": 1364,
+          "depletion_rate": 78.0,
+          "delivery_rate": 71.0,
+          "status": "CAUTION",
+          "max_local_subsidy_krw": 2500000,
+          "max_total_subsidy_krw": 9000000,
+          "total_budget_krw": 55800000000,
+          "remaining_budget_krw": 12276000000
+        },
+        "commercial": {
+          "announced_units": 1800,
+          "applied_units": 1620,
+          "delivered_units": 1500,
+          "remaining_units": 180,
+          "depletion_rate": 90.0,
+          "delivery_rate": 83.3,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 4500000,
+          "max_total_subsidy_krw": 15000000,
+          "total_budget_krw": 27000000000,
+          "remaining_budget_krw": 2700000000
+        },
+        "bus": {
+          "announced_units": 220,
+          "applied_units": 187,
+          "delivered_units": 170,
+          "remaining_units": 33,
+          "depletion_rate": 85.0,
+          "delivery_rate": 77.3,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 35000000,
+          "max_total_subsidy_krw": 105000000,
+          "total_budget_krw": 22000000000,
+          "remaining_budget_krw": 3300000000
+        }
+      },
+      "notes": "90일 거주 요건 엄격 심사. 가을철 출고 물량 유입으로 10월 중 소진율 가속 예상.",
+      "municipalities": [
+        {
+          "name_ko": "해운대구",
+          "announced_units": 1200,
+          "applied_units": 960,
+          "remaining_units": 240,
+          "depletion_rate": 80.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 2500000
+        },
+        {
+          "name_ko": "부산진구",
+          "announced_units": 900,
+          "applied_units": 711,
+          "remaining_units": 189,
+          "depletion_rate": 79.0,
+          "status": "CAUTION",
+          "local_subsidy_krw": 2500000
+        },
+        {
+          "name_ko": "동래구",
+          "announced_units": 750,
+          "applied_units": 570,
+          "remaining_units": 180,
+          "depletion_rate": 76.0,
+          "status": "CAUTION",
+          "local_subsidy_krw": 2500000
+        },
+        {
+          "name_ko": "사하구",
+          "announced_units": 650,
+          "applied_units": 494,
+          "remaining_units": 156,
+          "depletion_rate": 76.0,
+          "status": "CAUTION",
+          "local_subsidy_krw": 2500000
+        }
+      ]
+    },
+    {
+      "region_id": "KR-27",
+      "iso_code": "KR-27",
+      "name_ko": "대구광역시",
+      "name_en": "Daegu",
+      "tier": "metropolitan_city",
+      "overall_depletion_rate": 96.4,
+      "overall_status": "CRITICAL",
+      "residency_requirement_days": 30,
+      "supplementary_budget_added": false,
+      "categories": {
+        "passenger": {
+          "announced_units": 5100,
+          "applied_units": 4896,
+          "delivered_units": 4600,
+          "remaining_units": 204,
+          "depletion_rate": 96.0,
+          "delivery_rate": 90.2,
+          "status": "CRITICAL",
+          "max_local_subsidy_krw": 3000000,
+          "max_total_subsidy_krw": 9500000,
+          "total_budget_krw": 48450000000,
+          "remaining_budget_krw": 1938000000
+        },
+        "commercial": {
+          "announced_units": 1500,
+          "applied_units": 1470,
+          "delivered_units": 1410,
+          "remaining_units": 30,
+          "depletion_rate": 98.0,
+          "delivery_rate": 94.0,
+          "status": "CRITICAL",
+          "max_local_subsidy_krw": 4500000,
+          "max_total_subsidy_krw": 15000000,
+          "total_budget_krw": 22500000000,
+          "remaining_budget_krw": 450000000
+        },
+        "bus": {
+          "announced_units": 160,
+          "applied_units": 152,
+          "delivered_units": 144,
+          "remaining_units": 8,
+          "depletion_rate": 95.0,
+          "delivery_rate": 90.0,
+          "status": "CRITICAL",
+          "max_local_subsidy_krw": 35000000,
+          "max_total_subsidy_krw": 105000000,
+          "total_budget_krw": 16000000000,
+          "remaining_budget_krw": 800000000
+        }
+      },
+      "notes": "잔여 204대, 사실상 선착순 마감 직전. 대기번호 접수자 우선 순번 부여.",
+      "municipalities": [
+        {
+          "name_ko": "수성구",
+          "announced_units": 1300,
+          "applied_units": 1274,
+          "remaining_units": 26,
+          "depletion_rate": 98.0,
+          "status": "CRITICAL",
+          "local_subsidy_krw": 3000000
+        },
+        {
+          "name_ko": "달서구",
+          "announced_units": 1400,
+          "applied_units": 1344,
+          "remaining_units": 56,
+          "depletion_rate": 96.0,
+          "status": "CRITICAL",
+          "local_subsidy_krw": 3000000
+        },
+        {
+          "name_ko": "북구",
+          "announced_units": 950,
+          "applied_units": 912,
+          "remaining_units": 38,
+          "depletion_rate": 96.0,
+          "status": "CRITICAL",
+          "local_subsidy_krw": 3000000
+        },
+        {
+          "name_ko": "동구",
+          "announced_units": 750,
+          "applied_units": 705,
+          "remaining_units": 45,
+          "depletion_rate": 94.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 3000000
+        }
+      ]
+    },
+    {
+      "region_id": "KR-28",
+      "iso_code": "KR-28",
+      "name_ko": "인천광역시",
+      "name_en": "Incheon",
+      "tier": "metropolitan_city",
+      "overall_depletion_rate": 86.1,
+      "overall_status": "WARNING",
+      "residency_requirement_days": 30,
+      "supplementary_budget_added": false,
+      "categories": {
+        "passenger": {
+          "announced_units": 5800,
+          "applied_units": 4756,
+          "delivered_units": 4300,
+          "remaining_units": 1044,
+          "depletion_rate": 82.0,
+          "delivery_rate": 74.1,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 3000000,
+          "max_total_subsidy_krw": 9500000,
+          "total_budget_krw": 55100000000,
+          "remaining_budget_krw": 9918000000
+        },
+        "commercial": {
+          "announced_units": 1900,
+          "applied_units": 1862,
+          "delivered_units": 1780,
+          "remaining_units": 38,
+          "depletion_rate": 98.0,
+          "delivery_rate": 93.7,
+          "status": "CRITICAL",
+          "max_local_subsidy_krw": 5000000,
+          "max_total_subsidy_krw": 15500000,
+          "total_budget_krw": 29450000000,
+          "remaining_budget_krw": 589000000
+        },
+        "bus": {
+          "announced_units": 210,
+          "applied_units": 189,
+          "delivered_units": 175,
+          "remaining_units": 21,
+          "depletion_rate": 90.0,
+          "delivery_rate": 83.3,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 35000000,
+          "max_total_subsidy_krw": 105000000,
+          "total_budget_krw": 21000000000,
+          "remaining_budget_krw": 2100000000
+        }
+      },
+      "notes": "화물차 전량 소진, 승용 잔여 약 1,040대 소진 임박.",
+      "municipalities": [
+        {
+          "name_ko": "연수구 (송도)",
+          "announced_units": 1500,
+          "applied_units": 1290,
+          "remaining_units": 210,
+          "depletion_rate": 86.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 3000000
+        },
+        {
+          "name_ko": "서구 (청라·검단)",
+          "announced_units": 1600,
+          "applied_units": 1344,
+          "remaining_units": 256,
+          "depletion_rate": 84.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 3000000
+        },
+        {
+          "name_ko": "남동구",
+          "announced_units": 1100,
+          "applied_units": 880,
+          "remaining_units": 220,
+          "depletion_rate": 80.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 3000000
+        },
+        {
+          "name_ko": "부평구",
+          "announced_units": 900,
+          "applied_units": 711,
+          "remaining_units": 189,
+          "depletion_rate": 79.0,
+          "status": "CAUTION",
+          "local_subsidy_krw": 3000000
+        }
+      ]
+    },
+    {
+      "region_id": "KR-29",
+      "iso_code": "KR-29",
+      "name_ko": "광주광역시",
+      "name_en": "Gwangju",
+      "tier": "metropolitan_city",
+      "overall_depletion_rate": 92.7,
+      "overall_status": "WARNING",
+      "residency_requirement_days": 30,
+      "supplementary_budget_added": false,
+      "categories": {
+        "passenger": {
+          "announced_units": 3400,
+          "applied_units": 3128,
+          "delivered_units": 2900,
+          "remaining_units": 272,
+          "depletion_rate": 92.0,
+          "delivery_rate": 85.3,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 3500000,
+          "max_total_subsidy_krw": 10000000,
+          "total_budget_krw": 34000000000,
+          "remaining_budget_krw": 2720000000
+        },
+        "commercial": {
+          "announced_units": 1100,
+          "applied_units": 1045,
+          "delivered_units": 990,
+          "remaining_units": 55,
+          "depletion_rate": 95.0,
+          "delivery_rate": 90.0,
+          "status": "CRITICAL",
+          "max_local_subsidy_krw": 5000000,
+          "max_total_subsidy_krw": 15500000,
+          "total_budget_krw": 17050000000,
+          "remaining_budget_krw": 852500000
+        },
+        "bus": {
+          "announced_units": 110,
+          "applied_units": 101,
+          "delivered_units": 95,
+          "remaining_units": 9,
+          "depletion_rate": 91.8,
+          "delivery_rate": 86.4,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 35000000,
+          "max_total_subsidy_krw": 105000000,
+          "total_budget_krw": 11000000000,
+          "remaining_budget_krw": 900000000
+        }
+      },
+      "notes": "법인 물량 전액 소진, 개인 승용 조기 마감 위험 (잔여 272대).",
+      "municipalities": [
+        {
+          "name_ko": "서구",
+          "announced_units": 900,
+          "applied_units": 837,
+          "remaining_units": 63,
+          "depletion_rate": 93.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 3500000
+        },
+        {
+          "name_ko": "광산구",
+          "announced_units": 1100,
+          "applied_units": 1023,
+          "remaining_units": 77,
+          "depletion_rate": 93.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 3500000
+        },
+        {
+          "name_ko": "북구",
+          "announced_units": 850,
+          "applied_units": 773,
+          "remaining_units": 77,
+          "depletion_rate": 90.9,
+          "status": "WARNING",
+          "local_subsidy_krw": 3500000
+        }
+      ]
+    },
+    {
+      "region_id": "KR-30",
+      "iso_code": "KR-30",
+      "name_ko": "대전광역시",
+      "name_en": "Daejeon",
+      "tier": "metropolitan_city",
+      "overall_depletion_rate": 80.7,
+      "overall_status": "WARNING",
+      "residency_requirement_days": 90,
+      "supplementary_budget_added": false,
+      "categories": {
+        "passenger": {
+          "announced_units": 4200,
+          "applied_units": 3276,
+          "delivered_units": 3050,
+          "remaining_units": 924,
+          "depletion_rate": 78.0,
+          "delivery_rate": 72.6,
+          "status": "CAUTION",
+          "max_local_subsidy_krw": 3000000,
+          "max_total_subsidy_krw": 9500000,
+          "total_budget_krw": 39900000000,
+          "remaining_budget_krw": 8778000000
+        },
+        "commercial": {
+          "announced_units": 1200,
+          "applied_units": 1080,
+          "delivered_units": 1000,
+          "remaining_units": 120,
+          "depletion_rate": 90.0,
+          "delivery_rate": 83.3,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 4500000,
+          "max_total_subsidy_krw": 15000000,
+          "total_budget_krw": 18000000000,
+          "remaining_budget_krw": 1800000000
+        },
+        "bus": {
+          "announced_units": 130,
+          "applied_units": 104,
+          "delivered_units": 98,
+          "remaining_units": 26,
+          "depletion_rate": 80.0,
+          "delivery_rate": 75.4,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 35000000,
+          "max_total_subsidy_krw": 105000000,
+          "total_budget_krw": 13000000000,
+          "remaining_budget_krw": 2600000000
+        }
+      },
+      "notes": "안정적 소진 유지 중, 10월 하순경 예산 한도 도달 예상.",
+      "municipalities": [
+        {
+          "name_ko": "유성구",
+          "announced_units": 1500,
+          "applied_units": 1200,
+          "remaining_units": 300,
+          "depletion_rate": 80.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 3000000
+        },
+        {
+          "name_ko": "서구",
+          "announced_units": 1300,
+          "applied_units": 1014,
+          "remaining_units": 286,
+          "depletion_rate": 78.0,
+          "status": "CAUTION",
+          "local_subsidy_krw": 3000000
+        },
+        {
+          "name_ko": "중구",
+          "announced_units": 650,
+          "applied_units": 487,
+          "remaining_units": 163,
+          "depletion_rate": 74.9,
+          "status": "CAUTION",
+          "local_subsidy_krw": 3000000
+        }
+      ]
+    },
+    {
+      "region_id": "KR-31",
+      "iso_code": "KR-31",
+      "name_ko": "울산광역시",
+      "name_en": "Ulsan",
+      "tier": "metropolitan_city",
+      "overall_depletion_rate": 96.5,
+      "overall_status": "CRITICAL",
+      "residency_requirement_days": 90,
+      "supplementary_budget_added": false,
+      "categories": {
+        "passenger": {
+          "announced_units": 2800,
+          "applied_units": 2688,
+          "delivered_units": 2550,
+          "remaining_units": 112,
+          "depletion_rate": 96.0,
+          "delivery_rate": 91.1,
+          "status": "CRITICAL",
+          "max_local_subsidy_krw": 3150000,
+          "max_total_subsidy_krw": 9650000,
+          "total_budget_krw": 27020000000,
+          "remaining_budget_krw": 1080800000
+        },
+        "commercial": {
+          "announced_units": 900,
+          "applied_units": 882,
+          "delivered_units": 850,
+          "remaining_units": 18,
+          "depletion_rate": 98.0,
+          "delivery_rate": 94.4,
+          "status": "CRITICAL",
+          "max_local_subsidy_krw": 4800000,
+          "max_total_subsidy_krw": 15300000,
+          "total_budget_krw": 13770000000,
+          "remaining_budget_krw": 275400000
+        },
+        "bus": {
+          "announced_units": 80,
+          "applied_units": 76,
+          "delivered_units": 72,
+          "remaining_units": 4,
+          "depletion_rate": 95.0,
+          "delivery_rate": 90.0,
+          "status": "CRITICAL",
+          "max_local_subsidy_krw": 35000000,
+          "max_total_subsidy_krw": 105000000,
+          "total_budget_krw": 8000000000,
+          "remaining_budget_krw": 400000000
+        }
+      },
+      "notes": "현대차 임직원 출고 집중으로 잔여 112대 마감 직전. 긴급 확인 요망.",
+      "municipalities": [
+        {
+          "name_ko": "남구",
+          "announced_units": 950,
+          "applied_units": 921,
+          "remaining_units": 29,
+          "depletion_rate": 96.9,
+          "status": "CRITICAL",
+          "local_subsidy_krw": 3150000
+        },
+        {
+          "name_ko": "북구 (현대차공장)",
+          "announced_units": 900,
+          "applied_units": 882,
+          "remaining_units": 18,
+          "depletion_rate": 98.0,
+          "status": "CRITICAL",
+          "local_subsidy_krw": 3150000
+        },
+        {
+          "name_ko": "울주군",
+          "announced_units": 650,
+          "applied_units": 611,
+          "remaining_units": 39,
+          "depletion_rate": 94.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 3150000
+        }
+      ]
+    },
+    {
+      "region_id": "KR-36",
+      "iso_code": "KR-36",
+      "name_ko": "세종특별자치시",
+      "name_en": "Sejong",
+      "tier": "special_self_governing_city",
+      "overall_depletion_rate": 75.5,
+      "overall_status": "CAUTION",
+      "residency_requirement_days": 30,
+      "supplementary_budget_added": false,
+      "categories": {
+        "passenger": {
+          "announced_units": 1200,
+          "applied_units": 876,
+          "delivered_units": 810,
+          "remaining_units": 324,
+          "depletion_rate": 73.0,
+          "delivery_rate": 67.5,
+          "status": "CAUTION",
+          "max_local_subsidy_krw": 2500000,
+          "max_total_subsidy_krw": 9000000,
+          "total_budget_krw": 10800000000,
+          "remaining_budget_krw": 2916000000
+        },
+        "commercial": {
+          "announced_units": 300,
+          "applied_units": 255,
+          "delivered_units": 230,
+          "remaining_units": 45,
+          "depletion_rate": 85.0,
+          "delivery_rate": 76.7,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 4000000,
+          "max_total_subsidy_krw": 14500000,
+          "total_budget_krw": 4350000000,
+          "remaining_budget_krw": 652500000
+        },
+        "bus": {
+          "announced_units": 40,
+          "applied_units": 32,
+          "delivered_units": 30,
+          "remaining_units": 8,
+          "depletion_rate": 80.0,
+          "delivery_rate": 75.0,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 35000000,
+          "max_total_subsidy_krw": 105000000,
+          "total_budget_krw": 4000000000,
+          "remaining_budget_krw": 800000000
+        }
+      },
+      "notes": "공무원 위주 실수요 중심, 전국 광역시 대비 잔여 예산 여유.",
+      "municipalities": [
+        {
+          "name_ko": "세종시 본청",
+          "announced_units": 1200,
+          "applied_units": 876,
+          "remaining_units": 324,
+          "depletion_rate": 73.0,
+          "status": "CAUTION",
+          "local_subsidy_krw": 2500000
+        }
+      ]
+    },
+    {
+      "region_id": "KR-42",
+      "iso_code": "KR-42",
+      "name_ko": "강원특별자치도",
+      "name_en": "Gangwon",
+      "tier": "special_self_governing_province",
+      "overall_depletion_rate": 80.8,
+      "overall_status": "WARNING",
+      "residency_requirement_days": 90,
+      "supplementary_budget_added": false,
+      "categories": {
+        "passenger": {
+          "announced_units": 4500,
+          "applied_units": 3510,
+          "delivered_units": 3200,
+          "remaining_units": 990,
+          "depletion_rate": 78.0,
+          "delivery_rate": 71.1,
+          "status": "CAUTION",
+          "max_local_subsidy_krw": 5500000,
+          "max_total_subsidy_krw": 12000000,
+          "total_budget_krw": 54000000000,
+          "remaining_budget_krw": 11880000000
+        },
+        "commercial": {
+          "announced_units": 1800,
+          "applied_units": 1584,
+          "delivered_units": 1490,
+          "remaining_units": 216,
+          "depletion_rate": 88.0,
+          "delivery_rate": 82.8,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 7000000,
+          "max_total_subsidy_krw": 17500000,
+          "total_budget_krw": 31500000000,
+          "remaining_budget_krw": 3780000000
+        },
+        "bus": {
+          "announced_units": 120,
+          "applied_units": 96,
+          "delivered_units": 90,
+          "remaining_units": 24,
+          "depletion_rate": 80.0,
+          "delivery_rate": 75.0,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 45000000,
+          "max_total_subsidy_krw": 115000000,
+          "total_budget_krw": 13800000000,
+          "remaining_budget_krw": 2760000000
+        }
+      },
+      "notes": "춘천·원주 집중 소진, 삼척·영동권 지자체는 고액 보조금(700만 원)에 잔여 여유.",
+      "municipalities": [
+        {
+          "name_ko": "춘천시",
+          "announced_units": 1300,
+          "applied_units": 1092,
+          "remaining_units": 208,
+          "depletion_rate": 84.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 5500000
+        },
+        {
+          "name_ko": "원주시",
+          "announced_units": 1500,
+          "applied_units": 1245,
+          "remaining_units": 255,
+          "depletion_rate": 83.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 5500000
+        },
+        {
+          "name_ko": "강릉시",
+          "announced_units": 750,
+          "applied_units": 570,
+          "remaining_units": 180,
+          "depletion_rate": 76.0,
+          "status": "CAUTION",
+          "local_subsidy_krw": 5500000
+        },
+        {
+          "name_ko": "삼척시",
+          "announced_units": 350,
+          "applied_units": 245,
+          "remaining_units": 105,
+          "depletion_rate": 70.0,
+          "status": "CAUTION",
+          "local_subsidy_krw": 7000000
+        }
+      ]
+    },
+    {
+      "region_id": "KR-43",
+      "iso_code": "KR-43",
+      "name_ko": "충청북도",
+      "name_en": "Chungbuk",
+      "tier": "province",
+      "overall_depletion_rate": 86.3,
+      "overall_status": "WARNING",
+      "residency_requirement_days": 30,
+      "supplementary_budget_added": false,
+      "categories": {
+        "passenger": {
+          "announced_units": 4100,
+          "applied_units": 3485,
+          "delivered_units": 3150,
+          "remaining_units": 615,
+          "depletion_rate": 85.0,
+          "delivery_rate": 76.8,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 6000000,
+          "max_total_subsidy_krw": 12500000,
+          "total_budget_krw": 51250000000,
+          "remaining_budget_krw": 7687500000
+        },
+        "commercial": {
+          "announced_units": 1600,
+          "applied_units": 1440,
+          "delivered_units": 1360,
+          "remaining_units": 160,
+          "depletion_rate": 90.0,
+          "delivery_rate": 85.0,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 7500000,
+          "max_total_subsidy_krw": 18000000,
+          "total_budget_krw": 28800000000,
+          "remaining_budget_krw": 2880000000
+        },
+        "bus": {
+          "announced_units": 100,
+          "applied_units": 82,
+          "delivered_units": 75,
+          "remaining_units": 18,
+          "depletion_rate": 82.0,
+          "delivery_rate": 75.0,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 45000000,
+          "max_total_subsidy_krw": 115000000,
+          "total_budget_krw": 11500000000,
+          "remaining_budget_krw": 2070000000
+        }
+      },
+      "notes": "청주시 93%로 마감 임박, 단양/영동 등 군단위는 700만 원 이상 고액 보조금 지원.",
+      "municipalities": [
+        {
+          "name_ko": "청주시",
+          "announced_units": 2100,
+          "applied_units": 1953,
+          "remaining_units": 147,
+          "depletion_rate": 93.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 6000000
+        },
+        {
+          "name_ko": "충주시",
+          "announced_units": 800,
+          "applied_units": 664,
+          "remaining_units": 136,
+          "depletion_rate": 83.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 6500000
+        },
+        {
+          "name_ko": "제천시",
+          "announced_units": 500,
+          "applied_units": 395,
+          "remaining_units": 105,
+          "depletion_rate": 79.0,
+          "status": "CAUTION",
+          "local_subsidy_krw": 6800000
+        },
+        {
+          "name_ko": "단양군",
+          "announced_units": 200,
+          "applied_units": 146,
+          "remaining_units": 54,
+          "depletion_rate": 73.0,
+          "status": "CAUTION",
+          "local_subsidy_krw": 7500000
+        }
+      ]
+    },
+    {
+      "region_id": "KR-44",
+      "iso_code": "KR-44",
+      "name_ko": "충청남도",
+      "name_en": "Chungnam",
+      "tier": "province",
+      "overall_depletion_rate": 89.3,
+      "overall_status": "WARNING",
+      "residency_requirement_days": 30,
+      "supplementary_budget_added": false,
+      "categories": {
+        "passenger": {
+          "announced_units": 5900,
+          "applied_units": 5192,
+          "delivered_units": 4700,
+          "remaining_units": 708,
+          "depletion_rate": 88.0,
+          "delivery_rate": 79.7,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 6500000,
+          "max_total_subsidy_krw": 13000000,
+          "total_budget_krw": 76700000000,
+          "remaining_budget_krw": 9204000000
+        },
+        "commercial": {
+          "announced_units": 2200,
+          "applied_units": 2046,
+          "delivered_units": 1920,
+          "remaining_units": 154,
+          "depletion_rate": 93.0,
+          "delivery_rate": 87.3,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 8000000,
+          "max_total_subsidy_krw": 18500000,
+          "total_budget_krw": 40700000000,
+          "remaining_budget_krw": 2849000000
+        },
+        "bus": {
+          "announced_units": 140,
+          "applied_units": 121,
+          "delivered_units": 110,
+          "remaining_units": 19,
+          "depletion_rate": 86.4,
+          "delivery_rate": 78.6,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 50000000,
+          "max_total_subsidy_krw": 120000000,
+          "total_budget_krw": 16800000000,
+          "remaining_budget_krw": 2280000000
+        }
+      },
+      "notes": "천안·아산 공업지대 소진 가속화(94%), 태안·서천 등 군 지역은 최대 900만 원 지급.",
+      "municipalities": [
+        {
+          "name_ko": "천안시",
+          "announced_units": 2100,
+          "applied_units": 1974,
+          "remaining_units": 126,
+          "depletion_rate": 94.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 6000000
+        },
+        {
+          "name_ko": "아산시",
+          "announced_units": 1500,
+          "applied_units": 1365,
+          "remaining_units": 135,
+          "depletion_rate": 91.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 6500000
+        },
+        {
+          "name_ko": "서산시",
+          "announced_units": 650,
+          "applied_units": 552,
+          "remaining_units": 98,
+          "depletion_rate": 84.9,
+          "status": "WARNING",
+          "local_subsidy_krw": 7000000
+        },
+        {
+          "name_ko": "당진시",
+          "announced_units": 600,
+          "applied_units": 510,
+          "remaining_units": 90,
+          "depletion_rate": 85.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 7000000
+        },
+        {
+          "name_ko": "태안군",
+          "announced_units": 250,
+          "applied_units": 195,
+          "remaining_units": 55,
+          "depletion_rate": 78.0,
+          "status": "CAUTION",
+          "local_subsidy_krw": 9000000
+        }
+      ]
+    },
+    {
+      "region_id": "KR-45",
+      "iso_code": "KR-45",
+      "name_ko": "전북특별자치도",
+      "name_en": "Jeonbuk",
+      "tier": "special_self_governing_province",
+      "overall_depletion_rate": 85.7,
+      "overall_status": "WARNING",
+      "residency_requirement_days": 30,
+      "supplementary_budget_added": false,
+      "categories": {
+        "passenger": {
+          "announced_units": 4300,
+          "applied_units": 3612,
+          "delivered_units": 3300,
+          "remaining_units": 688,
+          "depletion_rate": 84.0,
+          "delivery_rate": 76.7,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 6500000,
+          "max_total_subsidy_krw": 13000000,
+          "total_budget_krw": 55900000000,
+          "remaining_budget_krw": 8944000000
+        },
+        "commercial": {
+          "announced_units": 1700,
+          "applied_units": 1530,
+          "delivered_units": 1420,
+          "remaining_units": 170,
+          "depletion_rate": 90.0,
+          "delivery_rate": 83.5,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 8000000,
+          "max_total_subsidy_krw": 18500000,
+          "total_budget_krw": 31450000000,
+          "remaining_budget_krw": 3145000000
+        },
+        "bus": {
+          "announced_units": 110,
+          "applied_units": 93,
+          "delivered_units": 85,
+          "remaining_units": 17,
+          "depletion_rate": 84.5,
+          "delivery_rate": 77.3,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 45000000,
+          "max_total_subsidy_krw": 115000000,
+          "total_budget_krw": 12650000000,
+          "remaining_budget_krw": 1955000000
+        }
+      },
+      "notes": "전주시 90% 돌파로 조기 마감 가시권, 익산·군산 잔여 15%선 유지 중.",
+      "municipalities": [
+        {
+          "name_ko": "전주시",
+          "announced_units": 2000,
+          "applied_units": 1800,
+          "remaining_units": 200,
+          "depletion_rate": 90.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 6500000
+        },
+        {
+          "name_ko": "익산시",
+          "announced_units": 900,
+          "applied_units": 738,
+          "remaining_units": 162,
+          "depletion_rate": 82.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 6500000
+        },
+        {
+          "name_ko": "군산시",
+          "announced_units": 800,
+          "applied_units": 656,
+          "remaining_units": 144,
+          "depletion_rate": 82.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 6500000
+        },
+        {
+          "name_ko": "무주군",
+          "announced_units": 180,
+          "applied_units": 135,
+          "remaining_units": 45,
+          "depletion_rate": 75.0,
+          "status": "CAUTION",
+          "local_subsidy_krw": 8000000
+        }
+      ]
+    },
+    {
+      "region_id": "KR-46",
+      "iso_code": "KR-46",
+      "name_ko": "전라남도",
+      "name_en": "Jeonnam",
+      "tier": "province",
+      "overall_depletion_rate": 84.9,
+      "overall_status": "WARNING",
+      "residency_requirement_days": 90,
+      "supplementary_budget_added": false,
+      "categories": {
+        "passenger": {
+          "announced_units": 5400,
+          "applied_units": 4482,
+          "delivered_units": 4100,
+          "remaining_units": 918,
+          "depletion_rate": 83.0,
+          "delivery_rate": 75.9,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 7500000,
+          "max_total_subsidy_krw": 14000000,
+          "total_budget_krw": 75600000000,
+          "remaining_budget_krw": 12852000000
+        },
+        "commercial": {
+          "announced_units": 2100,
+          "applied_units": 1890,
+          "delivered_units": 1750,
+          "remaining_units": 210,
+          "depletion_rate": 90.0,
+          "delivery_rate": 83.3,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 8500000,
+          "max_total_subsidy_krw": 19000000,
+          "total_budget_krw": 39900000000,
+          "remaining_budget_krw": 3990000000
+        },
+        "bus": {
+          "announced_units": 130,
+          "applied_units": 107,
+          "delivered_units": 98,
+          "remaining_units": 23,
+          "depletion_rate": 82.3,
+          "delivery_rate": 75.4,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 50000000,
+          "max_total_subsidy_krw": 120000000,
+          "total_budget_krw": 15600000000,
+          "remaining_budget_krw": 2760000000
+        }
+      },
+      "notes": "목포·순천 소진 임박. 신안군(1,150만 원), 해남군(850만 원) 등 전국 최고 수준 지방비 지급.",
+      "municipalities": [
+        {
+          "name_ko": "순천시",
+          "announced_units": 1200,
+          "applied_units": 1056,
+          "remaining_units": 144,
+          "depletion_rate": 88.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 7000000
+        },
+        {
+          "name_ko": "여수시",
+          "announced_units": 1100,
+          "applied_units": 946,
+          "remaining_units": 154,
+          "depletion_rate": 86.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 7000000
+        },
+        {
+          "name_ko": "목포시",
+          "announced_units": 950,
+          "applied_units": 836,
+          "remaining_units": 114,
+          "depletion_rate": 88.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 7000000
+        },
+        {
+          "name_ko": "나주시",
+          "announced_units": 650,
+          "applied_units": 526,
+          "remaining_units": 124,
+          "depletion_rate": 80.9,
+          "status": "WARNING",
+          "local_subsidy_krw": 7500000
+        },
+        {
+          "name_ko": "해남군",
+          "announced_units": 300,
+          "applied_units": 237,
+          "remaining_units": 63,
+          "depletion_rate": 79.0,
+          "status": "CAUTION",
+          "local_subsidy_krw": 8500000
+        },
+        {
+          "name_ko": "신안군",
+          "announced_units": 200,
+          "applied_units": 152,
+          "remaining_units": 48,
+          "depletion_rate": 76.0,
+          "status": "CAUTION",
+          "local_subsidy_krw": 11500000
+        }
+      ]
+    },
+    {
+      "region_id": "KR-47",
+      "iso_code": "KR-47",
+      "name_ko": "경상북도",
+      "name_en": "Gyeongbuk",
+      "tier": "province",
+      "overall_depletion_rate": 97.3,
+      "overall_status": "CRITICAL",
+      "residency_requirement_days": 30,
+      "supplementary_budget_added": false,
+      "categories": {
+        "passenger": {
+          "announced_units": 7200,
+          "applied_units": 6984,
+          "delivered_units": 6500,
+          "remaining_units": 216,
+          "depletion_rate": 97.0,
+          "delivery_rate": 90.3,
+          "status": "CRITICAL",
+          "max_local_subsidy_krw": 6500000,
+          "max_total_subsidy_krw": 13000000,
+          "total_budget_krw": 93600000000,
+          "remaining_budget_krw": 2808000000
+        },
+        "commercial": {
+          "announced_units": 2600,
+          "applied_units": 2548,
+          "delivered_units": 2410,
+          "remaining_units": 52,
+          "depletion_rate": 98.0,
+          "delivery_rate": 92.7,
+          "status": "CRITICAL",
+          "max_local_subsidy_krw": 8000000,
+          "max_total_subsidy_krw": 18500000,
+          "total_budget_krw": 48100000000,
+          "remaining_budget_krw": 962000000
+        },
+        "bus": {
+          "announced_units": 160,
+          "applied_units": 155,
+          "delivered_units": 148,
+          "remaining_units": 5,
+          "depletion_rate": 96.9,
+          "delivery_rate": 92.5,
+          "status": "CRITICAL",
+          "max_local_subsidy_krw": 50000000,
+          "max_total_subsidy_krw": 120000000,
+          "total_budget_krw": 19200000000,
+          "remaining_budget_krw": 600000000
+        }
+      },
+      "notes": "포항·구미 98% 이상 마감 직전. 울릉군(1,100만 원)은 100% 전액 소진 마감.",
+      "municipalities": [
+        {
+          "name_ko": "포항시",
+          "announced_units": 2200,
+          "applied_units": 2178,
+          "remaining_units": 22,
+          "depletion_rate": 99.0,
+          "status": "CRITICAL",
+          "local_subsidy_krw": 6000000
+        },
+        {
+          "name_ko": "구미시",
+          "announced_units": 1700,
+          "applied_units": 1666,
+          "remaining_units": 34,
+          "depletion_rate": 98.0,
+          "status": "CRITICAL",
+          "local_subsidy_krw": 6000000
+        },
+        {
+          "name_ko": "경주시",
+          "announced_units": 1000,
+          "applied_units": 960,
+          "remaining_units": 40,
+          "depletion_rate": 96.0,
+          "status": "CRITICAL",
+          "local_subsidy_krw": 6500000
+        },
+        {
+          "name_ko": "안동시",
+          "announced_units": 700,
+          "applied_units": 665,
+          "remaining_units": 35,
+          "depletion_rate": 95.0,
+          "status": "CRITICAL",
+          "local_subsidy_krw": 7000000
+        },
+        {
+          "name_ko": "울릉군",
+          "announced_units": 150,
+          "applied_units": 150,
+          "remaining_units": 0,
+          "depletion_rate": 100.0,
+          "status": "DEPLETED",
+          "local_subsidy_krw": 11000000
+        }
+      ]
+    },
+    {
+      "region_id": "KR-48",
+      "iso_code": "KR-48",
+      "name_ko": "경상남도",
+      "name_en": "Gyeongnam",
+      "tier": "province",
+      "overall_depletion_rate": 89.5,
+      "overall_status": "WARNING",
+      "residency_requirement_days": 30,
+      "supplementary_budget_added": false,
+      "categories": {
+        "passenger": {
+          "announced_units": 6800,
+          "applied_units": 5984,
+          "delivered_units": 5500,
+          "remaining_units": 816,
+          "depletion_rate": 88.0,
+          "delivery_rate": 80.9,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 6000000,
+          "max_total_subsidy_krw": 12500000,
+          "total_budget_krw": 85000000000,
+          "remaining_budget_krw": 10200000000
+        },
+        "commercial": {
+          "announced_units": 2400,
+          "applied_units": 2256,
+          "delivered_units": 2100,
+          "remaining_units": 144,
+          "depletion_rate": 94.0,
+          "delivery_rate": 87.5,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 7500000,
+          "max_total_subsidy_krw": 18000000,
+          "total_budget_krw": 43200000000,
+          "remaining_budget_krw": 2592000000
+        },
+        "bus": {
+          "announced_units": 150,
+          "applied_units": 132,
+          "delivered_units": 120,
+          "remaining_units": 18,
+          "depletion_rate": 88.0,
+          "delivery_rate": 80.0,
+          "status": "WARNING",
+          "max_local_subsidy_krw": 45000000,
+          "max_total_subsidy_krw": 115000000,
+          "total_budget_krw": 17250000000,
+          "remaining_budget_krw": 2070000000
+        }
+      },
+      "notes": "창원·김해 등 동부경남 공업벨트 소진 가속, 서부경남 소량 잔여.",
+      "municipalities": [
+        {
+          "name_ko": "창원시",
+          "announced_units": 2400,
+          "applied_units": 2208,
+          "remaining_units": 192,
+          "depletion_rate": 92.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 5500000
+        },
+        {
+          "name_ko": "김해시",
+          "announced_units": 1600,
+          "applied_units": 1440,
+          "remaining_units": 160,
+          "depletion_rate": 90.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 5500000
+        },
+        {
+          "name_ko": "양산시",
+          "announced_units": 1100,
+          "applied_units": 957,
+          "remaining_units": 143,
+          "depletion_rate": 87.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 6000000
+        },
+        {
+          "name_ko": "진주시",
+          "announced_units": 900,
+          "applied_units": 774,
+          "remaining_units": 126,
+          "depletion_rate": 86.0,
+          "status": "WARNING",
+          "local_subsidy_krw": 6000000
+        },
+        {
+          "name_ko": "거창군",
+          "announced_units": 200,
+          "applied_units": 156,
+          "remaining_units": 44,
+          "depletion_rate": 78.0,
+          "status": "CAUTION",
+          "local_subsidy_krw": 7500000
+        }
+      ]
+    },
+    {
+      "region_id": "KR-49",
+      "iso_code": "KR-49",
+      "name_ko": "제주특별자치도",
+      "name_en": "Jeju",
+      "tier": "special_self_governing_province",
+      "overall_depletion_rate": 99.0,
+      "overall_status": "CRITICAL",
+      "residency_requirement_days": 90,
+      "supplementary_budget_added": false,
+      "categories": {
+        "passenger": {
+          "announced_units": 4000,
+          "applied_units": 3960,
+          "delivered_units": 3800,
+          "remaining_units": 40,
+          "depletion_rate": 99.0,
+          "delivery_rate": 95.0,
+          "status": "CRITICAL",
+          "max_local_subsidy_krw": 4000000,
+          "max_total_subsidy_krw": 10500000,
+          "total_budget_krw": 42000000000,
+          "remaining_budget_krw": 420000000
+        },
+        "commercial": {
+          "announced_units": 1400,
+          "applied_units": 1386,
+          "delivered_units": 1320,
+          "remaining_units": 14,
+          "depletion_rate": 99.0,
+          "delivery_rate": 94.3,
+          "status": "CRITICAL",
+          "max_local_subsidy_krw": 6000000,
+          "max_total_subsidy_krw": 16500000,
+          "total_budget_krw": 23100000000,
+          "remaining_budget_krw": 231000000
+        },
+        "bus": {
+          "announced_units": 100,
+          "applied_units": 99,
+          "delivered_units": 95,
+          "remaining_units": 1,
+          "depletion_rate": 99.0,
+          "delivery_rate": 95.0,
+          "status": "CRITICAL",
+          "max_local_subsidy_krw": 40000000,
+          "max_total_subsidy_krw": 110000000,
+          "total_budget_krw": 11000000000,
+          "remaining_budget_krw": 110000000
+        }
+      },
+      "notes": "렌터카 및 도민 보급 목표 99% 달성. 일반 승용 잔여 40대, 실질적 접수 마감.",
+      "municipalities": [
+        {
+          "name_ko": "제주시",
+          "announced_units": 2700,
+          "applied_units": 2673,
+          "remaining_units": 27,
+          "depletion_rate": 99.0,
+          "status": "CRITICAL",
+          "local_subsidy_krw": 4000000
+        },
+        {
+          "name_ko": "서귀포시",
+          "announced_units": 1300,
+          "applied_units": 1287,
+          "remaining_units": 13,
+          "depletion_rate": 99.0,
+          "status": "CRITICAL",
+          "local_subsidy_krw": 4000000
+        }
+      ]
+    }
+  ],
+  "popular_models_matrix": [
+    {
+      "model_id": "ioniq-5-2026",
+      "name_ko": "현대 아이오닉 5 롱레인지 2WD (2026)",
+      "manufacturer": "현대자동차",
+      "battery_type": "NCM 삼원계 (SK온 84kWh)",
+      "battery_capacity_kwh": 84.0,
+      "rated_range_km": 485,
+      "base_price_krw": 54100000,
+      "price_subsidy_ratio": 1.0,
+      "national_subsidy_krw": 6500000,
+      "regional_subsidy_samples": {
+        "seoul": {
+          "total_subsidy_krw": 8000000,
+          "net_price_krw": 46100000
+        },
+        "gyeonggi_avg": {
+          "total_subsidy_krw": 10000000,
+          "net_price_krw": 44100000
+        },
+        "busan": {
+          "total_subsidy_krw": 9000000,
+          "net_price_krw": 45100000
+        },
+        "daegu": {
+          "total_subsidy_krw": 9500000,
+          "net_price_krw": 44600000
+        },
+        "jeju": {
+          "total_subsidy_krw": 10500000,
+          "net_price_krw": 43600000
+        },
+        "gurye_jeonnam": {
+          "total_subsidy_krw": 14500000,
+          "net_price_krw": 39600000
+        },
+        "ulleung_gyeongbuk": {
+          "total_subsidy_krw": 17500000,
+          "net_price_krw": 36600000
+        }
+      }
+    },
+    {
+      "model_id": "kia-ev3-2026",
+      "name_ko": "기아 EV3 롱레인지 에어 (2026)",
+      "manufacturer": "기아",
+      "battery_type": "NCM 삼원계 (LG엔솔 81.4kWh)",
+      "battery_capacity_kwh": 81.4,
+      "rated_range_km": 501,
+      "base_price_krw": 39950000,
+      "price_subsidy_ratio": 1.0,
+      "national_subsidy_krw": 5850000,
+      "regional_subsidy_samples": {
+        "seoul": {
+          "total_subsidy_krw": 7200000,
+          "net_price_krw": 32750000
+        },
+        "gyeonggi_avg": {
+          "total_subsidy_krw": 9000000,
+          "net_price_krw": 30950000
+        },
+        "busan": {
+          "total_subsidy_krw": 8100000,
+          "net_price_krw": 31850000
+        },
+        "daegu": {
+          "total_subsidy_krw": 8550000,
+          "net_price_krw": 31400000
+        },
+        "jeju": {
+          "total_subsidy_krw": 9450000,
+          "net_price_krw": 30500000
+        },
+        "gurye_jeonnam": {
+          "total_subsidy_krw": 13050000,
+          "net_price_krw": 26900000
+        },
+        "ulleung_gyeongbuk": {
+          "total_subsidy_krw": 15750000,
+          "net_price_krw": 24200000
+        }
+      }
+    },
+    {
+      "model_id": "kia-ev6-2026",
+      "name_ko": "기아 더 뉴 EV6 롱레인지 2WD (2026)",
+      "manufacturer": "기아",
+      "battery_type": "NCM 삼원계 (SK온 84kWh)",
+      "battery_capacity_kwh": 84.0,
+      "rated_range_km": 494,
+      "base_price_krw": 52600000,
+      "price_subsidy_ratio": 1.0,
+      "national_subsidy_krw": 6400000,
+      "regional_subsidy_samples": {
+        "seoul": {
+          "total_subsidy_krw": 7880000,
+          "net_price_krw": 44720000
+        },
+        "gyeonggi_avg": {
+          "total_subsidy_krw": 9850000,
+          "net_price_krw": 42750000
+        },
+        "busan": {
+          "total_subsidy_krw": 8860000,
+          "net_price_krw": 43740000
+        },
+        "daegu": {
+          "total_subsidy_krw": 9350000,
+          "net_price_krw": 43250000
+        },
+        "jeju": {
+          "total_subsidy_krw": 10340000,
+          "net_price_krw": 42260000
+        },
+        "gurye_jeonnam": {
+          "total_subsidy_krw": 14280000,
+          "net_price_krw": 38320000
+        },
+        "ulleung_gyeongbuk": {
+          "total_subsidy_krw": 17230000,
+          "net_price_krw": 35370000
+        }
+      }
+    },
+    {
+      "model_id": "kia-ev9-2026",
+      "name_ko": "기아 EV9 2WD 에어 (2026)",
+      "manufacturer": "기아",
+      "battery_type": "NCM 삼원계 (SK온 99.8kWh)",
+      "battery_capacity_kwh": 99.8,
+      "rated_range_km": 501,
+      "base_price_krw": 73370000,
+      "price_subsidy_ratio": 0.5,
+      "national_subsidy_krw": 3010000,
+      "regional_subsidy_samples": {
+        "seoul": {
+          "total_subsidy_krw": 3700000,
+          "net_price_krw": 69670000
+        },
+        "gyeonggi_avg": {
+          "total_subsidy_krw": 4630000,
+          "net_price_krw": 68740000
+        },
+        "busan": {
+          "total_subsidy_krw": 4170000,
+          "net_price_krw": 69200000
+        },
+        "daegu": {
+          "total_subsidy_krw": 4400000,
+          "net_price_krw": 68970000
+        },
+        "jeju": {
+          "total_subsidy_krw": 4860000,
+          "net_price_krw": 68510000
+        },
+        "gurye_jeonnam": {
+          "total_subsidy_krw": 6710000,
+          "net_price_krw": 66660000
+        },
+        "ulleung_gyeongbuk": {
+          "total_subsidy_krw": 8100000,
+          "net_price_krw": 65270000
+        }
+      }
+    },
+    {
+      "model_id": "tesla-model-y-rwd",
+      "name_ko": "테슬라 모델 Y RWD (2026)",
+      "manufacturer": "Tesla",
+      "battery_type": "LFP 리튬인산철 (CATL 60kWh)",
+      "battery_capacity_kwh": 60.0,
+      "rated_range_km": 350,
+      "base_price_krw": 52990000,
+      "price_subsidy_ratio": 1.0,
+      "national_subsidy_krw": 2000000,
+      "regional_subsidy_samples": {
+        "seoul": {
+          "total_subsidy_krw": 2460000,
+          "net_price_krw": 50530000
+        },
+        "gyeonggi_avg": {
+          "total_subsidy_krw": 3080000,
+          "net_price_krw": 49910000
+        },
+        "busan": {
+          "total_subsidy_krw": 2770000,
+          "net_price_krw": 50220000
+        },
+        "daegu": {
+          "total_subsidy_krw": 2920000,
+          "net_price_krw": 50070000
+        },
+        "jeju": {
+          "total_subsidy_krw": 3230000,
+          "net_price_krw": 49760000
+        },
+        "gurye_jeonnam": {
+          "total_subsidy_krw": 4460000,
+          "net_price_krw": 48530000
+        },
+        "ulleung_gyeongbuk": {
+          "total_subsidy_krw": 5380000,
+          "net_price_krw": 47610000
+        }
+      }
+    },
+    {
+      "model_id": "tesla-model-3-rwd",
+      "name_ko": "테슬라 모델 3 RWD 하이랜드 (2026)",
+      "manufacturer": "Tesla",
+      "battery_type": "LFP 리튬인산철 (CATL 60kWh)",
+      "battery_capacity_kwh": 60.0,
+      "rated_range_km": 382,
+      "base_price_krw": 51990000,
+      "price_subsidy_ratio": 1.0,
+      "national_subsidy_krw": 2260000,
+      "regional_subsidy_samples": {
+        "seoul": {
+          "total_subsidy_krw": 2780000,
+          "net_price_krw": 49210000
+        },
+        "gyeonggi_avg": {
+          "total_subsidy_krw": 3480000,
+          "net_price_krw": 48510000
+        },
+        "busan": {
+          "total_subsidy_krw": 3130000,
+          "net_price_krw": 48860000
+        },
+        "daegu": {
+          "total_subsidy_krw": 3300000,
+          "net_price_krw": 48690000
+        },
+        "jeju": {
+          "total_subsidy_krw": 3650000,
+          "net_price_krw": 48340000
+        },
+        "gurye_jeonnam": {
+          "total_subsidy_krw": 5040000,
+          "net_price_krw": 46950000
+        },
+        "ulleung_gyeongbuk": {
+          "total_subsidy_krw": 6080000,
+          "net_price_krw": 45910000
+        }
+      }
+    },
+    {
+      "model_id": "kgm-torres-evx",
+      "name_ko": "KGM 토레스 EVX 2WD (2026)",
+      "manufacturer": "KG모빌리티",
+      "battery_type": "LFP 블레이드 배터리 (BYD 73.4kWh)",
+      "battery_capacity_kwh": 73.4,
+      "rated_range_km": 433,
+      "base_price_krw": 45500000,
+      "price_subsidy_ratio": 1.0,
+      "national_subsidy_krw": 4570000,
+      "regional_subsidy_samples": {
+        "seoul": {
+          "total_subsidy_krw": 5620000,
+          "net_price_krw": 39880000
+        },
+        "gyeonggi_avg": {
+          "total_subsidy_krw": 7030000,
+          "net_price_krw": 38470000
+        },
+        "busan": {
+          "total_subsidy_krw": 6330000,
+          "net_price_krw": 39170000
+        },
+        "daegu": {
+          "total_subsidy_krw": 6680000,
+          "net_price_krw": 38820000
+        },
+        "jeju": {
+          "total_subsidy_krw": 7380000,
+          "net_price_krw": 38120000
+        },
+        "gurye_jeonnam": {
+          "total_subsidy_krw": 10190000,
+          "net_price_krw": 35310000
+        },
+        "ulleung_gyeongbuk": {
+          "total_subsidy_krw": 12300000,
+          "net_price_krw": 33200000
+        }
+      }
+    },
+    {
+      "model_id": "hyundai-casper-ev",
+      "name_ko": "현대 캐스퍼 일렉트릭 인스퍼레이션 (2026)",
+      "manufacturer": "현대자동차",
+      "battery_type": "NCM 삼원계 (LG엔솔 49kWh)",
+      "battery_capacity_kwh": 49.0,
+      "rated_range_km": 315,
+      "base_price_krw": 31500000,
+      "price_subsidy_ratio": 1.0,
+      "national_subsidy_krw": 5200000,
+      "regional_subsidy_samples": {
+        "seoul": {
+          "total_subsidy_krw": 6400000,
+          "net_price_krw": 25100000
+        },
+        "gyeonggi_avg": {
+          "total_subsidy_krw": 8000000,
+          "net_price_krw": 23500000
+        },
+        "busan": {
+          "total_subsidy_krw": 7200000,
+          "net_price_krw": 24300000
+        },
+        "daegu": {
+          "total_subsidy_krw": 7600000,
+          "net_price_krw": 23900000
+        },
+        "jeju": {
+          "total_subsidy_krw": 8400000,
+          "net_price_krw": 23100000
+        },
+        "gurye_jeonnam": {
+          "total_subsidy_krw": 11600000,
+          "net_price_krw": 19900000
+        },
+        "ulleung_gyeongbuk": {
+          "total_subsidy_krw": 14000000,
+          "net_price_krw": 17500000
+        }
+      }
+    },
+    {
+      "model_id": "byd-atto-3",
+      "name_ko": "BYD 아토 3 (2026 KDM)",
+      "manufacturer": "BYD",
+      "battery_type": "LFP 블레이드 배터리 (BYD 60.48kWh)",
+      "battery_capacity_kwh": 60.48,
+      "rated_range_km": 345,
+      "base_price_krw": 32500000,
+      "price_subsidy_ratio": 1.0,
+      "national_subsidy_krw": 2050000,
+      "regional_subsidy_samples": {
+        "seoul": {
+          "total_subsidy_krw": 2520000,
+          "net_price_krw": 29980000
+        },
+        "gyeonggi_avg": {
+          "total_subsidy_krw": 3150000,
+          "net_price_krw": 29350000
+        },
+        "busan": {
+          "total_subsidy_krw": 2840000,
+          "net_price_krw": 29660000
+        },
+        "daegu": {
+          "total_subsidy_krw": 3000000,
+          "net_price_krw": 29500000
+        },
+        "jeju": {
+          "total_subsidy_krw": 3310000,
+          "net_price_krw": 29190000
+        },
+        "gurye_jeonnam": {
+          "total_subsidy_krw": 4570000,
+          "net_price_krw": 27930000
+        },
+        "ulleung_gyeongbuk": {
+          "total_subsidy_krw": 5520000,
+          "net_price_krw": 26980000
+        }
+      }
+    },
+    {
+      "model_id": "byd-dolphin",
+      "name_ko": "BYD 돌핀 (2026 KDM)",
+      "manufacturer": "BYD",
+      "battery_type": "LFP 블레이드 배터리 (BYD 44.9kWh)",
+      "battery_capacity_kwh": 44.9,
+      "rated_range_km": 310,
+      "base_price_krw": 26900000,
+      "price_subsidy_ratio": 1.0,
+      "national_subsidy_krw": 1850000,
+      "regional_subsidy_samples": {
+        "seoul": {
+          "total_subsidy_krw": 2280000,
+          "net_price_krw": 24620000
+        },
+        "gyeonggi_avg": {
+          "total_subsidy_krw": 2850000,
+          "net_price_krw": 24050000
+        },
+        "busan": {
+          "total_subsidy_krw": 2560000,
+          "net_price_krw": 24340000
+        },
+        "daegu": {
+          "total_subsidy_krw": 2700000,
+          "net_price_krw": 24200000
+        },
+        "jeju": {
+          "total_subsidy_krw": 2990000,
+          "net_price_krw": 23910000
+        },
+        "gurye_jeonnam": {
+          "total_subsidy_krw": 4130000,
+          "net_price_krw": 22770000
+        },
+        "ulleung_gyeongbuk": {
+          "total_subsidy_krw": 4980000,
+          "net_price_krw": 21920000
+        }
+      }
+    }
+  ],
+  "historical_depletion_trajectory": [
+    {
+      "date": "2026-01-31",
+      "passenger_rate": 0.0,
+      "commercial_rate": 0.0,
+      "overall_rate": 0.0
+    },
+    {
+      "date": "2026-02-28",
+      "passenger_rate": 12.5,
+      "commercial_rate": 19.4,
+      "overall_rate": 14.1
+    },
+    {
+      "date": "2026-03-31",
+      "passenger_rate": 28.4,
+      "commercial_rate": 38.2,
+      "overall_rate": 30.6
+    },
+    {
+      "date": "2026-04-30",
+      "passenger_rate": 44.1,
+      "commercial_rate": 53.0,
+      "overall_rate": 46.2
+    },
+    {
+      "date": "2026-05-31",
+      "passenger_rate": 58.7,
+      "commercial_rate": 67.5,
+      "overall_rate": 60.8
+    },
+    {
+      "date": "2026-06-30",
+      "passenger_rate": 71.2,
+      "commercial_rate": 78.1,
+      "overall_rate": 72.8
+    },
+    {
+      "date": "2026-07-31",
+      "passenger_rate": 79.5,
+      "commercial_rate": 84.3,
+      "overall_rate": 80.6
+    },
+    {
+      "date": "2026-08-31",
+      "passenger_rate": 85.8,
+      "commercial_rate": 89.6,
+      "overall_rate": 86.7
+    },
+    {
+      "date": "2026-09-23",
+      "passenger_rate": 88.6,
+      "commercial_rate": 91.4,
+      "overall_rate": 89.3
+    }
+  ]
+}
