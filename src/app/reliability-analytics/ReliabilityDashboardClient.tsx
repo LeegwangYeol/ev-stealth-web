@@ -300,15 +300,16 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
               {/* Heatmap Grid Wrapper */}
               <div className="overflow-x-auto border border-slate-200 rounded-2xl">
-                <table className="w-full text-left text-xs sm:text-sm border-collapse">
+                <table className="w-full text-left text-xs sm:text-sm border-collapse" aria-label="연식별 전기차 신뢰성 및 결함 심각도(DSI) 매트릭스">
+                  <caption className="sr-only">연식별 전기차 신뢰성 및 결함 심각도(DSI) 매트릭스</caption>
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200">
-                      <th className="p-3 font-semibold text-slate-700 min-w-[140px] sticky left-0 bg-slate-50 z-10">
+                      <th scope="col" className="p-3 font-semibold text-slate-700 min-w-[140px] sticky left-0 bg-slate-50 z-10">
                         모델명
                       </th>
-                      <th className="p-3 font-semibold text-slate-700 min-w-[70px]">브랜드</th>
+                      <th scope="col" className="p-3 font-semibold text-slate-700 min-w-[70px]">브랜드</th>
                       {heatmapYears.map((yr) => (
-                        <th key={yr} className="p-3 font-semibold text-slate-700 text-center min-w-[60px]">
+                        <th key={yr} scope="col" className="p-3 font-semibold text-slate-700 text-center min-w-[60px]">
                           {yr}
                         </th>
                       ))}
@@ -321,9 +322,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
                       return (
                         <tr key={model.id} className="hover:bg-slate-50/80 transition">
-                          <td className="p-3 font-bold text-slate-900 sticky left-0 bg-white group-hover:bg-slate-50/80 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                          <th scope="row" className="p-3 font-bold text-slate-900 sticky left-0 bg-white group-hover:bg-slate-50/80 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] text-left font-normal sm:font-bold">
                             <div className="truncate max-w-[130px] sm:max-w-none">{model.name}</div>
-                          </td>
+                          </th>
                           <td className="p-3 text-slate-600 text-xs whitespace-nowrap">
                             {model.brand_name_ko}
                           </td>
@@ -448,7 +449,16 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     return (
                       <div
                         key={brand.id}
+                        role="button"
+                        tabIndex={0}
                         onClick={() => setSelectedBrand(isSelected ? 'ALL' : brand.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelectedBrand(isSelected ? 'ALL' : brand.id);
+                          }
+                        }}
+                        aria-pressed={isSelected}
                         className={`p-3 sm:p-4 rounded-2xl border transition cursor-pointer ${
                           isSelected
                             ? 'bg-indigo-50/80 border-indigo-300 ring-2 ring-indigo-200'
@@ -539,7 +549,16 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   return (
                     <div
                       key={cat.code}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => setSelectedCategory(selectedCategory === cat.code ? 'ALL' : cat.code)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedCategory(selectedCategory === cat.code ? 'ALL' : cat.code);
+                        }
+                      }}
+                      aria-pressed={selectedCategory === cat.code}
                       className={`p-4 rounded-2xl border transition cursor-pointer ${
                         selectedCategory === cat.code
                           ? 'ring-2 ring-indigo-300 bg-indigo-50/50 border-indigo-300'
@@ -907,25 +926,26 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
         </div>
 
         <div className="overflow-x-auto border border-slate-200 rounded-2xl">
-          <table className="w-full text-left text-xs sm:text-sm border-collapse">
+          <table className="w-full text-left text-xs sm:text-sm border-collapse" aria-label="보증 만료 후 폭탄 수리비 및 핵심 부품별 교체 비용 매트릭스">
+            <caption className="sr-only">보증 만료 후 폭탄 수리비 및 핵심 부품별 교체 비용 매트릭스</caption>
             <thead>
               <tr className="bg-slate-900 text-white">
-                <th className="p-4 font-semibold min-w-[180px]">핵심 부품명</th>
-                <th className="p-4 font-semibold min-w-[160px]">예상 교체 비용</th>
-                <th className="p-4 font-semibold min-w-[140px]">표준 보증 기준</th>
-                <th className="p-4 font-semibold min-w-[180px]">고위험 취약 차종</th>
-                <th className="p-4 font-semibold min-w-[260px]">치명적 경고 및 주의사항</th>
+                <th scope="col" className="p-4 font-semibold min-w-[180px]">핵심 부품명</th>
+                <th scope="col" className="p-4 font-semibold min-w-[160px]">예상 교체 비용</th>
+                <th scope="col" className="p-4 font-semibold min-w-[140px]">표준 보증 기준</th>
+                <th scope="col" className="p-4 font-semibold min-w-[180px]">고위험 취약 차종</th>
+                <th scope="col" className="p-4 font-semibold min-w-[260px]">치명적 경고 및 주의사항</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {initialData.repair_cost_matrix.map((item, idx) => (
                 <tr key={idx} className="hover:bg-slate-50 transition">
-                  <td className="p-4 font-bold text-slate-900 align-top">
+                  <th scope="row" className="p-4 font-bold text-slate-900 align-top text-left font-normal sm:font-bold">
                     <div>{item.component_name}</div>
                     <div className="text-[11px] text-slate-500 font-normal mt-1">
                       {item.affected_systems}
                     </div>
-                  </td>
+                  </th>
                   <td className="p-4 font-extrabold text-rose-600 align-top whitespace-nowrap">
                     {item.avg_cost_krw}
                   </td>

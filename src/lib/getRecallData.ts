@@ -235,6 +235,94 @@ export function validateVinString(vin: string): { valid: boolean; normalized: st
 }
 
 /**
+ * Checks whether a vehicle model name matches any model in a campaign's comma-separated target_model string.
+ * Prevents false-positive collisions across distinct models (e.g. "아이오닉 5" vs "아이오닉 EV", "모델 Y" vs "모델 3").
+ */
+export function isModelMatchForCampaign(queryModel: string, campaignTargetModel: string): boolean {
+  if (!queryModel || !campaignTargetModel) return false;
+
+  const normalize = (str: string) => str.toLowerCase().replace(/[\s\-_/()]+/g, '');
+  const cleanBase = (name: string) => name.replace(/\s*\([^)]*\)/g, '').trim();
+
+  const queryClean = cleanBase(queryModel).toLowerCase();
+  const queryNorm = normalize(queryClean);
+
+  const targets = campaignTargetModel.split(',').map((t) => cleanBase(t).toLowerCase());
+
+  for (const target of targets) {
+    const targetNorm = normalize(target);
+
+    // Exact normalized match (e.g. "아이오닉5" === "아이오닉5", "ev6" === "ev6")
+    if (queryNorm === targetNorm) return true;
+
+    // Check containment while guarding against collisions
+    if (targetNorm.includes(queryNorm) || queryNorm.includes(targetNorm)) {
+      // 1. Number collision check: e.g. "아이오닉 5" vs "아이오닉 6", "EV6" vs "EV9"
+      const queryNums = queryClean.match(/\d+/g) || [];
+      const targetNums = target.match(/\d+/g) || [];
+      if (queryNums.length > 0 && targetNums.length > 0) {
+        if (queryNums.join('') !== targetNums.join('')) {
+          continue;
+        }
+      }
+
+      // 2. EV / Electric vs Numbered EV check (e.g. "아이오닉 EV" vs "아이오닉 5")
+      const queryHasEv = /\bev\b|일렉트릭/i.test(queryClean);
+      const targetHasEv = /\bev\b|일렉트릭/i.test(target);
+      if (queryNums.length > 0 && !targetNums.length && targetHasEv) {
+        continue;
+      }
+      if (targetNums.length > 0 && !queryNums.length && queryHasEv) {
+        continue;
+      }
+
+      // 3. Model single-letter designation (e.g. "모델 Y" vs "모델 3/S/X")
+      const queryLetter = queryClean.match(/(?:모델|model)\s*([a-z0-9])/i);
+      const targetLetter = target.match(/(?:모델|model)\s*([a-z0-9])/i);
+      if (queryLetter && targetLetter && queryLetter[1] !== targetLetter[1]) {
+        continue;
+      }
+
+      return true;
+    }
+
+    // Sub-trims in query (e.g. "볼트 EV / EUV" matching "볼트 EV", "i4 eDrive40 / M50" matching "i4 eDrive40")
+    const subTrims = queryModel.split(/[/,]/).map((s) => cleanBase(s).toLowerCase().trim());
+    for (const sub of subTrims) {
+      const subNorm = normalize(sub);
+      if (subNorm === targetNorm || targetNorm.includes(subNorm) || subNorm.includes(targetNorm)) {
+        const subNums = sub.match(/\d+/g) || [];
+        const targetNums = target.match(/\d+/g) || [];
+        if (subNums.length > 0 && targetNums.length > 0 && subNums.join('') !== targetNums.join('')) {
+          continue;
+        }
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Checks whether a given model year falls within a campaign's target_model_years string.
+ */
+export function isYearMatchForCampaign(year?: number, targetModelYears?: string): boolean {
+  if (!year || !targetModelYears) return true;
+
+  const yearsMatch = targetModelYears.match(/(\d{4})/g);
+  if (yearsMatch && yearsMatch.length >= 2) {
+    const startYear = parseInt(yearsMatch[0], 10);
+    const endYear = parseInt(yearsMatch[yearsMatch.length - 1], 10);
+    return year >= startYear && year <= endYear;
+  } else if (yearsMatch && yearsMatch.length === 1) {
+    const targetYear = parseInt(yearsMatch[0], 10);
+    return year === targetYear;
+  }
+  return true;
+}
+
+/**
  * Decodes 17-digit VIN and cross-references government recall campaigns and battery safety profiles.
  */
 export function decodeVinAndCheckRecalls(rawVin: string, customDb?: RecallDatabase): VinCheckResult {
@@ -300,17 +388,20 @@ export function decodeVinAndCheckRecalls(rawVin: string, customDb?: RecallDataba
     const brandMatches =
       decodedBrand &&
       (campaign.brand.toLowerCase().includes(decodedBrand.toLowerCase()) ||
-        decodedBrand.toLowerCase().includes(campaign.brand.toLowerCase()));
+        decodedBrand.toLowerCase().includes(campaign.brand.toLowerCase()) ||
+        (decodedBrand === '제네시스' && campaign.brand === '현대자동차') ||
+        campaign.target_model.toLowerCase().includes(decodedBrand.toLowerCase()));
 
     if (!brandMatches) return false;
 
-    // If model is known, check if model name matches target_model
-    if (decodedModel) {
-      const modelKeywords = decodedModel.split(/[\s/()]+/);
-      const hasModelMatch = modelKeywords.some(
-        (kw) => kw.length >= 2 && campaign.target_model.includes(kw)
-      );
-      if (!hasModelMatch) return false;
+    // If model is known, check if model name matches target_model with collision protection
+    if (decodedModel && !isModelMatchForCampaign(decodedModel, campaign.target_model)) {
+      return false;
+    }
+
+    // Year match check against target_model_years
+    if (decodedYear && !isYearMatchForCampaign(decodedYear, campaign.target_model_years)) {
+      return false;
     }
 
     return true;
@@ -369,33 +460,20 @@ export function checkRecallsByModel(
   const matchingRecalls = db.recalls.filter((campaign) => {
     const brandMatches =
       campaign.brand.toLowerCase().includes(brand.toLowerCase()) ||
-      brand.toLowerCase().includes(campaign.brand.toLowerCase());
+      brand.toLowerCase().includes(campaign.brand.toLowerCase()) ||
+      (brand === '제네시스' && campaign.brand === '현대자동차') ||
+      campaign.target_model.toLowerCase().includes(brand.toLowerCase());
 
     if (!brandMatches) return false;
 
-    const modelKeywords = modelName.split(/[\s/()]+/);
-    const hasModelMatch = modelKeywords.some(
-      (kw) => kw.length >= 2 && campaign.target_model.includes(kw)
-    );
-
-    if (!hasModelMatch) return false;
+    // Model match check with collision protection
+    if (modelName && !isModelMatchForCampaign(modelName, campaign.target_model)) {
+      return false;
+    }
 
     // If year is specified, check if it falls within the campaign's target_model_years
-    if (year && campaign.target_model_years) {
-      const yearsMatch = campaign.target_model_years.match(/(\d{4})/g);
-      if (yearsMatch && yearsMatch.length >= 2) {
-        const startYear = parseInt(yearsMatch[0], 10);
-        const endYear = parseInt(yearsMatch[yearsMatch.length - 1], 10);
-        if (year < startYear || year > endYear) {
-          // outside of specific year range
-          return false;
-        }
-      } else if (yearsMatch && yearsMatch.length === 1) {
-        const targetYear = parseInt(yearsMatch[0], 10);
-        if (year !== targetYear) {
-          return false;
-        }
-      }
+    if (year && !isYearMatchForCampaign(year, campaign.target_model_years)) {
+      return false;
     }
 
     return true;

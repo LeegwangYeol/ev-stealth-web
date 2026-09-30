@@ -300,26 +300,26 @@ export function getDsiSeverityLevel(dsi: number): {
     return {
       level: 'HIGH',
       label: '높은 결함률 (High Risk)',
-      colorClass: 'text-amber-600',
+      colorClass: 'text-amber-800',
       barBgClass: 'bg-amber-500',
-      textColor: 'text-amber-600',
+      textColor: 'text-amber-800',
     };
   }
   if (dsi >= 35) {
     return {
       level: 'MODERATE',
       label: '주의 필요 (Moderate)',
-      colorClass: 'text-yellow-600',
+      colorClass: 'text-yellow-900',
       barBgClass: 'bg-yellow-400',
-      textColor: 'text-yellow-600',
+      textColor: 'text-yellow-900',
     };
   }
   return {
     level: 'LOW',
     label: '안정적 내구성 (Safe & Reliable)',
-    colorClass: 'text-emerald-600',
+    colorClass: 'text-emerald-800',
     barBgClass: 'bg-emerald-500',
-    textColor: 'text-emerald-600',
+    textColor: 'text-emerald-800',
   };
 }
 

@@ -537,8 +537,10 @@ export function calculateDepreciation(input: DepreciationCalculationInput): Depr
 
   // 3. Chemistry Aging Adjustment
   let batteryChemistryBonus = model.factor_weights.chemistry_aging;
-  if (model.battery_specs.chemistry.includes('LFP') && years >= 3) {
-    batteryChemistryBonus += 0.01;
+  if (model.battery_specs.chemistry.includes('LFP')) {
+    // Smooth monotonic ramp from year 2.0 to 3.0 to ensure discrete chemistry bonuses never invert the depreciation curve
+    const lfpBonusRamp = clamp(years - 2.0, 0.0, 1.0);
+    batteryChemistryBonus += 0.01 * lfpBonusRamp;
   }
 
   // 4. Winter Season Adjustment
@@ -641,7 +643,8 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
 
   const chemProfile = DATABASE.chemistries[chemistryKey] || DATABASE.chemistries.NCM_811;
   const packCapacityKwh = params.packCapacityKwh ?? model?.battery_specs.capacity_kwh ?? 77.4;
-  const totalKm = inputTotalKm ?? years * annualKm;
+  const mileage = inputTotalKm ?? years * annualKm;
+  const safeMileage = Math.max(0, mileage);
 
   // A. Calendar Aging via Arrhenius & SoC Kinetics
   const R_GAS = 8.314462;
@@ -657,7 +660,7 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
   const qLossCal = kCal * Math.pow(Math.max(0.1, years), chemProfile.calendar_time_exponent_z);
 
   // B. Cyclic Aging via Mechanical Strain & DCFC Factor
-  const energyThroughputKwh = totalKm / Math.max(1.0, vehicleEfficiencyKmPerKwh);
+  const energyThroughputKwh = safeMileage / Math.max(1.0, vehicleEfficiencyKmPerKwh);
   const equivalentFullCycles = energyThroughputKwh / Math.max(10.0, packCapacityKwh);
 
   const fDod = Math.pow(0.85, chemProfile.dod_exponent_u);
@@ -743,7 +746,7 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
     chemistry: chemistryKey,
     chemistryName: chemProfile.name,
     years,
-    totalKm,
+    totalKm: safeMileage,
     equivalentFullCycles: Math.round(equivalentFullCycles),
     calendarLossPct: Math.round(qLossCal * 1000) / 10,
     cyclicLossPct: Math.round(qLossCyc * 1000) / 10,
@@ -913,7 +916,9 @@ export function calculateTcoComparison(
   let parkingTotalSavings = 0;
   let maintenanceTotalSavings = 0;
 
-  for (let y = 1; y <= years; y++) {
+  const safeYears = Math.max(1, Math.round(years));
+
+  for (let y = 1; y <= safeYears; y++) {
     const evFuel = Math.round(annualKm * evCostPerKm);
     const iceFuel = Math.round(annualKm * iceCostPerKm);
     const iceTax = calculateIceAnnualTax(y);
@@ -949,8 +954,8 @@ export function calculateTcoComparison(
 
   return {
     annualKm,
-    years,
-    totalKm: annualKm * years,
+    years: safeYears,
+    totalKm: annualKm * safeYears,
     evEfficiencyKmPerKwh,
     iceFuelEconomyKmPerLiter: iceFuelEconomy,
     blendedElectricityTariffKrwPerKwh: Math.round(blendedTariff * 100) / 100,

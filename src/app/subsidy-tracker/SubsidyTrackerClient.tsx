@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   EVSubsidyDataset,
@@ -19,6 +19,11 @@ type ZoneFilter = 'ALL' | 'CAPITAL' | 'YEONGNAM' | 'HONAM' | 'CHUNGCHEONG' | 'GA
 type SortOption = 'DEPLETION_DESC' | 'DEPLETION_ASC' | 'REMAINING_ASC' | 'LOCAL_SUBSIDY_DESC' | 'NAME_ASC';
 
 export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClientProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const searchParams = useSearchParams();
   const urlRegion = searchParams?.get('region') || '';
   const urlModel = searchParams?.get('model') || '';
@@ -240,8 +245,18 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               기준: 2026년 환경부 무공해차 통합누리집 (ev.or.kr)
             </span>
           </div>
-          <span className="text-xs text-slate-400">
-            데이터 갱신 시각: {new Date(initialData.metadata.generated_at).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          <span className="text-xs text-slate-400" suppressHydrationWarning>
+            데이터 갱신 시각:{' '}
+            {mounted && initialData.metadata?.generated_at
+              ? new Date(initialData.metadata.generated_at).toLocaleDateString('ko-KR', {
+                  month: 'long',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
+              : initialData.metadata?.generated_at
+                ? initialData.metadata.generated_at.replace('T', ' ').substring(0, 16) + ' (UTC)'
+                : '방금 전'}
           </span>
         </div>
 
@@ -351,7 +366,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
           <h2 className="text-sm font-bold text-slate-300 flex items-center gap-2">
             <span>🛡️</span> 전국 지자체 보조금 소진 5단계 경보 기준
           </h2>
-          <span className="text-xs text-slate-400">배지 클릭 시 해당 경보 지역만 필터링</span>
+          <span className="text-xs text-slate-200">배지 클릭 시 해당 경보 지역만 필터링</span>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
@@ -531,10 +546,10 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
       {/* 4. 17 Regional Grid Cards */}
       <section aria-labelledby="regional-grid-heading" className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 id="regional-grid-heading" className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+          <h2 id="regional-grid-heading" className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
             <span>🗺️</span> 17개 광역시도별 보조금 소진율 &amp; 잔여 쿼터 현황
           </h2>
-          <span className="text-xs text-slate-400">
+          <span className="text-xs text-slate-600">
             {selectedCategory === 'passenger' ? '전기승용 기준' : selectedCategory === 'commercial' ? '전기화물 기준' : '전기승합 기준'}
           </span>
         </div>
@@ -1032,7 +1047,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
 
       {/* 6. Regulatory Footer Notes */}
       <section aria-label="보조금 지침 규정 안내" className="text-xs text-slate-400 leading-relaxed bg-slate-950 p-6 rounded-2xl border border-slate-900 space-y-2">
-        <h4 className="font-bold text-slate-400">📌 2026년 환경부 및 지자체 전기차 보조금 안내사항</h4>
+        <h2 className="text-base font-bold text-slate-200">📌 2026년 환경부 및 지자체 전기차 보조금 안내사항</h2>
         <ul className="list-disc pl-5 space-y-1 text-slate-400">
           <li>
             <strong>가격 상한제:</strong> 기본 출고가(MSRP) 기준 5,500만 원 미만 100%, 5,500만~8,500만 원 50%, 8,500만 원 초과 시 보조금 지급 대상에서 전액 제외됩니다.

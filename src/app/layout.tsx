@@ -30,6 +30,14 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900`}
       >
+        {/* Global Skip Navigation Link */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:font-bold focus:rounded-lg focus:shadow-2xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+        >
+          본문 바로가기
+        </a>
+
         <header className="bg-slate-900 text-white shadow-md sticky top-0 z-50">
           <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
             <Link href="/" className="text-xl font-bold tracking-tight hover:text-blue-300 transition shrink-0 flex items-center gap-2">
@@ -157,12 +165,29 @@ export default function RootLayout({
             </details>
           </div>
         </header>
-        <main className="max-w-6xl mx-auto p-6 min-h-screen">
+        <main id="main-content" className="max-w-6xl mx-auto p-6 min-h-screen">
           {children}
         </main>
         <footer className="bg-gray-200 text-center p-6 text-sm text-gray-600">
           © 2026 EV Critical Issues & Safety Intelligence Hub
         </footer>
+
+        {/* Mobile nav drawer auto-close on internal link click */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              document.addEventListener('click', function(e) {
+                var drawer = document.getElementById('mobile-nav-drawer');
+                if (drawer && drawer.hasAttribute('open')) {
+                  var target = e.target;
+                  if (target && target.closest && target.closest('#mobile-nav-drawer a')) {
+                    drawer.removeAttribute('open');
+                  }
+                }
+              });
+            `,
+          }}
+        />
       </body>
     </html>
   );

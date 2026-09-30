@@ -286,9 +286,11 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     setVinTouched(true);
     const result = decodeVinAndCheckRecalls(sampleVin, initialDatabase);
     setCheckResult(result);
-    // Smooth scroll to result
-    const el = document.getElementById('search-result-section');
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Smooth scroll to result (deferred so React mounts the section first)
+    setTimeout(() => {
+      const el = document.getElementById('search-result-section');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   // Handle Mode B lookup
@@ -698,7 +700,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
         {/* 3. Live Search Result Display */}
         {checkResult && (
-          <section id="search-result-section" className="space-y-6 scroll-mt-24">
+          <section id="search-result-section" aria-live="polite" className="space-y-6 scroll-mt-24">
             {/* Overall Risk Banner */}
             <div
               className={`rounded-2xl p-6 shadow-2xl border ${

@@ -35,7 +35,7 @@ export default function DepreciationCalculatorClient({
   const [annualMileageKm, setAnnualMileageKm] = useState<number>(15000);
   const [dcfcRatio, setDcfcRatio] = useState<number>(30); // 0 ~ 100%
   const [priceBasis, setPriceBasis] = useState<PriceBasis>('effective');
-  const [customPriceInput, setCustomPriceInput] = useState<number | null>(null);
+  const [customPriceInput, setCustomPriceInput] = useState<string | null>(null);
   const [winterSeason, setWinterSeason] = useState<boolean>(false);
 
   // Subsidy Clawback Controls
@@ -98,8 +98,11 @@ export default function DepreciationCalculatorClient({
 
   // Effective Purchase Price Baseline
   const currentPurchasePrice = useMemo(() => {
-    if (customPriceInput !== null && customPriceInput > 0) {
-      return customPriceInput;
+    if (customPriceInput !== null && customPriceInput.trim() !== '') {
+      const parsed = parseInt(customPriceInput, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        return parsed;
+      }
     }
     return priceBasis === 'effective'
       ? selectedModel.net_purchase_price_krw
@@ -660,7 +663,7 @@ export default function DepreciationCalculatorClient({
               <label htmlFor="holdingYearsInput" className="text-xs font-bold text-slate-700">
                 보유 기간
               </label>
-              <span className="text-sm font-extrabold text-blue-600 bg-blue-100 px-2 py-0.5 rounded">
+              <span className="text-sm font-extrabold text-blue-800 bg-blue-100 px-2 py-0.5 rounded">
                 {holdingYears}년 ({Math.round(holdingYears * 12)}개월)
               </span>
             </div>
@@ -707,7 +710,7 @@ export default function DepreciationCalculatorClient({
               <label htmlFor="annualMileageInput" className="text-xs font-bold text-slate-700">
                 연간 주행거리
               </label>
-              <span className="text-sm font-extrabold text-blue-600 bg-blue-100 px-2 py-0.5 rounded">
+              <span className="text-sm font-extrabold text-blue-800 bg-blue-100 px-2 py-0.5 rounded">
                 {annualMileageKm.toLocaleString()} km/년
               </span>
             </div>
@@ -743,7 +746,7 @@ export default function DepreciationCalculatorClient({
                 className={`text-sm font-extrabold px-2 py-0.5 rounded ${
                   dcfcRatio > 60
                     ? 'bg-amber-100 text-amber-900'
-                    : 'bg-blue-100 text-blue-600'
+                    : 'bg-blue-100 text-blue-800'
                 }`}
               >
                 {dcfcRatio}%
@@ -791,7 +794,10 @@ export default function DepreciationCalculatorClient({
             <div className="flex rounded-lg overflow-hidden border border-slate-200 text-xs">
               <button
                 type="button"
-                onClick={() => setPriceBasis('effective')}
+                onClick={() => {
+                  setPriceBasis('effective');
+                  setCustomPriceInput(null);
+                }}
                 className={`flex-1 py-1 text-center font-semibold transition ${
                   priceBasis === 'effective'
                     ? 'bg-blue-600 text-white'
@@ -803,7 +809,10 @@ export default function DepreciationCalculatorClient({
               </button>
               <button
                 type="button"
-                onClick={() => setPriceBasis('msrp')}
+                onClick={() => {
+                  setPriceBasis('msrp');
+                  setCustomPriceInput(null);
+                }}
                 className={`flex-1 py-1 text-center font-semibold transition ${
                   priceBasis === 'msrp'
                     ? 'bg-blue-600 text-white'
@@ -820,10 +829,9 @@ export default function DepreciationCalculatorClient({
                 id="customPriceInputField"
                 type="number"
                 step="100000"
-                value={currentPurchasePrice}
+                value={customPriceInput !== null ? customPriceInput : currentPurchasePrice}
                 onChange={(e) => {
-                  const val = parseInt(e.target.value, 10);
-                  setCustomPriceInput(isNaN(val) ? 0 : val);
+                  setCustomPriceInput(e.target.value);
                 }}
                 className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-right pr-8 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 aria-label="차량 구매 가격 직접 입력 (원 단위)"
@@ -846,9 +854,9 @@ export default function DepreciationCalculatorClient({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xl font-black text-slate-900">
+              <h2 className="text-xl font-black text-slate-900">
                 {selectedModel.brand_name_ko} {selectedModel.model_name}
-              </span>
+              </h2>
               {getDefenseTierBadge(selectedModel.resale_defense_tier)}
             </div>
             <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
@@ -969,6 +977,7 @@ export default function DepreciationCalculatorClient({
             <svg
               viewBox="0 0 700 280"
               className="w-full min-w-[550px] h-64 select-none"
+              role="img"
               aria-label="연차별 잔존가치 프로젝션 비교 차트"
             >
               {/* Grid Lines */}
@@ -1218,7 +1227,7 @@ export default function DepreciationCalculatorClient({
             </div>
 
             <div className="relative w-44 h-44 mx-auto flex items-center justify-center">
-              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
                 {/* Track Circle */}
                 <circle
                   cx="50"
@@ -1394,9 +1403,9 @@ export default function DepreciationCalculatorClient({
         <div className="border-b border-slate-200 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-lg sm:text-xl font-bold text-slate-900">
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900">
                 ⚖️ 2년 의무운행기간 보조금 환수 계산기
-              </span>
+              </h2>
               <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold">
                 법정 규정
               </span>
@@ -1524,7 +1533,7 @@ export default function DepreciationCalculatorClient({
                   />
                   <div>
                     <div className="font-bold">{item.title}</div>
-                    <div className="text-[11px] text-slate-500">{item.desc}</div>
+                    <div className="text-[11px] text-slate-700">{item.desc}</div>
                   </div>
                 </label>
               ))}
@@ -1592,13 +1601,14 @@ export default function DepreciationCalculatorClient({
               📋 대기환경보전법 시행규칙 [별표 21의2] 8단계 의무운행 회수요율표 보기
             </summary>
             <div className="mt-3 overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse" aria-label="8단계 법정 의무운행기간 보조금 회수요율표">
+                <caption className="sr-only">대기환경보전법 시행규칙 8단계 의무운행 회수요율표</caption>
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500">
-                    <th className="py-2 px-3 font-semibold">운행 기간 구간</th>
-                    <th className="py-2 px-3 font-semibold text-center">법정 회수요율</th>
-                    <th className="py-2 px-3 font-semibold">타 지자체 관외이전 환수액</th>
-                    <th className="py-2 px-3 font-semibold">해외 수출말소 환수액</th>
+                    <th scope="col" className="py-2 px-3 font-semibold">운행 기간 구간</th>
+                    <th scope="col" className="py-2 px-3 font-semibold text-center">법정 회수요율</th>
+                    <th scope="col" className="py-2 px-3 font-semibold">타 지자체 관외이전 환수액</th>
+                    <th scope="col" className="py-2 px-3 font-semibold">해외 수출말소 환수액</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -1623,9 +1633,9 @@ export default function DepreciationCalculatorClient({
                             : 'hover:bg-slate-100'
                         }
                       >
-                        <td className="py-2 px-3">
+                        <th scope="row" className="py-2 px-3 text-left font-medium">
                           {tier.label_ko} {isCurrentTier && '◀ 현재 해당'}
-                        </td>
+                        </th>
                         <td className="py-2 px-3 text-center">
                           {(tier.clawback_rate * 100).toFixed(0)}%
                         </td>
@@ -1730,24 +1740,25 @@ export default function DepreciationCalculatorClient({
 
         {/* Yearly Running Cost Breakdown Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left border-collapse">
+          <table className="w-full text-xs text-left border-collapse" aria-label="5개년 총소유비용(TCO) 및 유지비 절감 내역">
+            <caption className="sr-only">5개년 총소유비용(TCO) 및 내연기관 대비 유지비 절감 내역</caption>
             <thead>
               <tr className="bg-slate-100 text-slate-600 border-b border-slate-200">
-                <th className="py-2.5 px-3 font-bold">연차</th>
-                <th className="py-2.5 px-3 font-bold">누적 주행</th>
-                <th className="py-2.5 px-3 font-bold">EV 충전비</th>
-                <th className="py-2.5 px-3 font-bold">내연기관 주유비</th>
-                <th className="py-2.5 px-3 font-bold">EV 세금</th>
-                <th className="py-2.5 px-3 font-bold">내연기관 세금</th>
-                <th className="py-2.5 px-3 font-bold">부가 절감</th>
-                <th className="py-2.5 px-3 font-bold text-right">연간 순 절감액</th>
-                <th className="py-2.5 px-3 font-bold text-right text-blue-600">누적 순 절감액</th>
+                <th scope="col" className="py-2.5 px-3 font-bold">연차</th>
+                <th scope="col" className="py-2.5 px-3 font-bold">누적 주행</th>
+                <th scope="col" className="py-2.5 px-3 font-bold">EV 충전비</th>
+                <th scope="col" className="py-2.5 px-3 font-bold">내연기관 주유비</th>
+                <th scope="col" className="py-2.5 px-3 font-bold">EV 세금</th>
+                <th scope="col" className="py-2.5 px-3 font-bold">내연기관 세금</th>
+                <th scope="col" className="py-2.5 px-3 font-bold">부가 절감</th>
+                <th scope="col" className="py-2.5 px-3 font-bold text-right">연간 순 절감액</th>
+                <th scope="col" className="py-2.5 px-3 font-bold text-right text-blue-600">누적 순 절감액</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 text-slate-700">
               {tcoResult.yearlyBreakdown.map((row) => (
                 <tr key={row.year} className="hover:bg-slate-50 transition">
-                  <td className="py-2 px-3 font-bold">{row.year}년차</td>
+                  <th scope="row" className="py-2 px-3 font-bold text-left">{row.year}년차</th>
                   <td className="py-2 px-3">{row.cumulativeKm.toLocaleString()} km</td>
                   <td className="py-2 px-3">{(row.evElectricityCostKrw / 10000).toFixed(0)}만원</td>
                   <td className="py-2 px-3">{(row.iceFuelCostKrw / 10000).toFixed(0)}만원</td>

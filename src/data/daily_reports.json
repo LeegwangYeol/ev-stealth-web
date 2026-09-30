@@ -1,41 +1,78 @@
 {
-  "generated_at": "2026-09-22T16:48:22.967634+00:00",
+  "generated_at": "2026-09-30T01:43:05.996582+00:00",
   "pipeline_version": "1.0.0",
   "statistics": {
-    "total_scraped": 182,
-    "total_filtered_defects": 21,
-    "avg_negativity_score": 0.91,
+    "total_scraped": 222,
+    "total_filtered_defects": 22,
+    "avg_negativity_score": 0.9,
     "critical_defect_count": 7
   },
-  "total_complaints_today": 21,
+  "total_complaints_today": 22,
   "top_defect_categories": [
+    {
+      "category": "SERVICE_REPAIR_COST",
+      "count": 5,
+      "ratio": 0.227
+    },
     {
       "category": "BATTERY_CHARGING",
       "count": 5,
-      "ratio": 0.238
+      "ratio": 0.227
     },
     {
       "category": "DRIVING_POWERTRAIN",
       "count": 4,
-      "ratio": 0.19
+      "ratio": 0.182
     },
     {
       "category": "BUILD_QUALITY",
       "count": 4,
-      "ratio": 0.19
+      "ratio": 0.182
     },
     {
       "category": "SOFTWARE_ELECTRONICS",
       "count": 4,
-      "ratio": 0.19
-    },
-    {
-      "category": "SERVICE_REPAIR_COST",
-      "count": 4,
-      "ratio": 0.19
+      "ratio": 0.182
     }
   ],
   "reports": [
+    {
+      "id": "11525527",
+      "source": "dcinside",
+      "platform": "dcinside",
+      "url": "https://gall.dcinside.com/board/view/?id=car_new1&no=11525527",
+      "post_url": "https://gall.dcinside.com/board/view/?id=car_new1&no=11525527",
+      "title": "520i msp 지금 사는거 어때?",
+      "post_title": "520i msp 지금 사는거 어때?",
+      "author": "ㅇㅇ (222.97)",
+      "date": "2026-09-30",
+      "created_at": "2026-09-30T10:25:45+00:00",
+      "vehicle_brand": "Other",
+      "vehicle_model": "전기차",
+      "target_vehicle": "Other 전기차",
+      "defect_category": "SERVICE_REPAIR_COST",
+      "defect_category_ko": "AS/수리비",
+      "summary": "[Other 전기차] AS 서비스센터 입고 지연 및 과다 수리비/감가: 520i msp 지금 사는거 어때?",
+      "verbatim_quote": "지금 12년된 뉴투싼IX 몰고있는데 (살떄 새차사서 쭉탐)\n520i MSP 지금 6500정도던데 사는거 어떰?\n좀더 기다려서 페리 사는게 답인가...\n지금 520i msp사면 3년뒤 감가 얼마나 쳐맞을까 겁나기도하고\n최소 1년은 더 기다려야 페리 받을거같은데 못기다릴거같기도하고\n형들 조언좀 해주세요",
+      "raw_quote": "지금 12년된 뉴투싼IX 몰고있는데 (살떄 새차사서 쭉탐)\n520i MSP 지금 6500정도던데 사는거 어떰?\n좀더 기다려서 페리 사는게 답인가...\n지금 520i msp사면 3년뒤 감가 얼마나 쳐맞을까 겁나기도하고\n최소 1년은 더 기다려야 페리 받을거같은데 못기다릴거같기도하고\n형들 조언좀 해주세요",
+      "slang_tags": [],
+      "slang_terms_detected": [],
+      "sentiment_score": 0.775,
+      "sentiment_polarity": -0.55,
+      "negativity_score": 0.775,
+      "sentiment_tier": "NEGATIVE",
+      "severity": "MEDIUM",
+      "severity_index": 5.1,
+      "is_authentic_defect": true,
+      "dsi_breakdown": {
+        "safety": 0.0,
+        "functional": 7.5,
+        "economic": 8.5,
+        "social": 8.0,
+        "convenience": 7.5
+      },
+      "category": "SERVICE_REPAIR_COST"
+    },
     {
       "id": "2416882",
       "source": "bobaedream",
@@ -70,7 +107,8 @@
         "economic": 0.0,
         "social": 0.0,
         "convenience": 6.0
-      }
+      },
+      "category": "BATTERY_CHARGING"
     },
     {
       "id": "dc_20260908_001",
@@ -92,7 +130,9 @@
       ],
       "sentiment_score": 0.96,
       "severity": "CRITICAL",
-      "raw_quote": "고속도로에서 100km로 달리는데 갑자기 퍽 소리 나더니 배터리 경고등 뜨고 악셀 먹통됨 ㅋㅋㅋ 레알 황천길 갈 뻔했다 ㅅㅂ 개선형 달았다고 하더니 개뿔 달라진 게 없음"
+      "raw_quote": "고속도로에서 100km로 달리는데 갑자기 퍽 소리 나더니 배터리 경고등 뜨고 악셀 먹통됨 ㅋㅋㅋ 레알 황천길 갈 뻔했다 ㅅㅂ 개선형 달았다고 하더니 개뿔 달라진 게 없음",
+      "negativity_score": 0.96,
+      "category": "BATTERY_CHARGING"
     },
     {
       "id": "bd_20260908_002",
@@ -114,7 +154,9 @@
       ],
       "sentiment_score": 0.94,
       "severity": "CRITICAL",
-      "raw_quote": "비 오는 날 고속도로 이음새 밟고 회생제동 살짝 걸리는 순간 뒤쪽이 좌우로 사정없이 털리면서 피쉬테일 옴. 토션빔 세팅 쓰레기인 거 알았지만 빗길에서 생명의 위협을 느낀 건 처음이다. 식은땀 줄줄 흘렀네."
+      "raw_quote": "비 오는 날 고속도로 이음새 밟고 회생제동 살짝 걸리는 순간 뒤쪽이 좌우로 사정없이 털리면서 피쉬테일 옴. 토션빔 세팅 쓰레기인 거 알았지만 빗길에서 생명의 위협을 느낀 건 처음이다. 식은땀 줄줄 흘렀네.",
+      "negativity_score": 0.94,
+      "category": "DRIVING_POWERTRAIN"
     },
     {
       "id": "bd_20260908_003",
@@ -136,7 +178,9 @@
       ],
       "sentiment_score": 0.91,
       "severity": "WARNING",
-      "raw_quote": "차 받은 지 3일 만에 폭우 내렸는데 오늘 트렁크 바닥 열어보니까 물이 찰랑찰랑 한강이네요 ㅋㅋㅋ 6천만 원짜리 수족관 샀습니다. 사업소 가니까 웨더스트립 단차 조립 불량이라는데 새 차 뜯고 실리콘 떡칠하잡니다."
+      "raw_quote": "차 받은 지 3일 만에 폭우 내렸는데 오늘 트렁크 바닥 열어보니까 물이 찰랑찰랑 한강이네요 ㅋㅋㅋ 6천만 원짜리 수족관 샀습니다. 사업소 가니까 웨더스트립 단차 조립 불량이라는데 새 차 뜯고 실리콘 떡칠하잡니다.",
+      "negativity_score": 0.91,
+      "category": "BUILD_QUALITY"
     },
     {
       "id": "dc_20260908_004",
@@ -158,7 +202,9 @@
       ],
       "sentiment_score": 0.95,
       "severity": "CRITICAL",
-      "raw_quote": "새벽에 와이파이 잡고 업데이트 눌렀는데 아침에 출근하려고 차 타니까 중앙 스크린 꺼져있고 리셋 눌러도 깜깜무소식 ㅋㅋㅋ 깜빡이 소리도 안 나고 기어도 안 들어가는 완전 벽돌됨. 서비스센터는 어부바 견인해 오래."
+      "raw_quote": "새벽에 와이파이 잡고 업데이트 눌렀는데 아침에 출근하려고 차 타니까 중앙 스크린 꺼져있고 리셋 눌러도 깜깜무소식 ㅋㅋㅋ 깜빡이 소리도 안 나고 기어도 안 들어가는 완전 벽돌됨. 서비스센터는 어부바 견인해 오래.",
+      "negativity_score": 0.95,
+      "category": "SOFTWARE_ELECTRONICS"
     },
     {
       "id": "bd_20260907_005",
@@ -180,7 +226,9 @@
       ],
       "sentiment_score": 0.98,
       "severity": "CRITICAL",
-      "raw_quote": "지하주차장 방지턱 살짝 긁혀서 소리 났길래 점검받으러 갔더니 하부 배터리 알루미늄 케이스 스크래치 났다고 내부 셀 손상 위험성 핑계대면서 배터리 통교체 3800만원 부름. 자차 처리도 한도 초과라 강제 전손각 뜸. 전기차 탄 내가 병X이다."
+      "raw_quote": "지하주차장 방지턱 살짝 긁혀서 소리 났길래 점검받으러 갔더니 하부 배터리 알루미늄 케이스 스크래치 났다고 내부 셀 손상 위험성 핑계대면서 배터리 통교체 3800만원 부름. 자차 처리도 한도 초과라 강제 전손각 뜸. 전기차 탄 내가 병X이다.",
+      "negativity_score": 0.98,
+      "category": "SERVICE_REPAIR_COST"
     },
     {
       "id": "dc_20260907_006",
@@ -202,7 +250,9 @@
       ],
       "sentiment_score": 0.92,
       "severity": "CRITICAL",
-      "raw_quote": "남산 올라가는 급경사 정체 구간에서 섰다가 악셀 밟았는데 오토홀드 풀리면서 뒤로 2미터 스르륵 미끄러져서 뒤차 박을 뻔함 ㄷㄷ 악셀 깊게 밟아야 그제서야 휠스핀 돌면서 튀어나가는데 언덕 밀림 제어 로직 만든 놈 대가리 박아라."
+      "raw_quote": "남산 올라가는 급경사 정체 구간에서 섰다가 악셀 밟았는데 오토홀드 풀리면서 뒤로 2미터 스르륵 미끄러져서 뒤차 박을 뻔함 ㄷㄷ 악셀 깊게 밟아야 그제서야 휠스핀 돌면서 튀어나가는데 언덕 밀림 제어 로직 만든 놈 대가리 박아라.",
+      "negativity_score": 0.92,
+      "category": "DRIVING_POWERTRAIN"
     },
     {
       "id": "bd_20260907_007",
@@ -223,7 +273,9 @@
       ],
       "sentiment_score": 0.86,
       "severity": "WARNING",
-      "raw_quote": "고속도로 350kW 초급속 충전기에 꽂았는데 충전 속도 23kW 찍히는 거 보고 기절하는 줄 알았다. 배터리 온도 안 올라간다고 쓰로틀링 걸려서 1시간 넘게 덜덜 떨며 대기함. 프리컨디셔닝 켰는데도 왜 이따위냐?"
+      "raw_quote": "고속도로 350kW 초급속 충전기에 꽂았는데 충전 속도 23kW 찍히는 거 보고 기절하는 줄 알았다. 배터리 온도 안 올라간다고 쓰로틀링 걸려서 1시간 넘게 덜덜 떨며 대기함. 프리컨디셔닝 켰는데도 왜 이따위냐?",
+      "negativity_score": 0.86,
+      "category": "BATTERY_CHARGING"
     },
     {
       "id": "dc_20260907_008",
@@ -245,7 +297,9 @@
       ],
       "sentiment_score": 0.88,
       "severity": "CAUTION",
-      "raw_quote": "승차감 조용해졌다고 하더니 노면 안 좋은 도로만 가면 귀 옆 B필러에서 찌그덕 찌그덕 틱틱 플라스틱 비비는 소리 존나 남 ㅋㅋㅋ 테슬라 특유의 뽑기운 단차 마감 어디 안 가네. 센터 가니 스펀지 쑤셔 넣고 정상이라고 꺼지랜다."
+      "raw_quote": "승차감 조용해졌다고 하더니 노면 안 좋은 도로만 가면 귀 옆 B필러에서 찌그덕 찌그덕 틱틱 플라스틱 비비는 소리 존나 남 ㅋㅋㅋ 테슬라 특유의 뽑기운 단차 마감 어디 안 가네. 센터 가니 스펀지 쑤셔 넣고 정상이라고 꺼지랜다.",
+      "negativity_score": 0.88,
+      "category": "BUILD_QUALITY"
     },
     {
       "id": "bd_20260906_009",
@@ -267,7 +321,9 @@
       ],
       "sentiment_score": 0.97,
       "severity": "CRITICAL",
-      "raw_quote": "앞에 차 1도 없는데 고속도로 110km 달리다가 터널 진입 직전에 삐비빅 울리면서 풀브레이크 밟힘. 뒤따라오던 카니발이 겨우 피해서 연쇄추돌 면했다. 진짜 식은땀 나고 목 디스크 올 뻔함. 자율주행 기술이고 나발이고 살인미수다."
+      "raw_quote": "앞에 차 1도 없는데 고속도로 110km 달리다가 터널 진입 직전에 삐비빅 울리면서 풀브레이크 밟힘. 뒤따라오던 카니발이 겨우 피해서 연쇄추돌 면했다. 진짜 식은땀 나고 목 디스크 올 뻔함. 자율주행 기술이고 나발이고 살인미수다.",
+      "negativity_score": 0.97,
+      "category": "SOFTWARE_ELECTRONICS"
     },
     {
       "id": "dc_20260906_010",
@@ -289,7 +345,9 @@
       ],
       "sentiment_score": 0.93,
       "severity": "WARNING",
-      "raw_quote": "후륜 모터에서 비행기 이륙하는 쇳소리 나더니 감속기 나가서 입고시켰는데 부품 전국 재고 0개라 3달 동안 수리 대기 중임 ㅋㅋㅋ 대차도 아반떼 줘놓고 언제 나올지 모른다는데 제네시스 프리미엄 케어는 개뿔 껍데기만 럭셔리임."
+      "raw_quote": "후륜 모터에서 비행기 이륙하는 쇳소리 나더니 감속기 나가서 입고시켰는데 부품 전국 재고 0개라 3달 동안 수리 대기 중임 ㅋㅋㅋ 대차도 아반떼 줘놓고 언제 나올지 모른다는데 제네시스 프리미엄 케어는 개뿔 껍데기만 럭셔리임.",
+      "negativity_score": 0.93,
+      "category": "SERVICE_REPAIR_COST"
     },
     {
       "id": "bd_20260906_011",
@@ -311,7 +369,9 @@
       ],
       "sentiment_score": 0.89,
       "severity": "WARNING",
-      "raw_quote": "배터리 12% 남아서 충전소 왔는데 충전구 버튼 누르니 찌익거리다 결빙돼서 안 열림 ㅋㅋㅋ 헤어드라이어 가져와서 녹이라는 차주들 글 보고 어이가 가출했다. 1억짜리 기함 SUV가 겨울에 충전구 얼어서 길바닥에 서있어야 하냐?"
+      "raw_quote": "배터리 12% 남아서 충전소 왔는데 충전구 버튼 누르니 찌익거리다 결빙돼서 안 열림 ㅋㅋㅋ 헤어드라이어 가져와서 녹이라는 차주들 글 보고 어이가 가출했다. 1억짜리 기함 SUV가 겨울에 충전구 얼어서 길바닥에 서있어야 하냐?",
+      "negativity_score": 0.89,
+      "category": "BATTERY_CHARGING"
     },
     {
       "id": "dc_20260906_012",
@@ -333,7 +393,9 @@
       ],
       "sentiment_score": 0.87,
       "severity": "WARNING",
-      "raw_quote": "가성비 좋다고 빨아주길래 샀더니 고속도로 올리자마자 핸들 똑바로 잡으면 차가 왼쪽 차선으로 빨려 들어감 ㅋㅋㅋ 얼라인먼트 기본 영점도 안 맞추고 PDI 검수도 없이 배에 실어 보낸 수준임. 센터 갔더니 부품 없다고 다음 주에 오라네."
+      "raw_quote": "가성비 좋다고 빨아주길래 샀더니 고속도로 올리자마자 핸들 똑바로 잡으면 차가 왼쪽 차선으로 빨려 들어감 ㅋㅋㅋ 얼라인먼트 기본 영점도 안 맞추고 PDI 검수도 없이 배에 실어 보낸 수준임. 센터 갔더니 부품 없다고 다음 주에 오라네.",
+      "negativity_score": 0.87,
+      "category": "DRIVING_POWERTRAIN"
     },
     {
       "id": "bd_20260905_013",
@@ -355,7 +417,9 @@
       ],
       "sentiment_score": 0.9,
       "severity": "CAUTION",
-      "raw_quote": "인도받을 때 단차 지적했더니 테슬라 규격 오차 범위 내라고 인수 거부하려면 하라며 배 째라더니 80km만 넘어가면 보닛 틈으로 바람 새는 피리 소리 존나 남 ㅋㅋㅋ 손가락 쑥 들어가는 게 정상이냐 테슬라 양아치들아."
+      "raw_quote": "인도받을 때 단차 지적했더니 테슬라 규격 오차 범위 내라고 인수 거부하려면 하라며 배 째라더니 80km만 넘어가면 보닛 틈으로 바람 새는 피리 소리 존나 남 ㅋㅋㅋ 손가락 쑥 들어가는 게 정상이냐 테슬라 양아치들아.",
+      "negativity_score": 0.9,
+      "category": "BUILD_QUALITY"
     },
     {
       "id": "dc_20260905_014",
@@ -377,7 +441,9 @@
       ],
       "sentiment_score": 0.88,
       "severity": "WARNING",
-      "raw_quote": "주행 중에 갑자기 내비 화면 멈추더니 1분 간격으로 현대기아 로고 뜨면서 무한 재부팅됨. 속도계도 안 보이고 후방카메라도 안 나와서 주차도 감으로 함. 최신 소프트웨어라고 자랑하더니 기본 메모리 관리도 못 하는 쓰레기 OS."
+      "raw_quote": "주행 중에 갑자기 내비 화면 멈추더니 1분 간격으로 현대기아 로고 뜨면서 무한 재부팅됨. 속도계도 안 보이고 후방카메라도 안 나와서 주차도 감으로 함. 최신 소프트웨어라고 자랑하더니 기본 메모리 관리도 못 하는 쓰레기 OS.",
+      "negativity_score": 0.88,
+      "category": "SOFTWARE_ELECTRONICS"
     },
     {
       "id": "bd_20260905_015",
@@ -399,7 +465,9 @@
       ],
       "sentiment_score": 0.95,
       "severity": "WARNING",
-      "raw_quote": "주차기둥에 미러 커버 툭 긁혀서 플라스틱만 갈면 될 줄 알았더니 서비스센터 가니까 카메라랑 배선 일체형이라 모듈 통째로 갈아야 한다며 320만원 견적서 내밈 ㅋㅋㅋ 삼각별 감성 비용이라고 쳐도 이건 대놓고 날강도 수준."
+      "raw_quote": "주차기둥에 미러 커버 툭 긁혀서 플라스틱만 갈면 될 줄 알았더니 서비스센터 가니까 카메라랑 배선 일체형이라 모듈 통째로 갈아야 한다며 320만원 견적서 내밈 ㅋㅋㅋ 삼각별 감성 비용이라고 쳐도 이건 대놓고 날강도 수준.",
+      "negativity_score": 0.95,
+      "category": "SERVICE_REPAIR_COST"
     },
     {
       "id": "dc_20260905_016",
@@ -421,7 +489,9 @@
       ],
       "sentiment_score": 0.85,
       "severity": "WARNING",
-      "raw_quote": "퇴근하고 완속 꽂고 자면 새벽 3시에 '충전이 중단되었습니다' 푸시 알림 와서 출근할 때 배터리 40%로 나가야 됨. 충전기 업체는 차 문제라 하고 현기차는 충전기 호환성 문제라며 서로 핑퐁질함. 매일 아침 스트레스 극치다."
+      "raw_quote": "퇴근하고 완속 꽂고 자면 새벽 3시에 '충전이 중단되었습니다' 푸시 알림 와서 출근할 때 배터리 40%로 나가야 됨. 충전기 업체는 차 문제라 하고 현기차는 충전기 호환성 문제라며 서로 핑퐁질함. 매일 아침 스트레스 극치다.",
+      "negativity_score": 0.85,
+      "category": "BATTERY_CHARGING"
     },
     {
       "id": "bd_20260904_017",
@@ -443,7 +513,9 @@
       ],
       "sentiment_score": 0.91,
       "severity": "CRITICAL",
-      "raw_quote": "강원도 산길 15분 연속 오르막 올라가는데 계기판에 노란색 거북이 아이콘 뜨더니 엑셀 끝까지 밟아도 시속 30km 이상 안 나감 ㅋㅋㅋ 뒤에 덤프트럭 빵빵거리고 식은땀 펄펄 흘림. 냉각 설계 어떻게 했길래 언덕길 조금 올라갔다고 뻗냐?"
+      "raw_quote": "강원도 산길 15분 연속 오르막 올라가는데 계기판에 노란색 거북이 아이콘 뜨더니 엑셀 끝까지 밟아도 시속 30km 이상 안 나감 ㅋㅋㅋ 뒤에 덤프트럭 빵빵거리고 식은땀 펄펄 흘림. 냉각 설계 어떻게 했길래 언덕길 조금 올라갔다고 뻗냐?",
+      "negativity_score": 0.91,
+      "category": "DRIVING_POWERTRAIN"
     },
     {
       "id": "dc_20260904_018",
@@ -465,7 +537,9 @@
       ],
       "sentiment_score": 0.87,
       "severity": "CAUTION",
-      "raw_quote": "씨라이언7 실내 화려하다고 빨던 리뷰어들 다 뺨때려야 함. 운전석 문짝 도어트림 손으로 누르면 찌걱거리면서 1cm는 벌어짐. 클립 체결도 제대로 안 된 채로 출고됐는데 마감 수준이 20년 전 아반떼XD 수준이다."
+      "raw_quote": "씨라이언7 실내 화려하다고 빨던 리뷰어들 다 뺨때려야 함. 운전석 문짝 도어트림 손으로 누르면 찌걱거리면서 1cm는 벌어짐. 클립 체결도 제대로 안 된 채로 출고됐는데 마감 수준이 20년 전 아반떼XD 수준이다.",
+      "negativity_score": 0.87,
+      "category": "BUILD_QUALITY"
     },
     {
       "id": "bd_20260904_019",
@@ -487,7 +561,9 @@
       ],
       "sentiment_score": 0.89,
       "severity": "WARNING",
-      "raw_quote": "140만원 주고 넣은 디지털 사이드미러 진짜 개쓰레기 옵션임. 비 오는 밤에 외곽순환 타면 카메라 화면에 빛 번짐이랑 빗방울 범벅돼서 옆 차선 라이트가 번쩍번쩍 유령처럼 보임. 결국 창문 열고 고개 내밀어 숄더체크함."
+      "raw_quote": "140만원 주고 넣은 디지털 사이드미러 진짜 개쓰레기 옵션임. 비 오는 밤에 외곽순환 타면 카메라 화면에 빛 번짐이랑 빗방울 범벅돼서 옆 차선 라이트가 번쩍번쩍 유령처럼 보임. 결국 창문 열고 고개 내밀어 숄더체크함.",
+      "negativity_score": 0.89,
+      "category": "SOFTWARE_ELECTRONICS"
     },
     {
       "id": "dc_20260904_020",
@@ -509,7 +585,9 @@
       ],
       "sentiment_score": 0.84,
       "severity": "CAUTION",
-      "raw_quote": "여름만 되면 걸레 썩는 냄새 진동해서 사설 업체 가서 에바 클리닝이랑 필터 교체하는데 또 50만원 날림 ㅋㅋㅋ 테슬라 코리아는 자연 현상이라 보증 수리 안 된다고 매번 컷함. 차값 6천짜리에 에어컨 냄새 하나 못 잡아서 냄새 맡으며 타야 됨."
+      "raw_quote": "여름만 되면 걸레 썩는 냄새 진동해서 사설 업체 가서 에바 클리닝이랑 필터 교체하는데 또 50만원 날림 ㅋㅋㅋ 테슬라 코리아는 자연 현상이라 보증 수리 안 된다고 매번 컷함. 차값 6천짜리에 에어컨 냄새 하나 못 잡아서 냄새 맡으며 타야 됨.",
+      "negativity_score": 0.84,
+      "category": "SERVICE_REPAIR_COST"
     }
   ]
 }

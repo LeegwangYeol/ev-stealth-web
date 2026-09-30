@@ -428,8 +428,9 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 onClick={() => setSearchQuery('')}
                 className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
                 title="검색어 지우기"
+                aria-label="검색어 지우기"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -467,7 +468,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 onClick={() => setSortBy('negativity')}
                 className={`px-3 py-1.5 rounded-lg transition ${
                   sortBy === 'negativity'
-                    ? 'bg-white text-amber-600 shadow-sm'
+                    ? 'bg-white text-amber-800 shadow-sm'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -578,7 +579,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               />
             </svg>
           </div>
-          <h3 className="text-base font-bold text-slate-800">일치하는 결함 리포트가 없습니다</h3>
+          <h2 className="text-base font-bold text-slate-800">일치하는 결함 리포트가 없습니다</h2>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
             선택한 카테고리나 검색어와 일치하는 커뮤니티 결함 코멘트가 없습니다. 검색어를 변경하거나 필터를 초기화해 보세요.
           </p>
