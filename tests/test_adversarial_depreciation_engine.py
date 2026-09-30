@@ -12,10 +12,10 @@ Empirically validates:
    - Early resale clawback boundaries (1d, 89d, 90d, 364d, 729d, 730d) across intra, inter, and export.
 2. Numerical Stability & Anomalies:
    - Detection of NaN, Infinity, negative residual values, and curve inversions.
-   - Empirical reproduction of edge-case bugs:
-     * LFP battery chemistry bonus inversion at Year 3.00 (+0.9% ~ +1.0% jump from Year 2.99).
-     * simulateBatteryHealth NaN on negative totalKm due to fractional power of negative base.
-     * calculateTcoComparison integer-only loop truncation for fractional years (years < 1 returns 0).
+   - Empirical verification of hardened invariants for edge-case bugs:
+     * LFP battery chemistry monotonic ramp preventing Year 3.00 curve inversion.
+     * simulateBatteryHealth non-negative mileage clamping preventing negative km NaN.
+     * calculateTcoComparison safe years rounding ensuring fractional year handling.
 """
 
 from __future__ import annotations
@@ -321,61 +321,65 @@ class AdversarialDepreciationEngineTest(unittest.TestCase):
         self.assertEqual(cb_intra_729["totalClawbackKrw"], 0)
 
     # ==========================================================================
-    # 7. ADVERSARIAL STRESS FINDINGS & FAILURE MODES REPRODUCTION
+    # 7. ADVERSARIAL STRESS FINDINGS & HARDENED INVARIANTS VERIFICATION
     # ==========================================================================
 
-    def test_08_bug_reproduction_lfp_curve_inversion_at_year_3(self):
-        """FINDING 1: Inverted curve bug for LFP vehicles at Year 3.0 boundary.
+    def test_08_hardened_lfp_curve_monotonicity_at_year_3(self):
+        """VERIFICATION 1: Monotonicity preserved for LFP vehicles across Year 3.0 boundary.
         
-        Because line 540 adds a discrete +0.01 (+1.0%) step bonus when years >= 3:
-        At years = 2.99, residual value is 71.1%.
-        At years = 3.00, residual value spikes up to 72.0%.
-        This violates monotonicity: older car has higher residual value!
+        Smooth monotonic ramp (years - 2.0 clamped between 0.0 and 1.0) eliminates
+        the discrete step bonus jump. As the vehicle ages from 2.99y to 3.00y,
+        adjusted residual percentage decreases monotonically:
+        r(3.00) <= r(2.99).
         """
         r_299 = self.run_ts_eval("engine.calculateDepreciation({ modelId: 'model-y-rwd', years: 2.99 })")
         r_300 = self.run_ts_eval("engine.calculateDepreciation({ modelId: 'model-y-rwd', years: 3.00 })")
 
-        # Empirically verify that inversion occurs
-        is_inverted = r_300["adjustedResidualPct"] > r_299["adjustedResidualPct"]
+        # Empirically verify monotonicity holds (no inversion)
+        is_monotonic = r_300["adjustedResidualPct"] <= r_299["adjustedResidualPct"]
         self.assertTrue(
-            is_inverted,
-            f"Expected curve inversion bug between 2.99y and 3.00y for Model Y RWD, but got r(2.99)={r_299['adjustedResidualPct']}, r(3.00)={r_300['adjustedResidualPct']}"
+            is_monotonic,
+            f"Expected monotonicity between 2.99y and 3.00y for Model Y RWD, but got r(2.99)={r_299['adjustedResidualPct']}, r(3.00)={r_300['adjustedResidualPct']}"
         )
-        self.assertEqual(r_299["adjustedResidualPct"], 71.1)
+        self.assertEqual(r_299["adjustedResidualPct"], 72.1)
         self.assertEqual(r_300["adjustedResidualPct"], 72.0)
 
-    def test_09_bug_reproduction_battery_health_nan_on_negative_km(self):
-        """FINDING 2: simulateBatteryHealth produces NaN on negative totalKm.
+    def test_09_hardened_battery_health_negative_km_resilience(self):
+        """VERIFICATION 2: simulateBatteryHealth safely clamps negative totalKm to 0.
         
-        Math.pow(negative, 0.85) evaluates to NaN in JavaScript because of non-integer exponent.
-        totalKm lacks clamp(Math.max(0, ...)) protection.
+        Math.max(0, mileage) prevents negative base in Math.pow(equivalentFullCycles, w).
+        Ensures sohPct and cyclicLossPct are valid numbers (not NaN/null).
         """
         res = self.run_ts_eval("engine.simulateBatteryHealth({ years: 1.0, totalKm: -100, chemistry: 'NCM_811' })")
-        # In JavaScript, NaN serializes to null in JSON.stringify
-        self.assertIsNone(
+        self.assertIsNotNone(
             res["sohPct"],
-            "Expected sohPct to be NaN (serialized as null in JSON) on negative totalKm"
+            "Expected sohPct to be a valid number (not NaN/null) on negative totalKm"
         )
-        self.assertIsNone(
+        self.assertIsNotNone(
             res["cyclicLossPct"],
-            "Expected cyclicLossPct to be NaN (serialized as null) on negative totalKm"
+            "Expected cyclicLossPct to be a valid number (not NaN/null) on negative totalKm"
         )
+        self.assertEqual(res["totalKm"], 0)
+        self.assertEqual(res["cyclicLossPct"], 0)
+        self.assertEqual(res["sohPct"], 98.2)
 
-    def test_10_bug_reproduction_tco_fractional_years_truncation(self):
-        """FINDING 3: calculateTcoComparison integer loop ignores fractional years.
+    def test_10_hardened_tco_fractional_years_handling(self):
+        """VERIFICATION 3: calculateTcoComparison handles fractional years safely.
         
-        for (let y = 1; y <= years; y++)
-        - For years = 0.1 (or any years < 1.0): loop never executes, yearlyBreakdown = [], savings = 0.
-        - For years = 2.5: runs only for y=1 and y=2, truncating the remaining 0.5 year (7,500 km).
+        Using Math.max(1, Math.round(years)) guarantees that fractional ownership
+        durations (years < 1.0) produce at least 1 yearly breakdown record and positive
+        cumulative savings, rather than truncating to 0.
         """
         tco_01 = self.run_ts_eval("engine.calculateTcoComparison(15000, 0.1)")
-        self.assertEqual(len(tco_01["yearlyBreakdown"]), 0)
-        self.assertEqual(tco_01["totalCumulativeSavingsKrw"], 0)
-        self.assertEqual(tco_01["totalKm"], 1500)  # totalKm is 1500, but savings are 0
+        self.assertGreaterEqual(len(tco_01["yearlyBreakdown"]), 1)
+        self.assertGreater(tco_01["totalCumulativeSavingsKrw"], 0)
+        self.assertEqual(tco_01["totalKm"], 15000)
 
         tco_25 = self.run_ts_eval("engine.calculateTcoComparison(15000, 2.5)")
-        self.assertEqual(len(tco_25["yearlyBreakdown"]), 2)  # only 2 years recorded instead of 2.5
-        self.assertEqual(tco_25["totalKm"], 37500)
+        self.assertGreaterEqual(len(tco_25["yearlyBreakdown"]), 2)
+        self.assertEqual(len(tco_25["yearlyBreakdown"]), 3)
+        self.assertEqual(tco_25["totalKm"], 45000)
+        self.assertGreater(tco_25["totalCumulativeSavingsKrw"], 0)
 
 
 if __name__ == "__main__":
