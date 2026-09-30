@@ -362,6 +362,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     { key: 'BYD', label: 'BYD FinDreams' },
   ];
 
+  // Active VIN error state for accessible form feedback
+  const vinError = vinTouched && vinInput.length > 0 && !vinValidation.valid ? vinValidation.error : '';
+
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-16">
       <Suspense fallback={null}>
@@ -404,6 +407,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                 </svg>
                 자동차리콜센터 공식
+                <span className="sr-only"> (새 창에서 열림)</span>
               </a>
               <a
                 href="#battery-directory"
@@ -519,13 +523,15 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       maxLength={17}
                       value={vinInput}
                       aria-label="17자리 차대번호(VIN) 입력"
+                      aria-invalid={!!vinError}
+                      aria-describedby={vinError ? "vin-error-feedback" : undefined}
                       onChange={(e) => {
                         setVinInput(e.target.value.toUpperCase());
                         setVinTouched(true);
                       }}
                       placeholder="예: KM8KN4AE4NU123456 또는 W1K295112PF123456"
-                      className={`w-full bg-slate-900 border rounded-xl px-4 py-3.5 text-base font-mono tracking-wider text-white placeholder-slate-500 focus:outline-none focus:ring-2 transition ${
-                        vinTouched && vinInput.length > 0 && !vinValidation.valid
+                      className={`w-full bg-slate-900 border rounded-xl px-4 py-3.5 text-base font-mono tracking-wider text-white placeholder-slate-400 focus:outline-none focus:ring-2 transition ${
+                        vinError
                           ? 'border-red-500 focus:ring-red-500/50'
                           : 'border-slate-700 focus:ring-blue-500/50 focus:border-blue-500'
                       }`}
@@ -536,12 +542,12 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   </div>
 
                   {/* Realtime validation feedback */}
-                  {vinTouched && vinInput.length > 0 && !vinValidation.valid && (
-                    <p className="mt-2 text-xs text-red-400 flex items-center gap-1.5">
+                  {vinError && (
+                    <p id="vin-error-feedback" role="alert" className="mt-2 text-xs text-red-400 flex items-center gap-1.5">
                       <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                       </svg>
-                      {vinValidation.error}
+                      {vinError}
                     </p>
                   )}
 
@@ -849,7 +855,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   </p>
                 </div>
               ) : (
-                checkResult.recalls.map((campaign) => {
+                checkResult.recalls.map((campaign, idx) => {
                   const isExpanded = expandedRecallIds.has(campaign.id);
                   return (
                     <div
@@ -896,6 +902,8 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                         <button
                           type="button"
                           onClick={() => toggleRecallExpansion(campaign.id)}
+                          aria-expanded={isExpanded}
+                          aria-controls={"campaign-detail-" + idx}
                           className="self-start px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center gap-1.5"
                         >
                           <span>{isExpanded ? '상세 접기' : '대처요령 및 상세'}</span>
@@ -920,7 +928,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
                       {/* Expandable full remedy and consumer emergency guide */}
                       {isExpanded && (
-                        <div className="space-y-3 pt-2 border-t border-slate-800">
+                        <div id={"campaign-detail-" + idx} className="space-y-3 pt-2 border-t border-slate-800">
                           <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-4 text-xs text-slate-200 space-y-1">
                             <div className="font-bold text-blue-300 flex items-center gap-1.5">
                               <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -954,6 +962,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                               className="text-blue-400 hover:text-blue-300 flex items-center gap-1"
                             >
                               공식 제조사 리콜 공지 확인 &rarr;
+                              <span className="sr-only"> (새 창에서 열림)</span>
                             </a>
                           </div>
                         </div>
@@ -992,7 +1001,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 onChange={(e) => setBatterySearch(e.target.value)}
                 aria-label="배터리 제조사 및 모델 검색"
                 placeholder="모델명, 제조사, 배터리명 검색..."
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -1128,7 +1137,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 onChange={(e) => setRecallSearch(e.target.value)}
                 aria-label="전기차 리콜 캠페인 검색"
                 placeholder="리콜번호, 제목, 차종 검색..."
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -1183,7 +1192,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
           {/* List of Recalls */}
           <div className="space-y-3 pt-2">
-            {filteredRecalls.map((campaign) => {
+            {filteredRecalls.map((campaign, idx) => {
               const isExpanded = expandedRecallIds.has(campaign.id);
               return (
                 <div
@@ -1220,6 +1229,8 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     <button
                       type="button"
                       onClick={() => toggleRecallExpansion(campaign.id)}
+                      aria-expanded={isExpanded}
+                      aria-controls={"campaign-detail-" + idx}
                       className="self-start text-xs text-blue-400 hover:text-blue-300 font-medium px-2.5 py-1 rounded bg-slate-800/80 transition"
                     >
                       {isExpanded ? '닫기 ▲' : '상세 및 행동요령 ▼'}
@@ -1231,7 +1242,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   </p>
 
                   {isExpanded && (
-                    <div className="space-y-3 pt-3 border-t border-slate-800 text-xs">
+                    <div id={"campaign-detail-" + idx} className="space-y-3 pt-3 border-t border-slate-800 text-xs">
                       <div>
                         <span className="font-semibold text-slate-200">생산 기간: </span>
                         <span className="font-mono text-slate-300">{campaign.production_date_range}</span>
@@ -1258,6 +1269,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                           className="text-blue-400 hover:underline"
                         >
                           공식 웹사이트 바로가기 &rarr;
+                          <span className="sr-only"> (새 창에서 열림)</span>
                         </a>
                       </div>
                     </div>

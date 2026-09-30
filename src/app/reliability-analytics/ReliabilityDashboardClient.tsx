@@ -478,8 +478,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                             </span>
                           </div>
                           <div className="flex items-center gap-3 text-xs sm:text-sm">
-                            <span className="text-slate-500">
-                              치명 결함율: <strong className="text-rose-600">{brand.critical_issue_rate}%</strong>
+                            <span className="text-slate-600">
+                              치명 결함율: <strong className="text-rose-700">{brand.critical_issue_rate}%</strong>
                             </span>
                             <span className="font-black text-slate-900 text-sm sm:text-base">
                               DSI {brand.overall_dsi}점
@@ -488,7 +488,15 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         </div>
 
                         {/* Pure CSS Bar */}
-                        <div className="w-full bg-slate-200 rounded-full h-3.5 overflow-hidden relative">
+                        <div
+                          role="progressbar"
+                          aria-valuenow={brand.overall_dsi}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label={`${brand.name_ko} 종합 결함 심각도 DSI`}
+                          aria-valuetext={`${brand.overall_dsi}점`}
+                          className="w-full bg-slate-200 rounded-full h-3.5 overflow-hidden relative"
+                        >
                           <div
                             className={`h-full rounded-full transition-all duration-500 ${barColor}`}
                             style={{ width: dsiWidth }}
@@ -833,7 +841,15 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           {model.avg_dsi.toFixed(1)}점
                         </span>
                       </div>
-                      <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                      <div
+                        role="progressbar"
+                        aria-valuenow={Math.round(model.avg_dsi)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={`${model.brand_name_ko} ${model.name} 평균 결함 심각도 지수 DSI`}
+                        aria-valuetext={`${model.avg_dsi.toFixed(1)}점 (${dsiInfo.label})`}
+                        className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden"
+                      >
                         <div
                           className={`h-full rounded-full transition-all duration-300 ${dsiInfo.barBgClass}`}
                           style={{ width: `${Math.min(100, Math.max(10, model.avg_dsi))}%` }}

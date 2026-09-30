@@ -309,9 +309,9 @@ def ref_classify_alert_tier(depletion_rate: float) -> str:
 
 def ref_calculate_price_cap_ratio(msrp: int) -> float:
     """Reference Oracle: Statutory 2026 Korean EV price-cap sliding ratio."""
-    if msrp < 55_000_000:
+    if msrp <= 55_000_000:
         return 1.0
-    elif msrp < 85_000_000:
+    elif msrp <= 85_000_000:
         return 0.5
     else:
         return 0.0
@@ -515,13 +515,15 @@ class TestSubsidyMathAndDomainLogic(unittest.TestCase):
             (42_000_000, 1.0),  # EV3
             (52_400_000, 1.0),  # Ioniq 5 base
             (54_999_999, 1.0),  # Boundary - 1 KRW
-            # Tier 2: 50% eligibility [55,000,000, 85,000,000)
-            (55_000_000, 0.5),  # Exact lower boundary
+            (55_000_000, 1.0),  # Exact statutory 100% boundary (<= 55M)
+            # Tier 2: 50% eligibility (55,000,000, 85,000,000]
+            (55_000_001, 0.5),  # Boundary + 1 KRW
             (62_000_000, 0.5),  # GV60 Standard
             (73_370_000, 0.5),  # EV9 2WD
             (84_999_999, 0.5),  # Boundary - 1 KRW
-            # Tier 3: 0% eligibility (>= 85,000,000 KRW)
-            (85_000_000, 0.0),  # Exact lower boundary
+            (85_000_000, 0.5),  # Exact statutory 50% boundary (<= 85M)
+            # Tier 3: 0% eligibility (> 85,000,000 KRW)
+            (85_000_001, 0.0),  # Boundary + 1 KRW
             (92_000_000, 0.0),  # Genesis Electrified G80
             (115_000_000, 0.0),  # Tesla Model S
             (129_000_000, 0.0),  # Porsche Taycan

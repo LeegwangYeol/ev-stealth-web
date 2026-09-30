@@ -562,7 +562,8 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredRegions.map((region) => {
+            {filteredRegions.map((regionItem) => {
+              const region = { ...regionItem, code: regionItem.region_id };
               const cat = region.categories[selectedCategory];
               const isExpanded = !!expandedRegions[region.region_id];
               const deliveredPct = Math.min(100, Math.round((cat.delivered_units / (cat.announced_units || 1)) * 100));
@@ -685,6 +686,8 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                         <button
                           type="button"
                           onClick={() => toggleRegionExpand(region.region_id)}
+                          aria-expanded={isExpanded}
+                          aria-controls={"muni-details-" + region.code}
                           className="w-full py-1.5 px-3 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-xs font-medium flex items-center justify-between transition border border-slate-800 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
                         >
                           <span>세부 시·군·구 {region.municipalities.length}개 현황 보기</span>
@@ -692,7 +695,10 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                         </button>
 
                         {isExpanded && (
-                          <div className="mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1 text-xs">
+                          <div
+                            id={"muni-details-" + region.code}
+                            className="mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1 text-xs"
+                          >
                             {region.municipalities.map((muni) => (
                               <div
                                 key={muni.name_ko}

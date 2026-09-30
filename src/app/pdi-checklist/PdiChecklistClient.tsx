@@ -86,6 +86,7 @@ export default function PdiChecklistClient() {
 
   const checkedCount = items.filter((i) => i.checked).length;
   const progress = Math.round((checkedCount / items.length) * 100);
+  const progressPercentage = progress;
   const categories = Array.from(new Set(items.map((i) => i.category)));
 
   return (
@@ -121,10 +122,18 @@ export default function PdiChecklistClient() {
           <span className="font-semibold text-gray-700">검수 진행률 ({checkedCount}/{items.length})</span>
           <span className="font-bold text-blue-600">{progress}%</span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-3">
+        <div
+          role="progressbar"
+          aria-valuenow={progressPercentage}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="PDI 점검 진행률"
+          aria-valuetext={`${progressPercentage}% 검수 완료`}
+          className="w-full bg-gray-200 rounded-full h-3"
+        >
           <div
             className="bg-blue-600 h-3 rounded-full transition-all duration-500 ease-out"
-            style={{ width: `${progress}%` }}
+            style={{ width: `${progressPercentage}%` }}
           />
         </div>
       </div>
@@ -150,11 +159,11 @@ export default function PdiChecklistClient() {
                       className="mt-1 w-6 h-6 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
                     />
                     <div className="ml-4 flex-1">
-                      <p className={`text-lg ${item.checked ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+                      <p className={`text-lg ${item.checked ? 'text-slate-500 line-through' : 'text-gray-800'}`}>
                         {item.task}
                       </p>
                       {item.warning && (
-                        <p className={`mt-1 text-sm font-medium ${item.checked ? 'text-gray-400' : 'text-red-700'}`}>
+                        <p className={`mt-1 text-sm font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-red-700'}`}>
                           ⚠️ 주의: {item.warning}
                         </p>
                       )}

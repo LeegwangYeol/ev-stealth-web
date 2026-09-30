@@ -66,13 +66,12 @@ def classify_alert_tier(depletion_rate: float) -> str:
 
 
 def calculate_price_cap_ratio(msrp: int) -> float:
-    """Statutory 2026 Korean EV subsidy ratio tiers: 1.0 (<55M), 0.5 (55M-85M), 0.0 (>=85M)."""
-    if msrp < 55_000_000:
+    """Statutory 2026 Korean EV subsidy ratio tiers: 1.0 (<=55M), 0.5 (55M-85M), 0.0 (>85M)."""
+    if msrp <= 55_000_000:
         return 1.0
-    elif msrp < 85_000_000:
+    elif msrp <= 85_000_000:
         return 0.5
-    else:
-        return 0.0
+    return 0.0
 
 
 def calculate_net_subsidy(
@@ -108,11 +107,13 @@ class SubsidyTracker:
         timeout_seconds: float = 5.0,
         cache_fallback_path: Optional[Union[str, Path]] = None,
         validate_cache: bool = False,
+        quarantine_corrupted: bool = False,
     ) -> None:
         self.endpoint_url = endpoint_url
         self.timeout_seconds = timeout_seconds
         self.cache_fallback_path = Path(cache_fallback_path) if cache_fallback_path else None
         self.validate_cache = validate_cache
+        self.quarantine_corrupted = quarantine_corrupted
 
     def evaluate_status(self, depletion_rate: float) -> AlertSeverity:
         """Evaluate 5-tier alert severity from depletion percentage."""
@@ -300,15 +301,104 @@ class SubsidyTracker:
             logger.warning("Live fetch failed: %s. Initiating graceful fallback.", exc)
             return None
 
+    def quarantine_corrupted_cache(self, cache_path: Union[str, Path]) -> Optional[Path]:
+        """Quarantine a corrupted cache file by renaming it with a timestamp suffix."""
+        p = Path(cache_path)
+        if not p.exists():
+            return None
+        try:
+            ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            quarantine_path = p.with_name(f"{p.stem}.corrupt_{ts}{p.suffix}")
+            p.rename(quarantine_path)
+            logger.warning("Quarantined corrupted cache file: %s -> %s", p, quarantine_path)
+            return quarantine_path
+        except OSError as exc:
+            logger.warning("Failed to quarantine corrupted cache file %s: %s", p, exc)
+            return None
+
+    def discard_corrupted_cache(self, cache_path: Union[str, Path]) -> bool:
+        """Discard a corrupted cache file by removing it from disk."""
+        p = Path(cache_path)
+        if not p.exists():
+            return False
+        try:
+            p.unlink()
+            logger.warning("Discarded corrupted cache file: %s", p)
+            return True
+        except OSError as exc:
+            logger.warning("Failed to discard corrupted cache file %s: %s", p, exc)
+            return False
+
+    def load_cached_payload(
+        self,
+        cache_path: Optional[Union[str, Path]] = None,
+        validate: bool = False,
+        quarantine: Optional[bool] = None,
+    ) -> Optional[SubsidyPayload]:
+        """Load and validate cached SubsidyPayload snapshot with corrupted file resilience.
+
+        Hardened against:
+        - Malformed/truncated JSON or invalid UTF-8 bytes.
+        - Non-dictionary or missing root keys.
+        - Invalid schema structures (non-list regions, missing categories).
+        - Degenerate cache states.
+
+        If corruption is detected:
+        - Logs warning.
+        - Quarantines or discards corrupted cache gracefully if quarantine is requested.
+        - Gracefully discards invalid payload in memory and returns None (triggering fresh baseline computation).
+        """
+        target_path = Path(cache_path) if cache_path else self.cache_fallback_path
+        if not target_path or not target_path.exists():
+            return None
+
+        should_quarantine = self.quarantine_corrupted if quarantine is None else quarantine
+
+        try:
+            logger.info("Loading cached snapshot from %s", target_path)
+            with open(target_path, "r", encoding="utf-8") as f:
+                cached_dict = json.load(f)
+
+            if not isinstance(cached_dict, dict):
+                raise ValueError(
+                    f"Cache content must be a JSON object (dict), got {type(cached_dict).__name__}"
+                )
+
+            payload = SubsidyPayload.from_dict(cached_dict)
+
+            if validate:
+                if not payload.regions or len(payload.regions) < 17:
+                    raise ValueError(
+                        f"Invalid cache schema: expected >= 17 regions, found {len(payload.regions) if payload.regions else 0}"
+                    )
+                for idx, r in enumerate(payload.regions):
+                    if not hasattr(r, "categories") or not isinstance(r.categories, dict):
+                        raise ValueError(
+                            f"Corrupted region record at index {idx}: missing categories dictionary"
+                        )
+
+            return payload
+        except Exception as e:
+            logger.warning(
+                "Failed to load cache %s: %s. Gracefully discarding corrupted cache snapshot.",
+                target_path,
+                e,
+            )
+            if should_quarantine:
+                self.quarantine_corrupted_cache(target_path)
+            return None
+
     def execute_tracking_cycle(
         self,
         mock_network_failure: bool = False,
         validate_cache: Optional[bool] = None,
+        quarantine_corrupted: Optional[bool] = None,
     ) -> Tuple[SubsidyPayload, bool]:
         """Run complete tracking cycle. Returns (payload, is_fallback_used)."""
         logger.info("Starting EV Subsidy tracking cycle...")
 
         should_validate = self.validate_cache if validate_cache is None else validate_cache
+        should_quarantine = self.quarantine_corrupted if quarantine_corrupted is None else quarantine_corrupted
 
         live_data = None
         if not mock_network_failure and self.endpoint_url:
@@ -331,17 +421,11 @@ class SubsidyTracker:
         # Fallback to local cached file if available, otherwise built-in baseline
         payload = None
         if self.cache_fallback_path and self.cache_fallback_path.exists():
-            try:
-                logger.info("Loading cached snapshot from %s", self.cache_fallback_path)
-                with open(self.cache_fallback_path, "r", encoding="utf-8") as f:
-                    cached_dict = json.load(f)
-                payload = SubsidyPayload.from_dict(cached_dict)
-                if should_validate:
-                    if not payload.regions or len(payload.regions) < 17:
-                        raise ValueError("Invalid cache: less than 17 regions")
-            except Exception as e:
-                logger.warning("Failed to load cache %s: %s", self.cache_fallback_path, e)
-                payload = None
+            payload = self.load_cached_payload(
+                cache_path=self.cache_fallback_path,
+                validate=should_validate,
+                quarantine=should_quarantine,
+            )
 
         if payload is None:
             logger.info("Generating authoritative 2026 baseline dataset.")
@@ -356,6 +440,8 @@ class SubsidyTracker:
         except Exception as e:
             if should_validate:
                 logger.warning("Structural anomaly updating region metrics: %s. Falling back to baseline.", e)
+                if should_quarantine and self.cache_fallback_path:
+                    self.quarantine_corrupted_cache(self.cache_fallback_path)
                 payload = build_initial_baseline()
                 for idx, r in enumerate(payload.regions):
                     payload.regions[idx] = self.update_region_metrics(r)
@@ -371,13 +457,17 @@ class SubsidyTracker:
         sync_web: bool = False,
         output_path: Optional[Union[str, Path]] = None,
         dry_run: bool = False,
+        quarantine_corrupted: bool = False,
     ) -> SubsidyPayload:
         """Execute complete subsidy collection cycle and atomically save to disk.
 
         Conforms to PROJECT.md interface contract:
         SubsidyTracker.collect_and_save(sync_web: bool, output_path: Optional[str], dry_run: bool) -> SubsidyPayload
         """
-        payload, fallback_used = self.execute_tracking_cycle(validate_cache=True)
+        payload, fallback_used = self.execute_tracking_cycle(
+            validate_cache=True,
+            quarantine_corrupted=quarantine_corrupted,
+        )
 
         if not dry_run:
             dest_file = Path(output_path) if output_path else (self.cache_fallback_path or Path("data/ev_subsidy_data.json"))

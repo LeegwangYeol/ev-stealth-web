@@ -46,34 +46,34 @@ export default function RootLayout({
 
             {/* Desktop Navigation Bar */}
             <nav aria-label="데스크톱 내비게이션" data-testid="desktop-nav" className="hidden md:flex flex-wrap items-center justify-end gap-x-2 lg:gap-x-3 gap-y-1 text-xs lg:text-sm font-medium">
-              <Link href="/subsidy-tracker" className="text-amber-400 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800">
+              <Link href="/subsidy-tracker" className="text-amber-400 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
                 <span>⚡</span> 보조금 실시간 소진율
               </Link>
-              <Link href="/depreciation-calculator" className="text-emerald-400 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800">
+              <Link href="/depreciation-calculator" className="text-emerald-400 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
                 <span>📉</span> 감가·배터리 계산기
               </Link>
-              <Link href="/reliability-analytics" className="text-blue-300 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800">
+              <Link href="/reliability-analytics" className="text-blue-300 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
                 <span>📊</span> 결함·신뢰성 통계
               </Link>
-              <Link href="/recall-portal" className="text-slate-200 hover:text-white font-medium transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800">
+              <Link href="/recall-portal" className="text-slate-200 hover:text-white font-medium transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
                 <span>🚨</span> 공식 리콜 포털
               </Link>
-              <Link href="/2026-latest" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800">
+              <Link href="/2026-latest" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
                 2026 최신 결함
               </Link>
-              <Link href="/pdi-checklist" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800">
+              <Link href="/pdi-checklist" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
                 PDI 체크리스트
               </Link>
-              <Link href="/hyundai-kia" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800">
+              <Link href="/hyundai-kia" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
                 현대/기아
               </Link>
-              <Link href="/tesla" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800">
+              <Link href="/tesla" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
                 테슬라
               </Link>
-              <Link href="/byd" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800">
+              <Link href="/byd" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
                 BYD
               </Link>
-              <Link href="/global-brands" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800">
+              <Link href="/global-brands" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
                 기타 글로벌
               </Link>
             </nav>

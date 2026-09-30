@@ -211,11 +211,12 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        title="원문 게시물 바로가기"
+        title="원문 게시물 바로가기 (새 창에서 열림)"
         className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border font-medium transition ${badgeColor}`}
       >
         <span>{badgeText}</span>
-        <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <span className="sr-only"> (새 창에서 열림)</span>
+        <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -361,7 +362,15 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               극도로 부정적
             </span>
           </div>
-          <div className="mt-2 w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+          <div
+            role="progressbar"
+            aria-valuenow={Math.round(initialData.statistics.avg_negativity_score * 100)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="평균 부정 감성 지수"
+            aria-valuetext={`${Math.round(initialData.statistics.avg_negativity_score * 100)}%`}
+            className="mt-2 w-full bg-slate-100 rounded-full h-2 overflow-hidden"
+          >
             <div
               className="bg-amber-500 h-2 rounded-full transition-all duration-500"
               style={{ width: `${Math.round(initialData.statistics.avg_negativity_score * 100)}%` }}
@@ -633,6 +642,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 <h2 className="text-base md:text-lg font-extrabold text-slate-900 hover:text-blue-600 transition">
                   <a href={report.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
                     {report.title}
+                    <span className="sr-only"> (새 창에서 열림)</span>
                   </a>
                 </h2>
               </div>
@@ -680,7 +690,15 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 {/* Sentiment Meter */}
                 <div className="flex items-center gap-2 sm:self-end">
                   <span className="text-slate-500 font-medium">부정 감성 강도:</span>
-                  <div className="w-24 bg-slate-200 rounded-full h-2 overflow-hidden">
+                  <div
+                    role="progressbar"
+                    aria-valuenow={Math.round(report.sentiment_score * 100)}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={`리포트 ${report.id} 부정 감성 강도`}
+                    aria-valuetext={`${Math.round(report.sentiment_score * 100)}%`}
+                    className="w-24 bg-slate-200 rounded-full h-2 overflow-hidden"
+                  >
                     <div
                       className="bg-rose-500 h-2 rounded-full"
                       style={{ width: `${Math.round(report.sentiment_score * 100)}%` }}

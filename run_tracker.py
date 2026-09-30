@@ -117,6 +117,32 @@ def parse_arguments() -> argparse.Namespace:
         default=os.getenv("EV_SUBSIDY_API_ENDPOINT"),
         help="Custom URL for remote subsidy API/scraper endpoint.",
     )
+    parser.add_argument(
+        "--validate-cache",
+        dest="validate_cache",
+        action="store_true",
+        default=True,
+        help="Validate cached payload structure and integrity (default: True).",
+    )
+    parser.add_argument(
+        "--no-validate-cache",
+        dest="validate_cache",
+        action="store_false",
+        help="Disable cache schema and region validation.",
+    )
+    parser.add_argument(
+        "--quarantine-corrupted",
+        dest="quarantine_corrupted",
+        action="store_true",
+        default=True,
+        help="Quarantine corrupted cache files if encountered (default: True).",
+    )
+    parser.add_argument(
+        "--no-quarantine-corrupted",
+        dest="quarantine_corrupted",
+        action="store_false",
+        help="Disable automatic quarantine of corrupted cache files.",
+    )
     return parser.parse_args()
 
 
@@ -133,10 +159,14 @@ def main() -> int:
             endpoint_url=args.endpoint,
             timeout_seconds=5.0,
             cache_fallback_path=args.output,
+            validate_cache=args.validate_cache,
+            quarantine_corrupted=getattr(args, "quarantine_corrupted", True),
         )
 
         payload, fallback_used = tracker.execute_tracking_cycle(
-            mock_network_failure=args.mock_network
+            mock_network_failure=args.mock_network,
+            validate_cache=args.validate_cache,
+            quarantine_corrupted=getattr(args, "quarantine_corrupted", True),
         )
 
         if not args.dry_run:

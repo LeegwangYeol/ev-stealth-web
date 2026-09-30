@@ -610,7 +610,7 @@ export default function DepreciationCalculatorClient({
                   </div>
                   <div>
                     <span className="text-slate-600">실구매:</span>{' '}
-                    <span className="font-bold text-blue-600">
+                    <span className="font-bold text-blue-700">
                       {(model.net_purchase_price_krw / 10000).toLocaleString()}만원
                     </span>
                   </div>
@@ -1495,8 +1495,9 @@ export default function DepreciationCalculatorClient({
           </div>
 
           {/* Control 2: Transfer Type Selector */}
-          <div className="space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <label className="text-xs font-bold text-slate-700 block">이전 / 매매 유형 선택</label>
+          <fieldset className="space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <legend className="sr-only">이전 / 매매 유형 선택</legend>
+            <span className="text-xs font-bold text-slate-700 block" aria-hidden="true">이전 / 매매 유형 선택</span>
             <div className="space-y-1.5">
               {[
                 {
@@ -1538,7 +1539,7 @@ export default function DepreciationCalculatorClient({
                 </label>
               ))}
             </div>
-          </div>
+          </fieldset>
 
           {/* Control 3: Subsidy Input & Total Clawback Result */}
           <div className="bg-slate-900 text-white p-5 rounded-xl border border-slate-800 flex flex-col justify-between space-y-4">
@@ -1667,8 +1668,9 @@ export default function DepreciationCalculatorClient({
           </div>
 
           {/* ICE Displacement Selector */}
-          <div className="flex items-center gap-2 text-xs">
-            <span className="font-semibold text-slate-700">비교 내연기관:</span>
+          <fieldset className="flex items-center gap-2 text-xs border-0 p-0 m-0">
+            <legend className="sr-only">비교 내연기관 연료 및 배기량 세그먼트 선택</legend>
+            <span className="font-semibold text-slate-700" aria-hidden="true">비교 내연기관:</span>
             <select
               value={iceDisplacementCc}
               onChange={(e) => setIceDisplacementCc(parseInt(e.target.value, 10))}
@@ -1680,7 +1682,7 @@ export default function DepreciationCalculatorClient({
               <option value={2497}>2,500cc 준대형 가솔린 (그랜저급)</option>
               <option value={3470}>3,500cc 대형 가솔린 (G80급)</option>
             </select>
-          </div>
+          </fieldset>
         </div>
 
         {/* 4 TCO Metric Summary Cards */}

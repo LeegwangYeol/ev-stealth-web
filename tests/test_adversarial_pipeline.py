@@ -257,32 +257,13 @@ class TestCorruptedCacheRecovery(unittest.TestCase):
         self._execute_runner_and_assert_recovery()
 
     def test_structural_schema_corruption_failure_mode(self):
-        """Document and verify empirical vulnerability: syntactically valid JSON with malformed
-
-        types (e.g. regions: 'not_a_list') bypasses from_dict and raises unhandled AttributeError
-        in execute_tracking_cycle outside the try-except block, causing exit code 1.
+        """Syntactically valid JSON with malformed types (e.g. regions: 'not_a_list')
+        must trigger graceful fallback and valid 17-region baseline recovery.
         """
         with open(self.cache_file, "w", encoding="utf-8") as f:
             json.dump({"unrelated_field": "test", "numbers": [1, 2, 3], "regions": "not_a_list"}, f)
 
-        cmd = [
-            sys.executable,
-            str(PROJECT_ROOT / "run_tracker.py"),
-            "--output",
-            str(self.cache_file),
-            "--verbose",
-        ]
-        res = subprocess.run(
-            cmd,
-            cwd=str(PROJECT_ROOT),
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-        # Empirically captures that pipeline exits with 1 due to unhandled AttributeError
-        self.assertEqual(res.returncode, 1)
-        self.assertIn("AttributeError", res.stderr)
-        self.assertIn("has no attribute 'categories'", res.stderr)
+        self._execute_runner_and_assert_recovery()
 
     def test_empty_regions_cache_degeneracy_vulnerability(self):
         """Document empirical vulnerability: cache with empty regions [] is accepted as valid,
