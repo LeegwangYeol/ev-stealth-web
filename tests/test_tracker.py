@@ -12,6 +12,7 @@ Verifies:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -218,9 +219,13 @@ class TestCLIRunner(unittest.TestCase):
     """Test CLI runner behavior."""
 
     def test_dry_run_cli(self):
+        root = Path(__file__).resolve().parent.parent
+        script = root / "run_tracker.py"
+        if not script.exists() and (root.parent / "run_tracker.py").exists():
+            script = root.parent / "run_tracker.py"
         res = subprocess.run(
-            [sys.executable, "run_tracker.py", "--dry-run", "--verbose"],
-            cwd=str(Path(__file__).resolve().parent.parent),
+            [sys.executable, str(script), "--dry-run", "--mock-network", "--verbose"],
+            cwd=str(root),
             capture_output=True,
             text=True,
         )
@@ -230,35 +235,101 @@ class TestCLIRunner(unittest.TestCase):
 
     def test_sync_web_cli(self):
         root = Path(__file__).resolve().parent.parent
-        res = subprocess.run(
-            [sys.executable, "run_tracker.py", "--sync-web", "--verbose"],
-            cwd=str(root),
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(res.returncode, 0)
+        script = root / "run_tracker.py"
+        if not script.exists() and (root.parent / "run_tracker.py").exists():
+            script = root.parent / "run_tracker.py"
 
-        # Check target files exist
-        if (root / "ev-stealth-web").exists():
-            p1 = root / "data" / "ev_subsidy_data.json"
-            p2 = root / "ev-stealth-web" / "src" / "data" / "ev_subsidy_data.json"
-            p3 = root / "data" / "subsidy_depletion_data.json"
-            p4 = root / "ev-stealth-web" / "src" / "data" / "subsidy_depletion_data.json"
-        else:
-            p1 = root / "src" / "data" / "ev_subsidy_data.json"
-            p2 = root / "src" / "data" / "subsidy_depletion_data.json"
-            p3 = (root.parent / "data" / "ev_subsidy_data.json") if (root.parent / "data").exists() else p1
-            p4 = (root.parent / "data" / "subsidy_depletion_data.json") if (root.parent / "data").exists() else p2
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+            isolated_primary = td_path / "data" / "ev_subsidy_data.json"
+            isolated_web_dir = td_path / "web" / "src" / "data"
 
-        self.assertTrue(p1.exists(), f"Missing {p1}")
-        self.assertTrue(p2.exists(), f"Missing {p2}")
-        self.assertTrue(p3.exists(), f"Missing {p3}")
-        self.assertTrue(p4.exists(), f"Missing {p4}")
+            res = subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--sync-web",
+                    "--output",
+                    str(isolated_primary),
+                    "--web-dir",
+                    str(isolated_web_dir),
+                    "--mock-network",
+                    "--verbose",
+                ],
+                cwd=str(root),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res.returncode, 0, f"run_tracker failed: {res.stderr}\nOutput: {res.stdout}")
 
-        with open(p1, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            self.assertIn("metadata", data)
-            self.assertEqual(len(data["regions"]), 17)
+            p1 = isolated_primary
+            p2 = isolated_web_dir / "ev_subsidy_data.json"
+            p3 = td_path / "data" / "subsidy_depletion_data.json"
+            p4 = isolated_web_dir / "subsidy_depletion_data.json"
+
+            self.assertTrue(p1.exists(), f"Missing {p1}")
+            self.assertTrue(p2.exists(), f"Missing {p2}")
+            self.assertTrue(p3.exists(), f"Missing {p3}")
+            self.assertTrue(p4.exists(), f"Missing {p4}")
+
+            # Verify identical SHA-256 byte parity across generated files
+            h1 = hashlib.sha256(p1.read_bytes()).hexdigest()
+            h2 = hashlib.sha256(p2.read_bytes()).hexdigest()
+            h3 = hashlib.sha256(p3.read_bytes()).hexdigest()
+            h4 = hashlib.sha256(p4.read_bytes()).hexdigest()
+            self.assertEqual(h1, h2, "Primary and web ev_subsidy_data.json must have identical SHA-256")
+            self.assertEqual(h1, h3, "Primary ev_subsidy_data.json and subsidy_depletion_data.json must have identical SHA-256")
+            self.assertEqual(h3, h4, "Primary and web subsidy_depletion_data.json must have identical SHA-256")
+
+            with open(p1, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                self.assertIn("metadata", data)
+                self.assertEqual(len(data["regions"]), 17)
+
+    def test_sync_web_env_var_cli(self):
+        root = Path(__file__).resolve().parent.parent
+        script = root / "run_tracker.py"
+        if not script.exists() and (root.parent / "run_tracker.py").exists():
+            script = root.parent / "run_tracker.py"
+
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+            isolated_primary = td_path / "data" / "ev_subsidy_data.json"
+            isolated_web_dir = td_path / "env_web" / "src" / "data"
+
+            env = os.environ.copy()
+            env["EV_TRACKER_WEB_DIR"] = str(isolated_web_dir)
+
+            res = subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--sync-web",
+                    "--output",
+                    str(isolated_primary),
+                    "--mock-network",
+                    "--verbose",
+                ],
+                cwd=str(root),
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res.returncode, 0, f"run_tracker failed: {res.stderr}\nOutput: {res.stdout}")
+
+            p1 = isolated_primary
+            p2 = isolated_web_dir / "ev_subsidy_data.json"
+            p3 = td_path / "data" / "subsidy_depletion_data.json"
+            p4 = isolated_web_dir / "subsidy_depletion_data.json"
+
+            self.assertTrue(p1.exists(), f"Missing {p1}")
+            self.assertTrue(p2.exists(), f"Missing {p2}")
+            self.assertTrue(p3.exists(), f"Missing {p3}")
+            self.assertTrue(p4.exists(), f"Missing {p4}")
+
+            h1 = hashlib.sha256(p1.read_bytes()).hexdigest()
+            h2 = hashlib.sha256(p2.read_bytes()).hexdigest()
+            self.assertEqual(h1, h2)
 
     def test_run_tracker_sh_script(self):
         root = Path(__file__).resolve().parent.parent

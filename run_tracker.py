@@ -95,6 +95,13 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="Synchronize output files directly into ev-stealth-web/src/data/.",
     )
+    web_dir_env = os.getenv("EV_TRACKER_WEB_DIR")
+    parser.add_argument(
+        "--web-dir",
+        type=Path,
+        default=Path(web_dir_env) if web_dir_env else None,
+        help="Custom web directory to sync data files into (overrides default ev-stealth-web/src/data/ or EV_TRACKER_WEB_DIR).",
+    )
     parser.add_argument(
         "--verbose",
         "-v",
@@ -172,14 +179,21 @@ def main() -> int:
         if not args.dry_run:
             destinations: List[Path] = [args.output]
 
-            # If writing to default primary output, also create mirror subsidy_depletion_data.json
+            # If writing to default primary output or when syncing with standard filename, also create mirror subsidy_depletion_data.json
             if args.output == DEFAULT_PRIMARY_OUTPUT:
                 destinations.append(MIRROR_PRIMARY_OUTPUT)
+            elif (args.sync_web or args.web_dir) and args.output.name == "ev_subsidy_data.json":
+                destinations.append(args.output.parent / "subsidy_depletion_data.json")
 
             if args.sync_web:
-                destinations.append(DEFAULT_WEB_OUTPUT)
-                destinations.append(MIRROR_WEB_OUTPUT)
-                destinations.extend(EXTERNAL_SYNC_TARGETS)
+                if args.web_dir:
+                    web_dir = Path(args.web_dir)
+                    destinations.append(web_dir / "ev_subsidy_data.json")
+                    destinations.append(web_dir / "subsidy_depletion_data.json")
+                else:
+                    destinations.append(DEFAULT_WEB_OUTPUT)
+                    destinations.append(MIRROR_WEB_OUTPUT)
+                    destinations.extend(EXTERNAL_SYNC_TARGETS)
 
             # Deduplicate destinations while preserving order
             unique_destinations: List[Path] = []
