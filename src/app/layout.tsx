@@ -105,7 +105,7 @@ export default function RootLayout({
                 </div>
                 <Link
                   href="/subsidy-tracker"
-                  className="px-3 py-2 rounded-lg bg-amber-950/60 border border-amber-500/50 text-amber-300 hover:text-white font-semibold transition flex items-center justify-between"
+                  className="px-3 py-2 rounded-lg bg-amber-950/60 border border-amber-500/50 text-amber-300 hover:text-white font-semibold transition flex items-center justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <span className="flex items-center gap-2">
                     <span>⚡</span> [실시간] 전국 보조금 소진율 추적기
@@ -114,7 +114,7 @@ export default function RootLayout({
                 </Link>
                 <Link
                   href="/depreciation-calculator"
-                  className="px-3 py-2 rounded-lg bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 hover:text-white font-semibold transition flex items-center justify-between"
+                  className="px-3 py-2 rounded-lg bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 hover:text-white font-semibold transition flex items-center justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <span className="flex items-center gap-2">
                     <span>📉</span> 감가·배터리 계산기
@@ -123,41 +123,41 @@ export default function RootLayout({
                 </Link>
                 <Link
                   href="/reliability-analytics"
-                  className="px-3 py-2 rounded-lg hover:bg-slate-800 text-blue-300 hover:text-white font-semibold transition flex items-center gap-2"
+                  className="px-3 py-2 rounded-lg hover:bg-slate-800 text-blue-300 hover:text-white font-semibold transition flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <span>📊</span> 신뢰성 통계
                 </Link>
                 <Link
                   href="/recall-portal"
-                  className="px-3 py-2 rounded-lg hover:bg-slate-800 text-slate-200 hover:text-white font-medium transition flex items-center gap-2"
+                  className="px-3 py-2 rounded-lg hover:bg-slate-800 text-slate-200 hover:text-white font-medium transition flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <span>🚨</span> 리콜 포털
                 </Link>
                 <Link
                   href="/2026-latest"
-                  className="px-3 py-2 rounded-lg hover:bg-slate-800 text-slate-200 hover:text-white font-medium transition flex items-center gap-2"
+                  className="px-3 py-2 rounded-lg hover:bg-slate-800 text-slate-200 hover:text-white font-medium transition flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <span>🔥</span> 2026 최신 결함
                 </Link>
                 <Link
                   href="/pdi-checklist"
-                  className="px-3 py-2 rounded-lg hover:bg-slate-800 text-slate-200 hover:text-white font-medium transition flex items-center gap-2"
+                  className="px-3 py-2 rounded-lg hover:bg-slate-800 text-slate-200 hover:text-white font-medium transition flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <span>✅</span> PDI 체크리스트
                 </Link>
                 <div className="h-px border-t border-slate-800 my-1" />
                 <div className="text-[11px] font-semibold text-slate-400 px-2 py-0.5">제조사별 피하기 가이드</div>
                 <div className="grid grid-cols-2 gap-1">
-                  <Link href="/hyundai-kia" className="px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition">
+                  <Link href="/hyundai-kia" className="px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
                     현대/기아
                   </Link>
-                  <Link href="/tesla" className="px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition">
+                  <Link href="/tesla" className="px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
                     테슬라
                   </Link>
-                  <Link href="/byd" className="px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition">
+                  <Link href="/byd" className="px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
                     BYD
                   </Link>
-                  <Link href="/global-brands" className="px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition">
+                  <Link href="/global-brands" className="px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
                     기타 글로벌
                   </Link>
                 </div>

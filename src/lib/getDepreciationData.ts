@@ -916,7 +916,7 @@ export function calculateTcoComparison(
   let parkingTotalSavings = 0;
   let maintenanceTotalSavings = 0;
 
-  const safeYears = Math.max(1, Math.round(years));
+  const safeYears = Math.max(1, Math.round(Number.isFinite(years) && years > 0 ? years : 1));
 
   for (let y = 1; y <= safeYears; y++) {
     const evFuel = Math.round(annualKm * evCostPerKm);

@@ -85,7 +85,7 @@ export default function PdiChecklistClient() {
   };
 
   const checkedCount = items.filter((i) => i.checked).length;
-  const progress = Math.round((checkedCount / items.length) * 100);
+  const progress = items.length === 0 ? 0 : Math.round((checkedCount / items.length) * 100);
   const progressPercentage = progress;
   const categories = Array.from(new Set(items.map((i) => i.category)));
 

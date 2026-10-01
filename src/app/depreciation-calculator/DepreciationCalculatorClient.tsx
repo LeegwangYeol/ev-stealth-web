@@ -1226,7 +1226,15 @@ export default function DepreciationCalculatorClient({
               State of Health (SoH)
             </div>
 
-            <div className="relative w-44 h-44 mx-auto flex items-center justify-center">
+            <div
+              role="progressbar"
+              aria-valuenow={Math.round(batteryHealth.sohPct * 10) / 10}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="배터리 잔존 성능"
+              aria-valuetext={`${batteryHealth.sohPct.toFixed(1)}%`}
+              className="relative w-44 h-44 mx-auto flex items-center justify-center"
+            >
               <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
                 {/* Track Circle */}
                 <circle
@@ -1727,14 +1735,14 @@ export default function DepreciationCalculatorClient({
           </div>
 
           <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-4 rounded-xl shadow-md">
-            <span className="text-xs text-blue-200 font-semibold block">
+            <span className="text-xs text-white font-medium block">
               {holdingYears}년 총 운행비 순이득
             </span>
             <span className="text-xl sm:text-2xl font-black text-white block mt-1">
               +{(tcoResult.totalCumulativeSavingsKrw / 10000).toLocaleString()}{' '}
-              <span className="text-xs font-semibold text-blue-200">만원</span>
+              <span className="text-xs font-semibold text-white/90">만원</span>
             </span>
-            <span className="text-[11px] text-blue-100 mt-1 block">
+            <span className="text-[11px] text-white font-medium mt-1 block">
               월평균 +{Math.round(tcoResult.totalCumulativeSavingsKrw / (holdingYears * 12) / 10000).toLocaleString()}만 원 절약
             </span>
           </div>

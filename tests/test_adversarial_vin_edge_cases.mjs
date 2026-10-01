@@ -11,11 +11,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Read getRecallData.ts and inject 'with { type: "json" }' into memory for testing
-const sourcePath = path.resolve(__dirname, '../src/lib/getRecallData.ts');
+let sourcePath = path.resolve(__dirname, '../src/lib/getRecallData.ts');
+let jsonImport = "import rawRecallData from '../src/data/ev_recall_database.json' with { type: 'json' };";
+if (!fs.existsSync(sourcePath)) {
+  sourcePath = path.resolve(__dirname, '../ev-stealth-web/src/lib/getRecallData.ts');
+  jsonImport = "import rawRecallData from '../ev-stealth-web/src/data/ev_recall_database.json' with { type: 'json' };";
+}
 const originalSource = fs.readFileSync(sourcePath, 'utf-8');
 const patchedSource = originalSource.replace(
   "import rawRecallData from '../data/ev_recall_database.json';",
-  "import rawRecallData from '../src/data/ev_recall_database.json' with { type: 'json' };"
+  jsonImport
 );
 
 // Write to a temporary TypeScript test fixture inside tests/ (not modifying src/!)
@@ -145,6 +150,18 @@ for (const p of db.vin_prefixes) {
   assert(typeof dec.overallRiskGrade === 'string', 'Overall risk grade defined');
   assert(dec.batteryProfile !== undefined || p.brand === '포르쉐', `Battery profile mapped for ${p.model_name}`);
 }
+
+// C.1 Targeted verification for Tesla Model 3 (LRW3E7EK prefix) battery profile
+const m3Dec = decodeVinAndCheckRecalls('LRW3E7EK8NC123456');
+assert(m3Dec.valid, 'Tesla Model 3 sample VIN must be valid', m3Dec);
+assert(m3Dec.decodedBrand === '테슬라', 'Tesla Model 3 brand should be 테슬라');
+assert(m3Dec.decodedModel === '모델 3', 'Tesla Model 3 model should be 모델 3');
+assert(m3Dec.batteryProfile !== undefined, 'Tesla Model 3 battery profile must be mapped');
+assert(m3Dec.batteryProfile.cell_supplier.includes('CATL'), 'Tesla Model 3 supplier should include CATL');
+assert(m3Dec.batteryProfile.cell_chemistry.includes('LFP'), 'Tesla Model 3 chemistry should include LFP');
+assert(m3Dec.batteryProfile.recommended_soc_limit === 100, 'Tesla Model 3 LFP recommended SoC limit should be 100');
+assert(m3Dec.batteryProfile.fire_incident_status === 'VERIFIED_SAFE', 'Tesla Model 3 fire incident status verified safe');
+assert(m3Dec.batteryProfile.underground_parking_advisory.length > 20, 'Tesla Model 3 advisory text present');
 
 // D. Test WMI-only fallback (valid 17-char VIN with recognized WMI but unmapped model prefix)
 const wmiOnlyVin = '5YJ3E1EB8MF000000'; // 5YJ is Tesla, but 5YJ3 is not in vin_prefixes (only 5YJYGDE is)

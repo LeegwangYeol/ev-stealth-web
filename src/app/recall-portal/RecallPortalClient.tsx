@@ -455,7 +455,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
         {/* 2. Dual-Mode Verification Tool */}
         <section className="bg-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl">
           <div className="max-w-3xl mb-6">
@@ -471,14 +471,18 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
           </div>
 
           {/* Mode Switcher Tabs */}
-          <div className="flex border-b border-slate-800 mb-6">
+          <div role="tablist" aria-label="리콜 조회 방식 선택" className="flex border-b border-slate-800 mb-6">
             <button
               type="button"
+              role="tab"
+              aria-selected={activeCheckerMode === 'VIN'}
+              aria-controls="vin-checker-panel"
+              id="vin-checker-tab"
               onClick={() => {
                 setActiveCheckerMode('VIN');
                 setCheckResult(null);
               }}
-              className={`py-3 px-5 text-sm font-semibold border-b-2 transition flex items-center gap-2 ${
+              className={`py-3 px-5 text-sm font-semibold border-b-2 transition flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                 activeCheckerMode === 'VIN'
                   ? 'border-blue-500 text-blue-400 bg-blue-950/20'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -491,11 +495,15 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={activeCheckerMode === 'MODEL'}
+              aria-controls="model-checker-panel"
+              id="model-checker-tab"
               onClick={() => {
                 setActiveCheckerMode('MODEL');
                 setCheckResult(null);
               }}
-              className={`py-3 px-5 text-sm font-semibold border-b-2 transition flex items-center gap-2 ${
+              className={`py-3 px-5 text-sm font-semibold border-b-2 transition flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                 activeCheckerMode === 'MODEL'
                   ? 'border-blue-500 text-blue-400 bg-blue-950/20'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -510,7 +518,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
           {/* MODE A Form */}
           {activeCheckerMode === 'VIN' && (
-            <div>
+            <div id="vin-checker-panel" role="tabpanel" aria-labelledby="vin-checker-tab">
               <form onSubmit={handleVinSubmit} className="space-y-4">
                 <div>
                   <label htmlFor="vin-input" className="block text-sm font-medium text-slate-200 mb-2">
@@ -621,7 +629,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
           {/* MODE B Form */}
           {activeCheckerMode === 'MODEL' && (
-            <div>
+            <div id="model-checker-panel" role="tabpanel" aria-labelledby="model-checker-tab">
               <form onSubmit={handleModelSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   {/* Brand */}
@@ -855,7 +863,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   </p>
                 </div>
               ) : (
-                checkResult.recalls.map((campaign, idx) => {
+                checkResult.recalls.map((campaign) => {
                   const isExpanded = expandedRecallIds.has(campaign.id);
                   return (
                     <div
@@ -903,8 +911,8 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                           type="button"
                           onClick={() => toggleRecallExpansion(campaign.id)}
                           aria-expanded={isExpanded}
-                          aria-controls={"campaign-detail-" + idx}
-                          className="self-start px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center gap-1.5"
+                          aria-controls={"campaign-search-detail-" + campaign.id}
+                          className="self-start px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                         >
                           <span>{isExpanded ? '상세 접기' : '대처요령 및 상세'}</span>
                           <svg
@@ -928,7 +936,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
                       {/* Expandable full remedy and consumer emergency guide */}
                       {isExpanded && (
-                        <div id={"campaign-detail-" + idx} className="space-y-3 pt-2 border-t border-slate-800">
+                        <div id={"campaign-search-detail-" + campaign.id} className="space-y-3 pt-2 border-t border-slate-800">
                           <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-4 text-xs text-slate-200 space-y-1">
                             <div className="font-bold text-blue-300 flex items-center gap-1.5">
                               <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1192,7 +1200,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
           {/* List of Recalls */}
           <div className="space-y-3 pt-2">
-            {filteredRecalls.map((campaign, idx) => {
+            {filteredRecalls.map((campaign) => {
               const isExpanded = expandedRecallIds.has(campaign.id);
               return (
                 <div
@@ -1230,8 +1238,8 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       type="button"
                       onClick={() => toggleRecallExpansion(campaign.id)}
                       aria-expanded={isExpanded}
-                      aria-controls={"campaign-detail-" + idx}
-                      className="self-start text-xs text-blue-400 hover:text-blue-300 font-medium px-2.5 py-1 rounded bg-slate-800/80 transition"
+                      aria-controls={"campaign-list-detail-" + campaign.id}
+                      className="self-start text-xs text-blue-400 hover:text-blue-300 font-medium px-2.5 py-1 rounded bg-slate-800/80 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     >
                       {isExpanded ? '닫기 ▲' : '상세 및 행동요령 ▼'}
                     </button>
@@ -1242,7 +1250,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   </p>
 
                   {isExpanded && (
-                    <div id={"campaign-detail-" + idx} className="space-y-3 pt-3 border-t border-slate-800 text-xs">
+                    <div id={"campaign-list-detail-" + campaign.id} className="space-y-3 pt-3 border-t border-slate-800 text-xs">
                       <div>
                         <span className="font-semibold text-slate-200">생산 기간: </span>
                         <span className="font-mono text-slate-300">{campaign.production_date_range}</span>
@@ -1279,7 +1287,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
             })}
           </div>
         </section>
-      </main>
+      </div>
     </div>
   );
 }

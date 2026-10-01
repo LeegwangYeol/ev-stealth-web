@@ -255,6 +255,19 @@
       "bms_safety_features": "LFP 특화 OCV(개방전압) 곡선 적응형 SoC 추정, 혹한기 프리컨디셔닝 통합 서멀 매니지먼트."
     },
     {
+      "model_id": "tesla-model-3",
+      "brand": "테슬라",
+      "model_name": "모델 3 (LFP/NMC)",
+      "years": "2019 ~ 2026",
+      "cell_supplier": "CATL / LG에너지솔루션",
+      "cell_chemistry": "LFP (리튬인산철 각형) / NCM 삼원계 원통형 2170",
+      "fire_incident_status": "VERIFIED_SAFE",
+      "fire_incident_status_ko": "안전 검증 완료 (열폭주 극저)",
+      "recommended_soc_limit": 100,
+      "underground_parking_advisory": "상하이 기가팩토리 생산 RWD 및 하이랜드 모델은 CATL LFP 배터리를 탑재하여 열폭주 위험이 극도로 낮습니다. 주 1회 100% 완충이 권장되며 지하주차장 충전 및 주차 안전. 롱레인지/퍼포먼스는 80% 완충 권장.",
+      "bms_safety_features": "LFP 특화 OCV 적응형 SoC 추정, 셀 레벨 와이어 본딩 퓨즈, 파이로테크닉 디스커넥트(Pyrofuse), 24시간 실시간 팩 전압 텔레메트리."
+    },
+    {
       "model_id": "mercedes-eqe-350",
       "brand": "메르세데스-벤츠",
       "model_name": "EQE 350+",

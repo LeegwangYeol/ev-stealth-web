@@ -52,10 +52,25 @@ import tempfile
 import unittest
 from typing import Any, Dict, List, Optional, Tuple
 
-# Ensure project root is in sys.path
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# Adaptive root detection (works from repo root, tests/, ev-stealth-web/, or ev-stealth-web/tests/)
+def _find_repo_root() -> Path:
+    candidates = [
+        Path(__file__).resolve().parent.parent,
+        Path(__file__).resolve().parent.parent.parent,
+        Path.cwd(),
+        Path.cwd().parent,
+    ]
+    for p in candidates:
+        if (p / "ev-stealth-web").is_dir() and (p / "data").is_dir():
+            return p
+    return Path(__file__).resolve().parent.parent
+
+PROJECT_ROOT = _find_repo_root()
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+WEB_ROOT = PROJECT_ROOT / "ev-stealth-web"
+if str(WEB_ROOT) not in sys.path:
+    sys.path.insert(0, str(WEB_ROOT))
 
 # Live import of tracker modules (zero mock fallbacks, genuine live execution)
 import tracker
@@ -809,9 +824,17 @@ class TestVehicleModelMatrixIntegrity(unittest.TestCase):
     """Verify integrity of mined EV models matrix against statutory standards."""
 
     def setUp(self):
-        self.matrix_file = PROJECT_ROOT / ".agents" / "spec_miner_models_w2" / "models_subsidy_matrix.json"
-        if not self.matrix_file.exists() and (PROJECT_ROOT.parent / ".agents" / "spec_miner_models_w2" / "models_subsidy_matrix.json").exists():
-            self.matrix_file = PROJECT_ROOT.parent / ".agents" / "spec_miner_models_w2" / "models_subsidy_matrix.json"
+        candidates = [
+            PROJECT_ROOT / ".agents" / "spec_miner_models_w2" / "models_subsidy_matrix.json",
+            PROJECT_ROOT.parent / ".agents" / "spec_miner_models_w2" / "models_subsidy_matrix.json",
+            PROJECT_ROOT / "data" / "models_subsidy_matrix.json",
+            WEB_ROOT / "src" / "data" / "models_subsidy_matrix.json",
+        ]
+        self.matrix_file = candidates[0]
+        for c in candidates:
+            if c.exists():
+                self.matrix_file = c
+                break
 
     def test_models_matrix_file_structure(self):
         """Verify that models matrix file contains required automotive specifications."""
@@ -1074,6 +1097,8 @@ class TestCLIFlagsAndRunner(unittest.TestCase):
     def setUp(self):
         self.test_dir = tempfile.mkdtemp(prefix="test_subsidy_cli_")
         self.run_tracker_script = PROJECT_ROOT / "run_tracker.py"
+        if not self.run_tracker_script.exists() and (WEB_ROOT / "run_tracker.py").exists():
+            self.run_tracker_script = WEB_ROOT / "run_tracker.py"
 
     def tearDown(self):
         if os.path.exists(self.test_dir):
@@ -1100,6 +1125,7 @@ class TestCLIFlagsAndRunner(unittest.TestCase):
 
         result = subprocess.run(
             [sys.executable, str(self.run_tracker_script), "--help"],
+            cwd=str(PROJECT_ROOT),
             capture_output=True,
             text=True,
             timeout=10,
@@ -1115,6 +1141,7 @@ class TestCLIFlagsAndRunner(unittest.TestCase):
 
         result = subprocess.run(
             [sys.executable, str(self.run_tracker_script), "--dry-run", "--verbose"],
+            cwd=str(PROJECT_ROOT),
             capture_output=True,
             text=True,
             timeout=15,
@@ -1129,6 +1156,7 @@ class TestCLIFlagsAndRunner(unittest.TestCase):
         custom_output = Path(self.test_dir) / "custom_subsidy.json"
         result = subprocess.run(
             [sys.executable, str(self.run_tracker_script), "--output", str(custom_output), "--verbose"],
+            cwd=str(PROJECT_ROOT),
             capture_output=True,
             text=True,
             timeout=15,

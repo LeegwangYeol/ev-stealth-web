@@ -333,7 +333,11 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                             if (!evalData) {
                               return (
                                 <td key={yr} className="p-2 text-center">
-                                  <div className="w-8 h-8 mx-auto rounded-lg bg-slate-100 flex items-center justify-center text-[10px] text-slate-300 font-mono">
+                                  <div
+                                    className="w-8 h-8 mx-auto rounded-lg bg-slate-100 flex items-center justify-center text-[10px] text-slate-600 font-mono font-medium"
+                                    title="해당 연식 데이터 없음"
+                                    aria-label="데이터 없음"
+                                  >
                                     -
                                   </div>
                                 </td>
@@ -362,7 +366,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                                       quote: evalData.raw_quote,
                                     })
                                   }
-                                  className={`w-8 h-8 mx-auto rounded-lg font-bold text-xs flex items-center justify-center shadow-sm cursor-pointer transition transform hover:scale-110 active:scale-95 ${cellColor}`}
+                                  aria-label={`${model.name} ${evalData.year}년식 ${evalData.verdict} DSI ${evalData.dsi_score}점`}
+                                  className={`w-8 h-8 mx-auto rounded-lg font-bold text-xs flex items-center justify-center shadow-sm cursor-pointer transition transform hover:scale-110 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${cellColor}`}
                                   title={`${model.name} (${evalData.year}): ${evalData.verdict} - DSI ${evalData.dsi_score}`}
                                 >
                                   {evalData.dsi_score}
@@ -518,7 +523,11 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
               {/* Stacked Proportional Bar */}
               <div className="space-y-2">
-                <div className="w-full h-6 rounded-xl overflow-hidden flex shadow-inner border border-slate-200">
+                <div
+                  role="region"
+                  aria-label="전기차 결함 부문별 산업 점유율 분포 바"
+                  className="w-full h-6 rounded-xl overflow-hidden flex shadow-inner border border-slate-200"
+                >
                   {initialData.categories.map((cat) => {
                     const bgColors: Record<DefectCategoryKey, string> = {
                       BATTERY_CHARGING: 'bg-rose-500',
@@ -534,6 +543,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         key={cat.code}
                         style={{ width: `${cat.industry_share_pct}%` }}
                         className={`${bgColors[cat.code]} transition-all hover:opacity-80`}
+                        role="img"
+                        aria-label={`${cat.label_ko} 점유율 ${cat.industry_share_pct}%`}
                         title={`${cat.label_ko}: ${cat.industry_share_pct}%`}
                       />
                     );

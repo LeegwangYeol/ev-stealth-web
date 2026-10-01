@@ -30,10 +30,14 @@ from typing import Any, Dict, List, Optional
 
 
 def find_ts_engine_path() -> Path:
+    current_file = Path(__file__).resolve()
     candidates = [
-        Path(__file__).resolve().parent.parent / "src" / "lib" / "getDepreciationData.ts",
+        current_file.parent.parent / "src" / "lib" / "getDepreciationData.ts",
+        current_file.parent.parent / "ev-stealth-web" / "src" / "lib" / "getDepreciationData.ts",
+        current_file.parent.parent.parent / "ev-stealth-web" / "src" / "lib" / "getDepreciationData.ts",
         Path.cwd() / "src" / "lib" / "getDepreciationData.ts",
         Path.cwd() / "ev-stealth-web" / "src" / "lib" / "getDepreciationData.ts",
+        Path.cwd().parent / "ev-stealth-web" / "src" / "lib" / "getDepreciationData.ts",
     ]
     for c in candidates:
         if c.exists() and c.is_file():
@@ -42,10 +46,14 @@ def find_ts_engine_path() -> Path:
 
 
 def find_json_db_path() -> Path:
+    current_file = Path(__file__).resolve()
     candidates = [
-        Path(__file__).resolve().parent.parent / "src" / "data" / "ev_depreciation_data.json",
+        current_file.parent.parent / "src" / "data" / "ev_depreciation_data.json",
+        current_file.parent.parent / "ev-stealth-web" / "src" / "data" / "ev_depreciation_data.json",
+        current_file.parent.parent.parent / "ev-stealth-web" / "src" / "data" / "ev_depreciation_data.json",
         Path.cwd() / "src" / "data" / "ev_depreciation_data.json",
         Path.cwd() / "ev-stealth-web" / "src" / "data" / "ev_depreciation_data.json",
+        Path.cwd().parent / "ev-stealth-web" / "src" / "data" / "ev_depreciation_data.json",
     ]
     for c in candidates:
         if c.exists() and c.is_file():

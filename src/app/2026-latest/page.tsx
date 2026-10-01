@@ -27,7 +27,7 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;도심 주행 중 갑작스러운 동력 상실로 뒤차와 추돌할 뻔해 생명의 위협을 느꼈다.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <Link href="https://m.bobaedream.co.kr/board/bbs_view/national/2328953/2/1" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">보배드림 커뮤니티 원문</Link> | <Link href="https://www.autodaily.co.kr/news/articleView.html?idxno=535684" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">오토데일리 기사</Link>
+              <strong>출처:</strong> <Link href="https://m.bobaedream.co.kr/board/bbs_view/national/2328953/2/1" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">보배드림 커뮤니티 원문<span className="sr-only"> (새 창에서 열림)</span></Link> | <Link href="https://www.autodaily.co.kr/news/articleView.html?idxno=535684" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">오토데일리 기사<span className="sr-only"> (새 창에서 열림)</span></Link>
             </li>
           </ul>
         </div>
@@ -44,7 +44,7 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;페이스리프트 신차임에도 이전 모델의 ICCU 문제가 터졌다. 고속 주행 중 출력 저하로 불안감이 큼.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <Link href="https://www.reddit.com/r/Ioniq5/comments/1ibf63c/800_miles_in_my_2025_ioniq_5_officially_has_a/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">레딧 차주 인증</Link> | <Link href="https://m.bobaedream.co.kr/board/bbs_view/national/2317279" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">보배드림 출력저하 후기</Link>
+              <strong>출처:</strong> <Link href="https://www.reddit.com/r/Ioniq5/comments/1ibf63c/800_miles_in_my_2025_ioniq_5_officially_has_a/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">레딧 차주 인증<span className="sr-only"> (새 창에서 열림)</span></Link> | <Link href="https://m.bobaedream.co.kr/board/bbs_view/national/2317279" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">보배드림 출력저하 후기<span className="sr-only"> (새 창에서 열림)</span></Link>
             </li>
           </ul>
         </div>
@@ -61,7 +61,7 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;기가 상하이 생산이라 단차는 나아졌지만, 혹한기 아침에 문이 안 열려서 출근에 큰 차질을 빚었다.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <Link href="https://www.bobaedream.co.kr/view?code=cnews&No=872" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">보배드림 문 열림 결함 보도</Link> | <Link href="https://m.bobaedream.co.kr/board/bbs_view/best/927611/2/2?cmt=1" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">하부 소음 후기</Link>
+              <strong>출처:</strong> <Link href="https://www.bobaedream.co.kr/view?code=cnews&No=872" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">보배드림 문 열림 결함 보도<span className="sr-only"> (새 창에서 열림)</span></Link> | <Link href="https://m.bobaedream.co.kr/board/bbs_view/best/927611/2/2?cmt=1" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">하부 소음 후기<span className="sr-only"> (새 창에서 열림)</span></Link>
             </li>
           </ul>
         </div>
@@ -78,7 +78,7 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;가격은 매력적이나 하체 방청 수준이 엉망이라 겨울 염화칼슘 도로를 타면 금방 썩을 것 같다. 내비 번역체도 거슬린다.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <Link href="https://www.bobaedream.co.kr/view?code=best&No=888548" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">보배드림 조기 녹(부식) 현상</Link> | <Link href="https://m.bobaedream.co.kr/board/bbs_view/cnews/595" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">충전기 호환성 문제</Link>
+              <strong>출처:</strong> <Link href="https://www.bobaedream.co.kr/view?code=best&No=888548" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">보배드림 조기 녹(부식) 현상<span className="sr-only"> (새 창에서 열림)</span></Link> | <Link href="https://m.bobaedream.co.kr/board/bbs_view/cnews/595" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">충전기 호환성 문제<span className="sr-only"> (새 창에서 열림)</span></Link>
             </li>
           </ul>
         </div>
@@ -95,7 +95,7 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;8천만 원짜리 차를 뽑자마자 고전압 배터리를 통째로 뜯어내야 한다고 해서 환불을 요구 중이다.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <Link href="https://m.bobaedream.co.kr/board/bbs_view/best/1008916/2/8?cmt=1" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">보배드림 아이오닉9 배터리 결함</Link>
+              <strong>출처:</strong> <Link href="https://m.bobaedream.co.kr/board/bbs_view/best/1008916/2/8?cmt=1" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">보배드림 아이오닉9 배터리 결함<span className="sr-only"> (새 창에서 열림)</span></Link>
             </li>
           </ul>
         </div>
