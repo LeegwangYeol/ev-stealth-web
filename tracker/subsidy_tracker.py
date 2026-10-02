@@ -470,11 +470,52 @@ class SubsidyTracker:
         )
 
         if not dry_run:
-            dest_file = Path(output_path) if output_path else (self.cache_fallback_path or Path("data/ev_subsidy_data.json"))
-            destinations: List[Union[str, Path]] = [dest_file]
+            cwd = Path.cwd()
+            destinations: List[Path] = []
+
+            if output_path:
+                primary = Path(output_path)
+            elif self.cache_fallback_path:
+                primary = Path(self.cache_fallback_path)
+            elif (cwd / "src" / "data").exists():
+                primary = cwd / "src" / "data" / "ev_subsidy_data.json"
+            else:
+                primary = cwd / "data" / "ev_subsidy_data.json"
+
+            destinations.append(primary)
+
+            # Ensure subsidy_depletion_data.json mirror parity
+            if primary.name == "ev_subsidy_data.json":
+                destinations.append(primary.parent / "subsidy_depletion_data.json")
+            elif primary.name == "subsidy_depletion_data.json":
+                destinations.append(primary.parent / "ev_subsidy_data.json")
+
             if sync_web:
-                destinations.append(Path("ev-stealth-web/src/data/ev_subsidy_data.json"))
-            self.save_payload(payload, destinations)
+                web_dir_env = os.getenv("EV_TRACKER_WEB_DIR")
+                if web_dir_env:
+                    web_dir = Path(web_dir_env)
+                    destinations.append(web_dir / "ev_subsidy_data.json")
+                    destinations.append(web_dir / "subsidy_depletion_data.json")
+                elif (cwd / "src" / "data").exists():
+                    destinations.append(cwd / "src" / "data" / "ev_subsidy_data.json")
+                    destinations.append(cwd / "src" / "data" / "subsidy_depletion_data.json")
+                    if (cwd.parent / "data").exists():
+                        destinations.append(cwd.parent / "data" / "ev_subsidy_data.json")
+                        destinations.append(cwd.parent / "data" / "subsidy_depletion_data.json")
+                else:
+                    destinations.append(cwd / "ev-stealth-web" / "src" / "data" / "ev_subsidy_data.json")
+                    destinations.append(cwd / "ev-stealth-web" / "src" / "data" / "subsidy_depletion_data.json")
+
+            # Deduplicate destinations preserving order
+            unique_destinations: List[Path] = []
+            seen_paths = set()
+            for dst in destinations:
+                resolved_key = str(dst.resolve()) if dst.exists() else str(dst.absolute())
+                if resolved_key not in seen_paths:
+                    seen_paths.add(resolved_key)
+                    unique_destinations.append(dst)
+
+            self.save_payload(payload, unique_destinations)
 
         return payload
 

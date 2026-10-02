@@ -11,7 +11,7 @@ import logging
 import os
 from pathlib import Path
 import tempfile
-from typing import Any, List, Union
+from typing import Any, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 

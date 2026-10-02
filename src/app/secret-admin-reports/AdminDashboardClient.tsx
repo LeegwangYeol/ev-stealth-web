@@ -41,6 +41,9 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
   const [sortBy, setSortBy] = useState<SortOption>('critical');
 
   const reports = useMemo(() => initialData.reports || [], [initialData.reports]);
+  const safeScore = Number.isFinite(initialData.statistics.avg_negativity_score)
+    ? initialData.statistics.avg_negativity_score
+    : 0;
 
   // Calculate dynamic category counts
   const categoryCounts = useMemo(() => {
@@ -174,7 +177,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     if (sev === 'CRITICAL') {
       return (
         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-600 text-white shadow-sm ring-1 ring-rose-500">
-          <svg className="w-3 h-3 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+          <svg className="w-3 h-3 animate-pulse" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
             <path
               fillRule="evenodd"
               d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
@@ -237,7 +240,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           <div>
             <div className="flex items-center gap-2 mb-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-3 h-3" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
                   <path
                     fillRule="evenodd"
                     d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
@@ -247,7 +250,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 CONFIDENTIAL · INTERNAL ADMIN ONLY
               </span>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping motion-reduce:animate-none" aria-hidden="true" />
                 파이프라인 정상 가동
               </span>
             </div>
@@ -287,7 +290,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               전체 수집 결함
             </span>
             <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -312,11 +315,11 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         {/* Card 2: Critical Issues */}
         <div className="bg-white rounded-2xl p-5 border border-rose-200 bg-gradient-to-br from-white to-rose-50/30 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-rose-600 tracking-wider uppercase">
+            <span className="text-xs font-bold text-rose-700 tracking-wider uppercase">
               치명적 안전 결함
             </span>
             <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -330,7 +333,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             <span className="text-3xl font-black text-rose-600">
               {initialData.statistics.critical_defect_count}
             </span>
-            <span className="text-sm font-bold text-rose-600">건 위험</span>
+            <span className="text-sm font-bold text-rose-700">건 위험</span>
           </div>
           <div className="mt-2 text-xs text-rose-700 font-medium">
             동력상실 · 화재위험 · 급제동 긴급 모니터링
@@ -344,7 +347,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               평균 부정 감성 지수
             </span>
             <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -356,7 +359,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-3xl font-black text-slate-900">
-              {Math.round(initialData.statistics.avg_negativity_score * 100)}%
+              {Math.round(safeScore * 100)}%
             </span>
             <span className="text-xs font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800">
               극도로 부정적
@@ -364,16 +367,16 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           </div>
           <div
             role="progressbar"
-            aria-valuenow={Math.round(initialData.statistics.avg_negativity_score * 100)}
+            aria-valuenow={Math.round(safeScore * 100)}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-label="평균 부정 감성 지수"
-            aria-valuetext={`${Math.round(initialData.statistics.avg_negativity_score * 100)}%`}
+            aria-valuetext={`${Math.round(safeScore * 100)}%`}
             className="mt-2 w-full bg-slate-100 rounded-full h-2 overflow-hidden"
           >
             <div
               className="bg-amber-500 h-2 rounded-full transition-all duration-500"
-              style={{ width: `${Math.round(initialData.statistics.avg_negativity_score * 100)}%` }}
+              style={{ width: `${Math.round(safeScore * 100)}%` }}
             />
           </div>
         </div>
@@ -385,7 +388,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               최다 제보 차종 / 플랫폼
             </span>
             <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -414,7 +417,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           {/* Full-text search input */}
           <div className="relative flex-1">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -452,6 +455,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs font-semibold">
               <button
                 type="button"
+                aria-pressed={sortBy === 'critical'}
                 onClick={() => setSortBy('critical')}
                 className={`px-3 py-1.5 rounded-lg transition ${
                   sortBy === 'critical'
@@ -463,6 +467,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               </button>
               <button
                 type="button"
+                aria-pressed={sortBy === 'recent'}
                 onClick={() => setSortBy('recent')}
                 className={`px-3 py-1.5 rounded-lg transition ${
                   sortBy === 'recent'
@@ -474,6 +479,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               </button>
               <button
                 type="button"
+                aria-pressed={sortBy === 'negativity'}
                 onClick={() => setSortBy('negativity')}
                 className={`px-3 py-1.5 rounded-lg transition ${
                   sortBy === 'negativity'
@@ -488,7 +494,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         </div>
 
         {/* Category Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 scrollbar-none text-xs">
+        <div role="tablist" aria-label="결함 카테고리 탭" className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 scrollbar-none text-xs">
           {CATEGORY_TABS.map((tab) => {
             const isSelected = selectedCategory === tab.code;
             const count = categoryCounts[tab.code] || 0;
@@ -496,6 +502,8 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               <button
                 key={tab.code}
                 type="button"
+                role="tab"
+                aria-selected={isSelected}
                 onClick={() => setSelectedCategory(tab.code)}
                 className={`px-3 py-2 rounded-xl font-semibold whitespace-nowrap transition flex items-center gap-1.5 ${
                   isSelected
@@ -528,6 +536,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                   <button
                     key={src.id}
                     type="button"
+                    aria-pressed={isSelected}
                     onClick={() => setSelectedSource(src.id)}
                     className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1 border ${
                       isSelected
@@ -560,7 +569,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 onClick={handleResetFilters}
                 className="text-xs text-rose-600 hover:text-rose-700 font-semibold underline flex items-center gap-1"
               >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3 h-3" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -579,7 +588,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
       {filteredReports.length === 0 ? (
         <div className="bg-white rounded-2xl p-12 border border-slate-200 text-center space-y-3">
           <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 mx-auto flex items-center justify-center">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -657,7 +666,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               <div className="bg-rose-50/50 border-l-4 border-rose-500 p-4 rounded-r-xl space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold text-rose-700 uppercase tracking-wider">
                   <span className="flex items-center gap-1.5">
-                    <svg className="w-4 h-4 text-rose-500" fill="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-rose-500" aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" />
                     </svg>
                     실제 커뮤니티 유저 날것의 코멘트 (Raw Verbatim Quote)
@@ -674,9 +683,9 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 {/* Slang Tags */}
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-slate-600 font-semibold mr-1">감지된 은어/키워드:</span>
-                  {report.slang_tags.map((tag) => (
+                  {report.slang_tags.map((tag, idx) => (
                     <button
-                      key={tag}
+                      key={`${tag}-${idx}`}
                       type="button"
                       onClick={() => handleTagClick(tag)}
                       className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono hover:bg-rose-100 hover:text-rose-800 transition"

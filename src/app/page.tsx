@@ -18,7 +18,7 @@ export default function Home() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <div className="flex items-center gap-2">
               <span className="px-3 py-1 bg-amber-500/30 text-amber-300 border border-amber-400/40 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping inline-block" />
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping motion-reduce:animate-none inline-block" aria-hidden="true" />
                 스케줄러 실시간 연동
               </span>
               <span className="text-xs text-amber-200 font-medium">전국 17개 광역시도 · 73개 지자체 보조금 실시간 소진율</span>

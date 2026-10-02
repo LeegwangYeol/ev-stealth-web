@@ -49,6 +49,9 @@ export default function DepreciationCalculatorClient({
   const [iceDisplacementCc, setIceDisplacementCc] = useState<number>(1998); // 2.0L 중형 가솔린 기본
   const [chartViewMode, setChartViewMode] = useState<'price' | 'percentage'>('price');
 
+  // Guard against zero/negative holding years for division
+  const safeYears = Math.max(1, holdingYears);
+
   // ----------------------------------------------------
   // 2. MODEL LOOKUP & FILTERING
   // ----------------------------------------------------
@@ -535,13 +538,15 @@ export default function DepreciationCalculatorClient({
         </div>
 
         {/* Brand Tabs */}
-        <div className="flex flex-wrap gap-1.5 border-b border-slate-200 pb-3">
+        <div role="tablist" aria-label="브랜드별 필터 선택" className="flex flex-wrap gap-1.5 border-b border-slate-200 pb-3">
           {brands.map((b) => {
             const isSelected = selectedBrand === b.id;
             return (
               <button
                 key={b.id}
                 type="button"
+                role="tab"
+                aria-selected={isSelected}
                 onClick={() => setSelectedBrand(b.id)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                   isSelected
@@ -794,6 +799,7 @@ export default function DepreciationCalculatorClient({
             <div className="flex rounded-lg overflow-hidden border border-slate-200 text-xs">
               <button
                 type="button"
+                aria-pressed={priceBasis === 'effective'}
                 onClick={() => {
                   setPriceBasis('effective');
                   setCustomPriceInput(null);
@@ -809,6 +815,7 @@ export default function DepreciationCalculatorClient({
               </button>
               <button
                 type="button"
+                aria-pressed={priceBasis === 'msrp'}
                 onClick={() => {
                   setPriceBasis('msrp');
                   setCustomPriceInput(null);
@@ -919,7 +926,7 @@ export default function DepreciationCalculatorClient({
               <span className="text-sm font-semibold text-rose-700">만 원</span>
             </div>
             <div className="text-[11px] text-slate-500 mt-1">
-              연평균 감가: -{Math.round(depResult.depreciationAmountKrw / holdingYears / 10000).toLocaleString()} 만 원/년
+              연평균 감가: -{Math.round(depResult.depreciationAmountKrw / safeYears / 10000).toLocaleString()} 만 원/년
             </div>
           </div>
 
@@ -930,7 +937,7 @@ export default function DepreciationCalculatorClient({
               {depResult.adjustedResidualPct >= 58 ? '+' : ''}
               {(depResult.adjustedResidualPct - 58).toFixed(1)}%
             </div>
-            <div className="text-[11px] text-emerald-600 mt-1">
+            <div className="text-[11px] text-emerald-800 mt-1">
               동급 세그먼트 중 방어력 {depResult.defenseTier}등급
             </div>
           </div>
@@ -1743,7 +1750,7 @@ export default function DepreciationCalculatorClient({
               <span className="text-xs font-semibold text-white/90">만원</span>
             </span>
             <span className="text-[11px] text-white font-medium mt-1 block">
-              월평균 +{Math.round(tcoResult.totalCumulativeSavingsKrw / (holdingYears * 12) / 10000).toLocaleString()}만 원 절약
+              월평균 +{Math.round(tcoResult.totalCumulativeSavingsKrw / (safeYears * 12) / 10000).toLocaleString()}만 원 절약
             </span>
           </div>
         </div>
@@ -1807,7 +1814,7 @@ export default function DepreciationCalculatorClient({
       </section>
 
       {/* 9. STATUTORY & DATA SOURCES FOOTNOTE */}
-      <footer className="bg-slate-100 rounded-xl p-4 text-xs text-slate-600 space-y-1 leading-relaxed border border-slate-200">
+      <div className="bg-slate-100 rounded-xl p-4 text-xs text-slate-600 space-y-1 leading-relaxed border border-slate-200">
         <div className="font-semibold text-slate-700">📌 데이터 출처 및 산정 근거 고지:</div>
         <div>
           • 중고차 실거래 시세: 엔카닷컴(Encar) 2024~2026 실거래 지수, 케이카(K Car) 월간 전기차 시세표, 보험개발원(KIDI) 차량기준가액표
@@ -1818,7 +1825,7 @@ export default function DepreciationCalculatorClient({
         <div>
           • 자동차세 및 연료 단가: 지방세법 제127조 (전기차 연 13만원 정액), 환경부 공공급속충전요금 347.2원/kWh, 한전 비공용완속충전 250원/kWh, 오피넷 전국 평균 가솔린 1,700원/L
         </div>
-      </footer>
+      </div>
     </div>
   );
 }

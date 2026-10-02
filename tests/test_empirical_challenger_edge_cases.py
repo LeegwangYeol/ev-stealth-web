@@ -89,8 +89,15 @@ class TestCrawlerCorruptedHTMLPayloads(unittest.TestCase):
         logging.getLogger("DCInsideCrawler").setLevel(logging.CRITICAL)
         logging.getLogger("BaseCrawler").setLevel(logging.CRITICAL)
 
-        self.bobae = BobaeDreamCrawler()
-        self.dc = DCInsideCrawler()
+        mock_client_bobae = MagicMock(spec=SafeHttpClient)
+        mock_client_bobae.get.return_value = (200, "<html></html>", {})
+        mock_client_bobae.post.return_value = (200, "[]", {})
+        self.bobae = BobaeDreamCrawler(client=mock_client_bobae)
+
+        mock_client_dc = MagicMock(spec=SafeHttpClient)
+        mock_client_dc.get.return_value = (200, "<html></html>", {})
+        mock_client_dc.post.return_value = (200, "[]", {})
+        self.dc = DCInsideCrawler(client=mock_client_dc)
 
     def test_01_empty_and_whitespace_html_payloads(self):
         """Verify crawlers return valid schema dict without crashing on empty/whitespace HTML."""

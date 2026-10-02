@@ -14,6 +14,7 @@ const geistMono = localFont({
 });
 
 import Link from "next/link";
+import Script from "next/script";
 
 export const metadata: Metadata = {
   title: "Global EV Critical Issues Hub",
@@ -173,7 +174,9 @@ export default function RootLayout({
         </footer>
 
         {/* Mobile nav drawer auto-close on internal link click */}
-        <script
+        <Script
+          id="mobile-nav-script"
+          strategy="afterInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               document.addEventListener('click', function(e) {

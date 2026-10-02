@@ -78,8 +78,8 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
     severity = 'WARNING';
   }
 
-  const score = typeof raw.sentiment_score === 'number'
-    ? Math.abs(raw.sentiment_score)
+  const score = Number.isFinite(raw.sentiment_score)
+    ? Math.abs(raw.sentiment_score as number)
     : (typeof raw.negativity_score === 'number' ? raw.negativity_score : 0.85);
 
   const slang = Array.isArray(raw.slang_tags)
@@ -116,7 +116,10 @@ export function calculateKPIs(
     (r) => String(r.severity).toUpperCase() === 'CRITICAL'
   ).length;
 
-  const totalScore = reports.reduce((acc, r) => acc + (r.sentiment_score || 0), 0);
+  const totalScore = reports.reduce((acc, r) => {
+    const val = Number.isFinite(r.sentiment_score) ? r.sentiment_score! : 0;
+    return acc + val;
+  }, 0);
   const avgScore = totalFiltered > 0 ? Number((totalScore / totalFiltered).toFixed(2)) : 0.85;
 
   // Calculate top vehicle model
@@ -161,7 +164,9 @@ export function calculateKPIs(
   return {
     total_scraped: totalScraped,
     total_filtered_defects: totalFiltered,
-    avg_negativity_score: existingStats?.avg_negativity_score ?? avgScore,
+    avg_negativity_score: Number.isFinite(existingStats?.avg_negativity_score)
+      ? existingStats!.avg_negativity_score!
+      : avgScore,
     critical_defect_count: criticalCount,
     top_model: topModelDisplay,
     top_platform: topPlatformDisplay,

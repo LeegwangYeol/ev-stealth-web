@@ -233,9 +233,11 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           </div>
 
           {/* Chart Tab Selector */}
-          <div className="inline-flex bg-slate-100 p-1.5 rounded-xl self-start sm:self-auto">
+          <div role="tablist" aria-label="데이터 시각화 차트 선택" className="inline-flex bg-slate-100 p-1.5 rounded-xl self-start sm:self-auto">
             <button
               type="button"
+              role="tab"
+              aria-selected={activeChartTab === 'heatmap'}
               onClick={() => setActiveChartTab('heatmap')}
               className={`px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition ${
                 activeChartTab === 'heatmap'
@@ -247,6 +249,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={activeChartTab === 'brand_ranking'}
               onClick={() => setActiveChartTab('brand_ranking')}
               className={`px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition ${
                 activeChartTab === 'brand_ranking'
@@ -258,6 +262,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={activeChartTab === 'category_share'}
               onClick={() => setActiveChartTab('category_share')}
               className={`px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition ${
                 activeChartTab === 'category_share'
@@ -608,7 +614,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="relative flex-1">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
@@ -654,6 +660,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             <button
               type="button"
               onClick={() => setSelectedBrand('ALL')}
+              aria-pressed={selectedBrand === 'ALL'}
               className={`px-3 py-1.5 text-xs font-bold rounded-xl transition ${
                 selectedBrand === 'ALL'
                   ? 'bg-slate-900 text-white shadow-sm'
@@ -667,6 +674,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 key={brand.id}
                 type="button"
                 onClick={() => setSelectedBrand(selectedBrand === brand.id ? 'ALL' : brand.id)}
+                aria-pressed={selectedBrand === brand.id}
                 className={`px-3 py-1.5 text-xs font-bold rounded-xl transition flex items-center gap-1.5 ${
                   selectedBrand === brand.id
                     ? 'bg-blue-600 text-white shadow-sm'
@@ -689,6 +697,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               <button
                 type="button"
                 onClick={() => setSelectedVerdict('ALL')}
+                aria-pressed={selectedVerdict === 'ALL'}
                 className={`px-2.5 py-1 text-xs font-medium rounded-lg transition ${
                   selectedVerdict === 'ALL'
                     ? 'bg-slate-800 text-white'
@@ -700,6 +709,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               <button
                 type="button"
                 onClick={() => setSelectedVerdict('AVOID')}
+                aria-pressed={selectedVerdict === 'AVOID'}
                 className={`px-2.5 py-1 text-xs font-medium rounded-lg transition ${
                   selectedVerdict === 'AVOID'
                     ? 'bg-rose-600 text-white'
@@ -711,6 +721,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               <button
                 type="button"
                 onClick={() => setSelectedVerdict('CAUTION')}
+                aria-pressed={selectedVerdict === 'CAUTION'}
                 className={`px-2.5 py-1 text-xs font-medium rounded-lg transition ${
                   selectedVerdict === 'CAUTION'
                     ? 'bg-amber-500 text-white'
@@ -722,6 +733,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               <button
                 type="button"
                 onClick={() => setSelectedVerdict('BUY_SAFE')}
+                aria-pressed={selectedVerdict === 'BUY_SAFE'}
                 className={`px-2.5 py-1 text-xs font-medium rounded-lg transition ${
                   selectedVerdict === 'BUY_SAFE'
                     ? 'bg-emerald-600 text-white'
@@ -740,6 +752,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               <button
                 type="button"
                 onClick={() => setSelectedYearRange('ALL')}
+                aria-pressed={selectedYearRange === 'ALL'}
                 className={`px-2.5 py-1 text-xs font-medium rounded-lg transition ${
                   selectedYearRange === 'ALL'
                     ? 'bg-slate-800 text-white'
@@ -751,6 +764,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               <button
                 type="button"
                 onClick={() => setSelectedYearRange('EARLY')}
+                aria-pressed={selectedYearRange === 'EARLY'}
                 className={`px-2.5 py-1 text-xs font-medium rounded-lg transition ${
                   selectedYearRange === 'EARLY'
                     ? 'bg-blue-600 text-white'
@@ -762,6 +776,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               <button
                 type="button"
                 onClick={() => setSelectedYearRange('MID')}
+                aria-pressed={selectedYearRange === 'MID'}
                 className={`px-2.5 py-1 text-xs font-medium rounded-lg transition ${
                   selectedYearRange === 'MID'
                     ? 'bg-blue-600 text-white'
@@ -773,6 +788,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               <button
                 type="button"
                 onClick={() => setSelectedYearRange('LATE')}
+                aria-pressed={selectedYearRange === 'LATE'}
                 className={`px-2.5 py-1 text-xs font-medium rounded-lg transition ${
                   selectedYearRange === 'LATE'
                     ? 'bg-blue-600 text-white'
@@ -788,6 +804,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
       {/* 4. MODEL CARDS GRID */}
       <section className="space-y-4">
+        <h2 className="text-2xl font-bold text-slate-900 mb-6">차종별 신뢰성 상세 분석</h2>
         <div className="flex items-center justify-between">
           <div className="text-sm font-semibold text-slate-600">
             총 <strong className="text-slate-900">{sortedModels.length}</strong>개 차종 표시 중

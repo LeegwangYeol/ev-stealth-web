@@ -441,8 +441,9 @@ export function getTcoParameters(): TcoParameters {
 // 5. HELPER MATH UTILITIES
 // ==========================================
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
+function clamp(val: number, min: number, max: number): number {
+  if (!Number.isFinite(val)) return min;
+  return Math.min(Math.max(val, min), max);
 }
 
 function normalizeChemistry(chem: string): BatteryChemistryType {
@@ -457,7 +458,7 @@ function normalizeChemistry(chem: string): BatteryChemistryType {
 function interpolateBaselineResidual(curve: DepreciationCurve, years: number, basis: PriceBasis): number {
   const key = basis === 'effective' ? 'residual_pct_effective' : 'residual_pct_msrp';
 
-  if (years <= 0) return 100.0;
+  if (!Number.isFinite(years) || years <= 0) return 100.0;
   if (years <= 1.0) {
     const y1 = curve.year_1[key];
     return 100.0 - years * (100.0 - y1);
@@ -499,10 +500,15 @@ function interpolateBaselineResidual(curve: DepreciationCurve, years: number, ba
  * Accounts for vehicle age, mileage, warranty cliff, chemistry, 800V architecture, and OTA status.
  */
 export function calculateDepreciation(input: DepreciationCalculationInput): DepreciationCalculationResult {
+  const rawYears = input.years;
+  const years = Number.isFinite(rawYears) ? Math.max(0, rawYears) : 0;
+
+  const rawMileage = input.mileageKm;
+  const defaultMileage = years * DATABASE.metadata.baseline_annual_mileage_km;
+  const mileageKm = Number.isFinite(rawMileage) ? Math.max(0, rawMileage!) : defaultMileage;
+
   const {
     modelId,
-    years,
-    mileageKm = years * DATABASE.metadata.baseline_annual_mileage_km,
     winterSeason = false,
     priceBasis = 'msrp',
     customPurchasePriceKrw,
@@ -623,7 +629,7 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
   const {
     chemistry: chemInput,
     modelId,
-    years,
+    years: rawYears,
     totalKm: inputTotalKm,
     annualKm = 15000,
     dcfcRatio = 0.25,
@@ -631,6 +637,8 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
     ambientTempC = 25.0,
     vehicleEfficiencyKmPerKwh = 5.2,
   } = params;
+
+  const years = Math.max(0, Number.isFinite(rawYears) ? rawYears : 0);
 
   let model: EvModelDepreciation | undefined;
   if (modelId) {
@@ -786,7 +794,7 @@ export function calculateSubsidyClawback(
   transferType: TransferType,
   nationalSubsidyKrw: number = 0
 ): ClawbackResult {
-  const normalizedMonths = Math.max(0, heldMonths);
+  const normalizedMonths = Number.isFinite(heldMonths) ? Math.max(0, heldMonths) : 0;
   const tiers = DATABASE.subsidy_clawback_schedule.tiers;
 
   let matchedTier: ClawbackTier = tiers[tiers.length - 1]; // default >= 24m (0%)

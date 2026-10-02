@@ -167,7 +167,10 @@ class TestTier1FeatureCoverage(unittest.TestCase):
 
     def test_f1_03_bobaedream_post_detail_body_extraction(self):
         """F1.3: BobaeDream post detail parser extracts body text from bodyCont and cleans HTML."""
-        crawler = BobaeDreamCrawler()
+        from unittest.mock import MagicMock
+        mock_client = MagicMock(spec=SafeHttpClient)
+        mock_client.get.return_value = (200, "<html></html>", {})
+        crawler = BobaeDreamCrawler(client=mock_client)
         parsed = crawler.parse_post_detail(self.bobae_post_html, post_url="https://www.bobaedream.co.kr/view?code=national&No=2415510", post_id="2415510")
         self.assertEqual(parsed["post_id"], "2415510")
         self.assertIn("피쉬테일", parsed["content"])
@@ -215,7 +218,10 @@ class TestTier1FeatureCoverage(unittest.TestCase):
 
     def test_f2_03_dcinside_post_detail_body_extraction(self):
         """F2.3: DCInside detail parser extracts unvarnished body text from write_div container."""
-        crawler = DCInsideCrawler()
+        from unittest.mock import MagicMock
+        mock_client = MagicMock(spec=SafeHttpClient)
+        mock_client.post.return_value = (200, "[]", {})
+        crawler = DCInsideCrawler(client=mock_client)
         parsed = crawler.parse_post_detail(self.dc_post_html, post_url="https://gall.dcinside.com/board/view/?id=car_new1&no=11503496", post_id="11503496")
         self.assertEqual(parsed["post_id"], "11503496")
         self.assertIn("악셀 먹통됨", parsed["content"])

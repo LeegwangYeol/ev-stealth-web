@@ -376,7 +376,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
       </Suspense>
 
       {/* 1. Header & Live Alert Hero */}
-      <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-md sticky top-0 z-30">
+      <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-md relative z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
@@ -403,7 +403,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
               >
-                <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                 </svg>
                 자동차리콜센터 공식
@@ -460,7 +460,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
         <section className="bg-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl">
           <div className="max-w-3xl mb-6">
             <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
-              <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
               <span>차량 결함 & 리콜 즉시 판정기</span>
@@ -488,7 +488,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   : 'border-transparent text-slate-400 hover:text-slate-200'
               }`}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
               </svg>
               <span>[모드 A] 17자리 차대번호(VIN) 정밀 조회</span>
@@ -509,7 +509,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   : 'border-transparent text-slate-400 hover:text-slate-200'
               }`}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
               </svg>
               <span>[모드 B] 제조사 / 차종 / 연식 간편 선택</span>
@@ -552,7 +552,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   {/* Realtime validation feedback */}
                   {vinError && (
                     <p id="vin-error-feedback" role="alert" className="mt-2 text-xs text-red-400 flex items-center gap-1.5">
-                      <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                       </svg>
                       {vinError}
@@ -561,7 +561,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
                   {vinTouched && vinValidation.valid && (
                     <p className="mt-2 text-xs text-emerald-400 flex items-center gap-1.5">
-                      <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
                       유효한 ISO 3779 17자리 차대번호 형식입니다.
@@ -575,7 +575,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     disabled={!vinValidation.valid}
                     className="w-full sm:w-auto px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-semibold text-sm transition shadow-lg flex items-center justify-center gap-2"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                     차대번호로 리콜 & 배터리 진단
@@ -701,7 +701,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     type="submit"
                     className="w-full sm:w-auto px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition shadow-lg flex items-center justify-center gap-2"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
                     선택 차종 결함 및 리콜 진단
@@ -831,7 +831,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
                   <div className="bg-amber-950/30 border border-amber-800/50 rounded-xl p-4 space-y-2">
                     <div className="flex items-center gap-2 text-amber-300 font-bold text-xs">
-                      <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                       </svg>
                       🏢 아파트 지하주차장 이용 및 충전 가이드
@@ -922,6 +922,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
+                            aria-hidden="true"
                           >
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                           </svg>
@@ -939,7 +940,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                         <div id={"campaign-search-detail-" + campaign.id} className="space-y-3 pt-2 border-t border-slate-800">
                           <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-4 text-xs text-slate-200 space-y-1">
                             <div className="font-bold text-blue-300 flex items-center gap-1.5">
-                              <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                               </svg>
@@ -950,7 +951,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
                           <div className="bg-red-950/30 border border-red-800/50 rounded-xl p-4 text-xs text-slate-200 space-y-1">
                             <div className="font-bold text-red-300 flex items-center gap-1.5">
-                              <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                               </svg>
                               🚨 차주 긴급 대처 행동 요령
@@ -1022,6 +1023,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 key={s.key}
                 type="button"
                 onClick={() => setSelectedSupplierFilter(s.key)}
+                aria-pressed={selectedSupplierFilter === s.key}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
                   selectedSupplierFilter === s.key
                     ? 'bg-blue-600 text-white font-bold'
@@ -1045,6 +1047,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 key={f.key}
                 type="button"
                 onClick={() => setSelectedFireStatusFilter(f.key)}
+                aria-pressed={selectedFireStatusFilter === f.key}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
                   selectedFireStatusFilter === f.key
                     ? 'bg-blue-600 text-white font-bold'
@@ -1164,6 +1167,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 key={rf.key}
                 type="button"
                 onClick={() => setSelectedRiskFilter(rf.key)}
+                aria-pressed={selectedRiskFilter === rf.key}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
                   selectedRiskFilter === rf.key
                     ? 'bg-blue-600 text-white font-bold'
@@ -1187,6 +1191,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 key={rm.key}
                 type="button"
                 onClick={() => setSelectedRemedyFilter(rm.key)}
+                aria-pressed={selectedRemedyFilter === rm.key}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
                   selectedRemedyFilter === rm.key
                     ? 'bg-blue-600 text-white font-bold'

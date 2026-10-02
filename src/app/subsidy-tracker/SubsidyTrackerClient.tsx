@@ -238,7 +238,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-semibold tracking-wide">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block" />
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping motion-reduce:animate-none inline-block" aria-hidden="true" />
               실시간 스케줄러 동기화 완료
             </span>
             <span className="text-xs text-slate-400">
@@ -377,6 +377,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               <button
                 key={key}
                 type="button"
+                aria-pressed={isSelected}
                 onClick={() => setAlertFilter(isSelected ? 'ALL' : key)}
                 className={`p-3 rounded-xl border text-left transition flex flex-col justify-between focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
                   isSelected
@@ -403,9 +404,11 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
       <section aria-label="지자체 검색 및 정렬 제어판" className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           {/* Vehicle Category Selector */}
-          <div className="flex items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800 text-xs sm:text-sm font-semibold">
+          <div role="tablist" aria-label="차종 카테고리 선택" className="flex items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800 text-xs sm:text-sm font-semibold">
             <button
               type="button"
+              role="tab"
+              aria-selected={selectedCategory === 'passenger'}
               onClick={() => setSelectedCategory('passenger')}
               className={`px-3 py-1.5 rounded-lg transition focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
                 selectedCategory === 'passenger'
@@ -417,6 +420,8 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={selectedCategory === 'commercial'}
               onClick={() => setSelectedCategory('commercial')}
               className={`px-3 py-1.5 rounded-lg transition focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
                 selectedCategory === 'commercial'
@@ -428,6 +433,8 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={selectedCategory === 'bus'}
               onClick={() => setSelectedCategory('bus')}
               className={`px-3 py-1.5 rounded-lg transition focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
                 selectedCategory === 'bus'
@@ -492,6 +499,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               <button
                 key={zone.id}
                 type="button"
+                aria-pressed={zoneFilter === zone.id}
                 onClick={() => setZoneFilter(zone.id as ZoneFilter)}
                 className={`px-2.5 py-1.5 rounded-lg border font-medium transition focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
                   zoneFilter === zone.id
@@ -787,6 +795,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                   <button
                     key={m.model_id}
                     type="button"
+                    aria-pressed={selectedModelId === m.model_id}
                     onClick={() => setSelectedModelId(m.model_id)}
                     className={`px-2.5 py-1 rounded-lg text-xs font-medium transition focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
                       selectedModelId === m.model_id
@@ -1021,7 +1030,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 최종 실구매 체감가 (소비자 부담액)
               </span>
               <div className="text-3xl sm:text-4xl font-black text-emerald-400 tracking-tight">
-                {(calculationResult.netPurchasePriceKrw / 10000).toLocaleString()}
+                {Math.round(calculationResult.netPurchasePriceKrw / 10000).toLocaleString()}
                 <span className="text-xl sm:text-2xl font-bold ml-1 text-emerald-200">만 원</span>
               </div>
               <div className="text-[11px] text-emerald-300/80">
