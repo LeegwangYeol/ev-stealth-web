@@ -112,7 +112,7 @@ export default function PdiChecklistClient() {
           )}
         </div>
         <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
-          <span className={`w-2 h-2 rounded-full ${mounted ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+          <span aria-hidden="true" className={`w-2 h-2 rounded-full ${mounted ? 'bg-emerald-500' : 'bg-slate-300'}`} />
           <span>{mounted ? '로컬 저장소 동기화 활성화됨 (새로고침 시 체크 상태 유지)' : '초기화 중...'}</span>
         </div>
       </header>
@@ -159,7 +159,7 @@ export default function PdiChecklistClient() {
                       className="mt-1 w-6 h-6 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
                     />
                     <div className="ml-4 flex-1">
-                      <p className={`text-lg ${item.checked ? 'text-slate-500 line-through' : 'text-gray-800'}`}>
+                      <p className={`text-lg ${item.checked ? 'text-slate-600 line-through' : 'text-gray-800'}`}>
                         {item.task}
                       </p>
                       {item.warning && (
@@ -176,7 +176,11 @@ export default function PdiChecklistClient() {
       </div>
 
       {progress === 100 && (
-        <div className="bg-green-50 border border-green-200 text-green-800 p-6 rounded-2xl text-center shadow-sm animate-pulse">
+        <div
+          role="status"
+          aria-live="polite"
+          className="bg-green-50 border border-green-200 text-green-800 p-6 rounded-2xl text-center shadow-sm animate-pulse motion-reduce:animate-none"
+        >
           <h3 className="text-2xl font-bold mb-2">🎉 검수 완료!</h3>
           <p>모든 항목을 확인하셨습니다. 이상이 없다면 안심하고 인수증에 서명하세요.</p>
         </div>

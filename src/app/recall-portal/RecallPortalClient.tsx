@@ -365,6 +365,29 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
   // Active VIN error state for accessible form feedback
   const vinError = vinTouched && vinInput.length > 0 && !vinValidation.valid ? vinValidation.error : '';
 
+  const handleModeKeyDown = (e: React.KeyboardEvent, currentMode: 'VIN' | 'MODEL') => {
+    let nextMode: 'VIN' | 'MODEL' | null = null;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      nextMode = currentMode === 'VIN' ? 'MODEL' : 'VIN';
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      nextMode = currentMode === 'VIN' ? 'MODEL' : 'VIN';
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      nextMode = 'VIN';
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      nextMode = 'MODEL';
+    }
+    if (nextMode && nextMode !== currentMode) {
+      setActiveCheckerMode(nextMode);
+      setCheckResult(null);
+      const nextId = nextMode === 'VIN' ? 'vin-checker-tab' : 'model-checker-tab';
+      document.getElementById(nextId)?.focus();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-16">
       <Suspense fallback={null}>
@@ -381,7 +404,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-900/60 text-red-200 border border-red-700/50 animate-pulse">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-900/60 text-red-200 border border-red-700/50 animate-pulse motion-reduce:animate-none">
                   🚨 대한민국 국토교통부 & NHTSA 공시 연동
                 </span>
                 <span className="text-xs text-slate-400">기준: 2026 최신 개정판</span>
@@ -478,6 +501,8 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               aria-selected={activeCheckerMode === 'VIN'}
               aria-controls="vin-checker-panel"
               id="vin-checker-tab"
+              tabIndex={activeCheckerMode === 'VIN' ? 0 : -1}
+              onKeyDown={(e) => handleModeKeyDown(e, 'VIN')}
               onClick={() => {
                 setActiveCheckerMode('VIN');
                 setCheckResult(null);
@@ -499,6 +524,8 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               aria-selected={activeCheckerMode === 'MODEL'}
               aria-controls="model-checker-panel"
               id="model-checker-tab"
+              tabIndex={activeCheckerMode === 'MODEL' ? 0 : -1}
+              onKeyDown={(e) => handleModeKeyDown(e, 'MODEL')}
               onClick={() => {
                 setActiveCheckerMode('MODEL');
                 setCheckResult(null);
@@ -518,7 +545,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
           {/* MODE A Form */}
           {activeCheckerMode === 'VIN' && (
-            <div id="vin-checker-panel" role="tabpanel" aria-labelledby="vin-checker-tab">
+            <div id="vin-checker-panel" role="tabpanel" aria-labelledby="vin-checker-tab" tabIndex={0} className="focus:outline-none">
               <form onSubmit={handleVinSubmit} className="space-y-4">
                 <div>
                   <label htmlFor="vin-input" className="block text-sm font-medium text-slate-200 mb-2">
@@ -629,7 +656,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
           {/* MODE B Form */}
           {activeCheckerMode === 'MODEL' && (
-            <div id="model-checker-panel" role="tabpanel" aria-labelledby="model-checker-tab">
+            <div id="model-checker-panel" role="tabpanel" aria-labelledby="model-checker-tab" tabIndex={0} className="focus:outline-none">
               <form onSubmit={handleModelSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   {/* Brand */}
@@ -1082,7 +1109,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       <span
                         className={`text-[11px] font-bold px-2 py-0.5 rounded border flex-shrink-0 ${
                           isCritical
-                            ? 'bg-red-950 text-rose-200 border-red-700 animate-pulse'
+                            ? 'bg-red-950 text-rose-200 border-red-700 animate-pulse motion-reduce:animate-none'
                             : p.fire_incident_status === 'RECALLED_RESOLVED'
                             ? 'bg-amber-950 text-amber-200 border-amber-700'
                             : 'bg-emerald-950 text-emerald-200 border-emerald-700'

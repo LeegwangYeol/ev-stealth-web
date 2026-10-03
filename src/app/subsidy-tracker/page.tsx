@@ -39,9 +39,9 @@ export default function SubsidyTrackerPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-8">
+        <div role="status" aria-live="polite" className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-8">
           <div className="text-center space-y-3">
-            <div className="text-4xl animate-bounce">⚡</div>
+            <div className="text-4xl animate-bounce motion-reduce:animate-none" aria-hidden="true">⚡</div>
             <div className="text-base font-bold text-amber-400">
               전국 지자체별 보조금 소진율 데이터 로딩 중...
             </div>

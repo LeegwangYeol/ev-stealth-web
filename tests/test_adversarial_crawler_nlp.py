@@ -607,7 +607,8 @@ class TestNetworkFailureSimulationAdversarial(unittest.TestCase):
                 raise ValueError("Corrupted DOM cannot be parsed")
 
         client = SafeHttpClient(min_delay=0.0, max_delay=0.0, enable_jitter=False)
-        with patch.object(client, "get", return_value=(200, "<html><corrupt><body>", b"")):
+        with patch.object(client, "warm_up_session", return_value=True), \
+             patch.object(client, "get", return_value=(200, "<html><corrupt><body>", b"")):
             crawler = CorruptDOMCrawler(client=client)
             # fetch_post must gracefully return None instead of raising ValueError
             result = crawler.fetch_post("https://example.com/corrupt_post")
@@ -840,6 +841,262 @@ class TestRootScrapersAndSentimentAdversarial(unittest.TestCase):
 
         res_sarcasm = self.sentiment_engine.classify("단차 예술이네 ㅋㅋㅋ")
         self.assertIn("차체 단차로 인한 풍절음 및 빗물 누수", res_sarcasm.detected_complaints)
+
+
+class TestBackendRemediationParityAndIsolation(unittest.TestCase):
+    """Verifies REM-01 through REM-07 remediation tasks and contract invariants."""
+
+    def test_01_run_scraper_web_dir_cli_and_env_override(self):
+        """Verify run_scraper supports --web-dir CLI option and EV_SCRAPER_WEB_DIR env var."""
+        from run_scraper import create_parser, ScraperPipeline
+        import tempfile
+
+        # CLI flag parsing
+        parser = create_parser()
+        args = parser.parse_args(["--web-dir", "/tmp/custom_web_dir"])
+        self.assertEqual(str(args.web_dir), "/tmp/custom_web_dir")
+
+        # Environment variable override
+        with patch.dict(os.environ, {"EV_SCRAPER_WEB_DIR": "/tmp/env_web_dir"}):
+            parser_env = create_parser()
+            args_env = parser_env.parse_args([])
+            self.assertEqual(str(args_env.web_dir), "/tmp/env_web_dir")
+
+        # ScraperPipeline execution routing
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            pipeline = ScraperPipeline()
+            pipeline.harvest = MagicMock(return_value=([], {"bobaedream": 0, "dcinside": 0}))
+            pipeline.filter_defects = MagicMock(return_value=[])
+
+            summary = pipeline.run(sync_web=True, web_dir=tmp_dir, dry_run=True)
+            expected_target = os.path.abspath(os.path.join(tmp_dir, "daily_reports.json"))
+            self.assertIn(expected_target, summary["target_paths"])
+
+    def test_02_atomic_writer_type_hints_reflection(self):
+        """Verify typing.get_type_hints succeeds on atomic_writer modules without NameError."""
+        import typing
+        from tracker import atomic_writer as root_aw
+        import importlib.util
+
+        hints_root = typing.get_type_hints(root_aw.atomic_write_json)
+        self.assertIn("target_path", hints_root)
+
+        mirror_path = PROJECT_ROOT / "ev-stealth-web" / "tracker" / "atomic_writer.py"
+        if mirror_path.exists():
+            spec = importlib.util.spec_from_file_location("mirror_atomic_writer", str(mirror_path))
+            if spec and spec.loader:
+                mirror_mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mirror_mod)
+                hints_mirror = typing.get_type_hints(mirror_mod.atomic_write_json)
+                self.assertIn("target_path", hints_mirror)
+
+    def test_03_slang_lexicon_zero_duplicates(self):
+        """Verify SYMPTOM_PREDICATES in slang_lexicon contains zero duplicate tokens."""
+        from collections import Counter
+        from filters.slang_lexicon import SYMPTOM_PREDICATES
+
+        counts = Counter(SYMPTOM_PREDICATES)
+        duplicates = {k: v for k, v in counts.items() if v > 1}
+        self.assertEqual(duplicates, {}, f"Duplicate tokens found in SYMPTOM_PREDICATES: {duplicates}")
+
+    def test_04_subsidy_tracker_collect_and_save_parity(self):
+        """Verify SubsidyTracker.collect_and_save writes both primary and depletion mirrors."""
+        import importlib
+        import tracker.subsidy_tracker
+        importlib.reload(tracker.subsidy_tracker)
+        from tracker.subsidy_tracker import SubsidyTracker
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            out_file = Path(tmp_dir) / "ev_subsidy_data.json"
+            web_dir = Path(tmp_dir) / "web_dir"
+            web_dir.mkdir(parents=True, exist_ok=True)
+
+            tracker = SubsidyTracker()
+            with patch.dict(os.environ, {"EV_TRACKER_WEB_DIR": str(web_dir)}):
+                tracker.collect_and_save(output_path=str(out_file), sync_web=True)
+
+            mirror_file = Path(tmp_dir) / "subsidy_depletion_data.json"
+            web_primary = web_dir / "ev_subsidy_data.json"
+            web_mirror = web_dir / "subsidy_depletion_data.json"
+
+            self.assertTrue(out_file.exists(), "Primary output file missing")
+            self.assertTrue(mirror_file.exists(), "Depletion mirror file missing")
+            self.assertTrue(web_primary.exists(), "Web primary file missing")
+            self.assertTrue(web_mirror.exists(), "Web mirror file missing")
+
+            # Check byte content identical
+            with open(out_file, "rb") as f1, open(mirror_file, "rb") as f2:
+                self.assertEqual(f1.read(), f2.read())
+
+    def test_05_bug01_bug04_generate_briefing_dict_category_metrics_and_missing_passenger(self):
+        """Verify generate_briefing safely handles CategoryMetrics instances and missing categories without crash."""
+        from tracker.subsidy_tracker import SubsidyTracker, _metric_val
+        from tracker.subsidy_models import SubsidyPayload, NationwideSummary, RegionRecord, SubsidyMetadata, CategoryMetrics
+
+        # 1. Test _metric_val helper
+        self.assertEqual(_metric_val(None, "foo", default=42), 42)
+        self.assertEqual(_metric_val({"foo": 100}, "foo"), 100)
+        self.assertEqual(_metric_val({"bar": 50}, "foo", default=0), 0)
+
+        cat_obj = CategoryMetrics(
+            announced_units=100, applied_units=80, delivered_units=70,
+            remaining_units=20, depletion_rate=80.0, delivery_rate=70.0,
+            status="WARNING", max_local_subsidy_krw=2000000, max_total_subsidy_krw=8500000,
+        )
+        self.assertEqual(_metric_val(cat_obj, "announced_units"), 100)
+        self.assertEqual(_metric_val(cat_obj, "nonexistent", default=99), 99)
+
+        # 2. Test payload where category_totals contains CategoryMetrics objects
+        # and a critical region is missing "passenger" category
+        meta = SubsidyMetadata(
+            version="1.0.0", generated_at="2026-10-04T00:00:00Z", policy_year=2026,
+            data_sources=["test"], total_regions_tracked=1, total_municipalities_tracked=0,
+        )
+        summary = NationwideSummary(
+            total_announced_units=100, total_applied_units=98, total_delivered_units=90,
+            total_remaining_units=2, nationwide_depletion_rate=98.0,
+            total_budget_billion_krw=1.0, disbursed_budget_billion_krw=0.98,
+            category_totals={"passenger": cat_obj},
+            alert_region_counts={"critical": 1},
+        )
+        # Region without "passenger" category
+        region_missing_passenger = RegionRecord(
+            region_id="KR-99", iso_code="KR-99", name_ko="테스트지역", name_en="Test",
+            tier="province", overall_depletion_rate=98.0, overall_status="CRITICAL",
+            residency_requirement_days=30, supplementary_budget_added=False,
+            categories={}, municipalities=[],
+        )
+        payload = SubsidyPayload(
+            metadata=meta, alert_thresholds={}, nationwide_summary=summary,
+            regions=[region_missing_passenger], popular_models_matrix=[],
+            historical_depletion_trajectory=[],
+        )
+
+        tracker = SubsidyTracker()
+        briefing = tracker.generate_briefing(payload)
+        self.assertIn("테스트지역", briefing)
+        self.assertIn("잔여: 0대", briefing)
+        self.assertIn("공고 100대", briefing)
+
+    def test_06_bug02_subsidy_models_safe_conversions(self):
+        """Verify all from_dict methods tolerate malformed values (None, non-numeric strings)."""
+        from tracker.subsidy_models import (
+            _safe_int, _safe_float,
+            CategoryMetrics, MunicipalityMetrics, RegionRecord,
+            PopularModelEntry, HistoricalTrajectoryPoint, NationwideSummary, SubsidyMetadata
+        )
+
+        self.assertEqual(_safe_int(None), 0)
+        self.assertEqual(_safe_int("invalid", default=5), 5)
+        self.assertEqual(_safe_int(123), 123)
+        self.assertEqual(_safe_float(None), 0.0)
+        self.assertEqual(_safe_float("corrupted", default=3.14), 3.14)
+        self.assertEqual(_safe_float(2.5), 2.5)
+
+        # Corrupted dicts
+        cat = CategoryMetrics.from_dict({
+            "announced_units": "bad", "applied_units": None, "depletion_rate": "error"
+        })
+        self.assertEqual(cat.announced_units, 0)
+        self.assertEqual(cat.applied_units, 0)
+        self.assertEqual(cat.depletion_rate, 0.0)
+
+        muni = MunicipalityMetrics.from_dict({
+            "announced_units": None, "depletion_rate": "NaN_string", "local_subsidy_krw": "bad"
+        })
+        self.assertEqual(muni.announced_units, 0)
+        self.assertEqual(muni.depletion_rate, 0.0)
+        self.assertEqual(muni.local_subsidy_krw, 0)
+
+        reg = RegionRecord.from_dict({
+            "overall_depletion_rate": "corrupt", "residency_requirement_days": None
+        })
+        self.assertEqual(reg.overall_depletion_rate, 0.0)
+        self.assertEqual(reg.residency_requirement_days, 30)
+
+        model = PopularModelEntry.from_dict({
+            "battery_capacity_kwh": "bad", "rated_range_km": None, "base_price_krw": "oops"
+        })
+        self.assertEqual(model.battery_capacity_kwh, 0.0)
+        self.assertEqual(model.rated_range_km, 0)
+        self.assertEqual(model.base_price_krw, 0)
+
+        hist = HistoricalTrajectoryPoint.from_dict({"passenger_rate": "error"})
+        self.assertEqual(hist.passenger_rate, 0.0)
+
+        summ = NationwideSummary.from_dict({"total_announced_units": "corrupt", "nationwide_depletion_rate": None})
+        self.assertEqual(summ.total_announced_units, 0)
+        self.assertEqual(summ.nationwide_depletion_rate, 0.0)
+
+        meta = SubsidyMetadata.from_dict({"policy_year": "invalid", "total_regions_tracked": None})
+        self.assertEqual(meta.policy_year, 2026)
+        self.assertEqual(meta.total_regions_tracked, 17)
+
+    def test_07_bug03_run_tracker_relative_output_resolution(self):
+        """Verify relative -o path matches default and creates subsidy_depletion_data.json."""
+        import tempfile
+        import subprocess
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            out_file = Path(tmp_dir) / "ev_subsidy_data.json"
+            mirror_file = Path(tmp_dir) / "subsidy_depletion_data.json"
+
+            # Run tracker with custom output filename ev_subsidy_data.json
+            cmd = [
+                sys.executable,
+                str(PROJECT_ROOT / "run_tracker.py"),
+                "-o", str(out_file),
+            ]
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0, f"run_tracker failed: {res.stderr}")
+            self.assertTrue(out_file.exists(), "Primary output must exist")
+            self.assertTrue(mirror_file.exists(), "Depletion mirror must exist when output is ev_subsidy_data.json")
+
+    def test_08_bug05_local_ratio_clamping(self):
+        """Verify local_ratio is clamped between 0.0 and 1.0 when model_national > max_national."""
+        from tracker.subsidy_tracker import calculate_net_subsidy
+        from tracker.subsidy_baseline import _calc_model_regional_samples
+
+        # Exceeding national cap: model_national 8M, max_national 6.5M
+        res = calculate_net_subsidy(
+            model_national=8_000_000,
+            max_national=6_500_000,
+            max_local=2_000_000,
+            msrp=50_000_000,
+        )
+        # local_ratio clamped to 1.0 -> effective_local = 2_000_000 (not > 2_000_000)
+        self.assertEqual(res["local_subsidy_krw"], 2_000_000)
+
+        # Baseline sample clamping
+        samples = _calc_model_regional_samples(base_price=50_000_000, national_sub=10_000_000)
+        seoul_sub = samples["seoul"]["total_subsidy_krw"]
+        # In Seoul max_local is 1.5M, national_sub is 10M -> total subsidy is 11.5M
+        self.assertEqual(seoul_sub, 10_000_000 + 1_500_000)
+
+    def test_09_leak01_02_httperror_closed_safely(self):
+        """Verify HTTPError is closed on exceptions across scraper and tracker."""
+        import urllib.error
+        from unittest.mock import MagicMock
+        from tracker.subsidy_tracker import SubsidyTracker
+        from scrapers.common_utils import SafeHttpClient
+
+        # 1. SubsidyTracker.fetch_live_updates
+        tracker = SubsidyTracker(endpoint_url="http://mock.endpoint")
+        mock_http_err = urllib.error.HTTPError("http://mock.endpoint", 500, "Server Error", {}, None)
+        mock_http_err.close = MagicMock()
+        with patch("urllib.request.urlopen", side_effect=mock_http_err):
+            res = tracker.fetch_live_updates()
+            self.assertIsNone(res)
+            mock_http_err.close.assert_called_once()
+
+        # 2. SafeHttpClient HTTPError closing
+        client = SafeHttpClient(min_delay=0.0, max_delay=0.0, max_retries=1)
+        mock_err_404 = urllib.error.HTTPError("http://test.com", 404, "Not Found", {}, None)
+        mock_err_404.close = MagicMock()
+        with patch.object(client.opener, "open", side_effect=mock_err_404):
+            code, text, b = client.request("http://test.com")
+            mock_err_404.close.assert_called()
 
 
 if __name__ == "__main__":

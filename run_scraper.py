@@ -31,8 +31,10 @@ POSSIBLE_ROOTS = [
     CURRENT_DIR.parent / "ev_daily_monitor_bot",
     CURRENT_DIR.parent / "my-e-car",
 ]
-for root_path in POSSIBLE_ROOTS:
-    if root_path.exists() and str(root_path) not in sys.path:
+for root_path in reversed(POSSIBLE_ROOTS):
+    if root_path.exists():
+        if str(root_path) in sys.path:
+            sys.path.remove(str(root_path))
         sys.path.insert(0, str(root_path))
 
 # Dynamic imports with fallback aliases
@@ -55,7 +57,12 @@ except ImportError:
 logger = logging.getLogger("ScraperRunner")
 
 
-def _resolve_web_reports_path() -> Path:
+def _resolve_web_reports_path(custom_web_dir: Optional[Union[str, Path]] = None) -> Path:
+    if custom_web_dir:
+        return Path(custom_web_dir) / "daily_reports.json"
+    env_dir = os.getenv("EV_SCRAPER_WEB_DIR")
+    if env_dir:
+        return Path(env_dir) / "daily_reports.json"
     candidates = [
         CURRENT_DIR / "ev-stealth-web" / "src" / "data" / "daily_reports.json",
         CURRENT_DIR / "src" / "data" / "daily_reports.json",
@@ -124,6 +131,13 @@ def create_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help=f"Directly write daily report JSON to Next.js admin data directory ({WEB_DATA_DAILY_REPORTS_PATH}).",
+    )
+    web_dir_env = os.getenv("EV_SCRAPER_WEB_DIR")
+    parser.add_argument(
+        "--web-dir",
+        type=Path,
+        default=Path(web_dir_env) if web_dir_env else None,
+        help="Custom web directory to sync data files into (overrides default ev-stealth-web/src/data/ or EV_SCRAPER_WEB_DIR).",
     )
     parser.add_argument(
         "--dry-run",
@@ -261,6 +275,7 @@ class ScraperPipeline:
         sync_web: bool = False,
         dry_run: bool = False,
         verbose: bool = False,
+        web_dir: Optional[Union[str, Path]] = None,
     ) -> Dict[str, Any]:
         """Execute end-to-end harvest, filter, and report publishing pipeline."""
         configure_logging(verbose)
@@ -292,7 +307,8 @@ class ScraperPipeline:
         if custom_out:
             target_paths.append(os.path.abspath(custom_out))
         if sync_web:
-            target_paths.append(os.path.abspath(WEB_DATA_DAILY_REPORTS_PATH))
+            resolved_web_path = _resolve_web_reports_path(web_dir)
+            target_paths.append(os.path.abspath(str(resolved_web_path)))
         if not target_paths:
             target_paths.append(os.path.abspath(DEFAULT_OUTPUT_PATH))
 
@@ -374,6 +390,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             sync_web=args.sync_web,
             dry_run=args.dry_run,
             verbose=args.verbose,
+            web_dir=args.web_dir,
         )
         if summary.get("total_scraped", 0) == 0:
             logger.warning("Scraping completed with 0 posts harvested across sources (network outage or empty boards). Exiting gracefully.")

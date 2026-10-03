@@ -12,6 +12,26 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 
+def _safe_int(val: Any, default: int = 0) -> int:
+    """Safely convert value to int, catching None, ValueError, and TypeError."""
+    if val is None:
+        return default
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return default
+
+
+def _safe_float(val: Any, default: float = 0.0) -> float:
+    """Safely convert value to float, catching None, ValueError, and TypeError."""
+    if val is None:
+        return default
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+
+
 class AlertSeverity(str, Enum):
     """5-tier alert severity levels for EV subsidy depletion."""
 
@@ -51,6 +71,18 @@ class AlertThresholdConfig:
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> AlertThresholdConfig:
+        return cls(
+            min_percent=_safe_float(data.get("min_percent", 0.0)),
+            max_percent=_safe_float(data.get("max_percent", 0.0)),
+            label_ko=str(data.get("label_ko", "")),
+            severity=str(data.get("severity", "")),
+            color_hex=str(data.get("color_hex", "")),
+            badge_class=str(data.get("badge_class", "")),
+            recommended_action=str(data.get("recommended_action", "")),
+        )
+
 
 @dataclass
 class CategoryMetrics:
@@ -73,18 +105,20 @@ class CategoryMetrics:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> CategoryMetrics:
+        if not isinstance(data, dict):
+            data = {}
         return cls(
-            announced_units=int(data.get("announced_units", 0)),
-            applied_units=int(data.get("applied_units", 0)),
-            delivered_units=int(data.get("delivered_units", 0)),
-            remaining_units=int(data.get("remaining_units", 0)),
-            depletion_rate=float(data.get("depletion_rate", 0.0)),
-            delivery_rate=float(data.get("delivery_rate", 0.0)),
-            status=str(data.get("status", "HEALTHY")),
-            max_local_subsidy_krw=int(data.get("max_local_subsidy_krw", 0)),
-            max_total_subsidy_krw=int(data.get("max_total_subsidy_krw", 0)),
-            total_budget_krw=int(data.get("total_budget_krw", 0)),
-            remaining_budget_krw=int(data.get("remaining_budget_krw", 0)),
+            announced_units=_safe_int(data.get("announced_units", 0)),
+            applied_units=_safe_int(data.get("applied_units", 0)),
+            delivered_units=_safe_int(data.get("delivered_units", 0)),
+            remaining_units=_safe_int(data.get("remaining_units", 0)),
+            depletion_rate=_safe_float(data.get("depletion_rate", 0.0)),
+            delivery_rate=_safe_float(data.get("delivery_rate", 0.0)),
+            status=str(data.get("status") or "HEALTHY"),
+            max_local_subsidy_krw=_safe_int(data.get("max_local_subsidy_krw", 0)),
+            max_total_subsidy_krw=_safe_int(data.get("max_total_subsidy_krw", 0)),
+            total_budget_krw=_safe_int(data.get("total_budget_krw", 0)),
+            remaining_budget_krw=_safe_int(data.get("remaining_budget_krw", 0)),
         )
 
 
@@ -92,27 +126,29 @@ class CategoryMetrics:
 class MunicipalityMetrics:
     """Metrics for lower-tier administrative units (cities/counties within provinces)."""
 
-    name_ko: str
-    announced_units: int
-    applied_units: int
-    remaining_units: int
-    depletion_rate: float
-    status: str
-    local_subsidy_krw: int
+    name_ko: str = ""
+    announced_units: int = 0
+    applied_units: int = 0
+    remaining_units: int = 0
+    depletion_rate: float = 0.0
+    status: str = "HEALTHY"
+    local_subsidy_krw: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> MunicipalityMetrics:
+        if not isinstance(data, dict):
+            data = {}
         return cls(
-            name_ko=str(data.get("name_ko", "")),
-            announced_units=int(data.get("announced_units", 0)),
-            applied_units=int(data.get("applied_units", 0)),
-            remaining_units=int(data.get("remaining_units", 0)),
-            depletion_rate=float(data.get("depletion_rate", 0.0)),
-            status=str(data.get("status", "HEALTHY")),
-            local_subsidy_krw=int(data.get("local_subsidy_krw", 0)),
+            name_ko=str(data.get("name_ko") or ""),
+            announced_units=_safe_int(data.get("announced_units", 0)),
+            applied_units=_safe_int(data.get("applied_units", 0)),
+            remaining_units=_safe_int(data.get("remaining_units", 0)),
+            depletion_rate=_safe_float(data.get("depletion_rate", 0.0)),
+            status=str(data.get("status") or "HEALTHY"),
+            local_subsidy_krw=_safe_int(data.get("local_subsidy_krw", 0)),
         )
 
 
@@ -120,18 +156,27 @@ class MunicipalityMetrics:
 class RegionRecord:
     """Record for a 1st-tier administrative division (Province / Metropolitan City)."""
 
-    region_id: str
-    iso_code: str
-    name_ko: str
-    name_en: str
-    tier: str
-    overall_depletion_rate: float
-    overall_status: str
-    residency_requirement_days: int
-    supplementary_budget_added: bool
-    categories: Dict[str, CategoryMetrics]
+    region_id: str = ""
+    iso_code: str = ""
+    name_ko: str = ""
+    name_en: str = ""
+    tier: str = "province"
+    overall_depletion_rate: float = 0.0
+    overall_status: str = "HEALTHY"
+    residency_requirement_days: int = 30
+    supplementary_budget_added: bool = False
+    categories: Dict[str, CategoryMetrics] = field(default_factory=dict)
     municipalities: List[MunicipalityMetrics] = field(default_factory=list)
     notes: str = ""
+    code: Optional[str] = None
+
+    def __post_init__(self):
+        if self.code and not self.iso_code:
+            self.iso_code = self.code
+        if self.code and not self.region_id:
+            self.region_id = self.code
+        if self.iso_code and not self.region_id:
+            self.region_id = self.iso_code
 
     def to_dict(self) -> Dict[str, Any]:
         result = {
@@ -153,33 +198,39 @@ class RegionRecord:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> RegionRecord:
+        if not isinstance(data, dict):
+            data = {}
         cats = {}
-        for cat_name, cat_data in data.get("categories", {}).items():
-            if isinstance(cat_data, CategoryMetrics):
-                cats[cat_name] = cat_data
-            else:
-                cats[cat_name] = CategoryMetrics.from_dict(cat_data)
+        cats_raw = data.get("categories") or {}
+        if isinstance(cats_raw, dict):
+            for cat_name, cat_data in cats_raw.items():
+                if isinstance(cat_data, CategoryMetrics):
+                    cats[cat_name] = cat_data
+                elif isinstance(cat_data, dict):
+                    cats[cat_name] = CategoryMetrics.from_dict(cat_data)
 
         munis = []
-        for muni_data in data.get("municipalities", []):
-            if isinstance(muni_data, MunicipalityMetrics):
-                munis.append(muni_data)
-            else:
-                munis.append(MunicipalityMetrics.from_dict(muni_data))
+        munis_raw = data.get("municipalities") or []
+        if isinstance(munis_raw, (list, tuple)):
+            for muni_data in munis_raw:
+                if isinstance(muni_data, MunicipalityMetrics):
+                    munis.append(muni_data)
+                elif isinstance(muni_data, dict):
+                    munis.append(MunicipalityMetrics.from_dict(muni_data))
 
         return cls(
-            region_id=str(data.get("region_id", "")),
-            iso_code=str(data.get("iso_code", "")),
-            name_ko=str(data.get("name_ko", "")),
-            name_en=str(data.get("name_en", "")),
-            tier=str(data.get("tier", "province")),
-            overall_depletion_rate=float(data.get("overall_depletion_rate", 0.0)),
-            overall_status=str(data.get("overall_status", "HEALTHY")),
-            residency_requirement_days=int(data.get("residency_requirement_days", 30)),
+            region_id=str(data.get("region_id") or data.get("code") or ""),
+            iso_code=str(data.get("iso_code") or data.get("code") or ""),
+            name_ko=str(data.get("name_ko") or ""),
+            name_en=str(data.get("name_en") or ""),
+            tier=str(data.get("tier") or "province"),
+            overall_depletion_rate=_safe_float(data.get("overall_depletion_rate", 0.0)),
+            overall_status=str(data.get("overall_status") or "HEALTHY"),
+            residency_requirement_days=_safe_int(data.get("residency_requirement_days", 30), default=30),
             supplementary_budget_added=bool(data.get("supplementary_budget_added", False)),
             categories=cats,
             municipalities=munis,
-            notes=str(data.get("notes", "")),
+            notes=str(data.get("notes") or ""),
         )
 
 
@@ -203,17 +254,19 @@ class PopularModelEntry:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> PopularModelEntry:
+        if not isinstance(data, dict):
+            data = {}
         return cls(
-            model_id=str(data.get("model_id", "")),
-            name_ko=str(data.get("name_ko", "")),
-            manufacturer=str(data.get("manufacturer", "")),
-            battery_type=str(data.get("battery_type", "")),
-            battery_capacity_kwh=float(data.get("battery_capacity_kwh", 0.0)),
-            rated_range_km=int(data.get("rated_range_km", 0)),
-            base_price_krw=int(data.get("base_price_krw", 0)),
-            price_subsidy_ratio=float(data.get("price_subsidy_ratio", 1.0)),
-            national_subsidy_krw=int(data.get("national_subsidy_krw", 0)),
-            regional_subsidy_samples=data.get("regional_subsidy_samples", {}),
+            model_id=str(data.get("model_id") or ""),
+            name_ko=str(data.get("name_ko") or ""),
+            manufacturer=str(data.get("manufacturer") or ""),
+            battery_type=str(data.get("battery_type") or ""),
+            battery_capacity_kwh=_safe_float(data.get("battery_capacity_kwh", 0.0)),
+            rated_range_km=_safe_int(data.get("rated_range_km", 0)),
+            base_price_krw=_safe_int(data.get("base_price_krw", 0)),
+            price_subsidy_ratio=_safe_float(data.get("price_subsidy_ratio", 1.0), default=1.0),
+            national_subsidy_krw=_safe_int(data.get("national_subsidy_krw", 0)),
+            regional_subsidy_samples=data.get("regional_subsidy_samples") or {},
         )
 
 
@@ -231,11 +284,13 @@ class HistoricalTrajectoryPoint:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> HistoricalTrajectoryPoint:
+        if not isinstance(data, dict):
+            data = {}
         return cls(
-            date=str(data.get("date", "")),
-            passenger_rate=float(data.get("passenger_rate", 0.0)),
-            commercial_rate=float(data.get("commercial_rate", 0.0)),
-            overall_rate=float(data.get("overall_rate", 0.0)),
+            date=str(data.get("date") or ""),
+            passenger_rate=_safe_float(data.get("passenger_rate", 0.0)),
+            commercial_rate=_safe_float(data.get("commercial_rate", 0.0)),
+            overall_rate=_safe_float(data.get("overall_rate", 0.0)),
         )
 
 
@@ -271,25 +326,33 @@ class NationwideSummary:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> NationwideSummary:
+        if not isinstance(data, dict):
+            data = {}
         cat_totals = {}
-        for k, v in data.get("category_totals", {}).items():
-            if isinstance(v, CategoryMetrics):
-                cat_totals[k] = v
-            elif isinstance(v, dict):
-                cat_totals[k] = CategoryMetrics.from_dict(v)
-            else:
-                cat_totals[k] = v
+        cat_totals_raw = data.get("category_totals") or {}
+        if isinstance(cat_totals_raw, dict):
+            for k, v in cat_totals_raw.items():
+                if isinstance(v, CategoryMetrics):
+                    cat_totals[k] = v
+                elif isinstance(v, dict):
+                    cat_totals[k] = CategoryMetrics.from_dict(v)
+                else:
+                    cat_totals[k] = v
+
+        alert_region_counts = data.get("alert_region_counts")
+        if not isinstance(alert_region_counts, dict):
+            alert_region_counts = {}
 
         return cls(
-            total_announced_units=int(data.get("total_announced_units", 0)),
-            total_applied_units=int(data.get("total_applied_units", 0)),
-            total_delivered_units=int(data.get("total_delivered_units", 0)),
-            total_remaining_units=int(data.get("total_remaining_units", 0)),
-            nationwide_depletion_rate=float(data.get("nationwide_depletion_rate", 0.0)),
-            total_budget_billion_krw=float(data.get("total_budget_billion_krw", 0.0)),
-            disbursed_budget_billion_krw=float(data.get("disbursed_budget_billion_krw", 0.0)),
+            total_announced_units=_safe_int(data.get("total_announced_units", 0)),
+            total_applied_units=_safe_int(data.get("total_applied_units", 0)),
+            total_delivered_units=_safe_int(data.get("total_delivered_units", 0)),
+            total_remaining_units=_safe_int(data.get("total_remaining_units", 0)),
+            nationwide_depletion_rate=_safe_float(data.get("nationwide_depletion_rate", 0.0)),
+            total_budget_billion_krw=_safe_float(data.get("total_budget_billion_krw", 0.0)),
+            disbursed_budget_billion_krw=_safe_float(data.get("disbursed_budget_billion_krw", 0.0)),
             category_totals=cat_totals,
-            alert_region_counts=data.get("alert_region_counts", {}),
+            alert_region_counts=alert_region_counts,
         )
 
 
@@ -310,14 +373,18 @@ class SubsidyMetadata:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> SubsidyMetadata:
+        if not isinstance(data, dict):
+            data = {}
+        ds = data.get("data_sources")
+        data_sources = list(ds) if isinstance(ds, (list, tuple, set)) else []
         return cls(
-            version=str(data.get("version", "1.0.0")),
-            generated_at=str(data.get("generated_at", "")),
-            policy_year=int(data.get("policy_year", 2026)),
-            data_sources=list(data.get("data_sources", [])),
-            total_regions_tracked=int(data.get("total_regions_tracked", 17)),
-            total_municipalities_tracked=int(data.get("total_municipalities_tracked", 0)),
-            currency=str(data.get("currency", "KRW")),
+            version=str(data.get("version") or "1.0.0"),
+            generated_at=str(data.get("generated_at") or ""),
+            policy_year=_safe_int(data.get("policy_year", 2026), default=2026),
+            data_sources=data_sources,
+            total_regions_tracked=_safe_int(data.get("total_regions_tracked", 17), default=17),
+            total_municipalities_tracked=_safe_int(data.get("total_municipalities_tracked", 0)),
+            currency=str(data.get("currency") or "KRW"),
         )
 
 
@@ -350,30 +417,42 @@ class SubsidyPayload:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> SubsidyPayload:
-        metadata = SubsidyMetadata.from_dict(data.get("metadata", {}))
+        if not isinstance(data, dict):
+            data = {}
+        meta_dict = data.get("metadata")
+        metadata = SubsidyMetadata.from_dict(meta_dict if isinstance(meta_dict, dict) else {})
 
         alert_thresholds = {}
-        for k, v in data.get("alert_thresholds", {}).items():
-            if isinstance(v, AlertThresholdConfig):
-                alert_thresholds[k] = v
-            elif isinstance(v, dict):
-                alert_thresholds[k] = AlertThresholdConfig(**v)
+        at_dict = data.get("alert_thresholds") or {}
+        if isinstance(at_dict, dict):
+            for k, v in at_dict.items():
+                if isinstance(v, AlertThresholdConfig):
+                    alert_thresholds[k] = v
+                elif isinstance(v, dict):
+                    alert_thresholds[k] = AlertThresholdConfig.from_dict(v)
 
-        summary = NationwideSummary.from_dict(data.get("nationwide_summary", {}))
+        ns_dict = data.get("nationwide_summary")
+        summary = NationwideSummary.from_dict(ns_dict if isinstance(ns_dict, dict) else {})
 
+        regions_raw = data.get("regions") or []
         regions = [
             RegionRecord.from_dict(r) if isinstance(r, dict) else r
-            for r in data.get("regions", [])
+            for r in regions_raw
+            if isinstance(r, (dict, RegionRecord))
         ]
 
+        models_raw = data.get("popular_models_matrix") or []
         models = [
             PopularModelEntry.from_dict(m) if isinstance(m, dict) else m
-            for m in data.get("popular_models_matrix", [])
+            for m in models_raw
+            if isinstance(m, (dict, PopularModelEntry))
         ]
 
+        history_raw = data.get("historical_depletion_trajectory") or []
         history = [
             HistoricalTrajectoryPoint.from_dict(h) if isinstance(h, dict) else h
-            for h in data.get("historical_depletion_trajectory", [])
+            for h in history_raw
+            if isinstance(h, (dict, HistoricalTrajectoryPoint))
         ]
 
         return cls(

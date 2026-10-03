@@ -84,7 +84,7 @@ def calculate_net_subsidy(
     ratio = calculate_price_cap_ratio(msrp)
     effective_national = int(round(model_national * ratio))
     if max_national > 0:
-        local_ratio = model_national / max_national
+        local_ratio = min(1.0, max(0.0, model_national / max_national))
     else:
         local_ratio = 0.0
     effective_local = int(round(max_local * local_ratio * ratio))
@@ -96,6 +96,15 @@ def calculate_net_subsidy(
         "total_subsidy_krw": total_subsidy,
         "net_price_krw": net_price,
     }
+
+
+def _metric_val(metric: Any, key: str, default: Any = 0) -> Any:
+    """Safely extract metric attribute or dict key, supporting dict and dataclass instances."""
+    if metric is None:
+        return default
+    if isinstance(metric, dict):
+        return metric.get(key, default)
+    return getattr(metric, key, default)
 
 
 class SubsidyTracker:
@@ -298,6 +307,11 @@ class SubsidyTracker:
                 logger.warning("Remote server returned non-200 status: %d", resp.status)
                 return None
         except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+            if isinstance(exc, urllib.error.HTTPError):
+                try:
+                    exc.close()
+                except Exception:
+                    pass
             logger.warning("Live fetch failed: %s. Initiating graceful fallback.", exc)
             return None
 
@@ -535,20 +549,30 @@ class SubsidyTracker:
         summary = payload.nationwide_summary
         gen_time = payload.metadata.generated_at
 
+        def _get_passenger_remaining(region: RegionRecord) -> int:
+            cats = getattr(region, "categories", None)
+            if not isinstance(cats, dict):
+                return 0
+            p_cat = cats.get("passenger")
+            if p_cat is None:
+                return 0
+            return _metric_val(p_cat, "remaining_units", 0)
+
         critical_regions = [
-            f"{r.name_ko} ({r.overall_depletion_rate}%, 잔여: {r.categories['passenger'].remaining_units:,}대)"
+            f"{r.name_ko} ({r.overall_depletion_rate}%, 잔여: {_get_passenger_remaining(r):,}대)"
             for r in payload.regions
             if r.overall_status in ("CRITICAL", "DEPLETED")
         ]
         warning_regions = [
-            f"{r.name_ko} ({r.overall_depletion_rate}%, 잔여: {r.categories['passenger'].remaining_units:,}대)"
+            f"{r.name_ko} ({r.overall_depletion_rate}%, 잔여: {_get_passenger_remaining(r):,}대)"
             for r in payload.regions
             if r.overall_status == "WARNING"
         ]
 
-        p_info = summary.category_totals.get("passenger", {})
-        c_info = summary.category_totals.get("commercial", {})
-        b_info = summary.category_totals.get("bus", {})
+        category_totals = getattr(summary, "category_totals", None) or {}
+        p_info = category_totals.get("passenger", {})
+        c_info = category_totals.get("commercial", {})
+        b_info = category_totals.get("bus", {})
 
         status_text = "FALLBACK_BASELINE (Resilient)" if fallback_used else "SUCCESS (Live Sync)"
 
@@ -574,9 +598,9 @@ class SubsidyTracker:
             ),
             "",
             "## 📊 차종별 소진 현황",
-            f"- **승용**: 공고 {p_info.get('announced_units', 0):,}대 | 접수 {p_info.get('applied_units', 0):,}대 ({p_info.get('depletion_rate', 0)}%) | 잔여 {p_info.get('remaining_units', 0):,}대 [{p_info.get('status', 'N/A')}]",
-            f"- **화물**: 공고 {c_info.get('announced_units', 0):,}대 | 접수 {c_info.get('applied_units', 0):,}대 ({c_info.get('depletion_rate', 0)}%) | 잔여 {c_info.get('remaining_units', 0):,}대 [{c_info.get('status', 'N/A')}]",
-            f"- **승합(버스)**: 공고 {b_info.get('announced_units', 0):,}대 | 접수 {b_info.get('applied_units', 0):,}대 ({b_info.get('depletion_rate', 0)}%) | 잔여 {b_info.get('remaining_units', 0):,}대 [{b_info.get('status', 'N/A')}]",
+            f"- **승용**: 공고 {_metric_val(p_info, 'announced_units', 0):,}대 | 접수 {_metric_val(p_info, 'applied_units', 0):,}대 ({_metric_val(p_info, 'depletion_rate', 0)}%) | 잔여 {_metric_val(p_info, 'remaining_units', 0):,}대 [{_metric_val(p_info, 'status', 'N/A')}]",
+            f"- **화물**: 공고 {_metric_val(c_info, 'announced_units', 0):,}대 | 접수 {_metric_val(c_info, 'applied_units', 0):,}대 ({_metric_val(c_info, 'depletion_rate', 0)}%) | 잔여 {_metric_val(c_info, 'remaining_units', 0):,}대 [{_metric_val(c_info, 'status', 'N/A')}]",
+            f"- **승합(버스)**: 공고 {_metric_val(b_info, 'announced_units', 0):,}대 | 접수 {_metric_val(b_info, 'applied_units', 0):,}대 ({_metric_val(b_info, 'depletion_rate', 0)}%) | 잔여 {_metric_val(b_info, 'remaining_units', 0):,}대 [{_metric_val(b_info, 'status', 'N/A')}]",
             "",
             "## 💡 예비 차주 권고 사항",
             "- 대구, 울산, 경북, 제주는 보조금 마감 직전(소진율 96%~99%)입니다. 실계약자는 대기 순번 및 제조사 즉시 출고 재고를 확인하십시오.",
@@ -596,4 +620,5 @@ __all__ = [
     "classify_alert_tier",
     "calculate_price_cap_ratio",
     "calculate_net_subsidy",
+    "_metric_val",
 ]

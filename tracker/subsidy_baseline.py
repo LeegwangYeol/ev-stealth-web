@@ -79,6 +79,39 @@ DEFAULT_ALERT_THRESHOLDS: Dict[str, AlertThresholdConfig] = {
 }
 
 
+def calculate_price_cap_ratio(msrp: int) -> float:
+    """Statutory 2026 Korean EV subsidy ratio tiers: 1.0 (<=55M), 0.5 (55M-85M), 0.0 (>85M)."""
+    if msrp <= 55_000_000:
+        return 1.0
+    elif msrp <= 85_000_000:
+        return 0.5
+    return 0.0
+
+
+def calculate_net_subsidy(
+    model_national: int,
+    max_national: int,
+    max_local: int,
+    msrp: int,
+) -> Dict[str, int]:
+    """Calculate national subsidy, local subsidy, total subsidy, and net consumer purchase price."""
+    ratio = calculate_price_cap_ratio(msrp)
+    effective_national = int(round(model_national * ratio))
+    if max_national > 0:
+        local_ratio = min(1.0, max(0.0, model_national / max_national))
+    else:
+        local_ratio = 0.0
+    effective_local = int(round(max_local * local_ratio * ratio))
+    total_subsidy = effective_national + effective_local
+    net_price = max(0, msrp - total_subsidy)
+    return {
+        "national_subsidy_krw": effective_national,
+        "local_subsidy_krw": effective_local,
+        "total_subsidy_krw": total_subsidy,
+        "net_price_krw": net_price,
+    }
+
+
 def _calc_cat(
     announced: int,
     applied: int,
@@ -543,7 +576,7 @@ def _calc_model_regional_samples(base_price: int, national_sub: int) -> Dict[str
     }
 
     samples = {}
-    ratio = national_sub / PASSENGER_NATIONAL_CAP_KRW if PASSENGER_NATIONAL_CAP_KRW > 0 else 0.0
+    ratio = min(1.0, max(0.0, national_sub / PASSENGER_NATIONAL_CAP_KRW)) if PASSENGER_NATIONAL_CAP_KRW > 0 else 0.0
 
     for reg_key, max_local in regional_max_caps.items():
         # Local subsidy scales proportionally with national subsidy / national cap

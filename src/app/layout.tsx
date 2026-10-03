@@ -82,7 +82,6 @@ export default function RootLayout({
             {/* Mobile Drawer Menu Toggle */}
             <details className="md:hidden relative group" id="mobile-nav-drawer" data-testid="mobile-drawer-toggle">
               <summary
-                aria-label="모바일 메뉴 열기"
                 className="list-none flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-sm font-medium cursor-pointer border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 select-none"
               >
                 <svg className="w-5 h-5 block group-open:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -91,7 +90,8 @@ export default function RootLayout({
                 <svg className="w-5 h-5 hidden group-open:block" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
-                <span>메뉴</span>
+                <span className="group-open:hidden">메뉴 열기</span>
+                <span className="hidden group-open:inline">메뉴 닫기</span>
               </summary>
 
               {/* Mobile Drawer Content */}
@@ -173,7 +173,7 @@ export default function RootLayout({
           © 2026 EV Critical Issues & Safety Intelligence Hub
         </footer>
 
-        {/* Mobile nav drawer auto-close on internal link click */}
+        {/* Mobile nav drawer auto-close on internal link click & Escape key listener with focus return */}
         <Script
           id="mobile-nav-script"
           strategy="afterInteractive"
@@ -185,6 +185,18 @@ export default function RootLayout({
                   var target = e.target;
                   if (target && target.closest && target.closest('#mobile-nav-drawer a')) {
                     drawer.removeAttribute('open');
+                  }
+                }
+              });
+              document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' || e.key === 'Esc') {
+                  var drawer = document.getElementById('mobile-nav-drawer');
+                  if (drawer && drawer.hasAttribute('open')) {
+                    drawer.removeAttribute('open');
+                    var summary = drawer.querySelector('summary');
+                    if (summary) {
+                      summary.focus();
+                    }
                   }
                 }
               });

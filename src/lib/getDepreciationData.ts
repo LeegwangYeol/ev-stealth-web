@@ -390,6 +390,7 @@ export function getAllModels(): EvModelDepreciation[] {
  * Finds a specific model by its unique ID.
  */
 export function getModelById(id: string): EvModelDepreciation | undefined {
+  if (!id || typeof id !== 'string') return undefined;
   return DATABASE.models.find(
     (m) => m.id.toLowerCase() === id.toLowerCase() || m.id === id
   );
@@ -580,8 +581,9 @@ export function calculateDepreciation(input: DepreciationCalculationInput): Depr
   );
 
   const basePurchasePriceKrw =
-    customPurchasePriceKrw ??
-    (priceBasis === 'effective' ? model.net_purchase_price_krw : model.msrp_krw_baseline);
+    Number.isFinite(customPurchasePriceKrw) && (customPurchasePriceKrw as number) >= 0
+      ? (customPurchasePriceKrw as number)
+      : (priceBasis === 'effective' ? model.net_purchase_price_krw : model.msrp_krw_baseline);
 
   const estimatedResidualPriceKrw = Math.round((basePurchasePriceKrw * adjustedResidualPct) / 100);
   const depreciationAmountKrw = basePurchasePriceKrw - estimatedResidualPriceKrw;
@@ -651,8 +653,12 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
 
   const chemProfile = DATABASE.chemistries[chemistryKey] || DATABASE.chemistries.NCM_811;
   const packCapacityKwh = params.packCapacityKwh ?? model?.battery_specs.capacity_kwh ?? 77.4;
-  const mileage = inputTotalKm ?? years * annualKm;
-  const safeMileage = Math.max(0, mileage);
+  const safeYears = Number.isFinite(years) && years > 0 ? years : 3;
+  const safeAnnualKm = Number.isFinite(annualKm) && annualKm >= 0 ? annualKm : 15000;
+  const rawMileage = Number.isFinite(inputTotalKm)
+    ? (inputTotalKm as number)
+    : safeYears * safeAnnualKm;
+  const safeMileage = Math.max(0, rawMileage);
 
   // A. Calendar Aging via Arrhenius & SoC Kinetics
   const R_GAS = 8.314462;
@@ -665,11 +671,20 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
   );
   const socFactor = Math.exp(chemProfile.soc_stress_coefficient_beta * (storageSoc - SOC_REF));
   const kCal = (chemProfile.calendar_baseline_annual_loss_pct / 100.0) * arrheniusFactor * socFactor;
-  const qLossCal = kCal * Math.pow(Math.max(0.1, years), chemProfile.calendar_time_exponent_z);
+  const qLossCal = kCal * Math.pow(Math.max(0.1, safeYears), chemProfile.calendar_time_exponent_z);
 
   // B. Cyclic Aging via Mechanical Strain & DCFC Factor
-  const energyThroughputKwh = safeMileage / Math.max(1.0, vehicleEfficiencyKmPerKwh);
-  const equivalentFullCycles = energyThroughputKwh / Math.max(10.0, packCapacityKwh);
+  const safeEfficiency =
+    Number.isFinite(vehicleEfficiencyKmPerKwh) && (vehicleEfficiencyKmPerKwh as number) > 0
+      ? (vehicleEfficiencyKmPerKwh as number)
+      : 5.2;
+  const safeCapacity =
+    Number.isFinite(packCapacityKwh) && (packCapacityKwh as number) > 0
+      ? (packCapacityKwh as number)
+      : (model?.battery_specs.capacity_kwh ?? 77.4);
+
+  const energyThroughputKwh = safeMileage / Math.max(1.0, safeEfficiency);
+  const equivalentFullCycles = energyThroughputKwh / Math.max(10.0, safeCapacity);
 
   const fDod = Math.pow(0.85, chemProfile.dod_exponent_u);
   const fDcfc = 1.0 + (chemProfile.dcfc_acceleration_multiplier_max - 1.0) * clamp(dcfcRatio, 0.0, 1.0);
@@ -753,7 +768,7 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
   return {
     chemistry: chemistryKey,
     chemistryName: chemProfile.name,
-    years,
+    years: safeYears,
     totalKm: safeMileage,
     equivalentFullCycles: Math.round(equivalentFullCycles),
     calendarLossPct: Math.round(qLossCal * 1000) / 10,
@@ -795,6 +810,8 @@ export function calculateSubsidyClawback(
   nationalSubsidyKrw: number = 0
 ): ClawbackResult {
   const normalizedMonths = Number.isFinite(heldMonths) ? Math.max(0, heldMonths) : 0;
+  const safeLocalSubsidy = Number.isFinite(localSubsidyKrw) ? Math.max(0, localSubsidyKrw) : 0;
+  const safeNationalSubsidy = Number.isFinite(nationalSubsidyKrw) ? Math.max(0, nationalSubsidyKrw) : 0;
   const tiers = DATABASE.subsidy_clawback_schedule.tiers;
 
   let matchedTier: ClawbackTier = tiers[tiers.length - 1]; // default >= 24m (0%)
@@ -832,14 +849,14 @@ export function calculateSubsidyClawback(
   } else if (transferType === 'inter') {
     isExempt = statutoryRate === 0;
     effectiveRate = statutoryRate;
-    localClawbackKrw = Math.round(localSubsidyKrw * effectiveRate);
+    localClawbackKrw = Math.round(safeLocalSubsidy * effectiveRate);
     nationalClawbackKrw = 0; // 국비는 국내 운행 유지 시 환수 면제
-    explanation = `타 지자체 관외 이전: 매도인이 수령한 지자체 지방비 보조금(${Math.round(localSubsidyKrw).toLocaleString()}원)에 대해 사용기간별 회수요율(${(statutoryRate * 100).toFixed(0)}%)이 적용되어 ${localClawbackKrw.toLocaleString()}원이 환수 고지됩니다 (국비는 면제).`;
+    explanation = `타 지자체 관외 이전: 매도인이 수령한 지자체 지방비 보조금(${Math.round(safeLocalSubsidy).toLocaleString()}원)에 대해 사용기간별 회수요율(${(statutoryRate * 100).toFixed(0)}%)이 적용되어 ${localClawbackKrw.toLocaleString()}원이 환수 고지됩니다 (국비는 면제).`;
   } else if (transferType === 'export') {
     isExempt = false;
     effectiveRate = statutoryRate;
-    localClawbackKrw = Math.round(localSubsidyKrw * effectiveRate);
-    nationalClawbackKrw = Math.round(nationalSubsidyKrw * effectiveRate);
+    localClawbackKrw = Math.round(safeLocalSubsidy * effectiveRate);
+    nationalClawbackKrw = Math.round(safeNationalSubsidy * effectiveRate);
     explanation = `해외 수출 말소: 국내 대기질 개선 취지 상실로 국비와 지방비를 합산한 총 보조금에 회수요율(${(statutoryRate * 100).toFixed(0)}%)이 전액 적용됩니다.`;
   }
 
@@ -851,8 +868,8 @@ export function calculateSubsidyClawback(
     tierLabel: matchedTier.label_ko,
     statutoryClawbackRate: statutoryRate,
     effectiveClawbackRate: effectiveRate,
-    localSubsidyReceivedKrw: localSubsidyKrw,
-    nationalSubsidyReceivedKrw: nationalSubsidyKrw,
+    localSubsidyReceivedKrw: safeLocalSubsidy,
+    nationalSubsidyReceivedKrw: safeNationalSubsidy,
     localClawbackKrw,
     nationalClawbackKrw,
     totalClawbackKrw,
@@ -879,27 +896,37 @@ export function calculateTcoComparison(
   iceDisplacementCc: number = 1998
 ): TcoResult {
   const params = DATABASE.tco_parameters;
-  const clampedSlowRatio = clamp(slowChargingRatio, 0.0, 1.0);
-  const fastChargingRatio = 1.0 - clampedSlowRatio;
+  const safeSlowRatio = Number.isFinite(slowChargingRatio) ? clamp(slowChargingRatio, 0.0, 1.0) : 0.70;
+  const fastChargingRatio = 1.0 - safeSlowRatio;
 
   // 1. Blended electricity rate
   const blendedTariff =
-    clampedSlowRatio * params.fuel_tariffs.ev_slow_charging_krw_per_kwh +
+    safeSlowRatio * params.fuel_tariffs.ev_slow_charging_krw_per_kwh +
     fastChargingRatio * params.fuel_tariffs.ev_fast_charging_krw_per_kwh;
 
-  const evCostPerKm = blendedTariff / Math.max(1.0, evEfficiencyKmPerKwh);
+  const safeEvEff =
+    Number.isFinite(evEfficiencyKmPerKwh) && evEfficiencyKmPerKwh > 0
+      ? evEfficiencyKmPerKwh
+      : 5.2;
   const iceFuelEconomy = params.efficiency_baselines.ice_gasoline_economy_km_per_liter;
-  const iceCostPerKm = params.fuel_tariffs.ice_gasoline_krw_per_liter / Math.max(1.0, iceFuelEconomy);
+  const safeIceEff =
+    Number.isFinite(iceFuelEconomy) && iceFuelEconomy > 0
+      ? iceFuelEconomy
+      : 12.0;
+
+  const evCostPerKm = blendedTariff / Math.max(1.0, safeEvEff);
+  const iceCostPerKm = params.fuel_tariffs.ice_gasoline_krw_per_liter / Math.max(1.0, safeIceEff);
 
   // 2. Base ICE Tax Calculation Function
   const calculateIceAnnualTax = (yearIndex: number): number => {
+    const safeCc = Number.isFinite(iceDisplacementCc) && iceDisplacementCc > 0 ? iceDisplacementCc : 1998;
     let ratePerCc = 200;
-    if (iceDisplacementCc <= 1000) {
+    if (safeCc <= 1000) {
       ratePerCc = 80;
-    } else if (iceDisplacementCc <= 1600) {
+    } else if (safeCc <= 1600) {
       ratePerCc = 140;
     }
-    const baseNominalTax = iceDisplacementCc * ratePerCc * (1 + params.tax_parameters.education_tax_multiplier);
+    const baseNominalTax = safeCc * ratePerCc * (1 + params.tax_parameters.education_tax_multiplier);
 
     let discount = 0.0;
     if (yearIndex >= params.tax_parameters.ice_age_discount_start_year) {
@@ -924,11 +951,12 @@ export function calculateTcoComparison(
   let parkingTotalSavings = 0;
   let maintenanceTotalSavings = 0;
 
+  const safeAnnualKm = Number.isFinite(annualKm) && annualKm >= 0 ? annualKm : 15000;
   const safeYears = Math.max(1, Math.round(Number.isFinite(years) && years > 0 ? years : 1));
 
   for (let y = 1; y <= safeYears; y++) {
-    const evFuel = Math.round(annualKm * evCostPerKm);
-    const iceFuel = Math.round(annualKm * iceCostPerKm);
+    const evFuel = Math.round(safeAnnualKm * evCostPerKm);
+    const iceFuel = Math.round(safeAnnualKm * iceCostPerKm);
     const iceTax = calculateIceAnnualTax(y);
     const toll = params.auxiliary_benefits.annual_toll_savings_krw;
     const parking = params.auxiliary_benefits.annual_parking_savings_krw;
@@ -947,7 +975,7 @@ export function calculateTcoComparison(
 
     yearlyBreakdown.push({
       year: y,
-      cumulativeKm: y * annualKm,
+      cumulativeKm: y * safeAnnualKm,
       evElectricityCostKrw: evFuel,
       iceFuelCostKrw: iceFuel,
       evAutomobileTaxKrw: evAnnualTax,
@@ -961,11 +989,11 @@ export function calculateTcoComparison(
   }
 
   return {
-    annualKm,
+    annualKm: safeAnnualKm,
     years: safeYears,
-    totalKm: annualKm * safeYears,
-    evEfficiencyKmPerKwh,
-    iceFuelEconomyKmPerLiter: iceFuelEconomy,
+    totalKm: safeAnnualKm * safeYears,
+    evEfficiencyKmPerKwh: safeEvEff,
+    iceFuelEconomyKmPerLiter: safeIceEff,
     blendedElectricityTariffKrwPerKwh: Math.round(blendedTariff * 100) / 100,
     gasolinePriceKrwPerLiter: params.fuel_tariffs.ice_gasoline_krw_per_liter,
     evFuelCostPerKm: Math.round(evCostPerKm * 100) / 100,

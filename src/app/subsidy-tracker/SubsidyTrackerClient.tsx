@@ -18,6 +18,12 @@ type CategoryType = 'passenger' | 'commercial' | 'bus';
 type ZoneFilter = 'ALL' | 'CAPITAL' | 'YEONGNAM' | 'HONAM' | 'CHUNGCHEONG' | 'GANGWON_JEJU';
 type SortOption = 'DEPLETION_DESC' | 'DEPLETION_ASC' | 'REMAINING_ASC' | 'LOCAL_SUBSIDY_DESC' | 'NAME_ASC';
 
+const CATEGORY_TABS: { id: CategoryType; label: string; icon: string }[] = [
+  { id: 'passenger', label: '전기승용 (승용차)', icon: '🚗' },
+  { id: 'commercial', label: '전기화물 (소형/특장)', icon: '🚚' },
+  { id: 'bus', label: '전기승합 (버스)', icon: '🚌' },
+];
+
 export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClientProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -53,6 +59,16 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
     isMultiChildFamily: false,
     isOldDieselScrappage: false,
   });
+
+  // Sync selectedModelId and selectedRegionId on query param navigation (Fix R-1)
+  useEffect(() => {
+    if (urlModel) {
+      setSelectedModelId(urlModel);
+    }
+    if (urlRegion) {
+      setSelectedRegionId(urlRegion);
+    }
+  }, [urlModel, urlRegion]);
 
   const regions = useMemo(() => initialData.regions || [], [initialData.regions]);
   const models = useMemo(() => initialData.popular_models_matrix || [], [initialData.popular_models_matrix]);
@@ -188,6 +204,29 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
       ...prev,
       [regionId]: !prev[regionId],
     }));
+  };
+
+  const handleCategoryKeyDown = (e: React.KeyboardEvent, currentIndex: number) => {
+    const count = CATEGORY_TABS.length;
+    let nextIndex = -1;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      nextIndex = (currentIndex + 1) % count;
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      nextIndex = (currentIndex - 1 + count) % count;
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      nextIndex = 0;
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      nextIndex = count - 1;
+    }
+    if (nextIndex !== -1) {
+      const nextCategory = CATEGORY_TABS[nextIndex].id;
+      setSelectedCategory(nextCategory);
+      document.getElementById(`tab-category-${nextCategory}`)?.focus();
+    }
   };
 
   // Helper for alert colors & badges
@@ -405,51 +444,37 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         <div className="flex flex-wrap items-center justify-between gap-4">
           {/* Vehicle Category Selector */}
           <div role="tablist" aria-label="차종 카테고리 선택" className="flex items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800 text-xs sm:text-sm font-semibold">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={selectedCategory === 'passenger'}
-              onClick={() => setSelectedCategory('passenger')}
-              className={`px-3 py-1.5 rounded-lg transition focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
-                selectedCategory === 'passenger'
-                  ? 'bg-blue-600 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              🚗 전기승용 (승용차)
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={selectedCategory === 'commercial'}
-              onClick={() => setSelectedCategory('commercial')}
-              className={`px-3 py-1.5 rounded-lg transition focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
-                selectedCategory === 'commercial'
-                  ? 'bg-blue-600 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              🚚 전기화물 (소형/특장)
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={selectedCategory === 'bus'}
-              onClick={() => setSelectedCategory('bus')}
-              className={`px-3 py-1.5 rounded-lg transition focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
-                selectedCategory === 'bus'
-                  ? 'bg-blue-600 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              🚌 전기승합 (버스)
-            </button>
+            {CATEGORY_TABS.map((cat, idx) => {
+              const isSelected = selectedCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  id={`tab-category-${cat.id}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={isSelected}
+                  aria-controls="panel-regional-grid"
+                  tabIndex={isSelected ? 0 : -1}
+                  onKeyDown={(e) => handleCategoryKeyDown(e, idx)}
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className={`px-3 py-1.5 rounded-lg transition focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
+                    isSelected
+                      ? 'bg-blue-600 text-white shadow'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {cat.icon} {cat.label}
+                </button>
+              );
+            })}
           </div>
 
           {/* Supplementary Budget Toggle */}
-          <label className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm text-slate-300 hover:text-white select-none">
+          <label htmlFor="supplementary-budget-toggle" className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm text-slate-300 hover:text-white select-none">
             <input
+              id="supplementary-budget-toggle"
               type="checkbox"
+              aria-label="추경 예산 편성 지자체만 보기"
               checked={supplementaryOnly}
               onChange={(e) => setSupplementaryOnly(e.target.checked)}
               className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
@@ -462,6 +487,9 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         <div className="flex flex-col md:flex-row gap-3 pt-2">
           {/* Search Box */}
           <div className="relative flex-1">
+            <label htmlFor="region-search-input" className="sr-only">
+              지자체 검색
+            </label>
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 text-sm">
               🔍
             </div>
@@ -552,7 +580,13 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
       </section>
 
       {/* 4. 17 Regional Grid Cards */}
-      <section aria-labelledby="regional-grid-heading" className="space-y-4">
+      <section
+        id="panel-regional-grid"
+        role="tabpanel"
+        aria-labelledby={`tab-category-${selectedCategory}`}
+        tabIndex={0}
+        className="space-y-4 focus:outline-none"
+      >
         <div className="flex items-center justify-between">
           <h2 id="regional-grid-heading" className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
             <span>🗺️</span> 17개 광역시도별 보조금 소진율 &amp; 잔여 쿼터 현황
@@ -574,8 +608,17 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               const region = { ...regionItem, code: regionItem.region_id };
               const cat = region.categories[selectedCategory];
               const isExpanded = !!expandedRegions[region.region_id];
-              const deliveredPct = Math.min(100, Math.round((cat.delivered_units / (cat.announced_units || 1)) * 100));
-              const pendingPct = Math.max(0, Math.min(100 - deliveredPct, cat.depletion_rate - deliveredPct));
+
+              const safeAnnounced = Number.isFinite(cat.announced_units) && cat.announced_units > 0 ? cat.announced_units : 1;
+              const safeDelivered = Number.isFinite(cat.delivered_units) ? cat.delivered_units : 0;
+              const safeDepletion = Number.isFinite(cat.depletion_rate) ? cat.depletion_rate : 0;
+              const safeRemaining = Number.isFinite(cat.remaining_units) ? cat.remaining_units : 0;
+              const safeApplied = Number.isFinite(cat.applied_units) ? cat.applied_units : 0;
+
+              const rawDeliveredPct = Math.round((safeDelivered / safeAnnounced) * 100);
+              const deliveredPct = Number.isFinite(rawDeliveredPct) ? Math.min(100, Math.max(0, rawDeliveredPct)) : 0;
+              const rawPendingPct = safeDepletion - deliveredPct;
+              const pendingPct = Number.isFinite(rawPendingPct) ? Math.max(0, Math.min(100 - deliveredPct, rawPendingPct)) : 0;
               const remainingPct = Math.max(0, 100 - (deliveredPct + pendingPct));
 
               return (
@@ -602,54 +645,54 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                     <div className="space-y-1.5 pt-1">
                       <div className="flex justify-between items-center text-xs">
                         <span className="font-semibold text-slate-300">
-                          소진율 <strong className="text-amber-400 text-sm">{cat.depletion_rate.toFixed(1)}%</strong>
+                          소진율 <strong className="text-amber-400 text-sm">{safeDepletion.toFixed(1)}%</strong>
                         </span>
                         <span className="text-slate-400 text-[11px]">
-                          잔여 <strong className="text-emerald-400 font-bold">{cat.remaining_units.toLocaleString()}</strong> / {cat.announced_units.toLocaleString()}대
+                          잔여 <strong className="text-emerald-400 font-bold">{safeRemaining.toLocaleString()}</strong> / {safeAnnounced.toLocaleString()}대
                         </span>
                       </div>
 
                       <div
                         role="progressbar"
-                        aria-valuenow={Math.min(100, Math.round(cat.depletion_rate))}
+                        aria-valuenow={Math.min(100, Math.round(safeDepletion))}
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-label={`${region.name_ko} ${selectedCategory === 'passenger' ? '전기승용' : selectedCategory === 'commercial' ? '전기화물' : '전기승합'} 보조금 소진율`}
-                        aria-valuetext={`소진율 ${cat.depletion_rate.toFixed(1)}% (${getStatusLabel(cat.status)}), 잔여 ${cat.remaining_units.toLocaleString()}대`}
+                        aria-valuetext={`소진율 ${safeDepletion.toFixed(1)}% (${getStatusLabel(cat.status)}), 잔여 ${safeRemaining.toLocaleString()}대`}
                         className="w-full bg-slate-950 rounded-full h-3.5 overflow-hidden flex relative border border-slate-800"
                       >
                         {/* Layer 1: Confirmed Delivered */}
                         <div
                           style={{ width: `${deliveredPct}%` }}
                           className="bg-blue-500 h-full transition-all duration-500"
-                          title={`출고 완료: ${cat.delivered_units.toLocaleString()}대 (${deliveredPct}%)`}
+                          title={`출고 완료: ${safeDelivered.toLocaleString()}대 (${deliveredPct}%)`}
                         />
                         {/* Layer 2: Pending Applications */}
                         <div
                           style={{ width: `${pendingPct}%` }}
                           className="bg-amber-500 h-full transition-all duration-500"
-                          title={`접수 대기: ${(cat.applied_units - cat.delivered_units).toLocaleString()}대 (${pendingPct.toFixed(1)}%)`}
+                          title={`접수 대기: ${(safeApplied - safeDelivered).toLocaleString()}대 (${pendingPct.toFixed(1)}%)`}
                         />
                         {/* Layer 3: Remaining (slate track) */}
                         <div
                           style={{ width: `${remainingPct}%` }}
                           className="bg-slate-800/80 h-full"
-                          title={`잔여: ${cat.remaining_units.toLocaleString()}대 (${remainingPct.toFixed(1)}%)`}
+                          title={`잔여: ${safeRemaining.toLocaleString()}대 (${remainingPct.toFixed(1)}%)`}
                         />
                       </div>
 
                       <div className="flex justify-between text-[10px] text-slate-400">
                         <span className="flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
-                          출고 {cat.delivered_units.toLocaleString()}대
+                          <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" aria-hidden="true" />
+                          출고 {safeDelivered.toLocaleString()}대
                         </span>
                         <span className="flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
-                          심사중 {(cat.applied_units - cat.delivered_units).toLocaleString()}대
+                          <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" aria-hidden="true" />
+                          심사중 {(safeApplied - safeDelivered).toLocaleString()}대
                         </span>
                         <span className="flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-slate-700 inline-block" />
-                          잔여 {cat.remaining_units.toLocaleString()}대
+                          <span className="w-2 h-2 rounded-full bg-slate-700 inline-block" aria-hidden="true" />
+                          잔여 {safeRemaining.toLocaleString()}대
                         </span>
                       </div>
                     </div>
@@ -865,6 +908,9 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
 
               {isCustomMsrp && (
                 <div className="space-y-1.5 pt-1">
+                  <label htmlFor="custom-msrp-input" className="sr-only">
+                    직접 차량 출고가 입력
+                  </label>
                   <div className="relative">
                     <input
                       id="custom-msrp-input"

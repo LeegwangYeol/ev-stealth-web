@@ -40,6 +40,30 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
   const [selectedSource, setSelectedSource] = useState('all');
   const [sortBy, setSortBy] = useState<SortOption>('critical');
 
+  // Keyboard arrow navigation for Category Tabs (WAI-ARIA APG pattern)
+  const handleCategoryKeyDown = (e: React.KeyboardEvent, currentIndex: number) => {
+    const count = CATEGORY_TABS.length;
+    let nextIndex = -1;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      nextIndex = (currentIndex + 1) % count;
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      nextIndex = (currentIndex - 1 + count) % count;
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      nextIndex = 0;
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      nextIndex = count - 1;
+    }
+    if (nextIndex !== -1) {
+      const nextTab = CATEGORY_TABS[nextIndex].code;
+      setSelectedCategory(nextTab);
+      document.getElementById(`category-tab-${nextTab}`)?.focus();
+    }
+  };
+
   const reports = useMemo(() => initialData.reports || [], [initialData.reports]);
   const safeScore = Number.isFinite(initialData.statistics.avg_negativity_score)
     ? initialData.statistics.avg_negativity_score
@@ -177,7 +201,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     if (sev === 'CRITICAL') {
       return (
         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-600 text-white shadow-sm ring-1 ring-rose-500">
-          <svg className="w-3 h-3 animate-pulse" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
+          <svg className="w-3 h-3 animate-pulse motion-reduce:animate-none" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
             <path
               fillRule="evenodd"
               d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
@@ -308,7 +332,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           </div>
           <div className="mt-2 text-xs text-slate-500 flex items-center justify-between">
             <span>스크랩 대상: {initialData.statistics.total_scraped}건</span>
-            <span className="text-blue-600 font-medium">유효율 {Math.round((initialData.statistics.total_filtered_defects / Math.max(initialData.statistics.total_scraped, 1)) * 100)}%</span>
+            <span className="text-blue-600 font-medium">유효율 {Math.round((initialData.statistics.total_filtered_defects / Math.max(initialData.statistics.total_scraped || 0, 1)) * 100)}%</span>
           </div>
         </div>
 
@@ -416,7 +440,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
           {/* Full-text search input */}
           <div className="relative flex-1">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-600">
               <svg className="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -438,7 +462,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-600 hover:text-slate-800"
                 title="검색어 지우기"
                 aria-label="검색어 지우기"
               >
@@ -495,15 +519,19 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
         {/* Category Tabs */}
         <div role="tablist" aria-label="결함 카테고리 탭" className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 scrollbar-none text-xs">
-          {CATEGORY_TABS.map((tab) => {
+          {CATEGORY_TABS.map((tab, idx) => {
             const isSelected = selectedCategory === tab.code;
             const count = categoryCounts[tab.code] || 0;
             return (
               <button
                 key={tab.code}
+                id={`category-tab-${tab.code}`}
+                aria-controls="reports-tabpanel"
                 type="button"
                 role="tab"
                 aria-selected={isSelected}
+                tabIndex={isSelected ? 0 : -1}
+                onKeyDown={(e) => handleCategoryKeyDown(e, idx)}
                 onClick={() => setSelectedCategory(tab.code)}
                 className={`px-3 py-2 rounded-xl font-semibold whitespace-nowrap transition flex items-center gap-1.5 ${
                   isSelected
@@ -585,18 +613,19 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
       </div>
 
       {/* Reports List */}
-      {filteredReports.length === 0 ? (
-        <div className="bg-white rounded-2xl p-12 border border-slate-200 text-center space-y-3">
-          <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 mx-auto flex items-center justify-center">
-            <svg className="w-6 h-6" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          </div>
+      <div id="reports-tabpanel" role="tabpanel" aria-labelledby={`category-tab-${selectedCategory}`}>
+        {filteredReports.length === 0 ? (
+          <div className="bg-white rounded-2xl p-12 border border-slate-200 text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-600 mx-auto flex items-center justify-center">
+              <svg className="w-6 h-6" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
           <h2 className="text-base font-bold text-slate-800">일치하는 결함 리포트가 없습니다</h2>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
             선택한 카테고리나 검색어와 일치하는 커뮤니티 결함 코멘트가 없습니다. 검색어를 변경하거나 필터를 초기화해 보세요.
@@ -722,6 +751,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -191,6 +191,9 @@ export function getModelById(modelId: string): PopularModelEntry | undefined {
  * - MSRP >= 85,000,000 KRW: 0.0 (0% luxury vehicle exclusion)
  */
 export function getPriceSubsidyRatio(msrpKrw: number): number {
+  if (!Number.isFinite(msrpKrw) || msrpKrw < 0) {
+    return 1.0;
+  }
   if (msrpKrw >= 85_000_000) {
     return 0.0;
   }

@@ -83,14 +83,6 @@ def format_daily_report_payload(
             if "raw_quote" not in record_dict and "verbatim_quote" in record_dict:
                 record_dict["raw_quote"] = record_dict["verbatim_quote"]
 
-            def _safe_float(val: Any, default: float) -> float:
-                if val is None:
-                    return default
-                try:
-                    return float(val)
-                except (ValueError, TypeError):
-                    return default
-
             neg_score = _safe_float(record_dict.get("negativity_score") or record_dict.get("sentiment_score"), 0.5)
             sev_idx = _safe_float(record_dict.get("severity_index"), 0.0)
             is_critical = record_dict.get("severity") == "CRITICAL" or sev_idx >= 8.0

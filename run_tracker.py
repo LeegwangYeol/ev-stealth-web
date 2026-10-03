@@ -78,7 +78,7 @@ def setup_logging(verbose: bool = False) -> None:
     )
 
 
-def parse_arguments() -> argparse.Namespace:
+def parse_arguments(args: Optional[List[str]] = None) -> argparse.Namespace:
     """Parse CLI flags and parameters."""
     parser = argparse.ArgumentParser(
         description="Autonomous Nationwide EV Subsidy Depletion Tracker"
@@ -150,7 +150,10 @@ def parse_arguments() -> argparse.Namespace:
         action="store_false",
         help="Disable automatic quarantine of corrupted cache files.",
     )
-    return parser.parse_args()
+    return parser.parse_args(args)
+
+
+parse_args = parse_arguments
 
 
 def main() -> int:
@@ -180,10 +183,12 @@ def main() -> int:
             destinations: List[Path] = [args.output]
 
             # If writing to default primary output or when syncing with standard filename, also create mirror subsidy_depletion_data.json
-            if args.output == DEFAULT_PRIMARY_OUTPUT:
+            if args.output.resolve() == DEFAULT_PRIMARY_OUTPUT.resolve():
                 destinations.append(MIRROR_PRIMARY_OUTPUT)
-            elif (args.sync_web or args.web_dir) and args.output.name == "ev_subsidy_data.json":
+            elif args.output.name == "ev_subsidy_data.json":
                 destinations.append(args.output.parent / "subsidy_depletion_data.json")
+            elif args.output.name == "subsidy_depletion_data.json":
+                destinations.append(args.output.parent / "ev_subsidy_data.json")
 
             if args.sync_web:
                 if args.web_dir:

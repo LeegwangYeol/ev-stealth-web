@@ -91,8 +91,14 @@ def fetch_url(url_path: str, timeout: float = 5.0) -> tuple[int, str, dict]:
             headers = dict(resp.headers)
             return status, body, headers
     except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        return e.code, body, dict(e.headers)
+        try:
+            body = e.read().decode("utf-8", errors="replace")
+            return e.code, body, dict(e.headers)
+        finally:
+            try:
+                e.close()
+            except Exception:
+                pass
     except urllib.error.URLError as e:
         raise RuntimeError(f"Failed to connect to {full_url}: {e}")
 

@@ -50,7 +50,7 @@ export default function DepreciationCalculatorClient({
   const [chartViewMode, setChartViewMode] = useState<'price' | 'percentage'>('price');
 
   // Guard against zero/negative holding years for division
-  const safeYears = Math.max(1, holdingYears);
+  const safeYears = Number.isFinite(holdingYears) && holdingYears > 0 ? holdingYears : 1;
 
   // ----------------------------------------------------
   // 2. MODEL LOOKUP & FILTERING
@@ -139,6 +139,30 @@ export default function DepreciationCalculatorClient({
     setHoldingYears(years);
     if (syncMonthsWithYears) {
       setHeldMonths(Math.round(years * 12));
+    }
+  };
+
+  // Keyboard navigation for Brand Tabs (WAI-ARIA APG pattern)
+  const handleBrandTabKeyDown = (e: React.KeyboardEvent, currentIndex: number) => {
+    const count = brands.length;
+    let nextIndex = -1;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      nextIndex = (currentIndex + 1) % count;
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      nextIndex = (currentIndex - 1 + count) % count;
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      nextIndex = 0;
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      nextIndex = count - 1;
+    }
+    if (nextIndex !== -1) {
+      const nextBrand = brands[nextIndex].id;
+      setSelectedBrand(nextBrand);
+      document.getElementById(`brand-tab-${nextBrand}`)?.focus();
     }
   };
 
@@ -381,29 +405,29 @@ export default function DepreciationCalculatorClient({
       case 'GRADE_A':
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900 border border-emerald-400">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse motion-reduce:animate-none" aria-hidden="true" />
             Grade A (최상급 / CPO 인증급)
           </span>
         );
       case 'GRADE_B':
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-900 border border-blue-400">
-            <span className="w-2 h-2 rounded-full bg-blue-500" />
+            <span className="w-2 h-2 rounded-full bg-blue-500" aria-hidden="true" />
             Grade B (양호 / 정상 마모)
           </span>
         );
       case 'GRADE_C':
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-400">
-            <span className="w-2 h-2 rounded-full bg-amber-500" />
+            <span className="w-2 h-2 rounded-full bg-amber-500" aria-hidden="true" />
             Grade C (경고 / 급속 열화 진입)
           </span>
         );
       case 'CRITICAL':
       default:
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-900 border border-red-400 animate-bounce">
-            <span className="w-2 h-2 rounded-full bg-red-600" />
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-900 border border-red-400 animate-bounce motion-reduce:animate-none">
+            <span className="w-2 h-2 rounded-full bg-red-600" aria-hidden="true" />
             Critical (수명 만료 / 배터리 교체 대상)
           </span>
         );
@@ -420,7 +444,7 @@ export default function DepreciationCalculatorClient({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-2 max-w-3xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-semibold tracking-wide uppercase">
-              <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse motion-reduce:animate-none" aria-hidden="true" />
               2026 KOREA EV MARKET INTELLIGENCE
             </div>
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white">
@@ -533,20 +557,24 @@ export default function DepreciationCalculatorClient({
               className="w-full px-3.5 py-2 pl-9 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-slate-50"
               aria-label="전기차 모델 검색창"
             />
-            <span className="absolute left-3 top-2.5 text-slate-400 text-sm">🔍</span>
+            <span className="absolute left-3 top-2.5 text-slate-600 text-sm" aria-hidden="true">🔍</span>
           </div>
         </div>
 
         {/* Brand Tabs */}
         <div role="tablist" aria-label="브랜드별 필터 선택" className="flex flex-wrap gap-1.5 border-b border-slate-200 pb-3">
-          {brands.map((b) => {
+          {brands.map((b, idx) => {
             const isSelected = selectedBrand === b.id;
             return (
               <button
                 key={b.id}
+                id={`brand-tab-${b.id}`}
                 type="button"
                 role="tab"
                 aria-selected={isSelected}
+                aria-controls="panel-model-grid"
+                tabIndex={isSelected ? 0 : -1}
+                onKeyDown={(e) => handleBrandTabKeyDown(e, idx)}
                 onClick={() => setSelectedBrand(b.id)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                   isSelected
@@ -562,13 +590,20 @@ export default function DepreciationCalculatorClient({
         </div>
 
         {/* Models Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[380px] overflow-y-auto pr-1">
+        <div
+          id="panel-model-grid"
+          role="tabpanel"
+          aria-labelledby={`brand-tab-${selectedBrand}`}
+          tabIndex={0}
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[380px] overflow-y-auto pr-1 focus:outline-none"
+        >
           {filteredModels.map((model) => {
             const isSelected = model.id === selectedModel.id;
             return (
               <button
                 key={model.id}
                 type="button"
+                aria-pressed={isSelected}
                 onClick={() => handleSelectModel(model)}
                 className={`text-left p-3.5 rounded-xl border transition relative flex flex-col justify-between ${
                   isSelected
@@ -832,6 +867,9 @@ export default function DepreciationCalculatorClient({
             </div>
 
             <div className="relative">
+              <label htmlFor="customPriceInputField" className="sr-only">
+                차량 구매 가격 직접 입력
+              </label>
               <input
                 id="customPriceInputField"
                 type="number"
@@ -1024,6 +1062,9 @@ export default function DepreciationCalculatorClient({
                 // Heights for price or percentage
                 // Max: 100%, 0 to 200px (y from 230 to 30)
                 const getY = (val: number, maxVal: number) => {
+                  if (!Number.isFinite(val) || !Number.isFinite(maxVal) || maxVal <= 0) {
+                    return 230;
+                  }
                   const ratio = Math.max(0, Math.min(1, val / maxVal));
                   return 230 - ratio * 200;
                 };
@@ -1628,7 +1669,7 @@ export default function DepreciationCalculatorClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {initialDatabase.subsidy_clawback_schedule.tiers.map((tier, idx) => {
+                  {initialDatabase.subsidy_clawback_schedule.tiers.map((tier) => {
                     const isCurrentTier =
                       (tier.max_months_exclusive === null && heldMonths >= tier.min_months) ||
                       (tier.max_months_exclusive !== null &&
@@ -1642,7 +1683,7 @@ export default function DepreciationCalculatorClient({
 
                     return (
                       <tr
-                        key={idx}
+                        key={`${tier.min_months}-${(tier as { max_months?: number; max_months_exclusive: number | null }).max_months ?? tier.max_months_exclusive}`}
                         className={
                           isCurrentTier
                             ? 'bg-blue-100/70 font-bold text-blue-950'
@@ -1750,7 +1791,7 @@ export default function DepreciationCalculatorClient({
               <span className="text-xs font-semibold text-white/90">만원</span>
             </span>
             <span className="text-[11px] text-white font-medium mt-1 block">
-              월평균 +{Math.round(tcoResult.totalCumulativeSavingsKrw / (safeYears * 12) / 10000).toLocaleString()}만 원 절약
+              월평균 +{Math.round(tcoResult.totalCumulativeSavingsKrw / Math.max(1, Math.round(safeYears * 12)) / 10000).toLocaleString()}만 원 절약
             </span>
           </div>
         </div>

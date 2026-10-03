@@ -80,7 +80,7 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
 
   const score = Number.isFinite(raw.sentiment_score)
     ? Math.abs(raw.sentiment_score as number)
-    : (typeof raw.negativity_score === 'number' ? raw.negativity_score : 0.85);
+    : (Number.isFinite(raw.negativity_score) ? (raw.negativity_score as number) : 0.85);
 
   const slang = Array.isArray(raw.slang_tags)
     ? raw.slang_tags

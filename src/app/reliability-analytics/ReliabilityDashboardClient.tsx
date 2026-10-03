@@ -16,6 +16,14 @@ interface ReliabilityDashboardClientProps {
   initialData: ReliabilityTrendsDatabase;
 }
 
+type ChartTabKey = 'heatmap' | 'brand_ranking' | 'category_share';
+
+const CHART_TABS: { id: ChartTabKey; label: string }[] = [
+  { id: 'heatmap', label: '연식 리스크 히트맵' },
+  { id: 'brand_ranking', label: '브랜드 DSI 랭킹' },
+  { id: 'category_share', label: '부문별 결함 비중' },
+];
+
 export default function ReliabilityDashboardClient({ initialData }: ReliabilityDashboardClientProps) {
   // --- Filter States ---
   const [selectedBrand, setSelectedBrand] = useState<string>('ALL');
@@ -134,6 +142,29 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     setSortBy('DSI_DESC');
   };
 
+  const handleChartTabKeyDown = (e: React.KeyboardEvent, currentIndex: number) => {
+    const count = CHART_TABS.length;
+    let nextIndex = -1;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      nextIndex = (currentIndex + 1) % count;
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      nextIndex = (currentIndex - 1 + count) % count;
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      nextIndex = 0;
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      nextIndex = count - 1;
+    }
+    if (nextIndex !== -1) {
+      const nextTab = CHART_TABS[nextIndex].id;
+      setActiveChartTab(nextTab);
+      document.getElementById(`chart-tab-${nextTab}`)?.focus();
+    }
+  };
+
   const hasActiveFilter =
     selectedBrand !== 'ALL' ||
     selectedCategory !== 'ALL' ||
@@ -234,49 +265,39 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
           {/* Chart Tab Selector */}
           <div role="tablist" aria-label="데이터 시각화 차트 선택" className="inline-flex bg-slate-100 p-1.5 rounded-xl self-start sm:self-auto">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeChartTab === 'heatmap'}
-              onClick={() => setActiveChartTab('heatmap')}
-              className={`px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition ${
-                activeChartTab === 'heatmap'
-                  ? 'bg-white text-indigo-600 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              연식 리스크 히트맵
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeChartTab === 'brand_ranking'}
-              onClick={() => setActiveChartTab('brand_ranking')}
-              className={`px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition ${
-                activeChartTab === 'brand_ranking'
-                  ? 'bg-white text-indigo-600 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              브랜드 DSI 랭킹
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeChartTab === 'category_share'}
-              onClick={() => setActiveChartTab('category_share')}
-              className={`px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition ${
-                activeChartTab === 'category_share'
-                  ? 'bg-white text-indigo-600 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              부문별 결함 비중
-            </button>
+            {CHART_TABS.map((tab, idx) => {
+              const isSelected = activeChartTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  id={`chart-tab-${tab.id}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={isSelected}
+                  aria-controls={`chart-tabpanel-${tab.id}`}
+                  tabIndex={isSelected ? 0 : -1}
+                  onKeyDown={(e) => handleChartTabKeyDown(e, idx)}
+                  onClick={() => setActiveChartTab(tab.id)}
+                  className={`px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                    isSelected
+                      ? 'bg-white text-indigo-600 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <div className="mt-6">
+        <div
+          id={`chart-tabpanel-${activeChartTab}`}
+          role="tabpanel"
+          aria-labelledby={`chart-tab-${activeChartTab}`}
+          tabIndex={0}
+          className="mt-6 focus:outline-none"
+        >
           {/* TAB 1: MODEL-YEAR RISK HEATMAP */}
           {activeChartTab === 'heatmap' && (
             <div className="space-y-4">
@@ -286,19 +307,19 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-full bg-rose-500 inline-block" />
+                    <span className="w-3 h-3 rounded-full bg-rose-500 inline-block" aria-hidden="true" />
                     <span>회피 (AVOID)</span>
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-full bg-amber-400 inline-block" />
+                    <span className="w-3 h-3 rounded-full bg-amber-400 inline-block" aria-hidden="true" />
                     <span>주의 (CAUTION)</span>
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" />
+                    <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" aria-hidden="true" />
                     <span>추천 (SAFE)</span>
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="w-3 h-3 rounded-full bg-slate-200 inline-block" />
+                    <span className="w-3 h-3 rounded-full bg-slate-200 inline-block" aria-hidden="true" />
                     <span>미출시</span>
                   </span>
                 </div>
@@ -390,7 +411,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
               {/* Heatmap Detail Card (if selected) */}
               {hoveredCell && (
-                <div className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-700 shadow-xl animate-fade-in flex flex-col sm:flex-row justify-between gap-4">
+                <div className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-700 shadow-xl animate-fade-in motion-reduce:animate-none flex flex-col sm:flex-row justify-between gap-4">
                   <div className="space-y-1 max-w-2xl">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-base text-blue-300">
@@ -500,12 +521,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
                         {/* Pure CSS Bar */}
                         <div
-                          role="progressbar"
-                          aria-valuenow={brand.overall_dsi}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-label={`${brand.name_ko} 종합 결함 심각도 DSI`}
-                          aria-valuetext={`${brand.overall_dsi}점`}
+                          aria-hidden="true"
                           className="w-full bg-slate-200 rounded-full h-3.5 overflow-hidden relative"
                         >
                           <div
@@ -613,7 +629,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="relative flex-1">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-600">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
@@ -982,8 +998,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {initialData.repair_cost_matrix.map((item, idx) => (
-                <tr key={idx} className="hover:bg-slate-50 transition">
+              {initialData.repair_cost_matrix.map((item) => (
+                <tr key={item.component_name} className="hover:bg-slate-50 transition">
                   <th scope="row" className="p-4 font-bold text-slate-900 align-top text-left font-normal sm:font-bold">
                     <div>{item.component_name}</div>
                     <div className="text-[11px] text-slate-500 font-normal mt-1">
@@ -998,9 +1014,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   </td>
                   <td className="p-4 align-top">
                     <div className="flex flex-wrap gap-1">
-                      {item.high_risk_models.map((m, mIdx) => (
+                      {item.high_risk_models.map((m) => (
                         <span
-                          key={mIdx}
+                          key={`${item.component_name}-${m}`}
                           className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-medium"
                         >
                           {m}
