@@ -1,4 +1,4 @@
-import rawTrendsData from '@/data/ev_reliability_trends.json';
+import rawTrendsData from '../data/ev_reliability_trends.json' with { type: 'json' };
 
 export type DefectCategoryKey =
   | 'BATTERY_CHARGING'

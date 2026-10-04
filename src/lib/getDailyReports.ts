@@ -1,4 +1,4 @@
-import rawReportData from '@/data/daily_reports.json';
+import rawReportData from '../data/daily_reports.json' with { type: 'json' };
 
 export type DefectCategoryCode =
   | 'BATTERY_CHARGING'

@@ -18,7 +18,9 @@ import datetime
 import logging
 import os
 from pathlib import Path
+import shutil
 import sys
+import tempfile
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 # Ensure bot and project roots are present in sys.path
@@ -73,6 +75,32 @@ def _resolve_web_reports_path(custom_web_dir: Optional[Union[str, Path]] = None)
         if c.parent.exists():
             return c
     return candidates[0]
+
+
+def _resolve_root_reports_path() -> Path:
+    """Resolve repository root data/daily_reports.json path."""
+    candidates = [
+        CURRENT_DIR / "data" / "daily_reports.json",
+        CURRENT_DIR.parent / "data" / "daily_reports.json",
+    ]
+    for c in candidates:
+        if c.parent.exists():
+            return c
+    return candidates[0]
+
+
+def _atomic_copy_file(src_path: Union[str, Path], dest_path: Union[str, Path]) -> str:
+    """Atomically copy a file to dest_path using tempfile + os.replace."""
+    dest = Path(dest_path).resolve()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("wb", dir=str(dest.parent), delete=False, prefix=".tmp_sync_") as tf:
+        temp_name = tf.name
+        with open(src_path, "rb") as sf:
+            shutil.copyfileobj(sf, tf)
+        tf.flush()
+        os.fsync(tf.fileno())
+    os.replace(temp_name, dest)
+    return str(dest)
 
 
 WEB_DATA_DAILY_REPORTS_PATH = str(_resolve_web_reports_path())
@@ -309,6 +337,8 @@ class ScraperPipeline:
         if sync_web:
             resolved_web_path = _resolve_web_reports_path(web_dir)
             target_paths.append(os.path.abspath(str(resolved_web_path)))
+            resolved_root_path = _resolve_root_reports_path()
+            target_paths.append(os.path.abspath(str(resolved_root_path)))
         if not target_paths:
             target_paths.append(os.path.abspath(DEFAULT_OUTPUT_PATH))
 
@@ -337,15 +367,24 @@ class ScraperPipeline:
             )
             return results_summary
 
-        # Normal write mode with graceful degradation
+        # Normal write mode with graceful degradation and bitwise parity replication
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        primary_written: Optional[str] = None
+
         for out_path in unique_paths:
             try:
                 if len(defect_complaints) > 0:
-                    written_path = write_daily_reports(
-                        complaints=defect_complaints,
-                        output_path=out_path,
-                        total_scraped=total_scraped,
-                    )
+                    if primary_written is None:
+                        written_path = write_daily_reports(
+                            complaints=defect_complaints,
+                            output_path=out_path,
+                            total_scraped=total_scraped,
+                            generated_at=now_iso,
+                        )
+                        primary_written = written_path
+                    else:
+                        _atomic_copy_file(primary_written, out_path)
+                        written_path = out_path
                     results_summary["written_paths"].append(written_path)
                     logger.info(f"Successfully published daily reports to: {written_path}")
                 else:
@@ -360,11 +399,17 @@ class ScraperPipeline:
                             f"Scrape produced 0 authentic defects and {out_path} does not exist. "
                             f"Initializing empty daily reports payload."
                         )
-                        written_path = write_daily_reports(
-                            complaints=[],
-                            output_path=out_path,
-                            total_scraped=total_scraped,
-                        )
+                        if primary_written is None:
+                            written_path = write_daily_reports(
+                                complaints=[],
+                                output_path=out_path,
+                                total_scraped=total_scraped,
+                                generated_at=now_iso,
+                            )
+                            primary_written = written_path
+                        else:
+                            _atomic_copy_file(primary_written, out_path)
+                            written_path = out_path
                         results_summary["written_paths"].append(written_path)
             except Exception as e:
                 logger.error(f"Failed to write daily reports to {out_path}: {e}")

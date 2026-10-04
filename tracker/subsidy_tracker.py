@@ -7,6 +7,7 @@ nationwide aggregations, fallback resilience, and atomic persistence.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import http.client
 import json
 import logging
 import os
@@ -306,8 +307,17 @@ class SubsidyTracker:
                     return json.loads(raw_data)
                 logger.warning("Remote server returned non-200 status: %d", resp.status)
                 return None
-        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError, OSError) as exc:
-            if isinstance(exc, urllib.error.HTTPError):
+        except (
+            urllib.error.URLError,
+            urllib.error.HTTPError,
+            TimeoutError,
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            http.client.HTTPException,
+            OSError,
+            Exception,
+        ) as exc:
+            if hasattr(exc, "close"):
                 try:
                     exc.close()
                 except Exception:

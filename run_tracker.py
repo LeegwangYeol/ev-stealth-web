@@ -16,8 +16,10 @@ import argparse
 import logging
 import os
 from pathlib import Path
+import shutil
 import sys
-from typing import List, Set
+import tempfile
+from typing import List, Optional, Set
 
 # Ensure repository root and tracker package are on sys.path
 _CURRENT_DIR = Path(__file__).resolve().parent
@@ -66,6 +68,100 @@ def _resolve_default_paths():
     MIRROR_WEB_OUTPUT,
     EXTERNAL_SYNC_TARGETS,
 ) = _resolve_default_paths()
+
+
+def sync_defect_reports(
+    web_dir: Optional[Path] = None,
+    dry_run: bool = False,
+    run_crawler: bool = False,
+) -> List[str]:
+    """Synchronize defect reports (daily_reports.json) between root data/ and web src/data/.
+
+    Ensures both locations are bitwise synchronized and crash-durably mirrored.
+    If run_crawler is True, executes the crawler pipeline before synchronizing.
+    """
+    logger.info("Synchronizing defect reports (daily_reports.json)...")
+    if dry_run:
+        logger.info("[DRY-RUN] Defect reports synchronization skipped file persistence.")
+        return []
+
+    # Resolve web and root paths
+    if web_dir:
+        web_reports_path = Path(web_dir) / "daily_reports.json"
+    elif (_CURRENT_DIR / "src" / "data").exists():
+        web_reports_path = _CURRENT_DIR / "src" / "data" / "daily_reports.json"
+    else:
+        web_reports_path = _CURRENT_DIR / "ev-stealth-web" / "src" / "data" / "daily_reports.json"
+
+    if (_CURRENT_DIR / "data").exists():
+        root_reports_path = _CURRENT_DIR / "data" / "daily_reports.json"
+    else:
+        root_reports_path = _CURRENT_DIR.parent / "data" / "daily_reports.json"
+
+    written_paths: List[str] = []
+
+    if run_crawler:
+        try:
+            from run_scraper import ScraperPipeline
+            pipeline = ScraperPipeline()
+            res = pipeline.run(
+                sources="all",
+                limit=10,
+                sync_web=True,
+                web_dir=web_dir,
+                dry_run=dry_run,
+            )
+            written_paths.extend(res.get("written_paths", []))
+            return written_paths
+        except Exception as exc:
+            logger.warning(
+                "Crawler execution in sync_defect_reports encountered: %s. Falling back to mirror synchronization.",
+                exc,
+            )
+
+    root_exists = root_reports_path.exists()
+    web_exists = web_reports_path.exists()
+
+    source_path: Optional[Path] = None
+    target_paths: List[Path] = []
+
+    if root_exists and web_exists:
+        try:
+            root_stat = root_reports_path.stat()
+            web_stat = web_reports_path.stat()
+            if root_stat.st_mtime >= web_stat.st_mtime:
+                source_path = root_reports_path
+                target_paths = [web_reports_path]
+            else:
+                source_path = web_reports_path
+                target_paths = [root_reports_path]
+        except Exception:
+            source_path = root_reports_path
+            target_paths = [web_reports_path]
+    elif root_exists and not web_exists:
+        source_path = root_reports_path
+        target_paths = [web_reports_path]
+    elif web_exists and not root_exists:
+        source_path = web_reports_path
+        target_paths = [root_reports_path]
+
+    if source_path and target_paths:
+        for tgt in target_paths:
+            try:
+                tgt.parent.mkdir(parents=True, exist_ok=True)
+                with tempfile.NamedTemporaryFile("wb", dir=str(tgt.parent), delete=False, prefix=".tmp_sync_") as tf:
+                    tmp_name = tf.name
+                    with open(source_path, "rb") as sf:
+                        shutil.copyfileobj(sf, tf)
+                    tf.flush()
+                    os.fsync(tf.fileno())
+                os.replace(tmp_name, tgt)
+                written_paths.append(str(tgt))
+                logger.info("  ✓ Successfully synchronized defect reports: %s -> %s", source_path, tgt)
+            except Exception as e:
+                logger.warning("Failed to synchronize defect report to %s: %s", tgt, e)
+
+    return written_paths
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -150,6 +246,19 @@ def parse_arguments(args: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_false",
         help="Disable automatic quarantine of corrupted cache files.",
     )
+    parser.add_argument(
+        "--sync-defects",
+        dest="sync_defects",
+        action="store_true",
+        default=None,
+        help="Synchronize defect reports alongside subsidy data.",
+    )
+    parser.add_argument(
+        "--no-sync-defects",
+        dest="sync_defects",
+        action="store_false",
+        help="Disable defect reports synchronization.",
+    )
     return parser.parse_args(args)
 
 
@@ -213,8 +322,19 @@ def main() -> int:
             written_paths = tracker.save_payload(payload, unique_destinations)
             for wp in written_paths:
                 logger.info("  ✓ Successfully written: %s", wp)
+
+            # Synchronize defect reports alongside subsidy data when syncing web
+            if args.sync_web or (args.sync_defects is True):
+                if getattr(args, "sync_defects", None) is not False:
+                    sync_defect_reports(
+                        web_dir=args.web_dir,
+                        dry_run=False,
+                        run_crawler=bool(args.sync_defects is True),
+                    )
         else:
             logger.info("Dry-run requested: skipping file persistence.")
+            if args.sync_web or (args.sync_defects is True):
+                sync_defect_reports(web_dir=args.web_dir, dry_run=True, run_crawler=False)
 
         # Print executive summary briefing to stdout
         briefing = tracker.generate_briefing(payload, fallback_used=fallback_used)

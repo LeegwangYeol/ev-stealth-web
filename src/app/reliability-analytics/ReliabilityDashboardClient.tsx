@@ -258,7 +258,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               <span>📈</span>
               <span>데이터 시각화 차트 센터</span>
             </h2>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-slate-600 mt-1">
               연식별 위험 매트릭스, 9대 브랜드 결함 랭킹, 부문별 비중을 실시간으로 확인하세요.
             </p>
           </div>
@@ -296,7 +296,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           role="tabpanel"
           aria-labelledby={`chart-tab-${activeChartTab}`}
           tabIndex={0}
-          className="mt-6 focus:outline-none"
+          className="mt-6 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none rounded-2xl"
         >
           {/* TAB 1: MODEL-YEAR RISK HEATMAP */}
           {activeChartTab === 'heatmap' && (
@@ -459,7 +459,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           {/* TAB 2: BRAND DSI RANKING COMPARATIVE CHART */}
           {activeChartTab === 'brand_ranking' && (
             <div className="space-y-6">
-              <div className="text-xs text-slate-500">
+              <div className="text-xs text-slate-600">
                 9대 브랜드의 전체 제보와 심각도를 종합 산출한 Defect Severity Index (DSI) 랭킹입니다. 점수가 낮을수록 내구성이 우수하고 결함 발생 빈도가 적음을 나타냅니다.
               </div>
 
@@ -491,7 +491,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           }
                         }}
                         aria-pressed={isSelected}
-                        className={`p-3 sm:p-4 rounded-2xl border transition cursor-pointer ${
+                        className={`p-3 sm:p-4 rounded-2xl border transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
                           isSelected
                             ? 'bg-indigo-50/80 border-indigo-300 ring-2 ring-indigo-200'
                             : 'bg-slate-50 hover:bg-slate-100/80 border-slate-200'
@@ -539,7 +539,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           {/* TAB 3: CATEGORY DISTRIBUTION CHART */}
           {activeChartTab === 'category_share' && (
             <div className="space-y-6">
-              <div className="text-xs text-slate-500">
+              <div className="text-xs text-slate-600">
                 전기차 차주들이 가장 많이 겪는 결함 유형의 산업 전체 점유율과 예상 수리비 분석치입니다.
               </div>
 
@@ -600,7 +600,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         }
                       }}
                       aria-pressed={selectedCategory === cat.code}
-                      className={`p-4 rounded-2xl border transition cursor-pointer ${
+                      className={`p-4 rounded-2xl border transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
                         selectedCategory === cat.code
                           ? 'ring-2 ring-indigo-300 bg-indigo-50/50 border-indigo-300'
                           : `${color.bg} ${color.border} hover:shadow-md`
@@ -613,7 +613,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         </span>
                       </div>
                       <p className="text-xs text-slate-600 mt-2 leading-relaxed">{cat.description}</p>
-                      <div className="mt-3 pt-2 border-t border-slate-200/60 text-[11px] font-medium text-slate-500">
+                      <div className="mt-3 pt-2 border-t border-slate-200/60 text-[11px] font-medium text-slate-600">
                         평균 예상 수리비: <strong className="text-slate-800">{cat.avg_repair_cost_range}</strong>
                       </div>
                     </div>
@@ -671,7 +671,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
         {/* Brand Selector Buttons */}
         <div className="space-y-2">
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">제조사 브랜드</div>
+          <div className="text-xs font-semibold text-slate-600 uppercase tracking-wider">제조사 브랜드</div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -708,7 +708,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
           {/* Verdict Filter */}
           <div className="space-y-1.5">
-            <div className="text-xs font-semibold text-slate-500">판정 가이드 (Verdict)</div>
+            <div className="text-xs font-semibold text-slate-600">판정 가이드 (Verdict)</div>
             <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
@@ -763,7 +763,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
           {/* Year Range Filter */}
           <div className="space-y-1.5">
-            <div className="text-xs font-semibold text-slate-500">연식 대역</div>
+            <div className="text-xs font-semibold text-slate-600">연식 대역</div>
             <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
@@ -822,7 +822,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       <section className="space-y-4">
         <h2 className="text-2xl font-bold text-slate-900 mb-6">차종별 신뢰성 상세 분석</h2>
         <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold text-slate-600">
+          <div className="text-sm font-semibold text-slate-600" aria-live="polite">
             총 <strong className="text-slate-900">{sortedModels.length}</strong>개 차종 표시 중
           </div>
           {hasActiveFilter && (
@@ -836,7 +836,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           <div className="text-center py-16 bg-white rounded-3xl border border-slate-200 space-y-3">
             <div className="text-4xl">🔍</div>
             <h3 className="text-lg font-bold text-slate-800">일치하는 차종 데이터가 없습니다</h3>
-            <p className="text-sm text-slate-500 max-w-md mx-auto">
+            <p className="text-sm text-slate-600 max-w-md mx-auto">
               검색어나 필터 조건을 변경해 보세요. 다양한 연식과 브랜드를 종합적으로 제공합니다.
             </p>
             <button
@@ -1002,7 +1002,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 <tr key={item.component_name} className="hover:bg-slate-50 transition">
                   <th scope="row" className="p-4 font-bold text-slate-900 align-top text-left font-normal sm:font-bold">
                     <div>{item.component_name}</div>
-                    <div className="text-[11px] text-slate-500 font-normal mt-1">
+                    <div className="text-[11px] text-slate-600 font-normal mt-1">
                       {item.affected_systems}
                     </div>
                   </th>

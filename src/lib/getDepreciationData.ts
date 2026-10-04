@@ -952,22 +952,32 @@ export function calculateTcoComparison(
   let maintenanceTotalSavings = 0;
 
   const safeAnnualKm = Number.isFinite(annualKm) && annualKm >= 0 ? annualKm : 15000;
-  const safeYears = Math.max(1, Math.round(Number.isFinite(years) && years > 0 ? years : 1));
+  const rawYears = Number.isFinite(years) && years > 0 ? years : 1;
+  const safeYears = Math.max(1, Math.round(rawYears));
+  const fullYears = Math.floor(rawYears);
+  const fractionalRemainder = Math.round((rawYears - fullYears) * 10000) / 10000;
+  const totalLoops = Math.max(1, fractionalRemainder > 0.0001 ? fullYears + 1 : fullYears);
 
-  for (let y = 1; y <= safeYears; y++) {
-    const evFuel = Math.round(safeAnnualKm * evCostPerKm);
-    const iceFuel = Math.round(safeAnnualKm * iceCostPerKm);
-    const iceTax = calculateIceAnnualTax(y);
-    const toll = params.auxiliary_benefits.annual_toll_savings_krw;
-    const parking = params.auxiliary_benefits.annual_parking_savings_krw;
-    const maintenance = params.auxiliary_benefits.maintenance_annual_savings_krw;
+  let runningKm = 0;
+  for (let y = 1; y <= totalLoops; y++) {
+    const fraction = y <= fullYears ? 1.0 : (fractionalRemainder > 0 ? fractionalRemainder : 1.0);
+    const currentKm = Math.round(safeAnnualKm * fraction);
+    runningKm += currentKm;
 
-    const annualSavings = (iceFuel - evFuel) + (iceTax - evAnnualTax) + toll + parking + maintenance;
+    const evFuel = Math.round(currentKm * evCostPerKm);
+    const iceFuel = Math.round(currentKm * iceCostPerKm);
+    const evTax = Math.round(evAnnualTax * fraction);
+    const iceTax = Math.round(calculateIceAnnualTax(y) * fraction);
+    const toll = Math.round(params.auxiliary_benefits.annual_toll_savings_krw * fraction);
+    const parking = Math.round(params.auxiliary_benefits.annual_parking_savings_krw * fraction);
+    const maintenance = Math.round(params.auxiliary_benefits.maintenance_annual_savings_krw * fraction);
+
+    const annualSavings = (iceFuel - evFuel) + (iceTax - evTax) + toll + parking + maintenance;
     cumulativeSavings += annualSavings;
 
     evTotalFuel += evFuel;
     iceTotalFuel += iceFuel;
-    evTotalTax += evAnnualTax;
+    evTotalTax += evTax;
     iceTotalTax += iceTax;
     tollTotalSavings += toll;
     parkingTotalSavings += parking;
@@ -975,10 +985,10 @@ export function calculateTcoComparison(
 
     yearlyBreakdown.push({
       year: y,
-      cumulativeKm: y * safeAnnualKm,
+      cumulativeKm: runningKm,
       evElectricityCostKrw: evFuel,
       iceFuelCostKrw: iceFuel,
-      evAutomobileTaxKrw: evAnnualTax,
+      evAutomobileTaxKrw: evTax,
       iceAutomobileTaxKrw: iceTax,
       tollSavingsKrw: toll,
       parkingSavingsKrw: parking,

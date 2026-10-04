@@ -14,7 +14,7 @@ const geistMono = localFont({
 });
 
 import Link from "next/link";
-import Script from "next/script";
+import GlobalNavListener from "@/components/GlobalNavListener";
 
 export const metadata: Metadata = {
   title: "Global EV Critical Issues Hub",
@@ -174,35 +174,7 @@ export default function RootLayout({
         </footer>
 
         {/* Mobile nav drawer auto-close on internal link click & Escape key listener with focus return */}
-        <Script
-          id="mobile-nav-script"
-          strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              document.addEventListener('click', function(e) {
-                var drawer = document.getElementById('mobile-nav-drawer');
-                if (drawer && drawer.hasAttribute('open')) {
-                  var target = e.target;
-                  if (target && target.closest && target.closest('#mobile-nav-drawer a')) {
-                    drawer.removeAttribute('open');
-                  }
-                }
-              });
-              document.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape' || e.key === 'Esc') {
-                  var drawer = document.getElementById('mobile-nav-drawer');
-                  if (drawer && drawer.hasAttribute('open')) {
-                    drawer.removeAttribute('open');
-                    var summary = drawer.querySelector('summary');
-                    if (summary) {
-                      summary.focus();
-                    }
-                  }
-                }
-              });
-            `,
-          }}
-        />
+        <GlobalNavListener />
       </body>
     </html>
   );

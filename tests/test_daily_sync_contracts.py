@@ -42,6 +42,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import filecmp
 import hashlib
+import http.client
 import io
 import json
 import logging
@@ -75,6 +76,7 @@ WEB_ROOT = PROJECT_ROOT / "ev-stealth-web"
 if str(WEB_ROOT) not in sys.path:
     sys.path.insert(0, str(WEB_ROOT))
 
+import run_scraper
 import run_tracker
 from tracker.subsidy_tracker import (
     SubsidyTracker,
@@ -1364,6 +1366,140 @@ class TestCliFlagsAndRunnerContracts(unittest.TestCase):
             self.assertEqual(payload["metadata"]["total_regions_tracked"], 17)
             self.assertEqual(len(payload["regions"]), 17)
             self.assertEqual(payload["metadata"]["total_municipalities_tracked"], 73)
+
+
+# ==============================================================================
+# 8. SUBSIDY TRACKER RESILIENCE & RUN_SCRAPER DUAL-PATH CONTRACT TESTS
+# ==============================================================================
+
+class TestSubsidyTrackerResilienceContracts(unittest.TestCase):
+    """Hardened contract tests verifying SubsidyTracker exception resilience under network failures."""
+
+    def setUp(self) -> None:
+        self.tracker = SubsidyTracker(
+            endpoint_url="https://mock-ev-subsidy.local/api",
+            timeout_seconds=1.5,
+        )
+
+    def test_tracker_live_fetch_unicode_decode_error_fallback(self) -> None:
+        """When network endpoint returns non-UTF-8 bytes, fetch_live_updates must catch UnicodeDecodeError and return None."""
+        mock_resp = mock.MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.side_effect = UnicodeDecodeError("utf-8", b"\xff\xfe", 0, 1, "invalid start byte")
+
+        with mock.patch("urllib.request.urlopen") as mock_url:
+            mock_url.return_value.__enter__.return_value = mock_resp
+            result = self.tracker.fetch_live_updates()
+            self.assertIsNone(result, "fetch_live_updates must return None on UnicodeDecodeError")
+
+    def test_tracker_live_fetch_incomplete_read_fallback(self) -> None:
+        """When remote connection is dropped mid-stream, fetch_live_updates must catch IncompleteRead and return None."""
+        mock_resp = mock.MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.side_effect = http.client.IncompleteRead(b'{"partial":', expected=100)
+
+        with mock.patch("urllib.request.urlopen") as mock_url:
+            mock_url.return_value.__enter__.return_value = mock_resp
+            result = self.tracker.fetch_live_updates()
+            self.assertIsNone(result, "fetch_live_updates must return None on http.client.IncompleteRead")
+
+    def test_tracker_live_fetch_http_exception_fallback(self) -> None:
+        """When HTTP protocol failures occur (BadStatusLine, RemoteDisconnected), fetch_live_updates must return None."""
+        for exc in (
+            http.client.BadStatusLine("INVALID_STATUS"),
+            http.client.RemoteDisconnected("Remote disconnected"),
+            http.client.HTTPException("Generic protocol error"),
+        ):
+            with self.subTest(exc=type(exc).__name__):
+                with mock.patch("urllib.request.urlopen", side_effect=exc):
+                    result = self.tracker.fetch_live_updates()
+                    self.assertIsNone(result, f"fetch_live_updates must return None on {type(exc).__name__}")
+
+    def test_tracker_execute_cycle_resilient_under_network_errors(self) -> None:
+        """execute_tracking_cycle must never crash and must produce a valid 17-region SubsidyPayload under network exceptions."""
+        for exc in (
+            UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid"),
+            http.client.IncompleteRead(b''),
+            http.client.BadStatusLine("500 ???"),
+            http.client.HTTPException("Connection reset"),
+        ):
+            with self.subTest(exc=type(exc).__name__):
+                with mock.patch("urllib.request.urlopen", side_effect=exc):
+                    payload, _ = self.tracker.execute_tracking_cycle()
+                    self.assertIsInstance(payload, SubsidyPayload)
+                    self.assertEqual(len(payload.regions), 17)
+                    self.assertEqual(payload.metadata.total_regions_tracked, 17)
+                    self.assertEqual(payload.metadata.total_municipalities_tracked, 73)
+
+
+class TestScraperDualPathContracts(unittest.TestCase):
+    """Hardened contract tests verifying that run_scraper --sync-web adheres to dual-path mirroring."""
+
+    def test_scraper_sync_web_includes_dual_paths(self) -> None:
+        """When sync_web=True, run_scraper target_paths must include both root data/ and web src/data/ mirrors."""
+        pipeline = run_scraper.ScraperPipeline()
+        with mock.patch.object(pipeline, "harvest", return_value=([], {})):
+            with mock.patch.object(pipeline, "filter_defects", return_value=[]):
+                summary = pipeline.run(
+                    sources="all",
+                    limit=1,
+                    sync_web=True,
+                    dry_run=True,
+                )
+                target_paths = summary["target_paths"]
+                self.assertGreaterEqual(len(target_paths), 2)
+
+                has_root_mirror = any("data/daily_reports.json" in p and "src/data" not in p for p in target_paths)
+                has_web_mirror = any("src/data/daily_reports.json" in p for p in target_paths)
+                self.assertTrue(has_root_mirror, f"Root mirror path missing from {target_paths}")
+                self.assertTrue(has_web_mirror, f"Web mirror path missing from {target_paths}")
+
+    def test_scraper_resolve_root_and_web_reports_paths(self) -> None:
+        """_resolve_root_reports_path and _resolve_web_reports_path must resolve non-empty valid paths."""
+        root_path = run_scraper._resolve_root_reports_path()
+        web_path = run_scraper._resolve_web_reports_path()
+        self.assertEqual(root_path.name, "daily_reports.json")
+        self.assertEqual(web_path.name, "daily_reports.json")
+        self.assertNotEqual(str(root_path.resolve()), str(web_path.resolve()))
+
+    def test_scraper_dry_run_sync_web_preserves_disk_files(self) -> None:
+        """In dry-run mode with sync_web=True, no target files are written to disk."""
+        pipeline = run_scraper.ScraperPipeline()
+        with mock.patch.object(pipeline, "harvest", return_value=([], {})):
+            with mock.patch.object(pipeline, "filter_defects", return_value=[]):
+                summary = pipeline.run(
+                    sync_web=True,
+                    dry_run=True,
+                )
+                self.assertTrue(summary["dry_run"])
+                self.assertEqual(len(summary["written_paths"]), 0)
+
+
+class TestContinuousBitwiseParityContracts(unittest.TestCase):
+    """Hardened contract tests verifying continuous bitwise SHA-256 parity across synced datasets."""
+
+    def test_continuous_bitwise_sha256_parity_all_synced_datasets(self) -> None:
+        """All mirrored dataset pairs must maintain exact 100% SHA-256 bitwise parity."""
+        pairs_to_check = [
+            ("ev_subsidy_data.json", ROOT_SUBSIDY_DATA, WEB_SUBSIDY_DATA),
+            ("subsidy_depletion_data.json", ROOT_DEPLETION_DATA, WEB_DEPLETION_DATA),
+            ("daily_reports.json", ROOT_DAILY_REPORTS, WEB_DAILY_REPORTS),
+        ]
+        for name, root_p, web_p in pairs_to_check:
+            with self.subTest(dataset=name):
+                self.assertTrue(root_p.exists(), f"Missing root dataset: {root_p}")
+                self.assertTrue(web_p.exists(), f"Missing web dataset: {web_p}")
+                root_digest = _compute_sha256(root_p)
+                web_digest = _compute_sha256(web_p)
+                self.assertEqual(
+                    root_digest,
+                    web_digest,
+                    f"Bitwise parity mismatch on {name}: root={root_digest} vs web={web_digest}",
+                )
+                self.assertTrue(
+                    filecmp.cmp(root_p, web_p, shallow=False),
+                    f"filecmp mismatch on {name} between root and web mirrors",
+                )
 
 
 if __name__ == "__main__":

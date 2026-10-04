@@ -242,6 +242,18 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
   // Expanded recall card IDs for accordion view
   const [expandedRecallIds, setExpandedRecallIds] = useState<Set<string>>(new Set());
 
+  // Scroll timer ref to track and clear timeouts
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear pending timers on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (scrollTimerRef.current) {
+        clearTimeout(scrollTimerRef.current);
+      }
+    };
+  }, []);
+
   // Available brands and models for Mode B
   const availableBrands = useMemo(() => getDistinctBrands(initialDatabase), [initialDatabase]);
   const availableModels = useMemo(
@@ -286,8 +298,12 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     setVinTouched(true);
     const result = decodeVinAndCheckRecalls(sampleVin, initialDatabase);
     setCheckResult(result);
+    // Clear any pending scroll timer before scheduling a new one
+    if (scrollTimerRef.current) {
+      clearTimeout(scrollTimerRef.current);
+    }
     // Smooth scroll to result (deferred so React mounts the section first)
-    setTimeout(() => {
+    scrollTimerRef.current = setTimeout(() => {
       const el = document.getElementById('search-result-section');
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
@@ -545,7 +561,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
           {/* MODE A Form */}
           {activeCheckerMode === 'VIN' && (
-            <div id="vin-checker-panel" role="tabpanel" aria-labelledby="vin-checker-tab" tabIndex={0} className="focus:outline-none">
+            <div id="vin-checker-panel" role="tabpanel" aria-labelledby="vin-checker-tab" tabIndex={0} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl">
               <form onSubmit={handleVinSubmit} className="space-y-4">
                 <div>
                   <label htmlFor="vin-input" className="block text-sm font-medium text-slate-200 mb-2">
@@ -656,7 +672,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
           {/* MODE B Form */}
           {activeCheckerMode === 'MODEL' && (
-            <div id="model-checker-panel" role="tabpanel" aria-labelledby="model-checker-tab" tabIndex={0} className="focus:outline-none">
+            <div id="model-checker-panel" role="tabpanel" aria-labelledby="model-checker-tab" tabIndex={0} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl">
               <form onSubmit={handleModelSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   {/* Brand */}

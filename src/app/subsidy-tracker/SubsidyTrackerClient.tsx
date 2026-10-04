@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useDeferredValue, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   EVSubsidyDataset,
   AlertSeverity,
   CategoryMetrics,
   SubsidyCalculatorOptions,
+  RegionEntry,
+  PopularModelEntry,
 } from '@/types/subsidy';
 import { calculateNetSubsidy } from '@/lib/getSubsidyData';
 
@@ -24,6 +26,632 @@ const CATEGORY_TABS: { id: CategoryType; label: string; icon: string }[] = [
   { id: 'bus', label: '전기승합 (버스)', icon: '🚌' },
 ];
 
+// Pure Helper: Badge styling with opaque solid backgrounds for compliant contrast
+const getBadgeStyle = (status: AlertSeverity): string => {
+  switch (status) {
+    case 'HEALTHY':
+      return 'bg-emerald-950 text-emerald-300 border-emerald-500/40';
+    case 'CAUTION':
+      return 'bg-amber-950 text-amber-300 border-amber-500/40';
+    case 'WARNING':
+      return 'bg-orange-950 text-orange-300 border-orange-500/40';
+    case 'CRITICAL':
+      return 'bg-rose-950 text-rose-300 border-rose-500/40 animate-pulse motion-reduce:animate-none';
+    case 'DEPLETED':
+      return 'bg-slate-900 text-slate-300 border-slate-700';
+  }
+};
+
+// Pure Helper: Status badge labels
+const getStatusLabel = (status: AlertSeverity): string => {
+  switch (status) {
+    case 'HEALTHY':
+      return '🟢 안정';
+    case 'CAUTION':
+      return '🟡 주의';
+    case 'WARNING':
+      return '🟠 경고';
+    case 'CRITICAL':
+      return '🔴 마감임박';
+    case 'DEPLETED':
+      return '🔒 소진';
+  }
+};
+
+// Pure Helper: Zone categorizer
+const getRegionZone = (isoCode: string): ZoneFilter => {
+  switch (isoCode) {
+    case 'KR-11': // 서울
+    case 'KR-41': // 경기
+    case 'KR-28': // 인천
+      return 'CAPITAL';
+    case 'KR-26': // 부산
+    case 'KR-27': // 대구
+    case 'KR-31': // 울산
+    case 'KR-47': // 경북
+    case 'KR-48': // 경남
+      return 'YEONGNAM';
+    case 'KR-29': // 광주
+    case 'KR-45': // 전북
+    case 'KR-46': // 전남
+      return 'HONAM';
+    case 'KR-30': // 대전
+    case 'KR-36': // 세종
+    case 'KR-43': // 충북
+    case 'KR-44': // 충남
+      return 'CHUNGCHEONG';
+    case 'KR-42': // 강원
+    case 'KR-49': // 제주
+      return 'GANGWON_JEJU';
+    default:
+      return 'ALL';
+  }
+};
+
+// ============================================================================
+// Sub-Component: Memoized Region Card (prevents re-render cascades on typing)
+// ============================================================================
+interface RegionCardProps {
+  region: RegionEntry;
+  selectedCategory: CategoryType;
+  isExpanded: boolean;
+  toggleRegionExpand: (regionId: string) => void;
+  onSelectForCalc: (regionId: string) => void;
+}
+
+const RegionCard = React.memo(function RegionCard({
+  region,
+  selectedCategory,
+  isExpanded,
+  toggleRegionExpand,
+  onSelectForCalc,
+}: RegionCardProps) {
+  const cat: CategoryMetrics = region.categories[selectedCategory];
+
+  const safeAnnounced = Number.isFinite(cat.announced_units) && cat.announced_units > 0 ? cat.announced_units : 1;
+  const safeDelivered = Number.isFinite(cat.delivered_units) ? cat.delivered_units : 0;
+  const safeDepletion = Number.isFinite(cat.depletion_rate) ? cat.depletion_rate : 0;
+  const safeRemaining = Number.isFinite(cat.remaining_units) ? cat.remaining_units : 0;
+  const safeApplied = Number.isFinite(cat.applied_units) ? cat.applied_units : 0;
+
+  const rawDeliveredPct = Math.round((safeDelivered / safeAnnounced) * 100);
+  const deliveredPct = Number.isFinite(rawDeliveredPct) ? Math.min(100, Math.max(0, rawDeliveredPct)) : 0;
+  const rawPendingPct = safeDepletion - deliveredPct;
+  const pendingPct = Number.isFinite(rawPendingPct) ? Math.max(0, Math.min(100 - deliveredPct, rawPendingPct)) : 0;
+  const remainingPct = Math.max(0, 100 - (deliveredPct + pendingPct));
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg hover:border-slate-700 transition flex flex-col justify-between">
+      <div className="space-y-3">
+        {/* Card Header */}
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-bold text-white">{region.name_ko}</h3>
+              <span className="text-[10px] text-slate-400 uppercase font-mono">{region.iso_code}</span>
+            </div>
+            <div className="text-xs text-slate-400">{region.name_en}</div>
+          </div>
+          <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${getBadgeStyle(cat.status)}`}>
+            {getStatusLabel(cat.status)}
+          </span>
+        </div>
+
+        {/* Progress Bar (Dual Layer: Delivered vs Pending vs Remaining) */}
+        <div className="space-y-1.5 pt-1">
+          <div className="flex justify-between items-center text-xs">
+            <span className="font-semibold text-slate-300">
+              소진율 <strong className="text-amber-400 text-sm">{safeDepletion.toFixed(1)}%</strong>
+            </span>
+            <span className="text-slate-400 text-[11px]">
+              잔여 <strong className="text-emerald-400 font-bold">{safeRemaining.toLocaleString()}</strong> / {safeAnnounced.toLocaleString()}대
+            </span>
+          </div>
+
+          <div
+            role="progressbar"
+            aria-valuenow={Math.min(100, Math.round(safeDepletion))}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`${region.name_ko} ${selectedCategory === 'passenger' ? '전기승용' : selectedCategory === 'commercial' ? '전기화물' : '전기승합'} 보조금 소진율`}
+            aria-valuetext={`소진율 ${safeDepletion.toFixed(1)}% (${getStatusLabel(cat.status)}), 잔여 ${safeRemaining.toLocaleString()}대`}
+            className="w-full bg-slate-950 rounded-full h-3.5 overflow-hidden flex relative border border-slate-800"
+          >
+            {/* Layer 1: Confirmed Delivered */}
+            <div
+              style={{ width: `${deliveredPct}%` }}
+              className="bg-blue-500 h-full transition-all duration-500"
+              title={`출고 완료: ${safeDelivered.toLocaleString()}대 (${deliveredPct}%)`}
+            />
+            {/* Layer 2: Pending Applications */}
+            <div
+              style={{ width: `${pendingPct}%` }}
+              className="bg-amber-500 h-full transition-all duration-500"
+              title={`접수 대기: ${(safeApplied - safeDelivered).toLocaleString()}대 (${pendingPct.toFixed(1)}%)`}
+            />
+            {/* Layer 3: Remaining (slate track) */}
+            <div
+              style={{ width: `${remainingPct}%` }}
+              className="bg-slate-800 h-full"
+              title={`잔여: ${safeRemaining.toLocaleString()}대 (${remainingPct.toFixed(1)}%)`}
+            />
+          </div>
+
+          <div className="flex justify-between text-[10px] text-slate-400">
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" aria-hidden="true" />
+              출고 {safeDelivered.toLocaleString()}대
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" aria-hidden="true" />
+              심사중 {(safeApplied - safeDelivered).toLocaleString()}대
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-slate-700 inline-block" aria-hidden="true" />
+              잔여 {safeRemaining.toLocaleString()}대
+            </span>
+          </div>
+        </div>
+
+        {/* Financial Subsidy Limits - Solid Opaque Backgrounds for Contrast */}
+        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800 text-xs">
+          <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+            <div className="text-[11px] text-slate-400">지자체 최대 지원금</div>
+            <div className="text-sm font-bold text-slate-200 mt-0.5">
+              {(cat.max_local_subsidy_krw / 10000).toLocaleString()}만 원
+            </div>
+          </div>
+          <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+            <div className="text-[11px] text-slate-400">국비+지방비 합산 최대</div>
+            <div className="text-sm font-bold text-amber-400 mt-0.5">
+              {(cat.max_total_subsidy_krw / 10000).toLocaleString()}만 원
+            </div>
+          </div>
+        </div>
+
+        {/* Eligibility & Notes */}
+        <div className="flex flex-wrap gap-1.5 pt-1 text-[11px]">
+          <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+            거주 요건: {region.residency_requirement_days}일 이상
+          </span>
+          {region.supplementary_budget_added && (
+            <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/40 font-semibold">
+              추경 완료
+            </span>
+          )}
+        </div>
+
+        {region.notes && (
+          <p className="text-xs text-slate-400 leading-relaxed bg-slate-950 p-2 rounded-lg border border-slate-800">
+            ℹ️ {region.notes}
+          </p>
+        )}
+
+        {/* Municipalities Collapsible (if province has sub-cities) */}
+        {region.municipalities && region.municipalities.length > 0 && (
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => toggleRegionExpand(region.region_id)}
+              aria-expanded={isExpanded}
+              aria-controls={'muni-details-' + region.region_id}
+              className="w-full py-1.5 px-3 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-xs font-medium flex items-center justify-between transition border border-slate-800 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+            >
+              <span>세부 시·군·구 {region.municipalities.length}개 현황 보기</span>
+              <span>{isExpanded ? '▲ 접기' : '▼ 펼치기'}</span>
+            </button>
+
+            {isExpanded && (
+              <div
+                id={'muni-details-' + region.region_id}
+                tabIndex={0}
+                aria-label={`${region.name_ko} 세부 시·군·구 보조금 현황 목록`}
+                className="mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
+              >
+                {region.municipalities.map((muni) => (
+                  <div
+                    key={muni.name_ko}
+                    className="p-2 rounded bg-slate-950 border border-slate-800 flex items-center justify-between text-[11px]"
+                  >
+                    <div>
+                      <span className="font-semibold text-slate-200">{muni.name_ko}</span>
+                      <span className="text-slate-400 ml-2">
+                        {(muni.local_subsidy_krw / 10000).toLocaleString()}만 원
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400">잔여 {muni.remaining_units}대</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${getBadgeStyle(muni.status)}`}>
+                        {getStatusLabel(muni.status)} {muni.depletion_rate.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Card Action Button */}
+      <div className="pt-4 mt-3 border-t border-slate-800">
+        <button
+          type="button"
+          onClick={() => onSelectForCalc(region.region_id)}
+          className="w-full py-2.5 px-4 rounded-xl bg-blue-600/90 hover:bg-blue-600 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5 shadow focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+        >
+          <span>⚡</span> 이 지역({region.name_ko})으로 실구매가 계산
+        </button>
+      </div>
+    </div>
+  );
+});
+
+// ============================================================================
+// Sub-Component: Memoized Net Subsidy Calculator
+// (Isolated state: typing in search or toggling filters will not re-render calculator,
+// and toggling calculator checkboxes will not re-render the regional cards)
+// ============================================================================
+interface SubsidyCalculatorProps {
+  calculatorRef: React.RefObject<HTMLDivElement>;
+  models: PopularModelEntry[];
+  regions: RegionEntry[];
+  selectedModelId: string;
+  selectedRegionId: string;
+  onSelectModelId: (modelId: string) => void;
+  onSelectRegionId: (regionId: string) => void;
+}
+
+const SubsidyCalculator = React.memo(function SubsidyCalculator({
+  calculatorRef,
+  models,
+  regions,
+  selectedModelId,
+  selectedRegionId,
+  onSelectModelId,
+  onSelectRegionId,
+}: SubsidyCalculatorProps) {
+  const [isCustomMsrp, setIsCustomMsrp] = useState(false);
+  const [customMsrpInput, setCustomMsrpInput] = useState<string>('');
+  const [calcOptions, setCalcOptions] = useState<SubsidyCalculatorOptions>({
+    isYouthFirstTimeBuyer: false,
+    isSmallBusinessOrTaxi: false,
+    isMultiChildFamily: false,
+    isOldDieselScrappage: false,
+  });
+
+  const activeModel = useMemo(() => {
+    return models.find((m) => m.model_id === selectedModelId) || models[0];
+  }, [models, selectedModelId]);
+
+  const activeRegionForCalc = useMemo(() => {
+    return regions.find((r) => r.region_id === selectedRegionId) || regions[0];
+  }, [regions, selectedRegionId]);
+
+  const calculationResult = useMemo(() => {
+    const customMsrpNum = isCustomMsrp && customMsrpInput ? parseInt(customMsrpInput.replace(/[^0-9]/g, ''), 10) : undefined;
+    return calculateNetSubsidy(selectedModelId, selectedRegionId, customMsrpNum, calcOptions);
+  }, [selectedModelId, selectedRegionId, isCustomMsrp, customMsrpInput, calcOptions]);
+
+  return (
+    <section
+      id="subsidy-calculator"
+      ref={calculatorRef}
+      aria-labelledby="calculator-heading"
+      className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 border border-blue-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-8"
+    >
+      <div className="max-w-3xl space-y-2">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-bold uppercase tracking-wider">
+          <span aria-hidden="true">💡</span> 실시간 인터랙티브 시뮬레이터
+        </div>
+        <h2 id="calculator-heading" className="text-2xl sm:text-3xl font-extrabold text-white">
+          ⚡ 실시간 전기차 보조금 &amp; 체감 실구매가 계산기
+        </h2>
+        <p className="text-slate-300 text-sm leading-relaxed">
+          원하는 전기차 모델과 거주 지자체를 선택하면 2026년 <strong>5,500만/8,500만 원 슬라이딩 가격상한제</strong>, 배터리 계수, 지자체 매칭률 및 특별 가산금을 자동 계산하여 <strong>실제 내 지갑에서 나가는 체감가</strong>를 즉시 산출합니다.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Left Column: Calculator Controls */}
+        <div className="lg:col-span-7 space-y-6">
+          {/* 1. Vehicle Selector */}
+          <div className="space-y-2">
+            <label htmlFor="model-select" className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+              1. 차량 모델 선택
+            </label>
+            <select
+              id="model-select"
+              value={selectedModelId}
+              onChange={(e) => onSelectModelId(e.target.value)}
+              className="w-full py-3 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none cursor-pointer font-medium"
+            >
+              {models.map((model) => (
+                <option key={model.model_id} value={model.model_id}>
+                  {model.manufacturer} - {model.name_ko} (출고가 {(model.base_price_krw / 10000).toLocaleString()}만 원)
+                </option>
+              ))}
+            </select>
+
+            {/* Quick Pills for Top Models */}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {models.slice(0, 8).map((m) => (
+                <button
+                  key={m.model_id}
+                  type="button"
+                  aria-pressed={selectedModelId === m.model_id}
+                  onClick={() => onSelectModelId(m.model_id)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
+                    selectedModelId === m.model_id
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                  }`}
+                >
+                  {m.name_ko.replace(/^(현대|기아|테슬라|KGM|비야디|BYD)\s+/, '')}
+                </button>
+              ))}
+            </div>
+
+            {/* Selected Model Spec Card - Solid Opaque Background */}
+            {activeModel && (
+              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex flex-wrap items-center justify-between text-xs text-slate-300 gap-2">
+                <span>배터리: <strong>{activeModel.battery_type}</strong> ({activeModel.battery_capacity_kwh} kWh)</span>
+                <span>1회 충전 주행거리: <strong>{activeModel.rated_range_km} km</strong></span>
+                <span>기본 출고가: <strong>{(activeModel.base_price_krw / 10000).toLocaleString()}만 원</strong></span>
+              </div>
+            )}
+          </div>
+
+          {/* 2. Region Selector */}
+          <div className="space-y-2">
+            <label htmlFor="region-select" className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+              2. 거주 지자체 (시·도) 선택
+            </label>
+            <select
+              id="region-select"
+              value={selectedRegionId}
+              onChange={(e) => onSelectRegionId(e.target.value)}
+              aria-describedby="region-residency-note"
+              className="w-full py-3 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none cursor-pointer font-medium"
+            >
+              {regions.map((reg) => (
+                <option key={reg.region_id} value={reg.region_id}>
+                  {reg.name_ko} ({reg.categories.passenger.depletion_rate.toFixed(1)}% 소진, {getStatusLabel(reg.categories.passenger.status)})
+                </option>
+              ))}
+            </select>
+            <p id="region-residency-note" className="text-xs text-amber-300 flex items-center gap-1.5 pt-0.5">
+              <span aria-hidden="true">ℹ️</span> 해당 지자체 최소 <strong>{activeRegionForCalc.residency_requirement_days}일 이상</strong> 연속 거주 요건 필요
+            </p>
+          </div>
+
+          {/* 3. Custom MSRP Option */}
+          <div className="space-y-3 p-4 bg-slate-950 border border-slate-800 rounded-2xl">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-300 uppercase tracking-wider">
+                <input
+                  type="checkbox"
+                  checked={isCustomMsrp}
+                  onChange={(e) => {
+                    setIsCustomMsrp(e.target.checked);
+                    if (e.target.checked && !customMsrpInput && activeModel) {
+                      setCustomMsrpInput(activeModel.base_price_krw.toString());
+                    }
+                  }}
+                  className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                />
+                <span>옵션 포함 출고가 직접 입력 (커스텀 MSRP)</span>
+              </label>
+              {isCustomMsrp && (
+                <span className="text-[11px] text-amber-400 font-medium">5,500만/8,500만 원 상한제 실시간 연동</span>
+              )}
+            </div>
+
+            {isCustomMsrp && (
+              <div className="space-y-1.5 pt-1">
+                <label htmlFor="custom-msrp-input" className="sr-only">
+                  직접 차량 출고가 입력
+                </label>
+                <div className="relative">
+                  <input
+                    id="custom-msrp-input"
+                    type="text"
+                    inputMode="numeric"
+                    aria-label="직접 차량 출고가 입력"
+                    value={customMsrpInput ? parseInt(customMsrpInput, 10).toLocaleString('ko-KR') : ''}
+                    onChange={(e) => setCustomMsrpInput(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="원 단위 출고가 입력 (예: 54,900,000)"
+                    className="w-full py-2.5 px-3.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm font-semibold focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none pr-12"
+                  />
+                  <span className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 text-xs font-semibold">
+                    원
+                  </span>
+                </div>
+                <div className="flex gap-2 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setCustomMsrpInput('54000000')}
+                    className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                  >
+                    5,400만 (100% 구간)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomMsrpInput('62000000')}
+                    className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                  >
+                    6,200만 (50% 감액)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomMsrpInput('86000000')}
+                    className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                  >
+                    8,600만 (보조금 0원)
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 4. Special Additional Grants & Incentives */}
+          <div className="space-y-2.5 p-4 bg-slate-950 border border-slate-800 rounded-2xl">
+            <div className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+              3. 추가 지원금 &amp; 특별 가산 혜택 (해당 시 선택)
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <label className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={calcOptions.isYouthFirstTimeBuyer}
+                  onChange={(e) => setCalcOptions((prev) => ({ ...prev, isYouthFirstTimeBuyer: e.target.checked }))}
+                  className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                />
+                <span>청년 생애 최초 구매 (+20% 국비)</span>
+              </label>
+
+              <label className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={calcOptions.isSmallBusinessOrTaxi}
+                  onChange={(e) => setCalcOptions((prev) => ({ ...prev, isSmallBusinessOrTaxi: e.target.checked }))}
+                  className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                />
+                <span>소상공인 / 영업용 택시 (+30% 국비)</span>
+              </label>
+
+              <label className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={calcOptions.isMultiChildFamily}
+                  onChange={(e) => setCalcOptions((prev) => ({ ...prev, isMultiChildFamily: e.target.checked }))}
+                  className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                />
+                <span>다자녀 가구 (+10% 국비)</span>
+              </label>
+
+              <label className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={calcOptions.isOldDieselScrappage}
+                  onChange={(e) => setCalcOptions((prev) => ({ ...prev, isOldDieselScrappage: e.target.checked }))}
+                  className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                />
+                <span>노후 경유차 조기폐차 (+100만 원)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Live Output & Net Price Card */}
+        <div
+          aria-live="polite"
+          aria-atomic="true"
+          className="lg:col-span-5 bg-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-7 space-y-6 shadow-2xl sticky top-24"
+        >
+          <div>
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              시뮬레이션 견적 요약
+            </span>
+            <h3 className="text-xl font-bold text-white mt-1">
+              {calculationResult.modelName}
+            </h3>
+            <div className="text-xs text-blue-300 font-medium mt-0.5">
+              등록 지역: {calculationResult.regionName} ({activeRegionForCalc.name_en})
+            </div>
+          </div>
+
+          {/* Price Breakdown Matrix */}
+          <div className="space-y-2.5 text-sm border-t border-slate-800 pt-4">
+            <div className="flex justify-between items-center text-slate-300">
+              <span>차량 출고가 (MSRP)</span>
+              <span className="font-semibold text-slate-100">
+                {calculationResult.msrpKrw.toLocaleString()} 원
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center text-xs text-slate-400">
+              <span>가격상한제 적용 구간</span>
+              <span className="font-medium text-amber-300">
+                {calculationResult.priceCapTierText}
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center text-blue-400">
+              <span>(-) 국비 보조금</span>
+              <span className="font-semibold">
+                -{calculationResult.nationalSubsidyKrw.toLocaleString()} 원
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center text-blue-400">
+              <span>(-) 지자체 지방비 보조금</span>
+              <span className="font-semibold">
+                -{calculationResult.localSubsidyKrw.toLocaleString()} 원
+              </span>
+            </div>
+
+            {calculationResult.additionalGrantsKrw > 0 && (
+              <div className="flex justify-between items-center text-emerald-400">
+                <span>(-) 추가 지원 &amp; 특별 가산금</span>
+                <span className="font-semibold">
+                  -{calculationResult.additionalGrantsKrw.toLocaleString()} 원
+                </span>
+              </div>
+            )}
+
+            <div className="h-px bg-slate-800 my-2" />
+
+            {/* Total Subsidy Combined */}
+            <div className="flex justify-between items-center text-xs text-slate-400">
+              <span>총 지원 혜택 금액</span>
+              <span className="font-bold text-slate-200">
+                {calculationResult.totalSubsidyKrw.toLocaleString()} 원
+              </span>
+            </div>
+          </div>
+
+          {/* Net Out-of-pocket Purchase Price */}
+          <div className="bg-gradient-to-r from-emerald-950 to-slate-900 border border-emerald-500/40 rounded-2xl p-5 text-center space-y-1">
+            <span className="text-xs text-emerald-300 font-semibold uppercase tracking-wider">
+              최종 실구매 체감가 (소비자 부담액)
+            </span>
+            <div className="text-3xl sm:text-4xl font-black text-emerald-400 tracking-tight">
+              {Math.round(calculationResult.netPurchasePriceKrw / 10000).toLocaleString()}
+              <span className="text-xl sm:text-2xl font-bold ml-1 text-emerald-200">만 원</span>
+            </div>
+            <div className="text-[11px] text-emerald-300">
+              (정확한 금액: {calculationResult.netPurchasePriceKrw.toLocaleString()} 원)
+            </div>
+          </div>
+
+          {/* Depletion Risk Warning Alert */}
+          <div
+            className={`p-4 rounded-2xl border text-xs leading-relaxed space-y-1.5 ${
+              calculationResult.isHighDepletionRisk
+                ? 'bg-rose-950 border-rose-500/60 text-rose-200'
+                : 'bg-emerald-950 border-emerald-500/40 text-emerald-200'
+            }`}
+          >
+            <div className="font-bold flex items-center gap-1.5">
+              <span>{calculationResult.isHighDepletionRisk ? '🚨' : '✅'}</span>
+              <span>{calculationResult.regionName} 보조금 예산 소진 위험도 분석</span>
+            </div>
+            <p>{calculationResult.warningNotice}</p>
+            <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-800 flex flex-wrap justify-between gap-1">
+              <span>거주 요건: 최소 {calculationResult.residencyRequirementDays}일 이상</span>
+              <span>2년 의무 운행 기간 (관외 이전 시 환수)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+});
+
+// ============================================================================
+// Main Export: SubsidyTrackerClient Component
+// ============================================================================
 export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClientProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -34,7 +662,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   const urlRegion = searchParams?.get('region') || '';
   const urlModel = searchParams?.get('model') || '';
 
-  // State
+  // Top-Level State
   const [selectedCategory, setSelectedCategory] = useState<CategoryType>('passenger');
   const [zoneFilter, setZoneFilter] = useState<ZoneFilter>('ALL');
   const [alertFilter, setAlertFilter] = useState<AlertSeverity | 'ALL'>('ALL');
@@ -43,7 +671,10 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   const [supplementaryOnly, setSupplementaryOnly] = useState(false);
   const [expandedRegions, setExpandedRegions] = useState<Record<string, boolean>>({});
 
-  // Calculator State
+  // Performance Optimization: Non-blocking search typing via useDeferredValue
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+
+  // Calculator State & Ref
   const calculatorRef = useRef<HTMLDivElement>(null);
   const [selectedModelId, setSelectedModelId] = useState<string>(
     urlModel || initialData.popular_models_matrix[0]?.model_id || 'ioniq-5-2026'
@@ -51,16 +682,8 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   const [selectedRegionId, setSelectedRegionId] = useState<string>(
     urlRegion || initialData.regions[0]?.region_id || 'KR-11'
   );
-  const [isCustomMsrp, setIsCustomMsrp] = useState(false);
-  const [customMsrpInput, setCustomMsrpInput] = useState<string>('');
-  const [calcOptions, setCalcOptions] = useState<SubsidyCalculatorOptions>({
-    isYouthFirstTimeBuyer: false,
-    isSmallBusinessOrTaxi: false,
-    isMultiChildFamily: false,
-    isOldDieselScrappage: false,
-  });
 
-  // Sync selectedModelId and selectedRegionId on query param navigation (Fix R-1)
+  // Sync selectedModelId and selectedRegionId on query param navigation
   useEffect(() => {
     if (urlModel) {
       setSelectedModelId(urlModel);
@@ -75,38 +698,10 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   const summary = initialData.nationwide_summary;
   const thresholds = initialData.alert_thresholds;
 
-  // Zone categorizer helper
-  const getRegionZone = (isoCode: string): ZoneFilter => {
-    switch (isoCode) {
-      case 'KR-11': // 서울
-      case 'KR-41': // 경기
-      case 'KR-28': // 인천
-        return 'CAPITAL';
-      case 'KR-26': // 부산
-      case 'KR-27': // 대구
-      case 'KR-31': // 울산
-      case 'KR-47': // 경북
-      case 'KR-48': // 경남
-        return 'YEONGNAM';
-      case 'KR-29': // 광주
-      case 'KR-45': // 전북
-      case 'KR-46': // 전남
-        return 'HONAM';
-      case 'KR-30': // 대전
-      case 'KR-36': // 세종
-      case 'KR-43': // 충북
-      case 'KR-44': // 충남
-        return 'CHUNGCHEONG';
-      case 'KR-42': // 강원
-      case 'KR-49': // 제주
-        return 'GANGWON_JEJU';
-      default:
-        return 'ALL';
-    }
-  };
-
-  // Filtered & Sorted Regions
+  // Optimized Filtered & Sorted Regions (dependent on deferredSearchQuery to keep typing responsive)
   const filteredRegions = useMemo(() => {
+    const trimmedQuery = deferredSearchQuery.trim().toLowerCase();
+
     return regions
       .filter((region) => {
         // Category Metrics
@@ -129,15 +724,14 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         }
 
         // Search Query
-        if (searchQuery.trim()) {
-          const q = searchQuery.trim().toLowerCase();
+        if (trimmedQuery) {
           const matchRegion =
-            region.name_ko.toLowerCase().includes(q) ||
-            region.name_en.toLowerCase().includes(q) ||
-            region.iso_code.toLowerCase().includes(q);
+            region.name_ko.toLowerCase().includes(trimmedQuery) ||
+            region.name_en.toLowerCase().includes(trimmedQuery) ||
+            region.iso_code.toLowerCase().includes(trimmedQuery);
 
           const matchMuni =
-            region.municipalities?.some((m) => m.name_ko.toLowerCase().includes(q)) ?? false;
+            region.municipalities?.some((m) => m.name_ko.toLowerCase().includes(trimmedQuery)) ?? false;
 
           if (!matchRegion && !matchMuni) return false;
         }
@@ -163,7 +757,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             return 0;
         }
       });
-  }, [regions, selectedCategory, zoneFilter, alertFilter, supplementaryOnly, searchQuery, sortOption]);
+  }, [regions, selectedCategory, zoneFilter, alertFilter, supplementaryOnly, deferredSearchQuery, sortOption]);
 
   // Critical regions (for emergency ticker)
   const criticalRegions = useMemo(() => {
@@ -175,36 +769,28 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
     );
   }, [regions]);
 
-  // Active Model
-  const activeModel = useMemo(() => {
-    return models.find((m) => m.model_id === selectedModelId) || models[0];
-  }, [models, selectedModelId]);
-
-  // Active Region for Calculator
-  const activeRegionForCalc = useMemo(() => {
-    return regions.find((r) => r.region_id === selectedRegionId) || regions[0];
-  }, [regions, selectedRegionId]);
-
-  // Net Subsidy Calculation
-  const calculationResult = useMemo(() => {
-    const customMsrpNum = isCustomMsrp && customMsrpInput ? parseInt(customMsrpInput.replace(/[^0-9]/g, ''), 10) : undefined;
-    return calculateNetSubsidy(selectedModelId, selectedRegionId, customMsrpNum, calcOptions);
-  }, [selectedModelId, selectedRegionId, isCustomMsrp, customMsrpInput, calcOptions]);
-
-  // Quick Action: Select region and jump to calculator
-  const handleSelectRegionForCalc = (regionId: string) => {
+  // Stable Callbacks (passed to memoized children to prevent re-render cascades)
+  const handleSelectRegionForCalc = useCallback((regionId: string) => {
     setSelectedRegionId(regionId);
     if (calculatorRef.current) {
       calculatorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  };
+  }, []);
 
-  const toggleRegionExpand = (regionId: string) => {
+  const toggleRegionExpand = useCallback((regionId: string) => {
     setExpandedRegions((prev) => ({
       ...prev,
       [regionId]: !prev[regionId],
     }));
-  };
+  }, []);
+
+  const handleSelectModelId = useCallback((modelId: string) => {
+    setSelectedModelId(modelId);
+  }, []);
+
+  const handleSelectRegionId = useCallback((regionId: string) => {
+    setSelectedRegionId(regionId);
+  }, []);
 
   const handleCategoryKeyDown = (e: React.KeyboardEvent, currentIndex: number) => {
     const count = CATEGORY_TABS.length;
@@ -222,41 +808,13 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
       e.preventDefault();
       nextIndex = count - 1;
     }
-    if (nextIndex !== -1) {
-      const nextCategory = CATEGORY_TABS[nextIndex].id;
-      setSelectedCategory(nextCategory);
-      document.getElementById(`tab-category-${nextCategory}`)?.focus();
-    }
-  };
 
-  // Helper for alert colors & badges
-  const getBadgeStyle = (status: AlertSeverity) => {
-    switch (status) {
-      case 'HEALTHY':
-        return 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50';
-      case 'CAUTION':
-        return 'bg-amber-950/80 text-amber-300 border-amber-500/50';
-      case 'WARNING':
-        return 'bg-orange-950/80 text-orange-300 border-orange-500/50';
-      case 'CRITICAL':
-        return 'bg-rose-950/80 text-rose-300 border-rose-500/50';
-      case 'DEPLETED':
-        return 'bg-zinc-800 text-zinc-300 border-zinc-600';
-    }
-  };
-
-  const getStatusLabel = (status: AlertSeverity) => {
-    switch (status) {
-      case 'HEALTHY':
-        return '🟢 안정';
-      case 'CAUTION':
-        return '🟡 주의';
-      case 'WARNING':
-        return '🟠 경고';
-      case 'CRITICAL':
-        return '🔴 마감임박';
-      case 'DEPLETED':
-        return '🔒 소진';
+    if (nextIndex >= 0) {
+      setSelectedCategory(CATEGORY_TABS[nextIndex].id);
+      const targetBtn = document.getElementById(`tab-category-${CATEGORY_TABS[nextIndex].id}`);
+      if (targetBtn) {
+        targetBtn.focus();
+      }
     }
   };
 
@@ -270,13 +828,13 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         보조금 계산기로 건너뛰기
       </a>
 
-      {/* 1. Header Banner & Live Tracker Status */}
+      {/* 1. Header Banner & Live Tracker Status - Solid Opaque Background */}
       <section aria-labelledby="tracker-heading" className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-amber-500/10 via-blue-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-semibold tracking-wide">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-xs font-semibold tracking-wide">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping motion-reduce:animate-none inline-block" aria-hidden="true" />
               실시간 스케줄러 동기화 완료
             </span>
@@ -301,7 +859,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
 
         <div className="max-w-3xl space-y-3">
           <h1 id="tracker-heading" className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white flex items-center gap-3">
-            <span className="text-amber-400 text-3xl sm:text-4xl">⚡</span>
+            <span className="text-amber-400 text-3xl sm:text-4xl" aria-hidden="true">⚡</span>
             전국 지자체별 전기차 실시간 보조금 소진율 추적기
           </h1>
           <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
@@ -309,9 +867,9 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
           </p>
         </div>
 
-        {/* Live Nationwide Stat Cards */}
+        {/* Live Nationwide Stat Cards - Solid Opaque Backgrounds */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 mt-8 pt-6 border-t border-slate-800">
-          <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
             <div className="text-xs font-medium text-slate-400">전국 평균 소진율</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-amber-400 mt-1">
               {summary.nationwide_depletion_rate.toFixed(1)}%
@@ -321,7 +879,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             </div>
           </div>
 
-          <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
             <div className="text-xs font-medium text-slate-400">총 공고 대수</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-slate-100 mt-1">
               {summary.total_announced_units.toLocaleString()}
@@ -332,7 +890,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             </div>
           </div>
 
-          <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
             <div className="text-xs font-medium text-slate-400">총 접수 대수</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-blue-400 mt-1">
               {summary.total_applied_units.toLocaleString()}
@@ -343,7 +901,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             </div>
           </div>
 
-          <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
             <div className="text-xs font-medium text-slate-400">전국 잔여 대수</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-emerald-400 mt-1">
               {summary.total_remaining_units.toLocaleString()}
@@ -354,13 +912,13 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             </div>
           </div>
 
-          <div className="col-span-2 md:col-span-1 bg-rose-950/40 border border-rose-500/40 rounded-2xl p-4 flex flex-col justify-between">
+          <div className="col-span-2 md:col-span-1 bg-rose-950 border border-rose-500/40 rounded-2xl p-4 flex flex-col justify-between">
             <div className="text-xs font-medium text-rose-300">긴급 마감 위험 지역</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-rose-400 mt-1">
               {summary.alert_region_counts.critical + summary.alert_region_counts.depleted}
               <span className="text-xs font-normal text-rose-300 ml-1">개 시도</span>
             </div>
-            <div className="text-[11px] text-rose-300/80 mt-1">
+            <div className="text-[11px] text-rose-300 mt-1">
               소진율 95% 이상 극소량
             </div>
           </div>
@@ -368,9 +926,9 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
 
         {/* Emergency Alert Ticker for Critical Municipalities */}
         {criticalRegions.length > 0 && (
-          <div className="mt-6 bg-rose-950/40 border border-rose-500/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
+          <div className="mt-6 bg-rose-950 border border-rose-500/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
             <div className="flex items-center gap-2 text-rose-200">
-              <span className="text-base">🚨</span>
+              <span className="text-base" aria-hidden="true">🚨</span>
               <strong className="text-rose-100 font-semibold">마감 임박 특보 (소진율 95% 초과):</strong>
               <div className="flex flex-wrap gap-1.5 ml-1">
                 {criticalRegions.map((crit) => (
@@ -381,7 +939,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                       setSearchQuery(crit.name_ko);
                       handleSelectRegionForCalc(crit.region_id);
                     }}
-                    className="px-2 py-0.5 rounded bg-rose-900/60 border border-rose-500/50 text-rose-200 hover:bg-rose-800 hover:text-white transition font-medium focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                    className="px-2 py-0.5 rounded bg-rose-900 border border-rose-500/50 text-rose-200 hover:bg-rose-800 hover:text-white transition font-medium focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
                     title={`${crit.name_ko} 보조금 계산기로 이동`}
                   >
                     {crit.name_ko} ({crit.categories.passenger.depletion_rate}%)
@@ -399,13 +957,13 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         )}
       </section>
 
-      {/* 2. 5-Tier Alert Badges Legend & Quick Filter */}
-      <section aria-label="보조금 소진 5단계 경보 범례" className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5">
+      {/* 2. 5-Tier Alert Badges Legend & Quick Filter - Solid Opaque Background for WCAG AA Contrast */}
+      <section aria-label="보조금 소진 5단계 경보 범례" className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h2 className="text-sm font-bold text-slate-300 flex items-center gap-2">
-            <span>🛡️</span> 전국 지자체 보조금 소진 5단계 경보 기준
+            <span aria-hidden="true">🛡️</span> 전국 지자체 보조금 소진 5단계 경보 기준
           </h2>
-          <span className="text-xs text-slate-200">배지 클릭 시 해당 경보 지역만 필터링</span>
+          <span className="text-xs text-slate-300">배지 클릭 시 해당 경보 지역만 필터링</span>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
@@ -421,16 +979,16 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 className={`p-3 rounded-xl border text-left transition flex flex-col justify-between focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
                   isSelected
                     ? 'ring-2 ring-amber-400 ' + getBadgeStyle(key)
-                    : 'bg-slate-950/60 hover:bg-slate-800/80 border-slate-800 text-slate-300'
+                    : 'bg-slate-950 hover:bg-slate-800 border-slate-800 text-slate-300'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className={`text-xs px-2 py-0.5 rounded font-semibold border ${getBadgeStyle(key)}`}>
                     {getStatusLabel(key)}
                   </span>
-                  <span className="text-[11px] text-slate-400">{t.min_percent}%~{t.max_percent}%</span>
+                  <span className="text-[11px] text-slate-300 font-medium">{t.min_percent}%~{t.max_percent}%</span>
                 </div>
-                <div className="text-[11px] text-slate-400 line-clamp-2 mt-2 leading-relaxed">
+                <div className="text-[11px] text-slate-300 line-clamp-2 mt-2 leading-relaxed">
                   {t.recommended_action}
                 </div>
               </button>
@@ -557,9 +1115,9 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
           </div>
         </div>
 
-        {/* Active Filter Clear indicator */}
+        {/* Active Filter Clear indicator with aria-live */}
         {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || searchQuery || supplementaryOnly) && (
-          <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800">
+          <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800" aria-live="polite">
             <span>
               필터 적용 중: 총 <strong>{filteredRegions.length}</strong>개 지역 표시 중
             </span>
@@ -579,20 +1137,21 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         )}
       </section>
 
-      {/* 4. 17 Regional Grid Cards */}
+      {/* 4. 17 Regional Grid Cards - Visible Focus Ring for Keyboard Users */}
       <section
         id="panel-regional-grid"
         role="tabpanel"
         aria-labelledby={`tab-category-${selectedCategory}`}
         tabIndex={0}
-        className="space-y-4 focus:outline-none"
+        className="space-y-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
       >
         <div className="flex items-center justify-between">
           <h2 id="regional-grid-heading" className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <span>🗺️</span> 17개 광역시도별 보조금 소진율 &amp; 잔여 쿼터 현황
+            <span aria-hidden="true">🗺️</span> 17개 광역시도별 보조금 소진율 &amp; 잔여 쿼터 현황
           </h2>
           <span className="text-xs text-slate-600">
             {selectedCategory === 'passenger' ? '전기승용 기준' : selectedCategory === 'commercial' ? '전기화물 기준' : '전기승합 기준'}
+            {filteredRegions.length < regions.length && ` (검색 결과 ${filteredRegions.length}개 지역)`}
           </span>
         </div>
 
@@ -604,507 +1163,30 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredRegions.map((regionItem) => {
-              const region = { ...regionItem, code: regionItem.region_id };
-              const cat = region.categories[selectedCategory];
-              const isExpanded = !!expandedRegions[region.region_id];
-
-              const safeAnnounced = Number.isFinite(cat.announced_units) && cat.announced_units > 0 ? cat.announced_units : 1;
-              const safeDelivered = Number.isFinite(cat.delivered_units) ? cat.delivered_units : 0;
-              const safeDepletion = Number.isFinite(cat.depletion_rate) ? cat.depletion_rate : 0;
-              const safeRemaining = Number.isFinite(cat.remaining_units) ? cat.remaining_units : 0;
-              const safeApplied = Number.isFinite(cat.applied_units) ? cat.applied_units : 0;
-
-              const rawDeliveredPct = Math.round((safeDelivered / safeAnnounced) * 100);
-              const deliveredPct = Number.isFinite(rawDeliveredPct) ? Math.min(100, Math.max(0, rawDeliveredPct)) : 0;
-              const rawPendingPct = safeDepletion - deliveredPct;
-              const pendingPct = Number.isFinite(rawPendingPct) ? Math.max(0, Math.min(100 - deliveredPct, rawPendingPct)) : 0;
-              const remainingPct = Math.max(0, 100 - (deliveredPct + pendingPct));
-
-              return (
-                <div
-                  key={region.region_id}
-                  className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg hover:border-slate-700 transition flex flex-col justify-between"
-                >
-                  <div className="space-y-3">
-                    {/* Card Header */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-lg font-bold text-white">{region.name_ko}</h3>
-                          <span className="text-[10px] text-slate-400 uppercase font-mono">{region.iso_code}</span>
-                        </div>
-                        <div className="text-xs text-slate-400">{region.name_en}</div>
-                      </div>
-                      <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${getBadgeStyle(cat.status)}`}>
-                        {getStatusLabel(cat.status)}
-                      </span>
-                    </div>
-
-                    {/* Progress Bar (Dual Layer: Delivered vs Pending vs Remaining) */}
-                    <div className="space-y-1.5 pt-1">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-semibold text-slate-300">
-                          소진율 <strong className="text-amber-400 text-sm">{safeDepletion.toFixed(1)}%</strong>
-                        </span>
-                        <span className="text-slate-400 text-[11px]">
-                          잔여 <strong className="text-emerald-400 font-bold">{safeRemaining.toLocaleString()}</strong> / {safeAnnounced.toLocaleString()}대
-                        </span>
-                      </div>
-
-                      <div
-                        role="progressbar"
-                        aria-valuenow={Math.min(100, Math.round(safeDepletion))}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-label={`${region.name_ko} ${selectedCategory === 'passenger' ? '전기승용' : selectedCategory === 'commercial' ? '전기화물' : '전기승합'} 보조금 소진율`}
-                        aria-valuetext={`소진율 ${safeDepletion.toFixed(1)}% (${getStatusLabel(cat.status)}), 잔여 ${safeRemaining.toLocaleString()}대`}
-                        className="w-full bg-slate-950 rounded-full h-3.5 overflow-hidden flex relative border border-slate-800"
-                      >
-                        {/* Layer 1: Confirmed Delivered */}
-                        <div
-                          style={{ width: `${deliveredPct}%` }}
-                          className="bg-blue-500 h-full transition-all duration-500"
-                          title={`출고 완료: ${safeDelivered.toLocaleString()}대 (${deliveredPct}%)`}
-                        />
-                        {/* Layer 2: Pending Applications */}
-                        <div
-                          style={{ width: `${pendingPct}%` }}
-                          className="bg-amber-500 h-full transition-all duration-500"
-                          title={`접수 대기: ${(safeApplied - safeDelivered).toLocaleString()}대 (${pendingPct.toFixed(1)}%)`}
-                        />
-                        {/* Layer 3: Remaining (slate track) */}
-                        <div
-                          style={{ width: `${remainingPct}%` }}
-                          className="bg-slate-800/80 h-full"
-                          title={`잔여: ${safeRemaining.toLocaleString()}대 (${remainingPct.toFixed(1)}%)`}
-                        />
-                      </div>
-
-                      <div className="flex justify-between text-[10px] text-slate-400">
-                        <span className="flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" aria-hidden="true" />
-                          출고 {safeDelivered.toLocaleString()}대
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" aria-hidden="true" />
-                          심사중 {(safeApplied - safeDelivered).toLocaleString()}대
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-slate-700 inline-block" aria-hidden="true" />
-                          잔여 {safeRemaining.toLocaleString()}대
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Financial Subsidy Limits */}
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/80 text-xs">
-                      <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
-                        <div className="text-[11px] text-slate-400">지자체 최대 지원금</div>
-                        <div className="text-sm font-bold text-slate-200 mt-0.5">
-                          {(cat.max_local_subsidy_krw / 10000).toLocaleString()}만 원
-                        </div>
-                      </div>
-                      <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
-                        <div className="text-[11px] text-slate-400">국비+지방비 합산 최대</div>
-                        <div className="text-sm font-bold text-amber-400 mt-0.5">
-                          {(cat.max_total_subsidy_krw / 10000).toLocaleString()}만 원
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Eligibility & Notes */}
-                    <div className="flex flex-wrap gap-1.5 pt-1 text-[11px]">
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                        거주 요건: {region.residency_requirement_days}일 이상
-                      </span>
-                      {region.supplementary_budget_added && (
-                        <span className="px-2 py-0.5 rounded bg-emerald-950/70 text-emerald-300 border border-emerald-500/40 font-semibold">
-                          추경 완료
-                        </span>
-                      )}
-                    </div>
-
-                    {region.notes && (
-                      <p className="text-xs text-slate-400 leading-relaxed bg-slate-950/40 p-2 rounded-lg border border-slate-800/50">
-                        ℹ️ {region.notes}
-                      </p>
-                    )}
-
-                    {/* Municipalities Collapsible (if province has sub-cities) */}
-                    {region.municipalities && region.municipalities.length > 0 && (
-                      <div className="pt-2">
-                        <button
-                          type="button"
-                          onClick={() => toggleRegionExpand(region.region_id)}
-                          aria-expanded={isExpanded}
-                          aria-controls={"muni-details-" + region.code}
-                          className="w-full py-1.5 px-3 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-xs font-medium flex items-center justify-between transition border border-slate-800 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
-                        >
-                          <span>세부 시·군·구 {region.municipalities.length}개 현황 보기</span>
-                          <span>{isExpanded ? '▲ 접기' : '▼ 펼치기'}</span>
-                        </button>
-
-                        {isExpanded && (
-                          <div
-                            id={"muni-details-" + region.code}
-                            className="mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1 text-xs"
-                          >
-                            {region.municipalities.map((muni) => (
-                              <div
-                                key={muni.name_ko}
-                                className="p-2 rounded bg-slate-950/90 border border-slate-800 flex items-center justify-between text-[11px]"
-                              >
-                                <div>
-                                  <span className="font-semibold text-slate-200">{muni.name_ko}</span>
-                                  <span className="text-slate-400 ml-2">
-                                    {(muni.local_subsidy_krw / 10000).toLocaleString()}만 원
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-slate-400">잔여 {muni.remaining_units}대</span>
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${getBadgeStyle(muni.status)}`}>
-                                    {getStatusLabel(muni.status)} {muni.depletion_rate.toFixed(1)}%
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Card Action Button */}
-                  <div className="pt-4 mt-3 border-t border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => handleSelectRegionForCalc(region.region_id)}
-                      className="w-full py-2.5 px-4 rounded-xl bg-blue-600/90 hover:bg-blue-600 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5 shadow focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
-                    >
-                      <span>⚡</span> 이 지역({region.name_ko})으로 실구매가 계산
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+            {filteredRegions.map((regionItem) => (
+              <RegionCard
+                key={regionItem.region_id}
+                region={regionItem}
+                selectedCategory={selectedCategory}
+                isExpanded={!!expandedRegions[regionItem.region_id]}
+                toggleRegionExpand={toggleRegionExpand}
+                onSelectForCalc={handleSelectRegionForCalc}
+              />
+            ))}
           </div>
         )}
       </section>
 
-      {/* 5. Interactive Real-Time Net Subsidy Calculator */}
-      <section
-        id="subsidy-calculator"
-        ref={calculatorRef}
-        aria-labelledby="calculator-heading"
-        className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 border border-blue-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-8"
-      >
-        <div className="max-w-3xl space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-bold uppercase tracking-wider">
-            <span>💡</span> 실시간 인터랙티브 시뮬레이터
-          </div>
-          <h2 id="calculator-heading" className="text-2xl sm:text-3xl font-extrabold text-white">
-            ⚡ 실시간 전기차 보조금 &amp; 체감 실구매가 계산기
-          </h2>
-          <p className="text-slate-300 text-sm leading-relaxed">
-            원하는 전기차 모델과 거주 지자체를 선택하면 2026년 <strong>5,500만/8,500만 원 슬라이딩 가격상한제</strong>, 배터리 계수, 지자체 매칭률 및 특별 가산금을 자동 계산하여 <strong>실제 내 지갑에서 나가는 체감가</strong>를 즉시 산출합니다.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left Column: Calculator Controls */}
-          <div className="lg:col-span-7 space-y-6">
-            {/* 1. Vehicle Selector */}
-            <div className="space-y-2">
-              <label htmlFor="model-select" className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                1. 차량 모델 선택
-              </label>
-              <select
-                id="model-select"
-                value={selectedModelId}
-                onChange={(e) => setSelectedModelId(e.target.value)}
-                className="w-full py-3 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none cursor-pointer font-medium"
-              >
-                {models.map((model) => (
-                  <option key={model.model_id} value={model.model_id}>
-                    {model.manufacturer} - {model.name_ko} (출고가 {(model.base_price_krw / 10000).toLocaleString()}만 원)
-                  </option>
-                ))}
-              </select>
-
-              {/* Quick Pills for Top Models */}
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {models.slice(0, 8).map((m) => (
-                  <button
-                    key={m.model_id}
-                    type="button"
-                    aria-pressed={selectedModelId === m.model_id}
-                    onClick={() => setSelectedModelId(m.model_id)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
-                      selectedModelId === m.model_id
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-slate-800'
-                    }`}
-                  >
-                    {m.name_ko.replace(/^(현대|기아|테슬라|KGM|비야디|BYD)\s+/, '')}
-                  </button>
-                ))}
-              </div>
-
-              {/* Selected Model Spec Card */}
-              {activeModel && (
-                <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl flex flex-wrap items-center justify-between text-xs text-slate-300 gap-2">
-                  <span>배터리: <strong>{activeModel.battery_type}</strong> ({activeModel.battery_capacity_kwh} kWh)</span>
-                  <span>1회 충전 주행거리: <strong>{activeModel.rated_range_km} km</strong></span>
-                  <span>기본 출고가: <strong>{(activeModel.base_price_krw / 10000).toLocaleString()}만 원</strong></span>
-                </div>
-              )}
-            </div>
-
-            {/* 2. Region Selector */}
-            <div className="space-y-2">
-              <label htmlFor="region-select" className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                2. 거주 지자체 (시·도) 선택
-              </label>
-              <select
-                id="region-select"
-                value={selectedRegionId}
-                onChange={(e) => setSelectedRegionId(e.target.value)}
-                aria-describedby="region-residency-note"
-                className="w-full py-3 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none cursor-pointer font-medium"
-              >
-                {regions.map((reg) => (
-                  <option key={reg.region_id} value={reg.region_id}>
-                    {reg.name_ko} ({reg.categories.passenger.depletion_rate.toFixed(1)}% 소진, {getStatusLabel(reg.categories.passenger.status)})
-                  </option>
-                ))}
-              </select>
-              <p id="region-residency-note" className="text-xs text-amber-300/90 flex items-center gap-1.5 pt-0.5">
-                <span>ℹ️</span> 해당 지자체 최소 <strong>{activeRegionForCalc.residency_requirement_days}일 이상</strong> 연속 거주 요건 필요
-              </p>
-            </div>
-
-            {/* 3. Custom MSRP Option */}
-            <div className="space-y-3 p-4 bg-slate-950/50 border border-slate-800 rounded-2xl">
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  <input
-                    type="checkbox"
-                    checked={isCustomMsrp}
-                    onChange={(e) => {
-                      setIsCustomMsrp(e.target.checked);
-                      if (e.target.checked && !customMsrpInput && activeModel) {
-                        setCustomMsrpInput(activeModel.base_price_krw.toString());
-                      }
-                    }}
-                    className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
-                  />
-                  <span>옵션 포함 출고가 직접 입력 (커스텀 MSRP)</span>
-                </label>
-                {isCustomMsrp && (
-                  <span className="text-[11px] text-amber-400 font-medium">5,500만/8,500만 원 상한제 실시간 연동</span>
-                )}
-              </div>
-
-              {isCustomMsrp && (
-                <div className="space-y-1.5 pt-1">
-                  <label htmlFor="custom-msrp-input" className="sr-only">
-                    직접 차량 출고가 입력
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="custom-msrp-input"
-                      type="text"
-                      inputMode="numeric"
-                      aria-label="직접 차량 출고가 입력"
-                      value={customMsrpInput ? parseInt(customMsrpInput, 10).toLocaleString('ko-KR') : ''}
-                      onChange={(e) => setCustomMsrpInput(e.target.value.replace(/[^0-9]/g, ''))}
-                      placeholder="원 단위 출고가 입력 (예: 54,900,000)"
-                      className="w-full py-2.5 px-3.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm font-semibold focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none pr-12"
-                    />
-                    <span className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 text-xs font-semibold">
-                      원
-                    </span>
-                  </div>
-                  <div className="flex gap-2 text-[11px]">
-                    <button
-                      type="button"
-                      onClick={() => setCustomMsrpInput('54000000')}
-                      className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
-                    >
-                      5,400만 (100% 구간)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCustomMsrpInput('62000000')}
-                      className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
-                    >
-                      6,200만 (50% 감액)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCustomMsrpInput('86000000')}
-                      className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
-                    >
-                      8,600만 (보조금 0원)
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* 4. Special Additional Grants & Incentives */}
-            <div className="space-y-2.5 p-4 bg-slate-950/50 border border-slate-800 rounded-2xl">
-              <div className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                3. 추가 지원금 &amp; 특별 가산 혜택 (해당 시 선택)
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                <label className="flex items-center gap-2 p-2 rounded-lg bg-slate-900/60 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={calcOptions.isYouthFirstTimeBuyer}
-                    onChange={(e) => setCalcOptions((prev) => ({ ...prev, isYouthFirstTimeBuyer: e.target.checked }))}
-                    className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
-                  />
-                  <span>청년 생애 최초 구매 (+20% 국비)</span>
-                </label>
-
-                <label className="flex items-center gap-2 p-2 rounded-lg bg-slate-900/60 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={calcOptions.isSmallBusinessOrTaxi}
-                    onChange={(e) => setCalcOptions((prev) => ({ ...prev, isSmallBusinessOrTaxi: e.target.checked }))}
-                    className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
-                  />
-                  <span>소상공인 / 영업용 택시 (+30% 국비)</span>
-                </label>
-
-                <label className="flex items-center gap-2 p-2 rounded-lg bg-slate-900/60 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={calcOptions.isMultiChildFamily}
-                    onChange={(e) => setCalcOptions((prev) => ({ ...prev, isMultiChildFamily: e.target.checked }))}
-                    className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
-                  />
-                  <span>다자녀 가구 (+10% 국비)</span>
-                </label>
-
-                <label className="flex items-center gap-2 p-2 rounded-lg bg-slate-900/60 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={calcOptions.isOldDieselScrappage}
-                    onChange={(e) => setCalcOptions((prev) => ({ ...prev, isOldDieselScrappage: e.target.checked }))}
-                    className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
-                  />
-                  <span>노후 경유차 조기폐차 (+100만 원)</span>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column: Live Output & Net Price Card */}
-          <div
-            aria-live="polite"
-            aria-atomic="true"
-            className="lg:col-span-5 bg-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-7 space-y-6 shadow-2xl sticky top-24"
-          >
-            <div>
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                시뮬레이션 견적 요약
-              </span>
-              <h3 className="text-xl font-bold text-white mt-1">
-                {calculationResult.modelName}
-              </h3>
-              <div className="text-xs text-blue-300 font-medium mt-0.5">
-                등록 지역: {calculationResult.regionName} ({activeRegionForCalc.name_en})
-              </div>
-            </div>
-
-            {/* Price Breakdown Matrix */}
-            <div className="space-y-2.5 text-sm border-t border-slate-800/80 pt-4">
-              <div className="flex justify-between items-center text-slate-300">
-                <span>차량 출고가 (MSRP)</span>
-                <span className="font-semibold text-slate-100">
-                  {calculationResult.msrpKrw.toLocaleString()} 원
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center text-xs text-slate-400">
-                <span>가격상한제 적용 구간</span>
-                <span className="font-medium text-amber-300">
-                  {calculationResult.priceCapTierText}
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center text-blue-400">
-                <span>(-) 국비 보조금</span>
-                <span className="font-semibold">
-                  -{calculationResult.nationalSubsidyKrw.toLocaleString()} 원
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center text-blue-400">
-                <span>(-) 지자체 지방비 보조금</span>
-                <span className="font-semibold">
-                  -{calculationResult.localSubsidyKrw.toLocaleString()} 원
-                </span>
-              </div>
-
-              {calculationResult.additionalGrantsKrw > 0 && (
-                <div className="flex justify-between items-center text-emerald-400">
-                  <span>(-) 추가 지원 &amp; 특별 가산금</span>
-                  <span className="font-semibold">
-                    -{calculationResult.additionalGrantsKrw.toLocaleString()} 원
-                  </span>
-                </div>
-              )}
-
-              <div className="h-px bg-slate-800 my-2" />
-
-              {/* Total Subsidy Combined */}
-              <div className="flex justify-between items-center text-xs text-slate-400">
-                <span>총 지원 혜택 금액</span>
-                <span className="font-bold text-slate-200">
-                  {calculationResult.totalSubsidyKrw.toLocaleString()} 원
-                </span>
-              </div>
-            </div>
-
-            {/* Net Out-of-pocket Purchase Price */}
-            <div className="bg-gradient-to-r from-emerald-950/80 to-slate-900 border border-emerald-500/40 rounded-2xl p-5 text-center space-y-1">
-              <span className="text-xs text-emerald-300 font-semibold uppercase tracking-wider">
-                최종 실구매 체감가 (소비자 부담액)
-              </span>
-              <div className="text-3xl sm:text-4xl font-black text-emerald-400 tracking-tight">
-                {Math.round(calculationResult.netPurchasePriceKrw / 10000).toLocaleString()}
-                <span className="text-xl sm:text-2xl font-bold ml-1 text-emerald-200">만 원</span>
-              </div>
-              <div className="text-[11px] text-emerald-300/80">
-                (정확한 금액: {calculationResult.netPurchasePriceKrw.toLocaleString()} 원)
-              </div>
-            </div>
-
-            {/* Depletion Risk Warning Alert */}
-            <div
-              className={`p-4 rounded-2xl border text-xs leading-relaxed space-y-1.5 ${
-                calculationResult.isHighDepletionRisk
-                  ? 'bg-rose-950/60 border-rose-500/60 text-rose-200'
-                  : 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
-              }`}
-            >
-              <div className="font-bold flex items-center gap-1.5">
-                <span>{calculationResult.isHighDepletionRisk ? '🚨' : '✅'}</span>
-                <span>{calculationResult.regionName} 보조금 예산 소진 위험도 분석</span>
-              </div>
-              <p>{calculationResult.warningNotice}</p>
-              <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-800/60 flex flex-wrap justify-between gap-1">
-                <span>거주 요건: 최소 {calculationResult.residencyRequirementDays}일 이상</span>
-                <span>2년 의무 운행 기간 (관외 이전 시 환수)</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* 5. Interactive Real-Time Net Subsidy Calculator (Memoized Sub-Component) */}
+      <SubsidyCalculator
+        calculatorRef={calculatorRef}
+        models={models}
+        regions={regions}
+        selectedModelId={selectedModelId}
+        selectedRegionId={selectedRegionId}
+        onSelectModelId={handleSelectModelId}
+        onSelectRegionId={handleSelectRegionId}
+      />
 
       {/* 6. Regulatory Footer Notes */}
       <section aria-label="보조금 지침 규정 안내" className="text-xs text-slate-400 leading-relaxed bg-slate-950 p-6 rounded-2xl border border-slate-900 space-y-2">

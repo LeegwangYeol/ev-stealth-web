@@ -40,6 +40,7 @@ export default function Home() {
         </Link>
 
         <Link href="/depreciation-calculator"
+          prefetch={false}
           className="group block p-6 bg-gradient-to-br from-emerald-950 via-slate-900 to-teal-950 text-white border border-emerald-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-emerald-400 transition-all duration-300 md:col-span-2 lg:col-span-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <div className="flex items-center gap-2">
@@ -65,6 +66,7 @@ export default function Home() {
         </Link>
 
         <Link href="/reliability-analytics"
+          prefetch={false}
           className="group block p-6 bg-gradient-to-br from-indigo-900 via-slate-900 to-blue-950 text-white border border-indigo-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-indigo-400 transition-all duration-300 md:col-span-2 lg:col-span-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <div className="flex items-center gap-2">
@@ -84,6 +86,7 @@ export default function Home() {
         </Link>
 
         <Link href="/recall-portal"
+          prefetch={false}
           className="group block p-6 bg-gradient-to-br from-rose-950 via-slate-900 to-amber-950 text-white border border-rose-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-rose-400 transition-all duration-300 md:col-span-2 lg:col-span-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <div className="flex items-center gap-2">
@@ -103,6 +106,7 @@ export default function Home() {
         </Link>
 
         <Link href="/2026-latest"
+          prefetch={false}
           className="group block p-6 bg-blue-50 border border-blue-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
           <h2 className="text-2xl font-bold mb-3 text-blue-700 group-hover:text-blue-800">🔥 2026년식 KDM 최신 리뷰 &rarr;</h2>
           <p className="text-gray-700 leading-relaxed">
@@ -111,6 +115,7 @@ export default function Home() {
         </Link>
 
         <Link href="/pdi-checklist"
+          prefetch={false}
           className="group block p-6 bg-green-50 border border-green-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
           <h2 className="text-2xl font-bold mb-3 text-green-700 group-hover:text-green-800">✅ 신차 인수(PDI) 체크리스트 &rarr;</h2>
           <p className="text-gray-700 leading-relaxed">
@@ -119,6 +124,7 @@ export default function Home() {
         </Link>
 
         <Link href="/hyundai-kia"
+          prefetch={false}
           className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
           <h2 className="text-2xl font-bold mb-3 group-hover:text-blue-600">현대/기아 연식별 &rarr;</h2>
           <p className="text-gray-600 leading-relaxed">
@@ -127,6 +133,7 @@ export default function Home() {
         </Link>
 
         <Link href="/tesla"
+          prefetch={false}
           className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
           <h2 className="text-2xl font-bold mb-3 group-hover:text-blue-600">테슬라 연식별 &rarr;</h2>
           <p className="text-gray-600 leading-relaxed">
@@ -135,6 +142,7 @@ export default function Home() {
         </Link>
 
         <Link href="/byd"
+          prefetch={false}
           className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
           <h2 className="text-2xl font-bold mb-3 group-hover:text-blue-600">BYD 연식별 &rarr;</h2>
           <p className="text-gray-600 leading-relaxed">
@@ -143,6 +151,7 @@ export default function Home() {
         </Link>
 
         <Link href="/global-brands"
+          prefetch={false}
           className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
           <h2 className="text-2xl font-bold mb-3 group-hover:text-blue-600">폭스바겐/벤츠/폴스타 &rarr;</h2>
           <p className="text-gray-600 leading-relaxed">

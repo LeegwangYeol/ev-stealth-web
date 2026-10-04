@@ -46,6 +46,23 @@ def _safe_float(val: Any, default: float) -> float:
         return default
 
 
+def _extract_record_date(record: Dict[str, Any]) -> str:
+    """Extract normalized YYYY-MM-DD date string from a complaint record dict."""
+    for field in ("date", "created_at", "timestamp"):
+        val = record.get(field)
+        if not val:
+            continue
+        val_str = str(val).strip()
+        if len(val_str) >= 10 and val_str[4] in ("-", "/") and val_str[7] in ("-", "/"):
+            return val_str[:10].replace("/", "-")
+        try:
+            dt = datetime.fromisoformat(val_str.replace("Z", "+00:00"))
+            return dt.strftime("%Y-%m-%d")
+        except Exception:
+            pass
+    return ""
+
+
 def format_daily_report_payload(
     complaints: Iterable[Union[ComplaintRecord, Dict[str, Any]]],
     total_scraped: Optional[int] = None,
@@ -118,12 +135,40 @@ def format_daily_report_payload(
         critical_defect_count=critical_count,
     )
 
+    # Accurately compute total_complaints_today based on generated_at date
+    target_date_str = ""
+    if generated_at:
+        if len(generated_at) >= 10 and generated_at[4] in ("-", "/") and generated_at[7] in ("-", "/"):
+            target_date_str = generated_at[:10].replace("/", "-")
+        else:
+            try:
+                target_date_str = datetime.fromisoformat(generated_at.replace("Z", "+00:00")).strftime("%Y-%m-%d")
+            except Exception:
+                pass
+    if not target_date_str:
+        target_date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    dated_records = 0
+    today_matches = 0
+    for r in report_dicts:
+        r_date = _extract_record_date(r)
+        if r_date:
+            dated_records += 1
+            if r_date == target_date_str:
+                today_matches += 1
+
+    if dated_records == 0 and total_filtered > 0:
+        total_today = total_filtered
+    else:
+        undated_count = total_filtered - dated_records
+        total_today = today_matches + undated_count
+
     return DailyReportPayload(
         generated_at=generated_at,
         pipeline_version=pipeline_version,
         statistics=statistics,
         reports=report_dicts,
-        total_complaints_today=total_filtered,
+        total_complaints_today=total_today,
         top_defect_categories=top_categories,
     )
 
