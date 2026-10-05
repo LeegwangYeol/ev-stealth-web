@@ -23,7 +23,7 @@ export default function HyundaiKiaPage() {
         </div>
 
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4">
-          <h3 className="text-xl font-bold text-yellow-700">⚠️ 2023~2024년식: CAUTION (주의 요망)</h3>
+          <h3 className="text-xl font-bold text-amber-900">⚠️ 2023~2024년식: CAUTION (주의 요망)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li>배터리가 77.4kWh로 커지고 프리컨디셔닝이 추가되었으나, 여전히 ICCU 리콜(24V-868) 대상입니다.</li>
             <li><strong>조치:</strong> 딜러나 서비스센터에서 ICCU 리콜이 완료되었는지 반드시 확인 후 구매하세요.</li>
@@ -49,7 +49,7 @@ export default function HyundaiKiaPage() {
         </div>
 
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4">
-          <h3 className="text-xl font-bold text-yellow-700">⚠️ 2023~2024년식: CAUTION (주의 요망)</h3>
+          <h3 className="text-xl font-bold text-amber-900">⚠️ 2023~2024년식: CAUTION (주의 요망)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li>후륜 구동축 톱니바퀴(스플라인) 파손 리콜(24V-057) 및 메리디안 오디오 앰프 고장(수리비 100만 원 이상) 위험이 있습니다.</li>
           </ul>

@@ -93,14 +93,19 @@ def _atomic_copy_file(src_path: Union[str, Path], dest_path: Union[str, Path]) -
     """Atomically copy a file to dest_path using tempfile + os.replace."""
     dest = Path(dest_path).resolve()
     dest.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("wb", dir=str(dest.parent), delete=False, prefix=".tmp_sync_") as tf:
-        temp_name = tf.name
-        with open(src_path, "rb") as sf:
-            shutil.copyfileobj(sf, tf)
-        tf.flush()
-        os.fsync(tf.fileno())
-    os.replace(temp_name, dest)
-    return str(dest)
+    temp_name = None
+    try:
+        with tempfile.NamedTemporaryFile("wb", dir=str(dest.parent), delete=False, prefix=".tmp_sync_") as tf:
+            temp_name = tf.name
+            with open(src_path, "rb") as sf:
+                shutil.copyfileobj(sf, tf)
+            tf.flush()
+            os.fsync(tf.fileno())
+        os.replace(temp_name, dest)
+        return str(dest)
+    finally:
+        if temp_name and os.path.exists(temp_name):
+            os.unlink(temp_name)
 
 
 WEB_DATA_DAILY_REPORTS_PATH = str(_resolve_web_reports_path())

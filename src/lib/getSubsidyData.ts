@@ -1,4 +1,4 @@
-import rawData from '../data/ev_subsidy_data.json';
+import rawData from '../data/ev_subsidy_data.json' with { type: 'json' };
 import {
   EVSubsidyDataset,
   PopularModelEntry,

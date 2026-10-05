@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useCallback, useRef, Suspense } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef, Suspense, useDeferredValue } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type {
   RecallDatabase,
@@ -276,11 +276,16 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     [initialDatabase]
   );
 
-  // Live validation for VIN input
+  // Deferred values for stutter-free filtering on large datasets
+  const deferredVinInput = useDeferredValue(vinInput);
+  const deferredBatterySearch = useDeferredValue(batterySearch);
+  const deferredRecallSearch = useDeferredValue(recallSearch);
+
+  // Live validation for VIN input (using deferred value to prevent keystroke lag)
   const vinValidation = useMemo(() => {
-    if (!vinInput) return { valid: false, normalized: '', error: '' };
-    return validateVinString(vinInput);
-  }, [vinInput]);
+    if (!deferredVinInput) return { valid: false, normalized: '', error: '' };
+    return validateVinString(deferredVinInput);
+  }, [deferredVinInput]);
 
   // Handle Mode A lookup
   const handleVinSubmit = (e?: React.FormEvent) => {
@@ -329,15 +334,16 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     });
   };
 
-  // Filtered Battery Safety Profiles
+  // Filtered Battery Safety Profiles (deferred search)
   const filteredBatteryProfiles = useMemo(() => {
+    const q = deferredBatterySearch.trim().toLowerCase();
     return initialDatabase.battery_profiles.filter((profile) => {
       const matchesSearch =
-        batterySearch === '' ||
-        profile.model_name.toLowerCase().includes(batterySearch.toLowerCase()) ||
-        profile.brand.toLowerCase().includes(batterySearch.toLowerCase()) ||
-        profile.cell_supplier.toLowerCase().includes(batterySearch.toLowerCase()) ||
-        profile.cell_chemistry.toLowerCase().includes(batterySearch.toLowerCase());
+        q === '' ||
+        profile.model_name.toLowerCase().includes(q) ||
+        profile.brand.toLowerCase().includes(q) ||
+        profile.cell_supplier.toLowerCase().includes(q) ||
+        profile.cell_chemistry.toLowerCase().includes(q);
 
       const matchesSupplier =
         selectedSupplierFilter === 'ALL' ||
@@ -348,24 +354,25 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
       return matchesSearch && matchesSupplier && matchesStatus;
     });
-  }, [initialDatabase.battery_profiles, batterySearch, selectedSupplierFilter, selectedFireStatusFilter]);
+  }, [initialDatabase.battery_profiles, deferredBatterySearch, selectedSupplierFilter, selectedFireStatusFilter]);
 
-  // Filtered Recalls
+  // Filtered Recalls (deferred search)
   const filteredRecalls = useMemo(() => {
+    const q = deferredRecallSearch.trim().toLowerCase();
     return initialDatabase.recalls.filter((r) => {
       const matchesSearch =
-        recallSearch === '' ||
-        r.campaign_no.toLowerCase().includes(recallSearch.toLowerCase()) ||
-        r.defect_title.toLowerCase().includes(recallSearch.toLowerCase()) ||
-        r.target_model.toLowerCase().includes(recallSearch.toLowerCase()) ||
-        r.brand.toLowerCase().includes(recallSearch.toLowerCase());
+        q === '' ||
+        r.campaign_no.toLowerCase().includes(q) ||
+        r.defect_title.toLowerCase().includes(q) ||
+        r.target_model.toLowerCase().includes(q) ||
+        r.brand.toLowerCase().includes(q);
 
       const matchesRisk = selectedRiskFilter === 'ALL' || r.risk_level === selectedRiskFilter;
       const matchesRemedy = selectedRemedyFilter === 'ALL' || r.remedy_type === selectedRemedyFilter;
 
       return matchesSearch && matchesRisk && matchesRemedy;
     });
-  }, [initialDatabase.recalls, recallSearch, selectedRiskFilter, selectedRemedyFilter]);
+  }, [initialDatabase.recalls, deferredRecallSearch, selectedRiskFilter, selectedRemedyFilter]);
 
   // Distinct cell supplier list for filter chips
   const supplierFilters = [
@@ -616,7 +623,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   <button
                     type="submit"
                     disabled={!vinValidation.valid}
-                    className="w-full sm:w-auto px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-semibold text-sm transition shadow-lg flex items-center justify-center gap-2"
+                    className="w-full sm:w-auto px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-semibold text-sm transition shadow-lg flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -631,7 +638,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       setVinTouched(false);
                       setCheckResult(null);
                     }}
-                    className="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition"
+                    className="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                   >
                     초기화
                   </button>
@@ -652,7 +659,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       key={item.prefix}
                       type="button"
                       onClick={() => handleSelectSampleVin(item.sample_full_vin)}
-                      className="p-2.5 rounded-lg bg-slate-900 hover:bg-blue-900/40 border border-slate-800 hover:border-blue-700 text-left transition group"
+                      className="p-2.5 rounded-lg bg-slate-900 hover:bg-blue-900/40 border border-slate-800 hover:border-blue-700 text-left transition group focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     >
                       <div className="text-xs font-bold text-white group-hover:text-blue-300 truncate">
                         {item.model_name}
@@ -742,7 +749,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 <div className="pt-2">
                   <button
                     type="submit"
-                    className="w-full sm:w-auto px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition shadow-lg flex items-center justify-center gap-2"
+                    className="w-full sm:w-auto px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition shadow-lg flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -1067,7 +1074,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 type="button"
                 onClick={() => setSelectedSupplierFilter(s.key)}
                 aria-pressed={selectedSupplierFilter === s.key}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                   selectedSupplierFilter === s.key
                     ? 'bg-blue-600 text-white font-bold'
                     : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
@@ -1091,7 +1098,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 type="button"
                 onClick={() => setSelectedFireStatusFilter(f.key)}
                 aria-pressed={selectedFireStatusFilter === f.key}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                   selectedFireStatusFilter === f.key
                     ? 'bg-blue-600 text-white font-bold'
                     : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
@@ -1211,7 +1218,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 type="button"
                 onClick={() => setSelectedRiskFilter(rf.key)}
                 aria-pressed={selectedRiskFilter === rf.key}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                   selectedRiskFilter === rf.key
                     ? 'bg-blue-600 text-white font-bold'
                     : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
@@ -1235,7 +1242,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 type="button"
                 onClick={() => setSelectedRemedyFilter(rm.key)}
                 aria-pressed={selectedRemedyFilter === rm.key}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                   selectedRemedyFilter === rm.key
                     ? 'bg-blue-600 text-white font-bold'
                     : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'

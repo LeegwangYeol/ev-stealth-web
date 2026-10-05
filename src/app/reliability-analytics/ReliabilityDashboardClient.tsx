@@ -6,6 +6,7 @@ import {
   ReliabilityTrendsDatabase,
   DefectCategoryKey,
   ModelYearVerdict,
+  YearEvaluation,
   getAllEnrichedModels,
   getVerdictBadgeInfo,
   getDsiSeverityLevel,
@@ -23,6 +24,24 @@ const CHART_TABS: { id: ChartTabKey; label: string }[] = [
   { id: 'brand_ranking', label: '브랜드 DSI 랭킹' },
   { id: 'category_share', label: '부문별 결함 비중' },
 ];
+
+const CATEGORY_BG_COLORS: Record<DefectCategoryKey, string> = {
+  BATTERY_CHARGING: 'bg-rose-500',
+  DRIVING_POWERTRAIN: 'bg-amber-500',
+  SOFTWARE_ELECTRONICS: 'bg-blue-500',
+  BUILD_QUALITY: 'bg-purple-500',
+  SERVICE_REPAIR_COST: 'bg-emerald-500',
+  COLD_WEATHER: 'bg-cyan-500',
+};
+
+const CATEGORY_TAG_COLORS: Record<DefectCategoryKey, { bg: string; text: string; border: string }> = {
+  BATTERY_CHARGING: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
+  DRIVING_POWERTRAIN: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+  SOFTWARE_ELECTRONICS: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+  BUILD_QUALITY: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+  SERVICE_REPAIR_COST: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+  COLD_WEATHER: { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' },
+};
 
 export default function ReliabilityDashboardClient({ initialData }: ReliabilityDashboardClientProps) {
   // --- Filter States ---
@@ -47,6 +66,19 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
   const allModels = useMemo(() => {
     return getAllEnrichedModels(initialData);
   }, [initialData]);
+
+  // Pre-indexed evaluation maps per model ID (eliminating 22 redundant Map allocations inside the heatmap render loop)
+  const modelEvalMaps = useMemo(() => {
+    const lookup = new Map<string, Map<number, YearEvaluation>>();
+    for (const m of allModels) {
+      const mLookup = new Map<number, YearEvaluation>();
+      for (const y of m.year_evaluations) {
+        mLookup.set(y.year, y);
+      }
+      lookup.set(m.id, mLookup);
+    }
+    return lookup;
+  }, [allModels]);
 
   // Unique years for heatmap
   const heatmapYears = useMemo(() => {
@@ -278,7 +310,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   tabIndex={isSelected ? 0 : -1}
                   onKeyDown={(e) => handleChartTabKeyDown(e, idx)}
                   onClick={() => setActiveChartTab(tab.id)}
-                  className={`px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  className={`px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                     isSelected
                       ? 'bg-white text-indigo-600 shadow-sm'
                       : 'text-slate-600 hover:text-slate-900'
@@ -326,7 +358,11 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               </div>
 
               {/* Heatmap Grid Wrapper */}
-              <div className="overflow-x-auto border border-slate-200 rounded-2xl">
+              <div
+                tabIndex={0}
+                aria-label="연식별 전기차 신뢰성 및 결함 심각도 매트릭스 표 스크롤 영역"
+                className="overflow-x-auto border border-slate-200 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
                 <table className="w-full text-left text-xs sm:text-sm border-collapse" aria-label="연식별 전기차 신뢰성 및 결함 심각도(DSI) 매트릭스">
                   <caption className="sr-only">연식별 전기차 신뢰성 및 결함 심각도(DSI) 매트릭스</caption>
                   <thead>
@@ -344,8 +380,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {allModels.map((model) => {
-                      const evalMap = new Map<number, typeof model.year_evaluations[0]>();
-                      model.year_evaluations.forEach((y) => evalMap.set(y.year, y));
+                      const evalMap = modelEvalMaps.get(model.id);
 
                       return (
                         <tr key={model.id} className="hover:bg-slate-50/80 transition">
@@ -356,7 +391,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                             {model.brand_name_ko}
                           </td>
                           {heatmapYears.map((yr) => {
-                            const evalData = evalMap.get(yr);
+                            const evalData = evalMap?.get(yr);
                             if (!evalData) {
                               return (
                                 <td key={yr} className="p-2 text-center">
@@ -411,7 +446,10 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
               {/* Heatmap Detail Card (if selected) */}
               {hoveredCell && (
-                <div className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-700 shadow-xl animate-fade-in motion-reduce:animate-none flex flex-col sm:flex-row justify-between gap-4">
+                <div
+                  aria-live="polite"
+                  className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-700 shadow-xl animate-fade-in motion-reduce:animate-none flex flex-col sm:flex-row justify-between gap-4"
+                >
                   <div className="space-y-1 max-w-2xl">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-base text-blue-300">
@@ -439,14 +477,14 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   <div className="flex items-center gap-2 shrink-0">
                     <Link
                       href={`/recall-portal?model=${encodeURIComponent(hoveredCell.modelName)}`}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition"
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                     >
                       공식 리콜 조회 &rarr;
                     </Link>
                     <button
                       type="button"
                       onClick={() => setHoveredCell(null)}
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium transition"
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                     >
                       닫기
                     </button>
@@ -479,19 +517,12 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         : 'bg-rose-500';
 
                     return (
-                      <div
+                      <button
                         key={brand.id}
-                        role="button"
-                        tabIndex={0}
+                        type="button"
                         onClick={() => setSelectedBrand(isSelected ? 'ALL' : brand.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setSelectedBrand(isSelected ? 'ALL' : brand.id);
-                          }
-                        }}
                         aria-pressed={isSelected}
-                        className={`p-3 sm:p-4 rounded-2xl border transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                        className={`w-full text-left p-3 sm:p-4 rounded-2xl border transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                           isSelected
                             ? 'bg-indigo-50/80 border-indigo-300 ring-2 ring-indigo-200'
                             : 'bg-slate-50 hover:bg-slate-100/80 border-slate-200'
@@ -529,7 +560,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                             style={{ width: dsiWidth }}
                           />
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
               </div>
@@ -551,20 +582,11 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   className="w-full h-6 rounded-xl overflow-hidden flex shadow-inner border border-slate-200"
                 >
                   {initialData.categories.map((cat) => {
-                    const bgColors: Record<DefectCategoryKey, string> = {
-                      BATTERY_CHARGING: 'bg-rose-500',
-                      DRIVING_POWERTRAIN: 'bg-amber-500',
-                      SOFTWARE_ELECTRONICS: 'bg-blue-500',
-                      BUILD_QUALITY: 'bg-purple-500',
-                      SERVICE_REPAIR_COST: 'bg-emerald-500',
-                      COLD_WEATHER: 'bg-cyan-500',
-                    };
-
                     return (
                       <div
                         key={cat.code}
                         style={{ width: `${cat.industry_share_pct}%` }}
-                        className={`${bgColors[cat.code]} transition-all hover:opacity-80`}
+                        className={`${CATEGORY_BG_COLORS[cat.code] || 'bg-slate-500'} transition-all hover:opacity-80`}
                         role="img"
                         aria-label={`${cat.label_ko} 점유율 ${cat.industry_share_pct}%`}
                         title={`${cat.label_ko}: ${cat.industry_share_pct}%`}
@@ -577,30 +599,15 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               {/* Detailed Category Cards Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {initialData.categories.map((cat) => {
-                  const tagColors: Record<DefectCategoryKey, { bg: string; text: string; border: string }> = {
-                    BATTERY_CHARGING: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
-                    DRIVING_POWERTRAIN: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
-                    SOFTWARE_ELECTRONICS: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
-                    BUILD_QUALITY: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
-                    SERVICE_REPAIR_COST: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
-                    COLD_WEATHER: { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' },
-                  };
-                  const color = tagColors[cat.code] || { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200' };
+                  const color = CATEGORY_TAG_COLORS[cat.code] || { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200' };
 
                   return (
-                    <div
+                    <button
                       key={cat.code}
-                      role="button"
-                      tabIndex={0}
+                      type="button"
                       onClick={() => setSelectedCategory(selectedCategory === cat.code ? 'ALL' : cat.code)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          setSelectedCategory(selectedCategory === cat.code ? 'ALL' : cat.code);
-                        }
-                      }}
                       aria-pressed={selectedCategory === cat.code}
-                      className={`p-4 rounded-2xl border transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                      className={`w-full text-left p-4 rounded-2xl border transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                         selectedCategory === cat.code
                           ? 'ring-2 ring-indigo-300 bg-indigo-50/50 border-indigo-300'
                           : `${color.bg} ${color.border} hover:shadow-md`
@@ -616,7 +623,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       <div className="mt-3 pt-2 border-t border-slate-200/60 text-[11px] font-medium text-slate-600">
                         평균 예상 수리비: <strong className="text-slate-800">{cat.avg_repair_cost_range}</strong>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -640,7 +647,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               onChange={(e) => setSearchQuery(e.target.value)}
               aria-label="차종, 브랜드, 결함 증상 검색"
               placeholder="차종명, 브랜드, 결함 증상(ICCU, 배터리, 옥토밸브, 백색가루 등) 검색..."
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition"
             />
           </div>
 
@@ -649,7 +656,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
               aria-label="정렬 기준 선택"
-              className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <option value="DSI_DESC">DSI 위험도 높은 순</option>
               <option value="DSI_ASC">DSI 안전한 순</option>
@@ -661,7 +668,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               <button
                 type="button"
                 onClick={resetFilters}
-                className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs sm:text-sm font-semibold rounded-xl border border-rose-200 transition"
+                className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs sm:text-sm font-semibold rounded-xl border border-rose-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 필터 초기화 ↺
               </button>
@@ -677,7 +684,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               type="button"
               onClick={() => setSelectedBrand('ALL')}
               aria-pressed={selectedBrand === 'ALL'}
-              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition ${
+              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                 selectedBrand === 'ALL'
                   ? 'bg-slate-900 text-white shadow-sm'
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -691,7 +698,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 type="button"
                 onClick={() => setSelectedBrand(selectedBrand === brand.id ? 'ALL' : brand.id)}
                 aria-pressed={selectedBrand === brand.id}
-                className={`px-3 py-1.5 text-xs font-bold rounded-xl transition flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 text-xs font-bold rounded-xl transition flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedBrand === brand.id
                     ? 'bg-blue-600 text-white shadow-sm'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -714,7 +721,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 type="button"
                 onClick={() => setSelectedVerdict('ALL')}
                 aria-pressed={selectedVerdict === 'ALL'}
-                className={`px-2.5 py-1 text-xs font-medium rounded-lg transition ${
+                className={`px-2.5 py-1 text-xs font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedVerdict === 'ALL'
                     ? 'bg-slate-800 text-white'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -726,7 +733,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 type="button"
                 onClick={() => setSelectedVerdict('AVOID')}
                 aria-pressed={selectedVerdict === 'AVOID'}
-                className={`px-2.5 py-1 text-xs font-medium rounded-lg transition ${
+                className={`px-2.5 py-1 text-xs font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedVerdict === 'AVOID'
                     ? 'bg-rose-600 text-white'
                     : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
@@ -738,7 +745,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 type="button"
                 onClick={() => setSelectedVerdict('CAUTION')}
                 aria-pressed={selectedVerdict === 'CAUTION'}
-                className={`px-2.5 py-1 text-xs font-medium rounded-lg transition ${
+                className={`px-2.5 py-1 text-xs font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedVerdict === 'CAUTION'
                     ? 'bg-amber-500 text-white'
                     : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
@@ -750,7 +757,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 type="button"
                 onClick={() => setSelectedVerdict('BUY_SAFE')}
                 aria-pressed={selectedVerdict === 'BUY_SAFE'}
-                className={`px-2.5 py-1 text-xs font-medium rounded-lg transition ${
+                className={`px-2.5 py-1 text-xs font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedVerdict === 'BUY_SAFE'
                     ? 'bg-emerald-600 text-white'
                     : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
@@ -769,7 +776,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 type="button"
                 onClick={() => setSelectedYearRange('ALL')}
                 aria-pressed={selectedYearRange === 'ALL'}
-                className={`px-2.5 py-1 text-xs font-medium rounded-lg transition ${
+                className={`px-2.5 py-1 text-xs font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedYearRange === 'ALL'
                     ? 'bg-slate-800 text-white'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -781,7 +788,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 type="button"
                 onClick={() => setSelectedYearRange('EARLY')}
                 aria-pressed={selectedYearRange === 'EARLY'}
-                className={`px-2.5 py-1 text-xs font-medium rounded-lg transition ${
+                className={`px-2.5 py-1 text-xs font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedYearRange === 'EARLY'
                     ? 'bg-blue-600 text-white'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -793,7 +800,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 type="button"
                 onClick={() => setSelectedYearRange('MID')}
                 aria-pressed={selectedYearRange === 'MID'}
-                className={`px-2.5 py-1 text-xs font-medium rounded-lg transition ${
+                className={`px-2.5 py-1 text-xs font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedYearRange === 'MID'
                     ? 'bg-blue-600 text-white'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -805,7 +812,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 type="button"
                 onClick={() => setSelectedYearRange('LATE')}
                 aria-pressed={selectedYearRange === 'LATE'}
-                className={`px-2.5 py-1 text-xs font-medium rounded-lg transition ${
+                className={`px-2.5 py-1 text-xs font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedYearRange === 'LATE'
                     ? 'bg-blue-600 text-white'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -842,7 +849,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             <button
               type="button"
               onClick={resetFilters}
-              className="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition"
+              className="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               전체 모델 보기
             </button>
@@ -957,7 +964,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between">
                     <Link
                       href={`/recall-portal?model=${encodeURIComponent(model.name)}`}
-                      className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition"
+                      className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
                     >
                       <span>🚨 이 차종 공식 리콜·화재 조회</span>
                       <span>&rarr;</span>
@@ -985,7 +992,11 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           </p>
         </div>
 
-        <div className="overflow-x-auto border border-slate-200 rounded-2xl">
+        <div
+          tabIndex={0}
+          aria-label="보증 만료 후 부품별 수리비 매트릭스 표 스크롤 영역"
+          className="overflow-x-auto border border-slate-200 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        >
           <table className="w-full text-left text-xs sm:text-sm border-collapse" aria-label="보증 만료 후 폭탄 수리비 및 핵심 부품별 교체 비용 매트릭스">
             <caption className="sr-only">보증 만료 후 폭탄 수리비 및 핵심 부품별 교체 비용 매트릭스</caption>
             <thead>

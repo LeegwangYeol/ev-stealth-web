@@ -147,19 +147,23 @@ def sync_defect_reports(
 
     if source_path and target_paths:
         for tgt in target_paths:
+            temp_name = None
             try:
                 tgt.parent.mkdir(parents=True, exist_ok=True)
                 with tempfile.NamedTemporaryFile("wb", dir=str(tgt.parent), delete=False, prefix=".tmp_sync_") as tf:
-                    tmp_name = tf.name
+                    temp_name = tf.name
                     with open(source_path, "rb") as sf:
                         shutil.copyfileobj(sf, tf)
                     tf.flush()
                     os.fsync(tf.fileno())
-                os.replace(tmp_name, tgt)
+                os.replace(temp_name, tgt)
                 written_paths.append(str(tgt))
                 logger.info("  ✓ Successfully synchronized defect reports: %s -> %s", source_path, tgt)
             except Exception as e:
                 logger.warning("Failed to synchronize defect report to %s: %s", tgt, e)
+            finally:
+                if temp_name and os.path.exists(temp_name):
+                    os.unlink(temp_name)
 
     return written_paths
 

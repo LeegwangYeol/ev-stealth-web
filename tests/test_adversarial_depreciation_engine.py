@@ -381,12 +381,12 @@ class AdversarialDepreciationEngineTest(unittest.TestCase):
         tco_01 = self.run_ts_eval("engine.calculateTcoComparison(15000, 0.1)")
         self.assertGreaterEqual(len(tco_01["yearlyBreakdown"]), 1)
         self.assertGreater(tco_01["totalCumulativeSavingsKrw"], 0)
-        self.assertEqual(tco_01["totalKm"], 15000)
+        self.assertEqual(tco_01["totalKm"], 1500)
 
         tco_25 = self.run_ts_eval("engine.calculateTcoComparison(15000, 2.5)")
         self.assertGreaterEqual(len(tco_25["yearlyBreakdown"]), 2)
         self.assertEqual(len(tco_25["yearlyBreakdown"]), 3)
-        self.assertEqual(tco_25["totalKm"], 45000)
+        self.assertEqual(tco_25["totalKm"], 37500)
         self.assertGreater(tco_25["totalCumulativeSavingsKrw"], 0)
 
 

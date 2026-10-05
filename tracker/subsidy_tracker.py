@@ -38,6 +38,29 @@ from tracker.subsidy_models import (
 
 logger = logging.getLogger("subsidy_tracker")
 
+# Maximum bounded response read size (10MB) to prevent memory exhaustion
+MAX_RESPONSE_BYTES: int = 10 * 1024 * 1024
+
+try:
+    from utils.http_client import robust_decode
+except ImportError:
+    try:
+        from scrapers.common_utils import robust_decode
+    except ImportError:
+        def robust_decode(raw_bytes: bytes, declared_encoding: Optional[str] = None) -> str:
+            """Decode raw bytes with graceful fallback across Korean and universal charsets."""
+            if not raw_bytes:
+                return ""
+            encodings_to_try = [declared_encoding, "utf-8", "cp949", "euc-kr", "latin-1"]
+            for enc in encodings_to_try:
+                if not enc or not isinstance(enc, str):
+                    continue
+                try:
+                    return raw_bytes.decode(enc)
+                except (UnicodeDecodeError, LookupError):
+                    continue
+            return raw_bytes.decode("utf-8", errors="replace")
+
 # Exported baseline aliases and getters matching interface specifications
 get_baseline_regions = build_baseline_regions
 get_baseline_models = build_popular_models
@@ -303,7 +326,18 @@ class SubsidyTracker:
             )
             with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
                 if resp.status == 200:
-                    raw_data = resp.read().decode("utf-8")
+                    raw_bytes = resp.read(MAX_RESPONSE_BYTES)
+                    declared_encoding = None
+                    if hasattr(resp, "headers") and hasattr(resp.headers, "get_content_charset"):
+                        try:
+                            charset = resp.headers.get_content_charset()
+                            if isinstance(charset, str):
+                                declared_encoding = charset
+                        except Exception:
+                            pass
+                    raw_data = robust_decode(raw_bytes, declared_encoding=declared_encoding)
+                    if raw_data.startswith("\ufeff"):
+                        raw_data = raw_data.lstrip("\ufeff")
                     return json.loads(raw_data)
                 logger.warning("Remote server returned non-200 status: %d", resp.status)
                 return None
@@ -429,9 +463,13 @@ class SubsidyTracker:
             live_data = self.fetch_live_updates()
 
         # If live_data exists and contains valid payload, use it
-        if live_data and "regions" in live_data:
+        if isinstance(live_data, dict) and "regions" in live_data:
             try:
                 payload = SubsidyPayload.from_dict(live_data)
+                if not payload.regions or len(payload.regions) < 17:
+                    raise ValueError(
+                        f"Invalid live data schema: expected >= 17 regions, found {len(payload.regions) if payload.regions else 0}"
+                    )
                 # Recalculate metrics to guarantee invariants
                 for idx, r in enumerate(payload.regions):
                     payload.regions[idx] = self.update_region_metrics(r)
@@ -482,11 +520,14 @@ class SubsidyTracker:
         output_path: Optional[Union[str, Path]] = None,
         dry_run: bool = False,
         quarantine_corrupted: bool = False,
+        sync_defects: bool = False,
     ) -> SubsidyPayload:
         """Execute complete subsidy collection cycle and atomically save to disk.
 
         Conforms to PROJECT.md interface contract:
-        SubsidyTracker.collect_and_save(sync_web: bool, output_path: Optional[str], dry_run: bool) -> SubsidyPayload
+        SubsidyTracker.collect_and_save(
+            sync_web: bool, output_path: Optional[str], dry_run: bool, sync_defects: bool
+        ) -> SubsidyPayload
         """
         payload, fallback_used = self.execute_tracking_cycle(
             validate_cache=True,
@@ -540,6 +581,16 @@ class SubsidyTracker:
                     unique_destinations.append(dst)
 
             self.save_payload(payload, unique_destinations)
+
+        if sync_defects:
+            try:
+                from run_tracker import sync_defect_reports
+
+                web_dir_env = os.getenv("EV_TRACKER_WEB_DIR")
+                web_dir = Path(web_dir_env) if web_dir_env else None
+                sync_defect_reports(web_dir=web_dir, dry_run=dry_run, run_crawler=False)
+            except Exception as e:
+                logger.warning("Failed to synchronize defect reports in collect_and_save: %s", e)
 
         return payload
 

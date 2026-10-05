@@ -62,6 +62,7 @@ export const CATEGORY_MAP: Record<string, { code: DefectCategoryCode; ko: string
  * Normalizes any raw item from external JSON to DefectReportItem with safe defaults.
  */
 export function normalizeReport(raw: Record<string, unknown>, index: number): DefectReportItem {
+  if (!raw || typeof raw !== 'object') raw = {};
   const rawCat = String(raw.defect_category || raw.category || 'BATTERY_CHARGING');
   const catInfo = CATEGORY_MAP[rawCat] || {
     code: rawCat,

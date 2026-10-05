@@ -35,7 +35,7 @@ export default function GlobalEvPage() {
       <section className="space-y-4 mt-8">
         <h2 className="text-3xl font-semibold text-gray-800">볼보 EX30 / 폴스타 2</h2>
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4">
-          <h3 className="text-xl font-bold text-yellow-700">⚠️ 2021~2024년식: CAUTION (소프트웨어 및 히터 결함)</h3>
+          <h3 className="text-xl font-bold text-amber-900">⚠️ 2021~2024년식: CAUTION (소프트웨어 및 히터 결함)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li><strong>EX30 속도계 먹통:</strong> 모든 계기판을 중앙 12.3인치 스크린에 통합했으나 소프트웨어 에러로 주행 중 속도계 화면이 꺼지는 결함 리콜.</li>
             <li><strong>폴스타 2 세라믹 히터 파괴:</strong> 겨울철 고전압 냉각수 히터(HVCH) 내부 세라믹 부품이 쪼개지며 절연 파괴 에러로 히터 셧다운 (수리비 약 270만 원).</li>
@@ -46,7 +46,7 @@ export default function GlobalEvPage() {
       <section className="space-y-4 mt-8">
         <h2 className="text-3xl font-semibold text-gray-800">메르세데스-벤츠 EQE / EQS</h2>
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4">
-          <h3 className="text-xl font-bold text-yellow-700">⚠️ 2022~2023년식: CAUTION (수리비 폭탄 주의)</h3>
+          <h3 className="text-xl font-bold text-amber-900">⚠️ 2022~2023년식: CAUTION (수리비 폭탄 주의)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li><strong>모터라이즈 도어핸들 박살:</strong> 겨울철 얼음이 얼었을 때 도어 핸들 모터가 억지로 튀어나오려다 내부 플라스틱 기어 이빨이 다 부서짐 (수리비 짝당 190만 원).</li>
             <li><strong>배터리 수리비 절망편:</strong> 118kWh EQS 배터리팩 무상보증 종료 후 교체 비용은 약 <strong>7,560만 원</strong>으로 중고차 가격 전체를 상회하는 끔찍한 리스크를 안고 있습니다.</li>

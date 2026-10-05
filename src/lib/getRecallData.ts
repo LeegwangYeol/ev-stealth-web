@@ -1,4 +1,4 @@
-import rawRecallData from '../data/ev_recall_database.json';
+import rawRecallData from '../data/ev_recall_database.json' with { type: 'json' };
 
 export type RecallRiskLevel =
   | 'FIRE_HAZARD'

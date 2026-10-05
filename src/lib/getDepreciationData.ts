@@ -1001,7 +1001,7 @@ export function calculateTcoComparison(
   return {
     annualKm: safeAnnualKm,
     years: safeYears,
-    totalKm: safeAnnualKm * safeYears,
+    totalKm: runningKm,
     evEfficiencyKmPerKwh: safeEvEff,
     iceFuelEconomyKmPerLiter: safeIceEff,
     blendedElectricityTariffKrwPerKwh: Math.round(blendedTariff * 100) / 100,

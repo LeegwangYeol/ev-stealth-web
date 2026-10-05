@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 export type ChecklistItem = {
   id: string;
@@ -84,10 +84,50 @@ export default function PdiChecklistClient() {
     }
   };
 
-  const checkedCount = items.filter((i) => i.checked).length;
-  const progress = items.length === 0 ? 0 : Math.round((checkedCount / items.length) * 100);
+  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+
+  // Memoized category sets and filtered count calculations
+  const categories = useMemo(() => Array.from(new Set(items.map((i) => i.category))), [items]);
+  const checkedCount = useMemo(() => items.filter((i) => i.checked).length, [items]);
+  const progress = useMemo(() => {
+    return items.length === 0 ? 0 : Math.round((checkedCount / items.length) * 100);
+  }, [checkedCount, items.length]);
   const progressPercentage = progress;
-  const categories = Array.from(new Set(items.map((i) => i.category)));
+
+  // Memoized category statistics
+  const categoryStats = useMemo(() => {
+    const stats: Record<string, { total: number; checked: number }> = {};
+    for (const cat of categories) {
+      stats[cat] = { total: 0, checked: 0 };
+    }
+    for (const item of items) {
+      if (stats[item.category]) {
+        stats[item.category].total += 1;
+        if (item.checked) stats[item.category].checked += 1;
+      }
+    }
+    return stats;
+  }, [items, categories]);
+
+  // Memoized items grouped by category to eliminate redundant array filters during rendering
+  const itemsByCategory = useMemo(() => {
+    const map = new Map<string, ChecklistItem[]>();
+    for (const cat of categories) {
+      map.set(cat, []);
+    }
+    for (const item of items) {
+      const list = map.get(item.category);
+      if (list) list.push(item);
+    }
+    return map;
+  }, [items, categories]);
+
+  // Displayed categories based on selected category filter
+  const displayedCategories = useMemo(() => {
+    return selectedCategory === 'ALL'
+      ? categories
+      : categories.filter((c) => c === selectedCategory);
+  }, [categories, selectedCategory]);
 
   return (
     <div className="max-w-4xl mx-auto py-10 space-y-8">
@@ -105,7 +145,7 @@ export default function PdiChecklistClient() {
             <button
               onClick={resetChecklist}
               type="button"
-              className="self-start sm:self-auto px-3.5 py-2 text-xs font-semibold text-slate-600 hover:text-red-600 bg-white hover:bg-red-50 border border-slate-300 rounded-lg shadow-sm transition"
+              className="self-start sm:self-auto px-3.5 py-2 text-xs font-semibold text-slate-600 hover:text-red-700 bg-white hover:bg-red-50 border border-slate-300 rounded-lg shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               체크리스트 초기화
             </button>
@@ -117,8 +157,8 @@ export default function PdiChecklistClient() {
         </div>
       </header>
 
-      <div className="sticky top-0 bg-white/90 backdrop-blur-md p-4 rounded-xl border border-gray-200 shadow-sm z-10">
-        <div className="flex justify-between items-center mb-2">
+      <div className="sticky top-0 bg-white/90 backdrop-blur-md p-4 rounded-xl border border-gray-200 shadow-sm z-10 space-y-3">
+        <div className="flex justify-between items-center">
           <span className="font-semibold text-gray-700">검수 진행률 ({checkedCount}/{items.length})</span>
           <span className="font-bold text-blue-600">{progress}%</span>
         </div>
@@ -136,40 +176,80 @@ export default function PdiChecklistClient() {
             style={{ width: `${progressPercentage}%` }}
           />
         </div>
+
+        {/* Category Filter Chips with visible focus rings */}
+        <div
+          role="tablist"
+          aria-label="체크리스트 카테고리 필터"
+          className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={selectedCategory === 'ALL'}
+            onClick={() => setSelectedCategory('ALL')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              selectedCategory === 'ALL'
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+            }`}
+          >
+            전체 ({items.length})
+          </button>
+          {categories.map((cat) => {
+            const count = categoryStats[cat]?.total || 0;
+            const checked = categoryStats[cat]?.checked || 0;
+            const isSelected = selectedCategory === cat;
+            return (
+              <button
+                key={cat}
+                type="button"
+                role="tab"
+                aria-selected={isSelected}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  isSelected
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                {cat} ({checked}/{count})
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="space-y-6">
-        {categories.map((category) => (
+        {displayedCategories.map((category) => (
           <div key={category} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
             <h2 className="bg-slate-50 border-b border-gray-200 p-4 text-xl font-bold text-slate-800">
               {category}
             </h2>
             <div className="divide-y divide-gray-100">
-              {items
-                .filter((item) => item.category === category)
-                .map((item) => (
-                  <label
-                    key={item.id}
-                    className="flex items-start p-4 hover:bg-slate-50 cursor-pointer transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={item.checked}
-                      onChange={() => toggleCheck(item.id)}
-                      className="mt-1 w-6 h-6 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <div className="ml-4 flex-1">
-                      <p className={`text-lg ${item.checked ? 'text-slate-600 line-through' : 'text-gray-800'}`}>
-                        {item.task}
+              {(itemsByCategory.get(category) || []).map((item) => (
+                <label
+                  key={item.id}
+                  className="flex items-start p-4 hover:bg-slate-50 cursor-pointer transition-colors rounded-xl focus-within:ring-2 focus-within:ring-blue-500"
+                >
+                  <input
+                    type="checkbox"
+                    checked={item.checked}
+                    onChange={() => toggleCheck(item.id)}
+                    className="mt-1 w-6 h-6 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500"
+                  />
+                  <div className="ml-4 flex-1">
+                    <p className={`text-lg ${item.checked ? 'text-slate-600 line-through' : 'text-gray-800'}`}>
+                      {item.task}
+                    </p>
+                    {item.warning && (
+                      <p className={`mt-1 text-sm font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-red-700'}`}>
+                        ⚠️ 주의: {item.warning}
                       </p>
-                      {item.warning && (
-                        <p className={`mt-1 text-sm font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-red-700'}`}>
-                          ⚠️ 주의: {item.warning}
-                        </p>
-                      )}
-                    </div>
-                  </label>
-                ))}
+                    )}
+                  </div>
+                </label>
+              ))}
             </div>
           </div>
         ))}

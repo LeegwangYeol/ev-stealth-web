@@ -23,7 +23,7 @@ export default function TeslaPage() {
         </div>
 
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4">
-          <h3 className="text-xl font-bold text-yellow-700">⚠️ 2021~2023년식: CAUTION (주의 요망)</h3>
+          <h3 className="text-xl font-bold text-amber-900">⚠️ 2021~2023년식: CAUTION (주의 요망)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li><strong>히트펌프 사망:</strong> 옥토밸브(히트펌프) 결함으로 한파에 에어컨/히터가 모두 죽는 결함 발생 (수리비 87만 원 ~ 661만 원).</li>
             <li>LFP 배터리 탑재 모델(RWD)은 겨울철 100% 완충을 자주 안 해주면 배터리 계산 오류로 차가 멈출 수 있습니다.</li>

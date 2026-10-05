@@ -53,13 +53,18 @@ def _find_repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 PROJECT_ROOT = _find_repo_root()
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 WEB_ROOT = PROJECT_ROOT / "ev-stealth-web"
 if str(WEB_ROOT) not in sys.path:
-    sys.path.insert(0, str(WEB_ROOT))
+    sys.path.append(str(WEB_ROOT))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+else:
+    sys.path.remove(str(PROJECT_ROOT))
+    sys.path.insert(0, str(PROJECT_ROOT))
 
+import tracker.subsidy_tracker as subsidy_tracker_mod
 from tracker.subsidy_tracker import SubsidyTracker
+MAX_RESPONSE_BYTES = getattr(subsidy_tracker_mod, "MAX_RESPONSE_BYTES", 10 * 1024 * 1024)
 from tracker.subsidy_models import SubsidyPayload
 from tracker.subsidy_baseline import build_initial_baseline
 import run_scraper
@@ -252,6 +257,49 @@ class TestSubsidyTrackerResilientExceptionFallback(unittest.TestCase):
             self.assertTrue(discarded)
             self.assertFalse(bad_schema_file.exists())
 
+    def test_fetch_live_updates_bounded_read_size(self) -> None:
+        """fetch_live_updates must issue bounded read up to MAX_RESPONSE_BYTES (10MB) to prevent OOM."""
+        mock_response = mock.MagicMock()
+        mock_response.status = 200
+        mock_response.read.return_value = b'{"status": "ok"}'
+
+        with mock.patch("urllib.request.urlopen") as mock_urlopen:
+            mock_urlopen.return_value.__enter__.return_value = mock_response
+
+            res = self.tracker.fetch_live_updates()
+            self.assertEqual(res, {"status": "ok"})
+            mock_response.read.assert_called_once_with(MAX_RESPONSE_BYTES)
+
+    def test_fetch_live_updates_robust_decode_cp949_korean(self) -> None:
+        """fetch_live_updates must handle Korean CP949 / EUC-KR bytes cleanly via robust_decode."""
+        korean_payload = {"status": "정상", "regions": []}
+        korean_bytes = json.dumps(korean_payload, ensure_ascii=False).encode("cp949")
+
+        mock_response = mock.MagicMock()
+        mock_response.status = 200
+        mock_response.read.return_value = korean_bytes
+        mock_response.headers.get_content_charset.return_value = "cp949"
+
+        with mock.patch("urllib.request.urlopen") as mock_urlopen:
+            mock_urlopen.return_value.__enter__.return_value = mock_response
+
+            res = self.tracker.fetch_live_updates()
+            self.assertIsNotNone(res)
+            self.assertEqual(res["status"], "정상")
+
+    def test_execute_tracking_cycle_rejects_sub_17_region_live_payload(self) -> None:
+        """execute_tracking_cycle must reject live payloads with < 17 regions and fall back to 17-region baseline."""
+        partial_live = {
+            "metadata": {"version": "1.0.0"},
+            "regions": [{"region_id": f"KR-{i}"} for i in range(16)],
+            "nationwide_summary": {},
+        }
+
+        with mock.patch.object(self.tracker, "fetch_live_updates", return_value=partial_live):
+            payload, is_fallback = self.tracker.execute_tracking_cycle()
+            self.assertTrue(is_fallback, "Must fall back when live payload has < 17 regions")
+            self.assertEqual(len(payload.regions), 17)
+
 
 class TestScraperDualPathMirrorSyncContract(unittest.TestCase):
     """Verifies that run_scraper.py --sync-web implements dual-path mirror writing across root and web."""
@@ -330,6 +378,36 @@ class TestScraperDualPathMirrorSyncContract(unittest.TestCase):
         self.assertTrue(args.sync_web)
         self.assertTrue(args.dry_run)
         self.assertEqual(args.limit, 5)
+
+    def test_scraper_atomic_copy_cleanup_on_disk_error(self) -> None:
+        """_atomic_copy_file must remove temporary files if copyfileobj fails."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            src = Path(tmp_dir) / "source.json"
+            dest = Path(tmp_dir) / "out" / "dest.json"
+            src.write_text('{"test": true}')
+
+            with mock.patch("shutil.copyfileobj", side_effect=IOError("Simulated disk error")):
+                with self.assertRaises(IOError):
+                    run_scraper._atomic_copy_file(src, dest)
+
+            self.assertFalse(dest.exists())
+            lingering = list(dest.parent.glob(".tmp_sync_*"))
+            self.assertEqual(len(lingering), 0)
+
+    def test_scraper_atomic_copy_cleanup_on_fsync_error(self) -> None:
+        """_atomic_copy_file must remove temporary files if os.fsync fails."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            src = Path(tmp_dir) / "source.json"
+            dest = Path(tmp_dir) / "out" / "dest.json"
+            src.write_text('{"test": true}')
+
+            with mock.patch("os.fsync", side_effect=OSError("Simulated fsync error")):
+                with self.assertRaises(OSError):
+                    run_scraper._atomic_copy_file(src, dest)
+
+            self.assertFalse(dest.exists())
+            lingering = list(dest.parent.glob(".tmp_sync_*"))
+            self.assertEqual(len(lingering), 0)
 
 
 class TestContinuousBitwiseSha256Parity(unittest.TestCase):
@@ -424,6 +502,39 @@ class TestContinuousBitwiseSha256Parity(unittest.TestCase):
 
             hashes = [_compute_file_sha256(p) for p in (p1, p2, p3, p4)]
             self.assertEqual(len(set(hashes)), 1, f"Hash divergence across destinations: {hashes}")
+
+
+class TestSubsidyTrackerDefectSyncContract(unittest.TestCase):
+    """Verifies that SubsidyTracker.collect_and_save programmatically controls defect report sync."""
+
+    def test_collect_and_save_sync_defects_parameter_default(self) -> None:
+        """collect_and_save(sync_defects=False) does not invoke sync_defect_reports."""
+        tracker = SubsidyTracker(timeout_seconds=2.0)
+        with mock.patch("run_tracker.sync_defect_reports") as mock_sync:
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                out = Path(tmp_dir) / "ev_subsidy_data.json"
+                tracker.collect_and_save(output_path=out, sync_defects=False)
+                mock_sync.assert_not_called()
+
+    def test_collect_and_save_sync_defects_parameter_true(self) -> None:
+        """collect_and_save(sync_defects=True) invokes sync_defect_reports."""
+        tracker = SubsidyTracker(timeout_seconds=2.0)
+        with mock.patch("run_tracker.sync_defect_reports") as mock_sync:
+            mock_sync.return_value = ["/path/to/daily_reports.json"]
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                out = Path(tmp_dir) / "ev_subsidy_data.json"
+                tracker.collect_and_save(output_path=out, sync_defects=True)
+                mock_sync.assert_called_once()
+
+    def test_collect_and_save_sync_defects_failure_resilience(self) -> None:
+        """collect_and_save must not crash if sync_defect_reports raises an exception."""
+        tracker = SubsidyTracker(timeout_seconds=2.0)
+        with mock.patch("run_tracker.sync_defect_reports", side_effect=RuntimeError("Defect sync failure")):
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                out = Path(tmp_dir) / "ev_subsidy_data.json"
+                payload = tracker.collect_and_save(output_path=out, sync_defects=True)
+                self.assertIsInstance(payload, SubsidyPayload)
+                self.assertEqual(len(payload.regions), 17)
 
 
 if __name__ == "__main__":
