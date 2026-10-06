@@ -21,8 +21,8 @@ export default function BydPage() {
           </ul>
         </div>
 
-        <div className="bg-green-50 border-l-4 border-green-500 p-4">
-          <h3 className="text-xl font-bold text-green-700">✅ 2024~2025년식: BUY SAFE (적극 추천)</h3>
+        <div className="bg-green-50 border-l-4 border-green-500 p-4" role="region" aria-label="안전 구매 가이드">
+          <h3 className="text-xl font-bold text-green-900">✅ 2024~2025년식: BUY SAFE (적극 추천)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li>에바코어 코팅이 개선되었고 새로운 후륜 멀티링크 서스펜션이 적용되어 타이어 편마모와 승차감이 대폭 개선되었습니다. 배터리 교체 비용도 전 세계 최저 수준(약 900만 원 선)으로 유지비가 매우 저렴합니다.</li>
           </ul>
@@ -40,8 +40,8 @@ export default function BydPage() {
           </ul>
         </div>
 
-        <div className="bg-green-50 border-l-4 border-green-500 p-4">
-          <h3 className="text-xl font-bold text-green-700">✅ 2025년식: BUY SAFE (추천)</h3>
+        <div className="bg-green-50 border-l-4 border-green-500 p-4" role="region" aria-label="안전 구매 가이드">
+          <h3 className="text-xl font-bold text-green-900">✅ 2025년식: BUY SAFE (추천)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li>루프 라이다 세정 노즐 결함 개선 및 초기 하체 세팅이 수정되었습니다. 단, CTB 통짜 배터리의 구조적 한계(하부 긁힘 시 전손 위기)는 25년식도 동일하므로 반드시 하부 코팅이나 주의 운전이 필요합니다.</li>
           </ul>
@@ -56,8 +56,8 @@ export default function BydPage() {
             <li>LFP 배터리 겨울철 셧다운(25%에서 갑자기 0%로 추락) 및 하체 나사 부식 발생.</li>
           </ul>
         </div>
-        <div className="bg-green-50 border-l-4 border-green-500 p-4">
-          <h3 className="text-xl font-bold text-green-700">✅ 2024년식: BUY SAFE (적극 추천)</h3>
+        <div className="bg-green-50 border-l-4 border-green-500 p-4" role="region" aria-label="안전 구매 가이드">
+          <h3 className="text-xl font-bold text-green-900">✅ 2024년식: BUY SAFE (적극 추천)</h3>
         </div>
       </section>
 

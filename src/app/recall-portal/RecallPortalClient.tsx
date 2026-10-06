@@ -35,8 +35,10 @@ function resolveBrand(inputBrand: string, availableBrands: string[]): string | u
   const direct = availableBrands.find((b) => b.toLowerCase() === normalized);
   if (direct) return direct;
 
-  const synonym = BRAND_SYNONYMS[normalized];
-  if (synonym) {
+  const synonym = Object.prototype.hasOwnProperty.call(BRAND_SYNONYMS, normalized)
+    ? BRAND_SYNONYMS[normalized]
+    : undefined;
+  if (typeof synonym === 'string') {
     const synonymMatch = availableBrands.find((b) => b.toLowerCase() === synonym.toLowerCase());
     if (synonymMatch) return synonymMatch;
   }
@@ -447,7 +449,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 href="https://www.car.go.kr"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
               >
                 <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -457,7 +459,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               </a>
               <a
                 href="#battery-directory"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 transition"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
               >
                 🔋 배터리 제조사 공개표
               </a>
@@ -623,7 +625,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   <button
                     type="submit"
                     disabled={!vinValidation.valid}
-                    className="w-full sm:w-auto px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-semibold text-sm transition shadow-lg flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                    className="w-full sm:w-auto px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-400 text-white font-semibold text-sm transition shadow-lg flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -1018,7 +1020,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                               href={campaign.official_link}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                              className="text-blue-400 hover:text-blue-300 flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
                             >
                               공식 제조사 리콜 공지 확인 &rarr;
                               <span className="sr-only"> (새 창에서 열림)</span>
@@ -1329,7 +1331,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                           href={campaign.official_link}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-400 hover:underline"
+                          className="text-blue-400 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
                         >
                           공식 웹사이트 바로가기 &rarr;
                           <span className="sr-only"> (새 창에서 열림)</span>

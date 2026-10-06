@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useDeferredValue } from 'react';
 import type { DailyReportData, DefectReportItem } from '@/lib/getDailyReports';
+import ClientTimestamp from '@/components/ClientTimestamp';
 
 interface AdminDashboardClientProps {
   initialData: DailyReportData;
@@ -12,6 +13,17 @@ type SortOption = 'critical' | 'recent' | 'negativity';
 interface CategoryTab {
   code: string;
   label: string;
+}
+
+const SEVERITY_WEIGHT: Record<string, number> = {
+  CRITICAL: 3,
+  WARNING: 2,
+  CAUTION: 1,
+  INFO: 0,
+};
+
+interface DefectReportWithTimestamp extends DefectReportItem {
+  _timestamp: number;
 }
 
 const CATEGORY_TABS: CategoryTab[] = [
@@ -30,12 +42,8 @@ const SOURCE_OPTIONS = [
 ];
 
 export default function AdminDashboardClient({ initialData }: AdminDashboardClientProps) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedSource, setSelectedSource] = useState('all');
   const [sortBy, setSortBy] = useState<SortOption>('critical');
@@ -64,7 +72,16 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     }
   };
 
-  const reports = useMemo(() => initialData.reports || [], [initialData.reports]);
+  const reports = useMemo<DefectReportWithTimestamp[]>(() => {
+    return (initialData.reports || []).map((r) => {
+      const rawDate = (r as unknown as { created_at?: string }).created_at || r.date;
+      const parsed = rawDate ? new Date(rawDate).getTime() : 0;
+      return {
+        ...r,
+        _timestamp: Number.isFinite(parsed) ? parsed : 0,
+      };
+    });
+  }, [initialData.reports]);
   const safeScore = Number.isFinite(initialData.statistics.avg_negativity_score)
     ? initialData.statistics.avg_negativity_score
     : 0;
@@ -95,7 +112,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
   // Filtered and sorted reports
   const filteredReports = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const query = deferredSearchQuery.trim().toLowerCase();
 
     return reports
       .filter((report) => {
@@ -142,20 +159,14 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
       })
       .sort((a, b) => {
         if (sortBy === 'critical') {
-          const severityWeight: Record<string, number> = {
-            CRITICAL: 3,
-            WARNING: 2,
-            CAUTION: 1,
-            INFO: 0,
-          };
-          const weightA = severityWeight[String(a.severity).toUpperCase()] || 0;
-          const weightB = severityWeight[String(b.severity).toUpperCase()] || 0;
+          const weightA = SEVERITY_WEIGHT[String(a.severity).toUpperCase()] || 0;
+          const weightB = SEVERITY_WEIGHT[String(b.severity).toUpperCase()] || 0;
           if (weightB !== weightA) return weightB - weightA;
           return (b.sentiment_score || 0) - (a.sentiment_score || 0);
         }
 
         if (sortBy === 'recent') {
-          return new Date(b.date).getTime() - new Date(a.date).getTime();
+          return b._timestamp - a._timestamp;
         }
 
         if (sortBy === 'negativity') {
@@ -164,7 +175,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
         return 0;
       });
-  }, [reports, selectedCategory, selectedSource, searchQuery, sortBy]);
+  }, [reports, selectedCategory, selectedSource, deferredSearchQuery, sortBy]);
 
   const handleResetFilters = () => {
     setSearchQuery('');
@@ -293,13 +304,10 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             </div>
             <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
               <span className="block text-slate-400 font-mono">LAST GENERATED</span>
-              <span className="font-semibold text-slate-200" suppressHydrationWarning>
-                {mounted && initialData.generated_at
-                  ? new Date(initialData.generated_at).toLocaleString('ko-KR')
-                  : initialData.generated_at
-                    ? initialData.generated_at.replace('T', ' ').substring(0, 19) + ' (UTC)'
-                    : '방금 전'}
-              </span>
+              <ClientTimestamp
+                isoString={initialData.generated_at}
+                className="font-semibold text-slate-200"
+              />
             </div>
           </div>
         </div>
@@ -342,7 +350,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             <span className="text-xs font-bold text-rose-700 tracking-wider uppercase">
               치명적 안전 결함
             </span>
-            <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-800 flex items-center justify-center">
               <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -642,7 +650,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             <tbody>
               {filteredReports.map((report, idx) => (
                 <tr key={`sr-report-${report.id}`}>
-                  <td>{idx + 1}</td>
+                  <th scope="row">{idx + 1}</th>
                   <td>{report.date}</td>
                   <td>{report.vehicle_model}</td>
                   <td>{report.defect_category_ko}</td>

@@ -11,6 +11,7 @@ import {
   PopularModelEntry,
 } from '@/types/subsidy';
 import { calculateNetSubsidy } from '@/lib/getSubsidyData';
+import ClientTimestamp from '@/components/ClientTimestamp';
 
 interface SubsidyTrackerClientProps {
   initialData: EVSubsidyDataset;
@@ -421,7 +422,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               ))}
             </select>
             <p id="region-residency-note" className="text-xs text-amber-300 flex items-center gap-1.5 pt-0.5">
-              <span aria-hidden="true">ℹ️</span> 해당 지자체 최소 <strong>{activeRegionForCalc.residency_requirement_days}일 이상</strong> 연속 거주 요건 필요
+              <span aria-hidden="true">ℹ️</span> 해당 지자체 최소 <strong>{activeRegionForCalc?.residency_requirement_days ?? 30}일 이상</strong> 연속 거주 요건 필요
             </p>
           </div>
 
@@ -557,7 +558,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               {calculationResult.modelName}
             </h3>
             <div className="text-xs text-blue-300 font-medium mt-0.5">
-              등록 지역: {calculationResult.regionName} ({activeRegionForCalc.name_en})
+              등록 지역: {calculationResult.regionName} {activeRegionForCalc?.name_en ? `(${activeRegionForCalc.name_en})` : ''}
             </div>
           </div>
 
@@ -653,11 +654,6 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
 // Main Export: SubsidyTrackerClient Component
 // ============================================================================
 export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClientProps) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   const searchParams = useSearchParams();
   const urlRegion = searchParams?.get('region') || '';
   const urlModel = searchParams?.get('model') || '';
@@ -705,7 +701,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
     return regions
       .filter((region) => {
         // Category Metrics
-        const catMetrics: CategoryMetrics = region.categories[selectedCategory];
+        const catMetrics: CategoryMetrics | undefined = region.categories?.[selectedCategory];
         if (!catMetrics) return false;
 
         // Zone filter
@@ -739,20 +735,20 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         return true;
       })
       .sort((a, b) => {
-        const catA = a.categories[selectedCategory];
-        const catB = b.categories[selectedCategory];
+        const catA = a.categories?.[selectedCategory];
+        const catB = b.categories?.[selectedCategory];
 
         switch (sortOption) {
           case 'DEPLETION_DESC':
-            return catB.depletion_rate - catA.depletion_rate;
+            return (catB?.depletion_rate ?? 0) - (catA?.depletion_rate ?? 0);
           case 'DEPLETION_ASC':
-            return catA.depletion_rate - catB.depletion_rate;
+            return (catA?.depletion_rate ?? 0) - (catB?.depletion_rate ?? 0);
           case 'REMAINING_ASC':
-            return catA.remaining_units - catB.remaining_units;
+            return (catA?.remaining_units ?? 0) - (catB?.remaining_units ?? 0);
           case 'LOCAL_SUBSIDY_DESC':
-            return catB.max_local_subsidy_krw - catA.max_local_subsidy_krw;
+            return (catB?.max_local_subsidy_krw ?? 0) - (catA?.max_local_subsidy_krw ?? 0);
           case 'NAME_ASC':
-            return a.name_ko.localeCompare(b.name_ko, 'ko');
+            return (a.name_ko || '').localeCompare(b.name_ko || '', 'ko');
           default:
             return 0;
         }
@@ -761,12 +757,15 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
 
   // Critical regions (for emergency ticker)
   const criticalRegions = useMemo(() => {
-    return regions.filter(
-      (r) =>
-        r.categories.passenger.status === 'CRITICAL' ||
-        r.categories.passenger.status === 'DEPLETED' ||
-        r.categories.passenger.depletion_rate >= 95.0
-    );
+    return regions.filter((r) => {
+      const p = r.categories?.passenger;
+      if (!p) return false;
+      return (
+        p.status === 'CRITICAL' ||
+        p.status === 'DEPLETED' ||
+        (p.depletion_rate ?? 0) >= 95.0
+      );
+    });
   }, [regions]);
 
   // Stable Callbacks (passed to memoized children to prevent re-render cascades)
@@ -842,18 +841,17 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               기준: 2026년 환경부 무공해차 통합누리집 (ev.or.kr)
             </span>
           </div>
-          <span className="text-xs text-slate-400" suppressHydrationWarning>
+          <span className="text-xs text-slate-400">
             데이터 갱신 시각:{' '}
-            {mounted && initialData.metadata?.generated_at
-              ? new Date(initialData.metadata.generated_at).toLocaleDateString('ko-KR', {
-                  month: 'long',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })
-              : initialData.metadata?.generated_at
-                ? initialData.metadata.generated_at.replace('T', ' ').substring(0, 16) + ' (UTC)'
-                : '방금 전'}
+            <ClientTimestamp
+              isoString={initialData.metadata?.generated_at}
+              options={{
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              }}
+            />
           </span>
         </div>
 
@@ -893,29 +891,29 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
           <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
             <div className="text-xs font-medium text-slate-400">총 접수 대수</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-blue-400 mt-1">
-              {summary.total_applied_units.toLocaleString()}
+              {(summary?.total_applied_units ?? 0).toLocaleString()}
               <span className="text-xs font-normal text-slate-400 ml-1">대</span>
             </div>
             <div className="text-[11px] text-slate-400 mt-1">
-              출고 완료: {summary.total_delivered_units.toLocaleString()}대
+              출고 완료: {(summary?.total_delivered_units ?? 0).toLocaleString()}대
             </div>
           </div>
 
           <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
             <div className="text-xs font-medium text-slate-400">전국 잔여 대수</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-emerald-400 mt-1">
-              {summary.total_remaining_units.toLocaleString()}
+              {(summary?.total_remaining_units ?? 0).toLocaleString()}
               <span className="text-xs font-normal text-slate-400 ml-1">대</span>
             </div>
             <div className="text-[11px] text-slate-400 mt-1">
-              잔여율 {(100 - summary.nationwide_depletion_rate).toFixed(1)}%
+              잔여율 {(100 - (summary?.nationwide_depletion_rate ?? 0)).toFixed(1)}%
             </div>
           </div>
 
           <div className="col-span-2 md:col-span-1 bg-rose-950 border border-rose-500/40 rounded-2xl p-4 flex flex-col justify-between">
             <div className="text-xs font-medium text-rose-300">긴급 마감 위험 지역</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-rose-400 mt-1">
-              {summary.alert_region_counts.critical + summary.alert_region_counts.depleted}
+              {(summary?.alert_region_counts?.critical ?? 0) + (summary?.alert_region_counts?.depleted ?? 0)}
               <span className="text-xs font-normal text-rose-300 ml-1">개 시도</span>
             </div>
             <div className="text-[11px] text-rose-300 mt-1">

@@ -18,16 +18,64 @@ interface DepreciationCalculatorClientProps {
   initialDatabase: DepreciationDatabase;
 }
 
+const FALLBACK_MODEL: EvModelDepreciation = {
+  id: 'fallback-ev',
+  brand_id: 'generic',
+  brand_name_en: 'Generic',
+  brand_name_ko: '표준 EV',
+  model_name: '표준 전기차',
+  segment: '중형 CUV',
+  msrp_krw_baseline: 55_000_000,
+  avg_subsidy_krw: 7_000_000,
+  net_purchase_price_krw: 48_000_000,
+  battery_specs: {
+    capacity_kwh: 77.4,
+    chemistry: 'NCM 811',
+    cell_supplier: '국내 배터리 3사',
+    voltage_architecture: '800V',
+  },
+  warranty: {
+    years: 10,
+    km: 200_000,
+    guarantee_retention_pct: 70,
+  },
+  factor_weights: {
+    warranty_cliff: 1.0,
+    chemistry_aging: 1.0,
+    architecture_800v: 1.0,
+    ota_maturity: 1.0,
+    net_factor_adjustment: 1.0,
+  },
+  software_ota_level: 'FULL_STACK',
+  resale_defense_tier: 'A',
+  depreciation_curve: {
+    year_1: { residual_pct_msrp: 75, depreciation_pct_msrp: 25, residual_pct_effective: 86, avg_used_price_krw: 41_250_000, annual_drop_pct: 25 },
+    year_2: { residual_pct_msrp: 65, depreciation_pct_msrp: 35, residual_pct_effective: 74, avg_used_price_krw: 35_750_000, annual_drop_pct: 10 },
+    year_3: { residual_pct_msrp: 55, depreciation_pct_msrp: 45, residual_pct_effective: 63, avg_used_price_krw: 30_250_000, annual_drop_pct: 10 },
+    year_4: { residual_pct_msrp: 47, depreciation_pct_msrp: 53, residual_pct_effective: 54, avg_used_price_krw: 25_850_000, annual_drop_pct: 8 },
+    year_5: { residual_pct_msrp: 40, depreciation_pct_msrp: 60, residual_pct_effective: 46, avg_used_price_krw: 22_000_000, annual_drop_pct: 7 },
+  },
+  key_pros_resale: '데이터 동기화 대기 중',
+  key_cons_resale: '데이터 동기화 대기 중',
+};
+
 export default function DepreciationCalculatorClient({
   initialDatabase,
 }: DepreciationCalculatorClientProps) {
+  // Defensive guard against empty/undefined models array
+  const models = useMemo(() => {
+    return Array.isArray(initialDatabase?.models) && initialDatabase.models.length > 0
+      ? initialDatabase.models
+      : [FALLBACK_MODEL];
+  }, [initialDatabase?.models]);
+
   // ----------------------------------------------------
   // 1. STATE & USER SELECTIONS
   // ----------------------------------------------------
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedModelId, setSelectedModelId] = useState<string>(
-    initialDatabase.models[0]?.id || 'model-3'
+    models[0]?.id || 'model-3'
   );
 
   // Simulation Controls
@@ -57,18 +105,19 @@ export default function DepreciationCalculatorClient({
   // ----------------------------------------------------
   const selectedModel = useMemo(() => {
     return (
-      initialDatabase.models.find((m) => m.id === selectedModelId) ||
-      initialDatabase.models[0]
+      models.find((m) => m.id === selectedModelId) ||
+      models[0] ||
+      FALLBACK_MODEL
     );
-  }, [initialDatabase.models, selectedModelId]);
+  }, [models, selectedModelId]);
 
   // Available brands
   const brands = useMemo(() => {
     const list = [
-      { id: 'all', name_ko: '전체 브랜드', count: initialDatabase.models.length },
+      { id: 'all', name_ko: '전체 브랜드', count: models.length },
     ];
     const map = new Map<string, { id: string; name_ko: string; count: number }>();
-    for (const m of initialDatabase.models) {
+    for (const m of models) {
       const existing = map.get(m.brand_id);
       if (existing) {
         existing.count += 1;
@@ -81,13 +130,13 @@ export default function DepreciationCalculatorClient({
       }
     }
     return [...list, ...Array.from(map.values())];
-  }, [initialDatabase.models]);
+  }, [models]);
 
   // Filtered models with deferred search to prevent typing stutter
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const filteredModels = useMemo(() => {
     const q = deferredSearchQuery.trim().toLowerCase();
-    return initialDatabase.models.filter((m) => {
+    return models.filter((m) => {
       const matchesBrand = selectedBrand === 'all' || m.brand_id === selectedBrand;
       const matchesSearch =
         !q ||
@@ -98,7 +147,7 @@ export default function DepreciationCalculatorClient({
         m.segment.toLowerCase().includes(q);
       return matchesBrand && matchesSearch;
     });
-  }, [initialDatabase.models, selectedBrand, deferredSearchQuery]);
+  }, [models, selectedBrand, deferredSearchQuery]);
 
   // Effective Purchase Price Baseline
   const currentPurchasePrice = useMemo(() => {
@@ -846,7 +895,7 @@ export default function DepreciationCalculatorClient({
               <button
                 type="button"
                 onClick={() => setCustomPriceInput(null)}
-                className="text-[11px] text-blue-600 hover:underline font-semibold"
+                className="text-[11px] text-blue-600 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
                 aria-label="기본값 복원: 차량 기본 가격으로 초기화"
               >
                 기본값 복원
@@ -861,7 +910,7 @@ export default function DepreciationCalculatorClient({
                   setPriceBasis('effective');
                   setCustomPriceInput(null);
                 }}
-                className={`flex-1 py-1 text-center font-semibold transition ${
+                className={`flex-1 py-1 text-center font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none ${
                   priceBasis === 'effective'
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-slate-600 hover:bg-slate-100'
@@ -877,7 +926,7 @@ export default function DepreciationCalculatorClient({
                   setPriceBasis('msrp');
                   setCustomPriceInput(null);
                 }}
-                className={`flex-1 py-1 text-center font-semibold transition ${
+                className={`flex-1 py-1 text-center font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none ${
                   priceBasis === 'msrp'
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-slate-600 hover:bg-slate-100'
@@ -937,7 +986,7 @@ export default function DepreciationCalculatorClient({
               <button
                 type="button"
                 onClick={() => setChartViewMode('price')}
-                className={`px-3 py-1.5 font-semibold transition ${
+                className={`px-3 py-1.5 font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none ${
                   chartViewMode === 'price'
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-slate-600 hover:bg-slate-100'
@@ -949,7 +998,7 @@ export default function DepreciationCalculatorClient({
               <button
                 type="button"
                 onClick={() => setChartViewMode('percentage')}
-                className={`px-3 py-1.5 font-semibold transition ${
+                className={`px-3 py-1.5 font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none ${
                   chartViewMode === 'percentage'
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-slate-600 hover:bg-slate-100'
@@ -1594,7 +1643,7 @@ export default function DepreciationCalculatorClient({
                   setSyncMonthsWithYears(true);
                   setHeldMonths(Math.round(holdingYears * 12));
                 }}
-                className="text-blue-600 hover:underline text-[11px] font-medium"
+                className="text-blue-600 hover:underline text-[11px] font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
                 aria-label={`보유 기간(${holdingYears}년)과 동기화: 상단 연수와 개월 수 맞춤`}
               >
                 보유 기간({holdingYears}년)과 동기화
@@ -1665,7 +1714,7 @@ export default function DepreciationCalculatorClient({
                     step="100000"
                     value={effectiveNationalSubsidy}
                     onChange={(e) => setCustomNationalSubsidy(parseInt(e.target.value, 10) || 0)}
-                    className="w-full px-2 py-1 rounded bg-slate-800 border border-slate-700 text-right font-semibold text-white"
+                    className="w-full px-2 py-1 rounded bg-slate-800 border border-slate-700 text-right font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
                     aria-label="국비 보조금 금액 입력"
                   />
                 </div>
@@ -1679,7 +1728,7 @@ export default function DepreciationCalculatorClient({
                     step="100000"
                     value={effectiveLocalSubsidy}
                     onChange={(e) => setCustomLocalSubsidy(parseInt(e.target.value, 10) || 0)}
-                    className="w-full px-2 py-1 rounded bg-slate-800 border border-slate-700 text-right font-semibold text-white"
+                    className="w-full px-2 py-1 rounded bg-slate-800 border border-slate-700 text-right font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
                     aria-label="지방비 보조금 금액 입력"
                   />
                 </div>

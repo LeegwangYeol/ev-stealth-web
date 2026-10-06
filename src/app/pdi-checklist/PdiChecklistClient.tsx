@@ -89,10 +89,37 @@ export default function PdiChecklistClient() {
   // Memoized category sets and filtered count calculations
   const categories = useMemo(() => Array.from(new Set(items.map((i) => i.category))), [items]);
   const checkedCount = useMemo(() => items.filter((i) => i.checked).length, [items]);
+  const totalItems = items.length;
+  // Guard against division by zero (items.length === 0 ? 0 : Math.round((checkedCount / items.length) * 100))
   const progress = useMemo(() => {
-    return items.length === 0 ? 0 : Math.round((checkedCount / items.length) * 100);
-  }, [checkedCount, items.length]);
+    return totalItems > 0 ? Math.round((checkedCount / totalItems) * 100) : 0;
+  }, [checkedCount, totalItems]);
   const progressPercentage = progress;
+
+  const allCategories = useMemo(() => ['ALL', ...categories], [categories]);
+
+  const handleTabKeyDown = (e: React.KeyboardEvent, currentIndex: number) => {
+    const count = allCategories.length;
+    let nextIndex = -1;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      nextIndex = (currentIndex + 1) % count;
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      nextIndex = (currentIndex - 1 + count) % count;
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      nextIndex = 0;
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      nextIndex = count - 1;
+    }
+    if (nextIndex !== -1) {
+      const nextCat = allCategories[nextIndex];
+      setSelectedCategory(nextCat);
+      document.getElementById(`pdi-tab-${nextIndex}`)?.focus();
+    }
+  };
 
   // Memoized category statistics
   const categoryStats = useMemo(() => {
@@ -183,29 +210,43 @@ export default function PdiChecklistClient() {
           aria-label="체크리스트 카테고리 필터"
           className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100"
         >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={selectedCategory === 'ALL'}
-            onClick={() => setSelectedCategory('ALL')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-              selectedCategory === 'ALL'
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-            }`}
-          >
-            전체 ({items.length})
-          </button>
-          {categories.map((cat) => {
-            const count = categoryStats[cat]?.total || 0;
-            const checked = categoryStats[cat]?.checked || 0;
-            const isSelected = selectedCategory === cat;
+          {(() => {
+            const isSelected = selectedCategory === 'ALL';
             return (
               <button
-                key={cat}
+                id="pdi-tab-0"
                 type="button"
                 role="tab"
                 aria-selected={isSelected}
+                aria-controls="pdi-checklist-tabpanel"
+                tabIndex={isSelected ? 0 : -1}
+                onKeyDown={(e) => handleTabKeyDown(e, 0)}
+                onClick={() => setSelectedCategory('ALL')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  isSelected
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                전체 ({items.length})
+              </button>
+            );
+          })()}
+          {categories.map((cat, idx) => {
+            const count = categoryStats[cat]?.total || 0;
+            const checked = categoryStats[cat]?.checked || 0;
+            const isSelected = selectedCategory === cat;
+            const tabIndex = idx + 1;
+            return (
+              <button
+                key={cat}
+                id={`pdi-tab-${tabIndex}`}
+                type="button"
+                role="tab"
+                aria-selected={isSelected}
+                aria-controls="pdi-checklist-tabpanel"
+                tabIndex={isSelected ? 0 : -1}
+                onKeyDown={(e) => handleTabKeyDown(e, tabIndex)}
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   isSelected
@@ -220,7 +261,13 @@ export default function PdiChecklistClient() {
         </div>
       </div>
 
-      <div className="space-y-6">
+      <div
+        id="pdi-checklist-tabpanel"
+        role="tabpanel"
+        aria-labelledby={`pdi-tab-${Math.max(0, allCategories.indexOf(selectedCategory))}`}
+        tabIndex={0}
+        className="space-y-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
+      >
         {displayedCategories.map((category) => (
           <div key={category} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
             <h2 className="bg-slate-50 border-b border-gray-200 p-4 text-xl font-bold text-slate-800">

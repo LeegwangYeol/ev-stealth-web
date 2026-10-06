@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useDeferredValue } from 'react';
 import Link from 'next/link';
 import {
   ReliabilityTrendsDatabase,
@@ -50,6 +50,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
   const [selectedVerdict, setSelectedVerdict] = useState<string>('ALL');
   const [selectedYearRange, setSelectedYearRange] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [sortBy, setSortBy] = useState<'DSI_DESC' | 'DSI_ASC' | 'GRADE' | 'NAME'>('DSI_DESC');
   const [activeChartTab, setActiveChartTab] = useState<'heatmap' | 'brand_ranking' | 'category_share'>('heatmap');
   const [hoveredCell, setHoveredCell] = useState<{
@@ -126,8 +127,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       }
 
       // Live search query
-      if (searchQuery.trim() !== '') {
-        const q = searchQuery.toLowerCase().trim();
+      if (deferredSearchQuery.trim() !== '') {
+        const q = deferredSearchQuery.toLowerCase().trim();
         const matchesName = model.name.toLowerCase().includes(q);
         const matchesBrandKo = model.brand_name_ko.toLowerCase().includes(q);
         const matchesBrandEn = model.brand_name_en.toLowerCase().includes(q);
@@ -146,7 +147,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
       return true;
     });
-  }, [allModels, selectedBrand, selectedCategory, selectedVerdict, selectedYearRange, searchQuery]);
+  }, [allModels, selectedBrand, selectedCategory, selectedVerdict, selectedYearRange, deferredSearchQuery]);
 
   // Sorted models
   const sortedModels = useMemo(() => {
@@ -594,6 +595,27 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     );
                   })}
                 </div>
+
+                {/* Screen-reader accessible data table alternative */}
+                <div className="sr-only">
+                  <table aria-label="전기차 결함 부문별 산업 점유율 데이터 표">
+                    <caption>전기차 주요 결함 유형별 산업 점유율 분포</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">결함 부문</th>
+                        <th scope="col">산업 점유율</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {initialData.categories.map((cat) => (
+                        <tr key={cat.code}>
+                          <th scope="row">{cat.label_ko}</th>
+                          <td>{cat.industry_share_pct}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               {/* Detailed Category Cards Grid */}
@@ -916,7 +938,12 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     {/* Year Evaluations Accordion List */}
                     <div className="space-y-2">
                       <div className="text-xs font-bold text-slate-700">연식별 내구성 평가</div>
-                      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                      <div
+                        tabIndex={0}
+                        aria-label="평가 연도 목록"
+                        role="region"
+                        className="space-y-2 max-h-56 overflow-y-auto pr-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg outline-none"
+                      >
                         {model.year_evaluations.map((yEval) => {
                           const vInfo = getVerdictBadgeInfo(yEval.verdict);
 
@@ -1017,7 +1044,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       {item.affected_systems}
                     </div>
                   </th>
-                  <td className="p-4 font-extrabold text-rose-600 align-top whitespace-nowrap">
+                  <td className="p-4 font-extrabold text-rose-700 align-top whitespace-nowrap">
                     {item.avg_cost_krw}
                   </td>
                   <td className="p-4 text-slate-600 align-top text-xs">
@@ -1058,7 +1085,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
         </div>
         <Link
           href="/recall-portal"
-          className="px-6 py-3.5 bg-white text-blue-900 hover:bg-blue-50 font-extrabold rounded-2xl shadow-md transition shrink-0 text-sm sm:text-base text-center"
+          className="px-6 py-3.5 bg-white text-blue-900 hover:bg-blue-50 font-extrabold rounded-2xl shadow-md transition shrink-0 text-sm sm:text-base text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-blue-900"
         >
           공식 리콜 & 배터리 조회 포털 가기 &rarr;
         </Link>

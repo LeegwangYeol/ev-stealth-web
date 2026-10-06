@@ -1,5 +1,5 @@
 """
-ev-stealth-web/tests/test_frontend_math_a11y_sync5.py - Empirical Verification Test Suite for Next.js TypeScript
+tests/test_frontend_math_a11y_sync5.py - Empirical Verification Test Suite for Next.js TypeScript
 Math Functions under Adversarial Inputs & Static AST/Regex A11y Validations.
 
 Authoritative Reference:

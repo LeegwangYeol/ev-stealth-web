@@ -30,8 +30,8 @@ export default function TeslaPage() {
           </ul>
         </div>
 
-        <div className="bg-green-50 border-l-4 border-green-500 p-4">
-          <h3 className="text-xl font-bold text-green-700">✅ 2024년식 (Highland): BUY SAFE (적극 추천)</h3>
+        <div className="bg-green-50 border-l-4 border-green-500 p-4" role="region" aria-label="안전 구매 가이드">
+          <h3 className="text-xl font-bold text-green-900">✅ 2024년식 (Highland): BUY SAFE (적극 추천)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li>승차감이 극적으로 개선(FSD 댐퍼)되었고, 방음이 엄청나게 좋아졌습니다. 깜빡이 레버가 없어진 것만 적응하면 최고의 선택입니다.</li>
           </ul>

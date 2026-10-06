@@ -19,7 +19,7 @@ if (!fs.existsSync(sourcePath)) {
 }
 const originalSource = fs.readFileSync(sourcePath, 'utf-8');
 const patchedSource = originalSource.replace(
-  "import rawRecallData from '../data/ev_recall_database.json';",
+  /import rawRecallData from ['"].*?ev_recall_database\.json['"](?: with \{ type: ['"]json['"] \})?;/,
   jsonImport
 );
 

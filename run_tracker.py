@@ -13,13 +13,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 from pathlib import Path
 import shutil
 import sys
 import tempfile
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Union
 
 # Ensure repository root and tracker package are on sys.path
 _CURRENT_DIR = Path(__file__).resolve().parent
@@ -70,6 +71,26 @@ def _resolve_default_paths():
 ) = _resolve_default_paths()
 
 
+def validate_defect_reports_file(file_path: Union[str, Path]) -> bool:
+    """Validate that target file contains valid JSON syntax and expected schema ('reports' list key)."""
+    p = Path(file_path)
+    try:
+        if not p.is_file() or p.stat().st_size == 0:
+            return False
+        with open(p, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return False
+        if "reports" not in data or not isinstance(data["reports"], list):
+            return False
+        if not all(isinstance(r, dict) for r in data["reports"]):
+            return False
+        return True
+    except Exception as exc:
+        logger.warning("Defect report schema validation failed for %s: %s", p, exc)
+        return False
+
+
 def sync_defect_reports(
     web_dir: Optional[Path] = None,
     dry_run: bool = False,
@@ -78,6 +99,8 @@ def sync_defect_reports(
     """Synchronize defect reports (daily_reports.json) between root data/ and web src/data/.
 
     Ensures both locations are bitwise synchronized and crash-durably mirrored.
+    Validates source file JSON syntax and schema ('reports' key) before performing
+    atomic file replacement based on st_mtime. Never propagates corrupt files.
     If run_crawler is True, executes the crawler pipeline before synchronizing.
     """
     logger.info("Synchronizing defect reports (daily_reports.json)...")
@@ -130,22 +153,47 @@ def sync_defect_reports(
             root_stat = root_reports_path.stat()
             web_stat = web_reports_path.stat()
             if root_stat.st_mtime >= web_stat.st_mtime:
-                source_path = root_reports_path
-                target_paths = [web_reports_path]
+                primary, secondary = root_reports_path, web_reports_path
             else:
-                source_path = web_reports_path
-                target_paths = [root_reports_path]
+                primary, secondary = web_reports_path, root_reports_path
         except Exception:
+            primary, secondary = root_reports_path, web_reports_path
+
+        # Validate candidate source: do not propagate corrupt files
+        if validate_defect_reports_file(primary):
+            source_path = primary
+            target_paths = [secondary]
+        elif validate_defect_reports_file(secondary):
+            logger.warning(
+                "Primary source %s failed defect reports schema validation. Falling back to valid secondary %s.",
+                primary,
+                secondary,
+            )
+            source_path = secondary
+            target_paths = [primary]
+        else:
+            logger.error(
+                "Both candidate defect report files (%s, %s) are corrupt or invalid. Aborting sync to prevent corruption propagation.",
+                primary,
+                secondary,
+            )
+            return []
+    elif root_exists and not web_exists:
+        if validate_defect_reports_file(root_reports_path):
             source_path = root_reports_path
             target_paths = [web_reports_path]
-    elif root_exists and not web_exists:
-        source_path = root_reports_path
-        target_paths = [web_reports_path]
+        else:
+            logger.error("Root defect reports file %s is corrupt or invalid. Aborting sync.", root_reports_path)
+            return []
     elif web_exists and not root_exists:
-        source_path = web_reports_path
-        target_paths = [root_reports_path]
+        if validate_defect_reports_file(web_reports_path):
+            source_path = web_reports_path
+            target_paths = [root_reports_path]
+        else:
+            logger.error("Web defect reports file %s is corrupt or invalid. Aborting sync.", web_reports_path)
+            return []
 
-    if source_path and target_paths:
+    if source_path and target_paths and validate_defect_reports_file(source_path):
         for tgt in target_paths:
             temp_name = None
             try:
@@ -291,6 +339,15 @@ def main() -> int:
             validate_cache=args.validate_cache,
             quarantine_corrupted=getattr(args, "quarantine_corrupted", True),
         )
+
+        if not payload or not getattr(payload, "regions", None) or len(payload.regions) < 17:
+            logger.warning(
+                "Cache payload incomplete (%d regions). Safe baseline fallback guaranteed.",
+                len(payload.regions) if (payload and getattr(payload, "regions", None)) else 0,
+            )
+            from tracker.subsidy_baseline import build_initial_baseline
+            payload = build_initial_baseline()
+            fallback_used = True
 
         if not args.dry_run:
             destinations: List[Path] = [args.output]

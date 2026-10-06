@@ -30,8 +30,8 @@ export default function HyundaiKiaPage() {
           </ul>
         </div>
 
-        <div className="bg-green-50 border-l-4 border-green-500 p-4">
-          <h3 className="text-xl font-bold text-green-700">✅ 2025년식 (Facelift): BUY SAFE (적극 추천)</h3>
+        <div className="bg-green-50 border-l-4 border-green-500 p-4" role="region" aria-label="안전 구매 가이드">
+          <h3 className="text-xl font-bold text-green-900">✅ 2025년식 (Facelift): BUY SAFE (적극 추천)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li>공장 출고 때부터 ICCU 하드웨어가 개선되었고, 84kWh로 배터리 용량 증가, 후방 와이퍼가 기본 장착되었습니다. 가장 추천하는 연식입니다.</li>
           </ul>
@@ -55,8 +55,8 @@ export default function HyundaiKiaPage() {
           </ul>
         </div>
 
-        <div className="bg-green-50 border-l-4 border-green-500 p-4">
-          <h3 className="text-xl font-bold text-green-700">✅ 2025년식 (Facelift): BUY SAFE (적극 추천)</h3>
+        <div className="bg-green-50 border-l-4 border-green-500 p-4" role="region" aria-label="안전 구매 가이드">
+          <h3 className="text-xl font-bold text-green-900">✅ 2025년식 (Facelift): BUY SAFE (적극 추천)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li>승차감이 크게 개선되었고 초기 기계적 결함이 대부분 잡혔습니다.</li>
           </ul>

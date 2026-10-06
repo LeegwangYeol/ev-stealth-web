@@ -10,13 +10,16 @@ from datetime import datetime, timezone
 import http.client
 import json
 import logging
+import math
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+import time
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import urllib.error
 import urllib.request
 
 from tracker.atomic_writer import atomic_write_json, atomic_write_json_multiple
+from tracker.report_generator import ReportGenerator
 from tracker.subsidy_baseline import (
     COMMERCIAL_NATIONAL_CAP_KRW,
     DEFAULT_ALERT_THRESHOLDS,
@@ -72,16 +75,35 @@ def get_baseline_thresholds() -> Dict[str, Any]:
     return DEFAULT_ALERT_THRESHOLDS
 
 
-def calculate_depletion_rate(applied: int, announced: int) -> float:
-    """Calculate EV subsidy depletion rate as percentage with zero-division guard."""
-    if announced <= 0:
+def calculate_depletion_rate(applied: Union[int, float], announced: Union[int, float]) -> float:
+    """Calculate EV subsidy depletion rate as percentage with zero-division guard and negative clamping."""
+    try:
+        if announced is None or applied is None:
+            return 0.0
+        announced_val = float(announced)
+        applied_val = float(applied)
+        if math.isnan(announced_val) or math.isnan(applied_val) or math.isinf(announced_val) or math.isinf(applied_val):
+            return 0.0
+        if announced_val <= 0 or applied_val <= 0:
+            return 0.0
+        rate = round((applied_val / announced_val) * 100.0, 1)
+        return max(0.0, rate)
+    except (TypeError, ValueError, ZeroDivisionError):
         return 0.0
-    return round((applied / announced) * 100.0, 1)
 
 
-def calculate_remaining_units(applied: int, announced: int) -> int:
-    """Calculate remaining quota units clamped at zero for over-subscription."""
-    return max(0, announced - applied)
+def calculate_remaining_units(applied: Union[int, float], announced: Union[int, float]) -> int:
+    """Calculate remaining quota units clamped at zero for over-subscription or negative values."""
+    try:
+        if announced is None or applied is None:
+            return 0
+        announced_val = int(announced)
+        applied_val = int(applied)
+        safe_announced = max(0, announced_val)
+        safe_applied = max(0, applied_val)
+        return max(0, safe_announced - safe_applied)
+    except (TypeError, ValueError):
+        return 0
 
 
 def classify_alert_tier(depletion_rate: float) -> str:
@@ -141,12 +163,14 @@ class SubsidyTracker:
         cache_fallback_path: Optional[Union[str, Path]] = None,
         validate_cache: bool = False,
         quarantine_corrupted: bool = False,
+        report_generator: Optional[ReportGenerator] = None,
     ) -> None:
         self.endpoint_url = endpoint_url
         self.timeout_seconds = timeout_seconds
         self.cache_fallback_path = Path(cache_fallback_path) if cache_fallback_path else None
         self.validate_cache = validate_cache
         self.quarantine_corrupted = quarantine_corrupted
+        self.report_generator = report_generator or ReportGenerator()
 
     def evaluate_status(self, depletion_rate: float) -> AlertSeverity:
         """Evaluate 5-tier alert severity from depletion percentage."""
@@ -312,52 +336,77 @@ class SubsidyTracker:
             alert_region_counts=alert_counts,
         )
 
-    def fetch_live_updates(self) -> Optional[Dict[str, Any]]:
-        """Attempt to fetch live data from remote endpoint with graceful fallback."""
+    def fetch_live_updates(
+        self,
+        max_retries: int = 3,
+        backoff_base: float = 0.05,
+    ) -> Optional[Dict[str, Any]]:
+        """Attempt to fetch live data from remote endpoint with 3-attempt exponential backoff retry."""
         if not self.endpoint_url:
             logger.debug("No endpoint URL configured. Using validated baseline engine.")
             return None
 
         logger.info("Attempting live poll from %s (timeout=%.1fs)...", self.endpoint_url, self.timeout_seconds)
-        try:
-            req = urllib.request.Request(
-                self.endpoint_url,
-                headers={"User-Agent": "MyECar-SubsidyTracker/1.0 (Automated Scheduled Task)"},
-            )
-            with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
-                if resp.status == 200:
-                    raw_bytes = resp.read(MAX_RESPONSE_BYTES)
-                    declared_encoding = None
-                    if hasattr(resp, "headers") and hasattr(resp.headers, "get_content_charset"):
-                        try:
-                            charset = resp.headers.get_content_charset()
-                            if isinstance(charset, str):
-                                declared_encoding = charset
-                        except Exception:
-                            pass
-                    raw_data = robust_decode(raw_bytes, declared_encoding=declared_encoding)
-                    if raw_data.startswith("\ufeff"):
-                        raw_data = raw_data.lstrip("\ufeff")
-                    return json.loads(raw_data)
-                logger.warning("Remote server returned non-200 status: %d", resp.status)
+        closed_exc_ids: Set[int] = set()
+        for attempt in range(1, max_retries + 1):
+            try:
+                req = urllib.request.Request(
+                    self.endpoint_url,
+                    headers={
+                        "User-Agent": "MyECar-SubsidyTracker/1.0 (Automated Scheduled Task)",
+                        "Accept-Encoding": "identity",
+                    },
+                )
+                with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
+                    if resp.status == 200:
+                        raw_bytes = resp.read(MAX_RESPONSE_BYTES)
+                        declared_encoding = None
+                        if hasattr(resp, "headers") and hasattr(resp.headers, "get_content_charset"):
+                            try:
+                                charset = resp.headers.get_content_charset()
+                                if isinstance(charset, str):
+                                    declared_encoding = charset
+                            except Exception:
+                                pass
+                        raw_data = robust_decode(raw_bytes, declared_encoding=declared_encoding)
+                        if raw_data.startswith("\ufeff"):
+                            raw_data = raw_data.lstrip("\ufeff")
+                        return json.loads(raw_data)
+                    logger.warning(
+                        "Remote server returned non-200 status: %d (attempt %d/%d)",
+                        resp.status,
+                        attempt,
+                        max_retries,
+                    )
+                    if attempt < max_retries:
+                        backoff = backoff_base * (2 ** (attempt - 1))
+                        time.sleep(backoff)
+                        continue
+                    return None
+            except (
+                urllib.error.URLError,
+                urllib.error.HTTPError,
+                TimeoutError,
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                http.client.HTTPException,
+                OSError,
+                Exception,
+            ) as exc:
+                if hasattr(exc, "close") and id(exc) not in closed_exc_ids:
+                    closed_exc_ids.add(id(exc))
+                    try:
+                        exc.close()
+                    except Exception:
+                        pass
+                logger.warning("Live fetch attempt %d/%d failed: %s.", attempt, max_retries, exc)
+                if attempt < max_retries:
+                    backoff = backoff_base * (2 ** (attempt - 1))
+                    time.sleep(backoff)
+                    continue
+                logger.warning("Live fetch failed: %s. Initiating graceful fallback.", exc)
                 return None
-        except (
-            urllib.error.URLError,
-            urllib.error.HTTPError,
-            TimeoutError,
-            json.JSONDecodeError,
-            UnicodeDecodeError,
-            http.client.HTTPException,
-            OSError,
-            Exception,
-        ) as exc:
-            if hasattr(exc, "close"):
-                try:
-                    exc.close()
-                except Exception:
-                    pass
-            logger.warning("Live fetch failed: %s. Initiating graceful fallback.", exc)
-            return None
+        return None
 
     def quarantine_corrupted_cache(self, cache_path: Union[str, Path]) -> Optional[Path]:
         """Quarantine a corrupted cache file by renaming it with a timestamp suffix."""
@@ -500,17 +549,14 @@ class SubsidyTracker:
             payload.nationwide_summary = self.compute_nationwide_summary(payload.regions)
             payload.metadata.generated_at = datetime.now(timezone.utc).isoformat()
         except Exception as e:
-            if should_validate:
-                logger.warning("Structural anomaly updating region metrics: %s. Falling back to baseline.", e)
-                if should_quarantine and self.cache_fallback_path:
-                    self.quarantine_corrupted_cache(self.cache_fallback_path)
-                payload = build_initial_baseline()
-                for idx, r in enumerate(payload.regions):
-                    payload.regions[idx] = self.update_region_metrics(r)
-                payload.nationwide_summary = self.compute_nationwide_summary(payload.regions)
-                payload.metadata.generated_at = datetime.now(timezone.utc).isoformat()
-            else:
-                raise
+            logger.warning("Structural anomaly updating region metrics: %s. Guaranteeing safe baseline fallback.", e)
+            if should_quarantine and self.cache_fallback_path:
+                self.quarantine_corrupted_cache(self.cache_fallback_path)
+            payload = build_initial_baseline()
+            for idx, r in enumerate(payload.regions):
+                payload.regions[idx] = self.update_region_metrics(r)
+            payload.nationwide_summary = self.compute_nationwide_summary(payload.regions)
+            payload.metadata.generated_at = datetime.now(timezone.utc).isoformat()
 
         return payload, True
 
@@ -607,67 +653,7 @@ class SubsidyTracker:
 
     def generate_briefing(self, payload: SubsidyPayload, fallback_used: bool = False) -> str:
         """Generate formatted executive markdown summary briefing."""
-        summary = payload.nationwide_summary
-        gen_time = payload.metadata.generated_at
-
-        def _get_passenger_remaining(region: RegionRecord) -> int:
-            cats = getattr(region, "categories", None)
-            if not isinstance(cats, dict):
-                return 0
-            p_cat = cats.get("passenger")
-            if p_cat is None:
-                return 0
-            return _metric_val(p_cat, "remaining_units", 0)
-
-        critical_regions = [
-            f"{r.name_ko} ({r.overall_depletion_rate}%, 잔여: {_get_passenger_remaining(r):,}대)"
-            for r in payload.regions
-            if r.overall_status in ("CRITICAL", "DEPLETED")
-        ]
-        warning_regions = [
-            f"{r.name_ko} ({r.overall_depletion_rate}%, 잔여: {_get_passenger_remaining(r):,}대)"
-            for r in payload.regions
-            if r.overall_status == "WARNING"
-        ]
-
-        category_totals = getattr(summary, "category_totals", None) or {}
-        p_info = category_totals.get("passenger", {})
-        c_info = category_totals.get("commercial", {})
-        b_info = category_totals.get("bus", {})
-
-        status_text = "FALLBACK_BASELINE (Resilient)" if fallback_used else "SUCCESS (Live Sync)"
-
-        lines = [
-            "# [대한민국 2026 전국 지자체 전기차 보조금 실시간 소진율 모니터링]",
-            f"- **기록 시각(UTC)**: {gen_time}",
-            f"- **파이프라인 상태**: {status_text}",
-            f"- **전국 평균 소진율**: {summary.nationwide_depletion_rate}% (총 공고: {summary.total_announced_units:,}대 / 접수: {summary.total_applied_units:,}대)",
-            f"- **집행 예산**: {summary.disbursed_budget_billion_krw:,}억 원 / 총 예산 {summary.total_budget_billion_krw:,}억 원",
-            "",
-            "## 🚨 긴급 마감 임박 지자체 (CRITICAL / DEPLETED >= 95%)",
-            (
-                "\n".join([f"  - 🔴 {cr}" for cr in critical_regions])
-                if critical_regions
-                else "  - 현재 접수 마감된 긴급 지자체 없음."
-            ),
-            "",
-            "## ⚠️ 주의·경고 지자체 (WARNING 80% ~ 94.9%)",
-            (
-                "\n".join([f"  - 🟠 {wr}" for wr in warning_regions])
-                if warning_regions
-                else "  - 경고 지역 없음."
-            ),
-            "",
-            "## 📊 차종별 소진 현황",
-            f"- **승용**: 공고 {_metric_val(p_info, 'announced_units', 0):,}대 | 접수 {_metric_val(p_info, 'applied_units', 0):,}대 ({_metric_val(p_info, 'depletion_rate', 0)}%) | 잔여 {_metric_val(p_info, 'remaining_units', 0):,}대 [{_metric_val(p_info, 'status', 'N/A')}]",
-            f"- **화물**: 공고 {_metric_val(c_info, 'announced_units', 0):,}대 | 접수 {_metric_val(c_info, 'applied_units', 0):,}대 ({_metric_val(c_info, 'depletion_rate', 0)}%) | 잔여 {_metric_val(c_info, 'remaining_units', 0):,}대 [{_metric_val(c_info, 'status', 'N/A')}]",
-            f"- **승합(버스)**: 공고 {_metric_val(b_info, 'announced_units', 0):,}대 | 접수 {_metric_val(b_info, 'applied_units', 0):,}대 ({_metric_val(b_info, 'depletion_rate', 0)}%) | 잔여 {_metric_val(b_info, 'remaining_units', 0):,}대 [{_metric_val(b_info, 'status', 'N/A')}]",
-            "",
-            "## 💡 예비 차주 권고 사항",
-            "- 대구, 울산, 경북, 제주는 보조금 마감 직전(소진율 96%~99%)입니다. 실계약자는 대기 순번 및 제조사 즉시 출고 재고를 확인하십시오.",
-            "- 전남(신안 1,150만 원), 경북(울릉 1,100만 원), 충남(태안 900만 원) 등 군 단위 지역은 고액 보조금이 지급되나 거주기간 요건(30~90일)을 확인해야 합니다.",
-        ]
-        return "\n".join(lines)
+        return self.report_generator.generate_subsidy_briefing(payload, fallback_used=fallback_used)
 
 
 __all__ = [

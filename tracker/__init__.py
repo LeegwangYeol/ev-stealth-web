@@ -27,6 +27,8 @@ from tracker.subsidy_models import (
     SubsidyMetadata,
     SubsidyPayload,
 )
+from tracker.defect_tracker import DefectTracker
+from tracker.report_generator import ReportGenerator
 from tracker.subsidy_tracker import (
     SubsidyTracker,
     calculate_depletion_rate,
@@ -52,8 +54,10 @@ __all__ = [
     "RegionRecord",
     "SubsidyMetadata",
     "SubsidyPayload",
-    # Main Engine
+    # Main Engines & Formatters
     "SubsidyTracker",
+    "DefectTracker",
+    "ReportGenerator",
     # Persistence
     "atomic_write_json",
     "atomic_write_json_multiple",

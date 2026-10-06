@@ -21,7 +21,7 @@ const __dirname = path.dirname(__filename);
 const recallSrcPath = path.resolve(__dirname, '../src/lib/getRecallData.ts');
 const originalRecallSrc = fs.readFileSync(recallSrcPath, 'utf-8');
 const patchedRecallSrc = originalRecallSrc.replace(
-  "import rawRecallData from '../data/ev_recall_database.json';",
+  /import rawRecallData from ['"].*?ev_recall_database\.json['"](?: with \{ type: ['"]json['"] \})?;/,
   "import rawRecallData from '../src/data/ev_recall_database.json' with { type: 'json' };"
 );
 const tempRecallFixture = path.resolve(__dirname, 'temp_recall_extreme_fixture.ts');

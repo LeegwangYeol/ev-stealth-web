@@ -370,14 +370,387 @@ export interface TcoResult {
 // 4. CORE DATA ACCESS FUNCTIONS
 // ==========================================
 
-const DATABASE: DepreciationDatabase = rawDepreciationData as unknown as DepreciationDatabase;
+export const DEFAULT_FALLBACK_DEPRECIATION_DATABASE: DepreciationDatabase = {
+  metadata: {
+    version: '1.0.0-fallback',
+    generated_at: new Date().toISOString(),
+    total_models: 0,
+    brands_count: 0,
+    currency: 'KRW',
+    baseline_annual_mileage_km: 15000,
+    sources: ['Fallback Default'],
+  },
+  market_context: {
+    korean_market_status: '폴백 기본 데이터베이스',
+    cheongna_fire_impact_summary: '',
+    subsidy_clawback_rules: '',
+  },
+  adjustment_factors: {
+    warranty_cliff: {
+      safe_period_multiplier: 1.0,
+      approaching_cliff_1_2_years_penalty: -0.06,
+      expired_warranty_penalty: -0.14,
+      description: '배터리 보증 만료에 따른 감가율 패널티',
+    },
+    battery_chemistry: {
+      LFP: {
+        cycle_life_bonus_yr3_5: 0.025,
+        winter_seasonal_discount: -0.035,
+        fire_safety_reputation_bonus: 0.03,
+        description: 'LFP 배터리',
+      },
+      NCM_622: {
+        cycle_life_bonus_yr3_5: 0.0,
+        winter_seasonal_discount: -0.015,
+        fire_safety_reputation_bonus: 0.01,
+        description: 'NCM 622 배터리',
+      },
+      NCM_811: {
+        cycle_life_bonus_yr3_5: -0.01,
+        winter_seasonal_discount: -0.01,
+        fire_safety_reputation_bonus: 0.0,
+        description: 'NCM 811 배터리',
+      },
+      NCMA: {
+        cycle_life_bonus_yr3_5: 0.015,
+        winter_seasonal_discount: -0.01,
+        fire_safety_reputation_bonus: 0.015,
+        description: 'NCMA 배터리',
+      },
+      NCA: {
+        cycle_life_bonus_yr3_5: -0.015,
+        winter_seasonal_discount: -0.01,
+        fire_safety_reputation_bonus: -0.005,
+        description: 'NCA 배터리',
+      },
+    },
+    facelift_hardware: {
+      platform_800V_premium: 0.02,
+      platform_400V_penalty: -0.02,
+      major_facelift_compute_shift_penalty: -0.03,
+      description: '하드웨어 아키텍처 및 페이스리프트 영향',
+    },
+    software_ota: {
+      FULL_STACK: 0.03,
+      ADVANCED_CCB: 0.015,
+      INFOTAINMENT_ONLY: 0.0,
+      BASIC: -0.02,
+    },
+    mileage_sensitivity: {
+      base_km_per_year: 15000,
+      penalty_per_10000km_excess: -0.018,
+      bonus_per_10000km_deficit: 0.012,
+    },
+  },
+  chemistries: {
+    LFP: {
+      id: 'LFP',
+      name: 'LFP (리튬인산철 / Lithium Iron Phosphate)',
+      cathode_structure: 'Olivine LiFePO4',
+      nominal_cell_voltage_v: 3.2,
+      voltage_cutoff_v: 2.5,
+      energy_density_wh_kg: 160,
+      cycle_life_to_80_soh: 3000,
+      calendar_baseline_annual_loss_pct: 0.8,
+      calendar_arrhenius_ea_j_mol: 52000,
+      soc_stress_coefficient_beta: 0.4,
+      calendar_time_exponent_z: 0.5,
+      cyclic_exponent_w: 0.55,
+      dod_exponent_u: 1.1,
+      dcfc_acceleration_multiplier_max: 1.3,
+      cold_charge_sensitivity_gamma: 0.7,
+      thermal_runaway_temp_c: 270,
+      ocv_profile_type: 'FLAT_PLATEAU',
+      cell_balancing_requirement: 'WEEKLY_100PCT_CHARGE',
+    },
+    NCM_622: {
+      id: 'NCM_622',
+      name: 'NCM 622 (중밀도 삼원계)',
+      cathode_structure: 'Layered LiNi0.6Co0.2Mn0.2O2',
+      nominal_cell_voltage_v: 3.65,
+      voltage_cutoff_v: 2.8,
+      energy_density_wh_kg: 220,
+      cycle_life_to_80_soh: 1800,
+      calendar_baseline_annual_loss_pct: 1.2,
+      calendar_arrhenius_ea_j_mol: 60000,
+      soc_stress_coefficient_beta: 0.7,
+      calendar_time_exponent_z: 0.5,
+      cyclic_exponent_w: 0.58,
+      dod_exponent_u: 1.3,
+      dcfc_acceleration_multiplier_max: 1.6,
+      cold_charge_sensitivity_gamma: 0.45,
+      thermal_runaway_temp_c: 210,
+      ocv_profile_type: 'SLOPING',
+      cell_balancing_requirement: 'NORMAL_BMS_ROUTINE',
+    },
+    NCM_811: {
+      id: 'NCM_811',
+      name: 'NCM 811 (고에너지밀도 하이니켈)',
+      cathode_structure: 'Layered LiNi0.8Co0.1Mn0.1O2',
+      nominal_cell_voltage_v: 3.7,
+      voltage_cutoff_v: 2.8,
+      energy_density_wh_kg: 275,
+      cycle_life_to_80_soh: 1400,
+      calendar_baseline_annual_loss_pct: 1.5,
+      calendar_arrhenius_ea_j_mol: 65000,
+      soc_stress_coefficient_beta: 0.9,
+      calendar_time_exponent_z: 0.5,
+      cyclic_exponent_w: 0.6,
+      dod_exponent_u: 1.4,
+      dcfc_acceleration_multiplier_max: 1.9,
+      cold_charge_sensitivity_gamma: 0.35,
+      thermal_runaway_temp_c: 195,
+      ocv_profile_type: 'SLOPING',
+      cell_balancing_requirement: 'NORMAL_BMS_ROUTINE',
+    },
+    NCMA: {
+      id: 'NCMA',
+      name: 'NCMA (알루미늄 도핑 4원계)',
+      cathode_structure: 'Layered LiNi0.89Co0.05Mn0.05Al0.01O2',
+      nominal_cell_voltage_v: 3.7,
+      voltage_cutoff_v: 2.8,
+      energy_density_wh_kg: 290,
+      cycle_life_to_80_soh: 1600,
+      calendar_baseline_annual_loss_pct: 1.3,
+      calendar_arrhenius_ea_j_mol: 62000,
+      soc_stress_coefficient_beta: 0.8,
+      calendar_time_exponent_z: 0.5,
+      cyclic_exponent_w: 0.58,
+      dod_exponent_u: 1.35,
+      dcfc_acceleration_multiplier_max: 1.7,
+      cold_charge_sensitivity_gamma: 0.4,
+      thermal_runaway_temp_c: 205,
+      ocv_profile_type: 'SLOPING',
+      cell_balancing_requirement: 'NORMAL_BMS_ROUTINE',
+    },
+    NCA: {
+      id: 'NCA',
+      name: 'NCA (니켈·코발트·알루미늄 원통형)',
+      cathode_structure: 'Layered LiNi0.85Co0.12Al0.03O2',
+      nominal_cell_voltage_v: 3.65,
+      voltage_cutoff_v: 2.75,
+      energy_density_wh_kg: 280,
+      cycle_life_to_80_soh: 1300,
+      calendar_baseline_annual_loss_pct: 1.6,
+      calendar_arrhenius_ea_j_mol: 67000,
+      soc_stress_coefficient_beta: 0.95,
+      calendar_time_exponent_z: 0.5,
+      cyclic_exponent_w: 0.62,
+      dod_exponent_u: 1.45,
+      dcfc_acceleration_multiplier_max: 2.0,
+      cold_charge_sensitivity_gamma: 0.3,
+      thermal_runaway_temp_c: 190,
+      ocv_profile_type: 'SLOPING',
+      cell_balancing_requirement: 'NORMAL_BMS_ROUTINE',
+    },
+  },
+  battery_replacement_costs: [
+    {
+      tier_id: 'TIER_50KWH',
+      segment_name: '소형/경형 (40~60kWh)',
+      pack_size_kwh_nominal: 50,
+      pack_size_range: '40~60 kWh',
+      representative_models: ['CASPER_EV', 'RAY_EV', 'KONA_ELECTRIC'],
+      costs: {
+        new_pack_krw: 16500000,
+        new_pack_usd: 12200,
+        reman_pack_krw: 11500000,
+        reman_pack_usd: 8500,
+        labor_coolant_krw: 1200000,
+        labor_coolant_usd: 890,
+        total_new_installed_krw: 17700000,
+        total_new_installed_usd: 13090,
+        total_reman_installed_krw: 12700000,
+        total_reman_installed_usd: 9390,
+        cost_per_kwh_usd: 244,
+      },
+    },
+    {
+      tier_id: 'TIER_77KWH',
+      segment_name: '준중형/중형 (65~84kWh)',
+      pack_size_kwh_nominal: 77.4,
+      pack_size_range: '65~84 kWh',
+      representative_models: ['IONIQ_5', 'EV6', 'TESLA_MODEL_Y', 'TESLA_MODEL_3'],
+      costs: {
+        new_pack_krw: 24500000,
+        new_pack_usd: 18100,
+        reman_pack_krw: 16500000,
+        reman_pack_usd: 12200,
+        labor_coolant_krw: 1500000,
+        labor_coolant_usd: 1110,
+        total_new_installed_krw: 26000000,
+        total_new_installed_usd: 19210,
+        total_reman_installed_krw: 18000000,
+        total_reman_installed_usd: 13310,
+        cost_per_kwh_usd: 234,
+      },
+    },
+    {
+      tier_id: 'TIER_100KWH',
+      segment_name: '대형/플래그십 (90~110kWh)',
+      pack_size_kwh_nominal: 99.8,
+      pack_size_range: '89~110 kWh',
+      representative_models: ['EV9', 'GENESIS_GV70_ELECTRIFIED', 'BENZ_EQE_350', 'TAYCAN'],
+      costs: {
+        new_pack_krw: 38000000,
+        new_pack_usd: 28100,
+        reman_pack_krw: null,
+        reman_pack_usd: null,
+        labor_coolant_krw: 2200000,
+        labor_coolant_usd: 1630,
+        total_new_installed_krw: 40200000,
+        total_new_installed_usd: 29730,
+        total_reman_installed_krw: null,
+        total_reman_installed_usd: null,
+        cost_per_kwh_usd: 282,
+      },
+    },
+  ],
+  subsidy_clawback_schedule: {
+    mandatory_operation_months: 24,
+    legal_basis: '대기환경보전법 시행규칙 [별표 21의2]',
+    tiers: [
+      { min_months: 0, max_months_exclusive: 3, clawback_rate: 0.7, label_ko: '3개월 미만 (70% 회수)' },
+      { min_months: 3, max_months_exclusive: 6, clawback_rate: 0.6, label_ko: '3개월 이상 6개월 미만 (60% 회수)' },
+      { min_months: 6, max_months_exclusive: 12, clawback_rate: 0.5, label_ko: '6개월 이상 12개월 미만 (50% 회수)' },
+      { min_months: 12, max_months_exclusive: 18, clawback_rate: 0.35, label_ko: '12개월 이상 18개월 미만 (35% 회수)' },
+      { min_months: 18, max_months_exclusive: 24, clawback_rate: 0.2, label_ko: '18개월 이상 24개월 미만 (20% 회수)' },
+      { min_months: 24, max_months_exclusive: null, clawback_rate: 0.0, label_ko: '24개월 이상 (의무종료 / 회수 없음)' },
+    ],
+    transfer_rules: {
+      intra: { scenario: '관내 이전', clawback_local: false, clawback_national: false, description: '의무 승계로 환수 없음' },
+      inter: { scenario: '관외 이전', clawback_local: true, clawback_national: false, description: '지방비만 잔여기간 비율 회수' },
+      export: { scenario: '수출 말소', clawback_local: true, clawback_national: true, description: '국비/지방비 전액 회수율 적용' },
+    },
+  },
+  tco_parameters: {
+    fuel_tariffs: {
+      ev_slow_charging_krw_per_kwh: 260,
+      ev_fast_charging_krw_per_kwh: 380,
+      ice_gasoline_krw_per_liter: 1680,
+      ice_diesel_krw_per_liter: 1540,
+    },
+    efficiency_baselines: {
+      ev_efficiency_km_per_kwh: 5.2,
+      ice_gasoline_economy_km_per_liter: 12.0,
+      ice_diesel_economy_km_per_liter: 14.5,
+    },
+    tax_parameters: {
+      ev_annual_tax_krw: 130000,
+      ev_base_tax_krw: 100000,
+      ev_education_tax_krw: 30000,
+      ice_displacement_tiers: [
+        { max_cc: 1000, rate_per_cc_krw: 80, name: '경차' },
+        { max_cc: 1600, rate_per_cc_krw: 140, name: '소형' },
+        { max_cc: null, rate_per_cc_krw: 200, name: '중대형' },
+      ],
+      education_tax_multiplier: 0.3,
+      ice_age_discount_start_year: 3,
+      ice_age_discount_rate_per_year: 0.05,
+      ice_age_discount_max: 0.5,
+    },
+    auxiliary_benefits: {
+      expressway_toll_discount_rate: 0.5,
+      annual_toll_savings_krw: 280000,
+      public_parking_discount_rate: 0.5,
+      annual_parking_savings_krw: 190000,
+      maintenance_annual_savings_krw: 450000,
+    },
+  },
+  models: [
+    {
+      id: 'ioniq-5-2026',
+      brand_id: 'hyundai',
+      brand_name_en: 'Hyundai',
+      brand_name_ko: '현대자동차',
+      model_name: '아이오닉 5 롱레인지 2WD (2026)',
+      segment: '준중형 CUV',
+      msrp_krw_baseline: 54100000,
+      avg_subsidy_krw: 8000000,
+      net_purchase_price_krw: 46100000,
+      battery_specs: {
+        capacity_kwh: 84.0,
+        chemistry: 'NCMA',
+        cell_supplier: 'SK온',
+        voltage_architecture: '800V',
+      },
+      warranty: {
+        years: 10,
+        km: 200000,
+        guarantee_retention_pct: 70,
+      },
+      factor_weights: {
+        warranty_cliff: 1.0,
+        chemistry_aging: 0.015,
+        architecture_800v: 0.02,
+        ota_maturity: 0.015,
+        net_factor_adjustment: 0.05,
+      },
+      software_ota_level: 'ADVANCED_CCB',
+      resale_defense_tier: 'A',
+      depreciation_curve: {
+        year_1: {
+          residual_pct_msrp: 85.0,
+          depreciation_pct_msrp: 15.0,
+          residual_pct_effective: 92.0,
+          avg_used_price_krw: 45985000,
+          annual_drop_pct: 15.0,
+        },
+        year_2: {
+          residual_pct_msrp: 75.0,
+          depreciation_pct_msrp: 25.0,
+          residual_pct_effective: 82.0,
+          avg_used_price_krw: 40575000,
+          annual_drop_pct: 10.0,
+        },
+        year_3: {
+          residual_pct_msrp: 65.0,
+          depreciation_pct_msrp: 35.0,
+          residual_pct_effective: 71.0,
+          avg_used_price_krw: 35165000,
+          annual_drop_pct: 10.0,
+        },
+        year_4: {
+          residual_pct_msrp: 55.0,
+          depreciation_pct_msrp: 45.0,
+          residual_pct_effective: 60.0,
+          avg_used_price_krw: 29755000,
+          annual_drop_pct: 10.0,
+        },
+        year_5: {
+          residual_pct_msrp: 45.0,
+          depreciation_pct_msrp: 55.0,
+          residual_pct_effective: 49.0,
+          avg_used_price_krw: 24345000,
+          annual_drop_pct: 10.0,
+        },
+      },
+      key_pros_resale: '800V 초급속 충전 및 넓은 실내 거주성',
+      key_cons_resale: '부분변경에 따른 구형 시세 완만 조정',
+    },
+  ],
+};
 
 /**
  * Returns the complete EV depreciation database.
  */
 export function getDepreciationDatabase(): DepreciationDatabase {
-  return DATABASE;
+  try {
+    if (
+      rawDepreciationData &&
+      typeof rawDepreciationData === 'object' &&
+      Array.isArray((rawDepreciationData as Record<string, unknown>).models)
+    ) {
+      return rawDepreciationData as unknown as DepreciationDatabase;
+    }
+    return DEFAULT_FALLBACK_DEPRECIATION_DATABASE;
+  } catch (err) {
+    console.error('Failed to load depreciation database, using fallback:', err);
+    return DEFAULT_FALLBACK_DEPRECIATION_DATABASE;
+  }
 }
+
+const DATABASE: DepreciationDatabase = getDepreciationDatabase();
 
 /**
  * Returns all 15 EV depreciation models.
@@ -461,32 +834,32 @@ function interpolateBaselineResidual(curve: DepreciationCurve, years: number, ba
 
   if (!Number.isFinite(years) || years <= 0) return 100.0;
   if (years <= 1.0) {
-    const y1 = curve.year_1[key];
+    const y1 = curve?.year_1?.[key] ?? 100.0;
     return 100.0 - years * (100.0 - y1);
   }
   if (years <= 2.0) {
-    const y1 = curve.year_1[key];
-    const y2 = curve.year_2[key];
+    const y1 = curve?.year_1?.[key] ?? 100.0;
+    const y2 = curve?.year_2?.[key] ?? y1;
     return y1 - (years - 1.0) * (y1 - y2);
   }
   if (years <= 3.0) {
-    const y2 = curve.year_2[key];
-    const y3 = curve.year_3[key];
+    const y2 = curve?.year_2?.[key] ?? 100.0;
+    const y3 = curve?.year_3?.[key] ?? y2;
     return y2 - (years - 2.0) * (y2 - y3);
   }
   if (years <= 4.0) {
-    const y3 = curve.year_3[key];
-    const y4 = curve.year_4[key];
+    const y3 = curve?.year_3?.[key] ?? 100.0;
+    const y4 = curve?.year_4?.[key] ?? y3;
     return y3 - (years - 3.0) * (y3 - y4);
   }
   if (years <= 5.0) {
-    const y4 = curve.year_4[key];
-    const y5 = curve.year_5[key];
+    const y4 = curve?.year_4?.[key] ?? 100.0;
+    const y5 = curve?.year_5?.[key] ?? y4;
     return y4 - (years - 4.0) * (y4 - y5);
   }
 
   // Beyond 5 years: extrapolate with compounding 8% drop per additional year
-  const y5 = curve.year_5[key];
+  const y5 = curve?.year_5?.[key] ?? 50.0;
   const excessYears = years - 5.0;
   const extrapolated = y5 * Math.pow(0.92, excessYears);
   return Math.max(10.0, extrapolated);
@@ -812,7 +1185,34 @@ export function calculateSubsidyClawback(
   const normalizedMonths = Number.isFinite(heldMonths) ? Math.max(0, heldMonths) : 0;
   const safeLocalSubsidy = Number.isFinite(localSubsidyKrw) ? Math.max(0, localSubsidyKrw) : 0;
   const safeNationalSubsidy = Number.isFinite(nationalSubsidyKrw) ? Math.max(0, nationalSubsidyKrw) : 0;
-  const tiers = DATABASE.subsidy_clawback_schedule.tiers;
+  const tiers = getDepreciationDatabase().subsidy_clawback_schedule?.tiers;
+
+  const defaultTier: ClawbackTier = {
+    min_months: 24,
+    max_months_exclusive: null,
+    clawback_rate: 0.0,
+    label_ko: '24개월 이상 (의무종료 / 회수 없음)',
+  };
+
+  if (!tiers || tiers.length === 0) {
+    const isExempt = normalizedMonths >= 24 || transferType === 'intra';
+    const remainingMonths = Math.max(0, 24 - normalizedMonths);
+    return {
+      heldMonths: normalizedMonths,
+      tierLabel: defaultTier.label_ko,
+      statutoryClawbackRate: 0,
+      effectiveClawbackRate: 0,
+      localSubsidyReceivedKrw: safeLocalSubsidy,
+      nationalSubsidyReceivedKrw: safeNationalSubsidy,
+      localClawbackKrw: 0,
+      nationalClawbackKrw: 0,
+      totalClawbackKrw: 0,
+      transferType,
+      isExempt,
+      remainingMonthsOfObligation: Math.round(remainingMonths * 10) / 10,
+      explanation: '환수 요율 정보가 없습니다.',
+    };
+  }
 
   let matchedTier: ClawbackTier = tiers[tiers.length - 1]; // default >= 24m (0%)
   for (const t of tiers) {
