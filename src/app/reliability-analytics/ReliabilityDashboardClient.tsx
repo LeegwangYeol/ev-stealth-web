@@ -36,11 +36,11 @@ const CATEGORY_BG_COLORS: Record<DefectCategoryKey, string> = {
 
 const CATEGORY_TAG_COLORS: Record<DefectCategoryKey, { bg: string; text: string; border: string }> = {
   BATTERY_CHARGING: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
-  DRIVING_POWERTRAIN: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+  DRIVING_POWERTRAIN: { bg: 'bg-amber-50', text: 'text-amber-800', border: 'border-amber-200' },
   SOFTWARE_ELECTRONICS: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
   BUILD_QUALITY: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
   SERVICE_REPAIR_COST: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
-  COLD_WEATHER: { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' },
+  COLD_WEATHER: { bg: 'bg-cyan-50', text: 'text-cyan-800', border: 'border-cyan-200' },
 };
 
 export default function ReliabilityDashboardClient({ initialData }: ReliabilityDashboardClientProps) {
@@ -63,6 +63,31 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     quote: string;
   } | null>(null);
 
+  // Defensive fallbacks for database collections and metadata
+  const metadata = useMemo(
+    () =>
+      initialData?.metadata ?? {
+        version: '1.0',
+        last_updated: '',
+        total_records_analyzed: 0,
+        models_count: 0,
+        avg_industry_dsi: 0,
+      },
+    [initialData?.metadata]
+  );
+  const brands = useMemo(
+    () => (Array.isArray(initialData?.brands) ? initialData.brands : []),
+    [initialData?.brands]
+  );
+  const categories = useMemo(
+    () => (Array.isArray(initialData?.categories) ? initialData.categories : []),
+    [initialData?.categories]
+  );
+  const repairCostMatrix = useMemo(
+    () => (Array.isArray(initialData?.repair_cost_matrix) ? initialData.repair_cost_matrix : []),
+    [initialData?.repair_cost_matrix]
+  );
+
   // All enriched models
   const allModels = useMemo(() => {
     return getAllEnrichedModels(initialData);
@@ -73,7 +98,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     const lookup = new Map<string, Map<number, YearEvaluation>>();
     for (const m of allModels) {
       const mLookup = new Map<number, YearEvaluation>();
-      for (const y of m.year_evaluations) {
+      for (const y of (m.year_evaluations || [])) {
         mLookup.set(y.year, y);
       }
       lookup.set(m.id, mLookup);
@@ -85,7 +110,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
   const heatmapYears = useMemo(() => {
     const yearSet = new Set<number>();
     allModels.forEach((m) => {
-      m.year_evaluations.forEach((y) => yearSet.add(y.year));
+      (m.year_evaluations || []).forEach((y) => yearSet.add(y.year));
     });
     return Array.from(yearSet).sort((a, b) => a - b);
   }, [allModels]);
@@ -234,7 +259,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI)
           </h1>
           <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
-            국내 3대 커뮤니티(보배드림, 디시인사이드, 블라인드) 실차주 제보 <strong>{initialData.metadata.total_records_analyzed.toLocaleString()}건</strong>과 국토교통부·NHTSA 공식 리콜 기록을 교차 분석하여, 특정 연식의 치명적 고질병과 중고차 구매 시 절대 피해야 할 연식을 투명하게 공개합니다.
+            국내 3대 커뮤니티(보배드림, 디시인사이드, 블라인드) 실차주 제보 <strong>{metadata.total_records_analyzed.toLocaleString()}건</strong>과 국토교통부·NHTSA 공식 리콜 기록을 교차 분석하여, 특정 연식의 치명적 고질병과 중고차 구매 시 절대 피해야 할 연식을 투명하게 공개합니다.
           </p>
         </div>
 
@@ -243,17 +268,17 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           <div className="bg-slate-800/80 backdrop-blur rounded-2xl p-4 sm:p-5 border border-slate-700">
             <div className="text-xs sm:text-sm text-slate-400 font-medium">분석 결함 제보</div>
             <div className="text-2xl sm:text-3xl font-black text-white mt-1">
-              {initialData.metadata.total_records_analyzed.toLocaleString()}건
+              {metadata.total_records_analyzed.toLocaleString()}건
             </div>
             <div className="text-xs text-blue-400 mt-1 font-medium">
-              9개 브랜드 · {initialData.metadata.models_count}개 모델 조사
+              9개 브랜드 · {metadata.models_count}개 모델 조사
             </div>
           </div>
 
           <div className="bg-slate-800/80 backdrop-blur rounded-2xl p-4 sm:p-5 border border-slate-700">
             <div className="text-xs sm:text-sm text-slate-400 font-medium">산업 평균 DSI 점수</div>
             <div className="text-2xl sm:text-3xl font-black text-amber-400 mt-1">
-              {initialData.metadata.avg_industry_dsi}
+              {metadata.avg_industry_dsi}
               <span className="text-sm font-normal text-slate-400 ml-1">/ 100</span>
             </div>
             <div className="text-xs text-amber-300/80 mt-1 font-medium">
@@ -478,6 +503,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   <div className="flex items-center gap-2 shrink-0">
                     <Link
                       href={`/recall-portal?model=${encodeURIComponent(hoveredCell.modelName)}`}
+                      prefetch={false}
                       className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                     >
                       공식 리콜 조회 &rarr;
@@ -503,7 +529,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               </div>
 
               <div className="space-y-4">
-                {[...initialData.brands]
+                {[...brands]
                   .sort((a, b) => a.overall_dsi - b.overall_dsi)
                   .map((brand, idx) => {
                     const isSelected = selectedBrand === brand.id;
@@ -582,7 +608,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   aria-label="전기차 결함 부문별 산업 점유율 분포 바"
                   className="w-full h-6 rounded-xl overflow-hidden flex shadow-inner border border-slate-200"
                 >
-                  {initialData.categories.map((cat) => {
+                  {categories.map((cat) => {
                     return (
                       <div
                         key={cat.code}
@@ -607,7 +633,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       </tr>
                     </thead>
                     <tbody>
-                      {initialData.categories.map((cat) => (
+                      {categories.map((cat) => (
                         <tr key={cat.code}>
                           <th scope="row">{cat.label_ko}</th>
                           <td>{cat.industry_share_pct}%</td>
@@ -620,7 +646,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
               {/* Detailed Category Cards Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {initialData.categories.map((cat) => {
+                {categories.map((cat) => {
                   const color = CATEGORY_TAG_COLORS[cat.code] || { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200' };
 
                   return (
@@ -714,7 +740,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             >
               전체 ({allModels.length})
             </button>
-            {initialData.brands.map((brand) => (
+            {brands.map((brand) => (
               <button
                 key={brand.id}
                 type="button"
@@ -727,7 +753,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 }`}
               >
                 <span>{brand.name_ko}</span>
-                <span className="text-[10px] opacity-75">({brand.models.length})</span>
+                <span className="text-[10px] opacity-75">({(brand.models || []).length})</span>
               </button>
             ))}
           </div>
@@ -769,7 +795,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 aria-pressed={selectedVerdict === 'CAUTION'}
                 className={`px-2.5 py-1 text-xs font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedVerdict === 'CAUTION'
-                    ? 'bg-amber-500 text-white'
+                    ? 'bg-amber-500 text-slate-950 font-extrabold shadow-sm'
                     : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
                 }`}
               >
@@ -991,6 +1017,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between">
                     <Link
                       href={`/recall-portal?model=${encodeURIComponent(model.name)}`}
+                      prefetch={false}
                       className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
                     >
                       <span>🚨 이 차종 공식 리콜·화재 조회</span>
@@ -1036,7 +1063,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {initialData.repair_cost_matrix.map((item) => (
+              {repairCostMatrix.map((item) => (
                 <tr key={item.component_name} className="hover:bg-slate-50 transition">
                   <th scope="row" className="p-4 font-bold text-slate-900 align-top text-left font-normal sm:font-bold">
                     <div>{item.component_name}</div>
@@ -1076,15 +1103,16 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       {/* 6. CONSUMER SURVIVAL GUIDE BANNER */}
       <section className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-3xl p-6 sm:p-8 shadow-lg flex flex-col md:flex-row items-center justify-between gap-6">
         <div className="space-y-2 max-w-2xl">
-          <h3 className="text-xl sm:text-2xl font-black">
+          <h2 className="text-xl sm:text-2xl font-black">
             🚨 내 차의 공식 화재 리콜 및 배터리 제조사가 궁금하신가요?
-          </h3>
+          </h2>
           <p className="text-sm text-blue-200 leading-relaxed">
             국토교통부 및 자동차리콜센터의 실시간 리콜 캠페인 데이터와 17자리 차대번호(VIN) 조회기를 통해 배터리 제조사(LGES, SK On, CATL, 파라시스)와 긴급 무상 수리 대상 여부를 즉시 확인하세요.
           </p>
         </div>
         <Link
           href="/recall-portal"
+          prefetch={false}
           className="px-6 py-3.5 bg-white text-blue-900 hover:bg-blue-50 font-extrabold rounded-2xl shadow-md transition shrink-0 text-sm sm:text-base text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-blue-900"
         >
           공식 리콜 & 배터리 조회 포털 가기 &rarr;

@@ -461,6 +461,29 @@ class TestRecallPortalClientA11y(unittest.TestCase):
                 f"External link missing screen-reader accessible notification: {link}",
             )
 
+    def test_recall_portal_heading_hierarchy_continuity(self):
+        """
+        Validate that search result section under <h2> does not skip <h3> (WCAG 1.3.1).
+        Battery safety specs and matched recall list use <h3>, and campaign titles use <h4>.
+        """
+        self.assertIn(
+            "배터리 안전 제원",
+            self.source,
+            "RecallPortalClient.tsx must contain battery safety specs section.",
+        )
+        self.assertTrue(
+            bool(re.search(r'<h3\b[^>]*>\s*\{checkResult\.batteryProfile\.model_name\}\s+배터리 안전 제원\s*</h3>', self.source)),
+            "Battery safety profile heading must use semantic <h3>.",
+        )
+        self.assertTrue(
+            bool(re.search(r'<h3\b[^>]*>\s*<span>해당 차종 대상 정부 공시 리콜 세부 내역', self.source)),
+            "Matched recall list heading must use semantic <h3>.",
+        )
+        self.assertTrue(
+            bool(re.search(r'<h4\b[^>]*>\s*\{campaign\.defect_title\}\s*</h4>', self.source)),
+            "Campaign defect title heading must use semantic <h4>.",
+        )
+
 
 class TestDepreciationCalculatorClientA11y(unittest.TestCase):
     """
@@ -652,6 +675,22 @@ class TestReliabilityDashboardClientA11y(unittest.TestCase):
             "Category proportional bar segments must define role='img'.",
         )
 
+    def test_reliability_dashboard_caution_filter_button_contrast(self):
+        """
+        Validate that active CAUTION filter button uses text-slate-950 font-extrabold
+        on bg-amber-500, achieving > 9:1 contrast ratio (WCAG 1.4.3 Level AA & AAA).
+        """
+        caution_match = re.search(
+            r"selectedVerdict\s*===\s*'CAUTION'\s*\?\s*'([^']+)'",
+            self.source,
+        )
+        self.assertIsNotNone(caution_match, "Could not find CAUTION active style in ReliabilityDashboardClient.tsx")
+        active_classes = caution_match.group(1)
+        self.assertIn("bg-amber-500", active_classes)
+        self.assertIn("text-slate-950", active_classes)
+        self.assertIn("font-extrabold", active_classes)
+        self.assertNotIn("text-white", active_classes, "Active CAUTION button must not use failing text-white on amber-500")
+
 
 class TestLayoutDesktopNavigationA11y(unittest.TestCase):
     """
@@ -799,6 +838,34 @@ class TestSubsidyTrackerClientA11y(unittest.TestCase):
             re.search(r'aria-valuemax=\{100\}|aria-valuemax="100"', self.source),
             "SubsidyTrackerClient.tsx must define aria-valuemax={100} on progressbars.",
         )
+
+
+class TestSecretAdminReportsA11y(unittest.TestCase):
+    """
+    Test suite for AdminDashboardClient.tsx WCAG AA compliance.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.source = read_component_source("secret-admin-reports/AdminDashboardClient.tsx")
+
+    def test_sr_only_table_link_not_keyboard_focusable(self):
+        """
+        Validate that anchor link inside .sr-only summary table specifies tabIndex={-1} and aria-hidden="true"
+        to prevent trapping invisible keyboard focus (WCAG 2.4.7).
+        """
+        sr_table_match = re.search(
+            r'<div className="sr-only">[\s\S]*?<table[\s\S]*?</table>[\s\S]*?</div>',
+            self.source,
+        )
+        self.assertIsNotNone(sr_table_match, "Could not find .sr-only table block in AdminDashboardClient.tsx")
+        table_html = sr_table_match.group(0)
+
+        link_matches = re.findall(r'<a\b[^>]*>', table_html)
+        self.assertTrue(len(link_matches) > 0, "Expected link inside .sr-only table in AdminDashboardClient.tsx")
+        for link_tag in link_matches:
+            self.assertIn("tabIndex={-1}", link_tag, "sr-only table link must have tabIndex={-1}")
+            self.assertIn('aria-hidden="true"', link_tag, 'sr-only table link must have aria-hidden="true"')
 
 
 class TestEvRecallDatabaseIntegrity(unittest.TestCase):
@@ -984,6 +1051,21 @@ class TestContrastMathematicalVerification(unittest.TestCase):
         )
         self.assertAlmostEqual(new_banner_cr, 5.17, delta=0.1)
 
+    def test_caution_filter_button_amber500_slate950_contrast(self):
+        """
+        Prove mathematically that amber-500 (#f59e0b) with text-white (#ffffff) failed (< 4.5:1)
+        and that amber-500 with text-slate-950 (#020617) achieves > 9:1 (WCAG AA & AAA compliant).
+        """
+        # Failing white on amber-500
+        failing_cr = calculate_contrast_ratio("#ffffff", "#f59e0b")
+        self.assertLess(failing_cr, 4.5, f"white on amber-500 must fail WCAG AA: got {failing_cr:.2f}:1")
+        self.assertAlmostEqual(failing_cr, 2.14, delta=0.1)
+
+        # Passing slate-950 on amber-500
+        passing_cr = calculate_contrast_ratio("#020617", "#f59e0b")
+        self.assertGreaterEqual(passing_cr, 9.0, f"slate-950 on amber-500 must exceed 9:1: got {passing_cr:.2f}:1")
+        self.assertAlmostEqual(passing_cr, 9.42, delta=0.2)
+
 
 class TestAdversarialA11yEdgeCases(unittest.TestCase):
     """
@@ -992,7 +1074,7 @@ class TestAdversarialA11yEdgeCases(unittest.TestCase):
     """
 
     def test_components_exist_and_non_empty(self):
-        """Verify all 6 audited component files exist and exceed minimum content size."""
+        """Verify all 7 audited component files exist and exceed minimum content size."""
         target_files = [
             "pdi-checklist/PdiChecklistClient.tsx",
             "recall-portal/RecallPortalClient.tsx",
@@ -1000,6 +1082,7 @@ class TestAdversarialA11yEdgeCases(unittest.TestCase):
             "reliability-analytics/ReliabilityDashboardClient.tsx",
             "layout.tsx",
             "subsidy-tracker/SubsidyTrackerClient.tsx",
+            "secret-admin-reports/AdminDashboardClient.tsx",
         ]
         for rel_path in target_files:
             path = get_component_path(rel_path)

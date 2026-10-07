@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import {
   EVSubsidyDataset,
   AlertSeverity,
+  AlertThresholdConfig,
   CategoryMetrics,
   SubsidyCalculatorOptions,
   RegionEntry,
@@ -236,7 +237,7 @@ const RegionCard = React.memo(function RegionCard({
               onClick={() => toggleRegionExpand(region.region_id)}
               aria-expanded={isExpanded}
               aria-controls={'muni-details-' + region.region_id}
-              className="w-full py-1.5 px-3 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-xs font-medium flex items-center justify-between transition border border-slate-800 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+              className="w-full py-1.5 px-3 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-xs font-medium flex items-center justify-between transition border border-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
               <span>세부 시·군·구 {region.municipalities.length}개 현황 보기</span>
               <span>{isExpanded ? '▲ 접기' : '▼ 펼치기'}</span>
@@ -279,7 +280,7 @@ const RegionCard = React.memo(function RegionCard({
         <button
           type="button"
           onClick={() => onSelectForCalc(region.region_id)}
-          className="w-full py-2.5 px-4 rounded-xl bg-blue-600/90 hover:bg-blue-600 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5 shadow focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+          className="w-full py-2.5 px-4 rounded-xl bg-blue-600/90 hover:bg-blue-600 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5 shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
         >
           <span>⚡</span> 이 지역({region.name_ko})으로 실구매가 계산
         </button>
@@ -338,8 +339,9 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
     <section
       id="subsidy-calculator"
       ref={calculatorRef}
+      tabIndex={-1}
       aria-labelledby="calculator-heading"
-      className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 border border-blue-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-8"
+      className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 border border-blue-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-8 outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
     >
       <div className="max-w-3xl space-y-2">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-bold uppercase tracking-wider">
@@ -365,7 +367,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               id="model-select"
               value={selectedModelId}
               onChange={(e) => onSelectModelId(e.target.value)}
-              className="w-full py-3 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none cursor-pointer font-medium"
+              className="w-full py-3 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
             >
               {models.map((model) => (
                 <option key={model.model_id} value={model.model_id}>
@@ -382,7 +384,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                   type="button"
                   aria-pressed={selectedModelId === m.model_id}
                   onClick={() => onSelectModelId(m.model_id)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                     selectedModelId === m.model_id
                       ? 'bg-blue-600 text-white'
                       : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-slate-800'
@@ -413,7 +415,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               value={selectedRegionId}
               onChange={(e) => onSelectRegionId(e.target.value)}
               aria-describedby="region-residency-note"
-              className="w-full py-3 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none cursor-pointer font-medium"
+              className="w-full py-3 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
             >
               {regions.map((reg) => (
                 <option key={reg.region_id} value={reg.region_id}>
@@ -429,8 +431,9 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
           {/* 3. Custom MSRP Option */}
           <div className="space-y-3 p-4 bg-slate-950 border border-slate-800 rounded-2xl">
             <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-300 uppercase tracking-wider">
+              <label htmlFor="custom-msrp-toggle-checkbox" className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-300 uppercase tracking-wider">
                 <input
+                  id="custom-msrp-toggle-checkbox"
                   type="checkbox"
                   checked={isCustomMsrp}
                   onChange={(e) => {
@@ -439,7 +442,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                       setCustomMsrpInput(activeModel.base_price_krw.toString());
                     }
                   }}
-                  className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                  className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 />
                 <span>옵션 포함 출고가 직접 입력 (커스텀 MSRP)</span>
               </label>
@@ -462,7 +465,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                     value={customMsrpInput ? parseInt(customMsrpInput, 10).toLocaleString('ko-KR') : ''}
                     onChange={(e) => setCustomMsrpInput(e.target.value.replace(/[^0-9]/g, ''))}
                     placeholder="원 단위 출고가 입력 (예: 54,900,000)"
-                    className="w-full py-2.5 px-3.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm font-semibold focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none pr-12"
+                    className="w-full py-2.5 px-3.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 pr-12"
                   />
                   <span className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 text-xs font-semibold">
                     원
@@ -472,21 +475,21 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                   <button
                     type="button"
                     onClick={() => setCustomMsrpInput('54000000')}
-                    className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                    className="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     5,400만 (100% 구간)
                   </button>
                   <button
                     type="button"
                     onClick={() => setCustomMsrpInput('62000000')}
-                    className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                    className="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     6,200만 (50% 감액)
                   </button>
                   <button
                     type="button"
                     onClick={() => setCustomMsrpInput('86000000')}
-                    className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                    className="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     8,600만 (보조금 0원)
                   </button>
@@ -506,7 +509,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                   type="checkbox"
                   checked={calcOptions.isYouthFirstTimeBuyer}
                   onChange={(e) => setCalcOptions((prev) => ({ ...prev, isYouthFirstTimeBuyer: e.target.checked }))}
-                  className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                  className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 />
                 <span>청년 생애 최초 구매 (+20% 국비)</span>
               </label>
@@ -516,7 +519,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                   type="checkbox"
                   checked={calcOptions.isSmallBusinessOrTaxi}
                   onChange={(e) => setCalcOptions((prev) => ({ ...prev, isSmallBusinessOrTaxi: e.target.checked }))}
-                  className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                  className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 />
                 <span>소상공인 / 영업용 택시 (+30% 국비)</span>
               </label>
@@ -526,7 +529,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                   type="checkbox"
                   checked={calcOptions.isMultiChildFamily}
                   onChange={(e) => setCalcOptions((prev) => ({ ...prev, isMultiChildFamily: e.target.checked }))}
-                  className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                  className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 />
                 <span>다자녀 가구 (+10% 국비)</span>
               </label>
@@ -536,7 +539,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                   type="checkbox"
                   checked={calcOptions.isOldDieselScrappage}
                   onChange={(e) => setCalcOptions((prev) => ({ ...prev, isOldDieselScrappage: e.target.checked }))}
-                  className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                  className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 />
                 <span>노후 경유차 조기폐차 (+100만 원)</span>
               </label>
@@ -673,10 +676,10 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   // Calculator State & Ref
   const calculatorRef = useRef<HTMLDivElement>(null);
   const [selectedModelId, setSelectedModelId] = useState<string>(
-    urlModel || initialData.popular_models_matrix[0]?.model_id || 'ioniq-5-2026'
+    urlModel || initialData?.popular_models_matrix?.[0]?.model_id || 'ioniq-5-2026'
   );
   const [selectedRegionId, setSelectedRegionId] = useState<string>(
-    urlRegion || initialData.regions[0]?.region_id || 'KR-11'
+    urlRegion || initialData?.regions?.[0]?.region_id || 'KR-11'
   );
 
   // Sync selectedModelId and selectedRegionId on query param navigation
@@ -689,10 +692,75 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
     }
   }, [urlModel, urlRegion]);
 
-  const regions = useMemo(() => initialData.regions || [], [initialData.regions]);
-  const models = useMemo(() => initialData.popular_models_matrix || [], [initialData.popular_models_matrix]);
-  const summary = initialData.nationwide_summary;
-  const thresholds = initialData.alert_thresholds;
+  const regions = useMemo(() => (Array.isArray(initialData?.regions) ? initialData.regions : []), [initialData?.regions]);
+  const models = useMemo(() => (Array.isArray(initialData?.popular_models_matrix) ? initialData.popular_models_matrix : []), [initialData?.popular_models_matrix]);
+
+  const fallbackSummary = {
+    total_announced_units: 0,
+    total_applied_units: 0,
+    total_disbursed_units: 0,
+    total_remaining_units: 0,
+    total_delivered_units: 0,
+    nationwide_depletion_rate: 0,
+    total_budget_billion_krw: 0,
+    alert_region_counts: {
+      healthy: 0,
+      caution: 0,
+      warning: 0,
+      critical: 0,
+      depleted: 0,
+    },
+  };
+  const summary = initialData?.nationwide_summary || fallbackSummary;
+
+  const fallbackThresholds: Record<AlertSeverity, AlertThresholdConfig> = {
+    HEALTHY: {
+      min_percent: 0.0,
+      max_percent: 59.9,
+      label_ko: '원활 (신청 여유)',
+      severity: 'HEALTHY',
+      color_hex: '#10B981',
+      badge_class: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+      recommended_action: '보조금 잔여량이 충분하여 신청 접수 후 통상 1~2주 내 교부 결정됩니다.',
+    },
+    CAUTION: {
+      min_percent: 60.0,
+      max_percent: 79.9,
+      label_ko: '주의 (소진 가속)',
+      severity: 'CAUTION',
+      color_hex: '#F59E0B',
+      badge_class: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+      recommended_action: '출고 예정 시기가 1~2개월 이내인 경우 조속한 서류 접수를 권장합니다.',
+    },
+    WARNING: {
+      min_percent: 80.0,
+      max_percent: 94.9,
+      label_ko: '경고 (마감 임박)',
+      severity: 'WARNING',
+      color_hex: '#F97316',
+      badge_class: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+      recommended_action: '잔여 예산 소진이 임박했습니다. 즉시 출고 가능한 실재고 매칭이 필요합니다.',
+    },
+    CRITICAL: {
+      min_percent: 95.0,
+      max_percent: 99.9,
+      label_ko: '위험 (잔여 극소)',
+      severity: 'CRITICAL',
+      color_hex: '#EF4444',
+      badge_class: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+      recommended_action: '선착순 마감 직전입니다. 담당 지자체 문의 및 추경 예산 편성 여부를 확인하세요.',
+    },
+    DEPLETED: {
+      min_percent: 100.0,
+      max_percent: 999.0,
+      label_ko: '마감 (접수 종료)',
+      severity: 'DEPLETED',
+      color_hex: '#6B7280',
+      badge_class: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
+      recommended_action: '2026년 공고 예산이 전액 소진되었습니다. 취소분 대기 접수 또는 차년도 사업을 준비하세요.',
+    },
+  };
+  const thresholds = initialData?.alert_thresholds || fallbackThresholds;
 
   // Optimized Filtered & Sorted Regions (dependent on deferredSearchQuery to keep typing responsive)
   const filteredRegions = useMemo(() => {
@@ -822,7 +890,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
       {/* Skip Navigation for Keyboard Accessibility */}
       <a
         href="#subsidy-calculator"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-amber-400 focus:text-slate-950 focus:font-bold focus:rounded-xl focus:shadow-2xl focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none transition"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-amber-400 focus:text-slate-950 focus:font-bold focus:rounded-xl focus:shadow-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 transition"
       >
         보조금 계산기로 건너뛰기
       </a>
@@ -844,7 +912,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
           <span className="text-xs text-slate-400">
             데이터 갱신 시각:{' '}
             <ClientTimestamp
-              isoString={initialData.metadata?.generated_at}
+              isoString={initialData?.metadata?.generated_at}
               options={{
                 month: 'long',
                 day: 'numeric',
@@ -870,7 +938,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
           <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
             <div className="text-xs font-medium text-slate-400">전국 평균 소진율</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-amber-400 mt-1">
-              {summary.nationwide_depletion_rate.toFixed(1)}%
+              {(summary.nationwide_depletion_rate ?? 0).toFixed(1)}%
             </div>
             <div className="text-[11px] text-slate-400 mt-1">
               전체 카테고리 종합
@@ -880,11 +948,11 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
           <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
             <div className="text-xs font-medium text-slate-400">총 공고 대수</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-slate-100 mt-1">
-              {summary.total_announced_units.toLocaleString()}
+              {(summary.total_announced_units ?? 0).toLocaleString()}
               <span className="text-xs font-normal text-slate-400 ml-1">대</span>
             </div>
             <div className="text-[11px] text-slate-400 mt-1">
-              총 배정 예산 {summary.total_budget_billion_krw.toLocaleString()}억 원
+              총 배정 예산 {(summary.total_budget_billion_krw ?? 0).toLocaleString()}억 원
             </div>
           </div>
 
@@ -937,7 +1005,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                       setSearchQuery(crit.name_ko);
                       handleSelectRegionForCalc(crit.region_id);
                     }}
-                    className="px-2 py-0.5 rounded bg-rose-900 border border-rose-500/50 text-rose-200 hover:bg-rose-800 hover:text-white transition font-medium focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                    className="px-2 py-0.5 rounded bg-rose-900 border border-rose-500/50 text-rose-200 hover:bg-rose-800 hover:text-white transition font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                     title={`${crit.name_ko} 보조금 계산기로 이동`}
                   >
                     {crit.name_ko} ({crit.categories.passenger.depletion_rate}%)
@@ -947,7 +1015,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             </div>
             <a
               href="#subsidy-calculator"
-              className="text-amber-300 hover:text-amber-200 underline font-semibold shrink-0 rounded px-1 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+              className="text-amber-300 hover:text-amber-200 underline font-semibold shrink-0 rounded px-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
               내 차 실구매가 즉시 계산 &rarr;
             </a>
@@ -974,7 +1042,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 type="button"
                 aria-pressed={isSelected}
                 onClick={() => setAlertFilter(isSelected ? 'ALL' : key)}
-                className={`p-3 rounded-xl border text-left transition flex flex-col justify-between focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
+                className={`p-3 rounded-xl border text-left transition flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                   isSelected
                     ? 'ring-2 ring-amber-400 ' + getBadgeStyle(key)
                     : 'bg-slate-950 hover:bg-slate-800 border-slate-800 text-slate-300'
@@ -984,10 +1052,10 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                   <span className={`text-xs px-2 py-0.5 rounded font-semibold border ${getBadgeStyle(key)}`}>
                     {getStatusLabel(key)}
                   </span>
-                  <span className="text-[11px] text-slate-300 font-medium">{t.min_percent}%~{t.max_percent}%</span>
+                  <span className="text-[11px] text-slate-300 font-medium">{(t?.min_percent ?? 0)}%~{(t?.max_percent ?? 100)}%</span>
                 </div>
                 <div className="text-[11px] text-slate-300 line-clamp-2 mt-2 leading-relaxed">
-                  {t.recommended_action}
+                  {t?.recommended_action || ''}
                 </div>
               </button>
             );
@@ -1013,7 +1081,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                   tabIndex={isSelected ? 0 : -1}
                   onKeyDown={(e) => handleCategoryKeyDown(e, idx)}
                   onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-3 py-1.5 rounded-lg transition focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
+                  className={`px-3 py-1.5 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                     isSelected
                       ? 'bg-blue-600 text-white shadow'
                       : 'text-slate-400 hover:text-slate-200'
@@ -1033,7 +1101,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               aria-label="추경 예산 편성 지자체만 보기"
               checked={supplementaryOnly}
               onChange={(e) => setSupplementaryOnly(e.target.checked)}
-              className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+              className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             />
             <span>추경 예산 편성 지자체만 보기</span>
           </label>
@@ -1056,14 +1124,14 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="시·도 또는 세부 시·군·구 검색 (예: 서울, 수원, 성남, 대구, 포항, 울릉)"
-              className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder-slate-400 text-sm focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+              className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder-slate-400 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
                 aria-label="검색어 지우기"
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white text-sm rounded focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white text-sm rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
               >
                 ✕
               </button>
@@ -1085,7 +1153,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 type="button"
                 aria-pressed={zoneFilter === zone.id}
                 onClick={() => setZoneFilter(zone.id as ZoneFilter)}
-                className={`px-2.5 py-1.5 rounded-lg border font-medium transition focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none ${
+                className={`px-2.5 py-1.5 rounded-lg border font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                   zoneFilter === zone.id
                     ? 'bg-blue-600 text-white border-blue-500'
                     : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
@@ -1102,7 +1170,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               value={sortOption}
               onChange={(e) => setSortOption(e.target.value as SortOption)}
               aria-label="지자체 정렬 방식"
-              className="py-2.5 px-3 rounded-xl bg-slate-950 border border-slate-700 text-slate-200 text-xs sm:text-sm focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none cursor-pointer"
+              className="py-2.5 px-3 rounded-xl bg-slate-950 border border-slate-700 text-slate-200 text-xs sm:text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer"
             >
               <option value="DEPLETION_DESC">소진율 높은 순 (마감임박)</option>
               <option value="DEPLETION_ASC">소진율 낮은 순 (신청여유)</option>
@@ -1127,7 +1195,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 setSearchQuery('');
                 setSupplementaryOnly(false);
               }}
-              className="text-amber-400 hover:text-amber-300 underline font-medium rounded px-1 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 focus:outline-none"
+              className="text-amber-400 hover:text-amber-300 underline font-medium rounded px-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
               전체 필터 초기화
             </button>

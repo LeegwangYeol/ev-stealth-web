@@ -308,7 +308,7 @@ export default function PdiChecklistClient() {
           aria-live="polite"
           className="bg-green-50 border border-green-200 text-green-800 p-6 rounded-2xl text-center shadow-sm animate-pulse motion-reduce:animate-none"
         >
-          <h3 className="text-2xl font-bold mb-2">🎉 검수 완료!</h3>
+          <h2 className="text-2xl font-bold mb-2">🎉 검수 완료!</h2>
           <p>모든 항목을 확인하셨습니다. 이상이 없다면 안심하고 인수증에 서명하세요.</p>
         </div>
       )}

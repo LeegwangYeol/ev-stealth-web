@@ -266,6 +266,41 @@ recordAssert(
   defaultModelFallback.battery_capacity_kwh > 0
 );
 
+// 1.3 Defensive lookup guards and luxury subsidy ratio tests
+const adversarialLookupKeys: any[] = [null, undefined, '', '   ', 12345, {}, [], NaN, Infinity];
+for (const key of adversarialLookupKeys) {
+  const reg = subsidy.getRegionById(key);
+  recordAssert(
+    'subsidy:getRegionById:defensive',
+    `getRegionById returns undefined safely for adversarial key ${String(key)}`,
+    reg === undefined
+  );
+
+  const mdl = subsidy.getModelById(key);
+  recordAssert(
+    'subsidy:getModelById:defensive',
+    `getModelById returns undefined safely for adversarial key ${String(key)}`,
+    mdl === undefined
+  );
+}
+
+// 1.4 Luxury vehicle statutory price exclusion for Infinity MSRP
+recordAssert(
+  'subsidy:getPriceSubsidyRatio:luxury_infinity',
+  'getPriceSubsidyRatio(Infinity) returns 0.0 (luxury vehicle exclusion)',
+  subsidy.getPriceSubsidyRatio(Infinity) === 0.0
+);
+recordAssert(
+  'subsidy:getPriceSubsidyRatio:luxury_85M',
+  'getPriceSubsidyRatio(85_000_000) returns 0.0 (luxury vehicle boundary)',
+  subsidy.getPriceSubsidyRatio(85_000_000) === 0.0
+);
+recordAssert(
+  'subsidy:getPriceSubsidyRatio:negative_default',
+  'getPriceSubsidyRatio(-1000) returns 1.0 (default ratio)',
+  subsidy.getPriceSubsidyRatio(-1000) === 1.0
+);
+
 // ============================================================================
 // PART 2: INVALID QUERY STRINGS IN RECALL PORTAL RESOLVER
 // ============================================================================
@@ -560,6 +595,23 @@ recordAssert(
   depResDefault.model.model_name.length > 0
 );
 
+// 3.2 simulateBatteryHealth input sanitization under NaN and extreme values
+const sanitizedHealth = depreciation.simulateBatteryHealth({
+  years: NaN,
+  totalKm: NaN,
+  ambientTempC: NaN,
+  storageSoc: NaN,
+  dcfcRatio: NaN,
+});
+recordAssert(
+  'depreciation:simulateBatteryHealth:sanitized_inputs',
+  'simulateBatteryHealth handles NaN ambientTempC, storageSoc, and dcfcRatio without NaN in outputs',
+  Number.isFinite(sanitizedHealth.calendarLossPct) &&
+  Number.isFinite(sanitizedHealth.cyclicLossPct) &&
+  Number.isFinite(sanitizedHealth.totalLossPct) &&
+  Number.isFinite(sanitizedHealth.sohPct)
+);
+
 // ============================================================================
 // PART 4: RELIABILITY DASHBOARD WITH EMPTY BRANDS / MODELS
 // ============================================================================
@@ -585,6 +637,32 @@ recordAssert(
   'getAllEnrichedModels returns empty array without throwing when brands is []',
   Array.isArray(enrichedModelsEmpty) && enrichedModelsEmpty.length === 0
 );
+
+// 4.2 getAllEnrichedModels with non-array brands / models
+const malformedReliabilityDbs: any[] = [
+  {},
+  { brands: null },
+  { brands: undefined },
+  { brands: 'not-an-array' },
+  { brands: [{ name_ko: '무효브랜드', models: null }] },
+  { brands: [{ name_ko: '무효브랜드', models: undefined }] },
+  { brands: [{ name_ko: '유효브랜드', name_en: 'Valid', country: 'KR', models: [{ model_name: '테스트' }] }] },
+];
+
+for (const mDb of malformedReliabilityDbs) {
+  let threw = false;
+  let res: any;
+  try {
+    res = reliability.getAllEnrichedModels(mDb);
+  } catch (err: any) {
+    threw = true;
+  }
+  recordAssert(
+    'reliability:getAllEnrichedModels:iterability_guards',
+    `getAllEnrichedModels does not throw on malformed db structure`,
+    !threw && Array.isArray(res)
+  );
+}
 
 // ============================================================================
 // PART 5: URL SEARCHPARAMS SIMULATION FOR CLIENT PAGES

@@ -1037,12 +1037,15 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
   const R_GAS = 8.314462;
   const T_REF_K = 298.15;
   const SOC_REF = 0.50;
-  const tempK = ambientTempC + 273.15;
+  const safeTempC = Number.isFinite(ambientTempC) ? ambientTempC : 25.0;
+  const safeStorageSoc = Number.isFinite(storageSoc) ? clamp(storageSoc, 0.0, 1.0) : 0.50;
+  const safeDcfcRatio = Number.isFinite(dcfcRatio) ? clamp(dcfcRatio, 0.0, 1.0) : 0.25;
+  const tempK = safeTempC + 273.15;
 
   const arrheniusFactor = Math.exp(
     (-chemProfile.calendar_arrhenius_ea_j_mol / R_GAS) * (1.0 / tempK - 1.0 / T_REF_K)
   );
-  const socFactor = Math.exp(chemProfile.soc_stress_coefficient_beta * (storageSoc - SOC_REF));
+  const socFactor = Math.exp(chemProfile.soc_stress_coefficient_beta * (safeStorageSoc - SOC_REF));
   const kCal = (chemProfile.calendar_baseline_annual_loss_pct / 100.0) * arrheniusFactor * socFactor;
   const qLossCal = kCal * Math.pow(Math.max(0.1, safeYears), chemProfile.calendar_time_exponent_z);
 
@@ -1060,11 +1063,11 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
   const equivalentFullCycles = energyThroughputKwh / Math.max(10.0, safeCapacity);
 
   const fDod = Math.pow(0.85, chemProfile.dod_exponent_u);
-  const fDcfc = 1.0 + (chemProfile.dcfc_acceleration_multiplier_max - 1.0) * clamp(dcfcRatio, 0.0, 1.0);
+  const fDcfc = 1.0 + (chemProfile.dcfc_acceleration_multiplier_max - 1.0) * safeDcfcRatio;
 
   let fTempCyc = 1.0;
-  if (ambientTempC < 0) {
-    const coldFraction = Math.min(1.0, Math.abs(ambientTempC) / 15.0);
+  if (safeTempC < 0) {
+    const coldFraction = Math.min(1.0, Math.abs(safeTempC) / 15.0);
     fTempCyc = 1.0 + chemProfile.cold_charge_sensitivity_gamma * coldFraction;
   }
 

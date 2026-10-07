@@ -152,6 +152,7 @@ export function getAllRegions(): RegionEntry[] {
  * Finds a specific region by region_id, iso_code, or Korean name.
  */
 export function getRegionById(regionId: string): RegionEntry | undefined {
+  if (!regionId || typeof regionId !== 'string') return undefined;
   const regions = getAllRegions();
   const normalized = regionId.trim().toLowerCase();
   return regions.find(
@@ -175,8 +176,10 @@ export function getAllModels(): PopularModelEntry[] {
  * Finds a vehicle model by model_id or Korean name.
  */
 export function getModelById(modelId: string): PopularModelEntry | undefined {
+  if (!modelId || typeof modelId !== 'string') return undefined;
   const models = getAllModels();
   const normalized = modelId.trim().toLowerCase();
+  if (!normalized) return undefined;
   return models.find(
     (m) =>
       m.model_id.toLowerCase() === normalized ||
@@ -191,11 +194,11 @@ export function getModelById(modelId: string): PopularModelEntry | undefined {
  * - MSRP >= 85,000,000 KRW: 0.0 (0% luxury vehicle exclusion)
  */
 export function getPriceSubsidyRatio(msrpKrw: number): number {
+  if (msrpKrw === Infinity || (Number.isFinite(msrpKrw) && msrpKrw >= 85_000_000)) {
+    return 0.0;
+  }
   if (!Number.isFinite(msrpKrw) || msrpKrw < 0) {
     return 1.0;
-  }
-  if (msrpKrw >= 85_000_000) {
-    return 0.0;
   }
   if (msrpKrw >= 55_000_000) {
     return 0.5;

@@ -41,8 +41,16 @@ logger = logging.getLogger("run_tracker")
 
 
 def _resolve_default_paths():
-    """Adaptively resolve primary and web targets depending on execution directory."""
-    if (_CURRENT_DIR / "src" / "data").exists():
+    """Adaptively resolve primary and web targets depending on execution directory with bidirectional auto-sync."""
+    if (_CURRENT_DIR / "data").exists() and (_CURRENT_DIR / "ev-stealth-web" / "src" / "data").exists():
+        # Executing from project root /Users/a7890/src/my-e-car/
+        primary_output = _CURRENT_DIR / "data" / "ev_subsidy_data.json"
+        web_output = _CURRENT_DIR / "ev-stealth-web" / "src" / "data" / "ev_subsidy_data.json"
+        mirror_primary = _CURRENT_DIR / "data" / "subsidy_depletion_data.json"
+        mirror_web = _CURRENT_DIR / "ev-stealth-web" / "src" / "data" / "subsidy_depletion_data.json"
+        external_sync_targets = [web_output, mirror_web]
+        return primary_output, web_output, mirror_primary, mirror_web, external_sync_targets
+    elif (_CURRENT_DIR / "src" / "data").exists():
         # Executing from within ev-stealth-web/
         primary_output = _CURRENT_DIR / "src" / "data" / "ev_subsidy_data.json"
         web_output = _CURRENT_DIR / "src" / "data" / "ev_subsidy_data.json"
@@ -54,12 +62,20 @@ def _resolve_default_paths():
             external_sync_targets.append(_CURRENT_DIR.parent / "data" / "subsidy_depletion_data.json")
         return primary_output, web_output, mirror_primary, mirror_web, external_sync_targets
     else:
-        # Executing from project root /Users/a7890/src/my-e-car/
+        # Executing from project root or fallback
         primary_output = _CURRENT_DIR / "data" / "ev_subsidy_data.json"
         web_output = _CURRENT_DIR / "ev-stealth-web" / "src" / "data" / "ev_subsidy_data.json"
         mirror_primary = _CURRENT_DIR / "data" / "subsidy_depletion_data.json"
         mirror_web = _CURRENT_DIR / "ev-stealth-web" / "src" / "data" / "subsidy_depletion_data.json"
-        return primary_output, web_output, mirror_primary, mirror_web, []
+        external_sync_targets = []
+        if (_CURRENT_DIR / "ev-stealth-web" / "src" / "data").exists():
+            external_sync_targets.extend([web_output, mirror_web])
+        elif (_CURRENT_DIR.parent / "data").exists():
+            external_sync_targets.extend([
+                _CURRENT_DIR.parent / "data" / "ev_subsidy_data.json",
+                _CURRENT_DIR.parent / "data" / "subsidy_depletion_data.json",
+            ])
+        return primary_output, web_output, mirror_primary, mirror_web, external_sync_targets
 
 
 (
@@ -111,6 +127,8 @@ def sync_defect_reports(
     # Resolve web and root paths
     if web_dir:
         web_reports_path = Path(web_dir) / "daily_reports.json"
+    elif (_CURRENT_DIR / "ev-stealth-web" / "src" / "data").exists():
+        web_reports_path = _CURRENT_DIR / "ev-stealth-web" / "src" / "data" / "daily_reports.json"
     elif (_CURRENT_DIR / "src" / "data").exists():
         web_reports_path = _CURRENT_DIR / "src" / "data" / "daily_reports.json"
     else:
@@ -360,14 +378,69 @@ def main() -> int:
             elif args.output.name == "subsidy_depletion_data.json":
                 destinations.append(args.output.parent / "ev_subsidy_data.json")
 
-            if args.sync_web:
-                if args.web_dir:
+            # Check if bidirectional automatic synchronization applies:
+            # If both root data/ and web src/data/ exist in the tree, and the output is targeting
+            # the default or repository data directories, automatically synchronize to both locations
+            # even if --sync-web was omitted.
+            root_data_dir: Optional[Path] = None
+            if (_CURRENT_DIR / "data").exists():
+                root_data_dir = _CURRENT_DIR / "data"
+            elif (_CURRENT_DIR.parent / "data").exists():
+                root_data_dir = _CURRENT_DIR.parent / "data"
+
+            web_data_dir: Optional[Path] = None
+            if (_CURRENT_DIR / "ev-stealth-web" / "src" / "data").exists():
+                web_data_dir = _CURRENT_DIR / "ev-stealth-web" / "src" / "data"
+            elif (_CURRENT_DIR / "src" / "data").exists():
+                web_data_dir = _CURRENT_DIR / "src" / "data"
+
+            both_data_dirs_exist = (
+                root_data_dir is not None
+                and root_data_dir.is_dir()
+                and web_data_dir is not None
+                and web_data_dir.is_dir()
+            )
+
+            is_default_or_repo_target = False
+            try:
+                resolved_output = args.output.resolve()
+                repo_target_dirs: List[Path] = []
+                if root_data_dir and root_data_dir.exists():
+                    repo_target_dirs.append(root_data_dir.resolve())
+                if web_data_dir and web_data_dir.exists():
+                    repo_target_dirs.append(web_data_dir.resolve())
+
+                known_targets: Set[Path] = {
+                    DEFAULT_PRIMARY_OUTPUT.resolve(),
+                    DEFAULT_WEB_OUTPUT.resolve(),
+                    MIRROR_PRIMARY_OUTPUT.resolve(),
+                    MIRROR_WEB_OUTPUT.resolve(),
+                }
+                for ext in EXTERNAL_SYNC_TARGETS:
+                    try:
+                        known_targets.add(ext.resolve())
+                    except Exception:
+                        pass
+
+                if resolved_output in known_targets:
+                    is_default_or_repo_target = True
+                elif resolved_output.parent in repo_target_dirs:
+                    is_default_or_repo_target = True
+            except Exception:
+                is_default_or_repo_target = (args.output == DEFAULT_PRIMARY_OUTPUT)
+
+            auto_bidirectional = both_data_dirs_exist and is_default_or_repo_target
+
+            if args.sync_web or auto_bidirectional:
+                if args.sync_web and args.web_dir:
                     web_dir = Path(args.web_dir)
                     destinations.append(web_dir / "ev_subsidy_data.json")
                     destinations.append(web_dir / "subsidy_depletion_data.json")
                 else:
                     destinations.append(DEFAULT_WEB_OUTPUT)
                     destinations.append(MIRROR_WEB_OUTPUT)
+                    destinations.append(DEFAULT_PRIMARY_OUTPUT)
+                    destinations.append(MIRROR_PRIMARY_OUTPUT)
                     destinations.extend(EXTERNAL_SYNC_TARGETS)
 
             # Deduplicate destinations while preserving order
@@ -384,8 +457,8 @@ def main() -> int:
             for wp in written_paths:
                 logger.info("  ✓ Successfully written: %s", wp)
 
-            # Synchronize defect reports alongside subsidy data when syncing web
-            if args.sync_web or (args.sync_defects is True):
+            # Synchronize defect reports alongside subsidy data when syncing web or auto-bidirectional
+            if args.sync_web or auto_bidirectional or (args.sync_defects is True):
                 if getattr(args, "sync_defects", None) is not False:
                     sync_defect_reports(
                         web_dir=args.web_dir,
@@ -394,7 +467,12 @@ def main() -> int:
                     )
         else:
             logger.info("Dry-run requested: skipping file persistence.")
-            if args.sync_web or (args.sync_defects is True):
+            both_exist = (
+                ((_CURRENT_DIR / "data").is_dir() or (_CURRENT_DIR.parent / "data").is_dir())
+                and ((_CURRENT_DIR / "ev-stealth-web" / "src" / "data").is_dir() or (_CURRENT_DIR / "src" / "data").is_dir())
+            )
+            auto_bidirectional = both_exist and (args.output == DEFAULT_PRIMARY_OUTPUT)
+            if args.sync_web or auto_bidirectional or (args.sync_defects is True):
                 sync_defect_reports(web_dir=args.web_dir, dry_run=True, run_crawler=False)
 
         # Print executive summary briefing to stdout

@@ -59,6 +59,30 @@ const FALLBACK_MODEL: EvModelDepreciation = {
   key_cons_resale: '데이터 동기화 대기 중',
 };
 
+const FALLBACK_REPLACEMENT_TIER = {
+  tier_id: 'tier_2_standard',
+  segment_name: '중형 CUV / 세단 (표준)',
+  pack_size_kwh_nominal: 77.4,
+  pack_size_range: '65~85 kWh',
+  representative_models: ['아이오닉 5', 'EV6', 'Model Y'],
+  costs: {
+    new_pack_krw: 22_000_000,
+    new_pack_usd: 16_500,
+    reman_pack_krw: 14_000_000,
+    reman_pack_usd: 10_500,
+    labor_coolant_krw: 1_500_000,
+    labor_coolant_usd: 1_125,
+    total_new_installed_krw: 23_500_000,
+    total_new_installed_usd: 17_625,
+    total_reman_installed_krw: 15_500_000,
+    total_reman_installed_usd: 11_625,
+    cost_per_kwh_usd: 213,
+  },
+};
+
+// Maximum bounded cache entries for Arrhenius kinetics battery simulation
+const MAX_BATTERY_SIMULATION_CACHE_ENTRIES = 100;
+
 export default function DepreciationCalculatorClient({
   initialDatabase,
 }: DepreciationCalculatorClientProps) {
@@ -312,6 +336,14 @@ export default function DepreciationCalculatorClient({
       packCapacityKwh: selectedModel.battery_specs.capacity_kwh,
     });
 
+    // Bounded cache eviction: cap at 100 entries using FIFO eviction
+    if (batterySimulationCache.current.size >= MAX_BATTERY_SIMULATION_CACHE_ENTRIES) {
+      const oldestKey = batterySimulationCache.current.keys().next().value;
+      if (oldestKey !== undefined) {
+        batterySimulationCache.current.delete(oldestKey);
+      }
+    }
+
     batterySimulationCache.current.set(cacheKey, simResult);
     return simResult;
   }, [
@@ -327,12 +359,14 @@ export default function DepreciationCalculatorClient({
 
   // Matching full tier replacement cost info (with USD)
   const replacementCostTier = useMemo(() => {
-    const tiers = initialDatabase.battery_replacement_costs;
+    const tiers = Array.isArray(initialDatabase?.battery_replacement_costs)
+      ? initialDatabase.battery_replacement_costs
+      : [];
     const matched = tiers.find(
       (t) => t.tier_id === batteryHealth.replacementCostEstimate.tierId
     );
-    return matched || tiers[1];
-  }, [initialDatabase.battery_replacement_costs, batteryHealth.replacementCostEstimate.tierId]);
+    return matched || tiers[1] || tiers[0] || FALLBACK_REPLACEMENT_TIER;
+  }, [initialDatabase?.battery_replacement_costs, batteryHealth.replacementCostEstimate.tierId]);
 
   // C. Statutory Subsidy Clawback Calculation
   const clawbackResult = useMemo(() => {
@@ -759,7 +793,7 @@ export default function DepreciationCalculatorClient({
                 type="checkbox"
                 checked={winterSeason}
                 onChange={(e) => setWinterSeason(e.target.checked)}
-                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                className="w-4 h-4 rounded text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 aria-label="혹한기 저온 감가 및 열화 패널티 반영 여부"
               />
               <span>❄️ 혹한기(-5℃) 저온 패널티 반영</span>
@@ -882,7 +916,7 @@ export default function DepreciationCalculatorClient({
             <div className="text-[11px] text-slate-600 text-center font-medium bg-white py-1 rounded border border-slate-200 flex justify-around">
               <span>완속 {100 - dcfcRatio}%</span>
               <span className="text-slate-300">|</span>
-              <span className={dcfcRatio > 60 ? 'text-amber-700 font-bold' : ''}>
+              <span className={dcfcRatio > 60 ? 'text-amber-800 font-bold' : ''}>
                 급속 {dcfcRatio}%
               </span>
             </div>
@@ -949,7 +983,7 @@ export default function DepreciationCalculatorClient({
                 onChange={(e) => {
                   setCustomPriceInput(e.target.value);
                 }}
-                className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-right pr-8 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-right pr-8 bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 aria-label="차량 구매 가격 직접 입력 (원 단위)"
               />
               <span className="absolute right-3 top-2 text-xs text-slate-600">원</span>
@@ -1022,7 +1056,7 @@ export default function DepreciationCalculatorClient({
               {(depResult.estimatedResidualPriceKrw / 10000).toLocaleString()}{' '}
               <span className="text-sm font-semibold text-blue-700">만 원</span>
             </div>
-            <div className="text-[11px] text-blue-600 mt-1">
+            <div className="text-[11px] text-blue-800 font-semibold mt-1">
               신차 대비 {depResult.adjustedResidualPct}% 잔존
             </div>
           </div>
@@ -1687,7 +1721,7 @@ export default function DepreciationCalculatorClient({
                     name="transferTypeRadio"
                     checked={transferType === item.id}
                     onChange={() => setTransferType(item.id)}
-                    className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                    className="mt-0.5 text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                     aria-label={item.title}
                   />
                   <div>
@@ -1775,7 +1809,7 @@ export default function DepreciationCalculatorClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {initialDatabase.subsidy_clawback_schedule.tiers.map((tier) => {
+                  {(initialDatabase?.subsidy_clawback_schedule?.tiers || []).map((tier) => {
                     const isCurrentTier =
                       (tier.max_months_exclusive === null && heldMonths >= tier.min_months) ||
                       (tier.max_months_exclusive !== null &&

@@ -73,7 +73,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
   };
 
   const reports = useMemo<DefectReportWithTimestamp[]>(() => {
-    return (initialData.reports || []).map((r) => {
+    return (initialData?.reports || []).map((r) => {
       const rawDate = (r as unknown as { created_at?: string }).created_at || r.date;
       const parsed = rawDate ? new Date(rawDate).getTime() : 0;
       return {
@@ -81,10 +81,21 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         _timestamp: Number.isFinite(parsed) ? parsed : 0,
       };
     });
-  }, [initialData.reports]);
-  const safeScore = Number.isFinite(initialData.statistics.avg_negativity_score)
-    ? initialData.statistics.avg_negativity_score
-    : 0;
+  }, [initialData?.reports]);
+
+  const rawStats = initialData?.statistics;
+  const statistics = {
+    total_scraped: typeof rawStats?.total_scraped === 'number' ? rawStats.total_scraped : 0,
+    total_filtered_defects: typeof rawStats?.total_filtered_defects === 'number' ? rawStats.total_filtered_defects : 0,
+    avg_negativity_score: Number.isFinite(rawStats?.avg_negativity_score) ? (rawStats!.avg_negativity_score as number) : 0.85,
+    critical_defect_count: typeof rawStats?.critical_defect_count === 'number' ? rawStats.critical_defect_count : 0,
+    top_model: rawStats?.top_model || '미상',
+    top_platform: rawStats?.top_platform || '전체',
+  };
+
+  const safeScore = Number.isFinite(statistics.avg_negativity_score)
+    ? statistics.avg_negativity_score
+    : 0.85;
 
   // Calculate dynamic category counts
   const categoryCounts = useMemo(() => {
@@ -300,12 +311,12 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 text-xs text-slate-400">
             <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
               <span className="block text-slate-400 font-mono">PIPELINE VER</span>
-              <span className="font-semibold text-slate-200">v{initialData.pipeline_version}</span>
+              <span className="font-semibold text-slate-200">v{initialData?.pipeline_version || '1.0.0'}</span>
             </div>
             <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
               <span className="block text-slate-400 font-mono">LAST GENERATED</span>
               <ClientTimestamp
-                isoString={initialData.generated_at}
+                isoString={initialData?.generated_at}
                 className="font-semibold text-slate-200"
               />
             </div>
@@ -334,13 +345,13 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-3xl font-black text-slate-900">
-              {initialData.statistics.total_filtered_defects}
+              {statistics.total_filtered_defects}
             </span>
             <span className="text-sm font-semibold text-slate-700">건 분석</span>
           </div>
           <div className="mt-2 text-xs text-slate-700 flex items-center justify-between">
-            <span>스크랩 대상: {initialData.statistics.total_scraped}건</span>
-            <span className="text-blue-600 font-medium">유효율 {Math.round((initialData.statistics.total_filtered_defects / Math.max(initialData.statistics.total_scraped || 0, 1)) * 100)}%</span>
+            <span>스크랩 대상: {statistics.total_scraped}건</span>
+            <span className="text-blue-600 font-medium">유효율 {Math.round((statistics.total_filtered_defects / Math.max(statistics.total_scraped || 0, 1)) * 100)}%</span>
           </div>
         </div>
 
@@ -363,7 +374,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-3xl font-black text-rose-600">
-              {initialData.statistics.critical_defect_count}
+              {statistics.critical_defect_count}
             </span>
             <span className="text-sm font-bold text-rose-700">건 위험</span>
           </div>
@@ -431,12 +442,12 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             </div>
           </div>
           <div className="mt-3">
-            <div className="text-xl font-extrabold text-slate-900 truncate" title={initialData.statistics.top_model}>
-              {initialData.statistics.top_model}
+            <div className="text-xl font-extrabold text-slate-900 truncate" title={statistics.top_model}>
+              {statistics.top_model}
             </div>
             <div className="text-xs text-indigo-600 font-semibold mt-1 flex items-center gap-1">
               <span>출처:</span>
-              <span>{initialData.statistics.top_platform}</span>
+              <span>{statistics.top_platform}</span>
             </div>
           </div>
         </div>
@@ -657,7 +668,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                   <td>{report.severity}</td>
                   <td>{report.source}</td>
                   <td>
-                    <a href={report.url} target="_blank" rel="noopener noreferrer">
+                    <a href={report.url} target="_blank" rel="noopener noreferrer" tabIndex={-1} aria-hidden="true">
                       {report.title}
                     </a>
                   </td>
@@ -695,6 +706,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         </div>
       ) : (
         <div className="space-y-4">
+          <h2 className="sr-only">수집된 결함 제보 상세 목록</h2>
           {filteredReports.map((report: DefectReportItem) => (
             <div
               key={report.id}
@@ -732,7 +744,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
               {/* Title */}
               <div>
-                <h2 className="text-base md:text-lg font-extrabold text-slate-900 hover:text-blue-600 transition">
+                <h3 className="text-base md:text-lg font-extrabold text-slate-900 hover:text-blue-600 transition">
                   <a
                     href={report.url}
                     target="_blank"
@@ -742,7 +754,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                     {report.title}
                     <span className="sr-only"> (새 창에서 열림)</span>
                   </a>
-                </h2>
+                </h3>
               </div>
 
               {/* Defect Summary */}
@@ -802,7 +814,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                       style={{ width: `${Math.round(report.sentiment_score * 100)}%` }}
                     />
                   </div>
-                  <span className="font-bold text-rose-600 font-mono">
+                  <span className="font-bold text-rose-700 font-mono">
                     {Math.round(report.sentiment_score * 100)}%
                   </span>
                 </div>

@@ -304,8 +304,8 @@ class TestTypeScriptMathAdversarialInputs(unittest.TestCase):
         self.assertEqual(res["ratioExact85M"], 0.0)
         self.assertEqual(res["ratioAbove85M"], 0.0)
 
-        # Infinities & non-finites are caught by !Number.isFinite guard and return 1.0
-        self.assertEqual(res["ratioPosInf"], 1.0)
+        # Positive Infinity is capped at luxury exclusion 0.0; negative infinity caught by non-finite/negative guard returning 1.0
+        self.assertEqual(res["ratioPosInf"], 0.0)
         self.assertEqual(res["ratioNegInf"], 1.0)
 
         _assert_no_none_or_nan(self, res)

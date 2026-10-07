@@ -414,7 +414,7 @@ class SubsidyTracker:
         if not p.exists():
             return None
         try:
-            ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
             quarantine_path = p.with_name(f"{p.stem}.corrupt_{ts}{p.suffix}")
             p.rename(quarantine_path)
             logger.warning("Quarantined corrupted cache file: %s -> %s", p, quarantine_path)

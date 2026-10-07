@@ -30,6 +30,17 @@ const BRAND_SYNONYMS: Record<string, string> = {
   porsche: '포르쉐',
 };
 
+// Distinct cell supplier list for filter chips (hoisted to module scope to avoid re-allocation on render)
+const supplierFilters = [
+  { key: 'ALL', label: '전체' },
+  { key: '파라시스', label: '파라시스(Farasis)' },
+  { key: 'LG', label: 'LG에너지솔루션' },
+  { key: 'SK', label: 'SK온' },
+  { key: '삼성', label: '삼성SDI' },
+  { key: 'CATL', label: 'CATL' },
+  { key: 'BYD', label: 'BYD FinDreams' },
+];
+
 function resolveBrand(inputBrand: string, availableBrands: string[]): string | undefined {
   const normalized = inputBrand.trim().toLowerCase();
   const direct = availableBrands.find((b) => b.toLowerCase() === normalized);
@@ -84,14 +95,14 @@ function resolveModelAndBrand(
 
     // Collect all candidate items with their brand and model
     const candidates: Array<{ brand: string; model: string }> = [];
-    initialDatabase.battery_profiles.forEach((p) =>
+    (initialDatabase?.battery_profiles || []).forEach((p) =>
       candidates.push({ brand: p.brand, model: p.model_name })
     );
-    initialDatabase.vin_prefixes.forEach((vp) =>
+    (initialDatabase?.vin_prefixes || []).forEach((vp) =>
       candidates.push({ brand: vp.brand, model: vp.model_name })
     );
-    initialDatabase.recalls.forEach((r) => {
-      r.target_model.split(',').forEach((mStr) => {
+    (initialDatabase?.recalls || []).forEach((r) => {
+      (r.target_model || '').split(',').forEach((mStr) => {
         candidates.push({ brand: r.brand, model: mStr.trim() });
       });
     });
@@ -263,6 +274,32 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     [selectedBrand, initialDatabase]
   );
 
+  // Defensive fallbacks for database collections and metadata
+  const batteryProfiles = useMemo(
+    () => (Array.isArray(initialDatabase?.battery_profiles) ? initialDatabase.battery_profiles : []),
+    [initialDatabase?.battery_profiles]
+  );
+  const recalls = useMemo(
+    () => (Array.isArray(initialDatabase?.recalls) ? initialDatabase.recalls : []),
+    [initialDatabase?.recalls]
+  );
+  const vinPrefixes = useMemo(
+    () => (Array.isArray(initialDatabase?.vin_prefixes) ? initialDatabase.vin_prefixes : []),
+    [initialDatabase?.vin_prefixes]
+  );
+  const metadata = useMemo(
+    () =>
+      initialDatabase?.metadata ?? {
+        version: '1.0',
+        updated_at: '',
+        total_campaigns: 0,
+        total_affected_vehicles_kdm: 0,
+        active_fire_campaigns: 0,
+        ota_remedy_rate_pct: 0,
+      },
+    [initialDatabase?.metadata]
+  );
+
   // Handler for query parameter auto-selection (?model=..., ?brand=...)
   const handleSelectFromParams = useCallback(
     (brand: string, model: string, year?: number) => {
@@ -339,7 +376,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
   // Filtered Battery Safety Profiles (deferred search)
   const filteredBatteryProfiles = useMemo(() => {
     const q = deferredBatterySearch.trim().toLowerCase();
-    return initialDatabase.battery_profiles.filter((profile) => {
+    return batteryProfiles.filter((profile) => {
       const matchesSearch =
         q === '' ||
         profile.model_name.toLowerCase().includes(q) ||
@@ -356,12 +393,12 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
       return matchesSearch && matchesSupplier && matchesStatus;
     });
-  }, [initialDatabase.battery_profiles, deferredBatterySearch, selectedSupplierFilter, selectedFireStatusFilter]);
+  }, [batteryProfiles, deferredBatterySearch, selectedSupplierFilter, selectedFireStatusFilter]);
 
   // Filtered Recalls (deferred search)
   const filteredRecalls = useMemo(() => {
     const q = deferredRecallSearch.trim().toLowerCase();
-    return initialDatabase.recalls.filter((r) => {
+    return recalls.filter((r) => {
       const matchesSearch =
         q === '' ||
         r.campaign_no.toLowerCase().includes(q) ||
@@ -374,18 +411,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
       return matchesSearch && matchesRisk && matchesRemedy;
     });
-  }, [initialDatabase.recalls, deferredRecallSearch, selectedRiskFilter, selectedRemedyFilter]);
-
-  // Distinct cell supplier list for filter chips
-  const supplierFilters = [
-    { key: 'ALL', label: '전체' },
-    { key: '파라시스', label: '파라시스(Farasis)' },
-    { key: 'LG', label: 'LG에너지솔루션' },
-    { key: 'SK', label: 'SK온' },
-    { key: '삼성', label: '삼성SDI' },
-    { key: 'CATL', label: 'CATL' },
-    { key: 'BYD', label: 'BYD FinDreams' },
-  ];
+  }, [recalls, deferredRecallSearch, selectedRiskFilter, selectedRemedyFilter]);
 
   // Active VIN error state for accessible form feedback
   const vinError = vinTouched && vinInput.length > 0 && !vinValidation.valid ? vinValidation.error : '';
@@ -471,7 +497,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
             <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm">
               <span className="text-xs text-slate-400 font-medium">분석 리콜 캠페인</span>
               <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
-                {initialDatabase.metadata.total_campaigns}
+                {metadata.total_campaigns}
                 <span className="text-xs font-normal text-slate-400 ml-1">건 (정부 공시)</span>
               </div>
             </div>
@@ -479,7 +505,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
             <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm">
               <span className="text-xs text-slate-400 font-medium">국내(KDM) 대상 차량</span>
               <div className="text-xl sm:text-2xl font-black text-amber-400 mt-0.5">
-                {initialDatabase.metadata.total_affected_vehicles_kdm.toLocaleString()}
+                {metadata.total_affected_vehicles_kdm.toLocaleString()}
                 <span className="text-xs font-normal text-slate-400 ml-1">대</span>
               </div>
             </div>
@@ -487,7 +513,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
             <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm">
               <span className="text-xs text-slate-400 font-medium">긴급 화재 특별주의보</span>
               <div className="text-xl sm:text-2xl font-black text-red-400 mt-0.5">
-                {initialDatabase.metadata.active_fire_campaigns}
+                {metadata.active_fire_campaigns}
                 <span className="text-xs font-normal text-slate-400 ml-1">개 차종</span>
               </div>
             </div>
@@ -495,7 +521,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
             <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm">
               <span className="text-xs text-slate-400 font-medium">OTA 무선 조치 지원율</span>
               <div className="text-xl sm:text-2xl font-black text-emerald-400 mt-0.5">
-                {initialDatabase.metadata.ota_remedy_rate_pct}
+                {metadata.ota_remedy_rate_pct}
                 <span className="text-xs font-normal text-slate-400 ml-1">% (방문 불필요)</span>
               </div>
             </div>
@@ -590,10 +616,10 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                         setVinTouched(true);
                       }}
                       placeholder="예: KM8KN4AE4NU123456 또는 W1K295112PF123456"
-                      className={`w-full bg-slate-900 border rounded-xl px-4 py-3.5 text-base font-mono tracking-wider text-white placeholder-slate-400 focus:outline-none focus:ring-2 transition ${
+                      className={`w-full bg-slate-900 border rounded-xl px-4 py-3.5 text-base font-mono tracking-wider text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus-visible:ring-2 transition ${
                         vinError
-                          ? 'border-red-500 focus:ring-red-500/50'
-                          : 'border-slate-700 focus:ring-blue-500/50 focus:border-blue-500'
+                          ? 'border-red-500 focus:ring-red-500/50 focus-visible:ring-red-500/50'
+                          : 'border-slate-700 focus:ring-blue-500/50 focus-visible:ring-blue-500/50 focus:border-blue-500'
                       }`}
                     />
                     <div className="absolute right-3 top-3.5 text-xs font-mono text-slate-400">
@@ -656,7 +682,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   <span className="text-[11px] text-slate-400">실제 KDM 출고 규격</span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                  {initialDatabase.vin_prefixes.slice(0, 6).map((item) => (
+                  {vinPrefixes.slice(0, 6).map((item) => (
                     <button
                       key={item.prefix}
                       type="button"
@@ -698,7 +724,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                         const models = getModelsForBrand(newBrand, initialDatabase);
                         setSelectedModel(models[0] || '');
                       }}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                     >
                       {availableBrands.map((b) => (
                         <option key={b} value={b}>
@@ -717,7 +743,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       id="model-select"
                       value={selectedModel}
                       onChange={(e) => setSelectedModel(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                     >
                       {availableModels.map((m) => (
                         <option key={m} value={m}>
@@ -736,7 +762,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       id="year-select"
                       value={selectedYear}
                       onChange={(e) => setSelectedYear(e.target.value ? Number(e.target.value) : '')}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                     >
                       <option value="">전체 연식 확인</option>
                       {[2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018].map((yr) => (
@@ -796,14 +822,14 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                           : '안전 검증 완료'}
                       </span>
                       <span className="text-xs text-slate-300">
-                        조회 일시: {new Date(checkResult.timestamp).toLocaleDateString('ko-KR')}
+                        조회 일시: {isNaN(new Date(checkResult.timestamp).getTime()) ? '최근' : new Date(checkResult.timestamp).toLocaleDateString('ko-KR')}
                       </span>
                     </div>
 
-                    <h3 className="text-xl sm:text-2xl font-black mt-1">
+                    <h2 className="text-xl sm:text-2xl font-black mt-1">
                       {checkResult.decodedBrand} {checkResult.decodedModel}{' '}
                       {checkResult.decodedYear ? `${checkResult.decodedYear}년식` : ''} 판정 결과
-                    </h3>
+                    </h2>
 
                     <p className="text-sm text-slate-200 mt-1 max-w-3xl leading-relaxed">
                       {checkResult.hasFireRisk
@@ -839,9 +865,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">
                       배터리 공급사 및 셀 상세 정보
                     </span>
-                    <h4 className="text-lg font-bold text-white mt-0.5">
+                    <h3 className="text-lg font-bold text-white mt-0.5">
                       {checkResult.batteryProfile.model_name} 배터리 안전 제원
-                    </h4>
+                    </h3>
                   </div>
                   <div className="flex items-center gap-2">
                     <span
@@ -901,9 +927,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
             {/* Matched Recall Campaign Cards */}
             <div className="space-y-4">
-              <h4 className="text-lg font-bold text-white flex items-center gap-2">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <span>해당 차종 대상 정부 공시 리콜 세부 내역 ({checkResult.recalls.length}건)</span>
-              </h4>
+              </h3>
 
               {checkResult.recalls.length === 0 ? (
                 <div className="bg-slate-950 border border-slate-800 rounded-xl p-8 text-center text-slate-400">
@@ -947,9 +973,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                             </span>
                           </div>
 
-                          <h5 className="text-base sm:text-lg font-bold text-white pt-1">
+                          <h4 className="text-base sm:text-lg font-bold text-white pt-1">
                             {campaign.defect_title}
-                          </h5>
+                          </h4>
                           <div className="text-xs text-slate-400">
                             대상: <strong className="text-slate-200">{campaign.target_model}</strong> (
                             {campaign.target_model_years}) | 대상 대수: 약{' '}
@@ -1044,7 +1070,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 <span className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
                   전기차 차종별 배터리 실명제 공시 대장
                 </span>
-                <span className="text-xs text-slate-400">총 {initialDatabase.battery_profiles.length}개 차종</span>
+                <span className="text-xs text-slate-400">총 {batteryProfiles.length}개 차종</span>
               </div>
               <h2 className="text-xl sm:text-2xl font-bold text-white">
                 🔋 전기차 배터리 제조사 & 지하주차장 안전 가이드
@@ -1062,7 +1088,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 onChange={(e) => setBatterySearch(e.target.value)}
                 aria-label="배터리 제조사 및 모델 검색"
                 placeholder="모델명, 제조사, 배터리명 검색..."
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
               />
             </div>
           </div>
@@ -1200,7 +1226,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 onChange={(e) => setRecallSearch(e.target.value)}
                 aria-label="전기차 리콜 캠페인 검색"
                 placeholder="리콜번호, 제목, 차종 검색..."
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
               />
             </div>
           </div>

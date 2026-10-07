@@ -211,9 +211,11 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
 export function getAllEnrichedModels(data?: ReliabilityTrendsDatabase): EnrichedModelItem[] {
   const db = data || getReliabilityTrendsData();
   const result: EnrichedModelItem[] = [];
+  const brands = Array.isArray(db?.brands) ? db.brands : [];
 
-  for (const brand of db.brands) {
-    for (const model of brand.models) {
+  for (const brand of brands) {
+    const models = Array.isArray(brand?.models) ? brand.models : [];
+    for (const model of models) {
       result.push({
         ...model,
         brand_name_ko: brand.name_ko,

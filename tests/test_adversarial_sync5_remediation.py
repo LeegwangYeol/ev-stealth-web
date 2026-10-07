@@ -472,7 +472,9 @@ class TestBug03RunTrackerRelativePathResolution(unittest.TestCase):
 
     def test_relative_output_path_equality_with_default(self):
         """Path('data/ev_subsidy_data.json') resolved against execution base must match DEFAULT_PRIMARY_OUTPUT.resolve()."""
-        if (run_tracker._CURRENT_DIR / "src" / "data").exists():
+        if (run_tracker._CURRENT_DIR / "data").exists() and (run_tracker._CURRENT_DIR / "ev-stealth-web").exists():
+            resolved = (REPO_ROOT / "data" / "ev_subsidy_data.json").resolve()
+        elif (run_tracker._CURRENT_DIR / "src" / "data").exists():
             resolved = (run_tracker._CURRENT_DIR / "src" / "data" / "ev_subsidy_data.json").resolve()
         else:
             resolved = (REPO_ROOT / "data" / "ev_subsidy_data.json").resolve()

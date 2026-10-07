@@ -174,7 +174,7 @@ export default function RootLayout({
             </details>
           </div>
         </header>
-        <main id="main-content" className="max-w-6xl mx-auto p-6 min-h-screen">
+        <main id="main-content" tabIndex={-1} className="max-w-6xl mx-auto p-6 min-h-screen outline-none focus:outline-none">
           {children}
         </main>
         <footer className="bg-gray-200 text-center p-6 text-sm text-gray-600">
