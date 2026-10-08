@@ -66,6 +66,10 @@ def atomic_write_json(
             tf.flush()
             os.fsync(tf.fileno())
 
+        try:
+            os.chmod(temp_name, 0o644)
+        except OSError:
+            pass
         os.replace(temp_name, dest)
         temp_name = None  # Replaced successfully
         logger.debug("Atomically wrote %s", dest)

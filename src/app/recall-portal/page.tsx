@@ -3,6 +3,8 @@ import type { Metadata } from 'next';
 import { getRecallDatabase } from '@/lib/getRecallData';
 import RecallPortalClient from './RecallPortalClient';
 
+export const dynamic = 'force-static';
+
 export const metadata: Metadata = {
   title: '전기차 공식 리콜 & 배터리 제조사 화재 안전 포털 | Global EV Hub',
   description:

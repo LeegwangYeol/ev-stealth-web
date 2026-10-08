@@ -145,14 +145,14 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
         // Search query filter
         if (query) {
-          const matchTitle = report.title.toLowerCase().includes(query);
-          const matchSummary = report.summary.toLowerCase().includes(query);
-          const matchQuote = report.verbatim_quote.toLowerCase().includes(query);
-          const matchModel = report.vehicle_model.toLowerCase().includes(query);
-          const matchCategory = report.defect_category_ko.toLowerCase().includes(query);
-          const matchSlang = report.slang_tags.some((tag) =>
-            tag.toLowerCase().includes(query)
-          );
+          const matchTitle = (report.title || '').toLowerCase().includes(query);
+          const matchSummary = (report.summary || '').toLowerCase().includes(query);
+          const matchQuote = (report.verbatim_quote || '').toLowerCase().includes(query);
+          const matchModel = (report.vehicle_model || '').toLowerCase().includes(query);
+          const matchCategory = (report.defect_category_ko || '').toLowerCase().includes(query);
+          const matchSlang = report.slang_tags?.some((tag) =>
+            typeof tag === 'string' && tag.toLowerCase().includes(query)
+          ) ?? false;
 
           if (
             !matchTitle &&
@@ -475,7 +475,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               onChange={(e) => setSearchQuery(e.target.value)}
               aria-label="전기차 결함 제보 및 은어 검색"
               placeholder="제목, 요약, 실차주 원문 코멘트, 차종, 은어(#ICCU폭탄 등) 실시간 검색..."
-              className="w-full pl-10 pr-10 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+              className="w-full pl-10 pr-10 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition"
             />
             {searchQuery && (
               <button
@@ -784,7 +784,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 {/* Slang Tags */}
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-slate-700 font-semibold mr-1">감지된 은어/키워드:</span>
-                  {report.slang_tags.map((tag, idx) => (
+                  {(report.slang_tags || []).map((tag, idx) => (
                     <button
                       key={`${tag}-${idx}`}
                       type="button"

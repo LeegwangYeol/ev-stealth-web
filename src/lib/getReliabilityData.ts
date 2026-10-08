@@ -180,17 +180,27 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
       : [];
 
     const brands = Array.isArray(data.brands)
-      ? data.brands.map((b) => ({
-          ...b,
-          models: Array.isArray(b.models)
-            ? b.models.map((m) => ({
-                ...m,
-                year_evaluations: Array.isArray(m.year_evaluations)
-                  ? m.year_evaluations
-                  : [],
-              }))
-            : [],
-        }))
+      ? data.brands
+          .filter((b): b is BrandReliability => Boolean(b && typeof b === 'object'))
+          .map((b) => ({
+            ...b,
+            category_distribution:
+              b.category_distribution && typeof b.category_distribution === 'object'
+                ? b.category_distribution
+                : ({} as Record<DefectCategoryKey, { count: number; percentage: number }>),
+            models: Array.isArray(b.models)
+              ? b.models
+                  .filter((m): m is ModelReliability => Boolean(m && typeof m === 'object'))
+                  .map((m) => ({
+                    ...m,
+                    year_evaluations: Array.isArray(m.year_evaluations)
+                      ? m.year_evaluations.filter(
+                          (y): y is YearEvaluation => Boolean(y && typeof y === 'object')
+                        )
+                      : [],
+                  }))
+              : [],
+          }))
       : [];
 
     return {
@@ -214,13 +224,18 @@ export function getAllEnrichedModels(data?: ReliabilityTrendsDatabase): Enriched
   const brands = Array.isArray(db?.brands) ? db.brands : [];
 
   for (const brand of brands) {
-    const models = Array.isArray(brand?.models) ? brand.models : [];
+    if (!brand || typeof brand !== 'object') continue;
+    const models = Array.isArray(brand.models) ? brand.models : [];
     for (const model of models) {
+      if (!model || typeof model !== 'object') continue;
       result.push({
         ...model,
-        brand_name_ko: brand.name_ko,
-        brand_name_en: brand.name_en,
-        brand_country: brand.country,
+        year_evaluations: Array.isArray(model.year_evaluations)
+          ? model.year_evaluations.filter((y) => Boolean(y && typeof y === 'object'))
+          : [],
+        brand_name_ko: brand.name_ko || '',
+        brand_name_en: brand.name_en || '',
+        brand_country: brand.country || '',
       });
     }
   }
@@ -349,3 +364,56 @@ export function getGradeBadgeStyle(grade: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F'): {
       return { bg: 'bg-slate-100', text: 'text-slate-800', border: 'border-slate-300' };
   }
 }
+
+/**
+ * Finds a specific model by ID from the reliability trends dataset,
+ * gracefully handling missing, null, or malformed defect records.
+ */
+export function getModelReliabilityById(
+  modelId: string,
+  data?: ReliabilityTrendsDatabase
+): EnrichedModelItem | undefined {
+  if (!modelId || typeof modelId !== 'string') return undefined;
+  const normalized = modelId.trim().toLowerCase().replace(/[\s\-_]+/g, '');
+  if (!normalized) return undefined;
+  const allModels = getAllEnrichedModels(data);
+  return allModels.find((m) => {
+    const mIdNorm = (m?.id || '').toLowerCase().replace(/[\s\-_]+/g, '');
+    const mNameNorm = (m?.name || '').toLowerCase().replace(/[\s\-_]+/g, '');
+    return mIdNorm === normalized || mNameNorm.includes(normalized) || normalized.includes(mIdNorm);
+  });
+}
+
+/**
+ * Returns all year evaluations / defect records for a specific model,
+ * ensuring the returned array is safe, non-null, and filtered of malformed entries.
+ */
+export function getDefectsForModel(
+  modelId: string,
+  data?: ReliabilityTrendsDatabase
+): YearEvaluation[] {
+  const model = getModelReliabilityById(modelId, data);
+  if (!model || !Array.isArray(model.year_evaluations)) return [];
+  return model.year_evaluations.filter((y) => Boolean(y && typeof y === 'object' && y.verdict));
+}
+
+/**
+ * Finds a specific brand by ID or name from the reliability dataset.
+ */
+export function getBrandReliabilityById(
+  brandId: string,
+  data?: ReliabilityTrendsDatabase
+): BrandReliability | undefined {
+  if (!brandId || typeof brandId !== 'string') return undefined;
+  const normalized = brandId.trim().toLowerCase();
+  if (!normalized) return undefined;
+  const db = data || getReliabilityTrendsData();
+  const brands = Array.isArray(db?.brands) ? db.brands : [];
+  return brands.find(
+    (b) =>
+      (b?.id && b.id.toLowerCase() === normalized) ||
+      (b?.name_ko && b.name_ko.toLowerCase().includes(normalized)) ||
+      (b?.name_en && b.name_en.toLowerCase().includes(normalized))
+  );
+}
+

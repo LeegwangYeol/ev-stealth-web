@@ -42,20 +42,25 @@ const supplierFilters = [
 ];
 
 function resolveBrand(inputBrand: string, availableBrands: string[]): string | undefined {
+  if (!inputBrand || typeof inputBrand !== 'string' || !Array.isArray(availableBrands)) {
+    return undefined;
+  }
   const normalized = inputBrand.trim().toLowerCase();
-  const direct = availableBrands.find((b) => b.toLowerCase() === normalized);
+  if (!normalized) return undefined;
+
+  const direct = availableBrands.find((b) => b && typeof b === 'string' && b.toLowerCase() === normalized);
   if (direct) return direct;
 
   const synonym = Object.prototype.hasOwnProperty.call(BRAND_SYNONYMS, normalized)
     ? BRAND_SYNONYMS[normalized]
     : undefined;
   if (typeof synonym === 'string') {
-    const synonymMatch = availableBrands.find((b) => b.toLowerCase() === synonym.toLowerCase());
+    const synonymMatch = availableBrands.find((b) => b && typeof b === 'string' && b.toLowerCase() === synonym.toLowerCase());
     if (synonymMatch) return synonymMatch;
   }
 
   const partial = availableBrands.find(
-    (b) => b.toLowerCase().includes(normalized) || normalized.includes(b.toLowerCase())
+    (b) => b && typeof b === 'string' && (b.toLowerCase().includes(normalized) || normalized.includes(b.toLowerCase()))
   );
   if (partial) return partial;
 

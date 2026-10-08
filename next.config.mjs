@@ -8,7 +8,7 @@ const nextConfig = {
     removeConsole:
       process.env.NODE_ENV === 'production'
         ? {
-            exclude: ['error'],
+            exclude: ['error', 'warn'],
           }
         : false,
   },
@@ -29,10 +29,22 @@ const nextConfig = {
             key: 'Referrer-Policy',
             value: 'strict-origin-when-cross-origin',
           },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=()',
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block',
+          },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=63072000; includeSubDomains; preload',
+          },
         ],
       },
       {
-        source: '/:all*(svg|jpg|jpeg|png|webp|avif|ico|woff|woff2|ttf|otf)',
+        source: '/:all*\\.(svg|ico|png|jpg|jpeg|webp|woff|woff2|ttf|otf|css|js)',
         headers: [
           {
             key: 'Cache-Control',

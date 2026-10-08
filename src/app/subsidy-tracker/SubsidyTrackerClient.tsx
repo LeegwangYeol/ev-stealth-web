@@ -108,13 +108,22 @@ const RegionCard = React.memo(function RegionCard({
   toggleRegionExpand,
   onSelectForCalc,
 }: RegionCardProps) {
-  const cat: CategoryMetrics = region.categories[selectedCategory];
+  const cat: CategoryMetrics = region?.categories?.[selectedCategory] ?? {
+    status: 'available',
+    announced_units: 0,
+    delivered_units: 0,
+    depletion_rate: 0,
+    remaining_units: 0,
+    applied_units: 0,
+    max_local_subsidy_krw: 0,
+    max_total_subsidy_krw: 0,
+  };
 
-  const safeAnnounced = Number.isFinite(cat.announced_units) && cat.announced_units > 0 ? cat.announced_units : 1;
-  const safeDelivered = Number.isFinite(cat.delivered_units) ? cat.delivered_units : 0;
-  const safeDepletion = Number.isFinite(cat.depletion_rate) ? cat.depletion_rate : 0;
-  const safeRemaining = Number.isFinite(cat.remaining_units) ? cat.remaining_units : 0;
-  const safeApplied = Number.isFinite(cat.applied_units) ? cat.applied_units : 0;
+  const safeAnnounced = Number.isFinite(cat?.announced_units) && cat.announced_units > 0 ? cat.announced_units : 1;
+  const safeDelivered = Number.isFinite(cat?.delivered_units) ? cat.delivered_units : 0;
+  const safeDepletion = Number.isFinite(cat?.depletion_rate) ? cat.depletion_rate : 0;
+  const safeRemaining = Number.isFinite(cat?.remaining_units) ? cat.remaining_units : 0;
+  const safeApplied = Number.isFinite(cat?.applied_units) ? cat.applied_units : 0;
 
   const rawDeliveredPct = Math.round((safeDelivered / safeAnnounced) * 100);
   const deliveredPct = Number.isFinite(rawDeliveredPct) ? Math.min(100, Math.max(0, rawDeliveredPct)) : 0;
@@ -134,8 +143,8 @@ const RegionCard = React.memo(function RegionCard({
             </div>
             <div className="text-xs text-slate-400">{region.name_en}</div>
           </div>
-          <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${getBadgeStyle(cat.status)}`}>
-            {getStatusLabel(cat.status)}
+          <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${getBadgeStyle(cat?.status || 'available')}`}>
+            {getStatusLabel(cat?.status || 'available')}
           </span>
         </div>
 
@@ -156,7 +165,7 @@ const RegionCard = React.memo(function RegionCard({
             aria-valuemin={0}
             aria-valuemax={100}
             aria-label={`${region.name_ko} ${selectedCategory === 'passenger' ? '전기승용' : selectedCategory === 'commercial' ? '전기화물' : '전기승합'} 보조금 소진율`}
-            aria-valuetext={`소진율 ${safeDepletion.toFixed(1)}% (${getStatusLabel(cat.status)}), 잔여 ${safeRemaining.toLocaleString()}대`}
+            aria-valuetext={`소진율 ${safeDepletion.toFixed(1)}% (${getStatusLabel(cat?.status || 'available')}), 잔여 ${safeRemaining.toLocaleString()}대`}
             className="w-full bg-slate-950 rounded-full h-3.5 overflow-hidden flex relative border border-slate-800"
           >
             {/* Layer 1: Confirmed Delivered */}
@@ -200,13 +209,13 @@ const RegionCard = React.memo(function RegionCard({
           <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
             <div className="text-[11px] text-slate-400">지자체 최대 지원금</div>
             <div className="text-sm font-bold text-slate-200 mt-0.5">
-              {(cat.max_local_subsidy_krw / 10000).toLocaleString()}만 원
+              {((Number.isFinite(cat?.max_local_subsidy_krw) ? cat.max_local_subsidy_krw : 0) / 10000).toLocaleString()}만 원
             </div>
           </div>
           <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
             <div className="text-[11px] text-slate-400">국비+지방비 합산 최대</div>
             <div className="text-sm font-bold text-amber-400 mt-0.5">
-              {(cat.max_total_subsidy_krw / 10000).toLocaleString()}만 원
+              {((Number.isFinite(cat?.max_total_subsidy_krw) ? cat.max_total_subsidy_krw : 0) / 10000).toLocaleString()}만 원
             </div>
           </div>
         </div>
@@ -250,7 +259,7 @@ const RegionCard = React.memo(function RegionCard({
                 aria-label={`${region.name_ko} 세부 시·군·구 보조금 현황 목록`}
                 className="mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               >
-                {region.municipalities.map((muni) => (
+                {(region.municipalities || []).map((muni) => (
                   <div
                     key={muni.name_ko}
                     className="p-2 rounded bg-slate-950 border border-slate-800 flex items-center justify-between text-[11px]"
@@ -258,13 +267,13 @@ const RegionCard = React.memo(function RegionCard({
                     <div>
                       <span className="font-semibold text-slate-200">{muni.name_ko}</span>
                       <span className="text-slate-400 ml-2">
-                        {(muni.local_subsidy_krw / 10000).toLocaleString()}만 원
+                        {((Number.isFinite(muni.local_subsidy_krw) ? muni.local_subsidy_krw : 0) / 10000).toLocaleString()}만 원
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-slate-400">잔여 {muni.remaining_units}대</span>
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${getBadgeStyle(muni.status)}`}>
-                        {getStatusLabel(muni.status)} {muni.depletion_rate.toFixed(1)}%
+                      <span className="text-slate-400">잔여 {muni.remaining_units ?? 0}대</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${getBadgeStyle(muni.status || 'available')}`}>
+                        {getStatusLabel(muni.status || 'available')} {(Number.isFinite(muni.depletion_rate) ? muni.depletion_rate : 0).toFixed(1)}%
                       </span>
                     </div>
                   </div>
@@ -331,9 +340,14 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
   }, [regions, selectedRegionId]);
 
   const calculationResult = useMemo(() => {
-    const customMsrpNum = isCustomMsrp && customMsrpInput ? parseInt(customMsrpInput.replace(/[^0-9]/g, ''), 10) : undefined;
+    let customMsrpNum: number | undefined = undefined;
+    if (isCustomMsrp) {
+      const cleaned = (customMsrpInput || '').replace(/[^0-9]/g, '');
+      const parsed = cleaned ? parseInt(cleaned, 10) : NaN;
+      customMsrpNum = Number.isFinite(parsed) && parsed > 0 ? parsed : (activeModel?.base_price_krw ?? 0);
+    }
     return calculateNetSubsidy(selectedModelId, selectedRegionId, customMsrpNum, calcOptions);
-  }, [selectedModelId, selectedRegionId, isCustomMsrp, customMsrpInput, calcOptions]);
+  }, [selectedModelId, selectedRegionId, isCustomMsrp, customMsrpInput, activeModel?.base_price_krw, calcOptions]);
 
   return (
     <section
@@ -462,7 +476,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                     type="text"
                     inputMode="numeric"
                     aria-label="직접 차량 출고가 입력"
-                    value={customMsrpInput ? parseInt(customMsrpInput, 10).toLocaleString('ko-KR') : ''}
+                    value={customMsrpInput && Number.isFinite(parseInt(customMsrpInput, 10)) ? parseInt(customMsrpInput, 10).toLocaleString('ko-KR') : ''}
                     onChange={(e) => setCustomMsrpInput(e.target.value.replace(/[^0-9]/g, ''))}
                     placeholder="원 단위 출고가 입력 (예: 54,900,000)"
                     className="w-full py-2.5 px-3.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 pr-12"

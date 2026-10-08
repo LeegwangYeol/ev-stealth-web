@@ -266,6 +266,10 @@ def write_daily_reports(
             tf.flush()
             os.fsync(tf.fileno())
 
+        try:
+            os.chmod(temp_name, 0o644)
+        except OSError:
+            pass
         os.replace(temp_name, output_path)
         temp_name = None
     finally:

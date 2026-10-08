@@ -774,15 +774,17 @@ export function getModelById(id: string): EvModelDepreciation | undefined {
  */
 export function getAllBrands(): { id: string; name_ko: string; name_en: string; count: number }[] {
   const brandMap = new Map<string, { id: string; name_ko: string; name_en: string; count: number }>();
-  for (const model of DATABASE.models) {
+  const models = Array.isArray(DATABASE?.models) ? DATABASE.models : [];
+  for (const model of models) {
+    if (!model?.brand_id) continue;
     const existing = brandMap.get(model.brand_id);
     if (existing) {
       existing.count += 1;
     } else {
       brandMap.set(model.brand_id, {
         id: model.brand_id,
-        name_ko: model.brand_name_ko,
-        name_en: model.brand_name_en,
+        name_ko: model.brand_name_ko || model.brand_id,
+        name_en: model.brand_name_en || model.brand_id,
         count: 1,
       });
     }
@@ -794,14 +796,14 @@ export function getAllBrands(): { id: string; name_ko: string; name_en: string; 
  * Returns the battery replacement costs across capacity tiers.
  */
 export function getBatteryReplacementCosts(): BatteryReplacementTier[] {
-  return DATABASE.battery_replacement_costs;
+  return DATABASE.battery_replacement_costs || [];
 }
 
 /**
  * Returns the statutory subsidy clawback schedule tiers.
  */
 export function getClawbackSchedule(): ClawbackTier[] {
-  return DATABASE.subsidy_clawback_schedule.tiers;
+  return DATABASE.subsidy_clawback_schedule?.tiers || [];
 }
 
 /**
@@ -1040,7 +1042,7 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
   const safeTempC = Number.isFinite(ambientTempC) ? ambientTempC : 25.0;
   const safeStorageSoc = Number.isFinite(storageSoc) ? clamp(storageSoc, 0.0, 1.0) : 0.50;
   const safeDcfcRatio = Number.isFinite(dcfcRatio) ? clamp(dcfcRatio, 0.0, 1.0) : 0.25;
-  const tempK = safeTempC + 273.15;
+  const tempK = Math.max(1.0, safeTempC + 273.15);
 
   const arrheniusFactor = Math.exp(
     (-chemProfile.calendar_arrhenius_ea_j_mol / R_GAS) * (1.0 / tempK - 1.0 / T_REF_K)

@@ -321,6 +321,9 @@ export default function DepreciationCalculatorClient({
 
     const cached = batterySimulationCache.current.get(cacheKey);
     if (cached) {
+      // True LRU: delete and re-set to promote to MRU position
+      batterySimulationCache.current.delete(cacheKey);
+      batterySimulationCache.current.set(cacheKey, cached);
       return cached;
     }
 
@@ -336,7 +339,7 @@ export default function DepreciationCalculatorClient({
       packCapacityKwh: selectedModel.battery_specs.capacity_kwh,
     });
 
-    // Bounded cache eviction: cap at 100 entries using FIFO eviction
+    // Bounded cache eviction: cap at 100 entries using true LRU eviction
     if (batterySimulationCache.current.size >= MAX_BATTERY_SIMULATION_CACHE_ENTRIES) {
       const oldestKey = batterySimulationCache.current.keys().next().value;
       if (oldestKey !== undefined) {
@@ -659,7 +662,7 @@ export default function DepreciationCalculatorClient({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="모델명, 제조사, 배터리 검색..."
-              className="w-full px-3.5 py-2 pl-9 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-slate-50"
+              className="w-full px-3.5 py-2 pl-9 rounded-xl border border-slate-300 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:border-blue-500 bg-slate-50"
               aria-label="전기차 모델 검색창"
             />
             <span className="absolute left-3 top-2.5 text-slate-600 text-sm" aria-hidden="true">🔍</span>
@@ -1870,7 +1873,7 @@ export default function DepreciationCalculatorClient({
             <select
               value={iceDisplacementCc}
               onChange={(e) => setIceDisplacementCc(parseInt(e.target.value, 10))}
-              className="px-3 py-1.5 rounded-lg border border-slate-300 font-medium bg-white text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-1.5 rounded-lg border border-slate-300 font-medium bg-white text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               aria-label="비교 대상 내연기관 배기량 선택"
             >
               <option value={1598}>1,600cc 준중형 가솔린 (아반떼급)</option>

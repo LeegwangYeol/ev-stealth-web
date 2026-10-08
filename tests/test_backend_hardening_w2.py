@@ -300,5 +300,125 @@ with mock.patch.object(sys, "argv", ["run_tracker.py", "--mock-network", "--outp
             self.assertEqual(h2, h4, "Primary and Web subsidy_depletion_data.json must have bitwise identical SHA-256")
 
 
+class TestCycle10BackendHardening(unittest.TestCase):
+    """Test Suite verifying Cycle 10 backend hardening tasks."""
+
+    def setUp(self) -> None:
+        self.test_dir = tempfile.mkdtemp(prefix="test_cycle10_hardening_")
+        self.test_path = Path(self.test_dir)
+
+    def tearDown(self) -> None:
+        if os.path.exists(self.test_dir):
+            shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_atomic_writer_posix_permissions_0644(self) -> None:
+        """Verify atomic_write_json creates files with POSIX 0644 permissions."""
+        from tracker.atomic_writer import atomic_write_json
+        target_file = self.test_path / "permissions_test.json"
+        written = atomic_write_json({"status": "ok"}, target_file)
+        self.assertTrue(written.exists())
+        st = written.stat()
+        mode = st.st_mode & 0o777
+        self.assertEqual(mode, 0o644, f"Expected file mode 0644, got {oct(mode)}")
+
+    def test_defect_sync_mtime_preservation_and_sha_skip(self) -> None:
+        """Verify sync_defect_reports skips redundant writes and preserves mtime."""
+        root_dir = self.test_path / "data"
+        web_dir = self.test_path / "web" / "src" / "data"
+        root_dir.mkdir(parents=True)
+        web_dir.mkdir(parents=True)
+
+        root_file = root_dir / "daily_reports.json"
+        web_file = web_dir / "daily_reports.json"
+
+        sample = {"reports": [{"defect_category": "BATTERY", "title": "Test"}], "statistics": {}}
+        with open(root_file, "w", encoding="utf-8") as f:
+            json.dump(sample, f)
+
+        # Set specific mtime in the past
+        past_time = 1700000000.0
+        os.utime(root_file, (past_time, past_time))
+
+        with mock.patch.object(run_tracker, "_CURRENT_DIR", self.test_path):
+            written = run_tracker.sync_defect_reports(web_dir=web_dir)
+
+        self.assertIn(str(web_file), written)
+        # Web file should inherit root file's mtime
+        self.assertAlmostEqual(web_file.stat().st_mtime, past_time, places=1)
+
+        # Second sync: identical content, must skip write
+        with mock.patch.object(run_tracker, "_CURRENT_DIR", self.test_path):
+            written_again = run_tracker.sync_defect_reports(web_dir=web_dir)
+        self.assertEqual(len(written_again), 0, "Second sync must skip redundant write")
+        self.assertAlmostEqual(web_file.stat().st_mtime, past_time, places=1)
+
+    def test_subsidy_tracker_consolidated_invariants(self) -> None:
+        """Verify category and region metrics handle negative/NaN inputs cleanly."""
+        tracker = SubsidyTracker()
+        metrics = tracker.calculate_category_metrics(
+            announced=1000,
+            applied=-50,
+            delivered=0,
+            max_local_subsidy=3000000,
+        )
+        self.assertEqual(metrics.depletion_rate, 0.0)
+        self.assertEqual(metrics.remaining_units, 1000)
+
+        # Test NaN announced
+        metrics_nan = tracker.calculate_category_metrics(
+            announced=float("nan"),  # type: ignore
+            applied=100,
+            delivered=0,
+            max_local_subsidy=3000000,
+        )
+        self.assertEqual(metrics_nan.depletion_rate, 0.0)
+        self.assertEqual(metrics_nan.remaining_units, 0)
+
+    def test_defect_unknown_category_indexing_and_lru_cache(self) -> None:
+        """Verify missing/None categories are indexed as UNKNOWN and searchable."""
+        reports_file = self.test_path / "reports.json"
+        raw_data = {
+            "reports": [
+                {"id": "D1", "defect_category": None, "title": "No category"},
+                {"id": "D2", "defect_category": "", "title": "Empty category"},
+                {"id": "D3", "title": "Missing category field"},
+                {"id": "D4", "defect_category": "BATTERY", "title": "Battery defect"},
+            ],
+            "statistics": {},
+        }
+        with open(reports_file, "w", encoding="utf-8") as f:
+            json.dump(raw_data, f)
+
+        tracker = DefectTracker()
+        results = tracker.query_defects(category="UNKNOWN", file_path=reports_file)
+        self.assertEqual(len(results), 3)
+        self.assertEqual({r["id"] for r in results}, {"D1", "D2", "D3"})
+
+        # Verify LRU cache promotion on repeated access
+        results_again = tracker.query_defects(category="UNKNOWN", file_path=reports_file)
+        self.assertEqual(len(results_again), 3)
+        self.assertGreater(len(tracker._query_cache), 0)
+
+    def test_models_subsidy_matrix_export_structure(self) -> None:
+        """Verify models_subsidy_matrix.json contains >=15 compliant EV models."""
+        from tracker.subsidy_tracker import build_comprehensive_models_matrix
+        matrix = build_comprehensive_models_matrix()
+        self.assertGreaterEqual(len(matrix), 15)
+        for m in matrix:
+            self.assertIn("model_id", m)
+            self.assertIn("base_price_krw", m)
+            self.assertIn("price_subsidy_ratio", m)
+            self.assertIn("national_subsidy_krw", m)
+            price = m["base_price_krw"]
+            ratio = m["price_subsidy_ratio"]
+            if price <= 55_000_000:
+                self.assertEqual(ratio, 1.0)
+            elif price <= 85_000_000:
+                self.assertEqual(ratio, 0.5)
+            else:
+                self.assertEqual(ratio, 0.0)
+            self.assertLessEqual(m["national_subsidy_krw"], 6_500_000)
+
+
 if __name__ == "__main__":
     unittest.main()

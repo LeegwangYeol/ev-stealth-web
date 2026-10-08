@@ -13,7 +13,7 @@ export default function TeslaPage() {
       <section className="space-y-4">
         <h2 className="text-3xl font-semibold text-gray-800">모델 3 (Model 3)</h2>
         
-        <div className="bg-red-50 border-l-4 border-red-500 p-4">
+        <div className="bg-red-50 border-l-4 border-red-500 p-4" role="region" aria-label="테슬라 모델 3 구매 회피 연식 경고">
           <h3 className="text-xl font-bold text-red-700">🚫 2017~2020년식: AVOID (절대 피할 것)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li><strong>히터 파괴:</strong> PTC 고전압 히터가 타버려서 겨울에 얼어 죽을 수 있음 (수리비 168만 원 ~ 567만 원).</li>
@@ -22,7 +22,7 @@ export default function TeslaPage() {
           </ul>
         </div>
 
-        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4">
+        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4" role="region" aria-label="테슬라 모델 3 주의 연식 가이드">
           <h3 className="text-xl font-bold text-amber-900">⚠️ 2021~2023년식: CAUTION (주의 요망)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li><strong>히트펌프 사망:</strong> 옥토밸브(히트펌프) 결함으로 한파에 에어컨/히터가 모두 죽는 결함 발생 (수리비 87만 원 ~ 661만 원).</li>

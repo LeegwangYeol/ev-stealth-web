@@ -132,7 +132,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
       // Verdict filter
       if (selectedVerdict !== 'ALL') {
-        const hasMatchingVerdict = model.year_evaluations.some(
+        const hasMatchingVerdict = model.year_evaluations?.some(
           (y) => y.verdict === selectedVerdict
         );
         if (!hasMatchingVerdict) return false;
@@ -142,11 +142,11 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       if (selectedYearRange !== 'ALL') {
         let hasYear = false;
         if (selectedYearRange === 'EARLY') {
-          hasYear = model.year_evaluations.some((y) => y.year <= 2020);
+          hasYear = model.year_evaluations?.some((y) => y.year <= 2020) ?? false;
         } else if (selectedYearRange === 'MID') {
-          hasYear = model.year_evaluations.some((y) => y.year >= 2021 && y.year <= 2023);
+          hasYear = model.year_evaluations?.some((y) => y.year >= 2021 && y.year <= 2023) ?? false;
         } else if (selectedYearRange === 'LATE') {
-          hasYear = model.year_evaluations.some((y) => y.year >= 2024);
+          hasYear = model.year_evaluations?.some((y) => y.year >= 2024) ?? false;
         }
         if (!hasYear) return false;
       }
@@ -154,16 +154,16 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       // Live search query
       if (deferredSearchQuery.trim() !== '') {
         const q = deferredSearchQuery.toLowerCase().trim();
-        const matchesName = model.name.toLowerCase().includes(q);
-        const matchesBrandKo = model.brand_name_ko.toLowerCase().includes(q);
-        const matchesBrandEn = model.brand_name_en.toLowerCase().includes(q);
-        const matchesSegment = model.segment.toLowerCase().includes(q);
-        const matchesDefect = model.year_evaluations.some(
+        const matchesName = (model.name || '').toLowerCase().includes(q);
+        const matchesBrandKo = (model.brand_name_ko || '').toLowerCase().includes(q);
+        const matchesBrandEn = (model.brand_name_en || '').toLowerCase().includes(q);
+        const matchesSegment = (model.segment || '').toLowerCase().includes(q);
+        const matchesDefect = model.year_evaluations?.some(
           (y) =>
-            y.primary_defect.toLowerCase().includes(q) ||
-            y.chronic_symptoms.some((s) => s.toLowerCase().includes(q)) ||
-            y.raw_quote.toLowerCase().includes(q)
-        );
+            (y.primary_defect || '').toLowerCase().includes(q) ||
+            y.chronic_symptoms?.some((s) => (s || '').toLowerCase().includes(q)) ||
+            (y.raw_quote || '').toLowerCase().includes(q)
+        ) ?? false;
 
         if (!matchesName && !matchesBrandKo && !matchesBrandEn && !matchesSegment && !matchesDefect) {
           return false;
@@ -232,12 +232,12 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
   // Calculate Avoid Ratio
   const totalEvaluationsCount = useMemo(() => {
-    return allModels.reduce((acc, m) => acc + m.year_evaluations.length, 0);
+    return allModels.reduce((acc, m) => acc + (m.year_evaluations?.length || 0), 0);
   }, [allModels]);
 
   const avoidEvaluationsCount = useMemo(() => {
     return allModels.reduce(
-      (acc, m) => acc + m.year_evaluations.filter((y) => y.verdict === 'AVOID').length,
+      (acc, m) => acc + (m.year_evaluations ? m.year_evaluations.filter((y) => y.verdict === 'AVOID').length : 0),
       0
     );
   }, [allModels]);
@@ -695,7 +695,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               onChange={(e) => setSearchQuery(e.target.value)}
               aria-label="차종, 브랜드, 결함 증상 검색"
               placeholder="차종명, 브랜드, 결함 증상(ICCU, 배터리, 옥토밸브, 백색가루 등) 검색..."
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition"
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition"
             />
           </div>
 
@@ -704,7 +704,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
               aria-label="정렬 기준 선택"
-              className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm font-medium text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <option value="DSI_DESC">DSI 위험도 높은 순</option>
               <option value="DSI_ASC">DSI 안전한 순</option>
@@ -970,7 +970,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         role="region"
                         className="space-y-2 max-h-56 overflow-y-auto pr-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg outline-none"
                       >
-                        {model.year_evaluations.map((yEval) => {
+                        {(model.year_evaluations || []).map((yEval) => {
                           const vInfo = getVerdictBadgeInfo(yEval.verdict);
 
                           return (

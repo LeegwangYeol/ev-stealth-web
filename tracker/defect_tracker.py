@@ -8,12 +8,15 @@ Provides clean OOP abstractions for:
 
 from __future__ import annotations
 
+from collections import OrderedDict
+import hashlib
 import json
 import logging
 import os
 from pathlib import Path
 import shutil
 import tempfile
+import threading
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger("defect_tracker")
@@ -76,12 +79,13 @@ class DefectTracker:
         self._pipeline = pipeline
         self._filter_engine = filter_engine
 
-        # Caching and category pre-filtering index structures
+        # Caching and category pre-filtering index structures (thread-safe LRU)
+        self._cache_lock = threading.Lock()
         self._cached_reports_mtime: Optional[float] = None
         self._cached_reports_path: Optional[Path] = None
         self._cached_reports: Optional[List[Dict[str, Any]]] = None
         self._category_index: Dict[str, List[Dict[str, Any]]] = {}
-        self._query_cache: Dict[Tuple[Any, ...], List[Dict[str, Any]]] = {}
+        self._query_cache: OrderedDict[Tuple[Any, ...], List[Dict[str, Any]]] = OrderedDict()
 
     @property
     def pipeline(self) -> Any:
@@ -166,22 +170,25 @@ class DefectTracker:
 
     def invalidate_cache(self) -> None:
         """Invalidate in-memory report cache, category index, and query results."""
-        self._cached_reports_mtime = None
-        self._cached_reports_path = None
-        self._cached_reports = None
-        self._category_index.clear()
-        self._query_cache.clear()
+        with self._cache_lock:
+            self._cached_reports_mtime = None
+            self._cached_reports_path = None
+            self._cached_reports = None
+            self._category_index.clear()
+            self._query_cache.clear()
 
     def _build_category_index(self, reports: List[Dict[str, Any]]) -> None:
         """Pre-filter and index defect reports into category buckets for O(1) candidate lookup."""
         self._category_index.clear()
         for r in reports:
             cat = r.get("defect_category")
-            if cat and isinstance(cat, str):
+            if cat and isinstance(cat, str) and cat.strip():
                 cat_norm = cat.upper().strip()
-                if cat_norm not in self._category_index:
-                    self._category_index[cat_norm] = []
-                self._category_index[cat_norm].append(r)
+            else:
+                cat_norm = "UNKNOWN"
+            if cat_norm not in self._category_index:
+                self._category_index[cat_norm] = []
+            self._category_index[cat_norm].append(r)
 
     def load_reports(self, file_path: Optional[Union[str, Path]] = None) -> List[Dict[str, Any]]:
         """Load and return list of defect reports from target or primary path with mtime caching."""
@@ -189,33 +196,35 @@ class DefectTracker:
         if target and target.exists():
             try:
                 current_mtime = target.stat().st_mtime
-                if (
-                    self._cached_reports is not None
-                    and self._cached_reports_path == target
-                    and self._cached_reports_mtime == current_mtime
-                ):
-                    return self._cached_reports
+                with self._cache_lock:
+                    if (
+                        self._cached_reports is not None
+                        and self._cached_reports_path == target
+                        and self._cached_reports_mtime == current_mtime
+                    ):
+                        return self._cached_reports
             except OSError:
                 pass
 
         data = self.load_full_report_data(file_path=target)
         reports = data.get("reports", [])
 
-        if target and target.exists():
-            try:
-                self._cached_reports_mtime = target.stat().st_mtime
-                self._cached_reports_path = target
-            except OSError:
+        with self._cache_lock:
+            if target and target.exists():
+                try:
+                    self._cached_reports_mtime = target.stat().st_mtime
+                    self._cached_reports_path = target
+                except OSError:
+                    self._cached_reports_mtime = None
+                    self._cached_reports_path = None
+            else:
                 self._cached_reports_mtime = None
                 self._cached_reports_path = None
-        else:
-            self._cached_reports_mtime = None
-            self._cached_reports_path = None
 
-        self._cached_reports = reports
-        self._build_category_index(reports)
-        self._query_cache.clear()
-        return self._cached_reports
+            self._cached_reports = reports
+            self._build_category_index(reports)
+            self._query_cache.clear()
+            return self._cached_reports
 
     def query_defects(
         self,
@@ -246,21 +255,26 @@ class DefectTracker:
             limit,
         )
 
-        if cache_key in self._query_cache:
-            return list(self._query_cache[cache_key])
+        with self._cache_lock:
+            if cache_key in self._query_cache:
+                self._query_cache.move_to_end(cache_key)
+                return list(self._query_cache[cache_key])
 
-        # Category-level pre-filtering: use pre-indexed category bucket if specified
-        if cat_upper is not None:
-            candidate_pool = self._category_index.get(cat_upper, [])
-        else:
-            candidate_pool = reports
+            # Category-level pre-filtering: use pre-indexed category bucket if specified
+            if cat_upper is not None:
+                candidate_pool = list(self._category_index.get(cat_upper, []))
+            else:
+                candidate_pool = list(reports)
 
         filtered: List[Dict[str, Any]] = []
 
         for r in candidate_pool:
-            # Category filter (re-verify for defensive assurance)
-            if cat_upper and r.get("defect_category", "").upper().strip() != cat_upper:
-                continue
+            # Category filter (re-verify for defensive assurance, normalizing missing/None to UNKNOWN)
+            if cat_upper:
+                raw_cat = r.get("defect_category")
+                item_cat = (raw_cat.upper().strip() if (raw_cat and isinstance(raw_cat, str) and raw_cat.strip()) else "UNKNOWN")
+                if item_cat != cat_upper:
+                    continue
 
             # Brand filter
             if brand_lower and brand_lower not in (r.get("vehicle_brand") or "").lower():
@@ -294,10 +308,12 @@ class DefectTracker:
             if limit is not None and len(filtered) >= limit:
                 break
 
-        # Bounded query cache to optimize performance and prevent memory leak
-        if len(self._query_cache) >= 1024:
-            self._query_cache.clear()
-        self._query_cache[cache_key] = list(filtered)
+        # Thread-safe true LRU cache with promotion and bounded eviction
+        with self._cache_lock:
+            self._query_cache[cache_key] = list(filtered)
+            self._query_cache.move_to_end(cache_key)
+            while len(self._query_cache) > 1024:
+                self._query_cache.popitem(last=False)
 
         return filtered
 
@@ -464,7 +480,36 @@ class DefectTracker:
                 return []
 
         if source_path and target_paths and self.validate_report_file(source_path):
+            try:
+                source_stat = source_path.stat()
+                h_src = hashlib.sha256()
+                with open(source_path, "rb") as sf:
+                    while chunk := sf.read(65536):
+                        h_src.update(chunk)
+                source_hash = h_src.hexdigest()
+            except Exception as e:
+                logger.error("Failed to inspect source defect report %s: %s", source_path, e)
+                return []
+
             for tgt in target_paths:
+                if tgt.exists():
+                    try:
+                        h_tgt = hashlib.sha256()
+                        with open(tgt, "rb") as tf_in:
+                            while chunk := tf_in.read(65536):
+                                h_tgt.update(chunk)
+                        if h_tgt.hexdigest() == source_hash:
+                            try:
+                                tgt_stat = tgt.stat()
+                                if tgt_stat.st_mtime != source_stat.st_mtime:
+                                    os.utime(tgt, (source_stat.st_atime, source_stat.st_mtime))
+                            except OSError:
+                                pass
+                            logger.debug("Skipping redundant defect report sync for %s (SHA-256 match)", tgt)
+                            continue
+                    except Exception as e:
+                        logger.warning("Error verifying SHA-256 on target %s: %s", tgt, e)
+
                 temp_name = None
                 try:
                     tgt.parent.mkdir(parents=True, exist_ok=True)
@@ -474,14 +519,26 @@ class DefectTracker:
                             shutil.copyfileobj(sf, tf)
                         tf.flush()
                         os.fsync(tf.fileno())
+                    try:
+                        os.chmod(temp_name, 0o644)
+                    except OSError:
+                        pass
                     os.replace(temp_name, tgt)
+                    # Preserve original source timestamp to prevent oscillation
+                    try:
+                        os.utime(tgt, (source_stat.st_atime, source_stat.st_mtime))
+                    except OSError:
+                        pass
                     written_paths.append(str(tgt))
                     logger.info("  ✓ Successfully synchronized defect reports: %s -> %s", source_path, tgt)
                 except Exception as e:
                     logger.warning("Failed to synchronize defect report to %s: %s", tgt, e)
                 finally:
                     if temp_name and os.path.exists(temp_name):
-                        os.unlink(temp_name)
+                        try:
+                            os.unlink(temp_name)
+                        except OSError:
+                            pass
 
         if written_paths:
             self.invalidate_cache()

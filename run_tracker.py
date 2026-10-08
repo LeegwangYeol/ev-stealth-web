@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import os
@@ -212,7 +213,36 @@ def sync_defect_reports(
             return []
 
     if source_path and target_paths and validate_defect_reports_file(source_path):
+        try:
+            source_stat = source_path.stat()
+            h_src = hashlib.sha256()
+            with open(source_path, "rb") as sf:
+                while chunk := sf.read(65536):
+                    h_src.update(chunk)
+            source_hash = h_src.hexdigest()
+        except Exception as e:
+            logger.error("Failed to inspect source defect report %s: %s", source_path, e)
+            return []
+
         for tgt in target_paths:
+            if tgt.exists():
+                try:
+                    h_tgt = hashlib.sha256()
+                    with open(tgt, "rb") as tf_in:
+                        while chunk := tf_in.read(65536):
+                            h_tgt.update(chunk)
+                    if h_tgt.hexdigest() == source_hash:
+                        try:
+                            tgt_stat = tgt.stat()
+                            if tgt_stat.st_mtime != source_stat.st_mtime:
+                                os.utime(tgt, (source_stat.st_atime, source_stat.st_mtime))
+                        except OSError:
+                            pass
+                        logger.debug("Skipping redundant defect report sync for %s (SHA-256 match)", tgt)
+                        continue
+                except Exception as e:
+                    logger.warning("Error verifying SHA-256 on target %s: %s", tgt, e)
+
             temp_name = None
             try:
                 tgt.parent.mkdir(parents=True, exist_ok=True)
@@ -222,14 +252,26 @@ def sync_defect_reports(
                         shutil.copyfileobj(sf, tf)
                     tf.flush()
                     os.fsync(tf.fileno())
+                try:
+                    os.chmod(temp_name, 0o644)
+                except OSError:
+                    pass
                 os.replace(temp_name, tgt)
+                # Preserve original source timestamp to prevent oscillation
+                try:
+                    os.utime(tgt, (source_stat.st_atime, source_stat.st_mtime))
+                except OSError:
+                    pass
                 written_paths.append(str(tgt))
                 logger.info("  ✓ Successfully synchronized defect reports: %s -> %s", source_path, tgt)
             except Exception as e:
                 logger.warning("Failed to synchronize defect report to %s: %s", tgt, e)
             finally:
                 if temp_name and os.path.exists(temp_name):
-                    os.unlink(temp_name)
+                    try:
+                        os.unlink(temp_name)
+                    except OSError:
+                        pass
 
     return written_paths
 
@@ -447,7 +489,7 @@ def main() -> int:
             unique_destinations: List[Path] = []
             seen_paths: Set[str] = set()
             for dst in destinations:
-                resolved_str = str(dst.resolve()) if dst.exists() else str(dst.absolute())
+                resolved_str = str(dst.resolve())
                 if resolved_str not in seen_paths:
                     seen_paths.add(resolved_str)
                     unique_destinations.append(dst)

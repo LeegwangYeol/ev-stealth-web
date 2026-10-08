@@ -201,6 +201,9 @@ export function getRecallDatabase(): RecallDatabase {
  * Validates 17-character ISO 3779 VIN and provides clear diagnostic feedback.
  */
 export function validateVinString(vin: string): { valid: boolean; normalized: string; error?: string } {
+  if (!vin || typeof vin !== 'string') {
+    return { valid: false, normalized: '', error: '차대번호(VIN) 17자리를 입력해 주십시오.' };
+  }
   const normalized = vin.trim().toUpperCase().replace(/[\s-]/g, '');
 
   if (normalized.length === 0) {
@@ -447,27 +450,61 @@ export function checkRecallsByModel(
   year?: number,
   customDb?: RecallDatabase
 ): VinCheckResult {
+  if (
+    !brand ||
+    typeof brand !== 'string' ||
+    !brand.trim() ||
+    !modelName ||
+    typeof modelName !== 'string' ||
+    !modelName.trim()
+  ) {
+    return {
+      valid: false,
+      query: `${typeof brand === 'string' ? brand : ''} ${typeof modelName === 'string' ? modelName : ''} ${year || ''}`.trim(),
+      mode: 'MODEL',
+      decodedBrand: typeof brand === 'string' ? brand.trim() || undefined : undefined,
+      decodedModel: typeof modelName === 'string' ? modelName.trim() || undefined : undefined,
+      decodedYear: typeof year === 'number' && Number.isFinite(year) ? year : undefined,
+      recalls: [],
+      activeCampaignsCount: 0,
+      hasFireRisk: false,
+      hasPowerLoss: false,
+      overallRiskGrade: 'SAFE',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  const cleanBrand = brand.trim();
+  const cleanModel = modelName.trim();
+  const brandLower = cleanBrand.toLowerCase();
+  const modelLower = cleanModel.toLowerCase();
+
   const db = customDb || getRecallDatabase();
 
-  const matchedBatteryProfile = db.battery_profiles.find((bp) => {
-    const brandMatch = bp.brand.toLowerCase().includes(brand.toLowerCase());
-    const modelMatch =
-      bp.model_name.toLowerCase().includes(modelName.toLowerCase()) ||
-      modelName.toLowerCase().includes(bp.model_name.toLowerCase());
+  const matchedBatteryProfile = (db.battery_profiles || []).find((bp) => {
+    if (!bp?.brand || !bp?.model_name) return false;
+    const bpBrandLower = bp.brand.toLowerCase();
+    const bpModelLower = bp.model_name.toLowerCase();
+    const brandMatch = bpBrandLower.includes(brandLower) || brandLower.includes(bpBrandLower);
+    const modelMatch = bpModelLower.includes(modelLower) || modelLower.includes(bpModelLower);
     return brandMatch && modelMatch;
   });
 
-  const matchingRecalls = db.recalls.filter((campaign) => {
+  const matchingRecalls = (db.recalls || []).filter((campaign) => {
+    if (!campaign?.brand || !campaign?.target_model) return false;
+    const campBrandLower = campaign.brand.toLowerCase();
+    const campTargetLower = campaign.target_model.toLowerCase();
+
     const brandMatches =
-      campaign.brand.toLowerCase().includes(brand.toLowerCase()) ||
-      brand.toLowerCase().includes(campaign.brand.toLowerCase()) ||
-      (brand === '제네시스' && campaign.brand === '현대자동차') ||
-      campaign.target_model.toLowerCase().includes(brand.toLowerCase());
+      campBrandLower.includes(brandLower) ||
+      brandLower.includes(campBrandLower) ||
+      (cleanBrand === '제네시스' && campaign.brand === '현대자동차') ||
+      campTargetLower.includes(brandLower);
 
     if (!brandMatches) return false;
 
     // Model match check with collision protection
-    if (modelName && !isModelMatchForCampaign(modelName, campaign.target_model)) {
+    if (!isModelMatchForCampaign(cleanModel, campaign.target_model)) {
       return false;
     }
 
@@ -494,10 +531,10 @@ export function checkRecallsByModel(
 
   return {
     valid: true,
-    query: `${brand} ${modelName} ${year || ''}`.trim(),
+    query: `${cleanBrand} ${cleanModel} ${year || ''}`.trim(),
     mode: 'MODEL',
-    decodedBrand: brand,
-    decodedModel: modelName,
+    decodedBrand: cleanBrand,
+    decodedModel: cleanModel,
     decodedYear: year,
     decodedCountry: matchedBatteryProfile?.brand === '현대자동차' || matchedBatteryProfile?.brand === '기아' || matchedBatteryProfile?.brand === '제네시스' ? '대한민국' : undefined,
     batteryProfile: matchedBatteryProfile,
@@ -516,8 +553,12 @@ export function checkRecallsByModel(
 export function getDistinctBrands(customDb?: RecallDatabase): string[] {
   const db = customDb || getRecallDatabase();
   const brands = new Set<string>();
-  db.battery_profiles.forEach((p) => brands.add(p.brand));
-  db.recalls.forEach((r) => brands.add(r.brand));
+  (db.battery_profiles || []).forEach((p) => {
+    if (p?.brand) brands.add(p.brand);
+  });
+  (db.recalls || []).forEach((r) => {
+    if (r?.brand) brands.add(r.brand);
+  });
   return Array.from(brands);
 }
 
@@ -525,16 +566,24 @@ export function getDistinctBrands(customDb?: RecallDatabase): string[] {
  * Returns list of vehicle models for a selected brand.
  */
 export function getModelsForBrand(brand: string, customDb?: RecallDatabase): string[] {
+  if (!brand || typeof brand !== 'string' || !brand.trim()) {
+    return [];
+  }
+  const cleanBrand = brand.trim().toLowerCase();
   const db = customDb || getRecallDatabase();
   const models = new Set<string>();
 
-  db.battery_profiles
-    .filter((bp) => bp.brand.toLowerCase() === brand.toLowerCase())
-    .forEach((bp) => models.add(bp.model_name));
+  (db.battery_profiles || [])
+    .filter((bp) => bp?.brand && typeof bp.brand === 'string' && bp.brand.toLowerCase() === cleanBrand)
+    .forEach((bp) => {
+      if (bp?.model_name) models.add(bp.model_name);
+    });
 
-  db.vin_prefixes
-    .filter((vp) => vp.brand.toLowerCase() === brand.toLowerCase())
-    .forEach((vp) => models.add(vp.model_name));
+  (db.vin_prefixes || [])
+    .filter((vp) => vp?.brand && typeof vp.brand === 'string' && vp.brand.toLowerCase() === cleanBrand)
+    .forEach((vp) => {
+      if (vp?.model_name) models.add(vp.model_name);
+    });
 
   return Array.from(models);
 }

@@ -289,7 +289,20 @@ export function calculateNetSubsidy(
   const passengerCategory = region.categories?.passenger ?? defaultRegion.categories.passenger;
 
   // 3. Resolve MSRP and price cap ratio
-  const activeMsrp = customMsrp && customMsrp > 0 ? customMsrp : model.base_price_krw;
+  const safeModelPrice =
+    Number.isFinite(model?.base_price_krw) && model.base_price_krw > 0
+      ? Math.min(10_000_000_000, model.base_price_krw)
+      : 54_100_000;
+
+  let activeMsrp: number;
+  if (customMsrp === Infinity) {
+    activeMsrp = 10_000_000_000;
+  } else if (customMsrp !== undefined && customMsrp !== null && Number.isFinite(customMsrp) && customMsrp > 0) {
+    activeMsrp = Math.min(10_000_000_000, customMsrp);
+  } else {
+    activeMsrp = safeModelPrice;
+  }
+
   const ratio = getPriceSubsidyRatio(activeMsrp);
 
   let priceCapTierText = '100% 전액 지원 (5,500만 원 미만)';
@@ -305,7 +318,7 @@ export function calculateNetSubsidy(
     : 0;
   let nationalSubsidyKrw = 0;
   if (ratio > 0) {
-    if (customMsrp && customMsrp > 0) {
+    if (customMsrp && customMsrp > 0 && Number.isFinite(customMsrp)) {
       // Re-evaluate model un-scaled baseline
       const baseRatio = model.price_subsidy_ratio > 0 ? model.price_subsidy_ratio : 1.0;
       const unscaledNational = Math.round(validNationalSubsidy / baseRatio);
@@ -338,9 +351,11 @@ export function calculateNetSubsidy(
 
   // 6. Calculate Local Municipal Matching Subsidy
   // Formula: S_local = S_local_max * (S_nat / 6,500,000)
-  const maxLocal = passengerCategory.max_local_subsidy_krw;
+  const maxLocal = Number.isFinite(passengerCategory?.max_local_subsidy_krw)
+    ? passengerCategory.max_local_subsidy_krw
+    : 0;
   let localSubsidyKrw = 0;
-  if (nationalSubsidyKrw > 0) {
+  if (nationalSubsidyKrw > 0 && maxLocal > 0) {
     localSubsidyKrw = Math.round(maxLocal * (nationalSubsidyKrw / 6_500_000));
     // Round to nearest 10,000 KRW
     localSubsidyKrw = Math.round(localSubsidyKrw / 10_000) * 10_000;
@@ -348,12 +363,18 @@ export function calculateNetSubsidy(
 
   // 7. Calculate Combined Total & Out-of-pocket Net Price
   const totalSubsidyKrw = nationalSubsidyKrw + localSubsidyKrw + additionalGrantsKrw;
-  const netPurchasePriceKrw = Math.max(0, activeMsrp - totalSubsidyKrw);
+  const rawNetPrice = activeMsrp - totalSubsidyKrw;
+  const netPurchasePriceKrw = Number.isFinite(rawNetPrice) ? Math.max(0, rawNetPrice) : 0;
 
   // 8. Depletion Risk & Warning Analysis
-  const depletionRate = passengerCategory.depletion_rate;
+  const depletionRate = Number.isFinite(passengerCategory?.depletion_rate)
+    ? passengerCategory.depletion_rate
+    : 0;
   const isHighDepletionRisk = depletionRate >= 80.0;
-  const depletionStatus: AlertSeverity = passengerCategory.status;
+  const depletionStatus: AlertSeverity = passengerCategory?.status || 'HEALTHY';
+  const remainingUnits = Number.isFinite(passengerCategory?.remaining_units)
+    ? passengerCategory.remaining_units
+    : 0;
 
   let warningNotice: string | undefined;
   if (depletionRate >= 95.0) {
@@ -361,7 +382,7 @@ export function calculateNetSubsidy(
   } else if (depletionRate >= 80.0) {
     warningNotice = `⚠️ ${region.name_ko}의 승용 보조금 소진율이 ${depletionRate}%에 달해 조기 마감 위험이 높습니다.`;
   } else {
-    warningNotice = `✅ ${region.name_ko}의 보조금 잔여량이 비교적 여유롭습니다 (${passengerCategory.remaining_units.toLocaleString()}대 잔여).`;
+    warningNotice = `✅ ${region.name_ko}의 보조금 잔여량이 비교적 여유롭습니다 (${remainingUnits.toLocaleString()}대 잔여).`;
   }
 
   return {
@@ -388,3 +409,47 @@ export function calculateNetSubsidy(
     priceCapTierText,
   };
 }
+
+/**
+ * Safely retrieves category depletion metrics for a given region or category object,
+ * guarding all numerical values and toLocaleString calls against null/undefined.
+ */
+export function getCategoryDepletion(
+  regionOrId?: RegionEntry | string | null,
+  categoryKey: 'passenger' | 'commercial' | 'bus' = 'passenger'
+): {
+  announcedUnits: number;
+  appliedUnits: number;
+  remainingUnits: number;
+  depletionRate: number;
+  status: AlertSeverity;
+  formattedRemaining: string;
+  formattedAnnounced: string;
+  formattedApplied: string;
+} {
+  let region: RegionEntry | undefined;
+  if (typeof regionOrId === 'string') {
+    region = getRegionById(regionOrId);
+  } else if (regionOrId && typeof regionOrId === 'object' && 'categories' in regionOrId) {
+    region = regionOrId as RegionEntry;
+  }
+
+  const category = region?.categories?.[categoryKey];
+  const announced = Number.isFinite(category?.announced_units) ? category!.announced_units : 0;
+  const applied = Number.isFinite(category?.applied_units) ? category!.applied_units : 0;
+  const remaining = Number.isFinite(category?.remaining_units) ? category!.remaining_units : 0;
+  const rate = Number.isFinite(category?.depletion_rate) ? category!.depletion_rate : 0;
+  const status: AlertSeverity = category?.status || 'HEALTHY';
+
+  return {
+    announcedUnits: announced,
+    appliedUnits: applied,
+    remainingUnits: remaining,
+    depletionRate: rate,
+    status,
+    formattedRemaining: remaining.toLocaleString(),
+    formattedAnnounced: announced.toLocaleString(),
+    formattedApplied: applied.toLocaleString(),
+  };
+}
+

@@ -46,7 +46,7 @@ export default function GlobalNavListener() {
       const drawer = document.getElementById('mobile-nav-drawer');
       if (drawer && drawer.hasAttribute('open')) {
         const target = e.target as HTMLElement | null;
-        if (target && target.closest && target.closest('#mobile-nav-drawer a')) {
+        if (target && (!target.closest || !target.closest('#mobile-nav-drawer') || target.closest('#mobile-nav-drawer a'))) {
           drawer.removeAttribute('open');
         }
       }
