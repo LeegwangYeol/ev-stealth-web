@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime, timezone
 import json
+import math
 import os
 from pathlib import Path
 import tempfile
@@ -36,14 +37,18 @@ DEFAULT_OUTPUT_PATH = str(
 )
 
 
-def _safe_float(val: Any, default: float) -> float:
-    """Safely convert value to float, returning default on None, ValueError, or TypeError."""
+def _safe_float(val: Any, default: float = 0.0) -> float:
+    """Safely convert value to float, returning default on None, ValueError, TypeError, NaN, or Inf."""
+    safe_default = 0.0 if (isinstance(default, (int, float)) and (math.isnan(default) or math.isinf(default))) else default
     if val is None:
-        return default
+        return safe_default
     try:
-        return float(val)
-    except (ValueError, TypeError):
-        return default
+        f_val = float(val)
+        if math.isnan(f_val) or math.isinf(f_val):
+            return safe_default
+        return f_val
+    except (ValueError, TypeError, OverflowError):
+        return safe_default
 
 
 def _extract_record_date(record: Dict[str, Any]) -> str:
@@ -194,8 +199,17 @@ def write_daily_reports(
     if merge_existing and os.path.exists(output_path):
         try:
             existing_data = read_daily_reports(output_path)
-            existing_reports = existing_data.get("reports", [])
-            existing_total_scraped = existing_data.get("statistics", {}).get("total_scraped", 0)
+            if isinstance(existing_data, dict):
+                raw_reports = existing_data.get("reports")
+                existing_reports = raw_reports if isinstance(raw_reports, list) else []
+                stats = existing_data.get("statistics")
+                if isinstance(stats, dict):
+                    existing_total_scraped = stats.get("total_scraped", 0)
+                else:
+                    existing_total_scraped = len(existing_reports)
+            else:
+                existing_reports = []
+                existing_total_scraped = 0
         except Exception:
             existing_reports = []
             existing_total_scraped = 0

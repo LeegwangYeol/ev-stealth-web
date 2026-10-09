@@ -277,9 +277,11 @@ export default function PdiChecklistClient() {
               {(itemsByCategory.get(category) || []).map((item) => (
                 <label
                   key={item.id}
+                  htmlFor={`pdi-task-${item.id}`}
                   className="flex items-start p-4 hover:bg-slate-50 cursor-pointer transition-colors rounded-xl focus-within:ring-2 focus-within:ring-blue-500"
                 >
                   <input
+                    id={`pdi-task-${item.id}`}
                     type="checkbox"
                     checked={item.checked}
                     onChange={() => toggleCheck(item.id)}

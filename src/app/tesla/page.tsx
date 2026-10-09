@@ -10,8 +10,8 @@ export default function TeslaPage() {
     <div className="space-y-8 py-10 max-w-4xl mx-auto">
       <h1 className="text-4xl font-bold border-b pb-4">테슬라 연식별 구매 가이드 (피해야 할 연식)</h1>
       
-      <section className="space-y-4">
-        <h2 className="text-3xl font-semibold text-gray-800">모델 3 (Model 3)</h2>
+      <section className="space-y-4" aria-labelledby="heading-tesla-model3">
+        <h2 id="heading-tesla-model3" className="text-3xl font-semibold text-gray-800">모델 3 (Model 3)</h2>
         
         <div className="bg-red-50 border-l-4 border-red-500 p-4" role="region" aria-label="테슬라 모델 3 구매 회피 연식 경고">
           <h3 className="text-xl font-bold text-red-700">🚫 2017~2020년식: AVOID (절대 피할 것)</h3>
@@ -30,7 +30,7 @@ export default function TeslaPage() {
           </ul>
         </div>
 
-        <div className="bg-green-50 border-l-4 border-green-500 p-4" role="region" aria-label="안전 구매 가이드">
+        <div className="bg-green-50 border-l-4 border-green-500 p-4" role="region" aria-label="테슬라 모델 3 안전 구매 가이드">
           <h3 className="text-xl font-bold text-green-900">✅ 2024년식 (Highland): BUY SAFE (적극 추천)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li>승차감이 극적으로 개선(FSD 댐퍼)되었고, 방음이 엄청나게 좋아졌습니다. 깜빡이 레버가 없어진 것만 적응하면 최고의 선택입니다.</li>

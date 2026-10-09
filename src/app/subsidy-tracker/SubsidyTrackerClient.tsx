@@ -28,10 +28,14 @@ const CATEGORY_TABS: { id: CategoryType; label: string; icon: string }[] = [
   { id: 'bus', label: '전기승합 (버스)', icon: '🚌' },
 ];
 
+// Hoisted brand regexes to module scope to avoid re-allocating RegExp objects on every render
+export const BRAND_PREFIX_REGEX = /^(현대|기아|테슬라|KGM|비야디|BYD)\s+/;
+
 // Pure Helper: Badge styling with opaque solid backgrounds for compliant contrast
-const getBadgeStyle = (status: AlertSeverity): string => {
+export const getBadgeStyle = (status: AlertSeverity | string): string => {
   switch (status) {
     case 'HEALTHY':
+    case 'available':
       return 'bg-emerald-950 text-emerald-300 border-emerald-500/40';
     case 'CAUTION':
       return 'bg-amber-950 text-amber-300 border-amber-500/40';
@@ -41,13 +45,16 @@ const getBadgeStyle = (status: AlertSeverity): string => {
       return 'bg-rose-950 text-rose-300 border-rose-500/40 animate-pulse motion-reduce:animate-none';
     case 'DEPLETED':
       return 'bg-slate-900 text-slate-300 border-slate-700';
+    default:
+      return 'bg-emerald-950 text-emerald-300 border-emerald-500/40';
   }
 };
 
 // Pure Helper: Status badge labels
-const getStatusLabel = (status: AlertSeverity): string => {
+export const getStatusLabel = (status: AlertSeverity | string): string => {
   switch (status) {
     case 'HEALTHY':
+    case 'available':
       return '🟢 안정';
     case 'CAUTION':
       return '🟡 주의';
@@ -57,6 +64,8 @@ const getStatusLabel = (status: AlertSeverity): string => {
       return '🔴 마감임박';
     case 'DEPLETED':
       return '🔒 소진';
+    default:
+      return '🟢 안정';
   }
 };
 
@@ -178,7 +187,7 @@ const RegionCard = React.memo(function RegionCard({
             <div
               style={{ width: `${pendingPct}%` }}
               className="bg-amber-500 h-full transition-all duration-500"
-              title={`접수 대기: ${(safeApplied - safeDelivered).toLocaleString()}대 (${pendingPct.toFixed(1)}%)`}
+              title={`접수 대기: ${Math.max(0, safeApplied - safeDelivered).toLocaleString()}대 (${pendingPct.toFixed(1)}%)`}
             />
             {/* Layer 3: Remaining (slate track) */}
             <div
@@ -195,7 +204,7 @@ const RegionCard = React.memo(function RegionCard({
             </span>
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" aria-hidden="true" />
-              심사중 {(safeApplied - safeDelivered).toLocaleString()}대
+              심사중 {Math.max(0, safeApplied - safeDelivered).toLocaleString()}대
             </span>
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-slate-700 inline-block" aria-hidden="true" />
@@ -404,7 +413,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                       : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-slate-800'
                   }`}
                 >
-                  {m.name_ko.replace(/^(현대|기아|테슬라|KGM|비야디|BYD)\s+/, '')}
+                  {m.name_ko.replace(BRAND_PREFIX_REGEX, '')}
                 </button>
               ))}
             </div>
@@ -433,7 +442,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             >
               {regions.map((reg) => (
                 <option key={reg.region_id} value={reg.region_id}>
-                  {reg.name_ko} ({reg.categories.passenger.depletion_rate.toFixed(1)}% 소진, {getStatusLabel(reg.categories.passenger.status)})
+                  {reg.name_ko} ({(reg.categories?.passenger?.depletion_rate ?? 0).toFixed(1)}% 소진, {getStatusLabel(reg.categories?.passenger?.status || 'available')})
                 </option>
               ))}
             </select>
@@ -1022,7 +1031,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                     className="px-2 py-0.5 rounded bg-rose-900 border border-rose-500/50 text-rose-200 hover:bg-rose-800 hover:text-white transition font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                     title={`${crit.name_ko} 보조금 계산기로 이동`}
                   >
-                    {crit.name_ko} ({crit.categories.passenger.depletion_rate}%)
+                    {crit.name_ko} ({crit.categories?.passenger?.depletion_rate ?? 0}%)
                   </button>
                 ))}
               </div>

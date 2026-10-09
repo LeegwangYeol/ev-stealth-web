@@ -25,8 +25,8 @@ export default function Latest2026Page() {
         </p>
       </div>
 
-      <section>
-        <h2 className="text-3xl font-bold text-slate-800 mb-6 border-l-4 border-red-500 pl-4">1. 기아 EV3 (2026)</h2>
+      <section aria-labelledby="heading-ev3-2026">
+        <h2 id="heading-ev3-2026" className="text-3xl font-bold text-slate-800 mb-6 border-l-4 border-red-500 pl-4">1. 기아 EV3 (2026)</h2>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
           <ul className="list-disc list-inside space-y-3 text-gray-700">
             <li>
@@ -42,8 +42,8 @@ export default function Latest2026Page() {
         </div>
       </section>
 
-      <section>
-        <h2 className="text-3xl font-bold text-slate-800 mb-6 border-l-4 border-blue-500 pl-4">2. 더 뉴 아이오닉 5 페이스리프트 (2026)</h2>
+      <section aria-labelledby="heading-ioniq5-2026">
+        <h2 id="heading-ioniq5-2026" className="text-3xl font-bold text-slate-800 mb-6 border-l-4 border-blue-500 pl-4">2. 더 뉴 아이오닉 5 페이스리프트 (2026)</h2>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
           <ul className="list-disc list-inside space-y-3 text-gray-700">
             <li>
@@ -59,8 +59,8 @@ export default function Latest2026Page() {
         </div>
       </section>
 
-      <section>
-        <h2 className="text-3xl font-bold text-slate-800 mb-6 border-l-4 border-indigo-500 pl-4">3. 테슬라 모델 Y (2026 주니퍼 리프레시 / 테슬라 코리아)</h2>
+      <section aria-labelledby="heading-modely-2026">
+        <h2 id="heading-modely-2026" className="text-3xl font-bold text-slate-800 mb-6 border-l-4 border-indigo-500 pl-4">3. 테슬라 모델 Y (2026 주니퍼 리프레시 / 테슬라 코리아)</h2>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
           <ul className="list-disc list-inside space-y-3 text-gray-700">
             <li>
@@ -76,8 +76,8 @@ export default function Latest2026Page() {
         </div>
       </section>
 
-      <section>
-        <h2 className="text-3xl font-bold text-slate-800 mb-6 border-l-4 border-green-500 pl-4">4. BYD 시라이언 7 (2026 BYD 코리아)</h2>
+      <section aria-labelledby="heading-sealion7-2026">
+        <h2 id="heading-sealion7-2026" className="text-3xl font-bold text-slate-800 mb-6 border-l-4 border-green-500 pl-4">4. BYD 시라이언 7 (2026 BYD 코리아)</h2>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
           <ul className="list-disc list-inside space-y-3 text-gray-700">
             <li>
@@ -93,8 +93,8 @@ export default function Latest2026Page() {
         </div>
       </section>
       
-      <section>
-        <h2 className="text-3xl font-bold text-slate-800 mb-6 border-l-4 border-yellow-500 pl-4">5. 현대 아이오닉 9 (2026 플래그십)</h2>
+      <section aria-labelledby="heading-ioniq9-2026">
+        <h2 id="heading-ioniq9-2026" className="text-3xl font-bold text-slate-800 mb-6 border-l-4 border-yellow-500 pl-4">5. 현대 아이오닉 9 (2026 플래그십)</h2>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
           <ul className="list-disc list-inside space-y-3 text-gray-700">
             <li>

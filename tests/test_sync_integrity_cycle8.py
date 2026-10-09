@@ -334,7 +334,7 @@ class TestCycle8DualPathAtomicWriterGuarantees(unittest.TestCase):
     def test_atomic_write_json_cleans_up_temp_file_on_serialization_failure(self) -> None:
         """When serialization fails (e.g. non-serializable object), temp file is cleanly removed."""
         target = Path(self.test_dir) / "unserializable.json"
-        unserializable = {"bad_set": {1, 2, 3}}  # sets cannot be JSON serialized
+        unserializable = {"bad_obj": object()}  # arbitrary objects cannot be JSON serialized
 
         with self.assertRaises(TypeError):
             atomic_write_json(unserializable, target)

@@ -10,8 +10,8 @@ export default function HyundaiKiaPage() {
     <div className="space-y-8 py-10 max-w-4xl mx-auto">
       <h1 className="text-4xl font-bold border-b pb-4">현대/기아 연식별 구매 가이드 (피해야 할 연식)</h1>
       
-      <section className="space-y-4">
-        <h2 className="text-3xl font-semibold text-gray-800">아이오닉 5 (Ioniq 5)</h2>
+      <section className="space-y-4" aria-labelledby="heading-ioniq5">
+        <h2 id="heading-ioniq5" className="text-3xl font-semibold text-gray-800">아이오닉 5 (Ioniq 5)</h2>
         
         <div className="bg-red-50 border-l-4 border-red-500 p-4" role="region" aria-label="아이오닉 5 구매 회피 연식 경고">
           <h3 className="text-xl font-bold text-red-700">🚫 2021~2022년식: AVOID (절대 피할 것)</h3>
@@ -30,7 +30,7 @@ export default function HyundaiKiaPage() {
           </ul>
         </div>
 
-        <div className="bg-green-50 border-l-4 border-green-500 p-4" role="region" aria-label="안전 구매 가이드">
+        <div className="bg-green-50 border-l-4 border-green-500 p-4" role="region" aria-label="아이오닉 5 안전 구매 가이드">
           <h3 className="text-xl font-bold text-green-900">✅ 2025년식 (Facelift): BUY SAFE (적극 추천)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li>공장 출고 때부터 ICCU 하드웨어가 개선되었고, 84kWh로 배터리 용량 증가, 후방 와이퍼가 기본 장착되었습니다. 가장 추천하는 연식입니다.</li>
@@ -38,8 +38,8 @@ export default function HyundaiKiaPage() {
         </div>
       </section>
 
-      <section className="space-y-4 mt-8">
-        <h2 className="text-3xl font-semibold text-gray-800">기아 EV6</h2>
+      <section className="space-y-4 mt-8" aria-labelledby="heading-ev6">
+        <h2 id="heading-ev6" className="text-3xl font-semibold text-gray-800">기아 EV6</h2>
         
         <div className="bg-red-50 border-l-4 border-red-500 p-4" role="region" aria-label="기아 EV6 구매 회피 연식 경고">
           <h3 className="text-xl font-bold text-red-700">🚫 2022년식: AVOID (절대 피할 것)</h3>
@@ -55,7 +55,7 @@ export default function HyundaiKiaPage() {
           </ul>
         </div>
 
-        <div className="bg-green-50 border-l-4 border-green-500 p-4" role="region" aria-label="안전 구매 가이드">
+        <div className="bg-green-50 border-l-4 border-green-500 p-4" role="region" aria-label="EV6 안전 구매 가이드">
           <h3 className="text-xl font-bold text-green-900">✅ 2025년식 (Facelift): BUY SAFE (적극 추천)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li>승차감이 크게 개선되었고 초기 기계적 결함이 대부분 잡혔습니다.</li>

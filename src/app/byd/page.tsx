@@ -10,8 +10,8 @@ export default function BydPage() {
     <div className="space-y-8 py-10 max-w-4xl mx-auto">
       <h1 className="text-4xl font-bold border-b pb-4">BYD 연식별 구매 가이드 (피해야 할 연식)</h1>
       
-      <section className="space-y-4">
-        <h2 className="text-3xl font-semibold text-gray-800">돌핀 (Dolphin)</h2>
+      <section className="space-y-4" aria-labelledby="heading-byd-dolphin">
+        <h2 id="heading-byd-dolphin" className="text-3xl font-semibold text-gray-800">돌핀 (Dolphin)</h2>
         
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4" role="region" aria-label="돌핀 주의 연식 가이드">
           <h3 className="text-xl font-bold text-amber-900">⚠️ 2021~2023년식: CAUTION (주의 요망)</h3>
@@ -21,7 +21,7 @@ export default function BydPage() {
           </ul>
         </div>
 
-        <div className="bg-green-50 border-l-4 border-green-500 p-4" role="region" aria-label="안전 구매 가이드">
+        <div className="bg-green-50 border-l-4 border-green-500 p-4" role="region" aria-label="돌핀 안전 구매 가이드">
           <h3 className="text-xl font-bold text-green-900">✅ 2024~2025년식: BUY SAFE (적극 추천)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li>에바코어 코팅이 개선되었고 새로운 후륜 멀티링크 서스펜션이 적용되어 타이어 편마모와 승차감이 대폭 개선되었습니다. 배터리 교체 비용도 전 세계 최저 수준(약 900만 원 선)으로 유지비가 매우 저렴합니다.</li>
@@ -29,8 +29,8 @@ export default function BydPage() {
         </div>
       </section>
 
-      <section className="space-y-4 mt-8">
-        <h2 className="text-3xl font-semibold text-gray-800">시라이언 07 (Sealion 07)</h2>
+      <section className="space-y-4 mt-8" aria-labelledby="heading-byd-sealion">
+        <h2 id="heading-byd-sealion" className="text-3xl font-semibold text-gray-800">시라이언 07 (Sealion 07)</h2>
         
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4" role="region" aria-label="시라이언 07 주의 연식 가이드">
           <h3 className="text-xl font-bold text-amber-900">⚠️ 2024년식: CAUTION (주의 요망)</h3>
@@ -40,7 +40,7 @@ export default function BydPage() {
           </ul>
         </div>
 
-        <div className="bg-green-50 border-l-4 border-green-500 p-4" role="region" aria-label="안전 구매 가이드">
+        <div className="bg-green-50 border-l-4 border-green-500 p-4" role="region" aria-label="시라이언 07 안전 구매 가이드">
           <h3 className="text-xl font-bold text-green-900">✅ 2025년식: BUY SAFE (추천)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li>루프 라이다 세정 노즐 결함 개선 및 초기 하체 세팅이 수정되었습니다. 단, CTB 통짜 배터리의 구조적 한계(하부 긁힘 시 전손 위기)는 25년식도 동일하므로 반드시 하부 코팅이나 주의 운전이 필요합니다.</li>
@@ -48,21 +48,21 @@ export default function BydPage() {
         </div>
       </section>
 
-      <section className="space-y-4 mt-8">
-        <h2 className="text-3xl font-semibold text-gray-800">씰 (Seal)</h2>
+      <section className="space-y-4 mt-8" aria-labelledby="heading-byd-seal">
+        <h2 id="heading-byd-seal" className="text-3xl font-semibold text-gray-800">씰 (Seal)</h2>
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4" role="region" aria-label="씰 주의 연식 가이드">
           <h3 className="text-xl font-bold text-amber-900">⚠️ 2022~2023년식: CAUTION (주의 요망)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li>LFP 배터리 겨울철 셧다운(25%에서 갑자기 0%로 추락) 및 하체 나사 부식 발생.</li>
           </ul>
         </div>
-        <div className="bg-green-50 border-l-4 border-green-500 p-4" role="region" aria-label="안전 구매 가이드">
+        <div className="bg-green-50 border-l-4 border-green-500 p-4" role="region" aria-label="씰 안전 구매 가이드">
           <h3 className="text-xl font-bold text-green-900">✅ 2024년식: BUY SAFE (적극 추천)</h3>
         </div>
       </section>
 
-      <section className="space-y-4 mt-8">
-        <h2 className="text-3xl font-semibold text-gray-800">아토 3 (Atto 3)</h2>
+      <section className="space-y-4 mt-8" aria-labelledby="heading-byd-atto3">
+        <h2 id="heading-byd-atto3" className="text-3xl font-semibold text-gray-800">아토 3 (Atto 3)</h2>
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4" role="region" aria-label="아토 3 주의 연식 가이드">
           <h3 className="text-xl font-bold text-amber-900">⚠️ 2022~2024년식: CAUTION (주의 요망)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">

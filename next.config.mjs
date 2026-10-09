@@ -44,7 +44,16 @@ const nextConfig = {
         ],
       },
       {
-        source: '/:all*\\.(svg|ico|png|jpg|jpeg|webp|woff|woff2|ttf|otf|css|js)',
+        source: '/:all*\\.(svg|ico|png|jpg|jpeg|webp|woff|woff2|ttf|otf)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
+      {
+        source: '/_next/static/:path*',
         headers: [
           {
             key: 'Cache-Control',

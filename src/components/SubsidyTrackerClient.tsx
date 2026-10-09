@@ -1,3 +1,8 @@
 'use client';
 
-export { default } from '@/app/subsidy-tracker/SubsidyTrackerClient';
+export {
+  default,
+  getBadgeStyle,
+  getStatusLabel,
+  BRAND_PREFIX_REGEX,
+} from '@/app/subsidy-tracker/SubsidyTrackerClient';

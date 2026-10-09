@@ -311,7 +311,7 @@ class SubsidyTracker:
             total_remaining_units=total_remaining,
             nationwide_depletion_rate=nationwide_rate,
             total_budget_billion_krw=round(total_budget_krw / 1_000_000_000, 1),
-            disbursed_budget_billion_krw=round(disbursed_budget_krw / 1_000_000_000, 1),
+            disbursed_budget_billion_krw=max(0.0, round(disbursed_budget_krw / 1_000_000_000, 1)),
             category_totals=cat_totals,
             alert_region_counts=alert_counts,
         )

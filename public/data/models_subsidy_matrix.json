@@ -1,0 +1,596 @@
+[
+  {
+    "model_id": "ioniq-5-2026",
+    "name_ko": "현대 아이오닉 5 롱레인지 2WD (2026)",
+    "manufacturer": "현대자동차",
+    "battery_type": "NCM 삼원계 (SK온 84kWh)",
+    "battery_capacity_kwh": 84.0,
+    "rated_range_km": 485,
+    "base_price_krw": 54100000,
+    "price_subsidy_ratio": 1.0,
+    "national_subsidy_krw": 6500000,
+    "regional_subsidy_samples": {
+      "seoul": {
+        "total_subsidy_krw": 8000000,
+        "net_price_krw": 46100000
+      },
+      "gyeonggi_avg": {
+        "total_subsidy_krw": 10000000,
+        "net_price_krw": 44100000
+      },
+      "busan": {
+        "total_subsidy_krw": 9000000,
+        "net_price_krw": 45100000
+      },
+      "daegu": {
+        "total_subsidy_krw": 9500000,
+        "net_price_krw": 44600000
+      },
+      "jeju": {
+        "total_subsidy_krw": 10500000,
+        "net_price_krw": 43600000
+      },
+      "gurye_jeonnam": {
+        "total_subsidy_krw": 14500000,
+        "net_price_krw": 39600000
+      },
+      "ulleung_gyeongbuk": {
+        "total_subsidy_krw": 17500000,
+        "net_price_krw": 36600000
+      }
+    }
+  },
+  {
+    "model_id": "kia-ev3-2026",
+    "name_ko": "기아 EV3 롱레인지 에어 (2026)",
+    "manufacturer": "기아",
+    "battery_type": "NCM 삼원계 (LG엔솔 81.4kWh)",
+    "battery_capacity_kwh": 81.4,
+    "rated_range_km": 501,
+    "base_price_krw": 39950000,
+    "price_subsidy_ratio": 1.0,
+    "national_subsidy_krw": 5850000,
+    "regional_subsidy_samples": {
+      "seoul": {
+        "total_subsidy_krw": 7200000,
+        "net_price_krw": 32750000
+      },
+      "gyeonggi_avg": {
+        "total_subsidy_krw": 9000000,
+        "net_price_krw": 30950000
+      },
+      "busan": {
+        "total_subsidy_krw": 8100000,
+        "net_price_krw": 31850000
+      },
+      "daegu": {
+        "total_subsidy_krw": 8550000,
+        "net_price_krw": 31400000
+      },
+      "jeju": {
+        "total_subsidy_krw": 9450000,
+        "net_price_krw": 30500000
+      },
+      "gurye_jeonnam": {
+        "total_subsidy_krw": 13050000,
+        "net_price_krw": 26900000
+      },
+      "ulleung_gyeongbuk": {
+        "total_subsidy_krw": 15750000,
+        "net_price_krw": 24200000
+      }
+    }
+  },
+  {
+    "model_id": "kia-ev6-2026",
+    "name_ko": "기아 더 뉴 EV6 롱레인지 2WD (2026)",
+    "manufacturer": "기아",
+    "battery_type": "NCM 삼원계 (SK온 84kWh)",
+    "battery_capacity_kwh": 84.0,
+    "rated_range_km": 494,
+    "base_price_krw": 52600000,
+    "price_subsidy_ratio": 1.0,
+    "national_subsidy_krw": 6400000,
+    "regional_subsidy_samples": {
+      "seoul": {
+        "total_subsidy_krw": 7880000,
+        "net_price_krw": 44720000
+      },
+      "gyeonggi_avg": {
+        "total_subsidy_krw": 9850000,
+        "net_price_krw": 42750000
+      },
+      "busan": {
+        "total_subsidy_krw": 8860000,
+        "net_price_krw": 43740000
+      },
+      "daegu": {
+        "total_subsidy_krw": 9350000,
+        "net_price_krw": 43250000
+      },
+      "jeju": {
+        "total_subsidy_krw": 10340000,
+        "net_price_krw": 42260000
+      },
+      "gurye_jeonnam": {
+        "total_subsidy_krw": 14280000,
+        "net_price_krw": 38320000
+      },
+      "ulleung_gyeongbuk": {
+        "total_subsidy_krw": 17230000,
+        "net_price_krw": 35370000
+      }
+    }
+  },
+  {
+    "model_id": "kia-ev9-2026",
+    "name_ko": "기아 EV9 2WD 에어 (2026)",
+    "manufacturer": "기아",
+    "battery_type": "NCM 삼원계 (SK온 99.8kWh)",
+    "battery_capacity_kwh": 99.8,
+    "rated_range_km": 501,
+    "base_price_krw": 73370000,
+    "price_subsidy_ratio": 0.5,
+    "national_subsidy_krw": 3010000,
+    "regional_subsidy_samples": {
+      "seoul": {
+        "total_subsidy_krw": 3700000,
+        "net_price_krw": 69670000
+      },
+      "gyeonggi_avg": {
+        "total_subsidy_krw": 4630000,
+        "net_price_krw": 68740000
+      },
+      "busan": {
+        "total_subsidy_krw": 4170000,
+        "net_price_krw": 69200000
+      },
+      "daegu": {
+        "total_subsidy_krw": 4400000,
+        "net_price_krw": 68970000
+      },
+      "jeju": {
+        "total_subsidy_krw": 4860000,
+        "net_price_krw": 68510000
+      },
+      "gurye_jeonnam": {
+        "total_subsidy_krw": 6710000,
+        "net_price_krw": 66660000
+      },
+      "ulleung_gyeongbuk": {
+        "total_subsidy_krw": 8100000,
+        "net_price_krw": 65270000
+      }
+    }
+  },
+  {
+    "model_id": "tesla-model-y-rwd",
+    "name_ko": "테슬라 모델 Y RWD (2026)",
+    "manufacturer": "Tesla",
+    "battery_type": "LFP 리튬인산철 (CATL 60kWh)",
+    "battery_capacity_kwh": 60.0,
+    "rated_range_km": 350,
+    "base_price_krw": 52990000,
+    "price_subsidy_ratio": 1.0,
+    "national_subsidy_krw": 2000000,
+    "regional_subsidy_samples": {
+      "seoul": {
+        "total_subsidy_krw": 2460000,
+        "net_price_krw": 50530000
+      },
+      "gyeonggi_avg": {
+        "total_subsidy_krw": 3080000,
+        "net_price_krw": 49910000
+      },
+      "busan": {
+        "total_subsidy_krw": 2770000,
+        "net_price_krw": 50220000
+      },
+      "daegu": {
+        "total_subsidy_krw": 2920000,
+        "net_price_krw": 50070000
+      },
+      "jeju": {
+        "total_subsidy_krw": 3230000,
+        "net_price_krw": 49760000
+      },
+      "gurye_jeonnam": {
+        "total_subsidy_krw": 4460000,
+        "net_price_krw": 48530000
+      },
+      "ulleung_gyeongbuk": {
+        "total_subsidy_krw": 5380000,
+        "net_price_krw": 47610000
+      }
+    }
+  },
+  {
+    "model_id": "tesla-model-3-rwd",
+    "name_ko": "테슬라 모델 3 RWD 하이랜드 (2026)",
+    "manufacturer": "Tesla",
+    "battery_type": "LFP 리튬인산철 (CATL 60kWh)",
+    "battery_capacity_kwh": 60.0,
+    "rated_range_km": 382,
+    "base_price_krw": 51990000,
+    "price_subsidy_ratio": 1.0,
+    "national_subsidy_krw": 2260000,
+    "regional_subsidy_samples": {
+      "seoul": {
+        "total_subsidy_krw": 2780000,
+        "net_price_krw": 49210000
+      },
+      "gyeonggi_avg": {
+        "total_subsidy_krw": 3480000,
+        "net_price_krw": 48510000
+      },
+      "busan": {
+        "total_subsidy_krw": 3130000,
+        "net_price_krw": 48860000
+      },
+      "daegu": {
+        "total_subsidy_krw": 3300000,
+        "net_price_krw": 48690000
+      },
+      "jeju": {
+        "total_subsidy_krw": 3650000,
+        "net_price_krw": 48340000
+      },
+      "gurye_jeonnam": {
+        "total_subsidy_krw": 5040000,
+        "net_price_krw": 46950000
+      },
+      "ulleung_gyeongbuk": {
+        "total_subsidy_krw": 6080000,
+        "net_price_krw": 45910000
+      }
+    }
+  },
+  {
+    "model_id": "kgm-torres-evx",
+    "name_ko": "KGM 토레스 EVX 2WD (2026)",
+    "manufacturer": "KG모빌리티",
+    "battery_type": "LFP 블레이드 배터리 (BYD 73.4kWh)",
+    "battery_capacity_kwh": 73.4,
+    "rated_range_km": 433,
+    "base_price_krw": 45500000,
+    "price_subsidy_ratio": 1.0,
+    "national_subsidy_krw": 4570000,
+    "regional_subsidy_samples": {
+      "seoul": {
+        "total_subsidy_krw": 5620000,
+        "net_price_krw": 39880000
+      },
+      "gyeonggi_avg": {
+        "total_subsidy_krw": 7030000,
+        "net_price_krw": 38470000
+      },
+      "busan": {
+        "total_subsidy_krw": 6330000,
+        "net_price_krw": 39170000
+      },
+      "daegu": {
+        "total_subsidy_krw": 6680000,
+        "net_price_krw": 38820000
+      },
+      "jeju": {
+        "total_subsidy_krw": 7380000,
+        "net_price_krw": 38120000
+      },
+      "gurye_jeonnam": {
+        "total_subsidy_krw": 10190000,
+        "net_price_krw": 35310000
+      },
+      "ulleung_gyeongbuk": {
+        "total_subsidy_krw": 12300000,
+        "net_price_krw": 33200000
+      }
+    }
+  },
+  {
+    "model_id": "hyundai-casper-ev",
+    "name_ko": "현대 캐스퍼 일렉트릭 인스퍼레이션 (2026)",
+    "manufacturer": "현대자동차",
+    "battery_type": "NCM 삼원계 (LG엔솔 49kWh)",
+    "battery_capacity_kwh": 49.0,
+    "rated_range_km": 315,
+    "base_price_krw": 31500000,
+    "price_subsidy_ratio": 1.0,
+    "national_subsidy_krw": 5200000,
+    "regional_subsidy_samples": {
+      "seoul": {
+        "total_subsidy_krw": 6400000,
+        "net_price_krw": 25100000
+      },
+      "gyeonggi_avg": {
+        "total_subsidy_krw": 8000000,
+        "net_price_krw": 23500000
+      },
+      "busan": {
+        "total_subsidy_krw": 7200000,
+        "net_price_krw": 24300000
+      },
+      "daegu": {
+        "total_subsidy_krw": 7600000,
+        "net_price_krw": 23900000
+      },
+      "jeju": {
+        "total_subsidy_krw": 8400000,
+        "net_price_krw": 23100000
+      },
+      "gurye_jeonnam": {
+        "total_subsidy_krw": 11600000,
+        "net_price_krw": 19900000
+      },
+      "ulleung_gyeongbuk": {
+        "total_subsidy_krw": 14000000,
+        "net_price_krw": 17500000
+      }
+    }
+  },
+  {
+    "model_id": "byd-atto-3",
+    "name_ko": "BYD 아토 3 (2026 KDM)",
+    "manufacturer": "BYD",
+    "battery_type": "LFP 블레이드 배터리 (BYD 60.48kWh)",
+    "battery_capacity_kwh": 60.48,
+    "rated_range_km": 345,
+    "base_price_krw": 32500000,
+    "price_subsidy_ratio": 1.0,
+    "national_subsidy_krw": 2050000,
+    "regional_subsidy_samples": {
+      "seoul": {
+        "total_subsidy_krw": 2520000,
+        "net_price_krw": 29980000
+      },
+      "gyeonggi_avg": {
+        "total_subsidy_krw": 3150000,
+        "net_price_krw": 29350000
+      },
+      "busan": {
+        "total_subsidy_krw": 2840000,
+        "net_price_krw": 29660000
+      },
+      "daegu": {
+        "total_subsidy_krw": 3000000,
+        "net_price_krw": 29500000
+      },
+      "jeju": {
+        "total_subsidy_krw": 3310000,
+        "net_price_krw": 29190000
+      },
+      "gurye_jeonnam": {
+        "total_subsidy_krw": 4570000,
+        "net_price_krw": 27930000
+      },
+      "ulleung_gyeongbuk": {
+        "total_subsidy_krw": 5520000,
+        "net_price_krw": 26980000
+      }
+    }
+  },
+  {
+    "model_id": "byd-dolphin",
+    "name_ko": "BYD 돌핀 (2026 KDM)",
+    "manufacturer": "BYD",
+    "battery_type": "LFP 블레이드 배터리 (BYD 44.9kWh)",
+    "battery_capacity_kwh": 44.9,
+    "rated_range_km": 310,
+    "base_price_krw": 26900000,
+    "price_subsidy_ratio": 1.0,
+    "national_subsidy_krw": 1850000,
+    "regional_subsidy_samples": {
+      "seoul": {
+        "total_subsidy_krw": 2280000,
+        "net_price_krw": 24620000
+      },
+      "gyeonggi_avg": {
+        "total_subsidy_krw": 2850000,
+        "net_price_krw": 24050000
+      },
+      "busan": {
+        "total_subsidy_krw": 2560000,
+        "net_price_krw": 24340000
+      },
+      "daegu": {
+        "total_subsidy_krw": 2700000,
+        "net_price_krw": 24200000
+      },
+      "jeju": {
+        "total_subsidy_krw": 2990000,
+        "net_price_krw": 23910000
+      },
+      "gurye_jeonnam": {
+        "total_subsidy_krw": 4130000,
+        "net_price_krw": 22770000
+      },
+      "ulleung_gyeongbuk": {
+        "total_subsidy_krw": 4980000,
+        "net_price_krw": 21920000
+      }
+    }
+  },
+  {
+    "model_id": "ioniq-6-2026",
+    "name_ko": "현대 아이오닉 6 롱레인지 2WD (2026)",
+    "manufacturer": "현대자동차",
+    "battery_type": "NCM 삼원계 (SK온 77.4kWh)",
+    "battery_capacity_kwh": 77.4,
+    "rated_range_km": 524,
+    "base_price_krw": 52000000,
+    "price_subsidy_ratio": 1.0,
+    "national_subsidy_krw": 6500000,
+    "regional_subsidy_samples": {
+      "seoul": {
+        "local_subsidy_krw": 1500000,
+        "total_subsidy_krw": 8000000,
+        "net_price_krw": 44000000
+      },
+      "gyeonggi_avg": {
+        "local_subsidy_krw": 2600000,
+        "total_subsidy_krw": 9100000,
+        "net_price_krw": 42900000
+      }
+    }
+  },
+  {
+    "model_id": "genesis-gv60-2026",
+    "name_ko": "제네시스 GV60 스탠다드 2WD (2026)",
+    "manufacturer": "제네시스",
+    "battery_type": "NCM 삼원계 (SK온 77.4kWh)",
+    "battery_capacity_kwh": 77.4,
+    "rated_range_km": 451,
+    "base_price_krw": 64900000,
+    "price_subsidy_ratio": 0.5,
+    "national_subsidy_krw": 3150000,
+    "regional_subsidy_samples": {
+      "seoul": {
+        "local_subsidy_krw": 727000,
+        "total_subsidy_krw": 3877000,
+        "net_price_krw": 61023000
+      },
+      "gyeonggi_avg": {
+        "local_subsidy_krw": 1260000,
+        "total_subsidy_krw": 4410000,
+        "net_price_krw": 60490000
+      }
+    }
+  },
+  {
+    "model_id": "bmw-i4-edrive40",
+    "name_ko": "BMW i4 eDrive40 (2026)",
+    "manufacturer": "BMW",
+    "battery_type": "NCM 삼원계 (삼성SDI 83.9kWh)",
+    "battery_capacity_kwh": 83.9,
+    "rated_range_km": 429,
+    "base_price_krw": 78200000,
+    "price_subsidy_ratio": 0.5,
+    "national_subsidy_krw": 2120000,
+    "regional_subsidy_samples": {
+      "seoul": {
+        "local_subsidy_krw": 489000,
+        "total_subsidy_krw": 2609000,
+        "net_price_krw": 75591000
+      },
+      "gyeonggi_avg": {
+        "local_subsidy_krw": 848000,
+        "total_subsidy_krw": 2968000,
+        "net_price_krw": 75232000
+      }
+    }
+  },
+  {
+    "model_id": "audi-q4-e-tron",
+    "name_ko": "아우디 Q4 40 e-트론 (2026)",
+    "manufacturer": "아우디",
+    "battery_type": "NCM 삼원계 (LG엔솔 82kWh)",
+    "battery_capacity_kwh": 82.0,
+    "rated_range_km": 411,
+    "base_price_krw": 61700000,
+    "price_subsidy_ratio": 0.5,
+    "national_subsidy_krw": 1980000,
+    "regional_subsidy_samples": {
+      "seoul": {
+        "local_subsidy_krw": 457000,
+        "total_subsidy_krw": 2437000,
+        "net_price_krw": 59263000
+      },
+      "gyeonggi_avg": {
+        "local_subsidy_krw": 792000,
+        "total_subsidy_krw": 2772000,
+        "net_price_krw": 58928000
+      }
+    }
+  },
+  {
+    "model_id": "polestar-4-long-range",
+    "name_ko": "폴스타 4 롱레인지 싱글모터 (2026)",
+    "manufacturer": "폴스타",
+    "battery_type": "NCM 삼원계 (CATL 100kWh)",
+    "battery_capacity_kwh": 100.0,
+    "rated_range_km": 511,
+    "base_price_krw": 66900000,
+    "price_subsidy_ratio": 0.5,
+    "national_subsidy_krw": 2250000,
+    "regional_subsidy_samples": {
+      "seoul": {
+        "local_subsidy_krw": 519000,
+        "total_subsidy_krw": 2769000,
+        "net_price_krw": 64131000
+      },
+      "gyeonggi_avg": {
+        "local_subsidy_krw": 900000,
+        "total_subsidy_krw": 3150000,
+        "net_price_krw": 63750000
+      }
+    }
+  },
+  {
+    "model_id": "genesis-electrified-g80",
+    "name_ko": "제네시스 일렉트리파이드 G80 (2026)",
+    "manufacturer": "제네시스",
+    "battery_type": "NCM 삼원계 (SK온 94.5kWh)",
+    "battery_capacity_kwh": 94.5,
+    "rated_range_km": 475,
+    "base_price_krw": 89190000,
+    "price_subsidy_ratio": 0.0,
+    "national_subsidy_krw": 0,
+    "regional_subsidy_samples": {
+      "seoul": {
+        "local_subsidy_krw": 0,
+        "total_subsidy_krw": 0,
+        "net_price_krw": 89190000
+      },
+      "gyeonggi_avg": {
+        "local_subsidy_krw": 0,
+        "total_subsidy_krw": 0,
+        "net_price_krw": 89190000
+      }
+    }
+  },
+  {
+    "model_id": "benz-eqe-350",
+    "name_ko": "메르세데스-벤츠 EQE 350+ (2026)",
+    "manufacturer": "메르세데스-벤츠",
+    "battery_type": "NCM 삼원계 (CATL 90.6kWh)",
+    "battery_capacity_kwh": 90.6,
+    "rated_range_km": 471,
+    "base_price_krw": 103800000,
+    "price_subsidy_ratio": 0.0,
+    "national_subsidy_krw": 0,
+    "regional_subsidy_samples": {
+      "seoul": {
+        "local_subsidy_krw": 0,
+        "total_subsidy_krw": 0,
+        "net_price_krw": 103800000
+      },
+      "gyeonggi_avg": {
+        "local_subsidy_krw": 0,
+        "total_subsidy_krw": 0,
+        "net_price_krw": 103800000
+      }
+    }
+  },
+  {
+    "model_id": "porsche-taycan",
+    "name_ko": "포르쉐 타이칸 (2026)",
+    "manufacturer": "포르쉐",
+    "battery_type": "NCM 삼원계 (LG엔솔 105kWh)",
+    "battery_capacity_kwh": 105.0,
+    "rated_range_km": 500,
+    "base_price_krw": 129900000,
+    "price_subsidy_ratio": 0.0,
+    "national_subsidy_krw": 0,
+    "regional_subsidy_samples": {
+      "seoul": {
+        "local_subsidy_krw": 0,
+        "total_subsidy_krw": 0,
+        "net_price_krw": 129900000
+      },
+      "gyeonggi_avg": {
+        "local_subsidy_krw": 0,
+        "total_subsidy_krw": 0,
+        "net_price_krw": 129900000
+      }
+    }
+  }
+]

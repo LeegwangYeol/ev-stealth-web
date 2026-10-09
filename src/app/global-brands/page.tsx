@@ -10,8 +10,8 @@ export default function GlobalEvPage() {
     <div className="space-y-8 py-10 max-w-4xl mx-auto">
       <h1 className="text-4xl font-bold border-b pb-4">유럽 및 북미 EV 연식별 가이드 (폭스바겐, 리비안, 폴스타 등)</h1>
       
-      <section className="space-y-4">
-        <h2 className="text-3xl font-semibold text-gray-800">쉐보레 볼트 EV / EUV</h2>
+      <section className="space-y-4" aria-labelledby="heading-bolt-ev">
+        <h2 id="heading-bolt-ev" className="text-3xl font-semibold text-gray-800">쉐보레 볼트 EV / EUV</h2>
         <div className="bg-red-50 border-l-4 border-red-500 p-4" role="region" aria-label="쉐보레 볼트 EV 구매 회피 연식 경고">
           <h3 className="text-xl font-bold text-red-700">🚫 2017~2022년식: AVOID (절대 피할 것 - 배터리 화재)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
@@ -21,8 +21,8 @@ export default function GlobalEvPage() {
         </div>
       </section>
 
-      <section className="space-y-4 mt-8">
-        <h2 className="text-3xl font-semibold text-gray-800">폭스바겐 ID.4</h2>
+      <section className="space-y-4 mt-8" aria-labelledby="heading-id4">
+        <h2 id="heading-id4" className="text-3xl font-semibold text-gray-800">폭스바겐 ID.4</h2>
         <div className="bg-red-50 border-l-4 border-red-500 p-4" role="region" aria-label="폭스바겐 ID.4 구매 회피 연식 경고">
           <h3 className="text-xl font-bold text-red-700">🚫 2021~2024년식: AVOID (주행 중 문 열림 결함)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
@@ -32,8 +32,8 @@ export default function GlobalEvPage() {
         </div>
       </section>
 
-      <section className="space-y-4 mt-8">
-        <h2 className="text-3xl font-semibold text-gray-800">볼보 EX30 / 폴스타 2</h2>
+      <section className="space-y-4 mt-8" aria-labelledby="heading-volvo-polestar">
+        <h2 id="heading-volvo-polestar" className="text-3xl font-semibold text-gray-800">볼보 EX30 / 폴스타 2</h2>
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4" role="region" aria-label="볼보 EX30 및 폴스타 2 주의 연식 가이드">
           <h3 className="text-xl font-bold text-amber-900">⚠️ 2021~2024년식: CAUTION (소프트웨어 및 히터 결함)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
@@ -43,8 +43,8 @@ export default function GlobalEvPage() {
         </div>
       </section>
 
-      <section className="space-y-4 mt-8">
-        <h2 className="text-3xl font-semibold text-gray-800">메르세데스-벤츠 EQE / EQS</h2>
+      <section className="space-y-4 mt-8" aria-labelledby="heading-benz-eqe">
+        <h2 id="heading-benz-eqe" className="text-3xl font-semibold text-gray-800">메르세데스-벤츠 EQE / EQS</h2>
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4" role="region" aria-label="메르세데스-벤츠 EQE 및 EQS 주의 연식 가이드">
           <h3 className="text-xl font-bold text-amber-900">⚠️ 2022~2023년식: CAUTION (수리비 폭탄 주의)</h3>
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">

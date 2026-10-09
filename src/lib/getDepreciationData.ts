@@ -1015,7 +1015,12 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
     vehicleEfficiencyKmPerKwh = 5.2,
   } = params;
 
-  const years = Math.max(0, Number.isFinite(rawYears) ? rawYears : 0);
+  const isInvalidYears =
+    rawYears === undefined ||
+    rawYears === null ||
+    isNaN(rawYears) ||
+    rawYears < 0;
+  const safeYears = isInvalidYears ? 3 : rawYears;
 
   let model: EvModelDepreciation | undefined;
   if (modelId) {
@@ -1028,7 +1033,6 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
 
   const chemProfile = DATABASE.chemistries[chemistryKey] || DATABASE.chemistries.NCM_811;
   const packCapacityKwh = params.packCapacityKwh ?? model?.battery_specs.capacity_kwh ?? 77.4;
-  const safeYears = Number.isFinite(years) && years > 0 ? years : 3;
   const safeAnnualKm = Number.isFinite(annualKm) && annualKm >= 0 ? annualKm : 15000;
   const rawMileage = Number.isFinite(inputTotalKm)
     ? (inputTotalKm as number)
@@ -1049,7 +1053,10 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
   );
   const socFactor = Math.exp(chemProfile.soc_stress_coefficient_beta * (safeStorageSoc - SOC_REF));
   const kCal = (chemProfile.calendar_baseline_annual_loss_pct / 100.0) * arrheniusFactor * socFactor;
-  const qLossCal = kCal * Math.pow(Math.max(0.1, safeYears), chemProfile.calendar_time_exponent_z);
+  const qLossCal =
+    safeYears === 0
+      ? 0
+      : kCal * Math.pow(Math.max(0.1, safeYears), chemProfile.calendar_time_exponent_z);
 
   // B. Cyclic Aging via Mechanical Strain & DCFC Factor
   const safeEfficiency =

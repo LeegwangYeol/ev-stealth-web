@@ -286,11 +286,21 @@ class DefectTracker:
 
             # Severity filter
             if min_severity is not None:
-                sev = r.get("severity_index", 0.0)
-                try:
-                    if float(sev) < min_severity:
-                        continue
-                except (ValueError, TypeError):
+                sev = r.get("severity_index")
+                effective_sev: Optional[float] = None
+                if sev is not None:
+                    try:
+                        effective_sev = float(sev)
+                    except (ValueError, TypeError):
+                        effective_sev = None
+
+                if effective_sev is None:
+                    if str(r.get("severity", "")).upper() == "CRITICAL":
+                        effective_sev = 9.0
+                    else:
+                        effective_sev = 0.0
+
+                if effective_sev < min_severity:
                     continue
 
             # Keyword search across title, defect_topic, verbatim_quote, and raw_quote
@@ -335,12 +345,20 @@ class DefectTracker:
             cat = r.get("defect_category", "UNKNOWN")
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
-            dsi = r.get("severity_index", 0.0)
-            try:
-                if float(dsi) >= 7.0:
-                    critical_count += 1
-            except (ValueError, TypeError):
-                pass
+            dsi = r.get("severity_index")
+            effective_dsi: Optional[float] = None
+            if dsi is not None:
+                try:
+                    effective_dsi = float(dsi)
+                except (ValueError, TypeError):
+                    effective_dsi = None
+
+            is_critical = (
+                str(r.get("severity", "")).upper() == "CRITICAL"
+                or (effective_dsi is not None and effective_dsi >= 7.0)
+            )
+            if is_critical:
+                critical_count += 1
 
             neg = r.get("negativity_score")
             if neg is not None:

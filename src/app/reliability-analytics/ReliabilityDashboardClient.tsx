@@ -242,9 +242,10 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     );
   }, [allModels]);
 
-  const avoidPercentage = totalEvaluationsCount > 0
-    ? ((avoidEvaluationsCount / totalEvaluationsCount) * 100).toFixed(1)
-    : '31.5';
+  const rawRatio = totalEvaluationsCount > 0
+    ? (avoidEvaluationsCount / totalEvaluationsCount) * 100
+    : 31.5;
+  const avoidPercentage = Number.isFinite(rawRatio) ? rawRatio.toFixed(1) : '31.5';
 
   return (
     <div className="space-y-10 pb-16">
@@ -259,7 +260,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI)
           </h1>
           <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
-            국내 3대 커뮤니티(보배드림, 디시인사이드, 블라인드) 실차주 제보 <strong>{metadata.total_records_analyzed.toLocaleString()}건</strong>과 국토교통부·NHTSA 공식 리콜 기록을 교차 분석하여, 특정 연식의 치명적 고질병과 중고차 구매 시 절대 피해야 할 연식을 투명하게 공개합니다.
+            국내 3대 커뮤니티(보배드림, 디시인사이드, 블라인드) 실차주 제보 <strong>{(Number.isFinite(metadata?.total_records_analyzed) ? metadata.total_records_analyzed : 0).toLocaleString()}건</strong>과 국토교통부·NHTSA 공식 리콜 기록을 교차 분석하여, 특정 연식의 치명적 고질병과 중고차 구매 시 절대 피해야 할 연식을 투명하게 공개합니다.
           </p>
         </div>
 
@@ -268,7 +269,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           <div className="bg-slate-800/80 backdrop-blur rounded-2xl p-4 sm:p-5 border border-slate-700">
             <div className="text-xs sm:text-sm text-slate-400 font-medium">분석 결함 제보</div>
             <div className="text-2xl sm:text-3xl font-black text-white mt-1">
-              {metadata.total_records_analyzed.toLocaleString()}건
+              {(Number.isFinite(metadata?.total_records_analyzed) ? metadata.total_records_analyzed : 0).toLocaleString()}건
             </div>
             <div className="text-xs text-blue-400 mt-1 font-medium">
               9개 브랜드 · {metadata.models_count}개 모델 조사
@@ -906,7 +907,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {sortedModels.map((model) => {
               const gradeStyle = getGradeBadgeStyle(model.overall_grade);
-              const dsiInfo = getDsiSeverityLevel(model.avg_dsi);
+              const safeDsi = Number.isFinite(model?.avg_dsi) ? model.avg_dsi : 0;
+              const dsiInfo = getDsiSeverityLevel(safeDsi);
 
               return (
                 <div
@@ -937,21 +939,21 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-semibold text-slate-600">평균 결함 심각도 (DSI)</span>
                         <span className={`font-black text-sm ${dsiInfo.textColor}`}>
-                          {model.avg_dsi.toFixed(1)}점
+                          {safeDsi.toFixed(1)}점
                         </span>
                       </div>
                       <div
                         role="progressbar"
-                        aria-valuenow={Math.round(model.avg_dsi)}
+                        aria-valuenow={Math.round(safeDsi)}
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-label={`${model.brand_name_ko} ${model.name} 평균 결함 심각도 지수 DSI`}
-                        aria-valuetext={`${model.avg_dsi.toFixed(1)}점 (${dsiInfo.label})`}
+                        aria-valuetext={`${safeDsi.toFixed(1)}점 (${dsiInfo.label})`}
                         className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden"
                       >
                         <div
                           className={`h-full rounded-full transition-all duration-300 ${dsiInfo.barBgClass}`}
-                          style={{ width: `${Math.min(100, Math.max(10, model.avg_dsi))}%` }}
+                          style={{ width: `${Math.min(100, Math.max(10, safeDsi))}%` }}
                         />
                       </div>
                       <div className="flex justify-between text-[10px] text-slate-600 font-medium">
