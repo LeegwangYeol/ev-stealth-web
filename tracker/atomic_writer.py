@@ -6,6 +6,7 @@ fsync, and atomic rename (os.replace).
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import date, datetime
 from enum import Enum
 import json
@@ -19,17 +20,19 @@ logger = logging.getLogger(__name__)
 
 
 def _json_default(obj: Any) -> Any:
-    """Serialize Path, datetime, date, set, Enum, and to_dict objects to valid JSON primitives."""
+    """Serialize Path, datetime, date, set, frozenset, Enum, dataclass, and to_dict objects to valid JSON primitives."""
     if isinstance(obj, (datetime, date)):
         return obj.isoformat()
     if isinstance(obj, Path):
         return str(obj)
-    if isinstance(obj, set):
+    if isinstance(obj, (set, frozenset)):
         return list(obj)
     if isinstance(obj, Enum):
         return obj.value
     if hasattr(obj, "to_dict") and callable(getattr(obj, "to_dict")):
         return obj.to_dict()
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        return dataclasses.asdict(obj)
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 

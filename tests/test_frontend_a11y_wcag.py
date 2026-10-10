@@ -484,6 +484,25 @@ class TestRecallPortalClientA11y(unittest.TestCase):
             "Campaign defect title heading must use semantic <h4>.",
         )
 
+    def test_recall_portal_sections_aria_labelledby_and_search_input_labels(self):
+        """
+        Validate that all 4 <section> elements in RecallPortalClient.tsx are connected
+        to child headings via aria-labelledby, and search inputs are paired with labels.
+        """
+        self.assertIn('aria-labelledby="recall-checker-heading"', self.source)
+        self.assertIn('id="recall-checker-heading"', self.source)
+        self.assertIn('aria-labelledby="search-result-heading"', self.source)
+        self.assertIn('id="search-result-heading"', self.source)
+        self.assertIn('aria-labelledby="battery-directory-heading"', self.source)
+        self.assertIn('id="battery-directory-heading"', self.source)
+        self.assertIn('aria-labelledby="all-recalls-heading"', self.source)
+        self.assertIn('id="all-recalls-heading"', self.source)
+        self.assertIn('htmlFor="battery-search-input"', self.source)
+        self.assertIn('id="battery-search-input"', self.source)
+        self.assertIn('htmlFor="recall-catalog-search-input"', self.source)
+        self.assertIn('id="recall-catalog-search-input"', self.source)
+
+
 
 class TestDepreciationCalculatorClientA11y(unittest.TestCase):
     """
@@ -600,9 +619,8 @@ class TestDepreciationCalculatorClientA11y(unittest.TestCase):
         self.assertIsNotNone(fieldset_match, "Failed to match <fieldset> block in DepreciationCalculatorClient.tsx")
         fieldset_content = fieldset_match.group(1)
 
-        self.assertIn(
-            '<input\n                    type="radio"',
-            fieldset_content.replace("\r", ""),
+        self.assertTrue(
+            bool(re.search(r'<input\b[^>]*type=["\']radio["\']', fieldset_content)),
             "Transfer type radio inputs must be enclosed inside the <fieldset> block.",
         )
         self.assertIn(
@@ -690,6 +708,30 @@ class TestReliabilityDashboardClientA11y(unittest.TestCase):
         self.assertIn("text-slate-950", active_classes)
         self.assertIn("font-extrabold", active_classes)
         self.assertNotIn("text-white", active_classes, "Active CAUTION button must not use failing text-white on amber-500")
+
+    def test_reliability_dashboard_sections_aria_labelledby_and_disambiguated_regions(self):
+        """
+        Validate that sections in ReliabilityDashboardClient.tsx define accessible
+        aria-labelledby or aria-label attributes, and regions are disambiguated.
+        """
+        self.assertIn('aria-labelledby="reliability-hero-heading"', self.source)
+        self.assertIn('id="reliability-hero-heading"', self.source)
+        self.assertIn('aria-labelledby="charts-center-heading"', self.source)
+        self.assertIn('id="charts-center-heading"', self.source)
+        self.assertIn('aria-label="결함 통계 검색 및 다중 필터 제어판"', self.source)
+        self.assertIn('htmlFor="reliability-search-input"', self.source)
+        self.assertIn('id="reliability-search-input"', self.source)
+        self.assertIn('htmlFor="reliability-sort-select"', self.source)
+        self.assertIn('id="reliability-sort-select"', self.source)
+        self.assertIn('aria-labelledby="model-reliability-heading"', self.source)
+        self.assertIn('id="model-reliability-heading"', self.source)
+        self.assertIn('aria-labelledby="repair-cost-heading"', self.source)
+        self.assertIn('id="repair-cost-heading"', self.source)
+        self.assertIn('aria-labelledby="recall-banner-heading"', self.source)
+        self.assertIn('id="recall-banner-heading"', self.source)
+        self.assertIn('aria-label={`${model.brand_name_ko} ${model.name} 연식별 평가 목록`}', self.source)
+        self.assertNotIn('aria-label="평가 연도 목록"', self.source)
+
 
 
 class TestLayoutDesktopNavigationA11y(unittest.TestCase):
@@ -866,6 +908,15 @@ class TestSecretAdminReportsA11y(unittest.TestCase):
         for link_tag in link_matches:
             self.assertIn("tabIndex={-1}", link_tag, "sr-only table link must have tabIndex={-1}")
             self.assertIn('aria-hidden="true"', link_tag, 'sr-only table link must have aria-hidden="true"')
+
+    def test_admin_dashboard_search_input_label_pairing(self):
+        """
+        Validate that search input in AdminDashboardClient.tsx is explicitly paired
+        with id and <label htmlFor="..."> under WCAG 1.3.1 and 4.1.2.
+        """
+        self.assertIn('htmlFor="admin-defect-search-input"', self.source)
+        self.assertIn('id="admin-defect-search-input"', self.source)
+
 
 
 class TestEvRecallDatabaseIntegrity(unittest.TestCase):

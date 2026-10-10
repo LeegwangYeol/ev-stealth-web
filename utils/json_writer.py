@@ -25,6 +25,11 @@ from models.complaint import (
     DailyReportStatistics,
 )
 
+if not hasattr(DailyReportPayload, "__getitem__"):
+    setattr(DailyReportPayload, "__getitem__", lambda self, key: self.to_dict()[key])
+if not hasattr(DailyReportPayload, "__contains__"):
+    setattr(DailyReportPayload, "__contains__", lambda self, key: key in self.to_dict())
+
 
 _CURRENT_DIR = Path(__file__).resolve().parent
 _CANDIDATE_PATHS = [
@@ -89,8 +94,8 @@ def format_daily_report_payload(
             if not item.is_authentic_defect:
                 continue
             record_dict = item.to_admin_report_dict()
-            neg_score = item.negativity_score
-            is_critical = item.severity_tier == "CRITICAL"
+            neg_score = _safe_float(item.negativity_score, 0.5)
+            is_critical = str(item.severity_tier or "").strip().upper() == "CRITICAL" or _safe_float(getattr(item, "severity_index", 0.0), 0.0) >= 8.0
             category = item.defect_category
         elif isinstance(item, dict):
             # Check is_authentic_defect if provided
@@ -105,9 +110,18 @@ def format_daily_report_payload(
             if "raw_quote" not in record_dict and "verbatim_quote" in record_dict:
                 record_dict["raw_quote"] = record_dict["verbatim_quote"]
 
-            neg_score = _safe_float(record_dict.get("negativity_score") or record_dict.get("sentiment_score"), 0.5)
+            raw_neg = record_dict.get("negativity_score")
+            if raw_neg is None:
+                raw_neg = record_dict.get("sentiment_score")
+            neg_score = _safe_float(raw_neg, 0.5)
+            if record_dict.get("negativity_score") is None:
+                record_dict["negativity_score"] = neg_score
+            if record_dict.get("sentiment_score") is None:
+                record_dict["sentiment_score"] = neg_score
+
             sev_idx = _safe_float(record_dict.get("severity_index"), 0.0)
-            is_critical = record_dict.get("severity") == "CRITICAL" or sev_idx >= 8.0
+            raw_sev = str(record_dict.get("severity") or record_dict.get("severity_tier") or "").strip().upper()
+            is_critical = (raw_sev == "CRITICAL" or sev_idx >= 8.0)
             raw_cat = record_dict.get("defect_category")
             category = str(raw_cat) if raw_cat and str(raw_cat) != "None" else "BUILD_QUALITY"
         else:
@@ -204,7 +218,11 @@ def write_daily_reports(
                 existing_reports = raw_reports if isinstance(raw_reports, list) else []
                 stats = existing_data.get("statistics")
                 if isinstance(stats, dict):
-                    existing_total_scraped = stats.get("total_scraped", 0)
+                    raw_ts = stats.get("total_scraped")
+                    if raw_ts is not None:
+                        existing_total_scraped = int(max(0, _safe_float(raw_ts, len(existing_reports))))
+                    else:
+                        existing_total_scraped = len(existing_reports)
                 else:
                     existing_total_scraped = len(existing_reports)
             else:
@@ -249,11 +267,15 @@ def write_daily_reports(
             seen_urls.add(eurl)
         merged_reports.append(er)
 
-    combined_total_scraped = (
-        (existing_total_scraped + total_scraped)
-        if total_scraped is not None
-        else max(existing_total_scraped, len(merged_reports))
-    )
+    safe_existing_total = int(max(0, existing_total_scraped if existing_total_scraped is not None else len(existing_reports)))
+    if total_scraped is not None:
+        try:
+            safe_new_scraped = int(max(0, _safe_float(total_scraped, 0)))
+        except Exception:
+            safe_new_scraped = 0
+        combined_total_scraped = safe_existing_total + safe_new_scraped
+    else:
+        combined_total_scraped = max(safe_existing_total, len(merged_reports))
     items_to_write = merged_reports
     total_scraped = combined_total_scraped
 
@@ -276,7 +298,8 @@ def write_daily_reports(
     try:
         with tempfile.NamedTemporaryFile("w", dir=temp_dir, delete=False, encoding="utf-8") as tf:
             temp_name = tf.name
-            json.dump(data, tf, ensure_ascii=False, indent=2)
+            from tracker.atomic_writer import _json_default
+            json.dump(data, tf, ensure_ascii=False, indent=2, default=_json_default)
             tf.flush()
             os.fsync(tf.fileno())
 

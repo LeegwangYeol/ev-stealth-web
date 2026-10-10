@@ -324,6 +324,16 @@ class NationwideSummary:
             "alert_region_counts": self.alert_region_counts,
         }
 
+    @property
+    def disbursed_budget_krw(self) -> int:
+        """Disbursed statutory budget in KRW (non-negative)."""
+        return max(0, int(round(self.disbursed_budget_billion_krw * 1_000_000_000)))
+
+    @property
+    def total_budget_krw(self) -> int:
+        """Total statutory budget in KRW (non-negative)."""
+        return max(0, int(round(self.total_budget_billion_krw * 1_000_000_000)))
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> NationwideSummary:
         if not isinstance(data, dict):

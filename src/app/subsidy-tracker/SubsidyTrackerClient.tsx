@@ -527,8 +527,9 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               3. 추가 지원금 &amp; 특별 가산 혜택 (해당 시 선택)
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              <label className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
+              <label htmlFor="grant-youth-buyer-checkbox" className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
                 <input
+                  id="grant-youth-buyer-checkbox"
                   type="checkbox"
                   checked={calcOptions.isYouthFirstTimeBuyer}
                   onChange={(e) => setCalcOptions((prev) => ({ ...prev, isYouthFirstTimeBuyer: e.target.checked }))}
@@ -537,8 +538,9 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                 <span>청년 생애 최초 구매 (+20% 국비)</span>
               </label>
 
-              <label className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
+              <label htmlFor="grant-small-business-checkbox" className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
                 <input
+                  id="grant-small-business-checkbox"
                   type="checkbox"
                   checked={calcOptions.isSmallBusinessOrTaxi}
                   onChange={(e) => setCalcOptions((prev) => ({ ...prev, isSmallBusinessOrTaxi: e.target.checked }))}
@@ -547,8 +549,9 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                 <span>소상공인 / 영업용 택시 (+30% 국비)</span>
               </label>
 
-              <label className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
+              <label htmlFor="grant-multi-child-checkbox" className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
                 <input
+                  id="grant-multi-child-checkbox"
                   type="checkbox"
                   checked={calcOptions.isMultiChildFamily}
                   onChange={(e) => setCalcOptions((prev) => ({ ...prev, isMultiChildFamily: e.target.checked }))}
@@ -557,8 +560,9 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                 <span>다자녀 가구 (+10% 국비)</span>
               </label>
 
-              <label className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
+              <label htmlFor="grant-diesel-scrappage-checkbox" className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
                 <input
+                  id="grant-diesel-scrappage-checkbox"
                   type="checkbox"
                   checked={calcOptions.isOldDieselScrappage}
                   onChange={(e) => setCalcOptions((prev) => ({ ...prev, isOldDieselScrappage: e.target.checked }))}
@@ -1047,9 +1051,9 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
       </section>
 
       {/* 2. 5-Tier Alert Badges Legend & Quick Filter - Solid Opaque Background for WCAG AA Contrast */}
-      <section aria-label="보조금 소진 5단계 경보 범례" className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+      <section aria-labelledby="subsidy-alert-legend-heading" className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <h2 className="text-sm font-bold text-slate-300 flex items-center gap-2">
+          <h2 id="subsidy-alert-legend-heading" className="text-sm font-bold text-slate-300 flex items-center gap-2">
             <span aria-hidden="true">🛡️</span> 전국 지자체 보조금 소진 5단계 경보 기준
           </h2>
           <span className="text-xs text-slate-300">배지 클릭 시 해당 경보 지역만 필터링</span>
@@ -1189,7 +1193,9 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
 
           {/* Sort Selector */}
           <div className="shrink-0">
+            <label htmlFor="region-sort-select" className="sr-only">지자체 정렬 방식</label>
             <select
+              id="region-sort-select"
               value={sortOption}
               onChange={(e) => setSortOption(e.target.value as SortOption)}
               aria-label="지자체 정렬 방식"
@@ -1235,10 +1241,10 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         className="space-y-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
       >
         <div className="flex items-center justify-between">
-          <h2 id="regional-grid-heading" className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
+          <h2 id="regional-grid-heading" className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
             <span aria-hidden="true">🗺️</span> 17개 광역시도별 보조금 소진율 &amp; 잔여 쿼터 현황
           </h2>
-          <span className="text-xs text-slate-600">
+          <span className="text-xs text-slate-400">
             {selectedCategory === 'passenger' ? '전기승용 기준' : selectedCategory === 'commercial' ? '전기화물 기준' : '전기승합 기준'}
             {filteredRegions.length < regions.length && ` (검색 결과 ${filteredRegions.length}개 지역)`}
           </span>
@@ -1278,8 +1284,8 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
       />
 
       {/* 6. Regulatory Footer Notes */}
-      <section aria-label="보조금 지침 규정 안내" className="text-xs text-slate-400 leading-relaxed bg-slate-950 p-6 rounded-2xl border border-slate-900 space-y-2">
-        <h2 className="text-base font-bold text-slate-200">📌 2026년 환경부 및 지자체 전기차 보조금 안내사항</h2>
+      <section aria-labelledby="subsidy-guidelines-heading" className="text-xs text-slate-400 leading-relaxed bg-slate-950 p-6 rounded-2xl border border-slate-900 space-y-2">
+        <h2 id="subsidy-guidelines-heading" className="text-base font-bold text-slate-200">📌 2026년 환경부 및 지자체 전기차 보조금 안내사항</h2>
         <ul className="list-disc pl-5 space-y-1 text-slate-400">
           <li>
             <strong>가격 상한제:</strong> 기본 출고가(MSRP) 기준 5,500만 원 미만 100%, 5,500만~8,500만 원 50%, 8,500만 원 초과 시 보조금 지급 대상에서 전액 제외됩니다.

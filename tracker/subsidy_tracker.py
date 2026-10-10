@@ -115,9 +115,19 @@ def classify_alert_tier(depletion_rate: float) -> str:
 
 def calculate_price_cap_ratio(msrp: int) -> float:
     """Statutory 2026 Korean EV subsidy ratio tiers: 1.0 (<=55M), 0.5 (55M-85M), 0.0 (>85M)."""
-    if msrp <= 55_000_000:
+    try:
+        if msrp is None:
+            return 0.0
+        f_msrp = float(msrp)
+        if math.isnan(f_msrp) or math.isinf(f_msrp):
+            return 0.0
+        safe_msrp = int(f_msrp)
+    except (ValueError, TypeError, OverflowError):
+        return 0.0
+
+    if safe_msrp <= 55_000_000:
         return 1.0
-    elif msrp <= 85_000_000:
+    elif safe_msrp <= 85_000_000:
         return 0.5
     return 0.0
 
@@ -129,15 +139,39 @@ def calculate_net_subsidy(
     msrp: int,
 ) -> Dict[str, int]:
     """Calculate national subsidy, local subsidy, total subsidy, and net consumer purchase price."""
-    ratio = calculate_price_cap_ratio(msrp)
-    effective_national = int(round(model_national * ratio))
-    if max_national > 0:
-        local_ratio = min(1.0, max(0.0, model_national / max_national))
+    try:
+        if msrp is None:
+            safe_msrp = 0
+        else:
+            f_msrp = float(msrp)
+            safe_msrp = 0 if (math.isnan(f_msrp) or math.isinf(f_msrp)) else int(f_msrp)
+    except (ValueError, TypeError, OverflowError):
+        safe_msrp = 0
+
+    try:
+        safe_model_nat = max(0, int(model_national)) if model_national is not None else 0
+    except (ValueError, TypeError, OverflowError):
+        safe_model_nat = 0
+
+    try:
+        safe_max_nat = max(0, int(max_national)) if max_national is not None else 0
+    except (ValueError, TypeError, OverflowError):
+        safe_max_nat = 0
+
+    try:
+        safe_max_loc = max(0, int(max_local)) if max_local is not None else 0
+    except (ValueError, TypeError, OverflowError):
+        safe_max_loc = 0
+
+    ratio = calculate_price_cap_ratio(safe_msrp)
+    effective_national = int(round(safe_model_nat * ratio))
+    if safe_max_nat > 0:
+        local_ratio = min(1.0, max(0.0, safe_model_nat / safe_max_nat))
     else:
         local_ratio = 0.0
-    effective_local = int(round(max_local * local_ratio * ratio))
+    effective_local = int(round(safe_max_loc * local_ratio * ratio))
     total_subsidy = effective_national + effective_local
-    net_price = max(0, msrp - total_subsidy)
+    net_price = max(0, safe_msrp - total_subsidy)
     return {
         "national_subsidy_krw": effective_national,
         "local_subsidy_krw": effective_local,
@@ -219,21 +253,39 @@ class SubsidyTracker:
         total_applied = 0
 
         for cat_name, cat in region.categories.items():
-            total_announced += cat.announced_units
-            total_applied += cat.applied_units
-            cat.remaining_units = calculate_remaining_units(cat.applied_units, cat.announced_units)
-            cat.depletion_rate = calculate_depletion_rate(cat.applied_units, cat.announced_units)
-            cat.delivery_rate = calculate_depletion_rate(cat.delivered_units, cat.announced_units)
+            safe_ann = max(0, int(cat.announced_units or 0))
+            safe_app = max(0, int(cat.applied_units or 0))
+            safe_del = max(0, int(cat.delivered_units or 0))
+            cat.announced_units = safe_ann
+            cat.applied_units = safe_app
+            cat.delivered_units = safe_del
+
+            total_announced += safe_ann
+            total_applied += safe_app
+            cat.remaining_units = calculate_remaining_units(safe_app, safe_ann)
+            cat.depletion_rate = calculate_depletion_rate(safe_app, safe_ann)
+            cat.delivery_rate = calculate_depletion_rate(safe_del, safe_ann)
             cat.status = self.evaluate_status(cat.depletion_rate).value
-            if cat.total_budget_krw > 0 and cat.announced_units > 0:
-                unit_budget = cat.total_budget_krw / cat.announced_units
-                cat.remaining_budget_krw = int(max(0, cat.total_budget_krw - (cat.applied_units * unit_budget)))
+
+            safe_total_budget = max(0, int(cat.total_budget_krw or 0))
+            cat.total_budget_krw = safe_total_budget
+            if safe_total_budget > 0 and safe_ann > 0:
+                unit_budget = safe_total_budget / safe_ann
+                cat.remaining_budget_krw = min(safe_total_budget, max(0, int(safe_total_budget - (safe_app * unit_budget))))
+            else:
+                cat.remaining_budget_krw = min(safe_total_budget, max(0, int(cat.remaining_budget_krw or 0)))
 
         # Recalculate municipalities if present
         if region.municipalities:
             for muni in region.municipalities:
-                muni.remaining_units = calculate_remaining_units(muni.applied_units, muni.announced_units)
-                muni.depletion_rate = calculate_depletion_rate(muni.applied_units, muni.announced_units)
+                safe_m_ann = max(0, int(getattr(muni, "announced_units", 0) or 0))
+                safe_m_app = max(0, int(getattr(muni, "applied_units", 0) or 0))
+                muni.announced_units = safe_m_ann
+                muni.applied_units = safe_m_app
+                if hasattr(muni, "delivered_units"):
+                    muni.delivered_units = max(0, int(getattr(muni, "delivered_units", 0) or 0))
+                muni.remaining_units = calculate_remaining_units(safe_m_app, safe_m_ann)
+                muni.depletion_rate = calculate_depletion_rate(safe_m_app, safe_m_ann)
                 muni.status = self.evaluate_status(muni.depletion_rate).value
 
         # Overall depletion rate is weighted by volume across all categories
@@ -266,7 +318,7 @@ class SubsidyTracker:
 
         for r in regions:
             # Region overall status
-            st_key = r.overall_status.lower()
+            st_key = str(r.overall_status or "").strip().lower()
             if st_key in alert_counts:
                 alert_counts[st_key] += 1
 
@@ -274,15 +326,21 @@ class SubsidyTracker:
                 if c_name not in cat_counts:
                     cat_counts[c_name] = {"announced": 0, "applied": 0, "delivered": 0}
 
-                cat_counts[c_name]["announced"] += c_data.announced_units
-                cat_counts[c_name]["applied"] += c_data.applied_units
-                cat_counts[c_name]["delivered"] += c_data.delivered_units
+                c_ann = max(0, int(c_data.announced_units or 0))
+                c_app = max(0, int(c_data.applied_units or 0))
+                c_del = max(0, int(c_data.delivered_units or 0))
+                c_tot_b = max(0, int(c_data.total_budget_krw or 0))
+                c_rem_b = min(c_tot_b, max(0, int(c_data.remaining_budget_krw or 0)))
 
-                total_announced += c_data.announced_units
-                total_applied += c_data.applied_units
-                total_delivered += c_data.delivered_units
-                total_budget_krw += c_data.total_budget_krw
-                disbursed_budget_krw += (c_data.total_budget_krw - c_data.remaining_budget_krw)
+                cat_counts[c_name]["announced"] += c_ann
+                cat_counts[c_name]["applied"] += c_app
+                cat_counts[c_name]["delivered"] += c_del
+
+                total_announced += c_ann
+                total_applied += c_app
+                total_delivered += c_del
+                total_budget_krw += c_tot_b
+                disbursed_budget_krw += max(0, c_tot_b - c_rem_b)
 
         total_remaining = calculate_remaining_units(total_applied, total_announced)
         nationwide_rate = calculate_depletion_rate(total_applied, total_announced)
@@ -593,9 +651,15 @@ class SubsidyTracker:
                     if (cwd.parent / "data").exists():
                         destinations.append(cwd.parent / "data" / "ev_subsidy_data.json")
                         destinations.append(cwd.parent / "data" / "subsidy_depletion_data.json")
+                    if (cwd / "public" / "data").exists():
+                        destinations.append(cwd / "public" / "data" / "ev_subsidy_data.json")
+                        destinations.append(cwd / "public" / "data" / "subsidy_depletion_data.json")
                 else:
                     destinations.append(cwd / "ev-stealth-web" / "src" / "data" / "ev_subsidy_data.json")
                     destinations.append(cwd / "ev-stealth-web" / "src" / "data" / "subsidy_depletion_data.json")
+                    if (cwd / "ev-stealth-web" / "public" / "data").exists():
+                        destinations.append(cwd / "ev-stealth-web" / "public" / "data" / "ev_subsidy_data.json")
+                        destinations.append(cwd / "ev-stealth-web" / "public" / "data" / "subsidy_depletion_data.json")
 
             # Deduplicate destinations preserving order
             unique_destinations: List[Path] = []
@@ -805,7 +869,9 @@ def export_models_subsidy_matrix(target_dirs: Optional[List[Union[str, Path]]] =
         candidates = [
             cwd / "data",
             cwd / "ev-stealth-web" / "src" / "data",
+            cwd / "ev-stealth-web" / "public" / "data",
             cwd / "src" / "data",
+            cwd / "public" / "data",
             cwd.parent / "data",
         ]
         target_dirs = [c for c in candidates if c.exists()]

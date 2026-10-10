@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 
+export const dynamic = 'force-static';
+
 export const metadata: Metadata = {
   title: 'BYD 전기차 연식별 결함 및 구매 가이드 | Global EV Hub',
   description: 'BYD 돌핀, 시라이언 7, 씰, 아토 3 연식별(2021~2026) 에어컨 백색가루, 하체 부식, 조향장치 결함 및 구매 가이드',

@@ -627,7 +627,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
             <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm">
               <span className="text-xs text-slate-400 font-medium">OTA 무선 조치 지원율</span>
               <div className="text-xl sm:text-2xl font-black text-emerald-400 mt-0.5">
-                {metadata.ota_remedy_rate_pct}
+                {Number.isFinite(metadata?.ota_remedy_rate_pct) ? metadata.ota_remedy_rate_pct : 0}
                 <span className="text-xs font-normal text-slate-400 ml-1">% (방문 불필요)</span>
               </div>
             </div>
@@ -637,9 +637,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
         {/* 2. Dual-Mode Verification Tool */}
-        <section className="bg-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl">
+        <section aria-labelledby="recall-checker-heading" className="bg-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl">
           <div className="max-w-3xl mb-6">
-            <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+            <h2 id="recall-checker-heading" className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
               <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
@@ -898,7 +898,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
         {/* 3. Live Search Result Display */}
         {checkResult && (
-          <section id="search-result-section" aria-live="polite" className="space-y-6 scroll-mt-24">
+          <section id="search-result-section" aria-labelledby="search-result-heading" aria-live="polite" className="space-y-6 scroll-mt-24">
             {/* Overall Risk Banner */}
             <div
               className={`rounded-2xl p-6 shadow-2xl border ${
@@ -932,7 +932,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       </span>
                     </div>
 
-                    <h2 className="text-xl sm:text-2xl font-black mt-1">
+                    <h2 id="search-result-heading" className="text-xl sm:text-2xl font-black mt-1">
                       {checkResult.decodedBrand} {checkResult.decodedModel}{' '}
                       {checkResult.decodedYear ? `${checkResult.decodedYear}년식` : ''} 판정 결과
                     </h2>
@@ -1171,7 +1171,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
         )}
 
         {/* 4. Battery Safety Directory (공개 배터리 제조사 및 지하주차장 안전 가이드) */}
-        <section id="battery-directory" className="bg-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
+        <section id="battery-directory" aria-labelledby="battery-directory-heading" className="bg-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
@@ -1180,7 +1180,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 </span>
                 <span className="text-xs text-slate-400">총 {batteryProfiles.length}개 차종</span>
               </div>
-              <h2 className="text-xl sm:text-2xl font-bold text-white">
+              <h2 id="battery-directory-heading" className="text-xl sm:text-2xl font-bold text-white">
                 🔋 전기차 배터리 제조사 & 지하주차장 안전 가이드
               </h2>
               <p className="text-sm text-slate-400 mt-0.5">
@@ -1190,7 +1190,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
             {/* Search Input */}
             <div className="w-full md:w-72">
+              <label htmlFor="battery-search-input" className="sr-only">배터리 제조사 및 모델 검색</label>
               <input
+                id="battery-search-input"
                 type="text"
                 value={batterySearch}
                 onChange={(e) => setBatterySearch(e.target.value)}
@@ -1309,7 +1311,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
         </section>
 
         {/* 5. All Recalls Directory (전체 공식 리콜 캠페인 탐색기) */}
-        <section className="bg-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
+        <section aria-labelledby="all-recalls-heading" className="bg-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
@@ -1318,7 +1320,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 </span>
                 <span className="text-xs text-slate-400">전체 공시 리콜 대장</span>
               </div>
-              <h2 className="text-xl sm:text-2xl font-bold text-white">
+              <h2 id="all-recalls-heading" className="text-xl sm:text-2xl font-bold text-white">
                 📋 전체 전기차 리콜 캠페인 카탈로그
               </h2>
               <p className="text-sm text-slate-400 mt-0.5">
@@ -1328,7 +1330,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
             {/* Search Input */}
             <div className="w-full md:w-72">
+              <label htmlFor="recall-catalog-search-input" className="sr-only">전기차 리콜 캠페인 검색</label>
               <input
+                id="recall-catalog-search-input"
                 type="text"
                 value={recallSearch}
                 onChange={(e) => setRecallSearch(e.target.value)}

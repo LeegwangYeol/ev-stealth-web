@@ -250,13 +250,13 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
   return (
     <div className="space-y-10 pb-16">
       {/* 1. HERO SECTION & KEY METRICS */}
-      <section className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-3xl p-6 sm:p-10 shadow-2xl border border-slate-700/50">
+      <section aria-labelledby="reliability-hero-heading" className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-3xl p-6 sm:p-10 shadow-2xl border border-slate-700/50">
         <div className="max-w-4xl space-y-4">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs sm:text-sm font-semibold border border-blue-400/30">
             <span>📊</span>
             <span>2026 대한민국 전기차 종합 내구성 인텔리전스</span>
           </div>
-          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight">
+          <h1 id="reliability-hero-heading" className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight">
             전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI)
           </h1>
           <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
@@ -310,10 +310,10 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       </section>
 
       {/* 2. VISUAL CHARTS SECTION (PURE CSS/SVG) */}
-      <section className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200">
+      <section aria-labelledby="charts-center-heading" className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <h2 id="charts-center-heading" className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
               <span>📈</span>
               <span>데이터 시각화 차트 센터</span>
             </h2>
@@ -682,15 +682,17 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       </section>
 
       {/* 3. MULTI-FILTER TOOLBAR */}
-      <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-6">
+      <section aria-label="결함 통계 검색 및 다중 필터 제어판" className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="relative flex-1">
+            <label htmlFor="reliability-search-input" className="sr-only">차종, 브랜드, 결함 증상 검색</label>
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-600">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
             <input
+              id="reliability-search-input"
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -701,7 +703,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           </div>
 
           <div className="flex items-center gap-3">
+            <label htmlFor="reliability-sort-select" className="sr-only">정렬 기준 선택</label>
             <select
+              id="reliability-sort-select"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
               aria-label="정렬 기준 선택"
@@ -875,8 +879,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       </section>
 
       {/* 4. MODEL CARDS GRID */}
-      <section className="space-y-4">
-        <h2 className="text-2xl font-bold text-slate-900 mb-6">차종별 신뢰성 상세 분석</h2>
+      <section aria-labelledby="model-reliability-heading" className="space-y-4">
+        <h2 id="model-reliability-heading" className="text-2xl font-bold text-slate-900 mb-6">차종별 신뢰성 상세 분석</h2>
         <div className="flex items-center justify-between">
           <div className="text-sm font-semibold text-slate-600" aria-live="polite">
             총 <strong className="text-slate-900">{sortedModels.length}</strong>개 차종 표시 중
@@ -968,7 +972,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       <div className="text-xs font-bold text-slate-700">연식별 내구성 평가</div>
                       <div
                         tabIndex={0}
-                        aria-label="평가 연도 목록"
+                        aria-label={`${model.brand_name_ko} ${model.name} 연식별 평가 목록`}
                         role="region"
                         className="space-y-2 max-h-56 overflow-y-auto pr-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg outline-none"
                       >
@@ -1006,7 +1010,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     </div>
 
                     {/* Authentic Owner Quote */}
-                    {model.year_evaluations[0]?.raw_quote && (
+                    {model.year_evaluations?.[0]?.raw_quote && (
                       <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-xs text-slate-600 italic">
                         <span className="text-slate-600 font-serif mr-1">&ldquo;</span>
                         {model.year_evaluations[0].raw_quote}
@@ -1034,13 +1038,13 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       </section>
 
       {/* 5. OUT-OF-WARRANTY REPAIR COST MATRIX TABLE */}
-      <section className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200 space-y-6">
+      <section aria-labelledby="repair-cost-heading" className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200 space-y-6">
         <div className="max-w-3xl space-y-2">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-50 text-rose-700 text-xs font-bold border border-rose-200">
             <span>💣</span>
             <span>중고 전기차 구매자 필수 참고</span>
           </div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+          <h2 id="repair-cost-heading" className="text-2xl font-bold text-slate-900 tracking-tight">
             보증 만료 후 폭탄 수리비 및 핵심 부품별 교체 비용 매트릭스
           </h2>
           <p className="text-sm text-slate-600 leading-relaxed">
@@ -1103,9 +1107,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       </section>
 
       {/* 6. CONSUMER SURVIVAL GUIDE BANNER */}
-      <section className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-3xl p-6 sm:p-8 shadow-lg flex flex-col md:flex-row items-center justify-between gap-6">
+      <section aria-labelledby="recall-banner-heading" className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-3xl p-6 sm:p-8 shadow-lg flex flex-col md:flex-row items-center justify-between gap-6">
         <div className="space-y-2 max-w-2xl">
-          <h2 className="text-xl sm:text-2xl font-black">
+          <h2 id="recall-banner-heading" className="text-xl sm:text-2xl font-black">
             🚨 내 차의 공식 화재 리콜 및 배터리 제조사가 궁금하신가요?
           </h2>
           <p className="text-sm text-blue-200 leading-relaxed">

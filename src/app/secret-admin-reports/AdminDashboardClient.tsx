@@ -459,6 +459,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
           {/* Full-text search input */}
           <div className="relative flex-1">
+            <label htmlFor="admin-defect-search-input" className="sr-only">전기차 결함 제보 및 은어 검색</label>
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-600">
               <svg className="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -470,6 +471,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               </svg>
             </div>
             <input
+              id="admin-defect-search-input"
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}

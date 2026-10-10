@@ -1018,7 +1018,7 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
   const isInvalidYears =
     rawYears === undefined ||
     rawYears === null ||
-    isNaN(rawYears) ||
+    !Number.isFinite(rawYears) ||
     rawYears < 0;
   const safeYears = isInvalidYears ? 3 : rawYears;
 
@@ -1364,7 +1364,7 @@ export function calculateTcoComparison(
   let maintenanceTotalSavings = 0;
 
   const safeAnnualKm = Number.isFinite(annualKm) && annualKm >= 0 ? annualKm : 15000;
-  const rawYears = Number.isFinite(years) && years > 0 ? years : 1;
+  const rawYears = Math.min(30, Number.isFinite(years) && years > 0 ? years : 1);
   const safeYears = Math.max(1, Math.round(rawYears));
   const fullYears = Math.floor(rawYears);
   const fractionalRemainder = Math.round((rawYears - fullYears) * 10000) / 10000;

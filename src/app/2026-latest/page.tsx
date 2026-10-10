@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 
+export const dynamic = 'force-static';
+
 export const metadata: Metadata = {
   title: '2026년식 KDM EV 초기 품질 리포트 | Global EV Hub',
   description: '올해 출고된 2026년식 최신 전기차(아이오닉5, EV3, 아이오닉9, 모델Y, 시라이언7)의 한국 차주 실제 평가와 초기 결함을 100% 원문 출처와 함께 분석했습니다.',

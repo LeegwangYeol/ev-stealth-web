@@ -12,6 +12,7 @@ from collections import OrderedDict
 import hashlib
 import json
 import logging
+import math
 import os
 from pathlib import Path
 import shutil
@@ -56,7 +57,9 @@ class DefectTracker:
         web_data_dir: Optional[Union[str, Path]] = None,
         pipeline: Optional[Any] = None,
         filter_engine: Optional[Any] = None,
+        reports_file: Optional[Union[str, Path]] = None,
     ) -> None:
+        self.reports_file: Optional[Path] = Path(reports_file) if reports_file else None
         cwd = Path.cwd()
         if root_data_dir:
             self.root_data_dir = Path(root_data_dir)
@@ -131,6 +134,9 @@ class DefectTracker:
 
     def resolve_primary_reports_path(self) -> Optional[Path]:
         """Find the active authoritative defect reports file between root and web."""
+        if self.reports_file and self.validate_report_file(self.reports_file):
+            return self.reports_file
+
         root_path = self.get_root_reports_path()
         web_path = self.get_web_reports_path()
 
@@ -202,7 +208,7 @@ class DefectTracker:
                         and self._cached_reports_path == target
                         and self._cached_reports_mtime == current_mtime
                     ):
-                        return self._cached_reports
+                        return [dict(r) for r in self._cached_reports]
             except OSError:
                 pass
 
@@ -224,7 +230,7 @@ class DefectTracker:
             self._cached_reports = reports
             self._build_category_index(reports)
             self._query_cache.clear()
-            return self._cached_reports
+            return [dict(r) for r in self._cached_reports]
 
     def query_defects(
         self,
@@ -239,10 +245,10 @@ class DefectTracker:
         """Query and filter defect reports with category pre-filtering and query caching."""
         reports = self.load_reports(file_path=file_path)
 
-        cat_upper = category.upper().strip() if category else None
-        brand_lower = vehicle_brand.lower().strip() if vehicle_brand else None
-        model_lower = vehicle_model.lower().strip() if vehicle_model else None
-        kw_lower = keyword.lower().strip() if keyword else None
+        cat_upper = category.strip().upper() if (category and isinstance(category, str) and category.strip()) else None
+        brand_lower = vehicle_brand.strip().lower() if (vehicle_brand and isinstance(vehicle_brand, str) and vehicle_brand.strip()) else None
+        model_lower = vehicle_model.strip().lower() if (vehicle_model and isinstance(vehicle_model, str) and vehicle_model.strip()) else None
+        kw_lower = keyword.strip().lower() if (keyword and isinstance(keyword, str) and keyword.strip()) else None
 
         cache_key = (
             str(self._cached_reports_path),
@@ -258,7 +264,7 @@ class DefectTracker:
         with self._cache_lock:
             if cache_key in self._query_cache:
                 self._query_cache.move_to_end(cache_key)
-                return list(self._query_cache[cache_key])
+                return [dict(r) for r in self._query_cache[cache_key]]
 
             # Category-level pre-filtering: use pre-indexed category bucket if specified
             if cat_upper is not None:
@@ -286,22 +292,31 @@ class DefectTracker:
 
             # Severity filter
             if min_severity is not None:
-                sev = r.get("severity_index")
-                effective_sev: Optional[float] = None
-                if sev is not None:
-                    try:
-                        effective_sev = float(sev)
-                    except (ValueError, TypeError):
-                        effective_sev = None
+                try:
+                    min_sev_val = float(min_severity)
+                    if math.isnan(min_sev_val) or math.isinf(min_sev_val):
+                        min_sev_val = None
+                except (ValueError, TypeError):
+                    min_sev_val = None
 
-                if effective_sev is None:
-                    if str(r.get("severity", "")).upper() == "CRITICAL":
-                        effective_sev = 9.0
-                    else:
-                        effective_sev = 0.0
+                if min_sev_val is not None:
+                    sev = r.get("severity_index")
+                    effective_sev: Optional[float] = None
+                    if sev is not None:
+                        try:
+                            effective_sev = float(sev)
+                            if math.isnan(effective_sev) or math.isinf(effective_sev):
+                                effective_sev = None
+                        except (ValueError, TypeError):
+                            effective_sev = None
 
-                if effective_sev < min_severity:
-                    continue
+                    if effective_sev is None:
+                        raw_tier = str(r.get("severity") or r.get("severity_tier") or "").strip().upper()
+                        tier_map = {"CRITICAL": 9.0, "HIGH": 7.0, "MEDIUM": 5.0, "LOW": 3.0}
+                        effective_sev = tier_map.get(raw_tier, 0.0)
+
+                    if effective_sev < min_sev_val:
+                        continue
 
             # Keyword search across title, defect_topic, verbatim_quote, and raw_quote
             if kw_lower:
@@ -320,12 +335,12 @@ class DefectTracker:
 
         # Thread-safe true LRU cache with promotion and bounded eviction
         with self._cache_lock:
-            self._query_cache[cache_key] = list(filtered)
+            self._query_cache[cache_key] = [dict(r) for r in filtered]
             self._query_cache.move_to_end(cache_key)
             while len(self._query_cache) > 1024:
                 self._query_cache.popitem(last=False)
 
-        return filtered
+        return [dict(r) for r in filtered]
 
     def get_statistics(self, file_path: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
         """Return high-level statistics and category breakdown for defect reports."""

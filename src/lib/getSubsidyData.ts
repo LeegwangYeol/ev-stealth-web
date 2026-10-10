@@ -356,9 +356,9 @@ export function calculateNetSubsidy(
     : 0;
   let localSubsidyKrw = 0;
   if (nationalSubsidyKrw > 0 && maxLocal > 0) {
-    localSubsidyKrw = Math.round(maxLocal * (nationalSubsidyKrw / 6_500_000));
-    // Round to nearest 10,000 KRW
-    localSubsidyKrw = Math.round(localSubsidyKrw / 10_000) * 10_000;
+    const calculated = Math.round(maxLocal * (nationalSubsidyKrw / 6_500_000));
+    // Round to nearest 10,000 KRW and cap to statutory maxLocal
+    localSubsidyKrw = Math.min(maxLocal, Math.round(calculated / 10_000) * 10_000);
   }
 
   // 7. Calculate Combined Total & Out-of-pocket Net Price

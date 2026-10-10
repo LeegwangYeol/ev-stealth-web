@@ -257,6 +257,29 @@ export default function DepreciationCalculatorClient({
     });
   }, [selectedModel.id, holdingYears, totalMileage, winterSeason, priceBasis, currentPurchasePrice]);
 
+  // Dynamic multi-year benchmarks for current holdingYears
+  const currentEvBenchmark = useMemo(() => {
+    return Math.max(
+      15,
+      Math.round((80.5 - (holdingYears - 1) * 9.8 - (winterSeason ? 2 : 0)) * 10) / 10
+    );
+  }, [holdingYears, winterSeason]);
+
+  const currentIceBenchmark = useMemo(() => {
+    return Math.max(
+      20,
+      Math.round((82.0 - (holdingYears - 1) * 8.5) * 10) / 10
+    );
+  }, [holdingYears]);
+
+  const evDiff = useMemo(() => {
+    return depResult.adjustedResidualPct - currentEvBenchmark;
+  }, [depResult.adjustedResidualPct, currentEvBenchmark]);
+
+  const iceDiff = useMemo(() => {
+    return depResult.adjustedResidualPct - currentIceBenchmark;
+  }, [depResult.adjustedResidualPct, currentIceBenchmark]);
+
   // Multi-year comparison projection (1~5 years)
   // Decoupled base projection memoization prevents running 5 full depreciation models when only holdingYears steps
   const baseMultiYearProjection = useMemo(() => {
@@ -642,12 +665,12 @@ export default function DepreciationCalculatorClient({
 
       {/* 3. VEHICLE SELECTOR SECTION (15 MODELS, 8 BRANDS) */}
       <section
-        aria-label="차량 선택 섹션"
+        aria-labelledby="vehicle-selector-heading"
         className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-5"
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
+            <h2 id="vehicle-selector-heading" className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
               <span>🚘</span> 비교 분석 차량 선택
             </h2>
             <p className="text-xs sm:text-sm text-slate-600">
@@ -657,7 +680,9 @@ export default function DepreciationCalculatorClient({
 
           {/* Search box */}
           <div className="relative w-full sm:w-64">
+            <label htmlFor="vehicle-search-input" className="sr-only">전기차 모델 검색창</label>
             <input
+              id="vehicle-search-input"
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -777,12 +802,12 @@ export default function DepreciationCalculatorClient({
 
       {/* 4. SIMULATION CONTROLS (SLIDERS & SELECTORS) */}
       <section
-        aria-label="시뮬레이션 제어 슬라이더"
+        aria-labelledby="simulation-controls-heading"
         className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-6"
       >
         <div className="border-b border-slate-200 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
+            <h2 id="simulation-controls-heading" className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
               <span>⚙️</span> 정밀 시뮬레이션 제어기
             </h2>
             <p className="text-xs sm:text-sm text-slate-600">
@@ -791,8 +816,9 @@ export default function DepreciationCalculatorClient({
           </div>
 
           <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+            <label htmlFor="winter-season-checkbox" className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
               <input
+                id="winter-season-checkbox"
                 type="checkbox"
                 checked={winterSeason}
                 onChange={(e) => setWinterSeason(e.target.checked)}
@@ -1001,13 +1027,13 @@ export default function DepreciationCalculatorClient({
 
       {/* 5. MULTI-YEAR DEPRECIATION CHART & RESALE VALUE PROJECTION */}
       <section
-        aria-label="감가방어율 차트 및 잔존가치 프로젝션"
+        aria-labelledby="depreciation-chart-heading"
         className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-6"
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-black text-slate-900">
+              <h2 id="depreciation-chart-heading" className="text-xl font-black text-slate-900">
                 {selectedModel.brand_name_ko} {selectedModel.model_name}
               </h2>
               {getDefenseTierBadge(selectedModel.resale_defense_tier)}
@@ -1077,26 +1103,42 @@ export default function DepreciationCalculatorClient({
           </div>
 
           {/* KPI 3: VS EV Class Average */}
-          <div className="bg-gradient-to-br from-slate-50 to-emerald-50 border border-slate-200 rounded-xl p-4">
+          <div className={`${
+            evDiff >= 0
+              ? 'bg-gradient-to-br from-slate-50 to-emerald-50'
+              : 'bg-gradient-to-br from-slate-50 to-rose-50'
+          } border border-slate-200 rounded-xl p-4`}>
             <div className="text-xs font-bold text-slate-700">전기차 전체 평균 대비</div>
-            <div className="text-xl sm:text-2xl font-black text-emerald-700 mt-1">
-              {depResult.adjustedResidualPct >= 58 ? '+' : ''}
-              {(depResult.adjustedResidualPct - 58).toFixed(1)}%
+            <div className={`text-xl sm:text-2xl font-black mt-1 ${
+              evDiff >= 0 ? 'text-emerald-700' : 'text-rose-600'
+            }`}>
+              {evDiff >= 0 ? '+' : ''}
+              {evDiff.toFixed(1)}%
             </div>
-            <div className="text-[11px] text-emerald-800 mt-1">
+            <div className={`text-[11px] mt-1 ${
+              evDiff >= 0 ? 'text-emerald-800' : 'text-rose-700'
+            }`}>
               동급 세그먼트 중 방어력 {depResult.defenseTier}등급
             </div>
           </div>
 
           {/* KPI 4: VS ICE Benchmark */}
-          <div className="bg-gradient-to-br from-slate-50 to-amber-50 border border-slate-200 rounded-xl p-4">
+          <div className={`${
+            iceDiff >= 0
+              ? 'bg-gradient-to-br from-slate-50 to-amber-50'
+              : 'bg-gradient-to-br from-slate-50 to-rose-50'
+          } border border-slate-200 rounded-xl p-4`}>
             <div className="text-xs font-bold text-slate-700">동급 내연기관(가솔린) 대비</div>
-            <div className="text-xl sm:text-2xl font-black text-amber-800 mt-1">
-              {depResult.adjustedResidualPct >= 64 ? '+' : ''}
-              {(depResult.adjustedResidualPct - 64).toFixed(1)}%
+            <div className={`text-xl sm:text-2xl font-black mt-1 ${
+              iceDiff >= 0 ? 'text-amber-800' : 'text-rose-600'
+            }`}>
+              {iceDiff >= 0 ? '+' : ''}
+              {iceDiff.toFixed(1)}%
             </div>
-            <div className="text-[11px] text-slate-600 mt-1">
-              {depResult.adjustedResidualPct >= 64
+            <div className={`text-[11px] mt-1 ${
+              iceDiff >= 0 ? 'text-slate-600' : 'text-rose-700'
+            }`}>
+              {iceDiff >= 0
                 ? '내연기관보다 뛰어난 감가 방어'
                 : '초기 배터리 불확실성 감가 반영'}
             </div>
@@ -1390,12 +1432,12 @@ export default function DepreciationCalculatorClient({
 
       {/* 6. BATTERY HEALTH DEGRADATION & RISK ANALYSIS (SoH & REPLACEMENT COSTS) */}
       <section
-        aria-label="배터리 잔여 수명 및 교체 리스크 분석"
+        aria-labelledby="battery-health-heading"
         className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-6"
       >
         <div className="border-b border-slate-200 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
+            <h2 id="battery-health-heading" className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
               <span>🔋</span> 배터리 수명(SoH) 열화 및 교체비용 리스크
             </h2>
             <p className="text-xs sm:text-sm text-slate-600">
@@ -1592,13 +1634,13 @@ export default function DepreciationCalculatorClient({
 
       {/* 7. STATUTORY 2-YEAR SUBSIDY CLAWBACK CALCULATOR (대기환경보전법 제58조) */}
       <section
-        aria-label="법정 2년 보조금 환수액 계산기"
+        aria-labelledby="clawback-calculator-heading"
         className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-6"
       >
         <div className="border-b border-slate-200 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-lg sm:text-xl font-bold text-slate-900">
+              <h2 id="clawback-calculator-heading" className="text-lg sm:text-xl font-bold text-slate-900">
                 ⚖️ 2년 의무운행기간 보조금 환수 계산기
               </h2>
               <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-950 font-bold">
@@ -1713,6 +1755,7 @@ export default function DepreciationCalculatorClient({
               ].map((item) => (
                 <label
                   key={item.id}
+                  htmlFor={`transfer-type-radio-${item.id}`}
                   className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer text-xs transition ${
                     transferType === item.id
                       ? 'bg-blue-50 border-blue-500 text-blue-950 font-semibold'
@@ -1721,6 +1764,7 @@ export default function DepreciationCalculatorClient({
                 >
                   <input
                     type="radio"
+                    id={`transfer-type-radio-${item.id}`}
                     name="transferTypeRadio"
                     checked={transferType === item.id}
                     onChange={() => setTransferType(item.id)}
@@ -1853,12 +1897,12 @@ export default function DepreciationCalculatorClient({
 
       {/* 8. 5-YEAR TOTAL COST OF OWNERSHIP (TCO) COMPARISON */}
       <section
-        aria-label="5개년 총소유비용 TCO 비교 섹션"
+        aria-labelledby="tco-comparison-heading"
         className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-6"
       >
         <div className="border-b border-slate-200 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
+            <h2 id="tco-comparison-heading" className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
               <span>📊</span> 5개년 총소유비용 (TCO) & 경제성 비교
             </h2>
             <p className="text-xs sm:text-sm text-slate-600">
@@ -1869,8 +1913,9 @@ export default function DepreciationCalculatorClient({
           {/* ICE Displacement Selector */}
           <fieldset className="flex items-center gap-2 text-xs border-0 p-0 m-0">
             <legend className="sr-only">비교 내연기관 연료 및 배기량 세그먼트 선택</legend>
-            <span className="font-semibold text-slate-700" aria-hidden="true">비교 내연기관:</span>
+            <label htmlFor="ice-displacement-select" className="font-semibold text-slate-700">비교 내연기관:</label>
             <select
+              id="ice-displacement-select"
               value={iceDisplacementCc}
               onChange={(e) => setIceDisplacementCc(parseInt(e.target.value, 10))}
               className="px-3 py-1.5 rounded-lg border border-slate-300 font-medium bg-white text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
