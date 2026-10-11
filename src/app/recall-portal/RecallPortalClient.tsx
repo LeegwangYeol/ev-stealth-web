@@ -228,103 +228,6 @@ function SearchParamsWatcher({
   return null;
 }
 
-export interface RecallCardProps {
-  campaign: OfficialRecallCampaign;
-  isExpanded: boolean;
-  toggleRecallExpansion: (id: string) => void;
-}
-
-export const RecallCard = React.memo(function RecallCard({
-  campaign,
-  isExpanded,
-  toggleRecallExpansion,
-}: RecallCardProps) {
-  return (
-    <div
-      className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition space-y-3"
-    >
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2 mb-1">
-            <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
-              {campaign.campaign_no}
-            </span>
-            <span className="text-xs font-semibold text-slate-400">
-              {campaign.brand} • {campaign.target_model} ({campaign.target_model_years})
-            </span>
-            <span
-              className={`text-[11px] font-bold px-2 py-0.5 rounded ${
-                campaign.risk_level === 'FIRE_HAZARD'
-                  ? 'bg-red-950 text-red-300 border border-red-800'
-                  : campaign.risk_level === 'LOSS_OF_POWER'
-                  ? 'bg-orange-950 text-orange-300 border border-orange-800'
-                  : 'bg-slate-800 text-slate-300'
-              }`}
-            >
-              {campaign.risk_level_ko}
-            </span>
-            <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-              {campaign.remedy_type_ko}
-            </span>
-          </div>
-          <h3 className="text-base font-bold text-white">{campaign.defect_title}</h3>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => toggleRecallExpansion(campaign.id)}
-          aria-expanded={isExpanded}
-          aria-controls={"campaign-list-detail-" + campaign.id}
-          className="self-start text-xs text-blue-400 hover:text-blue-300 font-medium px-2.5 py-1 rounded bg-slate-800/80 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-        >
-          {isExpanded ? '닫기 ▲' : '상세 및 행동요령 ▼'}
-        </button>
-      </div>
-
-      <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
-        {campaign.defect_detail}
-      </p>
-
-      {isExpanded && (
-        <div id={"campaign-list-detail-" + campaign.id} className="space-y-3 pt-3 border-t border-slate-800 text-xs">
-          <div>
-            <span className="font-semibold text-slate-200">생산 기간: </span>
-            <span className="font-mono text-slate-300">{campaign.production_date_range}</span>
-            <span className="ml-3 font-semibold text-slate-200">대상 대수: </span>
-            <span className="text-amber-400 font-semibold">
-              {Number.isFinite(campaign?.affected_kdm_units)
-                ? campaign.affected_kdm_units.toLocaleString()
-                : '0'}대
-            </span>
-          </div>
-
-          <div className="bg-slate-950 rounded-lg p-3 border border-slate-800/80 space-y-1">
-            <span className="font-bold text-blue-300">무상 수리 내용: </span>
-            <p className="text-slate-300">{campaign.remedy_action}</p>
-          </div>
-
-          <div className="bg-red-950/30 rounded-lg p-3 border border-red-900/50 space-y-1">
-            <span className="font-bold text-red-300">🚨 차주 긴급 대처 행동요령: </span>
-            <p className="text-slate-300">{campaign.consumer_emergency_guide}</p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between text-slate-400 pt-1 gap-2">
-            <span>고객센터: <strong className="text-white">{campaign.service_center_contact}</strong></span>
-            <a
-              href={campaign.official_link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-400 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
-            >
-              공식 웹사이트 바로가기 &rarr;
-              <span className="sr-only"> (새 창에서 열림)</span>
-            </a>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-});
 
 interface RecallPortalClientProps {
   initialDatabase: RecallDatabase;
@@ -792,6 +695,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     <button
                       key={item.prefix}
                       type="button"
+                      aria-label={`${item.brand} ${item.model_name} 샘플 차대번호(${item.sample_full_vin}) 자동 입력`}
                       onClick={() => handleSelectSampleVin(item.sample_full_vin)}
                       className="p-2.5 rounded-lg bg-slate-900 hover:bg-blue-900/40 border border-slate-800 hover:border-blue-700 text-left transition group focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     >
@@ -823,6 +727,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     </label>
                     <select
                       id="brand-select"
+                      aria-label="제조사 선택"
                       value={selectedBrand}
                       onChange={(e) => {
                         const newBrand = e.target.value;
@@ -847,6 +752,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     </label>
                     <select
                       id="model-select"
+                      aria-label="모델 선택"
                       value={selectedModel}
                       onChange={(e) => setSelectedModel(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
@@ -866,6 +772,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     </label>
                     <select
                       id="year-select"
+                      aria-label="생산 연식 선택"
                       value={selectedYear}
                       onChange={(e) => setSelectedYear(e.target.value ? Number(e.target.value) : '')}
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
@@ -1409,3 +1316,101 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     </div>
   );
 }
+
+export interface RecallCardProps {
+  campaign: OfficialRecallCampaign;
+  isExpanded: boolean;
+  toggleRecallExpansion: (id: string) => void;
+}
+
+export const RecallCard = React.memo(function RecallCard({
+  campaign,
+  isExpanded,
+  toggleRecallExpansion,
+}: RecallCardProps) {
+  return (
+    <div
+      className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition space-y-3"
+    >
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
+              {campaign.campaign_no}
+            </span>
+            <span className="text-xs font-semibold text-slate-400">
+              {campaign.brand} • {campaign.target_model} ({campaign.target_model_years})
+            </span>
+            <span
+              className={`text-[11px] font-bold px-2 py-0.5 rounded ${
+                campaign.risk_level === 'FIRE_HAZARD'
+                  ? 'bg-red-950 text-red-300 border border-red-800'
+                  : campaign.risk_level === 'LOSS_OF_POWER'
+                  ? 'bg-orange-950 text-orange-300 border border-orange-800'
+                  : 'bg-slate-800 text-slate-300'
+              }`}
+            >
+              {campaign.risk_level_ko}
+            </span>
+            <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+              {campaign.remedy_type_ko}
+            </span>
+          </div>
+          <h3 className="text-base font-bold text-white">{campaign.defect_title}</h3>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => toggleRecallExpansion(campaign.id)}
+          aria-expanded={isExpanded}
+          aria-controls={"campaign-list-detail-" + campaign.id}
+          className="self-start text-xs text-blue-400 hover:text-blue-300 font-medium px-2.5 py-1 rounded bg-slate-800/80 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+        >
+          {isExpanded ? '닫기 ▲' : '상세 및 행동요령 ▼'}
+        </button>
+      </div>
+
+      <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
+        {campaign.defect_detail}
+      </p>
+
+      {isExpanded && (
+        <div id={"campaign-list-detail-" + campaign.id} className="space-y-3 pt-3 border-t border-slate-800 text-xs">
+          <div>
+            <span className="font-semibold text-slate-200">생산 기간: </span>
+            <span className="font-mono text-slate-300">{campaign.production_date_range}</span>
+            <span className="ml-3 font-semibold text-slate-200">대상 대수: </span>
+            <span className="text-amber-400 font-semibold">
+              {Number.isFinite(campaign?.affected_kdm_units)
+                ? campaign.affected_kdm_units.toLocaleString()
+                : '0'}대
+            </span>
+          </div>
+
+          <div className="bg-slate-950 rounded-lg p-3 border border-slate-800/80 space-y-1">
+            <span className="font-bold text-blue-300">무상 수리 내용: </span>
+            <p className="text-slate-300">{campaign.remedy_action}</p>
+          </div>
+
+          <div className="bg-red-950/30 rounded-lg p-3 border border-red-900/50 space-y-1">
+            <span className="font-bold text-red-300">🚨 차주 긴급 대처 행동요령: </span>
+            <p className="text-slate-300">{campaign.consumer_emergency_guide}</p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between text-slate-400 pt-1 gap-2">
+            <span>고객센터: <strong className="text-white">{campaign.service_center_contact}</strong></span>
+            <a
+              href={campaign.official_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
+            >
+              공식 웹사이트 바로가기 &rarr;
+              <span className="sr-only"> (새 창에서 열림)</span>
+            </a>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});

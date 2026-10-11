@@ -11,12 +11,26 @@ from datetime import date, datetime
 from enum import Enum
 import json
 import logging
+import math
 import os
 from pathlib import Path
 import tempfile
 from typing import Any, Callable, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
+
+
+def sanitize_nan_inf(obj: Any) -> Any:
+    """Recursively convert float NaN and Inf to 0.0 to guarantee RFC 8259 JSON compliance."""
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return 0.0
+        return obj
+    elif isinstance(obj, dict):
+        return {k: sanitize_nan_inf(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple, set)):
+        return [sanitize_nan_inf(v) for v in obj]
+    return obj
 
 
 def _json_default(obj: Any) -> Any:
@@ -30,9 +44,9 @@ def _json_default(obj: Any) -> Any:
     if isinstance(obj, Enum):
         return obj.value
     if hasattr(obj, "to_dict") and callable(getattr(obj, "to_dict")):
-        return obj.to_dict()
+        return sanitize_nan_inf(obj.to_dict())
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-        return dataclasses.asdict(obj)
+        return sanitize_nan_inf(dataclasses.asdict(obj))
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
@@ -72,6 +86,8 @@ def atomic_write_json(
     else:
         payload = data
 
+    payload = sanitize_nan_inf(payload)
+
     serializer = default if default is not None else _json_default
     temp_name: Optional[str] = None
     try:
@@ -85,7 +101,7 @@ def atomic_write_json(
             suffix=".json",
         ) as tf:
             temp_name = tf.name
-            json.dump(payload, tf, ensure_ascii=ensure_ascii, indent=indent, default=serializer)
+            json.dump(payload, tf, ensure_ascii=ensure_ascii, indent=indent, default=serializer, allow_nan=False)
             tf.flush()
             os.fsync(tf.fileno())
 

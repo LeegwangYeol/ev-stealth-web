@@ -86,6 +86,13 @@ export default function PdiChecklistClient() {
 
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
 
+  const isAllChecked = useMemo(() => items.length > 0 && items.every((i) => i.checked), [items]);
+
+  const toggleAllItems = () => {
+    const nextChecked = !isAllChecked;
+    setItems((prev) => prev.map((item) => ({ ...item, checked: nextChecked })));
+  };
+
   // Memoized category sets and filtered count calculations
   const categories = useMemo(() => Array.from(new Set(items.map((i) => i.category))), [items]);
   const checkedCount = useMemo(() => items.filter((i) => i.checked).length, [items]);
@@ -169,13 +176,27 @@ export default function PdiChecklistClient() {
             </p>
           </div>
           {mounted && (
-            <button
-              onClick={resetChecklist}
-              type="button"
-              className="self-start sm:self-auto px-3.5 py-2 text-xs font-semibold text-slate-600 hover:text-red-700 bg-white hover:bg-red-50 border border-slate-300 rounded-lg shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            >
-              체크리스트 초기화
-            </button>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <button
+                onClick={toggleAllItems}
+                type="button"
+                aria-pressed={isAllChecked}
+                className={`px-3.5 py-2 text-xs font-semibold border rounded-lg shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  isAllChecked
+                    ? 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                {isAllChecked ? '전체 해제' : '전체 선택'}
+              </button>
+              <button
+                onClick={resetChecklist}
+                type="button"
+                className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:text-red-700 bg-white hover:bg-red-50 border border-slate-300 rounded-lg shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                체크리스트 초기화
+              </button>
+            </div>
           )}
         </div>
         <div className="mt-3 flex items-center gap-2 text-xs text-slate-600">
@@ -269,8 +290,8 @@ export default function PdiChecklistClient() {
         className="space-y-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
       >
         {displayedCategories.map((category) => (
-          <div key={category} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-            <h2 className="bg-slate-50 border-b border-gray-200 p-4 text-xl font-bold text-slate-800">
+          <section key={category} aria-labelledby={`pdi-cat-${category}`} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <h2 id={`pdi-cat-${category}`} className="bg-slate-50 border-b border-gray-200 p-4 text-xl font-bold text-slate-800">
               {category}
             </h2>
             <div className="divide-y divide-gray-100">
@@ -284,6 +305,8 @@ export default function PdiChecklistClient() {
                     id={`pdi-task-${item.id}`}
                     type="checkbox"
                     checked={item.checked}
+                    aria-label={item.task}
+                    aria-describedby={item.warning ? `pdi-warning-${item.id}` : undefined}
                     onChange={() => toggleCheck(item.id)}
                     className="mt-1 w-6 h-6 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500"
                   />
@@ -292,7 +315,7 @@ export default function PdiChecklistClient() {
                       {item.task}
                     </p>
                     {item.warning && (
-                      <p className={`mt-1 text-sm font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-red-700'}`}>
+                      <p id={`pdi-warning-${item.id}`} className={`mt-1 text-sm font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-red-700'}`}>
                         ⚠️ 주의: {item.warning}
                       </p>
                     )}
@@ -300,7 +323,7 @@ export default function PdiChecklistClient() {
                 </label>
               ))}
             </div>
-          </div>
+          </section>
         ))}
       </div>
 

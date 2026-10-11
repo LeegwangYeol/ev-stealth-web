@@ -313,16 +313,28 @@ export function isModelMatchForCampaign(queryModel: string, campaignTargetModel:
 export function isYearMatchForCampaign(year?: number, targetModelYears?: string): boolean {
   if (!year || !targetModelYears) return true;
 
-  const yearsMatch = targetModelYears.match(/(\d{4})/g);
-  if (yearsMatch && yearsMatch.length >= 2) {
-    const startYear = parseInt(yearsMatch[0], 10);
-    const endYear = parseInt(yearsMatch[yearsMatch.length - 1], 10);
-    return year >= startYear && year <= endYear;
-  } else if (yearsMatch && yearsMatch.length === 1) {
-    const targetYear = parseInt(yearsMatch[0], 10);
-    return year === targetYear;
+  // Split disjoint segments separated by comma or semicolon
+  const segments = targetModelYears.split(/[,;]/).map((s) => s.trim());
+  let hasValidSegment = false;
+
+  for (const segment of segments) {
+    const match = segment.match(/(\d{4})\s*(?:~|-)\s*(\d{4})/);
+    if (match) {
+      hasValidSegment = true;
+      const start = parseInt(match[1], 10);
+      const end = parseInt(match[2], 10);
+      if (year >= Math.min(start, end) && year <= Math.max(start, end)) return true;
+    } else {
+      const singleYearMatch = segment.match(/(\d{4})/);
+      if (singleYearMatch) {
+        hasValidSegment = true;
+        if (parseInt(singleYearMatch[1], 10) === year) {
+          return true;
+        }
+      }
+    }
   }
-  return true;
+  return !hasValidSegment;
 }
 
 /**

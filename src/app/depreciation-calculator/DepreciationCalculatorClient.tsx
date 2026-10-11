@@ -176,9 +176,9 @@ export default function DepreciationCalculatorClient({
   // Effective Purchase Price Baseline
   const currentPurchasePrice = useMemo(() => {
     if (customPriceInput !== null && customPriceInput.trim() !== '') {
-      const parsed = parseInt(customPriceInput, 10);
+      const parsed = parseInt(customPriceInput.replace(/[^0-9]/g, ''), 10);
       if (!isNaN(parsed) && parsed > 0) {
-        return parsed;
+        return Math.min(10_000_000_000, parsed);
       }
     }
     return priceBasis === 'effective'
@@ -1007,6 +1007,8 @@ export default function DepreciationCalculatorClient({
               <input
                 id="customPriceInputField"
                 type="number"
+                min="0"
+                max="10000000000"
                 step="100000"
                 value={customPriceInput !== null ? customPriceInput : currentPurchasePrice}
                 onChange={(e) => {

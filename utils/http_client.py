@@ -65,16 +65,21 @@ def robust_decode(raw_bytes: bytes, declared_encoding: Optional[str] = None) -> 
     return raw_bytes.decode("utf-8", errors="replace")
 
 
-def encode_euc_kr_query(param: Union[str, Dict[str, Any]]) -> str:
+def encode_euc_kr_query(param: Union[str, Dict[str, Any], None]) -> str:
     """
     Percent-encode string or dictionary parameters into EUC-KR / CP949 for Korean forums
     like BobaeDream that require non-UTF-8 URL queries.
     """
+    if not param:
+        return ""
     if isinstance(param, str):
         try:
             return urllib.parse.quote(param.encode("euc-kr"))
         except UnicodeEncodeError:
             return urllib.parse.quote(param.encode("cp949", errors="replace"))
+
+    if not isinstance(param, dict):
+        return ""
 
     pairs = []
     for k, v in param.items():

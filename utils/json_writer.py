@@ -114,12 +114,12 @@ def format_daily_report_payload(
             if raw_neg is None:
                 raw_neg = record_dict.get("sentiment_score")
             neg_score = _safe_float(raw_neg, 0.5)
-            if record_dict.get("negativity_score") is None:
-                record_dict["negativity_score"] = neg_score
-            if record_dict.get("sentiment_score") is None:
-                record_dict["sentiment_score"] = neg_score
+            record_dict["negativity_score"] = neg_score
+            record_dict["sentiment_score"] = neg_score
 
             sev_idx = _safe_float(record_dict.get("severity_index"), 0.0)
+            if "severity_index" in record_dict:
+                record_dict["severity_index"] = sev_idx
             raw_sev = str(record_dict.get("severity") or record_dict.get("severity_tier") or "").strip().upper()
             is_critical = (raw_sev == "CRITICAL" or sev_idx >= 8.0)
             raw_cat = record_dict.get("defect_category")
@@ -215,7 +215,7 @@ def write_daily_reports(
             existing_data = read_daily_reports(output_path)
             if isinstance(existing_data, dict):
                 raw_reports = existing_data.get("reports")
-                existing_reports = raw_reports if isinstance(raw_reports, list) else []
+                existing_reports = [r for r in raw_reports if isinstance(r, dict)] if isinstance(raw_reports, list) else []
                 stats = existing_data.get("statistics")
                 if isinstance(stats, dict):
                     raw_ts = stats.get("total_scraped")
@@ -257,6 +257,8 @@ def write_daily_reports(
         merged_reports.append(nr)
 
     for er in existing_reports:
+        if not isinstance(er, dict):
+            continue
         eid = er.get("id")
         eurl = er.get("url")
         if (eid and eid in seen_ids) or (eurl and eurl in seen_urls):
@@ -298,8 +300,9 @@ def write_daily_reports(
     try:
         with tempfile.NamedTemporaryFile("w", dir=temp_dir, delete=False, encoding="utf-8") as tf:
             temp_name = tf.name
-            from tracker.atomic_writer import _json_default
-            json.dump(data, tf, ensure_ascii=False, indent=2, default=_json_default)
+            from tracker.atomic_writer import _json_default, sanitize_nan_inf
+            sanitized_data = sanitize_nan_inf(data)
+            json.dump(sanitized_data, tf, ensure_ascii=False, indent=2, default=_json_default, allow_nan=False)
             tf.flush()
             os.fsync(tf.fileno())
 

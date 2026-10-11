@@ -244,8 +244,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
   const rawRatio = totalEvaluationsCount > 0
     ? (avoidEvaluationsCount / totalEvaluationsCount) * 100
-    : 31.5;
-  const avoidPercentage = Number.isFinite(rawRatio) ? rawRatio.toFixed(1) : '31.5';
+    : 0.0;
+  const avoidPercentage = Number.isFinite(rawRatio) ? rawRatio.toFixed(1) : '0.0';
 
   return (
     <div className="space-y-10 pb-16">

@@ -9,6 +9,7 @@ Encapsulates:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import math
 from typing import Any, Dict, List, Optional, Union
 
 from tracker.subsidy_models import RegionRecord, SubsidyPayload
@@ -19,8 +20,10 @@ def _metric_val(metric: Any, key: str, default: Any = 0) -> Any:
     if metric is None:
         return default
     if isinstance(metric, dict):
-        return metric.get(key, default)
-    return getattr(metric, key, default)
+        val = metric.get(key, default)
+    else:
+        val = getattr(metric, key, default)
+    return default if val is None else val
 
 
 class ReportGenerator:
@@ -48,7 +51,11 @@ class ReportGenerator:
             p_cat = cats.get("passenger")
             if p_cat is None:
                 return 0
-            return _metric_val(p_cat, "remaining_units", 0)
+            val = _metric_val(p_cat, "remaining_units", 0)
+            try:
+                return max(0, int(val or 0))
+            except (ValueError, TypeError):
+                return 0
 
         critical_regions = [
             f"{r.name_ko} ({r.overall_depletion_rate}%, 잔여: {_get_passenger_remaining(r):,}대)"
@@ -66,14 +73,38 @@ class ReportGenerator:
         c_info = category_totals.get("commercial", {})
         b_info = category_totals.get("bus", {})
 
+        tot_ann = int(getattr(summary, "total_announced_units", 0) or 0)
+        tot_app = int(getattr(summary, "total_applied_units", 0) or 0)
+        disb_b = int(getattr(summary, "disbursed_budget_billion_krw", 0) or 0)
+        tot_b = int(getattr(summary, "total_budget_billion_krw", 0) or 0)
+        dep_rate = getattr(summary, "nationwide_depletion_rate", 0.0) or 0.0
+
+        p_ann = int(_metric_val(p_info, "announced_units", 0) or 0)
+        p_app = int(_metric_val(p_info, "applied_units", 0) or 0)
+        p_rate = _metric_val(p_info, "depletion_rate", 0.0) or 0.0
+        p_rem = int(_metric_val(p_info, "remaining_units", 0) or 0)
+        p_st = _metric_val(p_info, "status", "N/A") or "N/A"
+
+        c_ann = int(_metric_val(c_info, "announced_units", 0) or 0)
+        c_app = int(_metric_val(c_info, "applied_units", 0) or 0)
+        c_rate = _metric_val(c_info, "depletion_rate", 0.0) or 0.0
+        c_rem = int(_metric_val(c_info, "remaining_units", 0) or 0)
+        c_st = _metric_val(c_info, "status", "N/A") or "N/A"
+
+        b_ann = int(_metric_val(b_info, "announced_units", 0) or 0)
+        b_app = int(_metric_val(b_info, "applied_units", 0) or 0)
+        b_rate = _metric_val(b_info, "depletion_rate", 0.0) or 0.0
+        b_rem = int(_metric_val(b_info, "remaining_units", 0) or 0)
+        b_st = _metric_val(b_info, "status", "N/A") or "N/A"
+
         status_text = "FALLBACK_BASELINE (Resilient)" if fallback_used else "SUCCESS (Live Sync)"
 
         lines = [
-            "# [대한민국 2026 전국 지자체 전기차 보조금 실시간 소진율 모니터링]",
+            "# [대한민국 2026 전국 지자체 전기차 보조금 실시간 소진율 모니터링] (전국 전기차 보조금 소진 현황 일일 종합 브리핑)",
             f"- **기록 시각(UTC)**: {gen_time}",
             f"- **파이프라인 상태**: {status_text}",
-            f"- **전국 평균 소진율**: {summary.nationwide_depletion_rate}% (총 공고: {summary.total_announced_units:,}대 / 접수: {summary.total_applied_units:,}대)",
-            f"- **집행 예산**: {summary.disbursed_budget_billion_krw:,}억 원 / 총 예산 {summary.total_budget_billion_krw:,}억 원",
+            f"- **전국 평균 소진율**: {dep_rate}% (총 공고: {tot_ann:,}대 / 접수: {tot_app:,}대)",
+            f"- **집행 예산**: {disb_b:,}억 원 / 총 예산 {tot_b:,}억 원",
             "",
             "## 🚨 긴급 마감 임박 지자체 (CRITICAL / DEPLETED >= 95%)",
             (
@@ -90,9 +121,9 @@ class ReportGenerator:
             ),
             "",
             "## 📊 차종별 소진 현황",
-            f"- **승용**: 공고 {_metric_val(p_info, 'announced_units', 0):,}대 | 접수 {_metric_val(p_info, 'applied_units', 0):,}대 ({_metric_val(p_info, 'depletion_rate', 0)}%) | 잔여 {_metric_val(p_info, 'remaining_units', 0):,}대 [{_metric_val(p_info, 'status', 'N/A')}]",
-            f"- **화물**: 공고 {_metric_val(c_info, 'announced_units', 0):,}대 | 접수 {_metric_val(c_info, 'applied_units', 0):,}대 ({_metric_val(c_info, 'depletion_rate', 0)}%) | 잔여 {_metric_val(c_info, 'remaining_units', 0):,}대 [{_metric_val(c_info, 'status', 'N/A')}]",
-            f"- **승합(버스)**: 공고 {_metric_val(b_info, 'announced_units', 0):,}대 | 접수 {_metric_val(b_info, 'applied_units', 0):,}대 ({_metric_val(b_info, 'depletion_rate', 0)}%) | 잔여 {_metric_val(b_info, 'remaining_units', 0):,}대 [{_metric_val(b_info, 'status', 'N/A')}]",
+            f"- **승용**: 공고 {p_ann:,}대 | 접수 {p_app:,}대 ({p_rate}%) | 잔여 {p_rem:,}대 [{p_st}]",
+            f"- **화물**: 공고 {c_ann:,}대 | 접수 {c_app:,}대 ({c_rate}%) | 잔여 {c_rem:,}대 [{c_st}]",
+            f"- **승합(버스)**: 공고 {b_ann:,}대 | 접수 {b_app:,}대 ({b_rate}%) | 잔여 {b_rem:,}대 [{b_st}]",
             "",
             "## 💡 예비 차주 권고 사항",
             "- 대구, 울산, 경북, 제주는 보조금 마감 직전(소진율 96%~99%)입니다. 실계약자는 대기 순번 및 제조사 즉시 출고 재고를 확인하십시오.",
@@ -114,14 +145,36 @@ class ReportGenerator:
             stats = report_data.get("statistics", {})
             gen_time = report_data.get("generated_at", datetime.now(timezone.utc).isoformat())
 
+        def _safe_sev(record: Dict[str, Any]) -> float:
+            raw = record.get("severity_index")
+            if raw is None:
+                return 0.0
+            try:
+                f_val = float(raw)
+                return 0.0 if (math.isnan(f_val) or math.isinf(f_val)) else f_val
+            except (ValueError, TypeError):
+                return 0.0
+
         total_reports = len(reports)
-        critical_count = stats.get("critical_defect_count", sum(1 for r in reports if r.get("severity_index", 0) >= 7.0))
-        avg_negativity = stats.get("avg_negativity_score", 0.0)
+        critical_count = stats.get("critical_defect_count")
+        if critical_count is None:
+            critical_count = sum(1 for r in reports if _safe_sev(r) >= 7.0)
+
+        raw_avg_neg = stats.get("avg_negativity_score")
+        if raw_avg_neg is None:
+            avg_negativity = 0.0
+        else:
+            try:
+                f_neg = float(raw_avg_neg)
+                avg_negativity = 0.0 if (math.isnan(f_neg) or math.isinf(f_neg)) else f_neg
+            except (ValueError, TypeError):
+                avg_negativity = 0.0
 
         # Category aggregation
         category_counts: Dict[str, int] = {}
         for r in reports:
-            cat = r.get("defect_category", "UNKNOWN")
+            raw_cat = r.get("defect_category")
+            cat = str(raw_cat).strip() if (raw_cat and str(raw_cat).strip()) else "UNKNOWN"
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
         top_categories = sorted(category_counts.items(), key=lambda x: x[1], reverse=True)
@@ -147,12 +200,12 @@ class ReportGenerator:
             "## 🚨 긴급 주의 결함 사례 (DSI >= 7.0)",
         ])
 
-        critical_reports = [r for r in reports if r.get("severity_index", 0) >= 7.0][:5]
+        critical_reports = [r for r in reports if _safe_sev(r) >= 7.0][:5]
         if critical_reports:
             for r in critical_reports:
                 model = f"{r.get('vehicle_brand', '')} {r.get('vehicle_model', '')}".strip() or "차종 미상"
                 topic = r.get("defect_topic") or r.get("title") or "상세 없음"
-                dsi = r.get("severity_index", 0.0)
+                dsi = _safe_sev(r)
                 lines.append(f"- 🔴 **[{model}]** {topic} (심각도 DSI: {dsi:.1f})")
         else:
             lines.append("- 현재 긴급 심각도(DSI >= 7.0) 결함 사례 없음.")
@@ -187,7 +240,9 @@ class ReportGenerator:
             dsi = rec.get("severity_index")
             if dsi is not None:
                 try:
-                    severity_scores.append(float(dsi))
+                    f_dsi = float(dsi)
+                    if not (math.isnan(f_dsi) or math.isinf(f_dsi)):
+                        severity_scores.append(f_dsi)
                 except (ValueError, TypeError):
                     pass
 

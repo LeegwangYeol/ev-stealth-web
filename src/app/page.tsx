@@ -5,16 +5,16 @@ export const dynamic = 'force-static';
 export default function Home() {
   return (
     <div className="flex flex-col items-center justify-center space-y-12 py-20">
-      <div className="text-center space-y-4">
-        <h1 className="text-5xl font-extrabold tracking-tight text-slate-900">
+      <section aria-labelledby="home-hero-heading" className="text-center space-y-4">
+        <h1 id="home-hero-heading" className="text-5xl font-extrabold tracking-tight text-slate-900">
           글로벌 EV 중고차 연식별 피하기 가이드
         </h1>
         <p className="text-xl text-gray-600 max-w-2xl mx-auto">
           &quot;테슬라 사지 마라&quot;가 아니라 <strong>&quot;테슬라 모델3 2017~2020년식은 피해라&quot;</strong>가 맞습니다. 특정 모델과 연식별(Model Year) 고질병을 정확하게 파헤칩니다.
         </p>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full max-w-6xl">
+      <section aria-label="서비스 주요 진입점 바로가기 그리드" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full max-w-6xl">
         <Link href="/subsidy-tracker"
           prefetch={false}
           className="group block p-6 bg-gradient-to-br from-amber-950 via-slate-900 to-yellow-950 text-white border border-amber-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-amber-400 transition-all duration-300 md:col-span-2 lg:col-span-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
@@ -128,7 +128,7 @@ export default function Home() {
 
         <Link href="/hyundai-kia"
           prefetch={false}
-          className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
+          className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
           <h2 className="text-2xl font-bold mb-3 group-hover:text-blue-600">현대/기아 연식별 &rarr;</h2>
           <p className="text-gray-600 leading-relaxed">
             아이오닉5, EV6, GV60의 초기형(21~22년식) ICCU 결함 피하는 법 및 구매 추천 연식.
@@ -137,7 +137,7 @@ export default function Home() {
 
         <Link href="/tesla"
           prefetch={false}
-          className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
+          className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
           <h2 className="text-2xl font-bold mb-3 group-hover:text-blue-600">테슬라 연식별 &rarr;</h2>
           <p className="text-gray-600 leading-relaxed">
             모델3/모델Y 히트펌프 사망 결함, 컨트롤 암 파손을 피하기 위한 연식 선택 가이드.
@@ -146,7 +146,7 @@ export default function Home() {
 
         <Link href="/byd"
           prefetch={false}
-          className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
+          className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
           <h2 className="text-2xl font-bold mb-3 group-hover:text-blue-600">BYD 연식별 &rarr;</h2>
           <p className="text-gray-600 leading-relaxed">
             돌핀 에어컨 백색 가루 결함, 시라이언 07 CTB 파손 위험 등 주력 모델 피하기 매트릭스.
@@ -155,13 +155,13 @@ export default function Home() {
 
         <Link href="/global-brands"
           prefetch={false}
-          className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
+          className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
           <h2 className="text-2xl font-bold mb-3 group-hover:text-blue-600">폭스바겐/벤츠/폴스타 &rarr;</h2>
           <p className="text-gray-600 leading-relaxed">
             볼트EV 화재 리콜, 폭스바겐 ID.4 주행 중 문열림, 벤츠 7,500만 원 배터리 교체비 리포트.
           </p>
         </Link>
-      </div>
+      </section>
     </div>
   );
 }

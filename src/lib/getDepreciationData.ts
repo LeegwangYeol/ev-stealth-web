@@ -309,6 +309,7 @@ export interface BatteryHealthResult {
     laborCoolantKrw: number;
     totalNewInstalledKrw: number;
     totalRemanInstalledKrw: number | null;
+    estimatedCostKrw?: number;
   };
 }
 
@@ -890,7 +891,7 @@ export function calculateDepreciation(input: DepreciationCalculationInput): Depr
     customPurchasePriceKrw,
   } = input;
 
-  const model = getModelById(modelId) || DATABASE.models[0];
+  const model = getModelById(modelId) || DATABASE.models[0] || DEFAULT_FALLBACK_DEPRECIATION_DATABASE.models[0];
   const baselineResidualPct = interpolateBaselineResidual(model.depreciation_curve, years, priceBasis);
 
   // 1. Mileage Adjustment
@@ -1031,7 +1032,11 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
     chemInput || model?.battery_specs.chemistry || 'NCM_811'
   );
 
-  const chemProfile = DATABASE.chemistries[chemistryKey] || DATABASE.chemistries.NCM_811;
+  const chemProfile =
+    DATABASE.chemistries?.[chemistryKey] ||
+    DATABASE.chemistries?.NCM_811 ||
+    DEFAULT_FALLBACK_DEPRECIATION_DATABASE.chemistries[chemistryKey] ||
+    DEFAULT_FALLBACK_DEPRECIATION_DATABASE.chemistries.NCM_811;
   const packCapacityKwh = params.packCapacityKwh ?? model?.battery_specs.capacity_kwh ?? 77.4;
   const safeAnnualKm = Number.isFinite(annualKm) && annualKm >= 0 ? annualKm : 15000;
   const rawMileage = Number.isFinite(inputTotalKm)
@@ -1143,11 +1148,16 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
   }
 
   // E. Replacement Cost Tier Matching
-  let targetTier = DATABASE.battery_replacement_costs[1]; // default midsize 77kWh
+  const replacementCosts = Array.isArray(DATABASE.battery_replacement_costs) && DATABASE.battery_replacement_costs.length > 0
+    ? DATABASE.battery_replacement_costs
+    : DEFAULT_FALLBACK_DEPRECIATION_DATABASE.battery_replacement_costs;
+  const fallbackTier = replacementCosts[0] || DEFAULT_FALLBACK_DEPRECIATION_DATABASE.battery_replacement_costs[0];
+
+  let targetTier = replacementCosts[1] || fallbackTier;
   if (packCapacityKwh <= 65) {
-    targetTier = DATABASE.battery_replacement_costs[0]; // 50kWh
+    targetTier = replacementCosts[0] || fallbackTier;
   } else if (packCapacityKwh >= 89) {
-    targetTier = DATABASE.battery_replacement_costs[2]; // 100kWh
+    targetTier = replacementCosts[2] || replacementCosts[replacementCosts.length - 1] || fallbackTier;
   }
 
   return {
@@ -1176,6 +1186,7 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
       laborCoolantKrw: targetTier.costs.labor_coolant_krw,
       totalNewInstalledKrw: targetTier.costs.total_new_installed_krw,
       totalRemanInstalledKrw: targetTier.costs.total_reman_installed_krw,
+      estimatedCostKrw: targetTier.costs.total_new_installed_krw,
     },
   };
 }

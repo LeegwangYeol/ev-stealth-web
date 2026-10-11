@@ -13,6 +13,7 @@ const geistMono = localFont({
   variable: "--font-geist-mono",
   weight: "100 900",
   display: "swap",
+  preload: false,
 });
 
 import Link from "next/link";

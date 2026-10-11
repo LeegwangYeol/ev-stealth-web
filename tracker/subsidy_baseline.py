@@ -9,6 +9,7 @@ Provinces) and 160+ municipalities.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import math
 from typing import Any, Dict, List
 
 from tracker.subsidy_models import (
@@ -81,9 +82,19 @@ DEFAULT_ALERT_THRESHOLDS: Dict[str, AlertThresholdConfig] = {
 
 def calculate_price_cap_ratio(msrp: int) -> float:
     """Statutory 2026 Korean EV subsidy ratio tiers: 1.0 (<=55M), 0.5 (55M-85M), 0.0 (>85M)."""
-    if msrp <= 55_000_000:
+    try:
+        if msrp is None:
+            return 0.0
+        f_msrp = float(msrp)
+        if math.isnan(f_msrp) or math.isinf(f_msrp):
+            return 0.0
+        safe_msrp = int(f_msrp)
+    except (ValueError, TypeError, OverflowError):
+        return 0.0
+
+    if safe_msrp <= 55_000_000:
         return 1.0
-    elif msrp <= 85_000_000:
+    elif safe_msrp <= 85_000_000:
         return 0.5
     return 0.0
 
@@ -95,15 +106,39 @@ def calculate_net_subsidy(
     msrp: int,
 ) -> Dict[str, int]:
     """Calculate national subsidy, local subsidy, total subsidy, and net consumer purchase price."""
-    ratio = calculate_price_cap_ratio(msrp)
-    effective_national = int(round(model_national * ratio))
-    if max_national > 0:
-        local_ratio = min(1.0, max(0.0, model_national / max_national))
+    try:
+        if msrp is None:
+            safe_msrp = 0
+        else:
+            f_msrp = float(msrp)
+            safe_msrp = 0 if (math.isnan(f_msrp) or math.isinf(f_msrp)) else int(f_msrp)
+    except (ValueError, TypeError, OverflowError):
+        safe_msrp = 0
+
+    try:
+        safe_model_nat = max(0, int(model_national)) if model_national is not None else 0
+    except (ValueError, TypeError, OverflowError):
+        safe_model_nat = 0
+
+    try:
+        safe_max_nat = max(0, int(max_national)) if max_national is not None else 0
+    except (ValueError, TypeError, OverflowError):
+        safe_max_nat = 0
+
+    try:
+        safe_max_loc = max(0, int(max_local)) if max_local is not None else 0
+    except (ValueError, TypeError, OverflowError):
+        safe_max_loc = 0
+
+    ratio = calculate_price_cap_ratio(safe_msrp)
+    effective_national = int(round(safe_model_nat * ratio))
+    if safe_max_nat > 0:
+        local_ratio = min(1.0, max(0.0, safe_model_nat / safe_max_nat))
     else:
         local_ratio = 0.0
-    effective_local = int(round(max_local * local_ratio * ratio))
+    effective_local = int(round(safe_max_loc * local_ratio * ratio))
     total_subsidy = effective_national + effective_local
-    net_price = max(0, msrp - total_subsidy)
+    net_price = max(0, safe_msrp - total_subsidy)
     return {
         "national_subsidy_krw": effective_national,
         "local_subsidy_krw": effective_local,

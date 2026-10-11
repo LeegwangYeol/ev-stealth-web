@@ -243,6 +243,23 @@ class DefectTracker:
         file_path: Optional[Union[str, Path]] = None,
     ) -> List[Dict[str, Any]]:
         """Query and filter defect reports with category pre-filtering and query caching."""
+        norm_limit: Optional[int] = None
+        if limit is not None:
+            try:
+                norm_limit = int(limit)
+                if norm_limit <= 0:
+                    return []
+            except (ValueError, TypeError):
+                norm_limit = None
+
+        norm_min_sev: Optional[float] = None
+        if min_severity is not None:
+            try:
+                f_sev = float(min_severity)
+                norm_min_sev = f_sev if not (math.isnan(f_sev) or math.isinf(f_sev)) else None
+            except (ValueError, TypeError):
+                norm_min_sev = None
+
         reports = self.load_reports(file_path=file_path)
 
         cat_upper = category.strip().upper() if (category and isinstance(category, str) and category.strip()) else None
@@ -250,18 +267,17 @@ class DefectTracker:
         model_lower = vehicle_model.strip().lower() if (vehicle_model and isinstance(vehicle_model, str) and vehicle_model.strip()) else None
         kw_lower = keyword.strip().lower() if (keyword and isinstance(keyword, str) and keyword.strip()) else None
 
-        cache_key = (
-            str(self._cached_reports_path),
-            self._cached_reports_mtime,
-            cat_upper,
-            brand_lower,
-            model_lower,
-            min_severity,
-            kw_lower,
-            limit,
-        )
-
         with self._cache_lock:
+            cache_key = (
+                str(self._cached_reports_path),
+                self._cached_reports_mtime,
+                cat_upper,
+                brand_lower,
+                model_lower,
+                norm_min_sev,
+                kw_lower,
+                norm_limit,
+            )
             if cache_key in self._query_cache:
                 self._query_cache.move_to_end(cache_key)
                 return [dict(r) for r in self._query_cache[cache_key]]
@@ -291,38 +307,31 @@ class DefectTracker:
                 continue
 
             # Severity filter
-            if min_severity is not None:
-                try:
-                    min_sev_val = float(min_severity)
-                    if math.isnan(min_sev_val) or math.isinf(min_sev_val):
-                        min_sev_val = None
-                except (ValueError, TypeError):
-                    min_sev_val = None
-
-                if min_sev_val is not None:
-                    sev = r.get("severity_index")
-                    effective_sev: Optional[float] = None
-                    if sev is not None:
-                        try:
-                            effective_sev = float(sev)
-                            if math.isnan(effective_sev) or math.isinf(effective_sev):
-                                effective_sev = None
-                        except (ValueError, TypeError):
+            if norm_min_sev is not None:
+                sev = r.get("severity_index")
+                effective_sev: Optional[float] = None
+                if sev is not None:
+                    try:
+                        effective_sev = float(sev)
+                        if math.isnan(effective_sev) or math.isinf(effective_sev):
                             effective_sev = None
+                    except (ValueError, TypeError):
+                        effective_sev = None
 
-                    if effective_sev is None:
-                        raw_tier = str(r.get("severity") or r.get("severity_tier") or "").strip().upper()
-                        tier_map = {"CRITICAL": 9.0, "HIGH": 7.0, "MEDIUM": 5.0, "LOW": 3.0}
-                        effective_sev = tier_map.get(raw_tier, 0.0)
+                if effective_sev is None:
+                    raw_tier = str(r.get("severity") or r.get("severity_tier") or "").strip().upper()
+                    tier_map = {"CRITICAL": 9.0, "HIGH": 7.0, "MEDIUM": 5.0, "LOW": 3.0}
+                    effective_sev = tier_map.get(raw_tier, 0.0)
 
-                    if effective_sev < min_sev_val:
-                        continue
+                if effective_sev < norm_min_sev:
+                    continue
 
-            # Keyword search across title, defect_topic, verbatim_quote, and raw_quote
+            # Keyword search across title, defect_topic, summary, verbatim_quote, and raw_quote
             if kw_lower:
                 combined_text = " ".join([
                     str(r.get("title", "")),
                     str(r.get("defect_topic", "")),
+                    str(r.get("summary", "")),
                     str(r.get("verbatim_quote", "")),
                     str(r.get("raw_quote", "")),
                 ]).lower()
@@ -330,7 +339,7 @@ class DefectTracker:
                     continue
 
             filtered.append(r)
-            if limit is not None and len(filtered) >= limit:
+            if norm_limit is not None and len(filtered) >= norm_limit:
                 break
 
         # Thread-safe true LRU cache with promotion and bounded eviction

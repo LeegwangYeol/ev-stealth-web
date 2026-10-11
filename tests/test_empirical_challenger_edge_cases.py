@@ -655,10 +655,10 @@ class TestEmpiricalVulnerabilityFindings(unittest.TestCase):
         self.assertIn("sequence item 0: expected str instance, NoneType found", str(cm.exception))
 
     def test_finding_04_json_writer_nan_inf_serialization_breaks_rfc8259(self):
-        """EMPIRICAL FINDING 4: write_daily_reports produces literal NaN/Infinity tokens
+        """EMPIRICAL FINDING 4 (REMEDIATED): write_daily_reports must sanitize NaN/Infinity
 
-        when complaint dicts contain float('nan') or float('inf'), creating invalid JSON
-        that crashes Node.js / JavaScript JSON.parse().
+        when complaint dicts contain float('nan') or float('inf'), guaranteeing RFC 8259 compliance
+        so Node.js / JavaScript JSON.parse() parses the file successfully.
         """
         with tempfile.TemporaryDirectory() as td:
             target_path = os.path.join(td, "daily_reports.json")
@@ -674,12 +674,12 @@ class TestEmpiricalVulnerabilityFindings(unittest.TestCase):
             with open(target_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
-            self.assertIn("NaN", content)
+            self.assertNotIn("NaN", content)
+            self.assertNotIn("Infinity", content)
 
-            node_cmd = f"node -e 'JSON.parse(require(\"fs\").readFileSync(\"{target_path}\", \"utf8\"))'"
+            node_cmd = f"node -e 'const d = JSON.parse(require(\"fs\").readFileSync(\"{target_path}\", \"utf8\")); if (!d.reports) process.exit(1);'"
             proc = subprocess.run(node_cmd, shell=True, capture_output=True, text=True)
-            self.assertNotEqual(proc.returncode, 0, "Node.js JSON.parse should fail on NaN token")
-            self.assertIn("SyntaxError", proc.stderr)
+            self.assertEqual(proc.returncode, 0, f"Node.js JSON.parse should succeed on sanitized JSON: {proc.stderr}")
 
 
 if __name__ == "__main__":

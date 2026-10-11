@@ -280,7 +280,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
   return (
     <div className="space-y-6">
       {/* Confidential Header Bar */}
-      <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+      <header aria-label="관리자 결함 모니터링 헤더" className="bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl p-6 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 -mt-4 -mr-4 w-40 h-40 bg-rose-600/10 rounded-full blur-3xl pointer-events-none" />
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -322,10 +322,12 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* 4 KPI Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <section aria-labelledby="kpi-summary-heading">
+        <h2 id="kpi-summary-heading" className="sr-only">주요 결함 모니터링 통계 지표</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Total Defects */}
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between">
@@ -452,9 +454,10 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           </div>
         </div>
       </div>
+    </section>
 
       {/* Filter and Search Bar Section */}
-      <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-4">
+      <section aria-label="결함 제보 필터 및 검색 제어판" className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-4">
         {/* Search & Sort Row */}
         <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
           {/* Full-text search input */}
@@ -631,7 +634,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             )}
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Reports List */}
       <div
@@ -670,8 +673,9 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                   <td>{report.severity}</td>
                   <td>{report.source}</td>
                   <td>
-                    <a href={report.url} target="_blank" rel="noopener noreferrer" tabIndex={-1} aria-hidden="true">
-                      {report.title}
+                    <span>{report.title}</span>
+                    <a href={report.url} target="_blank" rel="noopener noreferrer" tabIndex={-1} aria-hidden="true" className="sr-only">
+                      (원문 링크)
                     </a>
                   </td>
                   <td>{report.summary}</td>
@@ -707,8 +711,8 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           </button>
         </div>
       ) : (
-        <div className="space-y-4">
-          <h2 className="sr-only">수집된 결함 제보 상세 목록</h2>
+        <section aria-labelledby="admin-defect-reports-list-heading" className="space-y-4">
+          <h2 id="admin-defect-reports-list-heading" className="sr-only">수집된 결함 제보 상세 목록</h2>
           {filteredReports.map((report: DefectReportItem) => (
             <div
               key={report.id}
@@ -823,7 +827,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               </div>
             </div>
           ))}
-        </div>
+        </section>
       )}
       </div>
     </div>

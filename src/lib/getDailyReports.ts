@@ -121,7 +121,7 @@ export function calculateKPIs(
     const val = Number.isFinite(r.sentiment_score) ? r.sentiment_score! : 0;
     return acc + val;
   }, 0);
-  const avgScore = totalFiltered > 0 ? Number((totalScore / totalFiltered).toFixed(2)) : 0.85;
+  const avgScore = totalFiltered > 0 ? Number((totalScore / totalFiltered).toFixed(2)) : 0.0;
 
   // Calculate top vehicle model
   const modelCounts: Record<string, number> = {};
@@ -138,9 +138,9 @@ export function calculateKPIs(
       topModelName = model;
     }
   }
-  const topModelDisplay = maxModelCount > 0
+  const topModelDisplay = totalFiltered > 0 && maxModelCount > 0
     ? `${topModelName} (${maxModelCount}건)`
-    : '아이오닉5 (5건)';
+    : '해당 없음 (0건)';
 
   // Calculate top community platform
   const platformCounts: Record<string, number> = {};
@@ -156,9 +156,11 @@ export function calculateKPIs(
       topPlatformKey = platform;
     }
   }
-  const platformRatio = totalFiltered > 0 ? Math.round((maxPlatformCount / totalFiltered) * 100) : 55;
+  const platformRatio = totalFiltered > 0 ? Math.round((maxPlatformCount / totalFiltered) * 100) : 0;
   const platformNameKo = topPlatformKey.includes('bobae') ? '보배드림' : '디시인사이드';
-  const topPlatformDisplay = `${platformNameKo} (${platformRatio}%)`;
+  const topPlatformDisplay = totalFiltered > 0
+    ? `${platformNameKo} (${platformRatio}%)`
+    : '해당 없음 (0%)';
 
   const totalScraped = existingStats?.total_scraped || (totalFiltered * 7);
 
