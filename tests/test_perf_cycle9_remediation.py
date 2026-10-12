@@ -73,23 +73,36 @@ class TestCycle9PerformanceRemediations(unittest.TestCase):
             self.assertIn(current_key, cache)
 
     def test_link_prefetch_false_compliance(self):
-        """Verify all <Link> tags in src/app specify prefetch={false}."""
+        """Verify secondary <Link> tags specify prefetch={false} while primary conversion routes enable prefetch."""
         tsx_files = list((WEB_ROOT / "src/app").rglob("*.tsx"))
         self.assertGreater(len(tsx_files), 0, "No TSX files found in src/app")
 
         missing_prefetch = []
+        conversion_routes_prefetched = []
         for file_path in tsx_files:
             text = file_path.read_text(encoding="utf-8")
             # Find all <Link ... > openings
             link_tags = re.findall(r"<Link\b[^>]*>", text)
             for tag in link_tags:
+                # Primary conversion routes in Cycle 14 enable prefetching
+                if 'href="/subsidy-tracker"' in tag or 'href="/depreciation-calculator"' in tag:
+                    if "prefetch={true}" in tag:
+                        conversion_routes_prefetched.append((file_path.name, tag.strip()))
+                    else:
+                        missing_prefetch.append((file_path.name, f"Expected prefetch={{true}}: {tag.strip()}"))
+                    continue
                 if "prefetch={false}" not in tag:
                     missing_prefetch.append((file_path.name, tag.strip()))
 
+        self.assertGreaterEqual(
+            len(conversion_routes_prefetched),
+            6,
+            "Primary conversion routes must have prefetch={true} enabled across layout and homepage",
+        )
         self.assertEqual(
             missing_prefetch,
             [],
-            f"Found <Link> tags without prefetch={{false}}: {missing_prefetch}",
+            f"Found <Link> tags without compliant prefetch configuration: {missing_prefetch}",
         )
 
     def test_supplier_filters_hoisted_to_module_scope(self):

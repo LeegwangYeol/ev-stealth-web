@@ -50,16 +50,22 @@ class RawPost:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> RawPost:
+    def from_dict(cls, data: Any) -> RawPost:
+        if isinstance(data, cls):
+            return data
+        def _get(k: str, default: Any = "") -> Any:
+            if isinstance(data, dict):
+                return data.get(k, default)
+            return getattr(data, k, default)
         return cls(
-            platform=str(data.get("platform", "unknown")),
-            post_id=str(data.get("post_id", "")),
-            url=str(data.get("url", "")),
-            title=str(data.get("title", "")),
-            content=str(data.get("content", "")),
-            comments=list(data.get("comments", [])),
-            created_at=str(data.get("created_at", "")),
-            author=str(data.get("author", "")),
+            platform=str(_get("platform", "unknown")),
+            post_id=str(_get("post_id", _get("id", ""))),
+            url=str(_get("url", "")),
+            title=str(_get("title", "")),
+            content=str(_get("content", "")),
+            comments=list(_get("comments", [])),
+            created_at=str(_get("created_at", _get("created_at=", ""))),
+            author=str(_get("author", "")),
         )
 
 
@@ -103,6 +109,7 @@ class ComplaintRecord:
     is_authentic_defect: bool = True
     dsi_breakdown: Optional[DSIBreakdown] = None
     filter_reason: str = ""
+    severity: Optional[str] = None
 
     @property
     def defect_category_ko(self) -> str:
@@ -110,7 +117,9 @@ class ComplaintRecord:
 
     @property
     def severity_tier(self) -> str:
-        """Map DSI score to 4 severity tiers."""
+        """Map DSI score to 4 severity tiers or return explicit severity."""
+        if self.severity:
+            return self.severity.upper()
         if self.severity_index >= 8.0:
             return "CRITICAL"
         if self.severity_index >= 6.0:

@@ -97,12 +97,20 @@ class DefectTracker:
             self._pipeline = ScraperPipeline()
         return self._pipeline
 
+    @pipeline.setter
+    def pipeline(self, pipeline: Any) -> None:
+        self._pipeline = pipeline
+
     @property
     def filter_engine(self) -> Any:
         """Lazily initialize ContextualDefectFilter if not explicitly provided."""
         if self._filter_engine is None and ContextualDefectFilter is not None:
             self._filter_engine = ContextualDefectFilter()
         return self._filter_engine
+
+    @filter_engine.setter
+    def filter_engine(self, engine: Any) -> None:
+        self._filter_engine = engine
 
     @staticmethod
     def validate_report_file(file_path: Union[str, Path]) -> bool:
@@ -353,45 +361,83 @@ class DefectTracker:
 
     def get_statistics(self, file_path: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
         """Return high-level statistics and category breakdown for defect reports."""
+        def _get_val(obj: Any, key: str, default: Any = None) -> Any:
+            if obj is None:
+                return default
+            if isinstance(obj, dict):
+                val = obj.get(key, default)
+            elif hasattr(obj, key):
+                val = getattr(obj, key, default)
+            elif hasattr(obj, "__getitem__"):
+                try:
+                    val = obj[key]
+                except (KeyError, TypeError, IndexError):
+                    val = default
+            else:
+                val = default
+            return default if val is None else val
+
         full_data = self.load_full_report_data(file_path=file_path)
-        stats = full_data.get("statistics")
+        stats = _get_val(full_data, "statistics")
         if stats and isinstance(stats, dict):
-            return dict(stats)
+            stat_copy = dict(stats)
+            raw_avg = stat_copy.get("avg_negativity_score")
+            if raw_avg is not None:
+                try:
+                    f_avg = float(raw_avg)
+                    if math.isnan(f_avg) or math.isinf(f_avg):
+                        stat_copy["avg_negativity_score"] = 0.0
+                    else:
+                        stat_copy["avg_negativity_score"] = round(f_avg, 2)
+                except (ValueError, TypeError, OverflowError):
+                    stat_copy["avg_negativity_score"] = 0.0
+            return stat_copy
 
         # Compute on-the-fly from reports list
-        reports = full_data.get("reports", [])
+        reports = _get_val(full_data, "reports", [])
         total = len(reports)
         critical_count = 0
         negativities: List[float] = []
         category_counts: Dict[str, int] = {}
 
         for r in reports:
-            cat = r.get("defect_category", "UNKNOWN")
+            raw_cat = _get_val(r, "defect_category", None)
+            if raw_cat is None:
+                raw_cat = _get_val(r, "category", None)
+            cat = str(raw_cat).strip() if (raw_cat and str(raw_cat).strip()) else "UNKNOWN"
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
-            dsi = r.get("severity_index")
+            dsi = _get_val(r, "severity_index")
             effective_dsi: Optional[float] = None
             if dsi is not None:
                 try:
-                    effective_dsi = float(dsi)
-                except (ValueError, TypeError):
+                    f_dsi = float(dsi)
+                    if not (math.isnan(f_dsi) or math.isinf(f_dsi)):
+                        effective_dsi = f_dsi
+                except (ValueError, TypeError, OverflowError):
                     effective_dsi = None
 
+            sev_raw = _get_val(r, "severity_tier") or _get_val(r, "severity") or ""
+            sev_str = str(sev_raw).strip().upper()
             is_critical = (
-                str(r.get("severity", "")).upper() == "CRITICAL"
+                sev_str == "CRITICAL"
                 or (effective_dsi is not None and effective_dsi >= 7.0)
             )
             if is_critical:
                 critical_count += 1
 
-            neg = r.get("negativity_score")
+            neg = _get_val(r, "negativity_score")
             if neg is not None:
                 try:
-                    negativities.append(float(neg))
-                except (ValueError, TypeError):
+                    f_neg = float(neg)
+                    if not (math.isnan(f_neg) or math.isinf(f_neg)):
+                        negativities.append(f_neg)
+                except (ValueError, TypeError, OverflowError):
                     pass
 
         avg_neg = (sum(negativities) / len(negativities)) if negativities else 0.0
+        if math.isnan(avg_neg) or math.isinf(avg_neg):
+            avg_neg = 0.0
 
         return {
             "total_filtered_defects": total,
@@ -400,25 +446,40 @@ class DefectTracker:
             "category_distribution": category_counts,
         }
 
-    def filter_raw_posts(self, raw_posts: List[Dict[str, Any]]) -> List[Any]:
+    def filter_raw_posts(self, raw_posts: List[Any]) -> List[Any]:
         """Process raw posts through ContextualDefectFilter and return authentic defect complaints."""
         if not self.filter_engine:
             raise RuntimeError("ContextualDefectFilter is not available in environment.")
 
         filtered_defects: List[Any] = []
-        for post_dict in raw_posts:
+        for post_item in raw_posts:
             try:
                 if RawPost is not None:
-                    post_obj = RawPost.from_dict(post_dict)
+                    if isinstance(post_item, RawPost):
+                        post_obj = post_item
+                    elif isinstance(post_item, dict):
+                        post_obj = RawPost.from_dict(post_item)
+                    else:
+                        post_obj = RawPost(
+                            platform=str(getattr(post_item, "platform", "unknown")),
+                            post_id=str(getattr(post_item, "post_id", getattr(post_item, "id", ""))),
+                            url=str(getattr(post_item, "url", "")),
+                            title=str(getattr(post_item, "title", "")),
+                            content=str(getattr(post_item, "content", "")),
+                            comments=list(getattr(post_item, "comments", [])),
+                            created_at=str(getattr(post_item, "created_at", "")),
+                            author=str(getattr(post_item, "author", "")),
+                        )
                     record = self.filter_engine.process_post(post_obj)
                 else:
-                    record = self.filter_engine.process_post(post_dict)
+                    record = self.filter_engine.process_post(post_item)
 
                 is_auth = getattr(record, "is_authentic_defect", False)
                 if is_auth:
                     filtered_defects.append(record)
             except Exception as exc:
-                logger.warning("Error filtering post %s: %s", post_dict.get("id"), exc)
+                p_id = getattr(post_item, "post_id", getattr(post_item, "id", None)) if not isinstance(post_item, dict) else (post_item.get("post_id") or post_item.get("id"))
+                logger.warning("Error filtering post %s: %s", p_id, exc)
 
         return filtered_defects
 

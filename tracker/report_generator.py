@@ -15,14 +15,53 @@ from typing import Any, Dict, List, Optional, Union
 from tracker.subsidy_models import RegionRecord, SubsidyPayload
 
 
+def _safe_int_val(val: Any, default: int = 0) -> int:
+    """Safely convert value to int, catching None, NaN, Inf, ValueError, TypeError, OverflowError."""
+    if val is None:
+        return default
+    try:
+        if isinstance(val, float):
+            if math.isnan(val) or math.isinf(val):
+                return default
+        return int(val)
+    except (ValueError, TypeError, OverflowError):
+        return default
+
+
+def _safe_float_val(val: Any, default: float = 0.0) -> float:
+    """Safely convert value to float, catching None, NaN, Inf, ValueError, TypeError, OverflowError."""
+    if val is None:
+        return default
+    try:
+        f = float(val)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return f
+    except (ValueError, TypeError, OverflowError):
+        return default
+
+
+def _get_field(item: Any, key: str, default: Any = None) -> Any:
+    """Safely extract field supporting dict access and domain model attribute access."""
+    if item is None:
+        return default
+    if isinstance(item, dict):
+        val = item.get(key, default)
+    elif hasattr(item, key):
+        val = getattr(item, key, default)
+    elif hasattr(item, "__getitem__"):
+        try:
+            val = item[key]
+        except (KeyError, TypeError, IndexError):
+            val = default
+    else:
+        val = default
+    return default if val is None else val
+
+
 def _metric_val(metric: Any, key: str, default: Any = 0) -> Any:
     """Safely extract metric attribute or dict key, supporting dict and dataclass instances."""
-    if metric is None:
-        return default
-    if isinstance(metric, dict):
-        val = metric.get(key, default)
-    else:
-        val = getattr(metric, key, default)
+    val = _get_field(metric, key, default)
     return default if val is None else val
 
 
@@ -52,18 +91,15 @@ class ReportGenerator:
             if p_cat is None:
                 return 0
             val = _metric_val(p_cat, "remaining_units", 0)
-            try:
-                return max(0, int(val or 0))
-            except (ValueError, TypeError):
-                return 0
+            return max(0, _safe_int_val(val, 0))
 
         critical_regions = [
-            f"{r.name_ko} ({r.overall_depletion_rate}%, 잔여: {_get_passenger_remaining(r):,}대)"
+            f"{r.name_ko} ({_safe_float_val(r.overall_depletion_rate)}%, 잔여: {_get_passenger_remaining(r):,}대)"
             for r in payload.regions
             if r.overall_status in ("CRITICAL", "DEPLETED")
         ]
         warning_regions = [
-            f"{r.name_ko} ({r.overall_depletion_rate}%, 잔여: {_get_passenger_remaining(r):,}대)"
+            f"{r.name_ko} ({_safe_float_val(r.overall_depletion_rate)}%, 잔여: {_get_passenger_remaining(r):,}대)"
             for r in payload.regions
             if r.overall_status == "WARNING"
         ]
@@ -73,28 +109,28 @@ class ReportGenerator:
         c_info = category_totals.get("commercial", {})
         b_info = category_totals.get("bus", {})
 
-        tot_ann = int(getattr(summary, "total_announced_units", 0) or 0)
-        tot_app = int(getattr(summary, "total_applied_units", 0) or 0)
-        disb_b = int(getattr(summary, "disbursed_budget_billion_krw", 0) or 0)
-        tot_b = int(getattr(summary, "total_budget_billion_krw", 0) or 0)
-        dep_rate = getattr(summary, "nationwide_depletion_rate", 0.0) or 0.0
+        tot_ann = _safe_int_val(getattr(summary, "total_announced_units", 0))
+        tot_app = _safe_int_val(getattr(summary, "total_applied_units", 0))
+        disb_b = _safe_int_val(getattr(summary, "disbursed_budget_billion_krw", 0))
+        tot_b = _safe_int_val(getattr(summary, "total_budget_billion_krw", 0))
+        dep_rate = _safe_float_val(getattr(summary, "nationwide_depletion_rate", 0.0))
 
-        p_ann = int(_metric_val(p_info, "announced_units", 0) or 0)
-        p_app = int(_metric_val(p_info, "applied_units", 0) or 0)
-        p_rate = _metric_val(p_info, "depletion_rate", 0.0) or 0.0
-        p_rem = int(_metric_val(p_info, "remaining_units", 0) or 0)
+        p_ann = _safe_int_val(_metric_val(p_info, "announced_units", 0))
+        p_app = _safe_int_val(_metric_val(p_info, "applied_units", 0))
+        p_rate = _safe_float_val(_metric_val(p_info, "depletion_rate", 0.0))
+        p_rem = _safe_int_val(_metric_val(p_info, "remaining_units", 0))
         p_st = _metric_val(p_info, "status", "N/A") or "N/A"
 
-        c_ann = int(_metric_val(c_info, "announced_units", 0) or 0)
-        c_app = int(_metric_val(c_info, "applied_units", 0) or 0)
-        c_rate = _metric_val(c_info, "depletion_rate", 0.0) or 0.0
-        c_rem = int(_metric_val(c_info, "remaining_units", 0) or 0)
+        c_ann = _safe_int_val(_metric_val(c_info, "announced_units", 0))
+        c_app = _safe_int_val(_metric_val(c_info, "applied_units", 0))
+        c_rate = _safe_float_val(_metric_val(c_info, "depletion_rate", 0.0))
+        c_rem = _safe_int_val(_metric_val(c_info, "remaining_units", 0))
         c_st = _metric_val(c_info, "status", "N/A") or "N/A"
 
-        b_ann = int(_metric_val(b_info, "announced_units", 0) or 0)
-        b_app = int(_metric_val(b_info, "applied_units", 0) or 0)
-        b_rate = _metric_val(b_info, "depletion_rate", 0.0) or 0.0
-        b_rem = int(_metric_val(b_info, "remaining_units", 0) or 0)
+        b_ann = _safe_int_val(_metric_val(b_info, "announced_units", 0))
+        b_app = _safe_int_val(_metric_val(b_info, "applied_units", 0))
+        b_rate = _safe_float_val(_metric_val(b_info, "depletion_rate", 0.0))
+        b_rem = _safe_int_val(_metric_val(b_info, "remaining_units", 0))
         b_st = _metric_val(b_info, "status", "N/A") or "N/A"
 
         status_text = "FALLBACK_BASELINE (Resilient)" if fallback_used else "SUCCESS (Live Sync)"
@@ -133,7 +169,7 @@ class ReportGenerator:
 
     def generate_defect_briefing(
         self,
-        report_data: Union[Dict[str, Any], List[Dict[str, Any]]],
+        report_data: Union[Dict[str, Any], List[Any], Any],
     ) -> str:
         """Generate executive markdown summary briefing for daily EV defect reports."""
         if isinstance(report_data, list):
@@ -141,39 +177,32 @@ class ReportGenerator:
             stats = {}
             gen_time = datetime.now(timezone.utc).isoformat()
         else:
-            reports = report_data.get("reports", [])
-            stats = report_data.get("statistics", {})
-            gen_time = report_data.get("generated_at", datetime.now(timezone.utc).isoformat())
+            reports = _get_field(report_data, "reports", [])
+            stats = _get_field(report_data, "statistics", {})
+            gen_time = _get_field(report_data, "generated_at", datetime.now(timezone.utc).isoformat())
 
-        def _safe_sev(record: Dict[str, Any]) -> float:
-            raw = record.get("severity_index")
+        def _safe_sev(record: Any) -> float:
+            raw = _get_field(record, "severity_index")
+            if raw is None:
+                raw = _get_field(record, "severity")
             if raw is None:
                 return 0.0
-            try:
-                f_val = float(raw)
-                return 0.0 if (math.isnan(f_val) or math.isinf(f_val)) else f_val
-            except (ValueError, TypeError):
-                return 0.0
+            return _safe_float_val(raw, 0.0)
 
         total_reports = len(reports)
-        critical_count = stats.get("critical_defect_count")
+        critical_count = _get_field(stats, "critical_defect_count")
         if critical_count is None:
             critical_count = sum(1 for r in reports if _safe_sev(r) >= 7.0)
-
-        raw_avg_neg = stats.get("avg_negativity_score")
-        if raw_avg_neg is None:
-            avg_negativity = 0.0
         else:
-            try:
-                f_neg = float(raw_avg_neg)
-                avg_negativity = 0.0 if (math.isnan(f_neg) or math.isinf(f_neg)) else f_neg
-            except (ValueError, TypeError):
-                avg_negativity = 0.0
+            critical_count = _safe_int_val(critical_count, 0)
+
+        raw_avg_neg = _get_field(stats, "avg_negativity_score")
+        avg_negativity = _safe_float_val(raw_avg_neg, 0.0)
 
         # Category aggregation
         category_counts: Dict[str, int] = {}
         for r in reports:
-            raw_cat = r.get("defect_category")
+            raw_cat = _get_field(r, "defect_category") or _get_field(r, "category")
             cat = str(raw_cat).strip() if (raw_cat and str(raw_cat).strip()) else "UNKNOWN"
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
@@ -203,10 +232,12 @@ class ReportGenerator:
         critical_reports = [r for r in reports if _safe_sev(r) >= 7.0][:5]
         if critical_reports:
             for r in critical_reports:
-                model = f"{r.get('vehicle_brand', '')} {r.get('vehicle_model', '')}".strip() or "차종 미상"
-                topic = r.get("defect_topic") or r.get("title") or "상세 없음"
+                brand = _get_field(r, "vehicle_brand", "") or ""
+                model = _get_field(r, "vehicle_model", "") or ""
+                v_model = f"{brand} {model}".strip() or "차종 미상"
+                topic = _get_field(r, "defect_topic") or _get_field(r, "title") or "상세 없음"
                 dsi = _safe_sev(r)
-                lines.append(f"- 🔴 **[{model}]** {topic} (심각도 DSI: {dsi:.1f})")
+                lines.append(f"- 🔴 **[{v_model}]** {topic} (심각도 DSI: {dsi:.1f})")
         else:
             lines.append("- 현재 긴급 심각도(DSI >= 7.0) 결함 사례 없음.")
 
@@ -214,7 +245,7 @@ class ReportGenerator:
 
     def generate_statistical_report(
         self,
-        records: List[Dict[str, Any]],
+        records: List[Any],
         summary_stats: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Encapsulate statistical reporting formatting into publication-grade Markdown."""
@@ -228,22 +259,22 @@ class ReportGenerator:
 
         severity_scores: List[float] = []
         for rec in records:
-            brand = rec.get("vehicle_brand") or "기타/미지정"
+            brand = _get_field(rec, "vehicle_brand") or "기타/미지정"
             brand_counts[brand] = brand_counts.get(brand, 0) + 1
 
-            plat = rec.get("source") or rec.get("platform") or "커뮤니티"
+            plat = _get_field(rec, "source") or _get_field(rec, "platform") or "커뮤니티"
             platform_counts[plat] = platform_counts.get(plat, 0) + 1
 
-            cat = rec.get("defect_category") or "기타"
+            cat = _get_field(rec, "defect_category") or _get_field(rec, "category") or "기타"
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
-            dsi = rec.get("severity_index")
+            dsi = _get_field(rec, "severity_index")
             if dsi is not None:
                 try:
                     f_dsi = float(dsi)
                     if not (math.isnan(f_dsi) or math.isinf(f_dsi)):
                         severity_scores.append(f_dsi)
-                except (ValueError, TypeError):
+                except (ValueError, TypeError, OverflowError):
                     pass
 
         avg_dsi = (sum(severity_scores) / len(severity_scores)) if severity_scores else 0.0

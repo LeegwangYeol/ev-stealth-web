@@ -7,6 +7,14 @@ const geistSans = localFont({
   variable: "--font-geist-sans",
   weight: "100 900",
   display: "swap",
+  fallback: [
+    "Pretendard",
+    "-apple-system",
+    "BlinkMacSystemFont",
+    "system-ui",
+    "Roboto",
+    "sans-serif",
+  ],
 });
 const geistMono = localFont({
   src: "./fonts/GeistMonoVF.woff",
@@ -18,6 +26,7 @@ const geistMono = localFont({
 
 import Link from "next/link";
 import GlobalNavListener from "@/components/GlobalNavListener";
+import SiteFooter from "@/components/layout/SiteFooter";
 
 export const metadata: Metadata = {
   title: "Global EV Critical Issues Hub",
@@ -50,10 +59,10 @@ export default function RootLayout({
 
             {/* Desktop Navigation Bar */}
             <nav aria-label="데스크톱 내비게이션" data-testid="desktop-nav" className="hidden md:flex flex-wrap items-center justify-end gap-x-2 lg:gap-x-3 gap-y-1 text-xs lg:text-sm font-medium">
-              <Link href="/subsidy-tracker" prefetch={false} className="text-amber-400 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
+              <Link href="/subsidy-tracker" prefetch={true} className="text-amber-400 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
                 <span>⚡</span> 보조금 실시간 소진율
               </Link>
-              <Link href="/depreciation-calculator" prefetch={false} className="text-emerald-400 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
+              <Link href="/depreciation-calculator" prefetch={true} className="text-emerald-400 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
                 <span>📉</span> 감가·배터리 계산기
               </Link>
               <Link href="/reliability-analytics" prefetch={false} className="text-blue-300 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-900">
@@ -110,7 +119,7 @@ export default function RootLayout({
                 </div>
                 <Link
                   href="/subsidy-tracker"
-                  prefetch={false}
+                  prefetch={true}
                   className="px-3 py-2 rounded-lg bg-amber-950/60 border border-amber-500/50 text-amber-300 hover:text-white font-semibold transition flex items-center justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <span className="flex items-center gap-2">
@@ -120,7 +129,7 @@ export default function RootLayout({
                 </Link>
                 <Link
                   href="/depreciation-calculator"
-                  prefetch={false}
+                  prefetch={true}
                   className="px-3 py-2 rounded-lg bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 hover:text-white font-semibold transition flex items-center justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <span className="flex items-center gap-2">
@@ -179,9 +188,7 @@ export default function RootLayout({
         <main id="main-content" tabIndex={-1} className="max-w-6xl mx-auto p-6 min-h-screen outline-none focus:outline-none">
           {children}
         </main>
-        <footer className="bg-gray-200 text-center p-6 text-sm text-gray-600">
-          © 2026 EV Critical Issues & Safety Intelligence Hub
-        </footer>
+        <SiteFooter />
 
         {/* Mobile nav drawer auto-close on internal link click & Escape key listener with focus return */}
         <GlobalNavListener />

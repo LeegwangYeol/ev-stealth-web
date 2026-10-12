@@ -730,73 +730,93 @@ export default function DepreciationCalculatorClient({
           tabIndex={0}
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[380px] overflow-y-auto pr-1 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
         >
-          {filteredModels.map((model) => {
-            const isSelected = model.id === selectedModel.id;
-            return (
-              <button
-                key={model.id}
-                type="button"
-                aria-pressed={isSelected}
-                onClick={() => handleSelectModel(model)}
-                className={`text-left p-3.5 rounded-xl border transition relative flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                  isSelected
-                    ? 'border-blue-600 bg-blue-50/60 ring-2 ring-blue-500/20 shadow-sm'
-                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-1 mb-1">
-                    <span className="text-xs font-semibold text-slate-600">
-                      {model.brand_name_ko} ({model.brand_name_en})
-                    </span>
-                    {getDefenseTierBadge(model.resale_defense_tier)}
-                  </div>
-
-                  <div className="text-sm font-bold text-slate-900 line-clamp-1">
-                    {model.model_name}
-                  </div>
-                  <div className="text-xs text-slate-600 mb-2">{model.segment}</div>
-
-                  <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                    {getChemistryBadge(model.battery_specs.chemistry)}
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-900 border border-slate-300">
-                      {model.battery_specs.capacity_kwh} kWh
-                    </span>
-                    <span
-                      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold border ${
-                        model.battery_specs.voltage_architecture === '800V'
-                          ? 'bg-emerald-100 text-emerald-950 border-emerald-400'
-                          : 'bg-slate-100 text-slate-900 border-slate-300'
-                      }`}
-                    >
-                      {model.battery_specs.voltage_architecture}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+          {filteredModels.length === 0 ? (
+            <div className="col-span-full py-12 px-4 text-center text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+              <span className="text-3xl block mb-2" aria-hidden="true">🔍</span>
+              <p className="font-bold text-slate-700 text-sm">일치하는 전기차 모델이 없습니다</p>
+              <p className="text-xs text-slate-500 mt-1">검색어를 변경하거나 다른 제조사 탭을 선택해 보세요.</p>
+              {(searchQuery.trim() !== '' || selectedBrand !== 'all') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedBrand('all');
+                  }}
+                  className="mt-3 px-3.5 py-1.5 text-xs font-semibold text-blue-600 bg-white hover:bg-blue-50 rounded-lg transition border border-slate-300 shadow-sm"
+                >
+                  검색어 및 제조사 필터 초기화
+                </button>
+              )}
+            </div>
+          ) : (
+            filteredModels.map((model) => {
+              const isSelected = model.id === selectedModel.id;
+              return (
+                <button
+                  key={model.id}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => handleSelectModel(model)}
+                  className={`text-left p-3.5 rounded-xl border transition relative flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    isSelected
+                      ? 'border-blue-600 bg-blue-50/60 ring-2 ring-blue-500/20 shadow-sm'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
                   <div>
-                    <span className="text-slate-600">출고가:</span>{' '}
-                    <span className="font-semibold text-slate-700">
-                      {(model.msrp_krw_baseline / 10000).toLocaleString()}만원
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-600">실구매:</span>{' '}
-                    <span className="font-bold text-blue-700">
-                      {(model.net_purchase_price_krw / 10000).toLocaleString()}만원
-                    </span>
-                  </div>
-                </div>
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <span className="text-xs font-semibold text-slate-600">
+                        {model.brand_name_ko} ({model.brand_name_en})
+                      </span>
+                      {getDefenseTierBadge(model.resale_defense_tier)}
+                    </div>
 
-                {isSelected && (
-                  <div className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow">
-                    ✓
+                    <div className="text-sm font-bold text-slate-900 line-clamp-1">
+                      {model.model_name}
+                    </div>
+                    <div className="text-xs text-slate-600 mb-2">{model.segment}</div>
+
+                    <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                      {getChemistryBadge(model.battery_specs.chemistry)}
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-900 border border-slate-300">
+                        {model.battery_specs.capacity_kwh} kWh
+                      </span>
+                      <span
+                        className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold border ${
+                          model.battery_specs.voltage_architecture === '800V'
+                            ? 'bg-emerald-100 text-emerald-950 border-emerald-400'
+                            : 'bg-slate-100 text-slate-900 border-slate-300'
+                        }`}
+                      >
+                        {model.battery_specs.voltage_architecture}
+                      </span>
+                    </div>
                   </div>
-                )}
-              </button>
-            );
-          })}
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="text-slate-600">출고가:</span>{' '}
+                      <span className="font-semibold text-slate-700">
+                        {(model.msrp_krw_baseline / 10000).toLocaleString()}만원
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-600">실구매:</span>{' '}
+                      <span className="font-bold text-blue-700">
+                        {(model.net_purchase_price_krw / 10000).toLocaleString()}만원
+                      </span>
+                    </div>
+                  </div>
+
+                  {isSelected && (
+                    <div className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow">
+                      ✓
+                    </div>
+                  )}
+                </button>
+              );
+            })
+          )}
         </div>
       </section>
 
@@ -1030,8 +1050,15 @@ export default function DepreciationCalculatorClient({
       {/* 5. MULTI-YEAR DEPRECIATION CHART & RESALE VALUE PROJECTION */}
       <section
         aria-labelledby="depreciation-chart-heading"
+        aria-live="polite"
+        aria-atomic="true"
         className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-6"
       >
+        {/* Dynamic calculation live summary for screen readers */}
+        <div className="sr-only" aria-live="polite" aria-atomic="true">
+          {selectedModel.brand_name_ko} {selectedModel.model_name} {holdingYears}년 보유 기준 예상 잔존 시세는 {Math.round(depResult.estimatedResidualPriceKrw / 10000).toLocaleString()}만 원(잔존율 {depResult.adjustedResidualPct}%), 배터리 잔여 수명은 {batteryHealth.sohPct.toFixed(1)}%, 5개년 누적 절감액은 {Math.round(tcoResult.totalCumulativeSavingsKrw / 10000).toLocaleString()}만 원입니다.
+        </div>
+
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
             <div className="flex items-center gap-2">
@@ -1077,7 +1104,7 @@ export default function DepreciationCalculatorClient({
         </div>
 
         {/* 4 Key KPI Result Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div aria-live="polite" aria-atomic="true" className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {/* KPI 1: Estimated Resale Price */}
           <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
             <div className="text-xs font-bold text-blue-800">
@@ -2000,8 +2027,8 @@ export default function DepreciationCalculatorClient({
                 <th scope="col" className="py-2.5 px-3 font-bold">누적 주행</th>
                 <th scope="col" className="py-2.5 px-3 font-bold">EV 충전비</th>
                 <th scope="col" className="py-2.5 px-3 font-bold">내연기관 주유비</th>
-                <th scope="col" className="py-2.5 px-3 font-bold">EV 세금</th>
-                <th scope="col" className="py-2.5 px-3 font-bold">내연기관 세금</th>
+                <th scope="col" className="py-2.5 px-3 font-bold">EV 자동차세</th>
+                <th scope="col" className="py-2.5 px-3 font-bold">내연기관 자동차세</th>
                 <th scope="col" className="py-2.5 px-3 font-bold">부가 절감</th>
                 <th scope="col" className="py-2.5 px-3 font-bold text-right">연간 순 절감액</th>
                 <th scope="col" className="py-2.5 px-3 font-bold text-right text-blue-600">누적 순 절감액</th>
@@ -2014,7 +2041,9 @@ export default function DepreciationCalculatorClient({
                   <td className="py-2 px-3">{row.cumulativeKm.toLocaleString()} km</td>
                   <td className="py-2 px-3">{(row.evElectricityCostKrw / 10000).toFixed(0)}만원</td>
                   <td className="py-2 px-3">{(row.iceFuelCostKrw / 10000).toFixed(0)}만원</td>
-                  <td className="py-2 px-3">13만원</td>
+                  <td className="py-2 px-3">
+                    {(row.evAutomobileTaxKrw / 10000).toLocaleString(undefined, { maximumFractionDigits: 1 })}만원
+                  </td>
                   <td className="py-2 px-3">{(row.iceAutomobileTaxKrw / 10000).toFixed(0)}만원</td>
                   <td className="py-2 px-3">
                     {((row.tollSavingsKrw + row.parkingSavingsKrw + row.maintenanceSavingsKrw) / 10000).toFixed(0)}만원

@@ -16,7 +16,7 @@ export default function Home() {
 
       <section aria-label="서비스 주요 진입점 바로가기 그리드" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full max-w-6xl">
         <Link href="/subsidy-tracker"
-          prefetch={false}
+          prefetch={true}
           className="group block p-6 bg-gradient-to-br from-amber-950 via-slate-900 to-yellow-950 text-white border border-amber-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-amber-400 transition-all duration-300 md:col-span-2 lg:col-span-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <div className="flex items-center gap-2">
@@ -43,7 +43,7 @@ export default function Home() {
         </Link>
 
         <Link href="/depreciation-calculator"
-          prefetch={false}
+          prefetch={true}
           className="group block p-6 bg-gradient-to-br from-emerald-950 via-slate-900 to-teal-950 text-white border border-emerald-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-emerald-400 transition-all duration-300 md:col-span-2 lg:col-span-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <div className="flex items-center gap-2">

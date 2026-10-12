@@ -565,8 +565,10 @@ class ContextualDefectFilter:
     # -----------------------------------------------------------------
     # Primary Pipeline Entrypoint
     # -----------------------------------------------------------------
-    def process_post(self, post: RawPost) -> ComplaintRecord:
+    def process_post(self, post: Union[RawPost, Dict[str, Any]]) -> ComplaintRecord:
         """Execute full 4-stage filter and return ComplaintRecord."""
+        if isinstance(post, dict):
+            post = RawPost.from_dict(post)
         combined_text = f"{post.title}\n{post.content}".strip()
         comments_text = " ".join(post.comments)
         full_text = f"{combined_text} {comments_text}".strip()

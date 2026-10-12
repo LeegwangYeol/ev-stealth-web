@@ -208,7 +208,7 @@ def sync_defect_reports(
         return []
 
     target_paths: List[Path] = [
-        p for p in known_paths if p != source_path and p.parent.exists()
+        p for p in known_paths if os.path.abspath(p) != os.path.abspath(source_path) and p.parent.exists()
     ]
 
     if source_path and target_paths and validate_defect_reports_file(source_path):

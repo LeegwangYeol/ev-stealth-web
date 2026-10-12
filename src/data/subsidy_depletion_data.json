@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": "1.0.0",
-    "generated_at": "2026-10-11T20:18:33.157828+00:00",
+    "generated_at": "2026-10-12T20:23:14.298178+00:00",
     "policy_year": 2026,
     "data_sources": [
       "환경부 무공해차 통합누리집 (ev.or.kr)",
@@ -157,6 +157,7 @@
         }
       },
       "notes": "잔여 1,610대 소진 임박, 10월 초 일반 승용 마감 유력. 법인 물량 조기 마감.",
+      "last_updated": "",
       "municipalities": [
         {
           "name_ko": "종로구",
@@ -165,7 +166,12 @@
           "remaining_units": 39,
           "depletion_rate": 86.1,
           "status": "WARNING",
-          "local_subsidy_krw": 1500000
+          "local_subsidy_krw": 1500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "강남구",
@@ -174,7 +180,12 @@
           "remaining_units": 132,
           "depletion_rate": 89.0,
           "status": "WARNING",
-          "local_subsidy_krw": 1500000
+          "local_subsidy_krw": 1500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "송파구",
@@ -183,7 +194,12 @@
           "remaining_units": 124,
           "depletion_rate": 86.9,
           "status": "WARNING",
-          "local_subsidy_krw": 1500000
+          "local_subsidy_krw": 1500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "서초구",
@@ -192,7 +208,12 @@
           "remaining_units": 107,
           "depletion_rate": 88.0,
           "status": "WARNING",
-          "local_subsidy_krw": 1500000
+          "local_subsidy_krw": 1500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "마포구",
@@ -201,7 +222,12 @@
           "remaining_units": 93,
           "depletion_rate": 85.0,
           "status": "WARNING",
-          "local_subsidy_krw": 1500000
+          "local_subsidy_krw": 1500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "영등포구",
@@ -210,7 +236,12 @@
           "remaining_units": 107,
           "depletion_rate": 84.9,
           "status": "WARNING",
-          "local_subsidy_krw": 1500000
+          "local_subsidy_krw": 1500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         }
       ]
     },
@@ -266,6 +297,7 @@
         }
       },
       "notes": "수원·성남·용인 95% 초과(위험), 평택·화성 등 경기남부 잔여 물량 소량 유지.",
+      "last_updated": "",
       "municipalities": [
         {
           "name_ko": "수원시",
@@ -274,7 +306,12 @@
           "remaining_units": 112,
           "depletion_rate": 96.0,
           "status": "CRITICAL",
-          "local_subsidy_krw": 3500000
+          "local_subsidy_krw": 3500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "성남시",
@@ -283,7 +320,12 @@
           "remaining_units": 66,
           "depletion_rate": 97.0,
           "status": "CRITICAL",
-          "local_subsidy_krw": 3500000
+          "local_subsidy_krw": 3500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "용인시",
@@ -292,7 +334,12 @@
           "remaining_units": 78,
           "depletion_rate": 97.0,
           "status": "CRITICAL",
-          "local_subsidy_krw": 3500000
+          "local_subsidy_krw": 3500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "고양시",
@@ -301,7 +348,12 @@
           "remaining_units": 192,
           "depletion_rate": 92.0,
           "status": "WARNING",
-          "local_subsidy_krw": 3500000
+          "local_subsidy_krw": 3500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "화성시",
@@ -310,7 +362,12 @@
           "remaining_units": 261,
           "depletion_rate": 91.0,
           "status": "WARNING",
-          "local_subsidy_krw": 3500000
+          "local_subsidy_krw": 3500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "평택시",
@@ -319,7 +376,12 @@
           "remaining_units": 176,
           "depletion_rate": 89.0,
           "status": "WARNING",
-          "local_subsidy_krw": 4500000
+          "local_subsidy_krw": 4500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "안산시",
@@ -328,7 +390,12 @@
           "remaining_units": 135,
           "depletion_rate": 91.0,
           "status": "WARNING",
-          "local_subsidy_krw": 3500000
+          "local_subsidy_krw": 3500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "부천시",
@@ -337,7 +404,12 @@
           "remaining_units": 112,
           "depletion_rate": 92.0,
           "status": "WARNING",
-          "local_subsidy_krw": 3500000
+          "local_subsidy_krw": 3500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "남양주시",
@@ -346,7 +418,12 @@
           "remaining_units": 150,
           "depletion_rate": 90.0,
           "status": "WARNING",
-          "local_subsidy_krw": 4000000
+          "local_subsidy_krw": 4000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "가평군",
@@ -355,7 +432,12 @@
           "remaining_units": 70,
           "depletion_rate": 80.0,
           "status": "WARNING",
-          "local_subsidy_krw": 5000000
+          "local_subsidy_krw": 5000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         }
       ]
     },
@@ -411,6 +493,7 @@
         }
       },
       "notes": "90일 거주 요건 엄격 심사. 가을철 출고 물량 유입으로 10월 중 소진율 가속 예상.",
+      "last_updated": "",
       "municipalities": [
         {
           "name_ko": "해운대구",
@@ -419,7 +502,12 @@
           "remaining_units": 240,
           "depletion_rate": 80.0,
           "status": "WARNING",
-          "local_subsidy_krw": 2500000
+          "local_subsidy_krw": 2500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "부산진구",
@@ -428,7 +516,12 @@
           "remaining_units": 189,
           "depletion_rate": 79.0,
           "status": "CAUTION",
-          "local_subsidy_krw": 2500000
+          "local_subsidy_krw": 2500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "동래구",
@@ -437,7 +530,12 @@
           "remaining_units": 180,
           "depletion_rate": 76.0,
           "status": "CAUTION",
-          "local_subsidy_krw": 2500000
+          "local_subsidy_krw": 2500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "사하구",
@@ -446,7 +544,12 @@
           "remaining_units": 156,
           "depletion_rate": 76.0,
           "status": "CAUTION",
-          "local_subsidy_krw": 2500000
+          "local_subsidy_krw": 2500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         }
       ]
     },
@@ -502,6 +605,7 @@
         }
       },
       "notes": "잔여 204대, 사실상 선착순 마감 직전. 대기번호 접수자 우선 순번 부여.",
+      "last_updated": "",
       "municipalities": [
         {
           "name_ko": "수성구",
@@ -510,7 +614,12 @@
           "remaining_units": 26,
           "depletion_rate": 98.0,
           "status": "CRITICAL",
-          "local_subsidy_krw": 3000000
+          "local_subsidy_krw": 3000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "달서구",
@@ -519,7 +628,12 @@
           "remaining_units": 56,
           "depletion_rate": 96.0,
           "status": "CRITICAL",
-          "local_subsidy_krw": 3000000
+          "local_subsidy_krw": 3000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "북구",
@@ -528,7 +642,12 @@
           "remaining_units": 38,
           "depletion_rate": 96.0,
           "status": "CRITICAL",
-          "local_subsidy_krw": 3000000
+          "local_subsidy_krw": 3000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "동구",
@@ -537,7 +656,12 @@
           "remaining_units": 45,
           "depletion_rate": 94.0,
           "status": "WARNING",
-          "local_subsidy_krw": 3000000
+          "local_subsidy_krw": 3000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         }
       ]
     },
@@ -593,6 +717,7 @@
         }
       },
       "notes": "화물차 전량 소진, 승용 잔여 약 1,040대 소진 임박.",
+      "last_updated": "",
       "municipalities": [
         {
           "name_ko": "연수구 (송도)",
@@ -601,7 +726,12 @@
           "remaining_units": 210,
           "depletion_rate": 86.0,
           "status": "WARNING",
-          "local_subsidy_krw": 3000000
+          "local_subsidy_krw": 3000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "서구 (청라·검단)",
@@ -610,7 +740,12 @@
           "remaining_units": 256,
           "depletion_rate": 84.0,
           "status": "WARNING",
-          "local_subsidy_krw": 3000000
+          "local_subsidy_krw": 3000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "남동구",
@@ -619,7 +754,12 @@
           "remaining_units": 220,
           "depletion_rate": 80.0,
           "status": "WARNING",
-          "local_subsidy_krw": 3000000
+          "local_subsidy_krw": 3000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "부평구",
@@ -628,7 +768,12 @@
           "remaining_units": 189,
           "depletion_rate": 79.0,
           "status": "CAUTION",
-          "local_subsidy_krw": 3000000
+          "local_subsidy_krw": 3000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         }
       ]
     },
@@ -684,6 +829,7 @@
         }
       },
       "notes": "법인 물량 전액 소진, 개인 승용 조기 마감 위험 (잔여 272대).",
+      "last_updated": "",
       "municipalities": [
         {
           "name_ko": "서구",
@@ -692,7 +838,12 @@
           "remaining_units": 63,
           "depletion_rate": 93.0,
           "status": "WARNING",
-          "local_subsidy_krw": 3500000
+          "local_subsidy_krw": 3500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "광산구",
@@ -701,7 +852,12 @@
           "remaining_units": 77,
           "depletion_rate": 93.0,
           "status": "WARNING",
-          "local_subsidy_krw": 3500000
+          "local_subsidy_krw": 3500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "북구",
@@ -710,7 +866,12 @@
           "remaining_units": 77,
           "depletion_rate": 90.9,
           "status": "WARNING",
-          "local_subsidy_krw": 3500000
+          "local_subsidy_krw": 3500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         }
       ]
     },
@@ -766,6 +927,7 @@
         }
       },
       "notes": "안정적 소진 유지 중, 10월 하순경 예산 한도 도달 예상.",
+      "last_updated": "",
       "municipalities": [
         {
           "name_ko": "유성구",
@@ -774,7 +936,12 @@
           "remaining_units": 300,
           "depletion_rate": 80.0,
           "status": "WARNING",
-          "local_subsidy_krw": 3000000
+          "local_subsidy_krw": 3000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "서구",
@@ -783,7 +950,12 @@
           "remaining_units": 286,
           "depletion_rate": 78.0,
           "status": "CAUTION",
-          "local_subsidy_krw": 3000000
+          "local_subsidy_krw": 3000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "중구",
@@ -792,7 +964,12 @@
           "remaining_units": 163,
           "depletion_rate": 74.9,
           "status": "CAUTION",
-          "local_subsidy_krw": 3000000
+          "local_subsidy_krw": 3000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         }
       ]
     },
@@ -848,6 +1025,7 @@
         }
       },
       "notes": "현대차 임직원 출고 집중으로 잔여 112대 마감 직전. 긴급 확인 요망.",
+      "last_updated": "",
       "municipalities": [
         {
           "name_ko": "남구",
@@ -856,7 +1034,12 @@
           "remaining_units": 29,
           "depletion_rate": 96.9,
           "status": "CRITICAL",
-          "local_subsidy_krw": 3150000
+          "local_subsidy_krw": 3150000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "북구 (현대차공장)",
@@ -865,7 +1048,12 @@
           "remaining_units": 18,
           "depletion_rate": 98.0,
           "status": "CRITICAL",
-          "local_subsidy_krw": 3150000
+          "local_subsidy_krw": 3150000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "울주군",
@@ -874,7 +1062,12 @@
           "remaining_units": 39,
           "depletion_rate": 94.0,
           "status": "WARNING",
-          "local_subsidy_krw": 3150000
+          "local_subsidy_krw": 3150000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         }
       ]
     },
@@ -930,6 +1123,7 @@
         }
       },
       "notes": "공무원 위주 실수요 중심, 전국 광역시 대비 잔여 예산 여유.",
+      "last_updated": "",
       "municipalities": [
         {
           "name_ko": "세종시 본청",
@@ -938,7 +1132,12 @@
           "remaining_units": 324,
           "depletion_rate": 73.0,
           "status": "CAUTION",
-          "local_subsidy_krw": 2500000
+          "local_subsidy_krw": 2500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         }
       ]
     },
@@ -994,6 +1193,7 @@
         }
       },
       "notes": "춘천·원주 집중 소진, 삼척·영동권 지자체는 고액 보조금(700만 원)에 잔여 여유.",
+      "last_updated": "",
       "municipalities": [
         {
           "name_ko": "춘천시",
@@ -1002,7 +1202,12 @@
           "remaining_units": 208,
           "depletion_rate": 84.0,
           "status": "WARNING",
-          "local_subsidy_krw": 5500000
+          "local_subsidy_krw": 5500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "원주시",
@@ -1011,7 +1216,12 @@
           "remaining_units": 255,
           "depletion_rate": 83.0,
           "status": "WARNING",
-          "local_subsidy_krw": 5500000
+          "local_subsidy_krw": 5500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "강릉시",
@@ -1020,7 +1230,12 @@
           "remaining_units": 180,
           "depletion_rate": 76.0,
           "status": "CAUTION",
-          "local_subsidy_krw": 5500000
+          "local_subsidy_krw": 5500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "삼척시",
@@ -1029,7 +1244,12 @@
           "remaining_units": 105,
           "depletion_rate": 70.0,
           "status": "CAUTION",
-          "local_subsidy_krw": 7000000
+          "local_subsidy_krw": 7000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         }
       ]
     },
@@ -1085,6 +1305,7 @@
         }
       },
       "notes": "청주시 93%로 마감 임박, 단양/영동 등 군단위는 700만 원 이상 고액 보조금 지원.",
+      "last_updated": "",
       "municipalities": [
         {
           "name_ko": "청주시",
@@ -1093,7 +1314,12 @@
           "remaining_units": 147,
           "depletion_rate": 93.0,
           "status": "WARNING",
-          "local_subsidy_krw": 6000000
+          "local_subsidy_krw": 6000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "충주시",
@@ -1102,7 +1328,12 @@
           "remaining_units": 136,
           "depletion_rate": 83.0,
           "status": "WARNING",
-          "local_subsidy_krw": 6500000
+          "local_subsidy_krw": 6500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "제천시",
@@ -1111,7 +1342,12 @@
           "remaining_units": 105,
           "depletion_rate": 79.0,
           "status": "CAUTION",
-          "local_subsidy_krw": 6800000
+          "local_subsidy_krw": 6800000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "단양군",
@@ -1120,7 +1356,12 @@
           "remaining_units": 54,
           "depletion_rate": 73.0,
           "status": "CAUTION",
-          "local_subsidy_krw": 7500000
+          "local_subsidy_krw": 7500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         }
       ]
     },
@@ -1176,6 +1417,7 @@
         }
       },
       "notes": "천안·아산 공업지대 소진 가속화(94%), 태안·서천 등 군 지역은 최대 900만 원 지급.",
+      "last_updated": "",
       "municipalities": [
         {
           "name_ko": "천안시",
@@ -1184,7 +1426,12 @@
           "remaining_units": 126,
           "depletion_rate": 94.0,
           "status": "WARNING",
-          "local_subsidy_krw": 6000000
+          "local_subsidy_krw": 6000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "아산시",
@@ -1193,7 +1440,12 @@
           "remaining_units": 135,
           "depletion_rate": 91.0,
           "status": "WARNING",
-          "local_subsidy_krw": 6500000
+          "local_subsidy_krw": 6500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "서산시",
@@ -1202,7 +1454,12 @@
           "remaining_units": 98,
           "depletion_rate": 84.9,
           "status": "WARNING",
-          "local_subsidy_krw": 7000000
+          "local_subsidy_krw": 7000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "당진시",
@@ -1211,7 +1468,12 @@
           "remaining_units": 90,
           "depletion_rate": 85.0,
           "status": "WARNING",
-          "local_subsidy_krw": 7000000
+          "local_subsidy_krw": 7000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "태안군",
@@ -1220,7 +1482,12 @@
           "remaining_units": 55,
           "depletion_rate": 78.0,
           "status": "CAUTION",
-          "local_subsidy_krw": 9000000
+          "local_subsidy_krw": 9000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         }
       ]
     },
@@ -1276,6 +1543,7 @@
         }
       },
       "notes": "전주시 90% 돌파로 조기 마감 가시권, 익산·군산 잔여 15%선 유지 중.",
+      "last_updated": "",
       "municipalities": [
         {
           "name_ko": "전주시",
@@ -1284,7 +1552,12 @@
           "remaining_units": 200,
           "depletion_rate": 90.0,
           "status": "WARNING",
-          "local_subsidy_krw": 6500000
+          "local_subsidy_krw": 6500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "익산시",
@@ -1293,7 +1566,12 @@
           "remaining_units": 162,
           "depletion_rate": 82.0,
           "status": "WARNING",
-          "local_subsidy_krw": 6500000
+          "local_subsidy_krw": 6500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "군산시",
@@ -1302,7 +1580,12 @@
           "remaining_units": 144,
           "depletion_rate": 82.0,
           "status": "WARNING",
-          "local_subsidy_krw": 6500000
+          "local_subsidy_krw": 6500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "무주군",
@@ -1311,7 +1594,12 @@
           "remaining_units": 45,
           "depletion_rate": 75.0,
           "status": "CAUTION",
-          "local_subsidy_krw": 8000000
+          "local_subsidy_krw": 8000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         }
       ]
     },
@@ -1367,6 +1655,7 @@
         }
       },
       "notes": "목포·순천 소진 임박. 신안군(1,150만 원), 해남군(850만 원) 등 전국 최고 수준 지방비 지급.",
+      "last_updated": "",
       "municipalities": [
         {
           "name_ko": "순천시",
@@ -1375,7 +1664,12 @@
           "remaining_units": 144,
           "depletion_rate": 88.0,
           "status": "WARNING",
-          "local_subsidy_krw": 7000000
+          "local_subsidy_krw": 7000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "여수시",
@@ -1384,7 +1678,12 @@
           "remaining_units": 154,
           "depletion_rate": 86.0,
           "status": "WARNING",
-          "local_subsidy_krw": 7000000
+          "local_subsidy_krw": 7000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "목포시",
@@ -1393,7 +1692,12 @@
           "remaining_units": 114,
           "depletion_rate": 88.0,
           "status": "WARNING",
-          "local_subsidy_krw": 7000000
+          "local_subsidy_krw": 7000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "나주시",
@@ -1402,7 +1706,12 @@
           "remaining_units": 124,
           "depletion_rate": 80.9,
           "status": "WARNING",
-          "local_subsidy_krw": 7500000
+          "local_subsidy_krw": 7500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "해남군",
@@ -1411,7 +1720,12 @@
           "remaining_units": 63,
           "depletion_rate": 79.0,
           "status": "CAUTION",
-          "local_subsidy_krw": 8500000
+          "local_subsidy_krw": 8500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "신안군",
@@ -1420,7 +1734,12 @@
           "remaining_units": 48,
           "depletion_rate": 76.0,
           "status": "CAUTION",
-          "local_subsidy_krw": 11500000
+          "local_subsidy_krw": 11500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         }
       ]
     },
@@ -1476,6 +1795,7 @@
         }
       },
       "notes": "포항·구미 98% 이상 마감 직전. 울릉군(1,100만 원)은 100% 전액 소진 마감.",
+      "last_updated": "",
       "municipalities": [
         {
           "name_ko": "포항시",
@@ -1484,7 +1804,12 @@
           "remaining_units": 22,
           "depletion_rate": 99.0,
           "status": "CRITICAL",
-          "local_subsidy_krw": 6000000
+          "local_subsidy_krw": 6000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "구미시",
@@ -1493,7 +1818,12 @@
           "remaining_units": 34,
           "depletion_rate": 98.0,
           "status": "CRITICAL",
-          "local_subsidy_krw": 6000000
+          "local_subsidy_krw": 6000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "경주시",
@@ -1502,7 +1832,12 @@
           "remaining_units": 40,
           "depletion_rate": 96.0,
           "status": "CRITICAL",
-          "local_subsidy_krw": 6500000
+          "local_subsidy_krw": 6500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "안동시",
@@ -1511,7 +1846,12 @@
           "remaining_units": 35,
           "depletion_rate": 95.0,
           "status": "CRITICAL",
-          "local_subsidy_krw": 7000000
+          "local_subsidy_krw": 7000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "울릉군",
@@ -1520,7 +1860,12 @@
           "remaining_units": 0,
           "depletion_rate": 100.0,
           "status": "DEPLETED",
-          "local_subsidy_krw": 11000000
+          "local_subsidy_krw": 11000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         }
       ]
     },
@@ -1576,6 +1921,7 @@
         }
       },
       "notes": "창원·김해 등 동부경남 공업벨트 소진 가속, 서부경남 소량 잔여.",
+      "last_updated": "",
       "municipalities": [
         {
           "name_ko": "창원시",
@@ -1584,7 +1930,12 @@
           "remaining_units": 192,
           "depletion_rate": 92.0,
           "status": "WARNING",
-          "local_subsidy_krw": 5500000
+          "local_subsidy_krw": 5500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "김해시",
@@ -1593,7 +1944,12 @@
           "remaining_units": 160,
           "depletion_rate": 90.0,
           "status": "WARNING",
-          "local_subsidy_krw": 5500000
+          "local_subsidy_krw": 5500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "양산시",
@@ -1602,7 +1958,12 @@
           "remaining_units": 143,
           "depletion_rate": 87.0,
           "status": "WARNING",
-          "local_subsidy_krw": 6000000
+          "local_subsidy_krw": 6000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "진주시",
@@ -1611,7 +1972,12 @@
           "remaining_units": 126,
           "depletion_rate": 86.0,
           "status": "WARNING",
-          "local_subsidy_krw": 6000000
+          "local_subsidy_krw": 6000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "거창군",
@@ -1620,7 +1986,12 @@
           "remaining_units": 44,
           "depletion_rate": 78.0,
           "status": "CAUTION",
-          "local_subsidy_krw": 7500000
+          "local_subsidy_krw": 7500000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         }
       ]
     },
@@ -1676,6 +2047,7 @@
         }
       },
       "notes": "렌터카 및 도민 보급 목표 99% 달성. 일반 승용 잔여 40대, 실질적 접수 마감.",
+      "last_updated": "",
       "municipalities": [
         {
           "name_ko": "제주시",
@@ -1684,7 +2056,12 @@
           "remaining_units": 27,
           "depletion_rate": 99.0,
           "status": "CRITICAL",
-          "local_subsidy_krw": 4000000
+          "local_subsidy_krw": 4000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         },
         {
           "name_ko": "서귀포시",
@@ -1693,7 +2070,12 @@
           "remaining_units": 13,
           "depletion_rate": 99.0,
           "status": "CRITICAL",
-          "local_subsidy_krw": 4000000
+          "local_subsidy_krw": 4000000,
+          "muni_id": "",
+          "name_en": "",
+          "category": "passenger",
+          "delivered_units": 0,
+          "total_subsidy_krw": 0
         }
       ]
     }

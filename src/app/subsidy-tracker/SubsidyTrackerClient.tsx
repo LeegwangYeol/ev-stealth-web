@@ -754,13 +754,14 @@ const RegionCard = React.memo(function RegionCard({
     max_total_subsidy_krw: 0,
   };
 
-  const safeAnnounced = Number.isFinite(cat?.announced_units) && cat.announced_units > 0 ? cat.announced_units : 1;
+  const announcedUnits = Number.isFinite(cat?.announced_units) ? Math.max(0, cat.announced_units) : 0;
+  const safeAnnounced = announcedUnits > 0 ? announcedUnits : 1;
   const safeDelivered = Number.isFinite(cat?.delivered_units) ? cat.delivered_units : 0;
   const safeDepletion = Number.isFinite(cat?.depletion_rate) ? cat.depletion_rate : 0;
   const safeRemaining = Number.isFinite(cat?.remaining_units) ? cat.remaining_units : 0;
   const safeApplied = Number.isFinite(cat?.applied_units) ? cat.applied_units : 0;
 
-  const rawDeliveredPct = Math.round((safeDelivered / safeAnnounced) * 100);
+  const rawDeliveredPct = announcedUnits > 0 ? Math.round((safeDelivered / safeAnnounced) * 100) : 0;
   const deliveredPct = Number.isFinite(rawDeliveredPct) ? Math.min(100, Math.max(0, rawDeliveredPct)) : 0;
   const rawPendingPct = safeDepletion - deliveredPct;
   const pendingPct = Number.isFinite(rawPendingPct) ? Math.max(0, Math.min(100 - deliveredPct, rawPendingPct)) : 0;
@@ -790,7 +791,7 @@ const RegionCard = React.memo(function RegionCard({
               소진율 <strong className="text-amber-400 text-sm">{safeDepletion.toFixed(1)}%</strong>
             </span>
             <span className="text-slate-400 text-[11px]">
-              잔여 <strong className="text-emerald-400 font-bold">{safeRemaining.toLocaleString()}</strong> / {safeAnnounced.toLocaleString()}대
+              잔여 <strong className="text-emerald-400 font-bold">{safeRemaining.toLocaleString()}</strong> / {announcedUnits.toLocaleString()}대
             </span>
           </div>
 

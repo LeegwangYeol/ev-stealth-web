@@ -9,26 +9,33 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from enum import Enum
+import math
 from typing import Any, Dict, List, Optional
 
 
 def _safe_int(val: Any, default: int = 0) -> int:
-    """Safely convert value to int, catching None, ValueError, and TypeError."""
+    """Safely convert value to int, catching None, NaN, Inf, ValueError, TypeError, and OverflowError."""
     if val is None:
         return default
     try:
+        if isinstance(val, float):
+            if math.isnan(val) or math.isinf(val):
+                return default
         return int(val)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         return default
 
 
 def _safe_float(val: Any, default: float = 0.0) -> float:
-    """Safely convert value to float, catching None, ValueError, and TypeError."""
+    """Safely convert value to float, catching None, NaN, Inf, ValueError, TypeError, and OverflowError."""
     if val is None:
         return default
     try:
-        return float(val)
-    except (ValueError, TypeError):
+        f = float(val)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return f
+    except (ValueError, TypeError, OverflowError):
         return default
 
 
@@ -44,6 +51,11 @@ class AlertSeverity(str, Enum):
     @classmethod
     def from_rate(cls, rate: float) -> AlertSeverity:
         """Determine alert severity tier based on depletion percentage."""
+        try:
+            if rate is None or math.isnan(rate) or math.isinf(rate):
+                return cls.HEALTHY
+        except (TypeError, ValueError):
+            return cls.HEALTHY
         if rate >= 100.0:
             return cls.DEPLETED
         elif rate >= 95.0:
@@ -100,6 +112,12 @@ class CategoryMetrics:
     total_budget_krw: int = 0
     remaining_budget_krw: int = 0
 
+    def __getitem__(self, key: str) -> Any:
+        return getattr(self, key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
@@ -133,6 +151,17 @@ class MunicipalityMetrics:
     depletion_rate: float = 0.0
     status: str = "HEALTHY"
     local_subsidy_krw: int = 0
+    muni_id: str = ""
+    name_en: str = ""
+    category: str = "passenger"
+    delivered_units: Optional[int] = 0
+    total_subsidy_krw: int = 0
+
+    def __getitem__(self, key: str) -> Any:
+        return getattr(self, key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -149,6 +178,11 @@ class MunicipalityMetrics:
             depletion_rate=_safe_float(data.get("depletion_rate", 0.0)),
             status=str(data.get("status") or "HEALTHY"),
             local_subsidy_krw=_safe_int(data.get("local_subsidy_krw", 0)),
+            muni_id=str(data.get("muni_id") or ""),
+            name_en=str(data.get("name_en") or ""),
+            category=str(data.get("category") or "passenger"),
+            delivered_units=_safe_int(data.get("delivered_units", 0)),
+            total_subsidy_krw=_safe_int(data.get("total_subsidy_krw", 0)),
         )
 
 
@@ -168,6 +202,7 @@ class RegionRecord:
     categories: Dict[str, CategoryMetrics] = field(default_factory=dict)
     municipalities: List[MunicipalityMetrics] = field(default_factory=list)
     notes: str = ""
+    last_updated: str = ""
     code: Optional[str] = None
 
     def __post_init__(self):
@@ -191,6 +226,7 @@ class RegionRecord:
             "supplementary_budget_added": self.supplementary_budget_added,
             "categories": {k: v.to_dict() if hasattr(v, "to_dict") else v for k, v in self.categories.items()},
             "notes": self.notes,
+            "last_updated": self.last_updated,
         }
         if self.municipalities:
             result["municipalities"] = [m.to_dict() if hasattr(m, "to_dict") else m for m in self.municipalities]
@@ -231,6 +267,7 @@ class RegionRecord:
             categories=cats,
             municipalities=munis,
             notes=str(data.get("notes") or ""),
+            last_updated=str(data.get("last_updated") or ""),
         )
 
 
@@ -327,12 +364,30 @@ class NationwideSummary:
     @property
     def disbursed_budget_krw(self) -> int:
         """Disbursed statutory budget in KRW (non-negative)."""
-        return max(0, int(round(self.disbursed_budget_billion_krw * 1_000_000_000)))
+        val = self.disbursed_budget_billion_krw
+        if val is None:
+            return 0
+        try:
+            f = float(val)
+            if math.isnan(f) or math.isinf(f):
+                return 0
+            return max(0, int(round(f * 1_000_000_000)))
+        except (ValueError, TypeError, OverflowError):
+            return 0
 
     @property
     def total_budget_krw(self) -> int:
         """Total statutory budget in KRW (non-negative)."""
-        return max(0, int(round(self.total_budget_billion_krw * 1_000_000_000)))
+        val = self.total_budget_billion_krw
+        if val is None:
+            return 0
+        try:
+            f = float(val)
+            if math.isnan(f) or math.isinf(f):
+                return 0
+            return max(0, int(round(f * 1_000_000_000)))
+        except (ValueError, TypeError, OverflowError):
+            return 0
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> NationwideSummary:

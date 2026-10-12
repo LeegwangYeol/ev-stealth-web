@@ -612,7 +612,11 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
           {/* Active filter counter & reset button */}
           <div className="flex items-center gap-3">
-            <span className="text-slate-700 font-medium">
+            <span
+              aria-live="polite"
+              aria-atomic="true"
+              className="text-slate-700 font-medium"
+            >
               결과 <strong className="text-slate-900 font-bold">{filteredReports.length}</strong>건
             </span>
             {(searchQuery || selectedCategory !== 'ALL' || selectedSource !== 'all') && (
@@ -644,6 +648,17 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         tabIndex={0}
         className="focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
       >
+        {/* Screen Reader Accessible Live Result Announcement */}
+        <div
+          aria-live="polite"
+          aria-atomic="true"
+          className="sr-only"
+        >
+          {selectedCategory !== 'ALL' || searchQuery || selectedSource !== 'all'
+            ? `필터링된 결과: 총 ${filteredReports.length}건의 결함 제보`
+            : `전체 수집된 결함 제보: 총 ${filteredReports.length}건`}
+        </div>
+
         {/* Screen Reader Accessible Summary Table for Defect Reports */}
         <div className="sr-only">
           <table aria-label="수집된 전기차 결함 제보 데이터 요약 표">

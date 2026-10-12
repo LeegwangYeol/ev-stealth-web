@@ -812,15 +812,26 @@ def build_initial_baseline() -> SubsidyPayload:
             alert_counts[status_key] += 1
 
         for c_name, c_metric in r.categories.items():
-            cat_announced[c_name] += c_metric.announced_units
-            cat_applied[c_name] += c_metric.applied_units
-            cat_delivered[c_name] += c_metric.delivered_units
+            if c_name not in cat_announced:
+                cat_announced[c_name] = 0
+                cat_applied[c_name] = 0
+                cat_delivered[c_name] = 0
 
-            total_announced += c_metric.announced_units
-            total_applied += c_metric.applied_units
-            total_delivered += c_metric.delivered_units
-            total_budget_sum += c_metric.total_budget_krw
-            disbursed_budget_sum += (c_metric.total_budget_krw - c_metric.remaining_budget_krw)
+            ann = getattr(c_metric, "announced_units", 0) or 0
+            app = getattr(c_metric, "applied_units", 0) or 0
+            delivered = getattr(c_metric, "delivered_units", 0) or 0
+            tot_b = getattr(c_metric, "total_budget_krw", 0) or 0
+            rem_b = getattr(c_metric, "remaining_budget_krw", 0) or 0
+
+            cat_announced[c_name] += ann
+            cat_applied[c_name] += app
+            cat_delivered[c_name] += delivered
+
+            total_announced += ann
+            total_applied += app
+            total_delivered += delivered
+            total_budget_sum += tot_b
+            disbursed_budget_sum += (tot_b - rem_b)
 
     total_remaining = max(0, total_announced - total_applied)
     nationwide_depletion_rate = (
@@ -828,21 +839,27 @@ def build_initial_baseline() -> SubsidyPayload:
     )
 
     category_totals = {}
-    for c_name in ["passenger", "commercial", "bus"]:
-        c_ann = cat_announced[c_name]
-        c_app = cat_applied[c_name]
-        c_del = cat_delivered[c_name]
+    standard_categories = ["passenger", "commercial", "bus"]
+    all_categories = standard_categories + [k for k in cat_announced.keys() if k not in standard_categories]
+    for c_name in all_categories:
+        c_ann = cat_announced.get(c_name, 0)
+        c_app = cat_applied.get(c_name, 0)
+        c_del = cat_delivered.get(c_name, 0)
         c_rate = round((c_app / c_ann * 100), 1) if c_ann > 0 else 0.0
         c_del_rate = round((c_del / c_ann * 100), 1) if c_ann > 0 else 0.0
-        category_totals[c_name] = {
-            "announced_units": c_ann,
-            "applied_units": c_app,
-            "delivered_units": c_del,
-            "remaining_units": max(0, c_ann - c_app),
-            "depletion_rate": c_rate,
-            "delivery_rate": c_del_rate,
-            "status": AlertSeverity.from_rate(c_rate).value,
-        }
+        category_totals[c_name] = CategoryMetrics(
+            announced_units=c_ann,
+            applied_units=c_app,
+            delivered_units=c_del,
+            remaining_units=max(0, c_ann - c_app),
+            depletion_rate=c_rate,
+            delivery_rate=c_del_rate,
+            status=AlertSeverity.from_rate(c_rate).value,
+            max_local_subsidy_krw=0,
+            max_total_subsidy_krw=0,
+            total_budget_krw=0,
+            remaining_budget_krw=0,
+        )
 
     summary = NationwideSummary(
         total_announced_units=total_announced,

@@ -252,10 +252,21 @@ class SubsidyTracker:
         total_announced = 0
         total_applied = 0
 
+        def _safe_int_metric(val: Any, default: int = 0) -> int:
+            if val is None:
+                return default
+            try:
+                if isinstance(val, float):
+                    if math.isnan(val) or math.isinf(val):
+                        return default
+                return int(val)
+            except (ValueError, TypeError, OverflowError):
+                return default
+
         for cat_name, cat in region.categories.items():
-            safe_ann = max(0, int(cat.announced_units or 0))
-            safe_app = max(0, int(cat.applied_units or 0))
-            safe_del = max(0, int(cat.delivered_units or 0))
+            safe_ann = max(0, _safe_int_metric(cat.announced_units, 0))
+            safe_app = max(0, _safe_int_metric(cat.applied_units, 0))
+            safe_del = max(0, _safe_int_metric(cat.delivered_units, 0))
             cat.announced_units = safe_ann
             cat.applied_units = safe_app
             cat.delivered_units = safe_del
@@ -267,23 +278,24 @@ class SubsidyTracker:
             cat.delivery_rate = calculate_depletion_rate(safe_del, safe_ann)
             cat.status = self.evaluate_status(cat.depletion_rate).value
 
-            safe_total_budget = max(0, int(cat.total_budget_krw or 0))
+            safe_total_budget = max(0, _safe_int_metric(cat.total_budget_krw, 0))
             cat.total_budget_krw = safe_total_budget
             if safe_total_budget > 0 and safe_ann > 0:
                 unit_budget = safe_total_budget / safe_ann
-                cat.remaining_budget_krw = min(safe_total_budget, max(0, int(safe_total_budget - (safe_app * unit_budget))))
+                rem_budget = safe_total_budget - (safe_app * unit_budget)
+                cat.remaining_budget_krw = min(safe_total_budget, max(0, _safe_int_metric(rem_budget, 0)))
             else:
-                cat.remaining_budget_krw = min(safe_total_budget, max(0, int(cat.remaining_budget_krw or 0)))
+                cat.remaining_budget_krw = min(safe_total_budget, max(0, _safe_int_metric(cat.remaining_budget_krw, 0)))
 
         # Recalculate municipalities if present
         if region.municipalities:
             for muni in region.municipalities:
-                safe_m_ann = max(0, int(getattr(muni, "announced_units", 0) or 0))
-                safe_m_app = max(0, int(getattr(muni, "applied_units", 0) or 0))
+                safe_m_ann = max(0, _safe_int_metric(getattr(muni, "announced_units", 0), 0))
+                safe_m_app = max(0, _safe_int_metric(getattr(muni, "applied_units", 0), 0))
                 muni.announced_units = safe_m_ann
                 muni.applied_units = safe_m_app
                 if hasattr(muni, "delivered_units"):
-                    muni.delivered_units = max(0, int(getattr(muni, "delivered_units", 0) or 0))
+                    muni.delivered_units = max(0, _safe_int_metric(getattr(muni, "delivered_units", 0), 0))
                 muni.remaining_units = calculate_remaining_units(safe_m_app, safe_m_ann)
                 muni.depletion_rate = calculate_depletion_rate(safe_m_app, safe_m_ann)
                 muni.status = self.evaluate_status(muni.depletion_rate).value

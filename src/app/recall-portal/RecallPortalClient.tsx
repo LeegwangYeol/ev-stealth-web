@@ -840,11 +840,16 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     </div>
 
                     <h2 id="search-result-heading" className="text-xl sm:text-2xl font-black mt-1">
-                      {checkResult.decodedBrand} {checkResult.decodedModel}{' '}
+                      {checkResult.decodedBrand || '미확인 브랜드'} {checkResult.decodedModel?.trim() ? checkResult.decodedModel : '미확인 모델'}{' '}
                       {checkResult.decodedYear ? `${checkResult.decodedYear}년식` : ''} 판정 결과
                     </h2>
 
                     <p className="text-sm text-slate-200 mt-1 max-w-3xl leading-relaxed">
+                      {checkResult.mode === 'VIN' && !checkResult.decodedModel && (
+                        <span className="block text-amber-300 text-xs font-semibold mb-1">
+                          ℹ️ 차대번호(VIN) 기준 제조사는 식별되었으나 세부 모델 정보가 데이터베이스에 매핑되지 않았습니다.
+                        </span>
+                      )}
                       {checkResult.hasFireRisk
                         ? '배터리 열폭주 화재 위험 또는 정부 특별 안전점검 대상 모델입니다. 즉시 완충 한도 설정 및 공식 서비스센터 점검을 완료하십시오.'
                         : checkResult.hasPowerLoss
@@ -1156,64 +1161,89 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
           {/* Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-            {filteredBatteryProfiles.map((p) => {
-              const isCritical = p.fire_incident_status === 'CRITICAL_MONITORING';
-              return (
-                <div
-                  key={p.model_id}
-                  className={`rounded-2xl p-5 border transition space-y-3 flex flex-col justify-between ${
-                    isCritical
-                      ? 'bg-red-950/20 border-red-800/80 shadow-md shadow-red-950/30'
-                      : 'bg-slate-900/90 border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <span className="text-xs text-slate-400 font-medium">{p.brand}</span>
-                        <h3 className="text-base font-bold text-white">{p.model_name}</h3>
-                        <span className="text-[11px] font-mono text-slate-400">{p.years}</span>
+            {filteredBatteryProfiles.length === 0 ? (
+              <div className="col-span-full bg-slate-950/80 border border-slate-800 rounded-2xl p-8 text-center text-slate-400">
+                <span className="text-3xl block mb-2" aria-hidden="true">🔋</span>
+                <p className="text-base font-semibold text-slate-200">
+                  조건에 일치하는 배터리 제조사 정보가 없습니다
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  검색어 또는 배터리 공급사/모니터링 필터를 변경해 보세요.
+                </p>
+                {(batterySearch.trim() !== '' || selectedSupplierFilter !== 'ALL' || selectedFireStatusFilter !== 'ALL') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBatterySearch('');
+                      setSelectedSupplierFilter('ALL');
+                      setSelectedFireStatusFilter('ALL');
+                    }}
+                    className="mt-3 px-3 py-1.5 text-xs font-semibold text-blue-400 bg-blue-950/50 hover:bg-blue-900/50 border border-blue-800/80 rounded-lg transition"
+                  >
+                    필터 및 검색 초기화
+                  </button>
+                )}
+              </div>
+            ) : (
+              filteredBatteryProfiles.map((p) => {
+                const isCritical = p.fire_incident_status === 'CRITICAL_MONITORING';
+                return (
+                  <div
+                    key={p.model_id}
+                    className={`rounded-2xl p-5 border transition space-y-3 flex flex-col justify-between ${
+                      isCritical
+                        ? 'bg-red-950/20 border-red-800/80 shadow-md shadow-red-950/30'
+                        : 'bg-slate-900/90 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="text-xs text-slate-400 font-medium">{p.brand}</span>
+                          <h3 className="text-base font-bold text-white">{p.model_name}</h3>
+                          <span className="text-[11px] font-mono text-slate-400">{p.years}</span>
+                        </div>
+                        <span
+                          className={`text-[11px] font-bold px-2 py-0.5 rounded border flex-shrink-0 ${
+                            isCritical
+                              ? 'bg-red-950 text-rose-200 border-red-700 animate-pulse motion-reduce:animate-none'
+                              : p.fire_incident_status === 'RECALLED_RESOLVED'
+                              ? 'bg-amber-950 text-amber-200 border-amber-700'
+                              : 'bg-emerald-950 text-emerald-200 border-emerald-700'
+                          }`}
+                        >
+                          {p.fire_incident_status_ko}
+                        </span>
                       </div>
-                      <span
-                        className={`text-[11px] font-bold px-2 py-0.5 rounded border flex-shrink-0 ${
-                          isCritical
-                            ? 'bg-red-950 text-rose-200 border-red-700 animate-pulse motion-reduce:animate-none'
-                            : p.fire_incident_status === 'RECALLED_RESOLVED'
-                            ? 'bg-amber-950 text-amber-200 border-amber-700'
-                            : 'bg-emerald-950 text-emerald-200 border-emerald-700'
-                        }`}
-                      >
-                        {p.fire_incident_status_ko}
-                      </span>
+
+                      <div className="bg-black/30 rounded-xl p-3 border border-white/5 space-y-1.5 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">셀 제조사:</span>
+                          <span className="font-bold text-white">{p.cell_supplier}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">셀 화학:</span>
+                          <span className="text-slate-300">{p.cell_chemistry}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">완충 권장 한도:</span>
+                          <span className="font-bold text-blue-300">{p.recommended_soc_limit}%</span>
+                        </div>
+                      </div>
+
+                      <div className="text-xs text-slate-300 pt-1 leading-relaxed">
+                        <strong className="text-amber-300">지하주차 가이드: </strong>
+                        {p.underground_parking_advisory}
+                      </div>
                     </div>
 
-                    <div className="bg-black/30 rounded-xl p-3 border border-white/5 space-y-1.5 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">셀 제조사:</span>
-                        <span className="font-bold text-white">{p.cell_supplier}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">셀 화학:</span>
-                        <span className="text-slate-300">{p.cell_chemistry}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">완충 권장 한도:</span>
-                        <span className="font-bold text-blue-300">{p.recommended_soc_limit}%</span>
-                      </div>
-                    </div>
-
-                    <div className="text-xs text-slate-300 pt-1 leading-relaxed">
-                      <strong className="text-amber-300">지하주차 가이드: </strong>
-                      {p.underground_parking_advisory}
+                    <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400 truncate">
+                      🛡️ {p.bms_safety_features}
                     </div>
                   </div>
-
-                  <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400 truncate">
-                    🛡️ {p.bms_safety_features}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </section>
 
@@ -1302,14 +1332,39 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
           {/* List of Recalls */}
           <div className="space-y-3 pt-2">
-            {filteredRecalls.map((campaign) => (
-              <RecallCard
-                key={campaign.id}
-                campaign={campaign}
-                isExpanded={expandedRecallIds.has(campaign.id)}
-                toggleRecallExpansion={toggleRecallExpansion}
-              />
-            ))}
+            {filteredRecalls.length === 0 ? (
+              <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-8 text-center text-slate-400">
+                <span className="text-3xl block mb-2" aria-hidden="true">📋</span>
+                <p className="text-base font-semibold text-slate-200">
+                  일치하는 공시 리콜 및 무상수리 내역이 없습니다
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  검색 키워드 또는 위험도/조치 유형 필터를 재설정해 보세요.
+                </p>
+                {(recallSearch.trim() !== '' || selectedRiskFilter !== 'ALL' || selectedRemedyFilter !== 'ALL') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRecallSearch('');
+                      setSelectedRiskFilter('ALL');
+                      setSelectedRemedyFilter('ALL');
+                    }}
+                    className="mt-3 px-3 py-1.5 text-xs font-semibold text-blue-400 bg-blue-950/50 hover:bg-blue-900/50 border border-blue-800/80 rounded-lg transition"
+                  >
+                    필터 및 검색 초기화
+                  </button>
+                )}
+              </div>
+            ) : (
+              filteredRecalls.map((campaign) => (
+                <RecallCard
+                  key={campaign.id}
+                  campaign={campaign}
+                  isExpanded={expandedRecallIds.has(campaign.id)}
+                  toggleRecallExpansion={toggleRecallExpansion}
+                />
+              ))
+            )}
           </div>
         </section>
       </div>

@@ -53,6 +53,11 @@ const nextConfig = {
             key: 'X-Permitted-Cross-Domain-Policies',
             value: 'none',
           },
+          {
+            key: 'Content-Security-Policy',
+            value:
+              "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';",
+          },
         ],
       },
       {
@@ -60,7 +65,7 @@ const nextConfig = {
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, max-age=3600, stale-while-revalidate=86400',
+            value: 'public, s-maxage=3600, max-age=3600, stale-while-revalidate=86400',
           },
         ],
       },
