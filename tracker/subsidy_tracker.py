@@ -189,6 +189,19 @@ def _metric_val(metric: Any, key: str, default: Any = 0) -> Any:
     return getattr(metric, key, default)
 
 
+def _safe_int_metric(val: Any, default: int = 0) -> int:
+    """Safely cast value to int, gracefully handling NaN, Inf, None, invalid types."""
+    if val is None:
+        return default
+    try:
+        if isinstance(val, float):
+            if math.isnan(val) or math.isinf(val):
+                return default
+        return int(val)
+    except (ValueError, TypeError, OverflowError):
+        return default
+
+
 class SubsidyTracker:
     """Automated tracker for nationwide South Korea EV subsidy allocations and depletion."""
 
@@ -252,40 +265,46 @@ class SubsidyTracker:
         total_announced = 0
         total_applied = 0
 
-        def _safe_int_metric(val: Any, default: int = 0) -> int:
-            if val is None:
-                return default
-            try:
-                if isinstance(val, float):
-                    if math.isnan(val) or math.isinf(val):
-                        return default
-                return int(val)
-            except (ValueError, TypeError, OverflowError):
-                return default
-
         for cat_name, cat in region.categories.items():
-            safe_ann = max(0, _safe_int_metric(cat.announced_units, 0))
-            safe_app = max(0, _safe_int_metric(cat.applied_units, 0))
-            safe_del = max(0, _safe_int_metric(cat.delivered_units, 0))
-            cat.announced_units = safe_ann
-            cat.applied_units = safe_app
-            cat.delivered_units = safe_del
+            safe_ann = max(0, _safe_int_metric(_metric_val(cat, "announced_units", 0), 0))
+            safe_app = max(0, _safe_int_metric(_metric_val(cat, "applied_units", 0), 0))
+            safe_del = max(0, _safe_int_metric(_metric_val(cat, "delivered_units", 0), 0))
+            rem_units = calculate_remaining_units(safe_app, safe_ann)
+            dep_rate = calculate_depletion_rate(safe_app, safe_ann)
+            del_rate = calculate_depletion_rate(safe_del, safe_ann)
+            st_val = self.evaluate_status(dep_rate).value
 
-            total_announced += safe_ann
-            total_applied += safe_app
-            cat.remaining_units = calculate_remaining_units(safe_app, safe_ann)
-            cat.depletion_rate = calculate_depletion_rate(safe_app, safe_ann)
-            cat.delivery_rate = calculate_depletion_rate(safe_del, safe_ann)
-            cat.status = self.evaluate_status(cat.depletion_rate).value
-
-            safe_total_budget = max(0, _safe_int_metric(cat.total_budget_krw, 0))
-            cat.total_budget_krw = safe_total_budget
+            safe_total_budget = max(0, _safe_int_metric(_metric_val(cat, "total_budget_krw", 0), 0))
             if safe_total_budget > 0 and safe_ann > 0:
                 unit_budget = safe_total_budget / safe_ann
                 rem_budget = safe_total_budget - (safe_app * unit_budget)
-                cat.remaining_budget_krw = min(safe_total_budget, max(0, _safe_int_metric(rem_budget, 0)))
+                safe_rem_budget = min(safe_total_budget, max(0, _safe_int_metric(rem_budget, 0)))
             else:
-                cat.remaining_budget_krw = min(safe_total_budget, max(0, _safe_int_metric(cat.remaining_budget_krw, 0)))
+                safe_rem_budget = min(safe_total_budget, max(0, _safe_int_metric(_metric_val(cat, "remaining_budget_krw", 0), 0)))
+
+            if hasattr(cat, "announced_units"):
+                cat.announced_units = safe_ann
+                cat.applied_units = safe_app
+                cat.delivered_units = safe_del
+                cat.remaining_units = rem_units
+                cat.depletion_rate = dep_rate
+                cat.delivery_rate = del_rate
+                cat.status = st_val
+                cat.total_budget_krw = safe_total_budget
+                cat.remaining_budget_krw = safe_rem_budget
+            elif isinstance(cat, dict):
+                cat["announced_units"] = safe_ann
+                cat["applied_units"] = safe_app
+                cat["delivered_units"] = safe_del
+                cat["remaining_units"] = rem_units
+                cat["depletion_rate"] = dep_rate
+                cat["delivery_rate"] = del_rate
+                cat["status"] = st_val
+                cat["total_budget_krw"] = safe_total_budget
+                cat["remaining_budget_krw"] = safe_rem_budget
+
+            total_announced += safe_ann
+            total_applied += safe_app
 
         # Recalculate municipalities if present
         if region.municipalities:
@@ -338,11 +357,11 @@ class SubsidyTracker:
                 if c_name not in cat_counts:
                     cat_counts[c_name] = {"announced": 0, "applied": 0, "delivered": 0}
 
-                c_ann = max(0, int(c_data.announced_units or 0))
-                c_app = max(0, int(c_data.applied_units or 0))
-                c_del = max(0, int(c_data.delivered_units or 0))
-                c_tot_b = max(0, int(c_data.total_budget_krw or 0))
-                c_rem_b = min(c_tot_b, max(0, int(c_data.remaining_budget_krw or 0)))
+                c_ann = max(0, _safe_int_metric(_metric_val(c_data, "announced_units", 0), 0))
+                c_app = max(0, _safe_int_metric(_metric_val(c_data, "applied_units", 0), 0))
+                c_del = max(0, _safe_int_metric(_metric_val(c_data, "delivered_units", 0), 0))
+                c_tot_b = max(0, _safe_int_metric(_metric_val(c_data, "total_budget_krw", 0), 0))
+                c_rem_b = min(c_tot_b, max(0, _safe_int_metric(_metric_val(c_data, "remaining_budget_krw", 0), 0)))
 
                 cat_counts[c_name]["announced"] += c_ann
                 cat_counts[c_name]["applied"] += c_app

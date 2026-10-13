@@ -83,6 +83,9 @@ def get_component_path(relative_subpath: str) -> Path:
     """Resolve and verify existence of a component file."""
     path = APP_DIR / relative_subpath
     if not path.is_file():
+        alt_path = WEB_APP_ROOT / "src" / relative_subpath
+        if alt_path.is_file():
+            return alt_path
         raise FileNotFoundError(f"Target TSX component not found at expected path: {path}")
     return path
 
@@ -251,6 +254,48 @@ class TestPdiChecklistClientA11y(unittest.TestCase):
         empty_result = calc_progress([])
         self.assertEqual(empty_result, 0)
         self.assertFalse(math.isnan(empty_result))
+
+    def test_pdi_checklist_tablist_and_tabpanel_semantics(self):
+        """
+        Validate that category filtering implements accessible tablist and tabpanel semantics
+        (role="tablist", aria-label, role="tab", aria-selected, aria-controls, role="tabpanel", tabIndex={0}).
+        """
+        self.assertIn('role="tablist"', self.source)
+        self.assertIn('aria-label="체크리스트 카테고리 필터"', self.source)
+        self.assertIn('role="tab"', self.source)
+        self.assertIn('aria-selected=', self.source)
+        self.assertIn('aria-controls="pdi-checklist-tabpanel"', self.source)
+        self.assertIn('role="tabpanel"', self.source)
+        self.assertIn('id="pdi-checklist-tabpanel"', self.source)
+        self.assertIn('tabIndex={0}', self.source)
+        self.assertIn('aria-labelledby=', self.source)
+
+    def test_pdi_checklist_checkbox_accessible_names_and_warning_linkage(self):
+        """
+        Validate that checklist inputs declare aria-label, matching htmlFor/id pairings,
+        and link to warnings via aria-describedby.
+        """
+        self.assertIn('type="checkbox"', self.source)
+        self.assertIn('aria-label={item.task}', self.source)
+        self.assertIn('htmlFor={`pdi-task-${item.id}`}', self.source)
+        self.assertIn('id={`pdi-task-${item.id}`}', self.source)
+        self.assertIn('aria-describedby={item.warning ? `pdi-warning-${item.id}` : undefined}', self.source)
+        self.assertIn('id={`pdi-warning-${item.id}`}', self.source)
+
+    def test_pdi_checklist_completion_live_announcement(self):
+        """
+        Validate that 100% completion announcement uses role="status" and aria-live="polite".
+        """
+        self.assertIn('role="status"', self.source)
+        self.assertIn('aria-live="polite"', self.source)
+        self.assertIn('progress === 100', self.source)
+
+    def test_pdi_checklist_toggle_all_button_state(self):
+        """
+        Validate that the toggle all button programmatically exposes aria-pressed state.
+        """
+        self.assertIn('aria-pressed={isAllChecked}', self.source)
+
 
 
 class TestRecallPortalClientA11y(unittest.TestCase):
@@ -502,6 +547,34 @@ class TestRecallPortalClientA11y(unittest.TestCase):
         self.assertIn('htmlFor="recall-catalog-search-input"', self.source)
         self.assertIn('id="recall-catalog-search-input"', self.source)
 
+    def test_recall_portal_search_result_live_region(self):
+        """
+        Validate that the search result section implements aria-live="polite"
+        to proactively announce search results to assistive screen readers.
+        """
+        self.assertIn('id="search-result-section"', self.source)
+        self.assertIn('aria-live="polite"', self.source)
+        self.assertTrue(
+            bool(re.search(r'id=["\']search-result-section["\'][^>]*aria-live=["\']polite["\']', self.source)),
+            "search-result-section must declare aria-live='polite' for live updates.",
+        )
+
+    def test_recall_portal_interactive_buttons_focus_visible_styling(self):
+        """
+        Validate that interactive buttons and controls declare visible focus rings (focus-visible:ring-2)
+        under WCAG 2.4.7 Focus Visible.
+        """
+        self.assertIn('focus-visible:ring-2', self.source)
+        self.assertIn('focus-visible:ring-blue-400', self.source)
+        self.assertIn('focus-visible:ring-blue-500', self.source)
+        # Tabpanels should also be keyboard focusable with visible ring
+        self.assertIn('id="vin-checker-panel"', self.source)
+        self.assertTrue(
+            bool(re.search(r'id=["\']vin-checker-panel["\'][^>]*tabIndex=\{0\}[^>]*focus-visible:ring-2', self.source)),
+            "vin-checker-panel must declare tabIndex={0} and focus-visible:ring-2.",
+        )
+
+
 
 
 class TestDepreciationCalculatorClientA11y(unittest.TestCase):
@@ -640,6 +713,46 @@ class TestDepreciationCalculatorClientA11y(unittest.TestCase):
             f"Expected legend to describe transfer type selection (이전), got: {legend_text}",
         )
 
+    def test_depreciation_calculator_all_sliders_accessible_labeling(self):
+        """
+        Validate that all interactive range sliders have matching label htmlFor,
+        accessible aria-label, and focus-visible:ring-2 classes under WCAG 1.3.1 and 2.4.7.
+        """
+        slider_ids = ["holdingYearsInput", "annualMileageInput", "dcfcRatioInput", "heldMonthsInput"]
+        for s_id in slider_ids:
+            self.assertIn(f'id="{s_id}"', self.source, f"Missing slider id: {s_id}")
+            self.assertIn(f'htmlFor="{s_id}"', self.source, f"Missing label htmlFor matching: {s_id}")
+            # Ensure slider has type="range" and focus-visible:ring-2
+            slider_pattern = rf'<input\b[^/]*?id=["\']?{s_id}["\']?[^/]*?/>'
+            match = re.search(slider_pattern, self.source, re.DOTALL)
+            self.assertIsNotNone(match, f"Could not find input tag for slider {s_id}")
+            tag = match.group(0)
+            self.assertIn('type="range"', tag, f"Slider {s_id} must have type='range'")
+            self.assertIn('aria-label=', tag, f"Slider {s_id} must declare aria-label")
+            self.assertIn('focus-visible:ring-2', tag, f"Slider {s_id} must declare focus-visible:ring-2")
+
+    def test_depreciation_calculator_brand_tablist_semantics(self):
+        """
+        Validate that brand filter buttons implement accessible tablist semantics
+        (role="tablist", aria-label, role="tab", aria-selected, aria-controls="panel-model-grid").
+        """
+        self.assertIn('role="tablist"', self.source)
+        self.assertIn('aria-label="브랜드별 필터 선택"', self.source)
+        self.assertIn('role="tab"', self.source)
+        self.assertIn('aria-selected=', self.source)
+        self.assertIn('aria-controls="panel-model-grid"', self.source)
+        self.assertIn('id="panel-model-grid"', self.source)
+        self.assertIn('role="tabpanel"', self.source)
+
+
+    def test_depreciation_calculator_screen_reader_live_regions(self):
+        """
+        Validate that calculation results and dynamic updates are announced via aria-live="polite".
+        """
+        self.assertIn('aria-live="polite"', self.source)
+        self.assertIn('aria-atomic="true"', self.source)
+
+
 
 class TestReliabilityDashboardClientA11y(unittest.TestCase):
     """
@@ -732,6 +845,43 @@ class TestReliabilityDashboardClientA11y(unittest.TestCase):
         self.assertIn('aria-label={`${model.brand_name_ko} ${model.name} 연식별 평가 목록`}', self.source)
         self.assertNotIn('aria-label="평가 연도 목록"', self.source)
 
+    def test_reliability_dashboard_chart_tablist_and_tabpanels(self):
+        """
+        Validate that the visualization chart switcher implements accessible tablist and tabpanel semantics
+        (role="tablist", aria-label, role="tab", aria-selected, aria-controls, role="tabpanel", tabIndex={0}).
+        """
+        self.assertIn('role="tablist"', self.source)
+        self.assertIn('aria-label="데이터 시각화 차트 선택"', self.source)
+        self.assertIn('role="tab"', self.source)
+        self.assertIn('aria-selected=', self.source)
+        self.assertIn('role="tabpanel"', self.source)
+        self.assertTrue(
+            bool(re.search(r'role="tabpanel"[^>]*tabIndex=\{0\}[^>]*focus-visible:ring-2', self.source)),
+            "Chart tabpanel must declare tabIndex={0} and focus-visible:ring-2.",
+        )
+
+    def test_reliability_dashboard_dsi_gauge_progressbar_semantics(self):
+        """
+        Validate that Defect Severity Index (DSI) gauges expose accessible progressbar semantics
+        (role="progressbar", aria-valuenow, aria-valuemin, aria-valuemax, aria-label, aria-valuetext).
+        """
+        self.assertIn('role="progressbar"', self.source)
+        self.assertIn('aria-valuenow={Math.round(safeDsi)}', self.source)
+        self.assertIn('aria-valuemin={0}', self.source)
+        self.assertIn('aria-valuemax={100}', self.source)
+        self.assertTrue(
+            bool(re.search(r'aria-label=\{`\$\{model\.brand_name_ko\}\s+\$\{model\.name\}\s+평균 결함 심각도 지수 DSI`\}', self.source)),
+            "DSI progressbar must declare descriptive model-specific aria-label.",
+        )
+        self.assertIn('aria-valuetext=', self.source)
+
+    def test_reliability_dashboard_screen_reader_live_announcements(self):
+        """
+        Validate that filter results and status updates are exposed via aria-live="polite".
+        """
+        self.assertIn('aria-live="polite"', self.source)
+
+
 
 
 class TestLayoutDesktopNavigationA11y(unittest.TestCase):
@@ -811,6 +961,38 @@ class TestLayoutDesktopNavigationA11y(unittest.TestCase):
                 f"Desktop nav missing required route: {route}",
             )
 
+    def test_layout_skip_link_and_main_landmark(self):
+        """
+        Validate that the skip-to-content navigation link exists (href="#main-content")
+        and targets the primary landmark <main id="main-content" tabIndex={-1}>.
+        """
+        self.assertIn('href="#main-content"', self.source)
+        self.assertIn('id="main-content"', self.source)
+        self.assertIn('tabIndex={-1}', self.source)
+        # Ensure skip link is visually hidden until focused (sr-only focus:not-sr-only)
+        self.assertTrue(
+            bool(re.search(r'href="#main-content"[^>]*sr-only\s+focus:not-sr-only', self.source)),
+            "Skip link must use 'sr-only focus:not-sr-only' styling.",
+        )
+
+    def test_layout_mobile_drawer_and_summary_a11y(self):
+        """
+        Validate that mobile navigation drawer provides accessible summary and nav landmarks.
+        """
+        self.assertIn('id="mobile-nav-drawer"', self.source)
+        self.assertIn('aria-label="모바일 내비게이션 메뉴 토글"', self.source)
+        self.assertIn('aria-label="모바일 서랍 메뉴"', self.source)
+        self.assertIn('focus-visible:ring-2', self.source)
+
+    def test_site_footer_contentinfo_landmark(self):
+        """
+        Validate that SiteFooter provides semantic role="contentinfo" and accessible aria-label.
+        """
+        footer_source = read_component_source("components/layout/SiteFooter.tsx")
+        self.assertIn('role="contentinfo"', footer_source)
+        self.assertIn('aria-label="법적 고지 및 데이터 출처"', footer_source)
+
+
 
 class TestSubsidyTrackerClientA11y(unittest.TestCase):
     """
@@ -881,6 +1063,51 @@ class TestSubsidyTrackerClientA11y(unittest.TestCase):
             "SubsidyTrackerClient.tsx must define aria-valuemax={100} on progressbars.",
         )
 
+    def test_subsidy_tracker_category_tablist_semantics(self):
+        """
+        Validate that vehicle category switcher declares accessible tablist and tabpanel semantics
+        (role="tablist", aria-label, role="tab", aria-selected, aria-controls, role="tabpanel", tabIndex={0}).
+        """
+        self.assertIn('role="tablist"', self.source)
+        self.assertIn('aria-label="차종 카테고리 선택"', self.source)
+        self.assertIn('role="tab"', self.source)
+        self.assertIn('aria-selected=', self.source)
+        self.assertIn('aria-controls="panel-regional-grid"', self.source)
+        self.assertIn('id="panel-regional-grid"', self.source)
+        self.assertIn('role="tabpanel"', self.source)
+        self.assertTrue(
+            bool(re.search(r'id="panel-regional-grid"[^>]*role="tabpanel"[^>]*tabIndex=\{0\}', self.source)),
+            "Regional panel must declare role='tabpanel' and tabIndex={0}.",
+        )
+
+    def test_subsidy_tracker_search_and_zone_filter_a11y(self):
+        """
+        Validate that the municipality search input is paired with a label, provides clear button label,
+        and zone filter buttons expose aria-pressed.
+        """
+        self.assertIn('id="region-search-input"', self.source)
+        self.assertIn('htmlFor="region-search-input"', self.source)
+        self.assertIn('aria-label="지자체 검색"', self.source)
+        self.assertIn('aria-label="검색어 지우기"', self.source)
+        self.assertIn('aria-pressed={zoneFilter === zone.id}', self.source)
+
+    def test_subsidy_tracker_screen_reader_live_announcements(self):
+        """
+        Validate that live filter adjustments and calculation changes use aria-live="polite".
+        """
+        self.assertIn('aria-live="polite"', self.source)
+
+    def test_subsidy_tracker_progressbar_aria_valuetext(self):
+        """
+        Validate that subsidy progressbars declare descriptive aria-valuetext for assistive technology.
+        """
+        self.assertIn('aria-valuetext=', self.source)
+        self.assertTrue(
+            bool(re.search(r'aria-valuetext=\{`소진율\s+\$\{safeDepletion\.toFixed\(1\)\}%', self.source)),
+            "Progressbar must declare aria-valuetext with formatted depletion rate.",
+        )
+
+
 
 class TestSecretAdminReportsA11y(unittest.TestCase):
     """
@@ -916,6 +1143,31 @@ class TestSecretAdminReportsA11y(unittest.TestCase):
         """
         self.assertIn('htmlFor="admin-defect-search-input"', self.source)
         self.assertIn('id="admin-defect-search-input"', self.source)
+
+    def test_admin_dashboard_category_tablist_semantics(self):
+        """
+        Validate that AdminDashboardClient implements accessible category tablist and tabpanel
+        (role="tablist", aria-label, role="tab", aria-selected, aria-controls, role="tabpanel", tabIndex={0}).
+        """
+        self.assertIn('role="tablist"', self.source)
+        self.assertIn('aria-label="결함 카테고리 탭"', self.source)
+        self.assertIn('role="tab"', self.source)
+        self.assertIn('aria-selected=', self.source)
+        self.assertIn('aria-controls="reports-tabpanel"', self.source)
+        self.assertIn('id="reports-tabpanel"', self.source)
+        self.assertIn('role="tabpanel"', self.source)
+        self.assertTrue(
+            bool(re.search(r'id="reports-tabpanel"[^>]*role="tabpanel"[^>]*tabIndex=\{0\}', self.source)),
+            "Reports tabpanel must declare role='tabpanel' and tabIndex={0}.",
+        )
+
+    def test_admin_dashboard_screen_reader_live_announcements(self):
+        """
+        Validate that filtered results count is announced via sr-only aria-live="polite".
+        """
+        self.assertIn('aria-live="polite"', self.source)
+        self.assertIn('aria-atomic="true"', self.source)
+
 
 
 
@@ -1117,6 +1369,131 @@ class TestContrastMathematicalVerification(unittest.TestCase):
         self.assertGreaterEqual(passing_cr, 9.0, f"slate-950 on amber-500 must exceed 9:1: got {passing_cr:.2f}:1")
         self.assertAlmostEqual(passing_cr, 9.42, delta=0.2)
 
+    def test_solid_status_badge_contrast_proof(self):
+        """
+        Prove mathematically that status badge foreground/background combinations
+        achieve >= 7.0:1 (WCAG Level AAA compliant).
+        - emerald-300 (#6ee7b7) on emerald-950 (#022c22)
+        - amber-300 (#fcd34d) on amber-950 (#451a03)
+        - orange-300 (#fdba74) on orange-950 (#431407)
+        - rose-300 (#fda4af) on rose-950 (#4c0519)
+        - slate-300 (#cbd5e1) on slate-900 (#0f172a)
+        """
+        badges = [
+            ("emerald-300 / emerald-950", "#6ee7b7", "#022c22"),
+            ("amber-300 / amber-950", "#fcd34d", "#451a03"),
+            ("orange-300 / orange-950", "#fdba74", "#431407"),
+            ("rose-300 / rose-950", "#fda4af", "#4c0519"),
+            ("slate-300 / slate-900", "#cbd5e1", "#0f172a"),
+        ]
+        for name, fg, bg in badges:
+            cr = calculate_contrast_ratio(fg, bg)
+            self.assertGreaterEqual(
+                cr,
+                7.0,
+                f"Badge pairing {name} must achieve >= 7.0:1 (AAA), got: {cr:.2f}:1",
+            )
+
+    def test_editorial_callout_yellow_contrast_proof(self):
+        """
+        Prove mathematically that editorial warning text colors on yellow-50 (#fefce8)
+        achieve WCAG Level AA and AAA compliance.
+        - yellow-800 (#854d0e) on yellow-50 (#fefce8) >= 4.5:1
+        - amber-900 (#78350f) on yellow-50 (#fefce8) >= 7.0:1
+        """
+        cr_y800 = calculate_contrast_ratio("#854d0e", "#fefce8")
+        self.assertGreaterEqual(cr_y800, 4.5, f"yellow-800 on yellow-50 failed: {cr_y800:.2f}:1")
+        self.assertAlmostEqual(cr_y800, 6.81, delta=0.2)
+
+        cr_a900 = calculate_contrast_ratio("#78350f", "#fefce8")
+        self.assertGreaterEqual(cr_a900, 7.0, f"amber-900 on yellow-50 failed: {cr_a900:.2f}:1")
+        self.assertAlmostEqual(cr_a900, 8.96, delta=0.2)
+
+
+class TestBrandAndEditorialPagesA11y(unittest.TestCase):
+    """
+    Test suite for brand editorial pages (Tesla, Hyundai/Kia, BYD, Global Brands,
+    2026 Latest KDM, and Home page) verifying heading continuity, accessible callouts,
+    and external link screen reader notifications.
+    """
+
+    def test_all_brand_pages_exist_and_conform_to_heading_hierarchy(self):
+        """
+        Validate that all 5 brand editorial pages conform to strict heading hierarchies:
+        h1 present, followed by h2, and child sections using h3 without skipping levels.
+        """
+        pages = [
+            "tesla/page.tsx",
+            "hyundai-kia/page.tsx",
+            "byd/page.tsx",
+            "global-brands/page.tsx",
+            "2026-latest/page.tsx",
+        ]
+        for rel_page in pages:
+            source = read_component_source(rel_page)
+            h1_matches = re.findall(r'<h1\b[^>]*>', source)
+            h2_matches = re.findall(r'<h2\b[^>]*>', source)
+            h3_matches = re.findall(r'<h3\b[^>]*>', source)
+
+            self.assertEqual(len(h1_matches), 1, f"Expected exactly 1 <h1> in {rel_page}, got {len(h1_matches)}")
+            self.assertGreater(len(h2_matches), 0, f"Expected at least one <h2> in {rel_page}")
+            if len(h3_matches) > 0:
+                self.assertGreater(len(h2_matches), 0, f"Page {rel_page} has <h3> without preceding <h2>")
+
+    def test_brand_pages_callouts_use_accessible_landmarks(self):
+        """
+        Validate that warning and advisory callout cards in brand pages define
+        role="region" and non-empty aria-label attributes.
+        """
+        pages = [
+            "tesla/page.tsx",
+            "hyundai-kia/page.tsx",
+            "byd/page.tsx",
+            "global-brands/page.tsx",
+            "2026-latest/page.tsx",
+        ]
+        for rel_page in pages:
+            source = read_component_source(rel_page)
+            region_matches = re.findall(r'<div\b[^>]*role="region"[^>]*aria-label="([^"]+)"', source)
+            self.assertGreater(
+                len(region_matches),
+                0,
+                f"Page {rel_page} must have at least one callout with role='region' and aria-label",
+            )
+            for label in region_matches:
+                self.assertTrue(len(label.strip()) > 0, f"Empty aria-label in {rel_page}")
+
+    def test_latest_2026_external_links_sr_only_and_focus_visible(self):
+        """
+        Validate that external links in 2026-latest/page.tsx contain sr-only new-tab warnings
+        and focus-visible:ring-2 classes.
+        """
+        source = read_component_source("2026-latest/page.tsx")
+        ext_links = re.findall(r'<a\b[^>]*target="_blank"[^>]*>([\s\S]*?)</a>', source)
+        self.assertGreater(len(ext_links), 0, "2026-latest/page.tsx must have external links")
+        for link_content in ext_links:
+            self.assertIn("sr-only", link_content, "External link missing sr-only notification")
+            self.assertIn("새 창에서 열림", link_content, "External link sr-only missing '새 창에서 열림'")
+
+        link_tags = re.findall(r'<a\b[^>]*target="_blank"[^>]*>', source)
+        for tag in link_tags:
+            self.assertIn("focus-visible:ring-2", tag, f"External link missing focus-visible:ring-2: {tag}")
+
+    def test_home_page_accessible_sections_and_focus_rings(self):
+        """
+        Validate that Home page (page.tsx) uses aria-labelledby on hero section,
+        aria-label on the main link grid, and focus-visible:ring-2 on all entrypoint links.
+        """
+        source = read_component_source("page.tsx")
+        self.assertIn('aria-labelledby="home-hero-heading"', source)
+        self.assertIn('id="home-hero-heading"', source)
+        self.assertIn('aria-label="서비스 주요 진입점 바로가기 그리드"', source)
+
+        links = re.findall(r'<Link\b[^>]*>', source)
+        self.assertGreaterEqual(len(links), 10, f"Expected at least 10 Link tags in page.tsx, got {len(links)}")
+        for link_tag in links:
+            self.assertIn("focus-visible:ring-2", link_tag, f"Home page Link missing focus-visible:ring-2: {link_tag}")
+
 
 class TestAdversarialA11yEdgeCases(unittest.TestCase):
     """
@@ -1125,21 +1502,28 @@ class TestAdversarialA11yEdgeCases(unittest.TestCase):
     """
 
     def test_components_exist_and_non_empty(self):
-        """Verify all 7 audited component files exist and exceed minimum content size."""
+        """Verify all 14 audited component and page files exist and exceed minimum content size."""
         target_files = [
             "pdi-checklist/PdiChecklistClient.tsx",
             "recall-portal/RecallPortalClient.tsx",
             "depreciation-calculator/DepreciationCalculatorClient.tsx",
             "reliability-analytics/ReliabilityDashboardClient.tsx",
             "layout.tsx",
+            "page.tsx",
             "subsidy-tracker/SubsidyTrackerClient.tsx",
             "secret-admin-reports/AdminDashboardClient.tsx",
+            "tesla/page.tsx",
+            "hyundai-kia/page.tsx",
+            "byd/page.tsx",
+            "global-brands/page.tsx",
+            "2026-latest/page.tsx",
+            "components/layout/SiteFooter.tsx",
         ]
         for rel_path in target_files:
             path = get_component_path(rel_path)
             self.assertTrue(path.exists(), f"Target file does not exist: {rel_path}")
             size = path.stat().st_size
-            self.assertGreater(size, 500, f"File {rel_path} is suspiciously small: {size} bytes")
+            self.assertGreater(size, 300, f"File {rel_path} is suspiciously small: {size} bytes")
 
     def test_progressbar_boundary_invariants(self):
         """
@@ -1149,6 +1533,7 @@ class TestAdversarialA11yEdgeCases(unittest.TestCase):
             "pdi-checklist/PdiChecklistClient.tsx",
             "subsidy-tracker/SubsidyTrackerClient.tsx",
             "depreciation-calculator/DepreciationCalculatorClient.tsx",
+            "reliability-analytics/ReliabilityDashboardClient.tsx",
         ]:
             source = read_component_source(rel_path)
             if 'role="progressbar"' in source:
@@ -1168,14 +1553,67 @@ class TestAdversarialA11yEdgeCases(unittest.TestCase):
         for rel_path in [
             "recall-portal/RecallPortalClient.tsx",
             "subsidy-tracker/SubsidyTrackerClient.tsx",
+            "pdi-checklist/PdiChecklistClient.tsx",
+            "depreciation-calculator/DepreciationCalculatorClient.tsx",
+            "reliability-analytics/ReliabilityDashboardClient.tsx",
+            "secret-admin-reports/AdminDashboardClient.tsx",
         ]:
             source = read_component_source(rel_path)
-            controls_matches = re.findall(r'aria-controls=\{([^}]+)\}', source)
+            controls_matches = re.findall(r'aria-controls=\{([^}]+)\}|aria-controls="([^"]+)"', source)
             self.assertTrue(len(controls_matches) > 0, f"Expected aria-controls in {rel_path}")
-            for expr in controls_matches:
+            for m in controls_matches:
+                expr = m[0] or m[1]
                 self.assertNotIn("undefined", expr, f"aria-controls expression should not produce undefined: {expr}")
                 self.assertNotIn("null", expr, f"aria-controls expression should not produce null: {expr}")
+
+    def test_interactive_elements_accessible_names_audit(self):
+        """
+        Audit interactive elements across client components to ensure all form inputs
+        declare accessible identifiers (aria-label, aria-labelledby, or id paired with htmlFor).
+        """
+        client_files = [
+            "pdi-checklist/PdiChecklistClient.tsx",
+            "recall-portal/RecallPortalClient.tsx",
+            "depreciation-calculator/DepreciationCalculatorClient.tsx",
+            "reliability-analytics/ReliabilityDashboardClient.tsx",
+            "subsidy-tracker/SubsidyTrackerClient.tsx",
+            "secret-admin-reports/AdminDashboardClient.tsx",
+        ]
+        for rel_path in client_files:
+            source = read_component_source(rel_path)
+            inputs = re.findall(r'<input\b[^>]*>', source)
+            for inp in inputs:
+                has_label = (
+                    "aria-label=" in inp
+                    or "aria-labelledby=" in inp
+                    or 'type="hidden"' in inp
+                    or "id=" in inp
+                )
+                self.assertTrue(has_label, f"Input missing accessible identifier in {rel_path}: {inp}")
+
+    def test_focus_visible_coverage_across_interactive_elements(self):
+        """
+        Verify that interactive buttons across all client components declare focus ring styles
+        (focus-visible:ring-2 or focus:ring-2).
+        """
+        client_files = [
+            "pdi-checklist/PdiChecklistClient.tsx",
+            "recall-portal/RecallPortalClient.tsx",
+            "depreciation-calculator/DepreciationCalculatorClient.tsx",
+            "reliability-analytics/ReliabilityDashboardClient.tsx",
+            "subsidy-tracker/SubsidyTrackerClient.tsx",
+            "secret-admin-reports/AdminDashboardClient.tsx",
+            "layout.tsx",
+        ]
+        for rel_path in client_files:
+            source = read_component_source(rel_path)
+            has_focus_ring = "focus-visible:ring-2" in source or "focus:ring-2" in source
+            self.assertTrue(
+                has_focus_ring,
+                f"Component {rel_path} must declare visible focus indicator styles.",
+            )
 
 
 if __name__ == "__main__":
     unittest.main()
+

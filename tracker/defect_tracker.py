@@ -18,9 +18,21 @@ from pathlib import Path
 import shutil
 import tempfile
 import threading
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 logger = logging.getLogger("defect_tracker")
+
+
+def _is_project_data_dir(path: Path, cwd: Path) -> bool:
+    """Check if the path points to the real project data directory."""
+    try:
+        resolved = path.resolve()
+        for cand in [cwd / "data", cwd.parent / "data"]:
+            if cand.exists() and resolved == cand.resolve():
+                return True
+    except Exception:
+        pass
+    return False
 
 try:
     from run_scraper import ScraperPipeline
@@ -55,6 +67,7 @@ class DefectTracker:
         self,
         root_data_dir: Optional[Union[str, Path]] = None,
         web_data_dir: Optional[Union[str, Path]] = None,
+        public_data_dir: Optional[Union[str, Path]] = None,
         pipeline: Optional[Any] = None,
         filter_engine: Optional[Any] = None,
         reports_file: Optional[Union[str, Path]] = None,
@@ -78,6 +91,23 @@ class DefectTracker:
             self.web_data_dir = cwd / "ev-stealth-web" / "src" / "data"
         else:
             self.web_data_dir = cwd / "ev-stealth-web" / "src" / "data"
+
+        if public_data_dir:
+            self.public_data_dir: Optional[Path] = Path(public_data_dir)
+        elif web_data_dir and (Path(web_data_dir).parent / "public" / "data").exists():
+            self.public_data_dir = Path(web_data_dir).parent / "public" / "data"
+        elif web_data_dir and (Path(web_data_dir).parent.parent / "public" / "data").exists():
+            self.public_data_dir = Path(web_data_dir).parent.parent / "public" / "data"
+        elif root_data_dir is not None and not _is_project_data_dir(self.root_data_dir, cwd):
+            self.public_data_dir = None
+        elif (cwd / "ev-stealth-web" / "public" / "data").exists():
+            self.public_data_dir = cwd / "ev-stealth-web" / "public" / "data"
+        elif (cwd / "public" / "data").exists():
+            self.public_data_dir = cwd / "public" / "data"
+        elif (cwd.parent / "ev-stealth-web" / "public" / "data").exists():
+            self.public_data_dir = cwd.parent / "ev-stealth-web" / "public" / "data"
+        else:
+            self.public_data_dir = None
 
         self._pipeline = pipeline
         self._filter_engine = filter_engine
@@ -140,29 +170,28 @@ class DefectTracker:
         """Resolve path to web daily_reports.json."""
         return self.web_data_dir / "daily_reports.json"
 
+    def get_public_reports_path(self) -> Optional[Path]:
+        """Resolve path to public daily_reports.json."""
+        if self.public_data_dir:
+            return self.public_data_dir / "daily_reports.json"
+        return None
+
     def resolve_primary_reports_path(self) -> Optional[Path]:
-        """Find the active authoritative defect reports file between root and web."""
+        """Find the active authoritative defect reports file between root, web, and public."""
         if self.reports_file and self.validate_report_file(self.reports_file):
             return self.reports_file
 
-        root_path = self.get_root_reports_path()
-        web_path = self.get_web_reports_path()
-
-        root_valid = self.validate_report_file(root_path)
-        web_valid = self.validate_report_file(web_path)
-
-        if root_valid and web_valid:
-            try:
-                if root_path.stat().st_mtime >= web_path.stat().st_mtime:
-                    return root_path
-                return web_path
-            except Exception:
-                return root_path
-        elif root_valid:
-            return root_path
-        elif web_valid:
-            return web_path
-        return None
+        candidates = [
+            p for p in [self.get_root_reports_path(), self.get_web_reports_path(), self.get_public_reports_path()]
+            if p is not None and self.validate_report_file(p)
+        ]
+        if not candidates:
+            return None
+        try:
+            candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        except Exception:
+            pass
+        return candidates[0]
 
     def load_full_report_data(self, file_path: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
         """Load complete defect report dataset including statistics and metadata."""
@@ -391,6 +420,43 @@ class DefectTracker:
                         stat_copy["avg_negativity_score"] = round(f_avg, 2)
                 except (ValueError, TypeError, OverflowError):
                     stat_copy["avg_negativity_score"] = 0.0
+
+            # Ensure category_distribution is always populated
+            if "category_distribution" not in stat_copy or not isinstance(stat_copy["category_distribution"], dict):
+                cat_dist: Dict[str, int] = {}
+                fd_dist = _get_val(full_data, "category_distribution")
+                if fd_dist and isinstance(fd_dist, dict):
+                    for k, v in fd_dist.items():
+                        try:
+                            cat_dist[str(k)] = int(v)
+                        except (ValueError, TypeError):
+                            pass
+                elif _get_val(full_data, "top_defect_categories"):
+                    top_cats = _get_val(full_data, "top_defect_categories")
+                    if isinstance(top_cats, list):
+                        for item in top_cats:
+                            if isinstance(item, dict) and "category" in item and "count" in item:
+                                try:
+                                    cat_dist[str(item["category"])] = int(item["count"])
+                                except (ValueError, TypeError):
+                                    pass
+                    elif isinstance(top_cats, dict):
+                        for k, v in top_cats.items():
+                            try:
+                                cat_dist[str(k)] = int(v)
+                            except (ValueError, TypeError):
+                                pass
+
+                if not cat_dist:
+                    reports = _get_val(full_data, "reports", [])
+                    if isinstance(reports, list):
+                        for r in reports:
+                            raw_cat = _get_val(r, "defect_category", None) or _get_val(r, "category", None)
+                            cat = str(raw_cat).strip() if (raw_cat and str(raw_cat).strip()) else "UNKNOWN"
+                            cat_dist[cat] = cat_dist.get(cat, 0) + 1
+
+                stat_copy["category_distribution"] = cat_dist
+
             return stat_copy
 
         # Compute on-the-fly from reports list
@@ -498,7 +564,7 @@ class DefectTracker:
         dry_run: bool = False,
         run_crawler: bool = False,
     ) -> List[str]:
-        """Synchronize defect reports between root data/ and web src/data/ with atomic safety and validation.
+        """Synchronize defect reports between root data/, web src/data/, and public/data/ with atomic safety and validation.
 
         Validates source file JSON syntax and 'reports' key schema before any file replacement.
         Guarantees that corrupt files are NEVER propagated.
@@ -512,6 +578,14 @@ class DefectTracker:
         root_path = self.get_root_reports_path()
         web_path = (Path(web_dir) / "daily_reports.json") if web_dir else self.get_web_reports_path()
 
+        public_path: Optional[Path] = None
+        if web_dir and (Path(web_dir).parent / "public" / "data").exists():
+            public_path = Path(web_dir).parent / "public" / "data" / "daily_reports.json"
+        elif web_dir and (Path(web_dir).parent.parent / "public" / "data").exists():
+            public_path = Path(web_dir).parent.parent / "public" / "data" / "daily_reports.json"
+        else:
+            public_path = self.get_public_reports_path()
+
         written_paths: List[str] = []
 
         if run_crawler and self.pipeline:
@@ -524,63 +598,39 @@ class DefectTracker:
                     dry_run=dry_run,
                 )
                 written_paths.extend(res.get("written_paths", []))
-                return written_paths
             except Exception as exc:
                 logger.warning(
                     "Crawler execution in sync_defect_reports encountered: %s. Falling back to mirror synchronization.",
                     exc,
                 )
 
-        root_exists = root_path.exists()
-        web_exists = web_path.exists()
+        known_paths: List[Path] = [p for p in [root_path, web_path, public_path] if p is not None]
+        candidate_paths: List[Path] = [p for p in known_paths if p.exists()]
+        try:
+            candidate_paths.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        except Exception:
+            pass
 
         source_path: Optional[Path] = None
+        for cand in candidate_paths:
+            if self.validate_report_file(cand):
+                source_path = cand
+                break
+
+        if not source_path:
+            logger.error(
+                "No candidate defect report file is valid among %s. Aborting sync to prevent corruption propagation.",
+                candidate_paths,
+            )
+            return []
+
         target_paths: List[Path] = []
-
-        if root_exists and web_exists:
-            try:
-                root_stat = root_path.stat()
-                web_stat = web_path.stat()
-                if root_stat.st_mtime >= web_stat.st_mtime:
-                    primary, secondary = root_path, web_path
-                else:
-                    primary, secondary = web_path, root_path
-            except Exception:
-                primary, secondary = root_path, web_path
-
-            # Strict validation: Only accept source if valid JSON and contains 'reports' key
-            if self.validate_report_file(primary):
-                source_path = primary
-                target_paths = [secondary]
-            elif self.validate_report_file(secondary):
-                logger.warning(
-                    "Primary candidate %s failed schema validation. Falling back to valid secondary %s.",
-                    primary,
-                    secondary,
-                )
-                source_path = secondary
-                target_paths = [primary]
-            else:
-                logger.error(
-                    "Both candidate defect report sources (%s, %s) are corrupted or invalid. Aborting sync.",
-                    primary,
-                    secondary,
-                )
-                return []
-        elif root_exists and not web_exists:
-            if self.validate_report_file(root_path):
-                source_path = root_path
-                target_paths = [web_path]
-            else:
-                logger.error("Root defect reports file %s is corrupt or invalid. Aborting sync.", root_path)
-                return []
-        elif web_exists and not root_exists:
-            if self.validate_report_file(web_path):
-                source_path = web_path
-                target_paths = [root_path]
-            else:
-                logger.error("Web defect reports file %s is corrupt or invalid. Aborting sync.", web_path)
-                return []
+        seen_targets: Set[str] = {os.path.abspath(source_path)}
+        for p in known_paths:
+            abs_p = os.path.abspath(p)
+            if abs_p not in seen_targets and (p.parent.exists() or p.parent.parent.exists()):
+                seen_targets.add(abs_p)
+                target_paths.append(p)
 
         if source_path and target_paths and self.validate_report_file(source_path):
             try:
@@ -646,7 +696,12 @@ class DefectTracker:
         if written_paths:
             self.invalidate_cache()
 
-        return written_paths
+        deduped_written: List[str] = []
+        for p_str in written_paths:
+            if p_str not in deduped_written:
+                deduped_written.append(p_str)
+
+        return deduped_written
 
 
 __all__ = ["DefectTracker"]

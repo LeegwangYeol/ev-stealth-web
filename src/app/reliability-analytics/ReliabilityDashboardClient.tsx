@@ -43,6 +43,15 @@ const CATEGORY_TAG_COLORS: Record<DefectCategoryKey, { bg: string; text: string;
   COLD_WEATHER: { bg: 'bg-cyan-50', text: 'text-cyan-800', border: 'border-cyan-200' },
 };
 
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  BATTERY_CHARGING: ['배터리', '충전', 'iccu', '화재', '열폭주', '방전', '인렛'],
+  DRIVING_POWERTRAIN: ['모터', '감속기', '구동계', '동력', '인버터', '출력'],
+  SOFTWARE_ELECTRONICS: ['소프트웨어', 'ota', 'bms', '인포테인먼트', '디스플레이', '통신'],
+  BUILD_QUALITY: ['단차', '도장', '누수', '소음', '유격', '마감', '잡소리'],
+  SERVICE_REPAIR_COST: ['수리비', '정비', '부품', '공임', '보증'],
+  COLD_WEATHER: ['혹한기', '동절기', '저온', '히트펌프', '옥토밸브', '난방'],
+};
+
 export default function ReliabilityDashboardClient({ initialData }: ReliabilityDashboardClientProps) {
   // --- Filter States ---
   const [selectedBrand, setSelectedBrand] = useState<string>('ALL');
@@ -123,11 +132,16 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
         return false;
       }
 
-      // Category filter
-      if (selectedCategory !== 'ALL' && model.top_category !== selectedCategory) {
-        // Check if any year evaluation mentions or has this category
-        const matchesCategory = model.top_category === selectedCategory;
-        if (!matchesCategory) return false;
+      // Category filter: match either model top_category or any year evaluation mentioning this defect domain
+      if (selectedCategory !== 'ALL') {
+        const matchesTop = model.top_category === selectedCategory;
+        const matchesYearEval = model.year_evaluations?.some((y) => {
+          const text = `${y.primary_defect || ''} ${y.chronic_symptoms?.join(' ') || ''}`.toLowerCase();
+          const kws = CATEGORY_KEYWORDS[selectedCategory] || [];
+          return kws.some((kw) => text.includes(kw));
+        }) ?? false;
+
+        if (!matchesTop && !matchesYearEval) return false;
       }
 
       // Verdict filter

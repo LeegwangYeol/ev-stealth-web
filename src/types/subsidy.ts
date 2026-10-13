@@ -3,6 +3,12 @@
  * Based on Ministry of Environment (환경부) & Korea Environment Corporation (KECO) 2026 Guidelines.
  */
 
+declare global {
+  interface NumberConstructor {
+    isFinite(number: unknown): number is number;
+  }
+}
+
 export type AlertSeverity = 'HEALTHY' | 'CAUTION' | 'WARNING' | 'CRITICAL' | 'DEPLETED';
 
 export interface AlertThresholdConfig {
@@ -23,8 +29,8 @@ export interface CategoryMetrics {
   depletion_rate: number;
   delivery_rate: number;
   status: AlertSeverity;
-  max_local_subsidy_krw: number;
-  max_total_subsidy_krw: number;
+  max_local_subsidy_krw?: number;
+  max_total_subsidy_krw?: number;
   total_budget_krw?: number;
   remaining_budget_krw?: number;
 }
@@ -37,6 +43,11 @@ export interface MunicipalityMetrics {
   depletion_rate: number;
   status: AlertSeverity;
   local_subsidy_krw: number;
+  muni_id?: string;
+  name_en?: string;
+  category?: string;
+  delivered_units?: number;
+  total_subsidy_krw?: number;
 }
 
 export interface RegionEntry {
@@ -56,6 +67,7 @@ export interface RegionEntry {
   };
   municipalities?: MunicipalityMetrics[];
   notes: string;
+  last_updated?: string;
 }
 
 export interface PopularModelEntry {

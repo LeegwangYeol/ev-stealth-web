@@ -143,10 +143,11 @@ class ComplaintRecord:
     def date_str(self) -> str:
         """Extract YYYY-MM-DD from created_at or default to today."""
         if self.created_at:
-            if len(self.created_at) >= 10 and self.created_at[4] == "-" and self.created_at[7] == "-":
-                return self.created_at[:10]
+            norm_date = str(self.created_at).strip().replace("/", "-").replace(".", "-")
+            if len(norm_date) >= 10 and norm_date[4] == "-" and norm_date[7] == "-":
+                return norm_date[:10]
             try:
-                dt = datetime.fromisoformat(self.created_at.replace("Z", "+00:00"))
+                dt = datetime.fromisoformat(norm_date.replace("Z", "+00:00"))
                 return dt.strftime("%Y-%m-%d")
             except Exception:
                 pass

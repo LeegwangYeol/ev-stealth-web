@@ -4,8 +4,29 @@ import React, { useState, useMemo, useDeferredValue } from 'react';
 import type { DailyReportData, DefectReportItem } from '@/lib/getDailyReports';
 import ClientTimestamp from '@/components/ClientTimestamp';
 
+export interface DsiBreakdown {
+  safety?: number;
+  functional?: number;
+  economic?: number;
+  social?: number;
+  convenience?: number;
+  [key: string]: number | undefined;
+}
+
+export interface AdminDefectReportItem extends DefectReportItem {
+  created_at?: string;
+  dsi_breakdown?: DsiBreakdown;
+  severity_index?: number;
+  sentiment_polarity?: number;
+  author?: string;
+}
+
+export interface AdminDailyReportData extends Omit<DailyReportData, 'reports'> {
+  reports?: AdminDefectReportItem[];
+}
+
 interface AdminDashboardClientProps {
-  initialData: DailyReportData;
+  initialData: AdminDailyReportData;
 }
 
 type SortOption = 'critical' | 'recent' | 'negativity';
@@ -22,7 +43,7 @@ const SEVERITY_WEIGHT: Record<string, number> = {
   INFO: 0,
 };
 
-interface DefectReportWithTimestamp extends DefectReportItem {
+interface DefectReportWithTimestamp extends AdminDefectReportItem {
   _timestamp: number;
 }
 
@@ -74,7 +95,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
   const reports = useMemo<DefectReportWithTimestamp[]>(() => {
     return (initialData?.reports || []).map((r) => {
-      const rawDate = (r as unknown as { created_at?: string }).created_at || r.date;
+      const rawDate = r.created_at || r.date;
       const parsed = rawDate ? new Date(rawDate).getTime() : 0;
       return {
         ...r,
@@ -728,7 +749,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
       ) : (
         <section aria-labelledby="admin-defect-reports-list-heading" className="space-y-4">
           <h2 id="admin-defect-reports-list-heading" className="sr-only">수집된 결함 제보 상세 목록</h2>
-          {filteredReports.map((report: DefectReportItem) => (
+          {filteredReports.map((report: DefectReportWithTimestamp) => (
             <div
               key={report.id}
               className="bg-white rounded-2xl p-5 md:p-6 border border-slate-200 shadow-sm hover:shadow-md transition space-y-4"

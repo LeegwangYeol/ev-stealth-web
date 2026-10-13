@@ -100,13 +100,16 @@ class DCInsideCrawler(BaseCrawler):
     """
 
     def __init__(self, client: Optional[SafeHttpClient] = None):
-        self.client = client or SafeHttpClient()
-        self._warmed_up = False
+        super().__init__(client=client)
 
-    def ensure_warm_up(self):
-        """Warm up session cookies on DCInside base URL."""
-        if not self._warmed_up:
-            self.client.warm_up_session(DC_BASE_URL)
+    def ensure_warm_up(self, base_url: Optional[str] = None, force: bool = False):
+        """Warm up session cookies on DCInside base URL if not already done."""
+        if isinstance(base_url, bool):
+            force = base_url
+            base_url = None
+        target_url = base_url or DC_BASE_URL
+        if (not self._warmed_up or force) and target_url:
+            self.client.warm_up_session(target_url)
             self._warmed_up = True
 
     def get_gallery_prefix(self, gallery_id: str) -> str:

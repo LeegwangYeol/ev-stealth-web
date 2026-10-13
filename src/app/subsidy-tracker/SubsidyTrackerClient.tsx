@@ -845,13 +845,13 @@ const RegionCard = React.memo(function RegionCard({
           <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
             <div className="text-[11px] text-slate-400">지자체 최대 지원금</div>
             <div className="text-sm font-bold text-slate-200 mt-0.5">
-              {((Number.isFinite(cat?.max_local_subsidy_krw) ? cat.max_local_subsidy_krw : 0) / 10000).toLocaleString()}만 원
+              {(((cat?.max_local_subsidy_krw ?? 0)) / 10000).toLocaleString()}만 원
             </div>
           </div>
           <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
             <div className="text-[11px] text-slate-400">국비+지방비 합산 최대</div>
             <div className="text-sm font-bold text-amber-400 mt-0.5">
-              {((Number.isFinite(cat?.max_total_subsidy_krw) ? cat.max_total_subsidy_krw : 0) / 10000).toLocaleString()}만 원
+              {(((cat?.max_total_subsidy_krw ?? 0)) / 10000).toLocaleString()}만 원
             </div>
           </div>
         </div>
@@ -968,11 +968,28 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
   });
 
   const activeModel = useMemo(() => {
-    return models.find((m) => m.model_id === selectedModelId) || models[0];
+    const q = (selectedModelId || '').trim().toLowerCase();
+    return (
+      models.find(
+        (m) =>
+          m.model_id.toLowerCase() === q ||
+          m.name_ko.toLowerCase().includes(q)
+      ) || models[0]
+    );
   }, [models, selectedModelId]);
 
   const activeRegionForCalc = useMemo(() => {
-    return regions.find((r) => r.region_id === selectedRegionId) || regions[0];
+    const q = (selectedRegionId || '').trim().toLowerCase();
+    return (
+      regions.find(
+        (r) =>
+          r.region_id.toLowerCase() === q ||
+          r.iso_code.toLowerCase() === q ||
+          r.name_ko.toLowerCase() === q ||
+          r.name_ko.replace(/(특별시|광역시|특별자치시|도|특별자치도)$/, '').toLowerCase() === q ||
+          r.name_en.toLowerCase() === q
+      ) || regions[0]
+    );
   }, [regions, selectedRegionId]);
 
   const calculationResult = useMemo(() => {
@@ -982,8 +999,22 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
       const parsed = cleaned ? parseInt(cleaned, 10) : NaN;
       customMsrpNum = Number.isFinite(parsed) && parsed > 0 ? parsed : (activeModel?.base_price_krw ?? 0);
     }
-    return calculateNetSubsidy(selectedModelId, selectedRegionId, customMsrpNum, calcOptions);
-  }, [selectedModelId, selectedRegionId, isCustomMsrp, customMsrpInput, activeModel?.base_price_krw, calcOptions]);
+    return calculateNetSubsidy(
+      activeModel?.model_id || selectedModelId,
+      activeRegionForCalc?.region_id || selectedRegionId,
+      customMsrpNum,
+      calcOptions
+    );
+  }, [
+    activeModel?.model_id,
+    activeModel?.base_price_krw,
+    activeRegionForCalc?.region_id,
+    selectedModelId,
+    selectedRegionId,
+    isCustomMsrp,
+    customMsrpInput,
+    calcOptions,
+  ]);
 
   return (
     <section
@@ -1015,7 +1046,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             </label>
             <select
               id="model-select"
-              value={selectedModelId}
+              value={activeModel?.model_id || selectedModelId}
               onChange={(e) => onSelectModelId(e.target.value)}
               className="w-full py-3 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
             >
@@ -1028,21 +1059,24 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
 
             {/* Quick Pills for Top Models */}
             <div className="flex flex-wrap gap-1.5 pt-1">
-              {models.slice(0, 8).map((m) => (
-                <button
-                  key={m.model_id}
-                  type="button"
-                  aria-pressed={selectedModelId === m.model_id}
-                  onClick={() => onSelectModelId(m.model_id)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
-                    selectedModelId === m.model_id
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-slate-800'
-                  }`}
-                >
-                  {m.name_ko.replace(BRAND_PREFIX_REGEX, '')}
-                </button>
-              ))}
+              {models.slice(0, 8).map((m) => {
+                const isSelected = (activeModel?.model_id || selectedModelId) === m.model_id;
+                return (
+                  <button
+                    key={m.model_id}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => onSelectModelId(m.model_id)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
+                      isSelected
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                    }`}
+                  >
+                    {m.name_ko.replace(BRAND_PREFIX_REGEX, '')}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Selected Model Spec Card - Solid Opaque Background */}
@@ -1062,7 +1096,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             </label>
             <select
               id="region-select"
-              value={selectedRegionId}
+              value={activeRegionForCalc?.region_id || selectedRegionId}
               onChange={(e) => onSelectRegionId(e.target.value)}
               aria-describedby="region-residency-note"
               className="w-full py-3 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"

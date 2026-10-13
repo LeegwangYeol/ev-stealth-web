@@ -165,6 +165,8 @@ def sync_defect_reports(
         public_reports_path = _CURRENT_DIR / "public" / "data" / "daily_reports.json"
     elif (_CURRENT_DIR.parent / "ev-stealth-web" / "public" / "data").exists():
         public_reports_path = _CURRENT_DIR.parent / "ev-stealth-web" / "public" / "data" / "daily_reports.json"
+    elif web_dir and (Path(web_dir).parent.parent / "public" / "data").exists():
+        public_reports_path = Path(web_dir).parent.parent / "public" / "data" / "daily_reports.json"
 
     written_paths: List[str] = []
 
@@ -180,7 +182,6 @@ def sync_defect_reports(
                 dry_run=dry_run,
             )
             written_paths.extend(res.get("written_paths", []))
-            return written_paths
         except Exception as exc:
             logger.warning(
                 "Crawler execution in sync_defect_reports encountered: %s. Falling back to mirror synchronization.",
@@ -207,9 +208,13 @@ def sync_defect_reports(
         )
         return []
 
-    target_paths: List[Path] = [
-        p for p in known_paths if os.path.abspath(p) != os.path.abspath(source_path) and p.parent.exists()
-    ]
+    target_paths: List[Path] = []
+    seen_target_abs: Set[str] = {os.path.abspath(source_path)}
+    for p in known_paths:
+        abs_p = os.path.abspath(p)
+        if abs_p not in seen_target_abs and (p.parent.exists() or p.parent.parent.exists()):
+            seen_target_abs.add(abs_p)
+            target_paths.append(p)
 
     if source_path and target_paths and validate_defect_reports_file(source_path):
         try:
@@ -272,7 +277,12 @@ def sync_defect_reports(
                     except OSError:
                         pass
 
-    return written_paths
+    deduped_written: List[str] = []
+    for p_str in written_paths:
+        if p_str not in deduped_written:
+            deduped_written.append(p_str)
+
+    return deduped_written
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -473,7 +483,7 @@ def main() -> int:
             auto_bidirectional = both_data_dirs_exist and is_default_or_repo_target
 
             if args.sync_web or auto_bidirectional:
-                if args.sync_web and args.web_dir:
+                if args.web_dir:
                     web_dir = Path(args.web_dir)
                     destinations.append(web_dir / "ev_subsidy_data.json")
                     destinations.append(web_dir / "subsidy_depletion_data.json")

@@ -64,6 +64,7 @@ jobs:
           else
             python scripts/run_scraper.py --sources "$MODE" --limit "$LIMIT" --sync-web --output-path src/data/daily_reports.json
           fi
+          python3 run_tracker.py --sync-web
 
       - name: 5. Verify Crawler & Pipeline Unit Tests
         run: |
@@ -84,8 +85,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           DATE_TAG=$(date -u +"%Y-%m-%d")
-          git add src/data/daily_reports.json ev-stealth-web/src/data/daily_reports.json 2>/dev/null || git add src/data/daily_reports.json
-          # Note: Omit [skip ci] from git commit message to allow Vercel auto-deployment of fresh scraped data
-          git commit -m "Automated daily EV scrape sync [workflow] (${DATE_TAG})"
+          git add data/daily_reports.json ev-stealth-web/src/data/daily_reports.json ev-stealth-web/public/data/daily_reports.json src/data/daily_reports.json 2>/dev/null || true
+          git add data/*.json ev-stealth-web/src/data/*.json ev-stealth-web/public/data/*.json 2>/dev/null || true
+          git commit -m "Automated daily EV scrape sync [workflow] [skip ci] (${DATE_TAG})"
           git pull --rebase origin main
           git push origin main

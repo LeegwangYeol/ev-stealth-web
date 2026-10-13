@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef, Suspense, useDeferredValue } from 'react';
 import { useSearchParams } from 'next/navigation';
+import ClientTimestamp from '@/components/ClientTimestamp';
 import type {
   RecallDatabase,
   VinCheckResult,
@@ -835,7 +836,12 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                           : '안전 검증 완료'}
                       </span>
                       <span className="text-xs text-slate-300">
-                        조회 일시: {isNaN(new Date(checkResult.timestamp).getTime()) ? '최근' : new Date(checkResult.timestamp).toLocaleDateString('ko-KR')}
+                        조회 일시:{' '}
+                        <ClientTimestamp
+                          isoString={checkResult.timestamp}
+                          fallback="최근"
+                          options={{ year: 'numeric', month: 'numeric', day: 'numeric' }}
+                        />
                       </span>
                     </div>
 
