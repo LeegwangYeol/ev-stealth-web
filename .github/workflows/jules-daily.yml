@@ -44,6 +44,7 @@ jobs:
             - `npm ci && npm run lint && npm run build`
             - The `.mjs` / `.ts` files in `tests/` are node or Playwright checks; run `node tests/<file>.mjs` only where no browser is needed.
             - Live bobaedream/dcinside fetches are unavailable; use `tests/fixtures/`.
+            - Many tests fail here because they expect files that are not in the repository (`scrapers/`, `scripts/domain_tokenizer.py`, generated `src/data/*.json`) or hard-code the owner's machine paths (`/Users/a7890/...`). Those are environment gaps, not defects: skip them and pick a failure that is self-contained.
 
             Focus:
             - Parsers in `crawlers/` against the fixtures, depreciation and subsidy math in `filters/` and `src/lib/`, VIN and board edge cases, `tracker/` state transitions.
