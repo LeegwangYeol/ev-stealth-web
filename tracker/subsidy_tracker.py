@@ -234,28 +234,32 @@ class SubsidyTracker:
         national_cap: int = PASSENGER_NATIONAL_CAP_KRW,
         avg_per_unit_budget: int = 10_000_000,
     ) -> CategoryMetrics:
-        """Safely compute metrics for a single category with boundary clamping."""
-        depletion_rate = calculate_depletion_rate(applied, announced)
-        delivery_rate = calculate_depletion_rate(delivered, announced)
-        remaining_units = calculate_remaining_units(applied, announced)
+        safe_announced = max(0, _safe_int_metric(announced, 0))
+        safe_applied = max(0, _safe_int_metric(applied, 0))
+        safe_delivered = max(0, _safe_int_metric(delivered, 0))
+        safe_max_local = max(0, _safe_int_metric(max_local_subsidy, 0))
+        safe_national_cap = max(0, _safe_int_metric(national_cap, PASSENGER_NATIONAL_CAP_KRW))
+        safe_unit_budget = max(0, _safe_int_metric(avg_per_unit_budget, 10_000_000))
+
+        depletion_rate = calculate_depletion_rate(safe_applied, safe_announced)
+        delivery_rate = calculate_depletion_rate(safe_delivered, safe_announced)
+        remaining_units = calculate_remaining_units(safe_applied, safe_announced)
         status = self.evaluate_status(depletion_rate).value
 
-        safe_announced = max(0, announced) if announced is not None else 0
-        safe_applied = max(0, applied) if applied is not None else 0
-        total_budget = safe_announced * avg_per_unit_budget
-        disbursed_budget = safe_applied * avg_per_unit_budget
+        total_budget = safe_announced * safe_unit_budget
+        disbursed_budget = safe_applied * safe_unit_budget
         remaining_budget = max(0, total_budget - disbursed_budget)
 
         return CategoryMetrics(
-            announced_units=announced,
-            applied_units=applied,
-            delivered_units=delivered,
+            announced_units=safe_announced,
+            applied_units=safe_applied,
+            delivered_units=safe_delivered,
             remaining_units=remaining_units,
             depletion_rate=depletion_rate,
             delivery_rate=delivery_rate,
             status=status,
-            max_local_subsidy_krw=max_local_subsidy,
-            max_total_subsidy_krw=max_local_subsidy + national_cap,
+            max_local_subsidy_krw=safe_max_local,
+            max_total_subsidy_krw=safe_max_local + safe_national_cap,
             total_budget_krw=total_budget,
             remaining_budget_krw=remaining_budget,
         )
@@ -309,15 +313,29 @@ class SubsidyTracker:
         # Recalculate municipalities if present
         if region.municipalities:
             for muni in region.municipalities:
-                safe_m_ann = max(0, _safe_int_metric(getattr(muni, "announced_units", 0), 0))
-                safe_m_app = max(0, _safe_int_metric(getattr(muni, "applied_units", 0), 0))
-                muni.announced_units = safe_m_ann
-                muni.applied_units = safe_m_app
-                if hasattr(muni, "delivered_units"):
-                    muni.delivered_units = max(0, _safe_int_metric(getattr(muni, "delivered_units", 0), 0))
-                muni.remaining_units = calculate_remaining_units(safe_m_app, safe_m_ann)
-                muni.depletion_rate = calculate_depletion_rate(safe_m_app, safe_m_ann)
-                muni.status = self.evaluate_status(muni.depletion_rate).value
+                safe_m_ann = max(0, _safe_int_metric(_metric_val(muni, "announced_units", 0), 0))
+                safe_m_app = max(0, _safe_int_metric(_metric_val(muni, "applied_units", 0), 0))
+                safe_m_del = max(0, _safe_int_metric(_metric_val(muni, "delivered_units", 0), 0))
+                m_rem = calculate_remaining_units(safe_m_app, safe_m_ann)
+                m_dep = calculate_depletion_rate(safe_m_app, safe_m_ann)
+                m_stat = self.evaluate_status(m_dep).value
+
+                if hasattr(muni, "announced_units"):
+                    muni.announced_units = safe_m_ann
+                    muni.applied_units = safe_m_app
+                    if hasattr(muni, "delivered_units"):
+                        muni.delivered_units = safe_m_del
+                    muni.remaining_units = m_rem
+                    muni.depletion_rate = m_dep
+                    muni.status = m_stat
+                elif isinstance(muni, dict):
+                    muni["announced_units"] = safe_m_ann
+                    muni["applied_units"] = safe_m_app
+                    if "delivered_units" in muni or (hasattr(muni, "get") and muni.get("delivered_units") is not None):
+                        muni["delivered_units"] = safe_m_del
+                    muni["remaining_units"] = m_rem
+                    muni["depletion_rate"] = m_dep
+                    muni["status"] = m_stat
 
         # Overall depletion rate is weighted by volume across all categories
         overall_rate = calculate_depletion_rate(total_applied, total_announced)

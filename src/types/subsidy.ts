@@ -83,6 +83,7 @@ export interface PopularModelEntry {
   regional_subsidy_samples?: Record<
     string,
     {
+      local_subsidy_krw?: number;
       total_subsidy_krw: number;
       net_price_krw: number;
     }

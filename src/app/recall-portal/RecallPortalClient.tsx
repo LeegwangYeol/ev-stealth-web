@@ -951,6 +951,11 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
             {/* Matched Recall Campaign Cards */}
             <div className="space-y-4">
+              <div aria-live="polite" aria-atomic="true" className="sr-only">
+                {checkResult.recalls.length === 0
+                  ? '해당 차종 조건에 일치하는 활성 리콜이 없습니다.'
+                  : `해당 차종 대상 정부 공시 리콜 총 ${checkResult.recalls.length}건이 조회되었습니다.`}
+              </div>
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <span>해당 차종 대상 정부 공시 리콜 세부 내역 ({checkResult.recalls.length}건)</span>
               </h3>
@@ -1016,6 +1021,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                           onClick={() => toggleRecallExpansion(campaign.id)}
                           aria-expanded={isExpanded}
                           aria-controls={"campaign-search-detail-" + campaign.id}
+                          aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '대처요령 및 상세 펼치기'}`}
                           className="self-start px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                         >
                           <span>{isExpanded ? '상세 접기' : '대처요령 및 상세'}</span>
@@ -1096,7 +1102,15 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 <span className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
                   전기차 차종별 배터리 실명제 공시 대장
                 </span>
-                <span className="text-xs text-slate-400">총 {batteryProfiles.length}개 차종</span>
+                <span
+                  aria-live="polite"
+                  aria-atomic="true"
+                  className="text-xs text-slate-400"
+                >
+                  {batterySearch.trim() !== '' || selectedSupplierFilter !== 'ALL' || selectedFireStatusFilter !== 'ALL'
+                    ? `검색 결과: ${filteredBatteryProfiles.length}개 차종 (전체 ${batteryProfiles.length}개)`
+                    : `총 ${batteryProfiles.length}개 차종`}
+                </span>
               </div>
               <h2 id="battery-directory-heading" className="text-xl sm:text-2xl font-bold text-white">
                 🔋 전기차 배터리 제조사 & 지하주차장 안전 가이드
@@ -1184,7 +1198,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       setSelectedSupplierFilter('ALL');
                       setSelectedFireStatusFilter('ALL');
                     }}
-                    className="mt-3 px-3 py-1.5 text-xs font-semibold text-blue-400 bg-blue-950/50 hover:bg-blue-900/50 border border-blue-800/80 rounded-lg transition"
+                    className="mt-3 px-3 py-1.5 text-xs font-semibold text-blue-400 bg-blue-950/50 hover:bg-blue-900/50 border border-blue-800/80 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                   >
                     필터 및 검색 초기화
                   </button>
@@ -1261,7 +1275,15 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-950 text-red-300 border border-red-800">
                   국토교통부 자동차안전연구원 공시
                 </span>
-                <span className="text-xs text-slate-400">전체 공시 리콜 대장</span>
+                <span
+                  aria-live="polite"
+                  aria-atomic="true"
+                  className="text-xs text-slate-400"
+                >
+                  {recallSearch.trim() !== '' || selectedRiskFilter !== 'ALL' || selectedRemedyFilter !== 'ALL'
+                    ? `검색 결과: ${filteredRecalls.length}건 (전체 ${recalls.length}건)`
+                    : `전체 공시 리콜 대장 (${recalls.length}건)`}
+                </span>
               </div>
               <h2 id="all-recalls-heading" className="text-xl sm:text-2xl font-bold text-white">
                 📋 전체 전기차 리콜 캠페인 카탈로그
@@ -1355,7 +1377,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       setSelectedRiskFilter('ALL');
                       setSelectedRemedyFilter('ALL');
                     }}
-                    className="mt-3 px-3 py-1.5 text-xs font-semibold text-blue-400 bg-blue-950/50 hover:bg-blue-900/50 border border-blue-800/80 rounded-lg transition"
+                    className="mt-3 px-3 py-1.5 text-xs font-semibold text-blue-400 bg-blue-950/50 hover:bg-blue-900/50 border border-blue-800/80 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                   >
                     필터 및 검색 초기화
                   </button>
@@ -1425,6 +1447,7 @@ export const RecallCard = React.memo(function RecallCard({
           onClick={() => toggleRecallExpansion(campaign.id)}
           aria-expanded={isExpanded}
           aria-controls={"campaign-list-detail-" + campaign.id}
+          aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '상세 및 행동요령 펼치기'}`}
           className="self-start text-xs text-blue-400 hover:text-blue-300 font-medium px-2.5 py-1 rounded bg-slate-800/80 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
         >
           {isExpanded ? '닫기 ▲' : '상세 및 행동요령 ▼'}

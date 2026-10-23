@@ -25,9 +25,12 @@ class BaseCrawler(abc.ABC):
         self.client = client or SafeHttpClient()
         self._warmed_up = False
 
-    def ensure_warm_up(self, base_url: Optional[str] = None):
+    def ensure_warm_up(self, base_url: Optional[str] = None, force: bool = False):
         """Warm up session cookies on base URL if not already done."""
-        if not self._warmed_up and base_url:
+        if isinstance(base_url, bool):
+            force = base_url
+            base_url = None
+        if (not self._warmed_up or force) and base_url and isinstance(base_url, str):
             self.client.warm_up_session(base_url)
             self._warmed_up = True
 

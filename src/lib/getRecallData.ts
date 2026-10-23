@@ -597,5 +597,28 @@ export function getModelsForBrand(brand: string, customDb?: RecallDatabase): str
       if (vp?.model_name) models.add(vp.model_name);
     });
 
+  // Support custom db.vehicles if present in customDb or mock
+  const customVehicles = (db as unknown as Record<string, unknown>)?.vehicles;
+  if (Array.isArray(customVehicles)) {
+    (customVehicles as Array<{ brand?: string; model_name?: string; model?: string }>)
+      .filter((v) => v?.brand && typeof v.brand === 'string' && v.brand.toLowerCase() === cleanBrand)
+      .forEach((v) => {
+        if (v?.model_name) models.add(v.model_name);
+        else if (v?.model) models.add(v.model);
+      });
+  }
+
+  // Include models explicitly tracked in recall campaigns for this brand
+  (db.recalls || [])
+    .filter((r) => r?.brand && typeof r.brand === 'string' && r.brand.toLowerCase() === cleanBrand)
+    .forEach((r) => {
+      if (r?.target_model) {
+        r.target_model.split(',').forEach((tm) => {
+          const cleanModel = tm.replace(/\s*\([^)]*\)/g, '').trim();
+          if (cleanModel) models.add(cleanModel);
+        });
+      }
+    });
+
   return Array.from(models);
 }

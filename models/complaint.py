@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import math
 from typing import Any, Dict, List, Optional
 
 
@@ -23,6 +24,19 @@ DEFECT_CATEGORY_KO_MAP: Dict[str, str] = {
 CANONICAL_CATEGORIES = list(DEFECT_CATEGORY_KO_MAP.keys())
 
 VALID_BRANDS = ["Hyundai", "Kia", "Tesla", "BYD", "Other"]
+
+
+def _safe_round(val: Any, decimals: int = 4, default: float = 0.0) -> float:
+    """Safely round numeric value, catching None, NaN, Inf, and non-numeric inputs."""
+    if val is None:
+        return default
+    try:
+        f = float(val)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return round(f, decimals)
+    except (ValueError, TypeError, OverflowError):
+        return default
 
 
 @dataclass
@@ -119,23 +133,41 @@ class ComplaintRecord:
     def severity_tier(self) -> str:
         """Map DSI score to 4 severity tiers or return explicit severity."""
         if self.severity:
-            return self.severity.upper()
-        if self.severity_index >= 8.0:
+            return str(self.severity).upper()
+        if self.severity_index is None:
+            return "LOW"
+        try:
+            val = float(self.severity_index)
+            if math.isnan(val) or math.isinf(val):
+                return "LOW"
+        except (ValueError, TypeError, OverflowError):
+            return "LOW"
+
+        if val >= 8.0:
             return "CRITICAL"
-        if self.severity_index >= 6.0:
+        if val >= 6.0:
             return "HIGH"
-        if self.severity_index >= 4.0:
+        if val >= 4.0:
             return "MEDIUM"
         return "LOW"
 
     @property
     def sentiment_tier(self) -> str:
         """Map continuous polarity [-1.0, 1.0] to 4 tiers."""
-        if self.sentiment_polarity >= 0.30:
-            return "POSITIVE"
-        if self.sentiment_polarity >= -0.29:
+        if self.sentiment_polarity is None:
             return "NEUTRAL"
-        if self.sentiment_polarity >= -0.69:
+        try:
+            val = float(self.sentiment_polarity)
+            if math.isnan(val) or math.isinf(val):
+                return "NEUTRAL"
+        except (ValueError, TypeError, OverflowError):
+            return "NEUTRAL"
+
+        if val >= 0.30:
+            return "POSITIVE"
+        if val >= -0.29:
+            return "NEUTRAL"
+        if val >= -0.69:
             return "NEGATIVE"
         return "STRONGLY_NEGATIVE"
 
@@ -168,9 +200,9 @@ class ComplaintRecord:
             "summary": self.summary,
             "verbatim_quote": self.verbatim_quote,
             "slang_terms_detected": list(self.slang_terms_detected),
-            "sentiment_polarity": round(self.sentiment_polarity, 4),
-            "negativity_score": round(self.negativity_score, 4),
-            "severity_index": round(self.severity_index, 2),
+            "sentiment_polarity": _safe_round(self.sentiment_polarity, 4),
+            "negativity_score": _safe_round(self.negativity_score, 4),
+            "severity_index": _safe_round(self.severity_index, 2),
             "is_authentic_defect": self.is_authentic_defect,
         }
 
@@ -197,12 +229,12 @@ class ComplaintRecord:
             "raw_quote": self.verbatim_quote,
             "slang_tags": list(self.slang_terms_detected),
             "slang_terms_detected": list(self.slang_terms_detected),
-            "sentiment_score": round(self.negativity_score, 4),
-            "sentiment_polarity": round(self.sentiment_polarity, 4),
-            "negativity_score": round(self.negativity_score, 4),
+            "sentiment_score": _safe_round(self.negativity_score, 4),
+            "sentiment_polarity": _safe_round(self.sentiment_polarity, 4),
+            "negativity_score": _safe_round(self.negativity_score, 4),
             "sentiment_tier": self.sentiment_tier,
             "severity": self.severity_tier,
-            "severity_index": round(self.severity_index, 2),
+            "severity_index": _safe_round(self.severity_index, 2),
             "is_authentic_defect": self.is_authentic_defect,
         }
         if self.dsi_breakdown:

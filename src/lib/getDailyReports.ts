@@ -8,7 +8,7 @@ export type DefectCategoryCode =
   | 'SERVICE_REPAIR_COST'
   | string;
 
-export type SeverityLevel = 'CRITICAL' | 'WARNING' | 'CAUTION' | 'INFO' | string;
+export type SeverityLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'WARNING' | 'CAUTION' | 'INFO' | string;
 
 export interface DefectReportItem {
   id: string;
@@ -16,15 +16,29 @@ export interface DefectReportItem {
   url: string;
   title: string;
   date: string;
+  created_at?: string;
   vehicle_model: string;
   vehicle_brand?: string;
+  target_vehicle?: string;
   defect_category: DefectCategoryCode;
   defect_category_ko: string;
   summary: string;
   verbatim_quote: string;
   slang_tags: string[];
   sentiment_score: number;
+  sentiment_polarity?: number;
   severity: SeverityLevel;
+  severity_index?: number;
+  author?: string;
+  is_authentic_defect?: boolean;
+  dsi_breakdown?: {
+    safety?: number;
+    functional?: number;
+    economic?: number;
+    social?: number;
+    convenience?: number;
+    [key: string]: number | undefined;
+  };
 }
 
 export interface ReportStatistics {
@@ -40,6 +54,12 @@ export interface DailyReportData {
   generated_at: string;
   pipeline_version: string;
   statistics: ReportStatistics;
+  total_complaints_today?: number;
+  top_defect_categories?: Array<{
+    category: string;
+    count: number;
+    ratio: number;
+  }>;
   reports: DefectReportItem[];
 }
 
@@ -69,14 +89,22 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
     ko: (raw.defect_category_ko || raw.category_ko || '기타 결함') as string,
   };
 
-  const rawSeverity = String(raw.severity || 'WARNING').toUpperCase();
+  const rawSeverity = String(raw.severity || raw.severity_tier || 'WARNING').toUpperCase();
   let severity: SeverityLevel = 'WARNING';
   if (rawSeverity.includes('CRITICAL')) {
     severity = 'CRITICAL';
+  } else if (rawSeverity === 'HIGH') {
+    severity = 'HIGH';
+  } else if (rawSeverity === 'MEDIUM') {
+    severity = 'MEDIUM';
+  } else if (rawSeverity === 'LOW') {
+    severity = 'LOW';
   } else if (rawSeverity.includes('CAUTION') || rawSeverity.includes('CONVENIENCE')) {
     severity = 'CAUTION';
   } else if (rawSeverity.includes('WARN') || rawSeverity.includes('FUNCTIONAL')) {
     severity = 'WARNING';
+  } else if (rawSeverity.includes('INFO')) {
+    severity = 'INFO';
   }
 
   const score = Number.isFinite(raw.sentiment_score)
@@ -93,15 +121,22 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
     url: String(raw.url || raw.post_url || '#'),
     title: String(raw.title || raw.post_title || '전기차 결함 제보'),
     date: String(raw.date || raw.post_date || new Date().toISOString().split('T')[0]),
+    created_at: raw.created_at ? String(raw.created_at) : undefined,
     vehicle_model: String(raw.vehicle_model || raw.target_vehicle || '미상 모델'),
     vehicle_brand: raw.vehicle_brand ? String(raw.vehicle_brand) : undefined,
+    target_vehicle: raw.target_vehicle ? String(raw.target_vehicle) : undefined,
     defect_category: catInfo.code,
     defect_category_ko: String(raw.defect_category_ko || catInfo.ko),
     summary: String(raw.summary || raw.defect_summary || raw.defect_topic || '결함 상세 내용 요약'),
     verbatim_quote: String(raw.verbatim_quote || raw.raw_quote || raw.content || '원문 없음'),
     slang_tags: slang.map((s: unknown) => String(s)),
     sentiment_score: Number(score.toFixed(2)),
+    sentiment_polarity: Number.isFinite(raw.sentiment_polarity) ? Number(raw.sentiment_polarity) : undefined,
     severity,
+    severity_index: Number.isFinite(raw.severity_index) ? Number(raw.severity_index) : undefined,
+    author: raw.author ? String(raw.author) : undefined,
+    is_authentic_defect: typeof raw.is_authentic_defect === 'boolean' ? raw.is_authentic_defect : true,
+    dsi_breakdown: (raw.dsi_breakdown && typeof raw.dsi_breakdown === 'object') ? (raw.dsi_breakdown as DefectReportItem['dsi_breakdown']) : undefined,
   };
 }
 
@@ -203,6 +238,12 @@ export function getDailyReports(): DailyReportData {
       generated_at: rawData?.generated_at || new Date().toISOString(),
       pipeline_version: rawData?.pipeline_version || '1.0.0',
       statistics,
+      total_complaints_today: typeof (rawData as Record<string, unknown>)?.total_complaints_today === 'number'
+        ? ((rawData as Record<string, unknown>).total_complaints_today as number)
+        : undefined,
+      top_defect_categories: Array.isArray((rawData as Record<string, unknown>)?.top_defect_categories)
+        ? ((rawData as Record<string, unknown>).top_defect_categories as DailyReportData['top_defect_categories'])
+        : undefined,
       reports,
     };
   } catch (error) {
@@ -211,13 +252,15 @@ export function getDailyReports(): DailyReportData {
       generated_at: new Date().toISOString(),
       pipeline_version: '1.0.0',
       statistics: {
-        total_scraped: 120,
+        total_scraped: 0,
         total_filtered_defects: 0,
         avg_negativity_score: 0.85,
         critical_defect_count: 0,
-        top_model: '아이오닉5',
-        top_platform: '보배드림',
+        top_model: '해당 없음 (0건)',
+        top_platform: '해당 없음 (0%)',
       },
+      total_complaints_today: 0,
+      top_defect_categories: [],
       reports: [],
     };
   }

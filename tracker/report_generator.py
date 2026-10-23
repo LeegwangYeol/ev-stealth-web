@@ -80,11 +80,17 @@ class ReportGenerator:
 
         Maintains exact statutory formatting expected by downstream systems and CLI.
         """
-        summary = payload.nationwide_summary
-        gen_time = payload.metadata.generated_at
+        summary = _get_field(payload, "nationwide_summary", None)
+        metadata = _get_field(payload, "metadata", None)
+        gen_time = (
+            _get_field(metadata, "generated_at", None)
+            or _get_field(metadata, "updated_at", None)
+            or _get_field(payload, "generated_at", None)
+            or _get_field(payload, "updated_at", "")
+        )
 
-        def _get_passenger_remaining(region: RegionRecord) -> int:
-            cats = getattr(region, "categories", None)
+        def _get_passenger_remaining(region: Any) -> int:
+            cats = _get_field(region, "categories", None)
             if not isinstance(cats, dict):
                 return 0
             p_cat = cats.get("passenger")
@@ -93,27 +99,30 @@ class ReportGenerator:
             val = _metric_val(p_cat, "remaining_units", 0)
             return max(0, _safe_int_val(val, 0))
 
+        regions_list = _get_field(payload, "regions", []) or []
         critical_regions = [
-            f"{r.name_ko} ({_safe_float_val(r.overall_depletion_rate)}%, 잔여: {_get_passenger_remaining(r):,}대)"
-            for r in payload.regions
-            if r.overall_status in ("CRITICAL", "DEPLETED")
+            f"{_get_field(r, 'name_ko', '')} ({_safe_float_val(_get_field(r, 'overall_depletion_rate', 0.0))}%, 잔여: {_get_passenger_remaining(r):,}대)"
+            for r in regions_list
+            if _get_field(r, "overall_status", "") in ("CRITICAL", "DEPLETED")
         ]
         warning_regions = [
-            f"{r.name_ko} ({_safe_float_val(r.overall_depletion_rate)}%, 잔여: {_get_passenger_remaining(r):,}대)"
-            for r in payload.regions
-            if r.overall_status == "WARNING"
+            f"{_get_field(r, 'name_ko', '')} ({_safe_float_val(_get_field(r, 'overall_depletion_rate', 0.0))}%, 잔여: {_get_passenger_remaining(r):,}대)"
+            for r in regions_list
+            if _get_field(r, "overall_status", "") == "WARNING"
         ]
 
-        category_totals = getattr(summary, "category_totals", None) or {}
+        category_totals = _get_field(summary, "category_totals", {}) or {}
+        if not isinstance(category_totals, dict):
+            category_totals = {}
         p_info = category_totals.get("passenger", {})
         c_info = category_totals.get("commercial", {})
         b_info = category_totals.get("bus", {})
 
-        tot_ann = _safe_int_val(getattr(summary, "total_announced_units", 0))
-        tot_app = _safe_int_val(getattr(summary, "total_applied_units", 0))
-        disb_b = _safe_int_val(getattr(summary, "disbursed_budget_billion_krw", 0))
-        tot_b = _safe_int_val(getattr(summary, "total_budget_billion_krw", 0))
-        dep_rate = _safe_float_val(getattr(summary, "nationwide_depletion_rate", 0.0))
+        tot_ann = _safe_int_val(_get_field(summary, "total_announced_units", 0))
+        tot_app = _safe_int_val(_get_field(summary, "total_applied_units", 0))
+        disb_b = _safe_int_val(_get_field(summary, "disbursed_budget_billion_krw", 0))
+        tot_b = _safe_int_val(_get_field(summary, "total_budget_billion_krw", 0))
+        dep_rate = _safe_float_val(_get_field(summary, "nationwide_depletion_rate", 0.0))
 
         p_ann = _safe_int_val(_metric_val(p_info, "announced_units", 0))
         p_app = _safe_int_val(_metric_val(p_info, "applied_units", 0))

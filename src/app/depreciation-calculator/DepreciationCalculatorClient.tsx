@@ -1056,7 +1056,7 @@ export default function DepreciationCalculatorClient({
       >
         {/* Dynamic calculation live summary for screen readers */}
         <div className="sr-only" aria-live="polite" aria-atomic="true">
-          {selectedModel.brand_name_ko} {selectedModel.model_name} {holdingYears}년 보유 기준 예상 잔존 시세는 {Math.round(depResult.estimatedResidualPriceKrw / 10000).toLocaleString()}만 원(잔존율 {depResult.adjustedResidualPct}%), 배터리 잔여 수명은 {batteryHealth.sohPct.toFixed(1)}%, 5개년 누적 절감액은 {Math.round(tcoResult.totalCumulativeSavingsKrw / 10000).toLocaleString()}만 원입니다.
+          {selectedModel.brand_name_ko} {selectedModel.model_name} {holdingYears}년 보유 기준 예상 잔존 시세는 {Math.round(depResult.estimatedResidualPriceKrw / 10000).toLocaleString()}만 원(잔존율 {depResult.adjustedResidualPct}%), 배터리 잔여 수명은 {batteryHealth.sohPct.toFixed(1)}%, {holdingYears}개년 누적 절감액은 {Math.round(tcoResult.totalCumulativeSavingsKrw / 10000).toLocaleString()}만 원입니다.
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
@@ -1078,6 +1078,7 @@ export default function DepreciationCalculatorClient({
               <button
                 type="button"
                 onClick={() => setChartViewMode('price')}
+                aria-pressed={chartViewMode === 'price'}
                 className={`px-3 py-1.5 font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none ${
                   chartViewMode === 'price'
                     ? 'bg-blue-600 text-white'
@@ -1090,6 +1091,7 @@ export default function DepreciationCalculatorClient({
               <button
                 type="button"
                 onClick={() => setChartViewMode('percentage')}
+                aria-pressed={chartViewMode === 'percentage'}
                 className={`px-3 py-1.5 font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none ${
                   chartViewMode === 'percentage'
                     ? 'bg-blue-600 text-white'
@@ -1688,6 +1690,9 @@ export default function DepreciationCalculatorClient({
 
         {/* Real-time Status Alert Banner */}
         <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
           className={`p-4 rounded-xl border flex items-start sm:items-center gap-3 ${
             clawbackResult.isExempt
               ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
@@ -1856,8 +1861,11 @@ export default function DepreciationCalculatorClient({
                 <span className="text-sm font-semibold text-slate-300">원</span>
               </div>
               <div className="text-[11px] text-slate-400 mt-1">
-                회수요율: {(clawbackResult.effectiveClawbackRate * 100).toFixed(0)}% (지방비:{' '}
-                {clawbackResult.localClawbackKrw.toLocaleString()}원)
+                회수요율: {(clawbackResult.effectiveClawbackRate * 100).toFixed(0)}% (
+                {clawbackResult.nationalClawbackKrw > 0
+                  ? `국비: ${clawbackResult.nationalClawbackKrw.toLocaleString()}원, 지방비: ${clawbackResult.localClawbackKrw.toLocaleString()}원`
+                  : `지방비: ${clawbackResult.localClawbackKrw.toLocaleString()}원`}
+                )
               </div>
             </div>
           </div>
@@ -2064,10 +2072,10 @@ export default function DepreciationCalculatorClient({
         <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
           <div className="space-y-1">
             <span className="font-bold text-slate-800 flex items-center gap-1.5">
-              <span>💡</span> 5년 종합 경제성 최종 판정:
+              <span>💡</span> {holdingYears}년 종합 경제성 최종 판정:
             </span>
             <p className="text-slate-600">
-              신차 구입가 대비 감가 손실 차액에 5개년 누적 운행비 절감액을 합산한 최종 실질 비용 평가입니다.
+              신차 구입가 대비 감가 손실 차액에 {holdingYears}개년 누적 운행비 절감액을 합산한 최종 실질 비용 평가입니다.
             </p>
           </div>
 

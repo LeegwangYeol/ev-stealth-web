@@ -574,6 +574,43 @@ class TestRecallPortalClientA11y(unittest.TestCase):
             "vin-checker-panel must declare tabIndex={0} and focus-visible:ring-2.",
         )
 
+    def test_recall_portal_accordion_buttons_have_accessible_disambiguated_labels(self):
+        """
+        Validate that campaign accordion toggle buttons provide disambiguated aria-label
+        including target model and defect title (WCAG 4.1.2 Name, Role, Value).
+        """
+        self.assertTrue(
+            bool(re.search(r'aria-label=\{`\$\{campaign\.target_model\}\s+\$\{campaign\.defect_title\}', self.source)),
+            "Campaign accordion toggle buttons must define disambiguated aria-label with target_model and defect_title.",
+        )
+
+    def test_recall_portal_reset_buttons_have_focus_visible_rings(self):
+        """
+        Validate that filter and search reset buttons in empty states declare focus-visible:ring-2.
+        """
+        matches = re.findall(
+            r'<button[^>]*onClick=\{[^}]*(?:setBatterySearch|setRecallSearch)[^}]*\}[^>]*className=["\']([^"\']*)["\']',
+            self.source,
+        )
+        self.assertGreaterEqual(len(matches), 2, "Must find at least 2 filter reset buttons in RecallPortalClient.")
+        for btn_class in matches:
+            self.assertIn("focus-visible:ring-2", btn_class, f"Reset button must declare focus-visible:ring-2: {btn_class}")
+            self.assertIn("focus-visible:ring-blue-400", btn_class, f"Reset button must declare focus-visible:ring-blue-400: {btn_class}")
+
+    def test_recall_portal_dynamic_search_results_live_regions(self):
+        """
+        Validate that Battery Safety Directory and All Recalls sections declare aria-live="polite"
+        counter announcements for filter results (WCAG 4.1.3 Status Messages).
+        """
+        self.assertTrue(
+            bool(re.search(r'aria-live=["\']polite["\'][^>]*aria-atomic=["\']true["\'][^>]*>\s*\{batterySearch', self.source)),
+            "Battery Safety Directory must declare aria-live='polite' result counter.",
+        )
+        self.assertTrue(
+            bool(re.search(r'aria-live=["\']polite["\'][^>]*aria-atomic=["\']true["\'][^>]*>\s*\{recallSearch', self.source)),
+            "All Recalls Directory must declare aria-live='polite' result counter.",
+        )
+
 
 
 
@@ -751,6 +788,23 @@ class TestDepreciationCalculatorClientA11y(unittest.TestCase):
         """
         self.assertIn('aria-live="polite"', self.source)
         self.assertIn('aria-atomic="true"', self.source)
+
+    def test_clawback_alert_has_role_status_and_aria_live(self):
+        """
+        Validate that the 2-year statutory clawback alert banner declares role="status"
+        and aria-live="polite" (WCAG 4.1.3 Status Messages).
+        """
+        self.assertTrue(
+            bool(re.search(r'role=["\']status["\'][^>]*aria-live=["\']polite["\'][^>]*aria-atomic=["\']true["\'][^>]*clawbackResult\.isExempt', self.source)),
+            "Clawback alert banner must declare role='status', aria-live='polite', and aria-atomic='true'.",
+        )
+
+    def test_depreciation_chart_view_mode_buttons_have_aria_pressed(self):
+        """
+        Validate that chart view mode toggle buttons declare aria-pressed state (WCAG 4.1.2).
+        """
+        self.assertIn("aria-pressed={chartViewMode === 'price'}", self.source)
+        self.assertIn("aria-pressed={chartViewMode === 'percentage'}", self.source)
 
 
 
@@ -1037,6 +1091,29 @@ class TestSubsidyTrackerClientA11y(unittest.TestCase):
         self.assertTrue(
             re.search(r'id=\{["\']muni-details-["\']\s*\+\s*region\.(?:code|region_id)\}', self.source),
             "Expandable municipality container must define id matching aria-controls.",
+        )
+
+    def test_subsidy_tracker_emergency_ticker_has_role_region_and_aria_label(self):
+        """
+        Validate that the emergency critical depletion ticker declares role="region",
+        aria-label="보조금 긴급 소진 주의보", and role="alert" (SC 1.3.1 Info and Relationships).
+        """
+        self.assertIn('role="region"', self.source)
+        self.assertIn('aria-label="보조금 긴급 소진 주의보"', self.source)
+        self.assertIn('role="alert"', self.source)
+        self.assertTrue(
+            bool(re.search(r'role=["\']region["\'][^>]*aria-label=["\']보조금 긴급 소진 주의보["\']', self.source)),
+            "Emergency depletion ticker must declare role='region' and aria-label='보조금 긴급 소진 주의보'.",
+        )
+
+    def test_subsidy_tracker_municipality_toggle_has_disambiguated_aria_label(self):
+        """
+        Validate that municipality collapsible toggle buttons declare aria-label
+        including parent province name for context disambiguation (SC 4.1.2).
+        """
+        self.assertTrue(
+            bool(re.search(r'aria-label=\{`\$\{region\.name_ko\}\s+세부 시·군·구', self.source)),
+            "Municipality toggle button must declare aria-label containing region.name_ko.",
         )
 
     def test_subsidy_tracker_progressbars_wcag_compliance(self):

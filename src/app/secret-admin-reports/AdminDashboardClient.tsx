@@ -37,9 +37,12 @@ interface CategoryTab {
 }
 
 const SEVERITY_WEIGHT: Record<string, number> = {
-  CRITICAL: 3,
+  CRITICAL: 4,
+  HIGH: 3,
   WARNING: 2,
+  MEDIUM: 2,
   CAUTION: 1,
+  LOW: 1,
   INFO: 0,
 };
 
@@ -170,6 +173,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           const matchSummary = (report.summary || '').toLowerCase().includes(query);
           const matchQuote = (report.verbatim_quote || '').toLowerCase().includes(query);
           const matchModel = (report.vehicle_model || '').toLowerCase().includes(query);
+          const matchBrand = (report.vehicle_brand || '').toLowerCase().includes(query);
           const matchCategory = (report.defect_category_ko || '').toLowerCase().includes(query);
           const matchSlang = report.slang_tags?.some((tag) =>
             typeof tag === 'string' && tag.toLowerCase().includes(query)
@@ -180,6 +184,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             !matchSummary &&
             !matchQuote &&
             !matchModel &&
+            !matchBrand &&
             !matchCategory &&
             !matchSlang
           ) {
@@ -255,10 +260,31 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         </span>
       );
     }
+    if (sev === 'HIGH') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-500 text-white shadow-sm">
+          HIGH
+        </span>
+      );
+    }
     if (sev === 'WARNING') {
       return (
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400 text-slate-950 shadow-sm">
           WARNING
+        </span>
+      );
+    }
+    if (sev === 'MEDIUM') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-300 text-amber-950 border border-amber-400 shadow-sm">
+          MEDIUM
+        </span>
+      );
+    }
+    if (sev === 'LOW' || sev === 'INFO') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-200 text-slate-800 border border-slate-300 shadow-sm">
+          {sev}
         </span>
       );
     }

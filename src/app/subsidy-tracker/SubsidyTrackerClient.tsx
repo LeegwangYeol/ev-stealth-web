@@ -144,11 +144,16 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   const fallbackSummary = {
     total_announced_units: 0,
     total_applied_units: 0,
-    total_disbursed_units: 0,
-    total_remaining_units: 0,
     total_delivered_units: 0,
+    total_remaining_units: 0,
     nationwide_depletion_rate: 0,
     total_budget_billion_krw: 0,
+    disbursed_budget_billion_krw: 0,
+    category_totals: {
+      passenger: { announced_units: 0, applied_units: 0, delivered_units: 0, remaining_units: 0, depletion_rate: 0, delivery_rate: 0, status: 'HEALTHY' as AlertSeverity },
+      commercial: { announced_units: 0, applied_units: 0, delivered_units: 0, remaining_units: 0, depletion_rate: 0, delivery_rate: 0, status: 'HEALTHY' as AlertSeverity },
+      bus: { announced_units: 0, applied_units: 0, delivered_units: 0, remaining_units: 0, depletion_rate: 0, delivery_rate: 0, status: 'HEALTHY' as AlertSeverity },
+    },
     alert_region_counts: {
       healthy: 0,
       caution: 0,
@@ -438,8 +443,12 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
 
         {/* Emergency Alert Ticker for Critical Municipalities */}
         {criticalRegions.length > 0 && (
-          <div className="mt-6 bg-rose-950 border border-rose-500/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
-            <div className="flex items-center gap-2 text-rose-200">
+          <div
+            role="region"
+            aria-label="보조금 긴급 소진 주의보"
+            className="mt-6 bg-rose-950 border border-rose-500/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm"
+          >
+            <div role="alert" className="flex items-center gap-2 text-rose-200">
               <span className="text-base" aria-hidden="true">🚨</span>
               <strong className="text-rose-100 font-semibold">마감 임박 특보 (소진율 95% 초과):</strong>
               <div className="flex flex-wrap gap-1.5 ml-1">
@@ -882,6 +891,7 @@ const RegionCard = React.memo(function RegionCard({
               onClick={() => toggleRegionExpand(region.region_id)}
               aria-expanded={isExpanded}
               aria-controls={'muni-details-' + region.region_id}
+              aria-label={`${region.name_ko} 세부 시·군·구 ${region.municipalities.length}개 현황 ${isExpanded ? '접기' : '보기'}`}
               className="w-full py-1.5 px-3 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-xs font-medium flex items-center justify-between transition border border-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
               <span>세부 시·군·구 {region.municipalities.length}개 현황 보기</span>
