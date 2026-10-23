@@ -3,7 +3,7 @@ name: Jules Daily Check
 on:
   schedule:
     # INFO : GitHub evaluates cron in UTC, not KST
-    - cron: '21 20 * * *'
+    - cron: '21'
   workflow_dispatch:
 
 permissions:
@@ -31,7 +31,24 @@ jobs:
               answer you chose under "Assumptions" in the pull request body, then continue.
             - When several candidates qualify, any one is fine. Pick one and go;
               the next daily run picks up the others.
+            - Earlier daily runs may already be fixing something. Run `git fetch origin` and
+              `git branch -r` first; skip any issue that an existing fix branch already addresses.
             - If you cannot settle on a safe fix, finish without changes and without a pull request.
+
+            ## This repository
+            Korean EV defect and listing harvester: Python crawlers (`crawlers/`, `filters/`, `models/`, `tracker/`, `utils/`; entry points `run_scraper.py` and `run_tracker.py`) feeding a Next.js site in `src/`. `.github/workflows/daily-scraper.yml` runs the pipeline daily and commits the results; do not change that workflow.
+
+            Setup and checks:
+            - `pip install -r requirements.txt` plus whatever `run_scraper.py` imports (install missing modules as you meet them), then `python -m pytest -q` (`pytest.ini`: `tests/`, `test_*.py`)
+            - `npm ci && npm run lint && npm run build`
+            - The `.mjs` / `.ts` files in `tests/` are node or Playwright checks; run `node tests/<file>.mjs` only where no browser is needed.
+            - Live bobaedream/dcinside fetches are unavailable; use `tests/fixtures/`.
+
+            Focus:
+            - Parsers in `crawlers/` against the fixtures, depreciation and subsidy math in `filters/` and `src/lib/`, VIN and board edge cases, `tracker/` state transitions.
+
+            Leave alone:
+            - `daily-scraper.yml`, committed data under `src/data/`, the `scripts/` the workflow calls.
 
             ## Goal
             Find ONE real defect and fix it in a small, safe pull request.
@@ -67,6 +84,8 @@ jobs:
             - How it was verified (build/test command and result)
             - Not fixed (problems that need a decision), or "none"
             - Assumptions (questions you would have asked, with the answer you chose), or "none"
+            - Prompt feedback (instructions above that were wrong, missing or unclear for this
+              repository, e.g. a build command that does not exist), or "none"
 
             Reminder: do not ask questions. Decide, finish, and open the pull request or stop.
         run: |
