@@ -31,8 +31,9 @@ jobs:
               answer you chose under "Assumptions" in the pull request body, then continue.
             - When several candidates qualify, any one is fine. Pick one and go;
               the next daily run picks up the others.
-            - Earlier daily runs may already be fixing something. Run `git fetch origin` and
-              `git branch -r` first; skip any issue that an existing fix branch already addresses.
+            - Earlier daily runs may already be fixing something. Run `git branch -r` first and skip
+              any issue that an existing fix branch already addresses. Do not run `git fetch` or
+              `git pull`: this environment has no GitHub credentials and the command fails.
             - If you cannot settle on a safe fix, finish without changes and without a pull request.
 
             ## This repository
