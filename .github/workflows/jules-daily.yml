@@ -26,7 +26,8 @@ jobs:
             - Nobody reads this session until it is over. A question or a request for confirmation
               is never answered, and the run is wasted.
             - Never ask whether your approach looks good, which issue to pick, or whether to continue.
-              Make the call yourself using the priority order below and keep going to the end.
+              Never call `request_user_input` or any similar tool; make the call yourself using the
+              priority order below and keep going to the end.
             - When you feel the need to ask something, do not send it. Write the question and the
               answer you chose under "Assumptions" in the pull request body, then continue.
             - When several candidates qualify, any one is fine. Pick one and go;
@@ -75,6 +76,8 @@ jobs:
             - Fix bugs only. Do not change intended behavior, public APIs, or design.
             - Do not refactor, reformat, rename, or update dependencies unless that is the fix itself.
             - Keep the change under 100 lines and run the tests before opening the pull request.
+            - Test failures that already exist on the base branch and are unrelated to your change do not
+              block the pull request: open it anyway and list them under "Not fixed".
             - A problem that needs a design decision is not yours to fix: leave the code alone and
               list it under "Not fixed" in the pull request body.
 
