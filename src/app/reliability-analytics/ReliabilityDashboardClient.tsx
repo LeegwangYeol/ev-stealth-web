@@ -77,8 +77,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     () =>
       initialData?.metadata ?? {
         version: '1.0',
-        last_updated: '',
+        updated_at: '',
         total_records_analyzed: 0,
+        brands_count: 0,
         models_count: 0,
         avg_industry_dsi: 0,
       },

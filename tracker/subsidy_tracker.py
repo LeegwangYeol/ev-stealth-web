@@ -264,12 +264,13 @@ class SubsidyTracker:
             remaining_budget_krw=remaining_budget,
         )
 
-    def update_region_metrics(self, region: RegionRecord) -> RegionRecord:
+    def update_region_metrics(self, region: Union[RegionRecord, Dict[str, Any]]) -> Union[RegionRecord, Dict[str, Any]]:
         """Recalculate overall status and depletion rates for a region."""
         total_announced = 0
         total_applied = 0
 
-        for cat_name, cat in region.categories.items():
+        cats = region.get("categories") if isinstance(region, dict) else getattr(region, "categories", {})
+        for cat_name, cat in (cats or {}).items():
             safe_ann = max(0, _safe_int_metric(_metric_val(cat, "announced_units", 0), 0))
             safe_app = max(0, _safe_int_metric(_metric_val(cat, "applied_units", 0), 0))
             safe_del = max(0, _safe_int_metric(_metric_val(cat, "delivered_units", 0), 0))
@@ -311,8 +312,9 @@ class SubsidyTracker:
             total_applied += safe_app
 
         # Recalculate municipalities if present
-        if region.municipalities:
-            for muni in region.municipalities:
+        munis = region.get("municipalities") if isinstance(region, dict) else getattr(region, "municipalities", None)
+        if munis:
+            for muni in munis:
                 safe_m_ann = max(0, _safe_int_metric(_metric_val(muni, "announced_units", 0), 0))
                 safe_m_app = max(0, _safe_int_metric(_metric_val(muni, "applied_units", 0), 0))
                 safe_m_del = max(0, _safe_int_metric(_metric_val(muni, "delivered_units", 0), 0))
@@ -339,11 +341,16 @@ class SubsidyTracker:
 
         # Overall depletion rate is weighted by volume across all categories
         overall_rate = calculate_depletion_rate(total_applied, total_announced)
-        region.overall_depletion_rate = overall_rate
-        region.overall_status = self.evaluate_status(overall_rate).value
+        st_eval = self.evaluate_status(overall_rate).value
+        if isinstance(region, dict):
+            region["overall_depletion_rate"] = overall_rate
+            region["overall_status"] = st_eval
+        else:
+            region.overall_depletion_rate = overall_rate
+            region.overall_status = st_eval
         return region
 
-    def compute_nationwide_summary(self, regions: List[RegionRecord]) -> NationwideSummary:
+    def compute_nationwide_summary(self, regions: List[Any]) -> NationwideSummary:
         """Aggregate totals across all tracked regions."""
         total_announced = 0
         total_applied = 0
@@ -367,11 +374,13 @@ class SubsidyTracker:
 
         for r in regions:
             # Region overall status
-            st_key = str(r.overall_status or "").strip().lower()
+            st_raw = r.get("overall_status") if isinstance(r, dict) else getattr(r, "overall_status", "")
+            st_key = str(st_raw or "").strip().lower()
             if st_key in alert_counts:
                 alert_counts[st_key] += 1
 
-            for c_name, c_data in r.categories.items():
+            r_cats = (r.get("categories") if isinstance(r, dict) else getattr(r, "categories", None)) or {}
+            for c_name, c_data in r_cats.items():
                 if c_name not in cat_counts:
                     cat_counts[c_name] = {"announced": 0, "applied": 0, "delivered": 0}
 

@@ -203,6 +203,10 @@ export default function PdiChecklistClient() {
           <span aria-hidden="true" className={`w-2 h-2 rounded-full ${mounted ? 'bg-emerald-500' : 'bg-slate-300'}`} />
           <span>{mounted ? '로컬 저장소 동기화 활성화됨 (새로고침 시 체크 상태 유지)' : '초기화 중...'}</span>
         </div>
+        {/* Screen Reader Dynamic Progression Announcement */}
+        <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          신차 검수 진행률 {progress}%, 총 {totalItems}개 중 {checkedCount}개 완료
+        </div>
       </header>
 
       <div className="sticky top-0 bg-white/90 backdrop-blur-md p-4 rounded-xl border border-gray-200 shadow-sm z-10 space-y-3">

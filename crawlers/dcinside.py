@@ -333,6 +333,7 @@ class DCInsideCrawler(BaseCrawler):
         post_url: str,
         gallery_id: str = "car_new1",
         post_id: str = "",
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """
         Extract article title, author, date, write_div content, and comments.
@@ -431,14 +432,25 @@ class DCInsideCrawler(BaseCrawler):
         post_url: str,
         gallery_id: str = "car_new1",
         post_id: Optional[str] = None,
+        referer: Optional[str] = None,
+        **kwargs: Any,
     ) -> Optional[Dict[str, Any]]:
         """Fetch and parse a single post from DCInside."""
-        self.ensure_warm_up()
-        status, text, _ = self.client.get(post_url, referer=f"{DC_BASE_URL}/")
+        base_url = kwargs.get("base_url")
+        self.ensure_warm_up(base_url)
+        eff_referer = referer or f"{DC_BASE_URL}/"
+        status, text, _ = self.client.get(post_url, referer=eff_referer)
+        effective_post_id = post_id
+        if not effective_post_id and post_url:
+            m_no = re.search(r"no=(\d+)", post_url, re.IGNORECASE)
+            if m_no:
+                effective_post_id = m_no.group(1)
+
         if status != 200 or not text:
             # Try fallback to mobile view URL
-            if post_id:
-                mobile_url = f"{DC_MOBILE_BASE_URL}/board/{gallery_id}/{post_id}"
+            if effective_post_id:
+                prefix = self.get_gallery_prefix(gallery_id)
+                mobile_url = f"{DC_MOBILE_BASE_URL}/{prefix}/{gallery_id}/{effective_post_id}"
                 m_status, m_text, _ = self.client.get(
                     mobile_url,
                     referer=f"{DC_MOBILE_BASE_URL}/",
@@ -448,7 +460,7 @@ class DCInsideCrawler(BaseCrawler):
                 )
                 if m_status == 200 and m_text:
                     try:
-                        return self.parse_post_detail(m_text, post_url, gallery_id=gallery_id, post_id=post_id)
+                        return self.parse_post_detail(m_text, post_url, gallery_id=gallery_id, post_id=effective_post_id, **kwargs)
                     except Exception as e:
                         logger.warning(f"Error parsing DCInside mobile post detail ({post_url}) on corrupt HTML: {e}")
                         return None
@@ -457,7 +469,7 @@ class DCInsideCrawler(BaseCrawler):
             return None
 
         try:
-            return self.parse_post_detail(text, post_url, gallery_id=gallery_id, post_id=post_id or "")
+            return self.parse_post_detail(text, post_url, gallery_id=gallery_id, post_id=effective_post_id or "", **kwargs)
         except Exception as e:
             logger.warning(f"Error parsing DCInside post detail ({post_url}) on corrupt HTML: {e}")
             return None

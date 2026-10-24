@@ -11,7 +11,7 @@ import {
   RegionEntry,
   PopularModelEntry,
 } from '@/types/subsidy';
-import { calculateNetSubsidy } from '@/lib/getSubsidyData';
+import { calculateNetSubsidy, getRegionById, getModelById } from '@/lib/getSubsidyData';
 import ClientTimestamp from '@/components/ClientTimestamp';
 
 interface SubsidyTrackerClientProps {
@@ -121,20 +121,24 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
 
   // Calculator State & Ref
   const calculatorRef = useRef<HTMLDivElement>(null);
-  const [selectedModelId, setSelectedModelId] = useState<string>(
-    urlModel || initialData?.popular_models_matrix?.[0]?.model_id || 'ioniq-5-2026'
-  );
-  const [selectedRegionId, setSelectedRegionId] = useState<string>(
-    urlRegion || initialData?.regions?.[0]?.region_id || 'KR-11'
-  );
+  const [selectedModelId, setSelectedModelId] = useState<string>(() => {
+    const canonical = urlModel ? getModelById(urlModel)?.model_id : undefined;
+    return canonical || urlModel || initialData?.popular_models_matrix?.[0]?.model_id || 'ioniq-5-2026';
+  });
+  const [selectedRegionId, setSelectedRegionId] = useState<string>(() => {
+    const canonical = urlRegion ? getRegionById(urlRegion)?.region_id : undefined;
+    return canonical || urlRegion || initialData?.regions?.[0]?.region_id || 'KR-11';
+  });
 
   // Sync selectedModelId and selectedRegionId on query param navigation
   useEffect(() => {
     if (urlModel) {
-      setSelectedModelId(urlModel);
+      const canonical = getModelById(urlModel)?.model_id;
+      setSelectedModelId(canonical || urlModel);
     }
     if (urlRegion) {
-      setSelectedRegionId(urlRegion);
+      const canonical = getRegionById(urlRegion)?.region_id;
+      setSelectedRegionId(canonical || urlRegion);
     }
   }, [urlModel, urlRegion]);
 

@@ -101,11 +101,18 @@ def _atomic_copy_file(src_path: Union[str, Path], dest_path: Union[str, Path]) -
                 shutil.copyfileobj(sf, tf)
             tf.flush()
             os.fsync(tf.fileno())
+        try:
+            os.chmod(temp_name, 0o644)
+        except OSError:
+            pass
         os.replace(temp_name, dest)
         return str(dest)
     finally:
         if temp_name and os.path.exists(temp_name):
-            os.unlink(temp_name)
+            try:
+                os.unlink(temp_name)
+            except OSError:
+                pass
 
 
 WEB_DATA_DAILY_REPORTS_PATH = str(_resolve_web_reports_path())

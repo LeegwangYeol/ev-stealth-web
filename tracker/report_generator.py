@@ -80,7 +80,7 @@ class ReportGenerator:
 
         Maintains exact statutory formatting expected by downstream systems and CLI.
         """
-        summary = _get_field(payload, "nationwide_summary", None)
+        summary = _get_field(payload, "nationwide_summary", None) or payload
         metadata = _get_field(payload, "metadata", None)
         gen_time = (
             _get_field(metadata, "generated_at", None)
@@ -103,12 +103,12 @@ class ReportGenerator:
         critical_regions = [
             f"{_get_field(r, 'name_ko', '')} ({_safe_float_val(_get_field(r, 'overall_depletion_rate', 0.0))}%, 잔여: {_get_passenger_remaining(r):,}대)"
             for r in regions_list
-            if _get_field(r, "overall_status", "") in ("CRITICAL", "DEPLETED")
+            if str(_get_field(r, "overall_status", "")).strip().upper() in ("CRITICAL", "DEPLETED")
         ]
         warning_regions = [
             f"{_get_field(r, 'name_ko', '')} ({_safe_float_val(_get_field(r, 'overall_depletion_rate', 0.0))}%, 잔여: {_get_passenger_remaining(r):,}대)"
             for r in regions_list
-            if _get_field(r, "overall_status", "") == "WARNING"
+            if str(_get_field(r, "overall_status", "")).strip().upper() == "WARNING"
         ]
 
         category_totals = _get_field(summary, "category_totals", {}) or {}
@@ -120,8 +120,10 @@ class ReportGenerator:
 
         tot_ann = _safe_int_val(_get_field(summary, "total_announced_units", 0))
         tot_app = _safe_int_val(_get_field(summary, "total_applied_units", 0))
-        disb_b = _safe_int_val(_get_field(summary, "disbursed_budget_billion_krw", 0))
-        tot_b = _safe_int_val(_get_field(summary, "total_budget_billion_krw", 0))
+        disb_b = _safe_float_val(_get_field(summary, "disbursed_budget_billion_krw", 0.0))
+        tot_b = _safe_float_val(_get_field(summary, "total_budget_billion_krw", 0.0))
+        disb_str = f"{disb_b:,.1f}" if (disb_b % 1 != 0) else f"{int(disb_b):,}"
+        tot_str = f"{tot_b:,.1f}" if (tot_b % 1 != 0) else f"{int(tot_b):,}"
         dep_rate = _safe_float_val(_get_field(summary, "nationwide_depletion_rate", 0.0))
 
         p_ann = _safe_int_val(_metric_val(p_info, "announced_units", 0))
@@ -149,7 +151,7 @@ class ReportGenerator:
             f"- **기록 시각(UTC)**: {gen_time}",
             f"- **파이프라인 상태**: {status_text}",
             f"- **전국 평균 소진율**: {dep_rate}% (총 공고: {tot_ann:,}대 / 접수: {tot_app:,}대)",
-            f"- **집행 예산**: {disb_b:,}억 원 / 총 예산 {tot_b:,}억 원",
+            f"- **집행 예산**: {disb_str}억 원 / 총 예산 {tot_str}억 원",
             "",
             "## 🚨 긴급 마감 임박 지자체 (CRITICAL / DEPLETED >= 95%)",
             (

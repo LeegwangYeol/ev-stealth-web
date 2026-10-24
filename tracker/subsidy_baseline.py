@@ -777,9 +777,10 @@ def build_historical_trajectory() -> List[HistoricalTrajectoryPoint]:
     ]
 
 
-def build_initial_baseline() -> SubsidyPayload:
+def build_initial_baseline(regions: Optional[List[Any]] = None) -> SubsidyPayload:
     """Construct full initial baseline SubsidyPayload."""
-    regions = build_baseline_regions()
+    if regions is None:
+        regions = build_baseline_regions()
     popular_models = build_popular_models()
     history = build_historical_trajectory()
 
@@ -806,22 +807,25 @@ def build_initial_baseline() -> SubsidyPayload:
     total_municipalities = 0
 
     for r in regions:
-        total_municipalities += len(r.municipalities)
-        status_key = r.overall_status.lower()
+        munis = r.get("municipalities", []) if isinstance(r, dict) else getattr(r, "municipalities", [])
+        total_municipalities += len(munis or [])
+        status_val = r.get("overall_status") if isinstance(r, dict) else getattr(r, "overall_status", "")
+        status_key = str(status_val or "").strip().lower()
         if status_key in alert_counts:
             alert_counts[status_key] += 1
 
-        for c_name, c_metric in r.categories.items():
+        cats = r.get("categories") if isinstance(r, dict) else getattr(r, "categories", {})
+        for c_name, c_metric in (cats or {}).items():
             if c_name not in cat_announced:
                 cat_announced[c_name] = 0
                 cat_applied[c_name] = 0
                 cat_delivered[c_name] = 0
 
-            ann = getattr(c_metric, "announced_units", 0) or 0
-            app = getattr(c_metric, "applied_units", 0) or 0
-            delivered = getattr(c_metric, "delivered_units", 0) or 0
-            tot_b = getattr(c_metric, "total_budget_krw", 0) or 0
-            rem_b = getattr(c_metric, "remaining_budget_krw", 0) or 0
+            ann = (c_metric.get("announced_units", 0) if isinstance(c_metric, dict) else getattr(c_metric, "announced_units", 0)) or 0
+            app = (c_metric.get("applied_units", 0) if isinstance(c_metric, dict) else getattr(c_metric, "applied_units", 0)) or 0
+            delivered = (c_metric.get("delivered_units", 0) if isinstance(c_metric, dict) else getattr(c_metric, "delivered_units", 0)) or 0
+            tot_b = (c_metric.get("total_budget_krw", 0) if isinstance(c_metric, dict) else getattr(c_metric, "total_budget_krw", 0)) or 0
+            rem_b = (c_metric.get("remaining_budget_krw", 0) if isinstance(c_metric, dict) else getattr(c_metric, "remaining_budget_krw", 0)) or 0
 
             cat_announced[c_name] += ann
             cat_applied[c_name] += app

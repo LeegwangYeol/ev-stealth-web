@@ -9,6 +9,7 @@ Provides clean OOP abstractions for:
 from __future__ import annotations
 
 from collections import OrderedDict
+import dataclasses
 import hashlib
 import json
 import logging
@@ -21,6 +22,40 @@ import threading
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 logger = logging.getLogger("defect_tracker")
+
+
+def _extract_val(obj: Any, key: str, default: Any = None) -> Any:
+    """Safely extract field from either a dict, a domain object, or a sequence."""
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        val = obj.get(key, default)
+    elif hasattr(obj, key):
+        val = getattr(obj, key, default)
+    elif hasattr(obj, "__getitem__"):
+        try:
+            val = obj[key]
+        except (KeyError, TypeError, IndexError):
+            val = default
+    else:
+        val = default
+    return default if val is None else val
+
+
+def _to_record_dict(obj: Any) -> Dict[str, Any]:
+    """Convert a defect record (dict or domain object) safely to a dictionary."""
+    if isinstance(obj, dict):
+        return dict(obj)
+    if hasattr(obj, "to_admin_report_dict") and callable(getattr(obj, "to_admin_report_dict")):
+        return obj.to_admin_report_dict()
+    if hasattr(obj, "to_dict") and callable(getattr(obj, "to_dict")):
+        return obj.to_dict()
+    if dataclasses.is_dataclass(obj):
+        return dataclasses.asdict(obj)
+    try:
+        return dict(obj)
+    except Exception:
+        return {k: getattr(obj, k) for k in dir(obj) if not k.startswith("_")}
 
 
 def _is_project_data_dir(path: Path, cwd: Path) -> bool:
@@ -220,13 +255,13 @@ class DefectTracker:
             self._category_index.clear()
             self._query_cache.clear()
 
-    def _build_category_index(self, reports: List[Dict[str, Any]]) -> None:
+    def _build_category_index(self, reports: List[Any]) -> None:
         """Pre-filter and index defect reports into category buckets for O(1) candidate lookup."""
         self._category_index.clear()
         for r in reports:
-            cat = r.get("defect_category")
-            if cat and isinstance(cat, str) and cat.strip():
-                cat_norm = cat.upper().strip()
+            raw_cat = _extract_val(r, "defect_category") or _extract_val(r, "category")
+            if raw_cat and isinstance(raw_cat, str) and raw_cat.strip():
+                cat_norm = raw_cat.upper().strip()
             else:
                 cat_norm = "UNKNOWN"
             if cat_norm not in self._category_index:
@@ -245,7 +280,7 @@ class DefectTracker:
                         and self._cached_reports_path == target
                         and self._cached_reports_mtime == current_mtime
                     ):
-                        return [dict(r) for r in self._cached_reports]
+                        return [_to_record_dict(r) for r in self._cached_reports]
             except OSError:
                 pass
 
@@ -267,7 +302,7 @@ class DefectTracker:
             self._cached_reports = reports
             self._build_category_index(reports)
             self._query_cache.clear()
-            return [dict(r) for r in self._cached_reports]
+            return [_to_record_dict(r) for r in self._cached_reports]
 
     def query_defects(
         self,
@@ -330,22 +365,24 @@ class DefectTracker:
         for r in candidate_pool:
             # Category filter (re-verify for defensive assurance, normalizing missing/None to UNKNOWN)
             if cat_upper:
-                raw_cat = r.get("defect_category")
+                raw_cat = _extract_val(r, "defect_category") or _extract_val(r, "category")
                 item_cat = (raw_cat.upper().strip() if (raw_cat and isinstance(raw_cat, str) and raw_cat.strip()) else "UNKNOWN")
                 if item_cat != cat_upper:
                     continue
 
             # Brand filter
-            if brand_lower and brand_lower not in (r.get("vehicle_brand") or "").lower():
+            brand_val = _extract_val(r, "vehicle_brand") or _extract_val(r, "brand") or ""
+            if brand_lower and brand_lower not in str(brand_val).lower():
                 continue
 
             # Model filter
-            if model_lower and model_lower not in (r.get("vehicle_model") or "").lower():
+            model_val = _extract_val(r, "vehicle_model") or _extract_val(r, "model") or ""
+            if model_lower and model_lower not in str(model_val).lower():
                 continue
 
             # Severity filter
             if norm_min_sev is not None:
-                sev = r.get("severity_index")
+                sev = _extract_val(r, "severity_index")
                 effective_sev: Optional[float] = None
                 if sev is not None:
                     try:
@@ -356,7 +393,7 @@ class DefectTracker:
                         effective_sev = None
 
                 if effective_sev is None:
-                    raw_tier = str(r.get("severity") or r.get("severity_tier") or "").strip().upper()
+                    raw_tier = str(_extract_val(r, "severity") or _extract_val(r, "severity_tier") or "").strip().upper()
                     tier_map = {"CRITICAL": 9.0, "HIGH": 7.0, "MEDIUM": 5.0, "LOW": 3.0}
                     effective_sev = tier_map.get(raw_tier, 0.0)
 
@@ -366,11 +403,11 @@ class DefectTracker:
             # Keyword search across title, defect_topic, summary, verbatim_quote, and raw_quote
             if kw_lower:
                 combined_text = " ".join([
-                    str(r.get("title", "")),
-                    str(r.get("defect_topic", "")),
-                    str(r.get("summary", "")),
-                    str(r.get("verbatim_quote", "")),
-                    str(r.get("raw_quote", "")),
+                    str(_extract_val(r, "title", "")),
+                    str(_extract_val(r, "defect_topic", "")),
+                    str(_extract_val(r, "summary", "")),
+                    str(_extract_val(r, "verbatim_quote", "")),
+                    str(_extract_val(r, "raw_quote", "")),
                 ]).lower()
                 if kw_lower not in combined_text:
                     continue
@@ -381,12 +418,12 @@ class DefectTracker:
 
         # Thread-safe true LRU cache with promotion and bounded eviction
         with self._cache_lock:
-            self._query_cache[cache_key] = [dict(r) for r in filtered]
+            self._query_cache[cache_key] = [_to_record_dict(r) for r in filtered]
             self._query_cache.move_to_end(cache_key)
             while len(self._query_cache) > 1024:
                 self._query_cache.popitem(last=False)
 
-        return [dict(r) for r in filtered]
+        return [_to_record_dict(r) for r in filtered]
 
     def get_statistics(self, file_path: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
         """Return high-level statistics and category breakdown for defect reports."""

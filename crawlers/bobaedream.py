@@ -243,6 +243,7 @@ class BobaeDreamCrawler(BaseCrawler):
         post_url: str,
         board_code: str = "national",
         post_id: str = "",
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """
         Extract article title, author, date, bodyCont content, and comments.
@@ -334,16 +335,20 @@ class BobaeDreamCrawler(BaseCrawler):
         post_url: str,
         board_code: str = "national",
         post_id: Optional[str] = None,
+        referer: Optional[str] = None,
+        **kwargs: Any,
     ) -> Optional[Dict[str, Any]]:
         """Fetch and parse a single post by URL."""
-        self.ensure_warm_up()
-        status, text, _ = self.client.get(post_url, referer=f"{BOBAE_BASE_URL}/")
+        base_url = kwargs.get("base_url")
+        self.ensure_warm_up(base_url)
+        eff_referer = referer or f"{BOBAE_BASE_URL}/"
+        status, text, _ = self.client.get(post_url, referer=eff_referer)
         if status != 200 or not text:
             logger.warning(f"Failed to fetch BobaeDream post: {post_url} (status: {status})")
             return None
 
         try:
-            return self.parse_post_detail(text, post_url, board_code=board_code, post_id=post_id or "")
+            return self.parse_post_detail(text, post_url, board_code=board_code, post_id=post_id or "", **kwargs)
         except Exception as e:
             logger.warning(f"Error parsing BobaeDream post detail ({post_url}) on corrupt HTML: {e}")
             return None

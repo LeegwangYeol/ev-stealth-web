@@ -224,7 +224,7 @@ class RegionRecord:
             "overall_status": self.overall_status,
             "residency_requirement_days": self.residency_requirement_days,
             "supplementary_budget_added": self.supplementary_budget_added,
-            "categories": {k: v.to_dict() if hasattr(v, "to_dict") else v for k, v in self.categories.items()},
+            "categories": {k: v.to_dict() if hasattr(v, "to_dict") else v for k, v in (self.categories or {}).items()},
             "notes": self.notes,
             "last_updated": self.last_updated,
         }
@@ -466,14 +466,20 @@ class SubsidyPayload:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "metadata": self.metadata.to_dict(),
+            "metadata": self.metadata.to_dict() if hasattr(self.metadata, "to_dict") else self.metadata,
             "alert_thresholds": {
                 k: v.to_dict() if hasattr(v, "to_dict") else v
                 for k, v in self.alert_thresholds.items()
             },
-            "nationwide_summary": self.nationwide_summary.to_dict(),
-            "regions": [r.to_dict() for r in self.regions],
-            "popular_models_matrix": [m.to_dict() for m in self.popular_models_matrix],
+            "nationwide_summary": (
+                self.nationwide_summary.to_dict()
+                if hasattr(self.nationwide_summary, "to_dict")
+                else self.nationwide_summary
+            ),
+            "regions": [r.to_dict() if hasattr(r, "to_dict") else r for r in self.regions],
+            "popular_models_matrix": [
+                m.to_dict() if hasattr(m, "to_dict") else m for m in self.popular_models_matrix
+            ],
             "historical_depletion_trajectory": [
                 h.to_dict() if hasattr(h, "to_dict") else h
                 for h in self.historical_depletion_trajectory

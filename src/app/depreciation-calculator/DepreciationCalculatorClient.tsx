@@ -177,7 +177,7 @@ export default function DepreciationCalculatorClient({
   const currentPurchasePrice = useMemo(() => {
     if (customPriceInput !== null && customPriceInput.trim() !== '') {
       const parsed = parseInt(customPriceInput.replace(/[^0-9]/g, ''), 10);
-      if (!isNaN(parsed) && parsed > 0) {
+      if (!isNaN(parsed) && parsed >= 0) {
         return Math.min(10_000_000_000, parsed);
       }
     }
@@ -731,10 +731,10 @@ export default function DepreciationCalculatorClient({
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[380px] overflow-y-auto pr-1 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
         >
           {filteredModels.length === 0 ? (
-            <div className="col-span-full py-12 px-4 text-center text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+            <div className="col-span-full py-12 px-4 text-center text-slate-600 bg-slate-50 rounded-xl border border-dashed border-slate-300">
               <span className="text-3xl block mb-2" aria-hidden="true">🔍</span>
               <p className="font-bold text-slate-700 text-sm">일치하는 전기차 모델이 없습니다</p>
-              <p className="text-xs text-slate-500 mt-1">검색어를 변경하거나 다른 제조사 탭을 선택해 보세요.</p>
+              <p className="text-xs text-slate-600 mt-1">검색어를 변경하거나 다른 제조사 탭을 선택해 보세요.</p>
               {(searchQuery.trim() !== '' || selectedBrand !== 'all') && (
                 <button
                   type="button"
@@ -742,7 +742,7 @@ export default function DepreciationCalculatorClient({
                     setSearchQuery('');
                     setSelectedBrand('all');
                   }}
-                  className="mt-3 px-3.5 py-1.5 text-xs font-semibold text-blue-600 bg-white hover:bg-blue-50 rounded-lg transition border border-slate-300 shadow-sm"
+                  className="mt-3 px-3.5 py-1.5 text-xs font-semibold text-blue-700 bg-white hover:bg-blue-50 rounded-lg transition border border-slate-300 shadow-sm"
                 >
                   검색어 및 제조사 필터 초기화
                 </button>
@@ -885,6 +885,7 @@ export default function DepreciationCalculatorClient({
                   key={yr}
                   type="button"
                   onClick={() => handleYearsChange(yr)}
+                  aria-pressed={holdingYears === yr}
                   className={`flex-1 py-1 text-[11px] font-semibold rounded border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                     holdingYears === yr
                       ? 'bg-blue-600 text-white border-blue-600'
@@ -978,7 +979,7 @@ export default function DepreciationCalculatorClient({
               <button
                 type="button"
                 onClick={() => setCustomPriceInput(null)}
-                className="text-[11px] text-blue-600 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
+                className="text-[11px] text-blue-700 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
                 aria-label="기본값 복원: 차량 기본 가격으로 초기화"
               >
                 기본값 복원
@@ -1558,7 +1559,7 @@ export default function DepreciationCalculatorClient({
               </div>
               <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
                 <span className="text-xs text-slate-600 font-medium block">등가 완전충전 사이클</span>
-                <span className="text-lg font-bold text-blue-600">
+                <span className="text-lg font-bold text-blue-700">
                   {batteryHealth.equivalentFullCycles} 회
                 </span>
               </div>
@@ -1756,7 +1757,7 @@ export default function DepreciationCalculatorClient({
                   setSyncMonthsWithYears(true);
                   setHeldMonths(Math.round(holdingYears * 12));
                 }}
-                className="text-blue-600 hover:underline text-[11px] font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
+                className="text-blue-700 hover:underline text-[11px] font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
                 aria-label={`보유 기간(${holdingYears}년)과 동기화: 상단 연수와 개월 수 맞춤`}
               >
                 보유 기간({holdingYears}년)과 동기화
@@ -1826,9 +1827,11 @@ export default function DepreciationCalculatorClient({
                   <input
                     id="nationalSubsidyInput"
                     type="number"
+                    min="0"
+                    max="100000000"
                     step="100000"
                     value={effectiveNationalSubsidy}
-                    onChange={(e) => setCustomNationalSubsidy(parseInt(e.target.value, 10) || 0)}
+                    onChange={(e) => setCustomNationalSubsidy(Math.max(0, Math.min(100_000_000, parseInt(e.target.value, 10) || 0)))}
                     className="w-full px-2 py-1 rounded bg-slate-800 border border-slate-700 text-right font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
                     aria-label="국비 보조금 금액 입력"
                   />
@@ -1840,9 +1843,11 @@ export default function DepreciationCalculatorClient({
                   <input
                     id="localSubsidyInput"
                     type="number"
+                    min="0"
+                    max="100000000"
                     step="100000"
                     value={effectiveLocalSubsidy}
-                    onChange={(e) => setCustomLocalSubsidy(parseInt(e.target.value, 10) || 0)}
+                    onChange={(e) => setCustomLocalSubsidy(Math.max(0, Math.min(100_000_000, parseInt(e.target.value, 10) || 0)))}
                     className="w-full px-2 py-1 rounded bg-slate-800 border border-slate-700 text-right font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
                     aria-label="지방비 보조금 금액 입력"
                   />
@@ -1985,7 +1990,7 @@ export default function DepreciationCalculatorClient({
             <span className="text-xs text-slate-600 font-medium block">
               {holdingYears}년 자동차세 절감
             </span>
-            <span className="text-xl sm:text-2xl font-black text-blue-600 block mt-1">
+            <span className="text-xl sm:text-2xl font-black text-blue-700 block mt-1">
               +{(tcoResult.taxSavingsKrw / 10000).toLocaleString()}{' '}
               <span className="text-xs font-semibold text-slate-600">만원</span>
             </span>
@@ -2039,7 +2044,7 @@ export default function DepreciationCalculatorClient({
                 <th scope="col" className="py-2.5 px-3 font-bold">내연기관 자동차세</th>
                 <th scope="col" className="py-2.5 px-3 font-bold">부가 절감</th>
                 <th scope="col" className="py-2.5 px-3 font-bold text-right">연간 순 절감액</th>
-                <th scope="col" className="py-2.5 px-3 font-bold text-right text-blue-600">누적 순 절감액</th>
+                <th scope="col" className="py-2.5 px-3 font-bold text-right text-blue-700">누적 순 절감액</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 text-slate-700">
@@ -2059,7 +2064,7 @@ export default function DepreciationCalculatorClient({
                   <td className="py-2 px-3 text-right font-semibold text-emerald-700">
                     +{(row.annualNetSavingsKrw / 10000).toFixed(0)}만원
                   </td>
-                  <td className="py-2 px-3 text-right font-extrabold text-blue-600">
+                  <td className="py-2 px-3 text-right font-extrabold text-blue-700">
                     +{(row.cumulativeNetSavingsKrw / 10000).toFixed(0)}만원
                   </td>
                 </tr>
@@ -2080,7 +2085,7 @@ export default function DepreciationCalculatorClient({
           </div>
 
           <div className="bg-white px-4 py-2 rounded-lg border border-slate-300 font-extrabold text-slate-900 text-sm whitespace-nowrap">
-            순 경제적 이점: <span className="text-blue-600">+{(tcoResult.totalCumulativeSavingsKrw / 10000).toLocaleString()}만 원</span>
+            순 경제적 이점: <span className="text-blue-700">+{(tcoResult.totalCumulativeSavingsKrw / 10000).toLocaleString()}만 원</span>
           </div>
         </div>
       </section>

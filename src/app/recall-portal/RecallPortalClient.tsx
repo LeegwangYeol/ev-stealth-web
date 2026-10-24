@@ -1187,7 +1187,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 <p className="text-base font-semibold text-slate-200">
                   조건에 일치하는 배터리 제조사 정보가 없습니다
                 </p>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-slate-400 mt-1">
                   검색어 또는 배터리 공급사/모니터링 필터를 변경해 보세요.
                 </p>
                 {(batterySearch.trim() !== '' || selectedSupplierFilter !== 'ALL' || selectedFireStatusFilter !== 'ALL') && (
@@ -1366,7 +1366,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 <p className="text-base font-semibold text-slate-200">
                   일치하는 공시 리콜 및 무상수리 내역이 없습니다
                 </p>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-slate-400 mt-1">
                   검색 키워드 또는 위험도/조치 유형 필터를 재설정해 보세요.
                 </p>
                 {(recallSearch.trim() !== '' || selectedRiskFilter !== 'ALL' || selectedRemedyFilter !== 'ALL') && (

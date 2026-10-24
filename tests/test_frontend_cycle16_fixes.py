@@ -32,7 +32,9 @@ from typing import Any
 def _find_repo_root() -> Path:
     candidates = [
         Path(__file__).resolve().parent.parent,
+        Path(__file__).resolve().parent.parent.parent,
         Path.cwd(),
+        Path.cwd().parent,
     ]
     for p in candidates:
         if (p / "ev-stealth-web").is_dir() and (p / "data").is_dir():

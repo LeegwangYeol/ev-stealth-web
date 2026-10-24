@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import math
+import re
 from typing import Any, Dict, List, Optional
 
 
@@ -94,11 +95,11 @@ class DSIBreakdown:
 
     def to_dict(self) -> Dict[str, float]:
         return {
-            "safety": round(self.safety, 2),
-            "functional": round(self.functional, 2),
-            "economic": round(self.economic, 2),
-            "social": round(self.social, 2),
-            "convenience": round(self.convenience, 2),
+            "safety": _safe_round(self.safety, 2),
+            "functional": _safe_round(self.functional, 2),
+            "economic": _safe_round(self.economic, 2),
+            "social": _safe_round(self.social, 2),
+            "convenience": _safe_round(self.convenience, 2),
         }
 
 
@@ -175,6 +176,11 @@ class ComplaintRecord:
     def date_str(self) -> str:
         """Extract YYYY-MM-DD from created_at or default to today."""
         if self.created_at:
+            # Handle Korean spaced or dotted date patterns e.g. "2026. 10. 25." or "2026. 9. 8." or slash/dash
+            match = re.search(r"(\d{4})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})", str(self.created_at))
+            if match:
+                y, m, d = match.group(1), match.group(2).zfill(2), match.group(3).zfill(2)
+                return f"{y}-{m}-{d}"
             norm_date = str(self.created_at).strip().replace("/", "-").replace(".", "-")
             if len(norm_date) >= 10 and norm_date[4] == "-" and norm_date[7] == "-":
                 return norm_date[:10]

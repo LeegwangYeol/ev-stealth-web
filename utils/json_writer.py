@@ -323,6 +323,10 @@ def write_daily_reports(
 
 
 def read_daily_reports(path: str = DEFAULT_OUTPUT_PATH) -> Dict[str, Any]:
-    """Read and parse daily reports JSON from file."""
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    """Read and parse daily reports JSON from file defensively."""
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {"reports": [], "statistics": {}}
+    except (FileNotFoundError, json.JSONDecodeError, OSError, ValueError):
+        return {"reports": [], "statistics": {}}
