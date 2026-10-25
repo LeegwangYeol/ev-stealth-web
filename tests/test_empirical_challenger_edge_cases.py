@@ -600,19 +600,18 @@ class TestEmpiricalVulnerabilityFindings(unittest.TestCase):
         self.filter = ContextualDefectFilter()
 
     def test_finding_01_crawler_date_normalization_unhandled_value_error(self):
-        """EMPIRICAL FINDING 1: _normalize_iso_timestamp raises unhandled ValueError
-
-        on out-of-range numerical dates/times (e.g. '99.99', '25:00', '2026-02-31').
-        When an unhandled date appears in HTML, parse_post_detail crashes.
+        """EMPIRICAL FINDING 1 (REMEDIATED): _normalize_iso_timestamp safely handles
+        out-of-range numerical dates/times (e.g. '99.99', '25:00', '2026-02-31')
+        without raising unhandled ValueError, falling back gracefully to current ISO time.
         """
         malformed_date_html = """
         <strong class="title">아이오닉5 고장</strong>
         <td class="date">99.99</td>
         <div class="bodyCont">배터리 ICCU 터짐</div>
         """
-        with self.assertRaises(ValueError) as cm:
-            self.bobae.parse_post_detail(malformed_date_html, "https://www.bobaedream.co.kr/view?code=national&No=123")
-        self.assertIn("month must be in 1..12", str(cm.exception))
+        res_b = self.bobae.parse_post_detail(malformed_date_html, "https://www.bobaedream.co.kr/view?code=national&No=123")
+        self.assertIn("created_at", res_b)
+        self.assertIsInstance(res_b["created_at"], str)
 
         malformed_list_html = """
         <table>
@@ -622,23 +621,26 @@ class TestEmpiricalVulnerabilityFindings(unittest.TestCase):
           </tr>
         </table>
         """
-        with self.assertRaises(ValueError) as cm2:
-            self.dc.parse_gallery_list(malformed_list_html, "car_new1")
-        self.assertIn("month must be in 1..12", str(cm2.exception))
+        posts = self.dc.parse_gallery_list(malformed_list_html, "car_new1")
+        self.assertEqual(len(posts), 1)
+        self.assertIsInstance(posts[0]["created_at"], str)
 
     def test_finding_02_vehicle_matcher_type_error_on_none_title(self):
-        """EMPIRICAL FINDING 2: VehicleMatcher.extract_vehicle_info crashes with TypeError
-
-        when passed title=None because it calls pattern.search(title) without str() coercion.
+        """EMPIRICAL FINDING 2 (REMEDIATED): VehicleMatcher.extract_vehicle_info safely handles
+        None title or content without raising TypeError.
         """
-        with self.assertRaises(TypeError) as cm:
-            extract_vehicle_info(None, "본문 내용")
-        self.assertIn("expected string or bytes-like object", str(cm.exception))
+        brand, model = extract_vehicle_info(None, "본문 내용 아이오닉5 배터리 결함")
+        self.assertEqual(brand, "Hyundai")
+        self.assertEqual(model, "아이오닉5")
+
+        brand_none, model_none = extract_vehicle_info(None, None)
+        self.assertEqual(brand_none, "Other")
+        self.assertEqual(model_none, "전기차")
 
     def test_finding_03_defect_filter_type_error_on_none_in_comments(self):
-        """EMPIRICAL FINDING 3: ContextualDefectFilter.process_post crashes with TypeError
+        """EMPIRICAL FINDING 3 (REMEDIATED): ContextualDefectFilter.process_post safely ignores None/non-str
 
-        when post.comments contains a None element (' '.join(post.comments) fails).
+        elements in post.comments without raising TypeError.
         """
         post_with_none_comment = RawPost(
             platform="dcinside",
@@ -650,9 +652,8 @@ class TestEmpiricalVulnerabilityFindings(unittest.TestCase):
             created_at="2026-09-08T00:00:00Z",
             author="tester",
         )
-        with self.assertRaises(TypeError) as cm:
-            self.filter.process_post(post_with_none_comment)
-        self.assertIn("sequence item 0: expected str instance, NoneType found", str(cm.exception))
+        rec = self.filter.process_post(post_with_none_comment)
+        self.assertIsNotNone(rec.id)
 
     def test_finding_04_json_writer_nan_inf_serialization_breaks_rfc8259(self):
         """EMPIRICAL FINDING 4 (REMEDIATED): write_daily_reports must sanitize NaN/Infinity

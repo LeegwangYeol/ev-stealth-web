@@ -469,10 +469,10 @@ class TestCycle9PriceSubsidyRatioInfinity(unittest.TestCase):
         # Core Cycle 9 requirement: Infinity returns 0.0
         self.assertEqual(res["ratioPosInf"], 0.0, "getPriceSubsidyRatio(Infinity) must strictly return 0.0")
 
-        # Boundary and error sanity
-        self.assertEqual(res["ratioNegInf"], 1.0, "-Infinity caught by non-finite/negative guard returning 1.0")
-        self.assertEqual(res["ratioNaN"], 1.0, "NaN caught by non-finite guard returning 1.0")
-        self.assertEqual(res["ratioZero"], 1.0, "0 KRW returns 1.0 (100% eligibility)")
+        # Boundary and error sanity (Cycle 18 remediation: non-positive and non-finite MSRP return 0.0 aligned with Python backend)
+        self.assertEqual(res["ratioNegInf"], 0.0, "-Infinity caught by non-finite/negative guard returning 0.0")
+        self.assertEqual(res["ratioNaN"], 0.0, "NaN caught by non-finite guard returning 0.0")
+        self.assertEqual(res["ratioZero"], 0.0, "0 KRW returns 0.0 (non-positive exclusion)")
         self.assertEqual(res["ratio54M"], 1.0, "54.99M KRW returns 1.0")
         self.assertEqual(res["ratio55M"], 0.5, "55.00M KRW returns 0.5 (50% statutory tier)")
         self.assertEqual(res["ratio84M"], 0.5, "84.99M KRW returns 0.5")

@@ -106,6 +106,8 @@ class DefectTracker:
         pipeline: Optional[Any] = None,
         filter_engine: Optional[Any] = None,
         reports_file: Optional[Union[str, Path]] = None,
+        base_dir: Optional[Union[str, Path]] = None,
+        **kwargs: Any,
     ) -> None:
         self.reports_file: Optional[Path] = Path(reports_file) if reports_file else None
         cwd = Path.cwd()
@@ -662,11 +664,11 @@ class DefectTracker:
             return []
 
         target_paths: List[Path] = []
-        seen_targets: Set[str] = {os.path.abspath(source_path)}
+        seen_targets: Set[str] = {str(Path(source_path).resolve())}
         for p in known_paths:
-            abs_p = os.path.abspath(p)
-            if abs_p not in seen_targets and (p.parent.exists() or p.parent.parent.exists()):
-                seen_targets.add(abs_p)
+            resolved_p = str(Path(p).resolve())
+            if resolved_p not in seen_targets and (p.parent.exists() or p.parent.parent.exists()):
+                seen_targets.add(resolved_p)
                 target_paths.append(p)
 
         if source_path and target_paths and self.validate_report_file(source_path):

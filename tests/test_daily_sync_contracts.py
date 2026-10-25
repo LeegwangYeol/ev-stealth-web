@@ -885,8 +885,9 @@ class TestSubsidyBracketLogic(unittest.TestCase):
     def test_statutory_price_cap_ratio_function_boundaries(self) -> None:
         """Test calculate_price_cap_ratio function at exact boundary values and representative points."""
         test_cases = [
-            # Bracket 1: 100% subsidy (ratio 1.0) for MSRP <= 55,000,000 KRW
-            (0, 1.0),
+            # Non-positive MSRP guard: 0.0 for price <= 0
+            (0, 0.0),
+            # Bracket 1: 100% subsidy (ratio 1.0) for 0 < MSRP <= 55,000,000 KRW
             (15_000_000, 1.0),
             (26_900_000, 1.0),   # BYD Dolphin
             (31_500_000, 1.0),   # Hyundai Casper EV

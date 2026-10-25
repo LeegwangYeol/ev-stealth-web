@@ -189,7 +189,7 @@ class TestPriceCapBoundariesAdversarial(unittest.TestCase):
 
     EXACT_BOUNDARIES_TEST_MATRIX = [
         # (msrp_krw, expected_ratio, tier_label)
-        (0, 1.0, "Tier 1: 100% (Zero MSRP boundary)"),
+        (0, 0.0, "Tier 1: 0% (Zero MSRP non-positive guard)"),
         (54_999_999, 1.0, "Tier 1: 100% (1 KRW below 55M threshold)"),
         (55_000_000, 1.0, "Tier 1: 100% (Exact statutory 55M threshold)"),
         (55_000_001, 0.5, "Tier 2: 50% (1 KRW above 55M threshold)"),
@@ -217,11 +217,11 @@ class TestPriceCapBoundariesAdversarial(unittest.TestCase):
         max_nat = 6_500_000
         max_loc = 1_500_000
 
-        # Sub-check at 0 KRW
+        # Sub-check at 0 KRW (non-positive MSRP guard)
         res_0 = calculate_net_subsidy(model_nat, max_nat, max_loc, 0)
-        self.assertEqual(res_0["national_subsidy_krw"], 6_500_000)
-        self.assertEqual(res_0["local_subsidy_krw"], 1_500_000)
-        self.assertEqual(res_0["total_subsidy_krw"], 8_000_000)
+        self.assertEqual(res_0["national_subsidy_krw"], 0)
+        self.assertEqual(res_0["local_subsidy_krw"], 0)
+        self.assertEqual(res_0["total_subsidy_krw"], 0)
         self.assertEqual(res_0["net_price_krw"], 0)
 
         # Sub-check at 54,999,999 KRW (100% tier)
@@ -276,20 +276,20 @@ class TestPriceCapBoundariesAdversarial(unittest.TestCase):
         for price in range(-10_000_000, 120_000_001, 500_000):
             ratio = calculate_price_cap_ratio(price)
             self.assertIn(ratio, (1.0, 0.5, 0.0))
-            if price <= 55_000_000:
+            if price <= 0:
+                self.assertEqual(ratio, 0.0)
+            elif price <= 55_000_000:
                 self.assertEqual(ratio, 1.0)
+                self.assertLessEqual(ratio, previous_ratio)
+                previous_ratio = ratio
             elif price <= 85_000_000:
                 self.assertEqual(ratio, 0.5)
+                self.assertLessEqual(ratio, previous_ratio)
+                previous_ratio = ratio
             else:
                 self.assertEqual(ratio, 0.0)
-
-            # Monotonic non-increasing property
-            self.assertLessEqual(
-                ratio,
-                previous_ratio,
-                f"Monotonicity inversion at price {price:,} KRW: ratio {ratio} > previous {previous_ratio}",
-            )
-            previous_ratio = ratio
+                self.assertLessEqual(ratio, previous_ratio)
+                previous_ratio = ratio
 
             # Net subsidy non-negative price guarantee
             net_res = calculate_net_subsidy(6_500_000, 6_500_000, 1_500_000, price)

@@ -22,6 +22,12 @@ const geistMono = localFont({
   weight: "100 900",
   display: "swap",
   preload: false,
+  fallback: [
+    "ui-monospace",
+    "SFMono-Regular",
+    "Menlo",
+    "monospace",
+  ],
 });
 
 import Link from "next/link";

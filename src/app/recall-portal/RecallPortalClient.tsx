@@ -185,12 +185,14 @@ function resolveModelAndBrand(
 
 interface SearchParamsWatcherProps {
   onSelectBrandModel: (brand: string, model: string, year?: number) => void;
+  onSelectVin?: (vin: string) => void;
   initialDatabase: RecallDatabase;
   availableBrands: string[];
 }
 
 function SearchParamsWatcher({
   onSelectBrandModel,
+  onSelectVin,
   initialDatabase,
   availableBrands,
 }: SearchParamsWatcherProps) {
@@ -200,6 +202,13 @@ function SearchParamsWatcher({
   useEffect(() => {
     const currentParamString = searchParams.toString();
     if (!currentParamString || currentParamString === lastAppliedRef.current) return;
+
+    const vinParam = searchParams.get('vin');
+    if (vinParam && onSelectVin) {
+      lastAppliedRef.current = currentParamString;
+      onSelectVin(vinParam);
+      return;
+    }
 
     const modelParam = searchParams.get('model');
     const brandParam = searchParams.get('brand');
@@ -224,7 +233,7 @@ function SearchParamsWatcher({
         isNaN(year as number) ? undefined : year
       );
     }
-  }, [searchParams, initialDatabase, availableBrands, onSelectBrandModel]);
+  }, [searchParams, initialDatabase, availableBrands, onSelectBrandModel, onSelectVin]);
 
   return null;
 }
@@ -319,6 +328,21 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
       setActiveCheckerMode('MODEL');
       const result = checkRecallsByModel(brand, model, year, initialDatabase);
       setCheckResult(result);
+    },
+    [initialDatabase]
+  );
+
+  // Handler for VIN query parameter auto-selection (?vin=...)
+  const handleSelectVinFromParams = useCallback(
+    (vin: string) => {
+      const cleanVin = vin.trim().toUpperCase();
+      setVinInput(cleanVin);
+      setVinTouched(true);
+      setActiveCheckerMode('VIN');
+      if (cleanVin.length === 17) {
+        const result = decodeVinAndCheckRecalls(cleanVin, initialDatabase);
+        setCheckResult(result);
+      }
     },
     [initialDatabase]
   );
@@ -452,6 +476,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
       <Suspense fallback={null}>
         <SearchParamsWatcher
           onSelectBrandModel={handleSelectFromParams}
+          onSelectVin={handleSelectVinFromParams}
           initialDatabase={initialDatabase}
           availableBrands={availableBrands}
         />

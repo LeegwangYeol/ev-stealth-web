@@ -153,14 +153,14 @@ class TestFuzzSubsidyCalculators(unittest.TestCase):
     def test_fuzz_calculate_price_cap_ratio(self) -> None:
         """Fuzz calculate_price_cap_ratio across regulatory threshold boundaries and random prices."""
         # Exact statutory transitions
-        self.assertEqual(calculate_price_cap_ratio(0), 1.0)
+        self.assertEqual(calculate_price_cap_ratio(0), 0.0)  # Non-positive guard
         self.assertEqual(calculate_price_cap_ratio(55_000_000), 1.0)
         self.assertEqual(calculate_price_cap_ratio(55_000_001), 0.5)
         self.assertEqual(calculate_price_cap_ratio(85_000_000), 0.5)
         self.assertEqual(calculate_price_cap_ratio(85_000_001), 0.0)
 
-        # Negative and non-finite numbers safely return bounded floats
-        self.assertEqual(calculate_price_cap_ratio(-10_000_000), 1.0)
+        # Negative and non-finite numbers safely return bounded floats (0.0 for invalid/negative)
+        self.assertEqual(calculate_price_cap_ratio(-10_000_000), 0.0)
         self.assertEqual(calculate_price_cap_ratio(float("nan")), 0.0)  # type: ignore
         self.assertEqual(calculate_price_cap_ratio(float("inf")), 0.0)  # type: ignore
 

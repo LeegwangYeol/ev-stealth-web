@@ -123,8 +123,7 @@ class TestExtremeNumericInputsAndBounds(unittest.TestCase):
 
     def test_03_calculate_price_cap_ratio_statutory_tiers(self) -> None:
         """calculate_price_cap_ratio strictly adheres to 2026 Korean EV subsidy tiers."""
-        # 1.0 tier (<= 55,000,000 KRW)
-        self.assertEqual(calculate_price_cap_ratio(0), 1.0)
+        # 1.0 tier (0 < MSRP <= 55,000,000 KRW)
         self.assertEqual(calculate_price_cap_ratio(30_000_000), 1.0)
         self.assertEqual(calculate_price_cap_ratio(55_000_000), 1.0)
 
@@ -139,11 +138,12 @@ class TestExtremeNumericInputsAndBounds(unittest.TestCase):
         self.assertEqual(calculate_price_cap_ratio(1_000_000_000), 0.0)
         self.assertEqual(calculate_price_cap_ratio(10**15), 0.0)
 
-        # Edge cases & invalid types
+        # Edge cases & invalid types (including non-positive MSRP guard)
+        self.assertEqual(calculate_price_cap_ratio(0), 0.0)  # Non-positive guard
+        self.assertEqual(calculate_price_cap_ratio(-50_000_000), 0.0)  # Negative price guard
         self.assertEqual(calculate_price_cap_ratio(None), 0.0)  # type: ignore[arg-type]
         self.assertEqual(calculate_price_cap_ratio(float("nan")), 0.0)  # type: ignore[arg-type]
         self.assertEqual(calculate_price_cap_ratio(float("inf")), 0.0)  # type: ignore[arg-type]
-        self.assertEqual(calculate_price_cap_ratio(-50_000_000), 1.0)  # Negative <= 55M
 
     def test_04_calculate_net_subsidy_extreme_inputs(self) -> None:
         """subsidy_baseline.calculate_net_subsidy handles zero, negative, extreme and None inputs."""

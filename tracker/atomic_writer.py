@@ -43,6 +43,11 @@ def _json_default(obj: Any) -> Any:
         return list(obj)
     if isinstance(obj, Enum):
         return obj.value
+    import decimal
+    if isinstance(obj, decimal.Decimal):
+        if obj.is_nan() or obj.is_infinite():
+            return 0.0
+        return float(obj)
     if hasattr(obj, "to_dict") and callable(getattr(obj, "to_dict")):
         return sanitize_nan_inf(obj.to_dict())
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
@@ -76,6 +81,8 @@ def atomic_write_json(
     Returns:
         Path: The absolute path of the written file.
     """
+    if not target_path or not str(target_path).strip():
+        raise ValueError("target_path cannot be empty")
     dest = Path(target_path).resolve()
     dest_dir = dest.parent
     dest_dir.mkdir(parents=True, exist_ok=True)

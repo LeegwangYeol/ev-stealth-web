@@ -15,8 +15,8 @@ Coverage:
      * calculateDepreciation({ modelId: 'model-3', years: NaN, mileageKm: NaN, customPurchasePriceKrw: NaN }) -> valid outputs.
      * calculateSubsidyClawback(NaN, NaN, 'inter', NaN) -> zero NaN.
    - getSubsidyData.ts:
-     * getPriceSubsidyRatio(NaN) -> valid numeric output (1.0).
-     * getPriceSubsidyRatio(-1000) -> valid numeric output (1.0).
+     * getPriceSubsidyRatio(NaN) -> valid numeric output (0.0).
+     * getPriceSubsidyRatio(-1000) -> valid numeric output (0.0).
      * getPriceSubsidyRatio(54_999_999, 55_000_000, 84_999_999, 85_000_000) -> exact statutory ratio checks.
      * calculateNetSubsidy('ioniq-5-2026', 'KR-11', NaN) -> zero NaN.
    - getDailyReports.ts:
@@ -291,10 +291,10 @@ class TestTypeScriptMathAdversarialInputs(unittest.TestCase):
         """
         res = _eval_ts_node(script)
 
-        # NaN guard must return valid numeric ratio (1.0 default)
-        self.assertEqual(res["ratioNaN"], 1.0)
-        self.assertEqual(res["ratioNegative"], 1.0)
-        self.assertEqual(res["ratioZero"], 1.0)
+        # Non-positive and non-finite MSRP guard returns 0.0 (aligned with Python backend)
+        self.assertEqual(res["ratioNaN"], 0.0)
+        self.assertEqual(res["ratioNegative"], 0.0)
+        self.assertEqual(res["ratioZero"], 0.0)
         self.assertEqual(res["ratioBelow55M"], 1.0)
 
         # Exact statutory boundaries
@@ -304,9 +304,9 @@ class TestTypeScriptMathAdversarialInputs(unittest.TestCase):
         self.assertEqual(res["ratioExact85M"], 0.0)
         self.assertEqual(res["ratioAbove85M"], 0.0)
 
-        # Positive Infinity is capped at luxury exclusion 0.0; negative infinity caught by non-finite/negative guard returning 1.0
+        # Positive Infinity and Negative Infinity both return 0.0
         self.assertEqual(res["ratioPosInf"], 0.0)
-        self.assertEqual(res["ratioNegInf"], 1.0)
+        self.assertEqual(res["ratioNegInf"], 0.0)
 
         _assert_no_none_or_nan(self, res)
 

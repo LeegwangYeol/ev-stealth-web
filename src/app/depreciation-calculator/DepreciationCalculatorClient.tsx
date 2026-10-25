@@ -871,6 +871,7 @@ export default function DepreciationCalculatorClient({
               onChange={(e) => handleYearsChange(parseFloat(e.target.value))}
               className="w-full accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="차량 보유 기간 설정 (1년에서 5년)"
+              aria-valuetext={`${holdingYears}년 보유`}
             />
             <div className="flex justify-between text-[11px] text-slate-600 px-0.5">
               <span>1년</span>
@@ -919,6 +920,7 @@ export default function DepreciationCalculatorClient({
               onChange={(e) => setAnnualMileageKm(parseInt(e.target.value, 10))}
               className="w-full accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="연간 주행거리 설정 (5,000km에서 50,000km)"
+              aria-valuetext={`연간 ${annualMileageKm.toLocaleString()}km 주행`}
             />
             <div className="flex justify-between text-[11px] text-slate-600 px-0.5">
               <span>5천km</span>
@@ -957,6 +959,7 @@ export default function DepreciationCalculatorClient({
               onChange={(e) => setDcfcRatio(parseInt(e.target.value, 10))}
               className="w-full accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="급속 충전 비율 설정 (0%에서 100%)"
+              aria-valuetext={`급속 충전 비율 ${dcfcRatio}%`}
             />
             <div className="flex justify-between text-[11px] text-slate-600 px-0.5">
               <span>0% (완속전용)</span>
@@ -1502,7 +1505,7 @@ export default function DepreciationCalculatorClient({
                   cx="50"
                   cy="50"
                   r="42"
-                  stroke="#334155"
+                  stroke="#64748b"
                   strokeWidth="10"
                   fill="transparent"
                 />
@@ -1742,6 +1745,7 @@ export default function DepreciationCalculatorClient({
               }}
               className="w-full accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="보조금 의무운행 기간 중 보유 개월 수 설정"
+              aria-valuetext={`${heldMonths}개월 운행`}
             />
             <div className="flex justify-between text-[11px] text-slate-600">
               <span>0개월</span>

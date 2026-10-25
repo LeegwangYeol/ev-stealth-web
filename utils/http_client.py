@@ -45,11 +45,12 @@ USER_AGENT_POOL = [
 ]
 
 
-def robust_decode(raw_bytes: bytes, declared_encoding: Optional[str] = None) -> str:
-    """
-    Decode raw bytes with graceful fallback across Korean and universal charsets.
+def robust_decode(raw_bytes: Union[bytes, str], declared_encoding: Optional[str] = None) -> str:
+    """Decode raw bytes with graceful fallback across Korean and universal charsets.
     Tries declared encoding, utf-8, cp949, euc-kr, and latin-1.
     """
+    if isinstance(raw_bytes, str):
+        return raw_bytes
     if not raw_bytes:
         return ""
 

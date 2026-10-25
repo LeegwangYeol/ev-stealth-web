@@ -113,7 +113,13 @@ class CategoryMetrics:
     remaining_budget_krw: int = 0
 
     def __getitem__(self, key: str) -> Any:
-        return getattr(self, key)
+        try:
+            return getattr(self, key)
+        except AttributeError:
+            raise KeyError(key) from None
+
+    def __contains__(self, key: Any) -> bool:
+        return hasattr(self, str(key))
 
     def get(self, key: str, default: Any = None) -> Any:
         return getattr(self, key, default)
@@ -158,7 +164,13 @@ class MunicipalityMetrics:
     total_subsidy_krw: int = 0
 
     def __getitem__(self, key: str) -> Any:
-        return getattr(self, key)
+        try:
+            return getattr(self, key)
+        except AttributeError:
+            raise KeyError(key) from None
+
+    def __contains__(self, key: Any) -> bool:
+        return hasattr(self, str(key))
 
     def get(self, key: str, default: Any = None) -> Any:
         return getattr(self, key, default)

@@ -149,19 +149,133 @@ export function getAllRegions(): RegionEntry[] {
 }
 
 /**
- * Finds a specific region by region_id, iso_code, or Korean name.
+ * Canonical alias map resolving colloquial city/province names, 2-letter abbreviations,
+ * and ISO codes to database region IDs.
+ */
+export const REGION_ALIAS_MAP: Record<string, string> = {
+  // Special City / Metropolitan Cities
+  '서울': 'KR-11',
+  '서울특별시': 'KR-11',
+  'seoul': 'KR-11',
+  '부산': 'KR-26',
+  '부산광역시': 'KR-26',
+  'busan': 'KR-26',
+  '대구': 'KR-27',
+  '대구광역시': 'KR-27',
+  'daegu': 'KR-27',
+  '인천': 'KR-28',
+  '인천광역시': 'KR-28',
+  'incheon': 'KR-28',
+  '광주': 'KR-29',
+  '광주광역시': 'KR-29',
+  'gwangju': 'KR-29',
+  '대전': 'KR-30',
+  '대전광역시': 'KR-30',
+  'daejeon': 'KR-30',
+  '울산': 'KR-31',
+  '울산광역시': 'KR-31',
+  'ulsan': 'KR-31',
+  // Special Self-Governing City (supports both CleanSys KR-36 and ISO KR-50)
+  '세종': 'KR-36',
+  '세종특별자치시': 'KR-36',
+  'sejong': 'KR-36',
+  'kr-50': 'KR-36',
+  'kr-36': 'KR-36',
+  // Provinces
+  '경기': 'KR-41',
+  '경기도': 'KR-41',
+  'gyeonggi': 'KR-41',
+  '강원': 'KR-42',
+  '강원도': 'KR-42',
+  '강원특별자치도': 'KR-42',
+  'gangwon': 'KR-42',
+  '충북': 'KR-43',
+  '충청북도': 'KR-43',
+  'chungbuk': 'KR-43',
+  '충남': 'KR-44',
+  '충청남도': 'KR-44',
+  'chungnam': 'KR-44',
+  '전북': 'KR-45',
+  '전라북도': 'KR-45',
+  '전북특별자치도': 'KR-45',
+  'jeonbuk': 'KR-45',
+  '전남': 'KR-46',
+  '전라남도': 'KR-46',
+  'jeonnam': 'KR-46',
+  '경북': 'KR-47',
+  '경상북도': 'KR-47',
+  'gyeongbuk': 'KR-47',
+  '경남': 'KR-48',
+  '경상남도': 'KR-48',
+  'gyeongnam': 'KR-48',
+  '제주': 'KR-49',
+  '제주도': 'KR-49',
+  '제주특별자치도': 'KR-49',
+  'jeju': 'KR-49',
+};
+
+/**
+ * Finds a specific region by region_id, iso_code, Korean name, or colloquial alias.
  */
 export function getRegionById(regionId: string): RegionEntry | undefined {
   if (!regionId || typeof regionId !== 'string') return undefined;
   const regions = getAllRegions();
   const normalized = regionId.trim().toLowerCase();
-  return regions.find(
+  if (!normalized) return undefined;
+
+  // 1. Direct alias resolution
+  const rawAlias = Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, normalized)
+    ? REGION_ALIAS_MAP[normalized]
+    : Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, regionId.trim())
+    ? REGION_ALIAS_MAP[regionId.trim()]
+    : undefined;
+  const aliasedId = typeof rawAlias === 'string' ? rawAlias : undefined;
+  if (aliasedId) {
+    const matched = regions.find(
+      (r) =>
+        r.region_id.toLowerCase() === aliasedId.toLowerCase() ||
+        r.iso_code.toLowerCase() === aliasedId.toLowerCase()
+    );
+    if (matched) return matched;
+  }
+
+  // 2. Direct exact match on ID, ISO code, or localized names
+  const exact = regions.find(
     (r) =>
       r.region_id.toLowerCase() === normalized ||
       r.iso_code.toLowerCase() === normalized ||
       r.name_ko.toLowerCase() === normalized ||
       r.name_en.toLowerCase() === normalized
   );
+  if (exact) return exact;
+
+  // 3. 2-letter provincial abbreviation / stripped administrative suffix match
+  const stripped = normalized.replace(/(특별시|광역시|특별자치시|특별자치도|도)$/, '');
+  if (stripped) {
+    const rawStrippedAlias = Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, stripped)
+      ? REGION_ALIAS_MAP[stripped]
+      : undefined;
+    const strippedAliasedId = typeof rawStrippedAlias === 'string' ? rawStrippedAlias : undefined;
+    if (strippedAliasedId) {
+      const matched = regions.find(
+        (r) =>
+          r.region_id.toLowerCase() === strippedAliasedId.toLowerCase() ||
+          r.iso_code.toLowerCase() === strippedAliasedId.toLowerCase()
+      );
+      if (matched) return matched;
+    }
+
+    return regions.find((r) => {
+      const rStripped = r.name_ko.toLowerCase().replace(/(특별시|광역시|특별자치시|특별자치도|도)$/, '');
+      return (
+        rStripped === stripped ||
+        r.name_ko.toLowerCase().includes(stripped) ||
+        stripped.includes(rStripped)
+      );
+    });
+  }
+
+  return undefined;
 }
 
 /**
@@ -173,18 +287,32 @@ export function getAllModels(): PopularModelEntry[] {
 }
 
 /**
- * Finds a vehicle model by model_id or Korean name.
+ * Finds a vehicle model by model_id or Korean name, supporting whitespace- and hyphen-normalized queries.
  */
 export function getModelById(modelId: string): PopularModelEntry | undefined {
   if (!modelId || typeof modelId !== 'string') return undefined;
   const models = getAllModels();
   const normalized = modelId.trim().toLowerCase();
   if (!normalized) return undefined;
-  return models.find(
+
+  // 1. Exact or substring match on raw string
+  const directMatch = models.find(
     (m) =>
       m.model_id.toLowerCase() === normalized ||
+      m.name_ko.toLowerCase() === normalized ||
       m.name_ko.toLowerCase().includes(normalized)
   );
+  if (directMatch) return directMatch;
+
+  // 2. Normalize by stripping whitespace, hyphens, and punctuation
+  const cleanQuery = normalized.replace(/[\s\-_]+/g, '');
+  if (!cleanQuery) return undefined;
+
+  return models.find((m) => {
+    const cleanId = m.model_id.toLowerCase().replace(/[\s\-_]+/g, '');
+    const cleanKo = m.name_ko.toLowerCase().replace(/[\s\-_]+/g, '');
+    return cleanId.includes(cleanQuery) || cleanKo.includes(cleanQuery);
+  });
 }
 
 /**
@@ -197,8 +325,8 @@ export function getPriceSubsidyRatio(msrpKrw: number): number {
   if (msrpKrw === Infinity || (Number.isFinite(msrpKrw) && msrpKrw >= 85_000_000)) {
     return 0.0;
   }
-  if (!Number.isFinite(msrpKrw) || msrpKrw < 0) {
-    return 1.0;
+  if (!Number.isFinite(msrpKrw) || msrpKrw <= 0) {
+    return 0.0;
   }
   if (msrpKrw >= 55_000_000) {
     return 0.5;

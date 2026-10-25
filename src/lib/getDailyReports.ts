@@ -197,7 +197,7 @@ export function calculateKPIs(
     ? `${platformNameKo} (${platformRatio}%)`
     : '해당 없음 (0%)';
 
-  const totalScraped = existingStats?.total_scraped || (totalFiltered * 7);
+  const totalScraped = existingStats?.total_scraped ?? (totalFiltered * 7);
 
   return {
     total_scraped: totalScraped,
@@ -210,6 +210,9 @@ export function calculateKPIs(
     top_platform: topPlatformDisplay,
   };
 }
+
+export const calculateReportStatistics = calculateKPIs;
+
 
 /**
  * Main type-safe loader for Daily EV Defect Reports.

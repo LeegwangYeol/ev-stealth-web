@@ -209,11 +209,11 @@ def sync_defect_reports(
         return []
 
     target_paths: List[Path] = []
-    seen_target_abs: Set[str] = {os.path.abspath(source_path)}
+    seen_target_abs: Set[str] = {str(Path(source_path).resolve())}
     for p in known_paths:
-        abs_p = os.path.abspath(p)
-        if abs_p not in seen_target_abs and (p.parent.exists() or p.parent.parent.exists()):
-            seen_target_abs.add(abs_p)
+        resolved_p = str(Path(p).resolve())
+        if resolved_p not in seen_target_abs and (p.parent.exists() or p.parent.parent.exists()):
+            seen_target_abs.add(resolved_p)
             target_paths.append(p)
 
     if source_path and target_paths and validate_defect_reports_file(source_path):

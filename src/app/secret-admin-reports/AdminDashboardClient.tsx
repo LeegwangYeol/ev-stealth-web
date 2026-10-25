@@ -736,7 +736,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                   <td>{report.source}</td>
                   <td>
                     <span>{report.title}</span>
-                    <a href={report.url} target="_blank" rel="noopener noreferrer" tabIndex={-1} aria-hidden="true" className="sr-only">
+                    <a href={report.url} target="_blank" rel="noopener noreferrer" className="sr-only" aria-label="게시글 원문 보기">
                       (원문 링크)
                     </a>
                   </td>

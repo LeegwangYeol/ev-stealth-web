@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import math
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from tracker.subsidy_models import (
     AlertSeverity,
@@ -92,7 +92,9 @@ def calculate_price_cap_ratio(msrp: int) -> float:
     except (ValueError, TypeError, OverflowError):
         return 0.0
 
-    if safe_msrp <= 55_000_000:
+    if safe_msrp <= 0:
+        return 0.0
+    elif safe_msrp <= 55_000_000:
         return 1.0
     elif safe_msrp <= 85_000_000:
         return 0.5
@@ -144,6 +146,7 @@ def calculate_net_subsidy(
         "local_subsidy_krw": effective_local,
         "total_subsidy_krw": total_subsidy,
         "net_price_krw": net_price,
+        "price_cap_ratio": ratio,
     }
 
 

@@ -40,7 +40,7 @@ def _safe_round(val: Any, decimals: int = 4, default: float = 0.0) -> float:
         return default
 
 
-@dataclass
+@dataclass(init=False)
 class RawPost:
     """Raw post extracted by scraper modules."""
     platform: str
@@ -51,6 +51,41 @@ class RawPost:
     comments: List[str] = field(default_factory=list)
     created_at: str = ""
     author: str = ""
+
+    def __init__(
+        self,
+        platform: str = "",
+        post_id: str = "",
+        url: str = "",
+        title: str = "",
+        content: str = "",
+        comments: Optional[List[Any]] = None,
+        created_at: str = "",
+        author: str = "",
+        id: Optional[str] = None,
+        source: Optional[str] = None,
+        **kwargs: Any,
+    ) -> None:
+        self.platform = str(source or platform or "unknown")
+        self.post_id = str(id or post_id or "")
+        self.url = str(url or "")
+        self.title = str(title or "")
+        self.content = str(content or "")
+        self.comments = (
+            [str(c) for c in comments if c is not None]
+            if isinstance(comments, (list, tuple, set))
+            else []
+        )
+        self.created_at = str(created_at or "")
+        self.author = str(author or "")
+
+    @property
+    def id(self) -> str:
+        return self.post_id
+
+    @property
+    def source(self) -> str:
+        return self.platform
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -72,15 +107,21 @@ class RawPost:
             if isinstance(data, dict):
                 return data.get(k, default)
             return getattr(data, k, default)
+        raw_comments = _get("comments")
+        comments = (
+            [str(c) for c in raw_comments if c is not None]
+            if isinstance(raw_comments, (list, tuple, set))
+            else []
+        )
         return cls(
-            platform=str(_get("platform", "unknown")),
-            post_id=str(_get("post_id", _get("id", ""))),
-            url=str(_get("url", "")),
-            title=str(_get("title", "")),
-            content=str(_get("content", "")),
-            comments=list(_get("comments", [])),
-            created_at=str(_get("created_at", _get("created_at=", ""))),
-            author=str(_get("author", "")),
+            platform=str(_get("platform") or "unknown"),
+            post_id=str(_get("post_id") or _get("id") or ""),
+            url=str(_get("url") or ""),
+            title=str(_get("title") or ""),
+            content=str(_get("content") or ""),
+            comments=comments,
+            created_at=str(_get("created_at") or _get("created_at=") or ""),
+            author=str(_get("author") or ""),
         )
 
 
@@ -181,6 +222,11 @@ class ComplaintRecord:
             if match:
                 y, m, d = match.group(1), match.group(2).zfill(2), match.group(3).zfill(2)
                 return f"{y}-{m}-{d}"
+            match_2 = re.search(r"(?:^|[^\d])(\d{2})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})", str(self.created_at))
+            if match_2:
+                yy, m, d = int(match_2.group(1)), match_2.group(2).zfill(2), match_2.group(3).zfill(2)
+                y = f"20{yy:02d}" if yy < 70 else f"19{yy:02d}"
+                return f"{y}-{m}-{d}"
             norm_date = str(self.created_at).strip().replace("/", "-").replace(".", "-")
             if len(norm_date) >= 10 and norm_date[4] == "-" and norm_date[7] == "-":
                 return norm_date[:10]
@@ -247,6 +293,24 @@ class ComplaintRecord:
             res["dsi_breakdown"] = self.dsi_breakdown.to_dict()
         return res
 
+    def __getitem__(self, key: str) -> Any:
+        try:
+            return getattr(self, key)
+        except AttributeError:
+            d = self.to_admin_report_dict()
+            if key in d:
+                return d[key]
+            raise KeyError(key) from None
+
+    def __contains__(self, key: Any) -> bool:
+        return hasattr(self, str(key)) or key in self.to_admin_report_dict()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
 
 @dataclass
 class DailyReportStatistics:
@@ -260,7 +324,7 @@ class DailyReportStatistics:
         return {
             "total_scraped": self.total_scraped,
             "total_filtered_defects": self.total_filtered_defects,
-            "avg_negativity_score": round(self.avg_negativity_score, 2),
+            "avg_negativity_score": _safe_round(self.avg_negativity_score, 2),
             "critical_defect_count": self.critical_defect_count,
         }
 
@@ -274,6 +338,18 @@ class DailyReportPayload:
     reports: List[Dict[str, Any]] = field(default_factory=list)
     total_complaints_today: int = 0
     top_defect_categories: List[Dict[str, Any]] = field(default_factory=list)
+
+    def __getitem__(self, key: str) -> Any:
+        d = self.to_dict()
+        if key not in d:
+            raise KeyError(key)
+        return d[key]
+
+    def __contains__(self, key: Any) -> bool:
+        return key in self.to_dict()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self.to_dict().get(key, default)
 
     def to_dict(self) -> Dict[str, Any]:
         return {

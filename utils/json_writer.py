@@ -16,6 +16,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import tempfile
 from typing import Any, Dict, Iterable, List, Optional, Union
 
@@ -24,11 +25,6 @@ from models.complaint import (
     DailyReportPayload,
     DailyReportStatistics,
 )
-
-if not hasattr(DailyReportPayload, "__getitem__"):
-    setattr(DailyReportPayload, "__getitem__", lambda self, key: self.to_dict()[key])
-if not hasattr(DailyReportPayload, "__contains__"):
-    setattr(DailyReportPayload, "__contains__", lambda self, key: key in self.to_dict())
 
 
 _CURRENT_DIR = Path(__file__).resolve().parent
@@ -63,6 +59,15 @@ def _extract_record_date(record: Dict[str, Any]) -> str:
         if not val:
             continue
         val_str = str(val).strip()
+        match_4 = re.search(r"(\d{4})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})", val_str)
+        if match_4:
+            y, m, d = match_4.group(1), match_4.group(2).zfill(2), match_4.group(3).zfill(2)
+            return f"{y}-{m}-{d}"
+        match_2 = re.search(r"(?:^|[^\d])(\d{2})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})", val_str)
+        if match_2:
+            yy, m, d = int(match_2.group(1)), match_2.group(2).zfill(2), match_2.group(3).zfill(2)
+            y = f"20{yy:02d}" if yy < 70 else f"19{yy:02d}"
+            return f"{y}-{m}-{d}"
         if len(val_str) >= 10 and val_str[4] in ("-", "/") and val_str[7] in ("-", "/"):
             return val_str[:10].replace("/", "-")
         try:

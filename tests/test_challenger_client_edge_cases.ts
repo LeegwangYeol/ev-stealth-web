@@ -297,8 +297,8 @@ recordAssert(
 );
 recordAssert(
   'subsidy:getPriceSubsidyRatio:negative_default',
-  'getPriceSubsidyRatio(-1000) returns 1.0 (default ratio)',
-  subsidy.getPriceSubsidyRatio(-1000) === 1.0
+  'getPriceSubsidyRatio(-1000) returns 0.0 (aligned with Python backend)',
+  subsidy.getPriceSubsidyRatio(-1000) === 0.0
 );
 
 // ============================================================================

@@ -145,11 +145,12 @@ def extract_vehicle_info(title: str, content: str = "") -> Tuple[str, str]:
     2. Direct model regex match from content
     3. Brand keyword match with default model
     4. Fallback to ("Other", "전기차")
-
     Returns:
         (vehicle_brand, vehicle_model)
     """
-    combined_text = f"{title} {content}"
+    title = str(title or "")
+    content = str(content or "")
+    combined_text = f"{title} {content}".strip()
 
     # 1. Search in title first for high-confidence model match
     for pattern, model_name, brand in MODEL_RULES:

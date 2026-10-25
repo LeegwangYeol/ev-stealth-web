@@ -19,7 +19,7 @@ Authoritative reference:
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from filters.slang_lexicon import (
     CONCESSIVES,
@@ -570,7 +570,8 @@ class ContextualDefectFilter:
         if isinstance(post, dict):
             post = RawPost.from_dict(post)
         combined_text = f"{post.title}\n{post.content}".strip()
-        comments_text = " ".join(post.comments)
+        safe_comments = [c for c in (post.comments or []) if isinstance(c, str)]
+        comments_text = " ".join(safe_comments)
         full_text = f"{combined_text} {comments_text}".strip()
 
         # Extract vehicle brand and model

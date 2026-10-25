@@ -1372,16 +1372,21 @@ SYMPTOM_PREDICATES: List[str] = [
 ]
 
 
+_SORTED_SLANG_ENTRIES = sorted(RAW_SLANG_ENTRIES, key=lambda x: len(x.term), reverse=True)
+
+
 def find_matching_slang(text: str) -> List[SlangEntry]:
     """Identify all slang entries present in the given text.
 
     Sorts by term length descending to match composite idioms first.
     """
+    if not text:
+        return []
+    text_str = str(text)
     matches: List[SlangEntry] = []
-    # Sort terms by length descending to match longer terms first (e.g. 'ICCU 폭탄' before 'ICCU')
-    sorted_entries = sorted(RAW_SLANG_ENTRIES, key=lambda x: len(x.term), reverse=True)
-    for entry in sorted_entries:
-        if entry.term in text:
+    # Match longer terms first (e.g. 'ICCU 폭탄' before 'ICCU')
+    for entry in _SORTED_SLANG_ENTRIES:
+        if entry.term in text_str:
             # Avoid duplicate matching of sub-terms if already represented
             matches.append(entry)
     return matches

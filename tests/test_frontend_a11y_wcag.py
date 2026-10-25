@@ -30,14 +30,17 @@ Test Scope & Invariants:
    - Verifies tablist, tab, and tabpanel ARIA roles and state for mode switcher.
 3. DepreciationCalculatorClient.tsx:
    - Verifies circular Battery State of Health (SoH) meter exposes role="progressbar", aria-valuenow, aria-valuemin, aria-valuemax, and aria-label.
+   - Verifies Battery SoH gauge track circle uses high-contrast stroke #64748b (>= 3.0:1 on container #0f172a, WCAG 1.4.11).
+   - Verifies range sliders expose localized aria-valuetext with unit expressions (년, km, %, 개월).
    - Verifies selected model card pricing color text-blue-700 (> 4.5:1 on bg-blue-50) replacing text-blue-600.
    - Verifies TCO cumulative savings banner uses high-contrast text-white font-medium rather than low-contrast text-blue-200/100.
    - Verifies wrapping of transfer type radio option groups in semantic <fieldset> with accessible <legend>.
 4. ReliabilityDashboardClient.tsx:
    - Verifies eradication of low-contrast text-slate-300 on bg-slate-100 empty cells, replaced by compliant text-slate-600/700.
    - Verifies accessible role="region" and role="img" labels on defect distribution proportional bar.
-5. layout.tsx:
+5. layout.tsx & SiteFooter.tsx:
    - Verifies desktop navigation bar links contain visible focus ring classes (focus:ring-2, focus:outline-none).
+   - Verifies SiteFooter statutory data source attribution links (KECO, MOLIT, NHTSA) with rel="noopener noreferrer", target="_blank", aria-label, and sr-only notifications.
 6. SubsidyTrackerClient.tsx:
    - Verifies aria-expanded and aria-controls on municipality accordion toggles with matching container IDs.
    - Verifies WCAG-compliant progressbar semantics on subsidy depletion visual tracks.
@@ -655,6 +658,31 @@ class TestDepreciationCalculatorClientA11y(unittest.TestCase):
             "Battery SoH progressbar should expose aria-valuetext for formatted reading.",
         )
 
+    def test_battery_soh_gauge_track_circle_contrast_ratio_level_aa(self):
+        """
+        Validate that the background track circle of the Battery SoH gauge uses
+        stroke="#64748b" (slate-500) rather than low-contrast #334155, achieving
+        a contrast ratio of >= 3.0:1 against container #0f172a (WCAG 1.4.11 Non-text Contrast).
+        """
+        track_circle_match = re.search(
+            r'\{/\*\s*Track Circle\s*\*/\}\s*<circle\b([^>]*?)/>',
+            self.source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(track_circle_match, "Could not find Track Circle SVG element in DepreciationCalculatorClient.tsx")
+        track_circle_attrs = track_circle_match.group(1)
+
+        self.assertIn('stroke="#64748b"', track_circle_attrs, "Track Circle must use stroke='#64748b' (slate-500)")
+        self.assertNotIn('stroke="#334155"', track_circle_attrs, "Track Circle must not use low-contrast stroke='#334155'")
+
+        # Mathematically verify contrast ratio against bg-slate-900 (#0f172a)
+        contrast = calculate_contrast_ratio("#64748b", "#0f172a")
+        self.assertGreaterEqual(
+            contrast,
+            3.0,
+            f"Track circle contrast {contrast:.2f}:1 must meet or exceed WCAG 1.4.11 minimum 3.0:1",
+        )
+
     def test_depreciation_calculator_selected_card_pricing_text_blue_700(self):
         """
         Validate that selected model card pricing uses text-blue-700 instead of
@@ -767,6 +795,26 @@ class TestDepreciationCalculatorClientA11y(unittest.TestCase):
             self.assertIn('type="range"', tag, f"Slider {s_id} must have type='range'")
             self.assertIn('aria-label=', tag, f"Slider {s_id} must declare aria-label")
             self.assertIn('focus-visible:ring-2', tag, f"Slider {s_id} must declare focus-visible:ring-2")
+
+    def test_depreciation_sliders_have_aria_valuetext(self):
+        """
+        Validate that all 4 interactive range sliders in DepreciationCalculatorClient.tsx
+        declare localized aria-valuetext with human-readable units (WCAG 4.1.2 Name, Role, Value).
+        """
+        slider_configs = [
+            ("holdingYearsInput", "holdingYears", "년"),
+            ("annualMileageInput", "annualMileageKm", "km"),
+            ("dcfcRatioInput", "dcfcRatio", "%"),
+            ("heldMonthsInput", "heldMonths", "개월"),
+        ]
+        for s_id, var_name, unit in slider_configs:
+            slider_pattern = rf'<input\b[^/]*?id=["\']?{s_id}["\']?[^/]*?/>'
+            match = re.search(slider_pattern, self.source, re.DOTALL)
+            self.assertIsNotNone(match, f"Could not find input tag for slider {s_id}")
+            tag = match.group(0)
+            self.assertIn('aria-valuetext=', tag, f"Slider {s_id} must declare aria-valuetext")
+            self.assertIn(var_name, tag, f"Slider {s_id} aria-valuetext must reference state variable {var_name}")
+            self.assertIn(unit, tag, f"Slider {s_id} aria-valuetext must contain unit '{unit}'")
 
     def test_depreciation_calculator_brand_tablist_semantics(self):
         """
@@ -1046,6 +1094,35 @@ class TestLayoutDesktopNavigationA11y(unittest.TestCase):
         self.assertIn('role="contentinfo"', footer_source)
         self.assertIn('aria-label="법적 고지 및 데이터 출처"', footer_source)
 
+    def test_site_footer_statutory_data_sources_and_a11y(self):
+        """
+        Validate that SiteFooter provides statutory public data source attribution links
+        (KECO 무공해차 통합누리집, MOLIT 자동차리콜센터, NHTSA) with explicit rel="noopener noreferrer",
+        target="_blank", aria-label, focus ring styling, and screen-reader new window notification.
+        """
+        footer_source = read_component_source("components/layout/SiteFooter.tsx")
+        data_sources = [
+            ("https://www.ev.or.kr", "KECO", "무공해차"),
+            ("https://www.car.go.kr", "MOLIT", "자동차리콜센터"),
+            ("https://www.nhtsa.gov", "NHTSA", "미국"),
+        ]
+        for url, code, label_keyword in data_sources:
+            self.assertIn(url, footer_source, f"SiteFooter must link to official data source: {url}")
+            self.assertIn(code, footer_source, f"SiteFooter must mention organization code: {code}")
+            anchor_pattern = rf'<a\b[^>]*?href=["\']{re.escape(url)}["\'][^>]*?>([\s\S]*?)</a>'
+            match = re.search(anchor_pattern, footer_source)
+            self.assertIsNotNone(match, f"Could not find anchor element for {url} in SiteFooter")
+            tag_content = match.group(0)
+            self.assertIn('target="_blank"', tag_content, f"Link {url} must open in new window with target='_blank'")
+            self.assertIn('rel="noopener noreferrer"', tag_content, f"Link {url} must specify rel='noopener noreferrer'")
+            self.assertIn('aria-label=', tag_content, f"Link {url} must declare an explicit aria-label")
+            self.assertIn('focus-visible:ring-2', tag_content, f"Link {url} must declare visible focus indicator")
+            self.assertIn('(새 창에서 열림)', tag_content, f"Link {url} must notify screen reader users of external opening")
+
+        # Verify high contrast text styling
+        self.assertIn("bg-slate-900", footer_source, "SiteFooter should use high-contrast dark container bg-slate-900")
+        self.assertNotIn("text-gray-400", footer_source, "SiteFooter must not use low-contrast text-gray-400 on light backgrounds")
+
 
 
 class TestSubsidyTrackerClientA11y(unittest.TestCase):
@@ -1195,10 +1272,10 @@ class TestSecretAdminReportsA11y(unittest.TestCase):
     def setUpClass(cls):
         cls.source = read_component_source("secret-admin-reports/AdminDashboardClient.tsx")
 
-    def test_sr_only_table_link_not_keyboard_focusable(self):
+    def test_sr_only_table_link_accessible_to_assistive_tech(self):
         """
-        Validate that anchor link inside .sr-only summary table specifies tabIndex={-1} and aria-hidden="true"
-        to prevent trapping invisible keyboard focus (WCAG 2.4.7).
+        Validate that anchor link inside .sr-only summary table is accessible to screen readers
+        with an explicit aria-label and without aria-hidden="true".
         """
         sr_table_match = re.search(
             r'<div className="sr-only">[\s\S]*?<table[\s\S]*?</table>[\s\S]*?</div>',
@@ -1210,8 +1287,8 @@ class TestSecretAdminReportsA11y(unittest.TestCase):
         link_matches = re.findall(r'<a\b[^>]*>', table_html)
         self.assertTrue(len(link_matches) > 0, "Expected link inside .sr-only table in AdminDashboardClient.tsx")
         for link_tag in link_matches:
-            self.assertIn("tabIndex={-1}", link_tag, "sr-only table link must have tabIndex={-1}")
-            self.assertIn('aria-hidden="true"', link_tag, 'sr-only table link must have aria-hidden="true"')
+            self.assertIn('aria-label="게시글 원문 보기"', link_tag)
+            self.assertNotIn('aria-hidden="true"', link_tag)
 
     def test_admin_dashboard_search_input_label_pairing(self):
         """

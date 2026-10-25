@@ -62,31 +62,40 @@ def _normalize_iso_timestamp(raw_date_str: str) -> str:
     # Full timestamp: "2026-09-08 10:11:21" or "2026.09.08 10:11"
     full_match = re.search(r"(\d{4})[./\-](\d{2})[./\-](\d{2})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?", raw)
     if full_match:
-        year = int(full_match.group(1))
-        month = int(full_match.group(2))
-        day = int(full_match.group(3))
-        hour = int(full_match.group(4)) if full_match.group(4) else 12
-        minute = int(full_match.group(5)) if full_match.group(5) else 0
-        second = int(full_match.group(6)) if full_match.group(6) else 0
-        dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
-        return dt.isoformat()
+        try:
+            year = int(full_match.group(1))
+            month = int(full_match.group(2))
+            day = int(full_match.group(3))
+            hour = int(full_match.group(4)) if full_match.group(4) else 12
+            minute = int(full_match.group(5)) if full_match.group(5) else 0
+            second = int(full_match.group(6)) if full_match.group(6) else 0
+            dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
+            return dt.isoformat()
+        except (ValueError, OverflowError):
+            return now.isoformat()
 
     # Time only: "10:11"
     time_match = re.match(r"^(\d{1,2}):(\d{2})(?::(\d{2}))?$", raw)
     if time_match:
-        hour = int(time_match.group(1))
-        minute = int(time_match.group(2))
-        second = int(time_match.group(3)) if time_match.group(3) else 0
-        dt = now.replace(hour=hour, minute=minute, second=second, microsecond=0)
-        return dt.isoformat()
+        try:
+            hour = int(time_match.group(1))
+            minute = int(time_match.group(2))
+            second = int(time_match.group(3)) if time_match.group(3) else 0
+            dt = now.replace(hour=hour, minute=minute, second=second, microsecond=0)
+            return dt.isoformat()
+        except (ValueError, OverflowError):
+            return now.isoformat()
 
     # Month-day: "09.08"
     md_match = re.match(r"^(\d{1,2})[./\-](\d{1,2})$", raw)
     if md_match:
-        month = int(md_match.group(1))
-        day = int(md_match.group(2))
-        dt = datetime.datetime(now.year, month, day, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        return dt.isoformat()
+        try:
+            month = int(md_match.group(1))
+            day = int(md_match.group(2))
+            dt = datetime.datetime(now.year, month, day, 12, 0, 0, tzinfo=datetime.timezone.utc)
+            return dt.isoformat()
+        except (ValueError, OverflowError):
+            return now.isoformat()
 
     return now.isoformat()
 
@@ -350,7 +359,7 @@ class DCInsideCrawler(BaseCrawler):
         """
         # 1. Post ID
         if not post_id:
-            no_match = re.search(r"no=(\d+)", post_url)
+            no_match = re.search(r"no=(\d+)", post_url, re.IGNORECASE)
             post_id = no_match.group(1) if no_match else ""
 
         # 2. Title

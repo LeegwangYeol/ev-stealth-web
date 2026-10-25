@@ -983,6 +983,12 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
 
   const activeModel = useMemo(() => {
     const q = (selectedModelId || '').trim().toLowerCase();
+    const resolved = getModelById(q);
+    if (resolved) {
+      const matchInModels = models.find((m) => m.model_id === resolved.model_id);
+      if (matchInModels) return matchInModels;
+      return resolved;
+    }
     return (
       models.find(
         (m) =>
@@ -994,6 +1000,12 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
 
   const activeRegionForCalc = useMemo(() => {
     const q = (selectedRegionId || '').trim().toLowerCase();
+    const resolved = getRegionById(q);
+    if (resolved) {
+      const matchInRegions = regions.find((r) => r.region_id === resolved.region_id);
+      if (matchInRegions) return matchInRegions;
+      return resolved;
+    }
     return (
       regions.find(
         (r) =>
