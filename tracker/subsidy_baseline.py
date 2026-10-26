@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import math
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from tracker.subsidy_models import (
     AlertSeverity,
@@ -106,7 +106,7 @@ def calculate_net_subsidy(
     max_national: int,
     max_local: int,
     msrp: int,
-) -> Dict[str, int]:
+) -> Dict[str, Union[int, float]]:
     """Calculate national subsidy, local subsidy, total subsidy, and net consumer purchase price."""
     try:
         if msrp is None:

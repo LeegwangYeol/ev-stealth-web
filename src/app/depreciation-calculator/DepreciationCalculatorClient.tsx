@@ -1,18 +1,18 @@
 'use client';
 
-import React, { useState, useMemo, useRef, useDeferredValue } from 'react';
+import React, { useState, useMemo, useRef, useDeferredValue, useCallback } from 'react';
 import type {
   DepreciationDatabase,
   EvModelDepreciation,
   TransferType,
   PriceBasis,
-} from '@/lib/getDepreciationData';
+} from '@/lib/depreciationCalculations';
 import {
   calculateDepreciation,
   simulateBatteryHealth,
   calculateSubsidyClawback,
   calculateTcoComparison,
-} from '@/lib/getDepreciationData';
+} from '@/lib/depreciationCalculations';
 
 interface DepreciationCalculatorClientProps {
   initialDatabase: DepreciationDatabase;
@@ -201,23 +201,23 @@ export default function DepreciationCalculatorClient({
     customNationalSubsidy !== null ? customNationalSubsidy : defaultNationalSubsidy;
 
   // Handle Model Selection
-  const handleSelectModel = (model: EvModelDepreciation) => {
+  const handleSelectModel = useCallback((model: EvModelDepreciation) => {
     setSelectedModelId(model.id);
     setCustomPriceInput(null);
     setCustomLocalSubsidy(null);
     setCustomNationalSubsidy(null);
-  };
+  }, []);
 
   // Sync heldMonths if sync is active
-  const handleYearsChange = (years: number) => {
+  const handleYearsChange = useCallback((years: number) => {
     setHoldingYears(years);
     if (syncMonthsWithYears) {
       setHeldMonths(Math.round(years * 12));
     }
-  };
+  }, [syncMonthsWithYears]);
 
   // Keyboard navigation for Brand Tabs (WAI-ARIA APG pattern)
-  const handleBrandTabKeyDown = (e: React.KeyboardEvent, currentIndex: number) => {
+  const handleBrandTabKeyDown = useCallback((e: React.KeyboardEvent, currentIndex: number) => {
     const count = brands.length;
     let nextIndex = -1;
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
@@ -238,7 +238,7 @@ export default function DepreciationCalculatorClient({
       setSelectedBrand(nextBrand);
       document.getElementById(`brand-tab-${nextBrand}`)?.focus();
     }
-  };
+  }, [brands]);
 
   // ----------------------------------------------------
   // 3. CORE CALCULATIONS
@@ -248,6 +248,7 @@ export default function DepreciationCalculatorClient({
 
   const depResult = useMemo(() => {
     return calculateDepreciation({
+      model: selectedModel,
       modelId: selectedModel.id,
       years: holdingYears,
       mileageKm: totalMileage,
@@ -255,7 +256,7 @@ export default function DepreciationCalculatorClient({
       priceBasis,
       customPurchasePriceKrw: currentPurchasePrice,
     });
-  }, [selectedModel.id, holdingYears, totalMileage, winterSeason, priceBasis, currentPurchasePrice]);
+  }, [selectedModel, holdingYears, totalMileage, winterSeason, priceBasis, currentPurchasePrice]);
 
   // Dynamic multi-year benchmarks for current holdingYears
   const currentEvBenchmark = useMemo(() => {
@@ -286,6 +287,7 @@ export default function DepreciationCalculatorClient({
     const yearsArr = [1, 2, 3, 4, 5];
     return yearsArr.map((y) => {
       const dep = calculateDepreciation({
+        model: selectedModel,
         modelId: selectedModel.id,
         years: y,
         mileageKm: y * annualMileageKm,
@@ -319,7 +321,7 @@ export default function DepreciationCalculatorClient({
       };
     });
   }, [
-    selectedModel.id,
+    selectedModel,
     annualMileageKm,
     winterSeason,
     priceBasis,
@@ -419,7 +421,7 @@ export default function DepreciationCalculatorClient({
   // ----------------------------------------------------
   // 4. PRESET SCENARIO HANDLERS
   // ----------------------------------------------------
-  const applyPreset = (preset: 'commute' | 'business' | 'leisure' | 'earlySell') => {
+  const applyPreset = useCallback((preset: 'commute' | 'business' | 'leisure' | 'earlySell') => {
     if (preset === 'commute') {
       setHoldingYears(3);
       setHeldMonths(36);
@@ -449,7 +451,7 @@ export default function DepreciationCalculatorClient({
       setWinterSeason(false);
       setTransferType('inter');
     }
-  };
+  }, []);
 
   // ----------------------------------------------------
   // 5. HELPER BADGE RENDERERS
@@ -687,7 +689,7 @@ export default function DepreciationCalculatorClient({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="모델명, 제조사, 배터리 검색..."
-              className="w-full px-3.5 py-2 pl-9 rounded-xl border border-slate-300 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:border-blue-500 bg-slate-50"
+              className="w-full px-3.5 py-2 pl-9 rounded-xl border border-slate-300 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:border-blue-500 bg-slate-50 placeholder-slate-500"
               aria-label="전기차 모델 검색창"
             />
             <span className="absolute left-3 top-2.5 text-slate-600 text-sm" aria-hidden="true">🔍</span>
@@ -871,6 +873,9 @@ export default function DepreciationCalculatorClient({
               onChange={(e) => handleYearsChange(parseFloat(e.target.value))}
               className="w-full accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="차량 보유 기간 설정 (1년에서 5년)"
+              aria-valuenow={holdingYears}
+              aria-valuemin={1}
+              aria-valuemax={5}
               aria-valuetext={`${holdingYears}년 보유`}
             />
             <div className="flex justify-between text-[11px] text-slate-600 px-0.5">
@@ -920,6 +925,9 @@ export default function DepreciationCalculatorClient({
               onChange={(e) => setAnnualMileageKm(parseInt(e.target.value, 10))}
               className="w-full accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="연간 주행거리 설정 (5,000km에서 50,000km)"
+              aria-valuenow={annualMileageKm}
+              aria-valuemin={5000}
+              aria-valuemax={50000}
               aria-valuetext={`연간 ${annualMileageKm.toLocaleString()}km 주행`}
             />
             <div className="flex justify-between text-[11px] text-slate-600 px-0.5">
@@ -959,6 +967,9 @@ export default function DepreciationCalculatorClient({
               onChange={(e) => setDcfcRatio(parseInt(e.target.value, 10))}
               className="w-full accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="급속 충전 비율 설정 (0%에서 100%)"
+              aria-valuenow={dcfcRatio}
+              aria-valuemin={0}
+              aria-valuemax={100}
               aria-valuetext={`급속 충전 비율 ${dcfcRatio}%`}
             />
             <div className="flex justify-between text-[11px] text-slate-600 px-0.5">
@@ -1226,7 +1237,7 @@ export default function DepreciationCalculatorClient({
                       y1={y}
                       x2="680"
                       y2={y}
-                      stroke="#334155"
+                      stroke="#64748b"
                       strokeDasharray="4 4"
                       strokeWidth="1"
                     />
@@ -1350,7 +1361,7 @@ export default function DepreciationCalculatorClient({
               })}
 
               {/* Bottom Baseline */}
-              <line x1="60" y1="230" x2="680" y2="230" stroke="#475569" strokeWidth="2" />
+              <line x1="60" y1="230" x2="680" y2="230" stroke="#64748b" strokeWidth="2" />
             </svg>
 
             {/* Screen Reader Accessible Data Table Alternative */}
@@ -1745,6 +1756,9 @@ export default function DepreciationCalculatorClient({
               }}
               className="w-full accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="보조금 의무운행 기간 중 보유 개월 수 설정"
+              aria-valuenow={heldMonths}
+              aria-valuemin={0}
+              aria-valuemax={36}
               aria-valuetext={`${heldMonths}개월 운행`}
             />
             <div className="flex justify-between text-[11px] text-slate-600">

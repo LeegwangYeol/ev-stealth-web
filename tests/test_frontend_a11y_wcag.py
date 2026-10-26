@@ -31,7 +31,9 @@ Test Scope & Invariants:
 3. DepreciationCalculatorClient.tsx:
    - Verifies circular Battery State of Health (SoH) meter exposes role="progressbar", aria-valuenow, aria-valuemin, aria-valuemax, and aria-label.
    - Verifies Battery SoH gauge track circle uses high-contrast stroke #64748b (>= 3.0:1 on container #0f172a, WCAG 1.4.11).
-   - Verifies range sliders expose localized aria-valuetext with unit expressions (년, km, %, 개월).
+   - Verifies SVG projection chart grid lines and bottom baseline use high-contrast stroke #64748b (>= 3.0:1 on container #0f172a, WCAG 1.4.11).
+   - Verifies range sliders expose localized aria-valuetext with unit expressions (년, km, %, 개월) and explicit aria-valuenow, aria-valuemin, aria-valuemax (WCAG 4.1.2).
+   - Verifies search input placeholders on bg-slate-50 use placeholder-slate-500 (>= 4.5:1, WCAG 1.4.3).
    - Verifies selected model card pricing color text-blue-700 (> 4.5:1 on bg-blue-50) replacing text-blue-600.
    - Verifies TCO cumulative savings banner uses high-contrast text-white font-medium rather than low-contrast text-blue-200/100.
    - Verifies wrapping of transfer type radio option groups in semantic <fieldset> with accessible <legend>.
@@ -854,6 +856,63 @@ class TestDepreciationCalculatorClientA11y(unittest.TestCase):
         self.assertIn("aria-pressed={chartViewMode === 'price'}", self.source)
         self.assertIn("aria-pressed={chartViewMode === 'percentage'}", self.source)
 
+    def test_depreciation_chart_svg_elements_contrast_ratio_level_aa(self):
+        """
+        Validate that SVG projection chart grid lines and bottom baseline use
+        stroke="#64748b" (slate-500) rather than low-contrast #334155 and #475569,
+        achieving a contrast ratio of >= 3.0:1 against container #0f172a (WCAG 1.4.11 Non-text Contrast).
+        """
+        # 1. Grid Lines verification
+        grid_match = re.search(
+            r'\{/\*\s*Grid Lines\s*\*/\}.*?<line\b([^>]*?)/>',
+            self.source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(grid_match, "Could not find Grid Lines SVG element in DepreciationCalculatorClient.tsx")
+        grid_attrs = grid_match.group(1)
+        self.assertIn('stroke="#64748b"', grid_attrs, "Grid lines must use high-contrast stroke='#64748b'")
+        self.assertNotIn('stroke="#334155"', grid_attrs, "Grid lines must not use low-contrast stroke='#334155'")
+
+        # 2. Bottom Baseline verification
+        baseline_match = re.search(
+            r'\{/\*\s*Bottom Baseline\s*\*/\}\s*<line\b([^>]*?)/>',
+            self.source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(baseline_match, "Could not find Bottom Baseline SVG element in DepreciationCalculatorClient.tsx")
+        baseline_attrs = baseline_match.group(1)
+        self.assertIn('stroke="#64748b"', baseline_attrs, "Bottom baseline must use high-contrast stroke='#64748b'")
+        self.assertNotIn('stroke="#475569"', baseline_attrs, "Bottom baseline must not use low-contrast stroke='#475569'")
+
+        # 3. Mathematical proof against container #0f172a
+        contrast = calculate_contrast_ratio("#64748b", "#0f172a")
+        self.assertGreaterEqual(
+            contrast,
+            3.0,
+            f"SVG chart elements contrast {contrast:.2f}:1 must meet or exceed WCAG 1.4.11 minimum 3.0:1",
+        )
+        self.assertAlmostEqual(contrast, 3.6, delta=0.2)
+
+    def test_depreciation_sliders_have_explicit_aria_boundary_attributes(self):
+        """
+        Validate that all 4 interactive range sliders in DepreciationCalculatorClient.tsx
+        declare explicit aria-valuenow, aria-valuemin, and aria-valuemax attributes (WCAG 4.1.2).
+        """
+        slider_expectations = [
+            ("holdingYearsInput", "holdingYears", 1, 5),
+            ("annualMileageInput", "annualMileageKm", 5000, 50000),
+            ("dcfcRatioInput", "dcfcRatio", 0, 100),
+            ("heldMonthsInput", "heldMonths", 0, 36),
+        ]
+        for s_id, var_name, min_val, max_val in slider_expectations:
+            slider_pattern = rf'<input\b[^/]*?id=["\']?{s_id}["\']?[^/]*?/>'
+            match = re.search(slider_pattern, self.source, re.DOTALL)
+            self.assertIsNotNone(match, f"Could not find input tag for slider {s_id}")
+            tag = match.group(0)
+            self.assertIn(f'aria-valuenow={{{var_name}}}', tag, f"Slider {s_id} must have aria-valuenow={{{var_name}}}")
+            self.assertIn(f'aria-valuemin={{{min_val}}}', tag, f"Slider {s_id} must have aria-valuemin={{{min_val}}}")
+            self.assertIn(f'aria-valuemax={{{max_val}}}', tag, f"Slider {s_id} must have aria-valuemax={{{max_val}}}")
+
 
 
 class TestReliabilityDashboardClientA11y(unittest.TestCase):
@@ -1563,6 +1622,39 @@ class TestContrastMathematicalVerification(unittest.TestCase):
         self.assertGreaterEqual(cr_a900, 7.0, f"amber-900 on yellow-50 failed: {cr_a900:.2f}:1")
         self.assertAlmostEqual(cr_a900, 8.96, delta=0.2)
 
+    def test_search_inputs_have_compliant_placeholder_contrast(self):
+        """
+        Validate that search inputs on bg-slate-50 explicitly declare placeholder-slate-500,
+        achieving contrast ratio >= 4.5:1 against #f8fafc (WCAG 1.4.3 Level AA Text Contrast).
+        """
+        depr_source = read_component_source("depreciation-calculator/DepreciationCalculatorClient.tsx")
+        admin_source = read_component_source("secret-admin-reports/AdminDashboardClient.tsx")
+        rel_source = read_component_source("reliability-analytics/ReliabilityDashboardClient.tsx")
+
+        # Check DepreciationCalculatorClient vehicle-search-input
+        depr_input_match = re.search(r'<input\b[^/]*?id=["\']vehicle-search-input["\'][^/]*?/>', depr_source, re.DOTALL)
+        self.assertIsNotNone(depr_input_match, "Could not find vehicle-search-input")
+        self.assertIn("placeholder-slate-500", depr_input_match.group(0))
+
+        # Check AdminDashboardClient admin-defect-search-input
+        admin_input_match = re.search(r'<input\b[^/]*?id=["\']admin-defect-search-input["\'][^/]*?/>', admin_source, re.DOTALL)
+        self.assertIsNotNone(admin_input_match, "Could not find admin-defect-search-input")
+        self.assertIn("placeholder-slate-500", admin_input_match.group(0))
+
+        # Check ReliabilityDashboardClient reliability-search-input
+        rel_input_match = re.search(r'<input\b[^/]*?id=["\']reliability-search-input["\'][^/]*?/>', rel_source, re.DOTALL)
+        self.assertIsNotNone(rel_input_match, "Could not find reliability-search-input")
+        self.assertIn("placeholder-slate-500", rel_input_match.group(0))
+
+        # Mathematical contrast ratio: slate-500 (#64748b) on slate-50 (#f8fafc)
+        cr = calculate_contrast_ratio("#64748b", "#f8fafc")
+        self.assertGreaterEqual(
+            cr,
+            4.5,
+            f"placeholder-slate-500 on bg-slate-50 contrast ratio {cr:.2f}:1 must be >= 4.5:1",
+        )
+        self.assertAlmostEqual(cr, 4.55, delta=0.1)
+
 
 class TestBrandAndEditorialPagesA11y(unittest.TestCase):
     """
@@ -1691,14 +1783,16 @@ class TestAdversarialA11yEdgeCases(unittest.TestCase):
         ]:
             source = read_component_source(rel_path)
             if 'role="progressbar"' in source:
-                min_match = re.search(r'aria-valuemin=\{?(\d+)\}?', source)
-                max_match = re.search(r'aria-valuemax=\{?(\d+)\}?', source)
-                if min_match and max_match:
-                    val_min = int(min_match.group(1))
-                    val_max = int(max_match.group(1))
-                    self.assertEqual(val_min, 0)
-                    self.assertEqual(val_max, 100)
-                    self.assertLess(val_min, val_max)
+                for pb_match in re.finditer(r'<[a-zA-Z0-9]+\b[^>]*?role=["\']progressbar["\'][^>]*?>', source, re.DOTALL):
+                    pb_tag = pb_match.group(0)
+                    min_match = re.search(r'aria-valuemin=\{?(\d+)\}?', pb_tag)
+                    max_match = re.search(r'aria-valuemax=\{?(\d+)\}?', pb_tag)
+                    if min_match and max_match:
+                        val_min = int(min_match.group(1))
+                        val_max = int(max_match.group(1))
+                        self.assertEqual(val_min, 0)
+                        self.assertEqual(val_max, 100)
+                        self.assertLess(val_min, val_max)
 
     def test_aria_controls_and_id_syntax_integrity(self):
         """

@@ -67,7 +67,7 @@ class RawPost:
         **kwargs: Any,
     ) -> None:
         self.platform = str(source or platform or "unknown")
-        self.post_id = str(id or post_id or "")
+        self.post_id = str(id if id is not None else (post_id if post_id is not None else ""))
         self.url = str(url or "")
         self.title = str(title or "")
         self.content = str(content or "")
@@ -114,7 +114,7 @@ class RawPost:
             else []
         )
         return cls(
-            platform=str(_get("platform") or "unknown"),
+            platform=str(_get("source") or _get("platform") or "unknown"),
             post_id=str(_get("post_id") or _get("id") or ""),
             url=str(_get("url") or ""),
             title=str(_get("title") or ""),
@@ -175,7 +175,7 @@ class ComplaintRecord:
     def severity_tier(self) -> str:
         """Map DSI score to 4 severity tiers or return explicit severity."""
         if self.severity:
-            return str(self.severity).upper()
+            return str(self.severity).strip().upper()
         if self.severity_index is None:
             return "LOW"
         try:
@@ -251,7 +251,7 @@ class ComplaintRecord:
             "defect_category": self.defect_category,
             "summary": self.summary,
             "verbatim_quote": self.verbatim_quote,
-            "slang_terms_detected": list(self.slang_terms_detected),
+            "slang_terms_detected": list(self.slang_terms_detected or []),
             "sentiment_polarity": _safe_round(self.sentiment_polarity, 4),
             "negativity_score": _safe_round(self.negativity_score, 4),
             "severity_index": _safe_round(self.severity_index, 2),
@@ -279,8 +279,8 @@ class ComplaintRecord:
             "summary": self.summary,
             "verbatim_quote": self.verbatim_quote,
             "raw_quote": self.verbatim_quote,
-            "slang_tags": list(self.slang_terms_detected),
-            "slang_terms_detected": list(self.slang_terms_detected),
+            "slang_tags": list(self.slang_terms_detected or []),
+            "slang_terms_detected": list(self.slang_terms_detected or []),
             "sentiment_score": _safe_round(self.negativity_score, 4),
             "sentiment_polarity": _safe_round(self.sentiment_polarity, 4),
             "negativity_score": _safe_round(self.negativity_score, 4),

@@ -1,17 +1,23 @@
 'use client';
 
-import React, { useState, useMemo, useDeferredValue } from 'react';
+import React, { useState, useMemo, useDeferredValue, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import ClientTimestamp from '@/components/ClientTimestamp';
 import {
   ReliabilityTrendsDatabase,
   DefectCategoryKey,
   ModelYearVerdict,
   YearEvaluation,
+  BrandReliability,
+  DefectCategoryMetadata,
+  RepairCostMatrixItem,
+  EnrichedModelItem,
   getAllEnrichedModels,
   getVerdictBadgeInfo,
   getDsiSeverityLevel,
   getGradeBadgeStyle,
-} from '@/lib/getReliabilityData';
+} from '@/lib/reliabilityCalculations';
 
 interface ReliabilityDashboardClientProps {
   initialData: ReliabilityTrendsDatabase;
@@ -52,7 +58,321 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
   COLD_WEATHER: ['혹한기', '동절기', '저온', '히트펌프', '옥토밸브', '난방'],
 };
 
+/**
+ * Fuzzy brand resolver for deep-linking query parameter (?brand=...)
+ */
+function resolveBrandId(input: string, brands: BrandReliability[]): string | null {
+  if (!input) return null;
+  const clean = input.trim().toLowerCase();
+  if (clean === 'all') return 'ALL';
+
+  const exact = brands.find((b) => b.id.toLowerCase() === clean);
+  if (exact) return exact.id;
+
+  const match = brands.find((b) => {
+    const en = (b.name_en || '').toLowerCase();
+    const ko = (b.name_ko || '').toLowerCase();
+    return (
+      clean === en ||
+      clean === ko ||
+      en.includes(clean) ||
+      clean.includes(en) ||
+      ko.includes(clean) ||
+      clean.includes(ko)
+    );
+  });
+  if (match) return match.id;
+
+  if (clean.includes('hyundai') || clean.includes('현대')) return 'hyundai';
+  if (clean.includes('kia') || clean.includes('기아')) return 'kia';
+  if (clean.includes('genesis') || clean.includes('제네시스')) return 'genesis';
+  if (clean.includes('tesla') || clean.includes('테슬라')) return 'tesla';
+  if (clean.includes('byd') || clean.includes('비야디')) return 'byd';
+  if (clean.includes('benz') || clean.includes('벤츠') || clean.includes('mercedes')) return 'mercedes-benz';
+  if (clean.includes('bmw')) return 'bmw';
+  if (clean.includes('polestar') || clean.includes('폴스타')) return 'polestar';
+  if (clean.includes('gm') || clean.includes('chevrolet') || clean.includes('쉐보레')) return 'gm';
+
+  return null;
+}
+
+/**
+ * Fuzzy category resolver for deep-linking query parameter (?category=...)
+ */
+function resolveCategoryKey(input: string, categories: DefectCategoryMetadata[]): string | null {
+  if (!input) return null;
+  const clean = input.trim().toUpperCase();
+  if (clean === 'ALL') return 'ALL';
+
+  const exact = categories.find((c) => c.code.toUpperCase() === clean);
+  if (exact) return exact.code;
+
+  const lower = input.trim().toLowerCase();
+  const labelMatch = categories.find(
+    (c) =>
+      c.label_ko.toLowerCase().includes(lower) ||
+      lower.includes(c.label_ko.toLowerCase())
+  );
+  if (labelMatch) return labelMatch.code;
+
+  if (lower.includes('battery') || lower.includes('충전') || lower.includes('배터리')) return 'BATTERY_CHARGING';
+  if (lower.includes('power') || lower.includes('drive') || lower.includes('구동') || lower.includes('모터') || lower.includes('iccu')) return 'DRIVING_POWERTRAIN';
+  if (lower.includes('soft') || lower.includes('ota') || lower.includes('bms')) return 'SOFTWARE_ELECTRONICS';
+  if (lower.includes('build') || lower.includes('단차') || lower.includes('품질')) return 'BUILD_QUALITY';
+  if (lower.includes('cost') || lower.includes('repair') || lower.includes('수리')) return 'SERVICE_REPAIR_COST';
+  if (lower.includes('cold') || lower.includes('heat') || lower.includes('저온') || lower.includes('혹한')) return 'COLD_WEATHER';
+
+  return null;
+}
+
+// ==========================================
+// MEMOIZED SUBCOMPONENTS FOR HIGH RENDERING HYGIENE
+// ==========================================
+
+interface HeatmapRowProps {
+  model: EnrichedModelItem;
+  evalMap?: Map<number, YearEvaluation>;
+  heatmapYears: number[];
+  onCellClick: (cell: {
+    modelName: string;
+    brandName: string;
+    year: number;
+    verdict: ModelYearVerdict;
+    dsi: number;
+    primaryDefect: string;
+    quote: string;
+  }) => void;
+}
+
+const HeatmapRow = React.memo(function HeatmapRow({
+  model,
+  evalMap,
+  heatmapYears,
+  onCellClick,
+}: HeatmapRowProps) {
+  return (
+    <tr className="hover:bg-slate-50/80 transition">
+      <th
+        scope="row"
+        className="p-3 font-bold text-slate-900 sticky left-0 bg-white group-hover:bg-slate-50/80 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] text-left font-normal sm:font-bold"
+      >
+        <div className="truncate max-w-[130px] sm:max-w-none">{model.name}</div>
+      </th>
+      <td className="p-3 text-slate-600 text-xs whitespace-nowrap">
+        {model.brand_name_ko}
+      </td>
+      {heatmapYears.map((yr) => {
+        const evalData = evalMap?.get(yr);
+        if (!evalData) {
+          return (
+            <td key={yr} className="p-2 text-center">
+              <div
+                className="w-8 h-8 mx-auto rounded-lg bg-slate-100 flex items-center justify-center text-[10px] text-slate-600 font-mono font-medium"
+                title="해당 연식 데이터 없음"
+                aria-label="데이터 없음"
+              >
+                -
+              </div>
+            </td>
+          );
+        }
+
+        const cellColor =
+          evalData.verdict === 'AVOID'
+            ? 'bg-rose-700 hover:bg-rose-800 text-white shadow-rose-200'
+            : evalData.verdict === 'CAUTION'
+            ? 'bg-amber-400 hover:bg-amber-500 text-slate-950 shadow-amber-200 font-bold'
+            : 'bg-emerald-700 hover:bg-emerald-800 text-white shadow-emerald-200';
+
+        return (
+          <td key={yr} className="p-2 text-center">
+            <button
+              type="button"
+              onClick={() =>
+                onCellClick({
+                  modelName: model.name,
+                  brandName: model.brand_name_ko,
+                  year: evalData.year,
+                  verdict: evalData.verdict,
+                  dsi: evalData.dsi_score,
+                  primaryDefect: evalData.primary_defect,
+                  quote: evalData.raw_quote,
+                })
+              }
+              aria-label={`${model.name} ${evalData.year}년식 ${evalData.verdict} DSI ${evalData.dsi_score}점`}
+              className={`w-8 h-8 mx-auto rounded-lg font-bold text-xs flex items-center justify-center shadow-sm cursor-pointer transition transform hover:scale-110 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${cellColor}`}
+              title={`${model.name} (${evalData.year}): ${evalData.verdict} - DSI ${evalData.dsi_score}`}
+            >
+              {evalData.dsi_score}
+            </button>
+          </td>
+        );
+      })}
+    </tr>
+  );
+});
+
+interface BrandRankingItemProps {
+  brand: BrandReliability;
+  idx: number;
+  isSelected: boolean;
+  onToggle: (brandId: string) => void;
+}
+
+const BrandRankingItem = React.memo(function BrandRankingItem({
+  brand,
+  idx,
+  isSelected,
+  onToggle,
+}: BrandRankingItemProps) {
+  const safeDsi = Number.isFinite(brand.overall_dsi) ? brand.overall_dsi : 0;
+  const dsiWidth = `${Math.min(100, Math.max(15, safeDsi))}%`;
+  const barColor =
+    safeDsi < 50
+      ? 'bg-emerald-500'
+      : safeDsi < 60
+      ? 'bg-amber-400'
+      : safeDsi < 65
+      ? 'bg-orange-500'
+      : 'bg-rose-500';
+
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(brand.id)}
+      aria-pressed={isSelected}
+      className={`w-full text-left p-3 sm:p-4 rounded-2xl border transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+        isSelected
+          ? 'bg-indigo-50/80 border-indigo-300 ring-2 ring-indigo-200'
+          : 'bg-slate-50 hover:bg-slate-100/80 border-slate-200'
+      }`}
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-4 mb-2">
+        <div className="flex items-center gap-2">
+          <span className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center">
+            {idx + 1}
+          </span>
+          <span className="font-bold text-slate-900 text-sm sm:text-base">
+            {brand.name_ko} ({brand.name_en})
+          </span>
+          <span className="text-xs text-slate-600 font-normal">
+            {brand.country} · {brand.models.length}개 모델
+          </span>
+        </div>
+        <div className="flex items-center gap-3 text-xs sm:text-sm">
+          <span className="text-slate-600">
+            치명 결함율: <strong className="text-rose-700">{Number.isFinite(brand.critical_issue_rate) ? brand.critical_issue_rate : 0}%</strong>
+          </span>
+          <span className="font-black text-slate-900 text-sm sm:text-base">
+            DSI {safeDsi}점
+          </span>
+        </div>
+      </div>
+
+      {/* Pure CSS Bar */}
+      <div
+        aria-hidden="true"
+        className="w-full bg-slate-200 rounded-full h-3.5 overflow-hidden relative"
+      >
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+          style={{ width: dsiWidth }}
+        />
+      </div>
+    </button>
+  );
+});
+
+interface CategoryShareCardProps {
+  cat: DefectCategoryMetadata;
+  isSelected: boolean;
+  onToggle: (catCode: string) => void;
+}
+
+const CategoryShareCard = React.memo(function CategoryShareCard({
+  cat,
+  isSelected,
+  onToggle,
+}: CategoryShareCardProps) {
+  const color = CATEGORY_TAG_COLORS[cat.code] || {
+    bg: 'bg-slate-50',
+    text: 'text-slate-700',
+    border: 'border-slate-200',
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(cat.code)}
+      aria-pressed={isSelected}
+      className={`w-full text-left p-4 rounded-2xl border transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+        isSelected
+          ? 'ring-2 ring-indigo-300 bg-indigo-50/50 border-indigo-300'
+          : `${color.bg} ${color.border} hover:shadow-md`
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <span className="font-bold text-sm text-slate-900">{cat.label_ko}</span>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${color.text} bg-white shadow-sm`}>
+          {cat.industry_share_pct}%
+        </span>
+      </div>
+      <p className="text-xs text-slate-600 mt-2 leading-relaxed">{cat.description}</p>
+      <div className="mt-3 pt-2 border-t border-slate-200/60 text-[11px] font-medium text-slate-600">
+        평균 예상 수리비: <strong className="text-slate-800">{cat.avg_repair_cost_range}</strong>
+      </div>
+    </button>
+  );
+});
+
+
+
+interface RepairCostMatrixRowProps {
+  item: RepairCostMatrixItem;
+}
+
+const RepairCostMatrixRow = React.memo(function RepairCostMatrixRow({ item }: RepairCostMatrixRowProps) {
+  return (
+    <tr className="hover:bg-slate-50 transition">
+      <th scope="row" className="p-4 font-bold text-slate-900 align-top text-left font-normal sm:font-bold">
+        <div>{item.component_name}</div>
+        <div className="text-[11px] text-slate-600 font-normal mt-1">
+          {item.affected_systems}
+        </div>
+      </th>
+      <td className="p-4 font-extrabold text-rose-700 align-top whitespace-nowrap">
+        {item.avg_cost_krw}
+      </td>
+      <td className="p-4 text-slate-600 align-top text-xs">
+        {item.standard_warranty}
+      </td>
+      <td className="p-4 align-top">
+        <div className="flex flex-wrap gap-1">
+          {item.high_risk_models.map((m) => (
+            <span
+              key={`${item.component_name}-${m}`}
+              className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-medium"
+            >
+              {m}
+            </span>
+          ))}
+        </div>
+      </td>
+      <td className="p-4 text-xs text-slate-700 leading-relaxed align-top">
+        <span className="font-semibold text-rose-700 mr-1">주의:</span>
+        {item.critical_warning}
+      </td>
+    </tr>
+  );
+});
+
+// ==========================================
+// ROOT DASHBOARD CLIENT COMPONENT
+// ==========================================
+
 export default function ReliabilityDashboardClient({ initialData }: ReliabilityDashboardClientProps) {
+  const searchParams = useSearchParams();
+
   // --- Filter States ---
   const [selectedBrand, setSelectedBrand] = useState<string>('ALL');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
@@ -98,7 +418,26 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     [initialData?.repair_cost_matrix]
   );
 
-  // All enriched models
+  // Synchronize URL query parameters (?brand=...&category=...)
+  useEffect(() => {
+    if (!searchParams) return;
+    const brandParam = searchParams.get('brand');
+    if (brandParam) {
+      const resolved = resolveBrandId(brandParam, brands);
+      if (resolved) {
+        setSelectedBrand(resolved);
+      }
+    }
+    const catParam = searchParams.get('category');
+    if (catParam) {
+      const resolvedCat = resolveCategoryKey(catParam, categories);
+      if (resolvedCat) {
+        setSelectedCategory(resolvedCat);
+      }
+    }
+  }, [searchParams, brands, categories]);
+
+  // All enriched models loaded from initialData
   const allModels = useMemo(() => {
     return getAllEnrichedModels(initialData);
   }, [initialData]);
@@ -108,7 +447,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     const lookup = new Map<string, Map<number, YearEvaluation>>();
     for (const m of allModels) {
       const mLookup = new Map<number, YearEvaluation>();
-      for (const y of (m.year_evaluations || [])) {
+      for (const y of m.year_evaluations || []) {
         mLookup.set(y.year, y);
       }
       lookup.set(m.id, mLookup);
@@ -136,11 +475,12 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       // Category filter: match either model top_category or any year evaluation mentioning this defect domain
       if (selectedCategory !== 'ALL') {
         const matchesTop = model.top_category === selectedCategory;
-        const matchesYearEval = model.year_evaluations?.some((y) => {
-          const text = `${y.primary_defect || ''} ${y.chronic_symptoms?.join(' ') || ''}`.toLowerCase();
-          const kws = CATEGORY_KEYWORDS[selectedCategory] || [];
-          return kws.some((kw) => text.includes(kw));
-        }) ?? false;
+        const matchesYearEval =
+          model.year_evaluations?.some((y) => {
+            const text = `${y.primary_defect || ''} ${y.chronic_symptoms?.join(' ') || ''}`.toLowerCase();
+            const kws = CATEGORY_KEYWORDS[selectedCategory] || [];
+            return kws.some((kw) => text.includes(kw));
+          }) ?? false;
 
         if (!matchesTop && !matchesYearEval) return false;
       }
@@ -155,67 +495,97 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
       // Year range filter
       if (selectedYearRange !== 'ALL') {
-        let hasYear = false;
-        if (selectedYearRange === 'EARLY') {
-          hasYear = model.year_evaluations?.some((y) => y.year <= 2020) ?? false;
-        } else if (selectedYearRange === 'MID') {
-          hasYear = model.year_evaluations?.some((y) => y.year >= 2021 && y.year <= 2023) ?? false;
-        } else if (selectedYearRange === 'LATE') {
-          hasYear = model.year_evaluations?.some((y) => y.year >= 2024) ?? false;
-        }
-        if (!hasYear) return false;
+        const hasYearInRange = model.year_evaluations?.some((y) => {
+          if (selectedYearRange === 'EARLY') return y.year <= 2020;
+          if (selectedYearRange === 'MID') return y.year >= 2021 && y.year <= 2023;
+          if (selectedYearRange === 'LATE') return y.year >= 2024;
+          return true;
+        });
+        if (!hasYearInRange) return false;
       }
 
-      // Live search query
-      if (deferredSearchQuery.trim() !== '') {
-        const q = deferredSearchQuery.toLowerCase().trim();
-        const matchesName = (model.name || '').toLowerCase().includes(q);
-        const matchesBrandKo = (model.brand_name_ko || '').toLowerCase().includes(q);
-        const matchesBrandEn = (model.brand_name_en || '').toLowerCase().includes(q);
-        const matchesSegment = (model.segment || '').toLowerCase().includes(q);
-        const matchesDefect = model.year_evaluations?.some(
-          (y) =>
-            (y.primary_defect || '').toLowerCase().includes(q) ||
-            y.chronic_symptoms?.some((s) => (s || '').toLowerCase().includes(q)) ||
-            (y.raw_quote || '').toLowerCase().includes(q)
-        ) ?? false;
+      // Deferred Search query (brand name, model name, segment, chronic symptoms, raw quote)
+      if (deferredSearchQuery.trim()) {
+        const q = deferredSearchQuery.trim().toLowerCase();
+        const matchesName = model.name.toLowerCase().includes(q);
+        const matchesBrandKo = model.brand_name_ko.toLowerCase().includes(q);
+        const matchesBrandEn = model.brand_name_en.toLowerCase().includes(q);
+        const matchesSegment = model.segment.toLowerCase().includes(q);
+        const matchesDefect =
+          model.year_evaluations?.some(
+            (y) =>
+              (y.primary_defect || '').toLowerCase().includes(q) ||
+              y.chronic_symptoms?.some((s) => (s || '').toLowerCase().includes(q)) ||
+              (y.raw_quote || '').toLowerCase().includes(q)
+          ) ?? false;
 
-        if (!matchesName && !matchesBrandKo && !matchesBrandEn && !matchesSegment && !matchesDefect) {
+        if (
+          !matchesName &&
+          !matchesBrandKo &&
+          !matchesBrandEn &&
+          !matchesSegment &&
+          !matchesDefect
+        ) {
           return false;
         }
       }
 
       return true;
     });
-  }, [allModels, selectedBrand, selectedCategory, selectedVerdict, selectedYearRange, deferredSearchQuery]);
+  }, [
+    allModels,
+    selectedBrand,
+    selectedCategory,
+    selectedVerdict,
+    selectedYearRange,
+    deferredSearchQuery,
+  ]);
 
   // Sorted models
   const sortedModels = useMemo(() => {
     const sorted = [...filteredModels];
     if (sortBy === 'DSI_DESC') {
-      sorted.sort((a, b) => b.avg_dsi - a.avg_dsi);
+      sorted.sort((a, b) => {
+        const dsiA = Number.isFinite(a.avg_dsi) ? a.avg_dsi : 0;
+        const dsiB = Number.isFinite(b.avg_dsi) ? b.avg_dsi : 0;
+        return dsiB - dsiA;
+      });
     } else if (sortBy === 'DSI_ASC') {
-      sorted.sort((a, b) => a.avg_dsi - b.avg_dsi);
+      sorted.sort((a, b) => {
+        const dsiA = Number.isFinite(a.avg_dsi) ? a.avg_dsi : 0;
+        const dsiB = Number.isFinite(b.avg_dsi) ? b.avg_dsi : 0;
+        return dsiA - dsiB;
+      });
     } else if (sortBy === 'GRADE') {
-      const gradeOrder: Record<string, number> = { 'A+': 1, 'A': 2, 'B': 3, 'C': 4, 'D': 5, 'F': 6 };
-      sorted.sort((a, b) => (gradeOrder[a.overall_grade] || 99) - (gradeOrder[b.overall_grade] || 99));
+      const gradeOrder: Record<string, number> = {
+        'A+': 1,
+        A: 2,
+        B: 3,
+        C: 4,
+        D: 5,
+        F: 6,
+      };
+      sorted.sort(
+        (a, b) =>
+          (gradeOrder[a.overall_grade] || 99) - (gradeOrder[b.overall_grade] || 99)
+      );
     } else if (sortBy === 'NAME') {
       sorted.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
     }
     return sorted;
   }, [filteredModels, sortBy]);
 
-  // Reset filters
-  const resetFilters = () => {
+  // Stabilized Callback Handlers
+  const resetFilters = useCallback(() => {
     setSelectedBrand('ALL');
     setSelectedCategory('ALL');
     setSelectedVerdict('ALL');
     setSelectedYearRange('ALL');
     setSearchQuery('');
     setSortBy('DSI_DESC');
-  };
+  }, []);
 
-  const handleChartTabKeyDown = (e: React.KeyboardEvent, currentIndex: number) => {
+  const handleChartTabKeyDown = useCallback((e: React.KeyboardEvent, currentIndex: number) => {
     const count = CHART_TABS.length;
     let nextIndex = -1;
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
@@ -236,7 +606,34 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       setActiveChartTab(nextTab);
       document.getElementById(`chart-tab-${nextTab}`)?.focus();
     }
-  };
+  }, []);
+
+  const handleCellClick = useCallback(
+    (cell: {
+      modelName: string;
+      brandName: string;
+      year: number;
+      verdict: ModelYearVerdict;
+      dsi: number;
+      primaryDefect: string;
+      quote: string;
+    }) => {
+      setHoveredCell(cell);
+    },
+    []
+  );
+
+  const handleCloseCell = useCallback(() => {
+    setHoveredCell(null);
+  }, []);
+
+  const handleBrandToggle = useCallback((brandId: string) => {
+    setSelectedBrand((prev) => (prev === brandId ? 'ALL' : brandId));
+  }, []);
+
+  const handleCategoryToggle = useCallback((catCode: string) => {
+    setSelectedCategory((prev) => (prev === catCode ? 'ALL' : catCode));
+  }, []);
 
   const hasActiveFilter =
     selectedBrand !== 'ALL' ||
@@ -252,35 +649,47 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
   const avoidEvaluationsCount = useMemo(() => {
     return allModels.reduce(
-      (acc, m) => acc + (m.year_evaluations ? m.year_evaluations.filter((y) => y.verdict === 'AVOID').length : 0),
+      (acc, m) =>
+        acc +
+        (m.year_evaluations
+          ? m.year_evaluations.filter((y) => y.verdict === 'AVOID').length
+          : 0),
       0
     );
   }, [allModels]);
 
-  const rawRatio = totalEvaluationsCount > 0
-    ? (avoidEvaluationsCount / totalEvaluationsCount) * 100
-    : 0.0;
+  const rawRatio =
+    totalEvaluationsCount > 0
+      ? (avoidEvaluationsCount / totalEvaluationsCount) * 100
+      : 0;
   const avoidPercentage = Number.isFinite(rawRatio) ? rawRatio.toFixed(1) : '0.0';
 
   return (
-    <div className="space-y-10 pb-16">
-      {/* 1. HERO SECTION & KEY METRICS */}
-      <section aria-labelledby="reliability-hero-heading" className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-3xl p-6 sm:p-10 shadow-2xl border border-slate-700/50">
-        <div className="max-w-4xl space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs sm:text-sm font-semibold border border-blue-400/30">
-            <span>📊</span>
-            <span>2026 대한민국 전기차 종합 내구성 인텔리전스</span>
+    <div className="space-y-12">
+      {/* 1. HERO HEADER WITH KPI METRICS */}
+      <section aria-labelledby="reliability-hero-heading" className="bg-slate-900 text-white rounded-3xl p-6 sm:p-10 shadow-xl border border-slate-800">
+        <div className="max-w-3xl space-y-3">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-semibold border border-blue-400/30">
+            <span>🛡️</span>
+            <span>중고 전기차 구매자 필수 검증 지침</span>
           </div>
-          <h1 id="reliability-hero-heading" className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight">
-            전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI)
+          <h1 id="reliability-hero-heading" className="text-3xl sm:text-4xl font-black tracking-tight leading-tight">
+            전기차 연식별 결함 트렌드 &amp; 신뢰성 지수(DSI)
           </h1>
-          <p className="text-slate-300 text-base sm:text-lg leading-relaxed">
-            국내 3대 커뮤니티(보배드림, 디시인사이드, 블라인드) 실차주 제보 <strong>{(Number.isFinite(metadata?.total_records_analyzed) ? metadata.total_records_analyzed : 0).toLocaleString()}건</strong>과 국토교통부·NHTSA 공식 리콜 기록을 교차 분석하여, 특정 연식의 치명적 고질병과 중고차 구매 시 절대 피해야 할 연식을 투명하게 공개합니다.
+          <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
+            배터리 화재·열폭주, ICCU 폭파 및 동력 상실, 혹한기 히트펌프 고착 등 1,280여 건의 실차주 결함 제보 데이터를 분석하여 연식별 &quot;안심 추천(BUY SAFE)&quot;, &quot;주의(CAUTION)&quot;, &quot;구매 회피(AVOID)&quot; 판정을 제공합니다.
           </p>
+          <div className="text-xs text-slate-400 flex items-center gap-2 pt-1">
+            <span>최종 데이터 동기화:</span>
+            <ClientTimestamp
+              isoString={metadata?.updated_at || null}
+              className="text-slate-200 font-mono"
+            />
+          </div>
         </div>
 
-        {/* 4 KPI STAT CARDS */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-8 pt-8 border-t border-slate-700/60">
+        {/* KPI Score Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-8 pt-8 border-t border-slate-800">
           <div className="bg-slate-800/80 backdrop-blur rounded-2xl p-4 sm:p-5 border border-slate-700">
             <div className="text-xs sm:text-sm text-slate-400 font-medium">분석 결함 제보</div>
             <div className="text-2xl sm:text-3xl font-black text-white mt-1">
@@ -318,7 +727,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               38.4%
             </div>
             <div className="text-xs text-emerald-300/80 mt-1 font-medium">
-              배터리 & 고전압 충전 계통
+              배터리 &amp; 고전압 충전 계통
             </div>
           </div>
         </div>
@@ -421,67 +830,15 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {allModels.map((model) => {
-                      const evalMap = modelEvalMaps.get(model.id);
-
-                      return (
-                        <tr key={model.id} className="hover:bg-slate-50/80 transition">
-                          <th scope="row" className="p-3 font-bold text-slate-900 sticky left-0 bg-white group-hover:bg-slate-50/80 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] text-left font-normal sm:font-bold">
-                            <div className="truncate max-w-[130px] sm:max-w-none">{model.name}</div>
-                          </th>
-                          <td className="p-3 text-slate-600 text-xs whitespace-nowrap">
-                            {model.brand_name_ko}
-                          </td>
-                          {heatmapYears.map((yr) => {
-                            const evalData = evalMap?.get(yr);
-                            if (!evalData) {
-                              return (
-                                <td key={yr} className="p-2 text-center">
-                                  <div
-                                    className="w-8 h-8 mx-auto rounded-lg bg-slate-100 flex items-center justify-center text-[10px] text-slate-600 font-mono font-medium"
-                                    title="해당 연식 데이터 없음"
-                                    aria-label="데이터 없음"
-                                  >
-                                    -
-                                  </div>
-                                </td>
-                              );
-                            }
-
-                            const cellColor =
-                              evalData.verdict === 'AVOID'
-                                ? 'bg-rose-700 hover:bg-rose-800 text-white shadow-rose-200'
-                                : evalData.verdict === 'CAUTION'
-                                ? 'bg-amber-400 hover:bg-amber-500 text-slate-950 shadow-amber-200 font-bold'
-                                : 'bg-emerald-700 hover:bg-emerald-800 text-white shadow-emerald-200';
-
-                            return (
-                              <td key={yr} className="p-2 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setHoveredCell({
-                                      modelName: model.name,
-                                      brandName: model.brand_name_ko,
-                                      year: evalData.year,
-                                      verdict: evalData.verdict,
-                                      dsi: evalData.dsi_score,
-                                      primaryDefect: evalData.primary_defect,
-                                      quote: evalData.raw_quote,
-                                    })
-                                  }
-                                  aria-label={`${model.name} ${evalData.year}년식 ${evalData.verdict} DSI ${evalData.dsi_score}점`}
-                                  className={`w-8 h-8 mx-auto rounded-lg font-bold text-xs flex items-center justify-center shadow-sm cursor-pointer transition transform hover:scale-110 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${cellColor}`}
-                                  title={`${model.name} (${evalData.year}): ${evalData.verdict} - DSI ${evalData.dsi_score}`}
-                                >
-                                  {evalData.dsi_score}
-                                </button>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      );
-                    })}
+                    {allModels.map((model) => (
+                      <HeatmapRow
+                        key={model.id}
+                        model={model}
+                        evalMap={modelEvalMaps.get(model.id)}
+                        heatmapYears={heatmapYears}
+                        onCellClick={handleCellClick}
+                      />
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -526,7 +883,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     </Link>
                     <button
                       type="button"
-                      onClick={() => setHoveredCell(null)}
+                      onClick={handleCloseCell}
                       className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                     >
                       닫기
@@ -546,66 +903,20 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
               <div className="space-y-4">
                 {[...brands]
-                  .sort((a, b) => a.overall_dsi - b.overall_dsi)
-                  .map((brand, idx) => {
-                    const isSelected = selectedBrand === brand.id;
-                    const dsiWidth = `${Math.min(100, Math.max(15, brand.overall_dsi))}%`;
-                    const barColor =
-                      brand.overall_dsi < 50
-                        ? 'bg-emerald-500'
-                        : brand.overall_dsi < 60
-                        ? 'bg-amber-400'
-                        : brand.overall_dsi < 65
-                        ? 'bg-orange-500'
-                        : 'bg-rose-500';
-
-                    return (
-                      <button
-                        key={brand.id}
-                        type="button"
-                        onClick={() => setSelectedBrand(isSelected ? 'ALL' : brand.id)}
-                        aria-pressed={isSelected}
-                        className={`w-full text-left p-3 sm:p-4 rounded-2xl border transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                          isSelected
-                            ? 'bg-indigo-50/80 border-indigo-300 ring-2 ring-indigo-200'
-                            : 'bg-slate-50 hover:bg-slate-100/80 border-slate-200'
-                        }`}
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-4 mb-2">
-                          <div className="flex items-center gap-2">
-                            <span className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center">
-                              {idx + 1}
-                            </span>
-                            <span className="font-bold text-slate-900 text-sm sm:text-base">
-                              {brand.name_ko} ({brand.name_en})
-                            </span>
-                            <span className="text-xs text-slate-600 font-normal">
-                              {brand.country} · {brand.models.length}개 모델
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3 text-xs sm:text-sm">
-                            <span className="text-slate-600">
-                              치명 결함율: <strong className="text-rose-700">{brand.critical_issue_rate}%</strong>
-                            </span>
-                            <span className="font-black text-slate-900 text-sm sm:text-base">
-                              DSI {brand.overall_dsi}점
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Pure CSS Bar */}
-                        <div
-                          aria-hidden="true"
-                          className="w-full bg-slate-200 rounded-full h-3.5 overflow-hidden relative"
-                        >
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                            style={{ width: dsiWidth }}
-                          />
-                        </div>
-                      </button>
-                    );
-                  })}
+                  .sort((a, b) => {
+                    const dsiA = Number.isFinite(a.overall_dsi) ? a.overall_dsi : 0;
+                    const dsiB = Number.isFinite(b.overall_dsi) ? b.overall_dsi : 0;
+                    return dsiA - dsiB;
+                  })
+                  .map((brand, idx) => (
+                    <BrandRankingItem
+                      key={brand.id}
+                      brand={brand}
+                      idx={idx}
+                      isSelected={selectedBrand === brand.id}
+                      onToggle={handleBrandToggle}
+                    />
+                  ))}
               </div>
             </div>
           )}
@@ -625,14 +936,15 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   className="w-full h-6 rounded-xl overflow-hidden flex shadow-inner border border-slate-200"
                 >
                   {categories.map((cat) => {
+                    const safeShare = Number.isFinite(cat.industry_share_pct) ? cat.industry_share_pct : 0;
                     return (
                       <div
                         key={cat.code}
-                        style={{ width: `${cat.industry_share_pct}%` }}
+                        style={{ width: `${safeShare}%` }}
                         className={`${CATEGORY_BG_COLORS[cat.code] || 'bg-slate-500'} transition-all hover:opacity-80`}
                         role="img"
-                        aria-label={`${cat.label_ko} 점유율 ${cat.industry_share_pct}%`}
-                        title={`${cat.label_ko}: ${cat.industry_share_pct}%`}
+                        aria-label={`${cat.label_ko} 점유율 ${safeShare}%`}
+                        title={`${cat.label_ko}: ${safeShare}%`}
                       />
                     );
                   })}
@@ -662,34 +974,14 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
               {/* Detailed Category Cards Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {categories.map((cat) => {
-                  const color = CATEGORY_TAG_COLORS[cat.code] || { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200' };
-
-                  return (
-                    <button
-                      key={cat.code}
-                      type="button"
-                      onClick={() => setSelectedCategory(selectedCategory === cat.code ? 'ALL' : cat.code)}
-                      aria-pressed={selectedCategory === cat.code}
-                      className={`w-full text-left p-4 rounded-2xl border transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                        selectedCategory === cat.code
-                          ? 'ring-2 ring-indigo-300 bg-indigo-50/50 border-indigo-300'
-                          : `${color.bg} ${color.border} hover:shadow-md`
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-sm text-slate-900">{cat.label_ko}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${color.text} bg-white shadow-sm`}>
-                          {cat.industry_share_pct}%
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-600 mt-2 leading-relaxed">{cat.description}</p>
-                      <div className="mt-3 pt-2 border-t border-slate-200/60 text-[11px] font-medium text-slate-600">
-                        평균 예상 수리비: <strong className="text-slate-800">{cat.avg_repair_cost_range}</strong>
-                      </div>
-                    </button>
-                  );
-                })}
+                {categories.map((cat) => (
+                  <CategoryShareCard
+                    key={cat.code}
+                    cat={cat}
+                    isSelected={selectedCategory === cat.code}
+                    onToggle={handleCategoryToggle}
+                  />
+                ))}
               </div>
             </div>
           )}
@@ -713,7 +1005,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               onChange={(e) => setSearchQuery(e.target.value)}
               aria-label="차종, 브랜드, 결함 증상 검색"
               placeholder="차종명, 브랜드, 결함 증상(ICCU, 배터리, 옥토밸브, 백색가루 등) 검색..."
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition"
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition placeholder-slate-500"
             />
           </div>
 
@@ -924,130 +1216,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {sortedModels.map((model) => {
-              const gradeStyle = getGradeBadgeStyle(model.overall_grade);
-              const safeDsi = Number.isFinite(model?.avg_dsi) ? model.avg_dsi : 0;
-              const dsiInfo = getDsiSeverityLevel(safeDsi);
-
-              return (
-                <div
-                  key={model.id}
-                  className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between"
-                >
-                  <div className="space-y-4">
-                    {/* Card Header */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-xs font-semibold text-blue-600 tracking-wide uppercase">
-                          {model.brand_name_ko} · {model.segment}
-                        </div>
-                        <h3 className="text-xl font-extrabold text-slate-900 mt-0.5 tracking-tight">
-                          {model.name}
-                        </h3>
-                      </div>
-                      <div
-                        className={`px-3 py-1 rounded-2xl border font-black text-sm sm:text-base shrink-0 ${gradeStyle.bg} ${gradeStyle.text} ${gradeStyle.border}`}
-                        title={`내구성 등급: ${model.overall_grade}`}
-                      >
-                        {model.overall_grade} 등급
-                      </div>
-                    </div>
-
-                    {/* DSI Gauge */}
-                    <div className="bg-slate-50 rounded-2xl p-3.5 border border-slate-100 space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-semibold text-slate-600">평균 결함 심각도 (DSI)</span>
-                        <span className={`font-black text-sm ${dsiInfo.textColor}`}>
-                          {safeDsi.toFixed(1)}점
-                        </span>
-                      </div>
-                      <div
-                        role="progressbar"
-                        aria-valuenow={Math.round(safeDsi)}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-label={`${model.brand_name_ko} ${model.name} 평균 결함 심각도 지수 DSI`}
-                        aria-valuetext={`${safeDsi.toFixed(1)}점 (${dsiInfo.label})`}
-                        className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden"
-                      >
-                        <div
-                          className={`h-full rounded-full transition-all duration-300 ${dsiInfo.barBgClass}`}
-                          style={{ width: `${Math.min(100, Math.max(10, safeDsi))}%` }}
-                        />
-                      </div>
-                      <div className="flex justify-between text-[10px] text-slate-600 font-medium">
-                        <span>안전 (0점)</span>
-                        <span className={dsiInfo.textColor}>{dsiInfo.label}</span>
-                        <span>치명 (100점)</span>
-                      </div>
-                    </div>
-
-                    {/* Year Evaluations Accordion List */}
-                    <div className="space-y-2">
-                      <div className="text-xs font-bold text-slate-700">연식별 내구성 평가</div>
-                      <div
-                        tabIndex={0}
-                        aria-label={`${model.brand_name_ko} ${model.name} 연식별 평가 목록`}
-                        role="region"
-                        className="space-y-2 max-h-56 overflow-y-auto pr-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg outline-none"
-                      >
-                        {(model.year_evaluations || []).map((yEval) => {
-                          const vInfo = getVerdictBadgeInfo(yEval.verdict);
-
-                          return (
-                            <div
-                              key={yEval.year}
-                              className={`p-2.5 rounded-xl border text-xs space-y-1 ${
-                                yEval.verdict === 'AVOID'
-                                  ? 'bg-rose-50/70 border-rose-200 text-rose-950'
-                                  : yEval.verdict === 'CAUTION'
-                                  ? 'bg-amber-50/70 border-amber-200 text-amber-950'
-                                  : 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="font-bold">{yEval.year}년식</span>
-                                <span className={`px-2 py-0.5 rounded-full font-extrabold text-[10px] ${vInfo.badgeClass}`}>
-                                  {yEval.verdict}
-                                </span>
-                              </div>
-                              <div className="text-[11px] font-medium leading-snug">
-                                {yEval.primary_defect}
-                              </div>
-                              <div className="flex items-center justify-between text-[10px] text-slate-600 pt-1 border-t border-slate-200/40">
-                                <span>발생률: <strong>{yEval.incident_rate}%</strong></span>
-                                <span>예상 수리비: <strong>{yEval.estimated_repair_cost}</strong></span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Authentic Owner Quote */}
-                    {model.year_evaluations?.[0]?.raw_quote && (
-                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-xs text-slate-600 italic">
-                        <span className="text-slate-600 font-serif mr-1">&ldquo;</span>
-                        {model.year_evaluations[0].raw_quote}
-                        <span className="text-slate-600 font-serif ml-1">&rdquo;</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Card Action Link */}
-                  <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between">
-                    <Link
-                      href={`/recall-portal?model=${encodeURIComponent(model.name)}`}
-                      prefetch={false}
-                      className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
-                    >
-                      <span>🚨 이 차종 공식 리콜·화재 조회</span>
-                      <span>&rarr;</span>
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
+            {sortedModels.map((model) => (
+              <ModelCardItem key={model.id} model={model} />
+            ))}
           </div>
         )}
       </section>
@@ -1085,36 +1256,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             </thead>
             <tbody className="divide-y divide-slate-100">
               {repairCostMatrix.map((item) => (
-                <tr key={item.component_name} className="hover:bg-slate-50 transition">
-                  <th scope="row" className="p-4 font-bold text-slate-900 align-top text-left font-normal sm:font-bold">
-                    <div>{item.component_name}</div>
-                    <div className="text-[11px] text-slate-600 font-normal mt-1">
-                      {item.affected_systems}
-                    </div>
-                  </th>
-                  <td className="p-4 font-extrabold text-rose-700 align-top whitespace-nowrap">
-                    {item.avg_cost_krw}
-                  </td>
-                  <td className="p-4 text-slate-600 align-top text-xs">
-                    {item.standard_warranty}
-                  </td>
-                  <td className="p-4 align-top">
-                    <div className="flex flex-wrap gap-1">
-                      {item.high_risk_models.map((m) => (
-                        <span
-                          key={`${item.component_name}-${m}`}
-                          className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-medium"
-                        >
-                          {m}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="p-4 text-xs text-slate-700 leading-relaxed align-top">
-                    <span className="font-semibold text-rose-700 mr-1">주의:</span>
-                    {item.critical_warning}
-                  </td>
-                </tr>
+                <RepairCostMatrixRow key={item.component_name} item={item} />
               ))}
             </tbody>
           </table>
@@ -1136,9 +1278,135 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           prefetch={false}
           className="px-6 py-3.5 bg-white text-blue-900 hover:bg-blue-50 font-extrabold rounded-2xl shadow-md transition shrink-0 text-sm sm:text-base text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-blue-900"
         >
-          공식 리콜 & 배터리 조회 포털 가기 &rarr;
+          공식 리콜 &amp; 배터리 조회 포털 가기 &rarr;
         </Link>
       </section>
     </div>
   );
 }
+
+interface ModelCardItemProps {
+  model: EnrichedModelItem;
+}
+
+const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItemProps) {
+  const gradeStyle = getGradeBadgeStyle(model.overall_grade);
+  const safeDsi = Number.isFinite(model?.avg_dsi) ? model.avg_dsi : 0;
+  const dsiInfo = getDsiSeverityLevel(safeDsi);
+
+  return (
+    <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between">
+      <div className="space-y-4">
+        {/* Card Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold text-blue-600 tracking-wide uppercase">
+              {model.brand_name_ko} · {model.segment}
+            </div>
+            <h3 className="text-xl font-extrabold text-slate-900 mt-0.5 tracking-tight">
+              {model.name}
+            </h3>
+          </div>
+          <div
+            className={`px-3 py-1 rounded-2xl border font-black text-sm sm:text-base shrink-0 ${gradeStyle.bg} ${gradeStyle.text} ${gradeStyle.border}`}
+            title={`내구성 등급: ${model.overall_grade}`}
+          >
+            {model.overall_grade} 등급
+          </div>
+        </div>
+
+        {/* DSI Gauge */}
+        <div className="bg-slate-50 rounded-2xl p-3.5 border border-slate-100 space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-semibold text-slate-600">평균 결함 심각도 (DSI)</span>
+            <span className={`font-black text-sm ${dsiInfo.textColor}`}>
+              {safeDsi.toFixed(1)}점
+            </span>
+          </div>
+          <div
+            role="progressbar"
+            aria-valuenow={Math.round(safeDsi)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`${model.brand_name_ko} ${model.name} 평균 결함 심각도 지수 DSI`}
+            aria-valuetext={`${safeDsi.toFixed(1)}점 (${dsiInfo.label})`}
+            className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden"
+          >
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${dsiInfo.barBgClass}`}
+              style={{ width: `${Math.min(100, Math.max(10, safeDsi))}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-[10px] text-slate-600 font-medium">
+            <span>안전 (0점)</span>
+            <span className={dsiInfo.textColor}>{dsiInfo.label}</span>
+            <span>치명 (100점)</span>
+          </div>
+        </div>
+
+        {/* Year Evaluations Accordion List */}
+        <div className="space-y-2">
+          <div className="text-xs font-bold text-slate-700">연식별 내구성 평가</div>
+          <div
+            tabIndex={0}
+            aria-label={`${model.brand_name_ko} ${model.name} 연식별 평가 목록`}
+            role="region"
+            className="space-y-2 max-h-56 overflow-y-auto pr-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg outline-none"
+          >
+            {(model.year_evaluations || []).map((yEval) => {
+              const vInfo = getVerdictBadgeInfo(yEval.verdict);
+
+              return (
+                <div
+                  key={yEval.year}
+                  className={`p-2.5 rounded-xl border text-xs space-y-1 ${
+                    yEval.verdict === 'AVOID'
+                      ? 'bg-rose-50/70 border-rose-200 text-rose-950'
+                      : yEval.verdict === 'CAUTION'
+                      ? 'bg-amber-50/70 border-amber-200 text-amber-950'
+                      : 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold">{yEval.year}년식</span>
+                    <span className={`px-2 py-0.5 rounded-full font-extrabold text-[10px] ${vInfo.badgeClass}`}>
+                      {yEval.verdict}
+                    </span>
+                  </div>
+                  <div className="text-[11px] font-medium leading-snug">
+                    {yEval.primary_defect}
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-600 pt-1 border-t border-slate-200/40">
+                    <span>발생률: <strong>{yEval.incident_rate}%</strong></span>
+                    <span>예상 수리비: <strong>{yEval.estimated_repair_cost}</strong></span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Authentic Owner Quote */}
+        {model.year_evaluations?.[0]?.raw_quote && (
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-xs text-slate-600 italic">
+            <span className="text-slate-600 font-serif mr-1">&ldquo;</span>
+            {model.year_evaluations[0].raw_quote}
+            <span className="text-slate-600 font-serif ml-1">&rdquo;</span>
+          </div>
+        )}
+      </div>
+
+      {/* Card Action Link */}
+      <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between">
+        <Link
+          href={`/recall-portal?model=${encodeURIComponent(model.name)}`}
+          prefetch={false}
+          className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+        >
+          <span>🚨 이 차종 공식 리콜·화재 조회</span>
+          <span>&rarr;</span>
+        </Link>
+      </div>
+    </div>
+  );
+});

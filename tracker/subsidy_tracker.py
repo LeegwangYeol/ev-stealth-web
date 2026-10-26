@@ -139,7 +139,7 @@ def calculate_net_subsidy(
     max_national: int,
     max_local: int,
     msrp: int,
-) -> Dict[str, int]:
+) -> Dict[str, Union[int, float]]:
     """Calculate national subsidy, local subsidy, total subsidy, and net consumer purchase price."""
     try:
         if msrp is None:
@@ -492,6 +492,11 @@ class SubsidyTracker:
                 OSError,
                 Exception,
             ) as exc:
+                if hasattr(exc, "fp") and exc.fp:
+                    try:
+                        exc.fp.close()
+                    except Exception:
+                        pass
                 if hasattr(exc, "close") and id(exc) not in closed_exc_ids:
                     closed_exc_ids.add(id(exc))
                     try:

@@ -77,6 +77,26 @@ def _resolve_web_reports_path(custom_web_dir: Optional[Union[str, Path]] = None)
     return candidates[0]
 
 
+def _resolve_public_reports_path(custom_web_dir: Optional[Union[str, Path]] = None) -> Path:
+    """Resolve repository public data/daily_reports.json path for Triple Mirror Parity."""
+    candidates = [
+        CURRENT_DIR / "ev-stealth-web" / "public" / "data" / "daily_reports.json",
+        CURRENT_DIR / "public" / "data" / "daily_reports.json",
+        CURRENT_DIR.parent / "ev-stealth-web" / "public" / "data" / "daily_reports.json",
+        CURRENT_DIR.parent / "src" / "my-e-car" / "ev-stealth-web" / "public" / "data" / "daily_reports.json",
+    ]
+    if custom_web_dir:
+        custom_public = Path(custom_web_dir).parent / "public" / "data" / "daily_reports.json"
+        candidates.insert(0, custom_public)
+        custom_public_2 = Path(custom_web_dir).parent.parent / "public" / "data" / "daily_reports.json"
+        candidates.insert(1, custom_public_2)
+    for c in candidates:
+        if c.parent.exists():
+            return c
+    return candidates[0]
+
+
+
 def _resolve_root_reports_path() -> Path:
     """Resolve repository root data/daily_reports.json path."""
     candidates = [
@@ -349,6 +369,8 @@ class ScraperPipeline:
         if sync_web:
             resolved_web_path = _resolve_web_reports_path(web_dir)
             target_paths.append(os.path.abspath(str(resolved_web_path)))
+            resolved_public_path = _resolve_public_reports_path(web_dir)
+            target_paths.append(os.path.abspath(str(resolved_public_path)))
             resolved_root_path = _resolve_root_reports_path()
             target_paths.append(os.path.abspath(str(resolved_root_path)))
         if not target_paths:

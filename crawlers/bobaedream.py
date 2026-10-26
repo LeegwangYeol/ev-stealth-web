@@ -72,8 +72,8 @@ def _normalize_iso_timestamp(raw_date_str: str) -> str:
         except (ValueError, OverflowError):
             return now.isoformat()
 
-    # Case: "YYYY-MM-DD HH:MM:SS" or "YYYY.MM.DD HH:MM"
-    full_match = re.search(r"(\d{4})[./\-](\d{2})[./\-](\d{2})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?", raw)
+    # Case: "YYYY-MM-DD HH:MM:SS" or "YYYY.MM.DD HH:MM" or "YYYY.M.D"
+    full_match = re.search(r"(\d{4})[./\-\s]+(\d{1,2})[./\-\s]+(\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?", raw)
     if full_match:
         try:
             year = int(full_match.group(1))

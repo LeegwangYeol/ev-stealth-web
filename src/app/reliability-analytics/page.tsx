@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { getReliabilityTrendsData } from '@/lib/getReliabilityData';
 import ReliabilityDashboardClient from './ReliabilityDashboardClient';
@@ -32,7 +33,28 @@ export default function ReliabilityAnalyticsPage() {
 
   return (
     <div className="py-6 sm:py-8 space-y-6">
-      <ReliabilityDashboardClient initialData={data} />
+      <Suspense
+        fallback={
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex min-h-[400px] items-center justify-center rounded-3xl border border-slate-700 bg-slate-900/60 p-12 text-center"
+          >
+            <div className="space-y-4">
+              <div
+                className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"
+                aria-hidden="true"
+              />
+              <p className="text-sm font-medium text-slate-300">
+                전기차 결함 통계 및 DSI 내구성 데이터를 불러오는 중...
+              </p>
+            </div>
+          </div>
+        }
+      >
+        <ReliabilityDashboardClient initialData={data} />
+      </Suspense>
     </div>
   );
 }
+

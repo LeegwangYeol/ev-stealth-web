@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 export const dynamic = 'force-static';
 
@@ -53,6 +54,88 @@ export default function GlobalEvPage() {
             <li><strong>모터라이즈 도어핸들 박살:</strong> 겨울철 얼음이 얼었을 때 도어 핸들 모터가 억지로 튀어나오려다 내부 플라스틱 기어 이빨이 다 부서짐 (수리비 짝당 190만 원).</li>
             <li><strong>배터리 수리비 절망편:</strong> 118kWh EQS 배터리팩 무상보증 종료 후 교체 비용은 약 <strong>7,560만 원</strong>으로 중고차 가격 전체를 상회하는 끔찍한 리스크를 안고 있습니다.</li>
           </ul>
+        </div>
+      </section>
+
+      {/* Contextual CTA Cross-Links to Interactive Intelligence Tools */}
+      <section aria-labelledby="heading-global-tools" className="pt-8 border-t border-slate-200 space-y-6">
+        <div className="space-y-1">
+          <h2 id="heading-global-tools" className="text-2xl font-bold text-slate-900">
+            글로벌 수입 EV 데이터 인텔리전스 및 진단 도구
+          </h2>
+          <p className="text-sm text-slate-600">
+            유럽·북미 9대 브랜드 DSI 결함 순위, 파라시스·CATL 배터리 조회, 수리비 폭탄 방어 및 국고 보조금을 확인하세요.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Link
+            href="/reliability-analytics"
+            prefetch={false}
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            <div className="flex items-center gap-2 text-blue-600 font-bold text-base mb-1">
+              <span className="text-xl" aria-hidden="true">📊</span>
+              <span>글로벌 9대 브랜드 DSI 비교 랭킹</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              벤츠, BMW, 폭스바겐, 볼보, 폴스타의 결함 심각도 지수와 보증 외 고전압 배터리 교체비 매트릭스를 확인합니다.
+            </p>
+            <span className="inline-flex items-center gap-1 text-xs text-blue-600 font-semibold mt-3 group-hover:underline">
+              내구성 랭킹 조회하기 &rarr;
+            </span>
+          </Link>
+
+          <Link
+            href="/recall-portal"
+            prefetch={false}
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-rose-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+          >
+            <div className="flex items-center gap-2 text-rose-600 font-bold text-base mb-1">
+              <span className="text-xl" aria-hidden="true">🚨</span>
+              <span>수입차 VIN 및 배터리 공급사 조회</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              17자리 차대번호로 파라시스, CATL, LG에너지솔루션 등 실제 탑재 배터리 제조사와 국토부 공식 리콜을 조회합니다.
+            </p>
+            <span className="inline-flex items-center gap-1 text-xs text-rose-600 font-semibold mt-3 group-hover:underline">
+              리콜 및 배터리 확인하기 &rarr;
+            </span>
+          </Link>
+
+          <Link
+            href="/depreciation-calculator"
+            prefetch={true}
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          >
+            <div className="flex items-center gap-2 text-emerald-600 font-bold text-base mb-1">
+              <span className="text-xl" aria-hidden="true">📉</span>
+              <span>수입 EV 감가율 & 배터리 잔존가치</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              독일 프리미엄 브랜드의 급격한 중고차 감가 곡선과 보증 만료 후 5년 TCO 유지비를 정밀 산출합니다.
+            </p>
+            <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-semibold mt-3 group-hover:underline">
+              감가율 계산하기 &rarr;
+            </span>
+          </Link>
+
+          <Link
+            href="/subsidy-tracker"
+            prefetch={true}
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+          >
+            <div className="flex items-center gap-2 text-amber-600 font-bold text-base mb-1">
+              <span className="text-xl" aria-hidden="true">⚡</span>
+              <span>수입 전기차 보조금 상한제 시뮬레이터</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              출고가 5,500만 원(100%), 8,500만 원(50%), 8,500만 원 초과(0%) 기준 실질 지자체 보조금을 비교합니다.
+            </p>
+            <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-semibold mt-3 group-hover:underline">
+              보조금 소진율 확인하기 &rarr;
+            </span>
+          </Link>
         </div>
       </section>
     </div>

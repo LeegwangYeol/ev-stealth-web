@@ -65,8 +65,33 @@ def _metric_val(metric: Any, key: str, default: Any = 0) -> Any:
     return default if val is None else val
 
 
+def _safe_sev(record: Any) -> float:
+    """Safely extract and map defect severity score, mapping string tiers to numeric DSI values."""
+    raw = _get_field(record, "severity_index")
+    if raw is None:
+        raw = _get_field(record, "severity")
+    if raw is None:
+        return 0.0
+    if isinstance(raw, str):
+        tier_map = {
+            "CRITICAL": 10.0,
+            "WARNING": 7.0,
+            "HIGH": 7.0,
+            "CAUTION": 4.0,
+            "MEDIUM": 4.0,
+            "INFO": 1.0,
+            "LOW": 1.0,
+        }
+        cleaned = raw.strip().upper()
+        if cleaned in tier_map:
+            return tier_map[cleaned]
+    return _safe_float_val(raw, 0.0)
+
+
 class ReportGenerator:
     """Encapsulates executive markdown briefing and statistical reporting formatting."""
+
+    _safe_sev = staticmethod(_safe_sev)
 
     def __init__(self) -> None:
         pass
@@ -191,14 +216,6 @@ class ReportGenerator:
             reports = _get_field(report_data, "reports", [])
             stats = _get_field(report_data, "statistics", {})
             gen_time = _get_field(report_data, "generated_at", datetime.now(timezone.utc).isoformat())
-
-        def _safe_sev(record: Any) -> float:
-            raw = _get_field(record, "severity_index")
-            if raw is None:
-                raw = _get_field(record, "severity")
-            if raw is None:
-                return 0.0
-            return _safe_float_val(raw, 0.0)
 
         total_reports = len(reports)
         critical_count = _get_field(stats, "critical_defect_count")

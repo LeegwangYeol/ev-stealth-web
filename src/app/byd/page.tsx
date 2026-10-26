@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 export const dynamic = 'force-static';
 
@@ -70,6 +71,88 @@ export default function BydPage() {
           <ul className="list-disc pl-6 mt-2 text-gray-700 space-y-1">
             <li>초기형 에어컨 곰팡이 냄새 고질병 및 앞바퀴 털림 증상. 24년식에 일부 개선되었으나 여전히 앞 서스펜션 세팅이 너무 무릅니다.</li>
           </ul>
+        </div>
+      </section>
+
+      {/* Contextual CTA Cross-Links to Interactive Intelligence Tools */}
+      <section aria-labelledby="heading-byd-tools" className="pt-8 border-t border-slate-200 space-y-6">
+        <div className="space-y-1">
+          <h2 id="heading-byd-tools" className="text-2xl font-bold text-slate-900">
+            BYD 전기차 내구성 및 실시간 분석 도구
+          </h2>
+          <p className="text-sm text-slate-600">
+            블레이드 배터리 안전성, CTB 구조적 수리비 리스크, 감가율 및 국내 진출 모델 보조금 현황을 확인하세요.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Link
+            href="/reliability-analytics?brand=byd"
+            prefetch={false}
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            <div className="flex items-center gap-2 text-blue-600 font-bold text-base mb-1">
+              <span className="text-xl" aria-hidden="true">📊</span>
+              <span>BYD DSI 결함 통계 및 수리비</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              12-in-1 모터 통교체 수리비 및 CTB 하부 찍힘 위험 등 BYD 실차주 고질병 데이터를 분석합니다.
+            </p>
+            <span className="inline-flex items-center gap-1 text-xs text-blue-600 font-semibold mt-3 group-hover:underline">
+              BYD 결함 통계 보기 &rarr;
+            </span>
+          </Link>
+
+          <Link
+            href="/recall-portal?brand=byd"
+            prefetch={false}
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-rose-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+          >
+            <div className="flex items-center gap-2 text-rose-600 font-bold text-base mb-1">
+              <span className="text-xl" aria-hidden="true">🚨</span>
+              <span>BYD 공식 리콜 & 배터리 정보</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              돌핀 스티어링 리콜 내역, 블레이드 LFP 셀 제조사(FinDreams) 및 VIN 차대번호 조회를 제공합니다.
+            </p>
+            <span className="inline-flex items-center gap-1 text-xs text-rose-600 font-semibold mt-3 group-hover:underline">
+              리콜 및 배터리 확인하기 &rarr;
+            </span>
+          </Link>
+
+          <Link
+            href="/depreciation-calculator"
+            prefetch={true}
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          >
+            <div className="flex items-center gap-2 text-emerald-600 font-bold text-base mb-1">
+              <span className="text-xl" aria-hidden="true">📉</span>
+              <span>LFP 배터리 감가 & 잔존가치 계산기</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              중국산 LFP 배터리의 국내 중고차 시장 감가방어율과 5년 보유 TCO 시뮬레이션을 계산합니다.
+            </p>
+            <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-semibold mt-3 group-hover:underline">
+              감가율 계산하기 &rarr;
+            </span>
+          </Link>
+
+          <Link
+            href="/subsidy-tracker"
+            prefetch={true}
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+          >
+            <div className="flex items-center gap-2 text-amber-600 font-bold text-base mb-1">
+              <span className="text-xl" aria-hidden="true">⚡</span>
+              <span>BYD 모델별 지자체 보조금 현황</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              배터리 에너지 밀도 및 재활용 계수에 따른 환경부 보조금 차등 지급액과 잔여 쿼터를 확인합니다.
+            </p>
+            <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-semibold mt-3 group-hover:underline">
+              보조금 소진율 확인하기 &rarr;
+            </span>
+          </Link>
         </div>
       </section>
     </div>

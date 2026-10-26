@@ -4,6 +4,8 @@ import React, { useState, useEffect, memo } from 'react';
 
 export interface ClientTimestampProps {
   isoString?: string | null;
+  timestamp?: string | null;
+  format?: string;
   className?: string;
   fallback?: string;
   locale?: string;
@@ -18,6 +20,7 @@ export interface ClientTimestampProps {
  */
 export const ClientTimestamp = memo(function ClientTimestamp({
   isoString,
+  timestamp,
   className,
   fallback = '방금 전',
   locale = 'ko-KR',
@@ -29,16 +32,17 @@ export const ClientTimestamp = memo(function ClientTimestamp({
     setMounted(true);
   }, []);
 
-  const fallbackText = isoString
-    ? isoString.includes('T')
-      ? isoString.replace('T', ' ').substring(0, 19) + ' (UTC)'
-      : isoString
+  const effectiveIso = isoString || timestamp;
+  const fallbackText = effectiveIso
+    ? effectiveIso.includes('T')
+      ? effectiveIso.replace('T', ' ').substring(0, 19) + ' (UTC)'
+      : effectiveIso
     : fallback;
 
   let formattedText = fallbackText;
-  if (mounted && isoString) {
+  if (mounted && effectiveIso) {
     try {
-      const date = new Date(isoString);
+      const date = new Date(effectiveIso);
       if (!isNaN(date.getTime())) {
         formattedText = date.toLocaleString(locale, options);
       }
@@ -49,7 +53,7 @@ export const ClientTimestamp = memo(function ClientTimestamp({
 
   return (
     <time
-      dateTime={isoString || undefined}
+      dateTime={effectiveIso || undefined}
       className={className}
       suppressHydrationWarning
     >

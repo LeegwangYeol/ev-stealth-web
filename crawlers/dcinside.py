@@ -59,8 +59,8 @@ def _normalize_iso_timestamp(raw_date_str: str) -> str:
 
     now = datetime.datetime.now(datetime.timezone.utc)
 
-    # Full timestamp: "2026-09-08 10:11:21" or "2026.09.08 10:11"
-    full_match = re.search(r"(\d{4})[./\-](\d{2})[./\-](\d{2})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?", raw)
+    # Full timestamp: "2026-09-08 10:11:21" or "2026.09.08 10:11" or "2026.9.8"
+    full_match = re.search(r"(\d{4})[./\-\s]+(\d{1,2})[./\-\s]+(\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?", raw)
     if full_match:
         try:
             year = int(full_match.group(1))

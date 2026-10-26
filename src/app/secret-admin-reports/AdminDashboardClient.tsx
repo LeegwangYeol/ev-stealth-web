@@ -139,7 +139,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     const counts: Record<string, number> = { all: reports.length };
     SOURCE_OPTIONS.forEach((s) => {
       if (s.id !== 'all') {
-        counts[s.id] = reports.filter((r) => r.source.toLowerCase() === s.id).length;
+        counts[s.id] = reports.filter((r) => (r.source || '').toLowerCase() === s.id).length;
       }
     });
     return counts;
@@ -162,7 +162,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
         // Source filter
         if (selectedSource !== 'all') {
-          if (report.source.toLowerCase() !== selectedSource.toLowerCase()) {
+          if ((report.source || '').toLowerCase() !== selectedSource.toLowerCase()) {
             return false;
           }
         }
@@ -296,7 +296,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
   };
 
   const getSourceBadge = (source: string, url: string) => {
-    const isBobae = source.toLowerCase().includes('bobae');
+    const isBobae = (source || '').toLowerCase().includes('bobae');
     const badgeText = isBobae ? '보배드림' : '디시인사이드';
     const badgeColor = isBobae
       ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
@@ -527,7 +527,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               onChange={(e) => setSearchQuery(e.target.value)}
               aria-label="전기차 결함 제보 및 은어 검색"
               placeholder="제목, 요약, 실차주 원문 코멘트, 차종, 은어(#ICCU폭탄 등) 실시간 검색..."
-              className="w-full pl-10 pr-10 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition"
+              className="w-full pl-10 pr-10 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition placeholder-slate-500"
             />
             {searchQuery && (
               <button
@@ -733,7 +733,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                   <td>{report.vehicle_model}</td>
                   <td>{report.defect_category_ko}</td>
                   <td>{report.severity}</td>
-                  <td>{report.source}</td>
+                  <td>{report.source || 'N/A'}</td>
                   <td>
                     <span>{report.title}</span>
                     <a href={report.url} target="_blank" rel="noopener noreferrer" className="sr-only" aria-label="게시글 원문 보기">
