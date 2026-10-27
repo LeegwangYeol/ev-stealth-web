@@ -7,14 +7,17 @@ import type {
   RecallDatabase,
   VinCheckResult,
   OfficialRecallCampaign,
-} from '@/lib/getRecallData';
+  BatterySafetyProfile,
+  VinPrefixMapping,
+} from '@/lib/recallCalculations';
 import {
   decodeVinAndCheckRecalls,
   checkRecallsByModel,
   validateVinString,
   getDistinctBrands,
   getModelsForBrand,
-} from '@/lib/getRecallData';
+  DEFAULT_RECALL_METADATA,
+} from '@/lib/recallCalculations';
 
 const BRAND_SYNONYMS: Record<string, string> = {
   tesla: '테슬라',
@@ -34,14 +37,48 @@ const BRAND_SYNONYMS: Record<string, string> = {
 
 // Distinct cell supplier list for filter chips (hoisted to module scope to avoid re-allocation on render)
 const supplierFilters = [
-  { key: 'ALL', label: '전체' },
-  { key: '파라시스', label: '파라시스(Farasis)' },
-  { key: 'LG', label: 'LG에너지솔루션' },
-  { key: 'SK', label: 'SK온' },
-  { key: '삼성', label: '삼성SDI' },
-  { key: 'CATL', label: 'CATL' },
-  { key: 'BYD', label: 'BYD FinDreams' },
+  Object.freeze({ key: 'ALL', label: '전체' }),
+  Object.freeze({ key: '파라시스', label: '파라시스(Farasis)' }),
+  Object.freeze({ key: 'LG', label: 'LG에너지솔루션' }),
+  Object.freeze({ key: 'SK', label: 'SK온' }),
+  Object.freeze({ key: '삼성', label: '삼성SDI' }),
+  Object.freeze({ key: 'CATL', label: 'CATL' }),
+  Object.freeze({ key: 'BYD', label: 'BYD FinDreams' }),
 ];
+Object.freeze(supplierFilters);
+
+// Fire safety status filter chips (frozen module scope)
+const FIRE_STATUS_FILTERS = Object.freeze([
+  Object.freeze({ key: 'ALL', label: '전체' }),
+  Object.freeze({ key: 'CRITICAL_MONITORING', label: '🚨 집중 모니터링' }),
+  Object.freeze({ key: 'RECALLED_RESOLVED', label: '🔄 조치 완료' }),
+  Object.freeze({ key: 'VERIFIED_SAFE', label: '✅ 안전 검증' }),
+]);
+
+// Recall risk level filter chips (frozen module scope)
+const RISK_LEVEL_FILTERS = Object.freeze([
+  Object.freeze({ key: 'ALL', label: '전체' }),
+  Object.freeze({ key: 'FIRE_HAZARD', label: '🔥 화재 위험' }),
+  Object.freeze({ key: 'LOSS_OF_POWER', label: '⚡ 동력 상실/ICCU' }),
+  Object.freeze({ key: 'BRAKE_STEERING', label: '🛑 조향/제동' }),
+  Object.freeze({ key: 'SOFTWARE_REGULATION', label: '💻 소프트웨어/규정' }),
+]);
+
+// Remedy method filter chips (frozen module scope)
+const REMEDY_METHOD_FILTERS = Object.freeze([
+  Object.freeze({ key: 'ALL', label: '전체' }),
+  Object.freeze({ key: 'HARDWARE_REPLACE', label: '🔧 부품 전량 무상 교체' }),
+  Object.freeze({ key: 'SOFTWARE_UPDATE_SERVICE', label: '🛠️ 센터 방문 소프트웨어' }),
+  Object.freeze({ key: 'OTA_WIRELESS', label: '📡 OTA 무선 업데이트' }),
+]);
+
+// Model year dropdown selection options (frozen module scope)
+const MODEL_YEAR_OPTIONS = Object.freeze([2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018]);
+
+// Frozen fallback collections (Zero-GC)
+const EMPTY_BATTERY_PROFILES: readonly BatterySafetyProfile[] = Object.freeze([]);
+const EMPTY_RECALLS: readonly OfficialRecallCampaign[] = Object.freeze([]);
+const EMPTY_VIN_PREFIXES: readonly VinPrefixMapping[] = Object.freeze([]);
 
 function resolveBrand(inputBrand: string, availableBrands: string[]): string | undefined {
   if (!inputBrand || typeof inputBrand !== 'string' || !Array.isArray(availableBrands)) {
@@ -291,29 +328,21 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     [selectedBrand, initialDatabase]
   );
 
-  // Defensive fallbacks for database collections and metadata
+  // Defensive fallbacks for database collections and metadata (Zero-GC)
   const batteryProfiles = useMemo(
-    () => (Array.isArray(initialDatabase?.battery_profiles) ? initialDatabase.battery_profiles : []),
+    () => (Array.isArray(initialDatabase?.battery_profiles) ? initialDatabase.battery_profiles : (EMPTY_BATTERY_PROFILES as BatterySafetyProfile[])),
     [initialDatabase?.battery_profiles]
   );
   const recalls = useMemo(
-    () => (Array.isArray(initialDatabase?.recalls) ? initialDatabase.recalls : []),
+    () => (Array.isArray(initialDatabase?.recalls) ? initialDatabase.recalls : (EMPTY_RECALLS as OfficialRecallCampaign[])),
     [initialDatabase?.recalls]
   );
   const vinPrefixes = useMemo(
-    () => (Array.isArray(initialDatabase?.vin_prefixes) ? initialDatabase.vin_prefixes : []),
+    () => (Array.isArray(initialDatabase?.vin_prefixes) ? initialDatabase.vin_prefixes : (EMPTY_VIN_PREFIXES as VinPrefixMapping[])),
     [initialDatabase?.vin_prefixes]
   );
   const metadata = useMemo(
-    () =>
-      initialDatabase?.metadata ?? {
-        version: '1.0',
-        updated_at: '',
-        total_campaigns: 0,
-        total_affected_vehicles_kdm: 0,
-        active_fire_campaigns: 0,
-        ota_remedy_rate_pct: 0,
-      },
+    () => initialDatabase?.metadata ?? DEFAULT_RECALL_METADATA,
     [initialDatabase?.metadata]
   );
 
@@ -804,7 +833,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                     >
                       <option value="">전체 연식 확인</option>
-                      {[2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018].map((yr) => (
+                      {MODEL_YEAR_OPTIONS.map((yr) => (
                         <option key={yr} value={yr}>
                           {yr}년식
                         </option>
@@ -1182,12 +1211,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold text-slate-400 mr-2">화재 리스크 상태:</span>
-            {[
-              { key: 'ALL', label: '전체' },
-              { key: 'CRITICAL_MONITORING', label: '🚨 집중 모니터링' },
-              { key: 'RECALLED_RESOLVED', label: '🔄 조치 완료' },
-              { key: 'VERIFIED_SAFE', label: '✅ 안전 검증' },
-            ].map((f) => (
+            {FIRE_STATUS_FILTERS.map((f) => (
               <button
                 key={f.key}
                 type="button"
@@ -1336,13 +1360,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
           {/* Filter Chips: Risk & Remedy */}
           <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-800">
             <span className="text-xs font-semibold text-slate-400 mr-2">위험 등급:</span>
-            {[
-              { key: 'ALL', label: '전체' },
-              { key: 'FIRE_HAZARD', label: '🔥 화재 위험' },
-              { key: 'LOSS_OF_POWER', label: '⚡ 동력 상실/ICCU' },
-              { key: 'BRAKE_STEERING', label: '🛑 조향/제동' },
-              { key: 'SOFTWARE_REGULATION', label: '💻 소프트웨어/규정' },
-            ].map((rf) => (
+            {RISK_LEVEL_FILTERS.map((rf) => (
               <button
                 key={rf.key}
                 type="button"
@@ -1361,12 +1379,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold text-slate-400 mr-2">조치 유형:</span>
-            {[
-              { key: 'ALL', label: '전체' },
-              { key: 'HARDWARE_REPLACE', label: '🔧 부품 전량 무상 교체' },
-              { key: 'SOFTWARE_UPDATE_SERVICE', label: '🛠️ 센터 방문 소프트웨어' },
-              { key: 'OTA_WIRELESS', label: '📡 OTA 무선 업데이트' },
-            ].map((rm) => (
+            {REMEDY_METHOD_FILTERS.map((rm) => (
               <button
                 key={rm.key}
                 type="button"

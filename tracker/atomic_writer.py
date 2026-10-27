@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 from datetime import date, datetime
+from decimal import Decimal
 from enum import Enum
 import json
 import logging
@@ -21,11 +22,15 @@ logger = logging.getLogger(__name__)
 
 
 def sanitize_nan_inf(obj: Any) -> Any:
-    """Recursively convert float NaN and Inf to 0.0 to guarantee RFC 8259 JSON compliance."""
+    """Recursively convert float/Decimal NaN and Inf to 0.0 to guarantee RFC 8259 JSON compliance."""
     if isinstance(obj, float):
         if math.isnan(obj) or math.isinf(obj):
             return 0.0
         return obj
+    elif isinstance(obj, Decimal):
+        if obj.is_nan() or obj.is_infinite():
+            return 0.0
+        return float(obj)
     elif isinstance(obj, dict):
         return {k: sanitize_nan_inf(v) for k, v in obj.items()}
     elif isinstance(obj, (list, tuple, set)):

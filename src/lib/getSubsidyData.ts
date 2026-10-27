@@ -317,21 +317,21 @@ export function getModelById(modelId: string): PopularModelEntry | undefined {
 
 /**
  * Calculates national subsidy multiplier based on 2026 MOE statutory price caps:
- * - MSRP < 55,000,000 KRW: 1.0 (100% eligibility)
- * - 55,000,000 <= MSRP < 85,000,000 KRW: 0.5 (50% eligibility)
- * - MSRP >= 85,000,000 KRW: 0.0 (0% luxury vehicle exclusion)
+ * - MSRP <= 55,000,000 KRW: 1.0 (100% eligibility)
+ * - 55,000,000 < MSRP <= 85,000,000 KRW: 0.5 (50% eligibility)
+ * - MSRP > 85,000,000 KRW: 0.0 (0% luxury vehicle exclusion)
  */
 export function getPriceSubsidyRatio(msrpKrw: number): number {
-  if (msrpKrw === Infinity || (Number.isFinite(msrpKrw) && msrpKrw >= 85_000_000)) {
-    return 0.0;
-  }
   if (!Number.isFinite(msrpKrw) || msrpKrw <= 0) {
     return 0.0;
   }
-  if (msrpKrw >= 55_000_000) {
+  if (msrpKrw <= 55_000_000) {
+    return 1.0;
+  }
+  if (msrpKrw <= 85_000_000) {
     return 0.5;
   }
-  return 1.0;
+  return 0.0;
 }
 
 /**
@@ -433,11 +433,11 @@ export function calculateNetSubsidy(
 
   const ratio = getPriceSubsidyRatio(activeMsrp);
 
-  let priceCapTierText = '100% 전액 지원 (5,500만 원 미만)';
+  let priceCapTierText = '100% 전액 지원 (5,500만 원 이하)';
   if (ratio === 0.5) {
-    priceCapTierText = '50% 감액 지원 (5,500만~8,500만 원 구간)';
+    priceCapTierText = '50% 감액 지원 (5,500만 원 초과 ~ 8,500만 원 이하)';
   } else if (ratio === 0.0) {
-    priceCapTierText = '보조금 지급 대상 제외 (8,500만 원 이상)';
+    priceCapTierText = '보조금 지급 대상 제외 (8,500만 원 초과)';
   }
 
   // 4. Calculate National Subsidy

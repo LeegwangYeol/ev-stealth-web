@@ -315,6 +315,7 @@ class DefectTracker:
         keyword: Optional[str] = None,
         limit: Optional[int] = None,
         file_path: Optional[Union[str, Path]] = None,
+        reports: Optional[Union[List[Any], List[Dict[str, Any]]]] = None,
     ) -> List[Dict[str, Any]]:
         """Query and filter defect reports with category pre-filtering and query caching."""
         norm_limit: Optional[int] = None
@@ -334,33 +335,42 @@ class DefectTracker:
             except (ValueError, TypeError):
                 norm_min_sev = None
 
-        reports = self.load_reports(file_path=file_path)
+        if reports is None:
+            loaded_reports = self.load_reports(file_path=file_path)
+            candidate_source = loaded_reports
+            use_cache = True
+        else:
+            candidate_source = list(reports)
+            use_cache = False
 
         cat_upper = category.strip().upper() if (category and isinstance(category, str) and category.strip()) else None
         brand_lower = vehicle_brand.strip().lower() if (vehicle_brand and isinstance(vehicle_brand, str) and vehicle_brand.strip()) else None
         model_lower = vehicle_model.strip().lower() if (vehicle_model and isinstance(vehicle_model, str) and vehicle_model.strip()) else None
         kw_lower = keyword.strip().lower() if (keyword and isinstance(keyword, str) and keyword.strip()) else None
 
-        with self._cache_lock:
-            cache_key = (
-                str(self._cached_reports_path),
-                self._cached_reports_mtime,
-                cat_upper,
-                brand_lower,
-                model_lower,
-                norm_min_sev,
-                kw_lower,
-                norm_limit,
-            )
-            if cache_key in self._query_cache:
-                self._query_cache.move_to_end(cache_key)
-                return [dict(r) for r in self._query_cache[cache_key]]
+        if use_cache:
+            with self._cache_lock:
+                cache_key = (
+                    str(self._cached_reports_path),
+                    self._cached_reports_mtime,
+                    cat_upper,
+                    brand_lower,
+                    model_lower,
+                    norm_min_sev,
+                    kw_lower,
+                    norm_limit,
+                )
+                if cache_key in self._query_cache:
+                    self._query_cache.move_to_end(cache_key)
+                    return [dict(r) for r in self._query_cache[cache_key]]
 
-            # Category-level pre-filtering: use pre-indexed category bucket if specified
-            if cat_upper is not None:
-                candidate_pool = list(self._category_index.get(cat_upper, []))
-            else:
-                candidate_pool = list(reports)
+                # Category-level pre-filtering: use pre-indexed category bucket if specified
+                if cat_upper is not None:
+                    candidate_pool = list(self._category_index.get(cat_upper, []))
+                else:
+                    candidate_pool = list(candidate_source)
+        else:
+            candidate_pool = list(candidate_source)
 
         filtered: List[Dict[str, Any]] = []
 
@@ -396,7 +406,15 @@ class DefectTracker:
 
                 if effective_sev is None:
                     raw_tier = str(_extract_val(r, "severity") or _extract_val(r, "severity_tier") or "").strip().upper()
-                    tier_map = {"CRITICAL": 9.0, "HIGH": 7.0, "MEDIUM": 5.0, "LOW": 3.0}
+                    tier_map = {
+                        "CRITICAL": 9.0,
+                        "HIGH": 7.0,
+                        "WARNING": 7.0,
+                        "MEDIUM": 5.0,
+                        "CAUTION": 4.0,
+                        "LOW": 3.0,
+                        "INFO": 1.0,
+                    }
                     effective_sev = tier_map.get(raw_tier, 0.0)
 
                 if effective_sev < norm_min_sev:
@@ -419,11 +437,12 @@ class DefectTracker:
                 break
 
         # Thread-safe true LRU cache with promotion and bounded eviction
-        with self._cache_lock:
-            self._query_cache[cache_key] = [_to_record_dict(r) for r in filtered]
-            self._query_cache.move_to_end(cache_key)
-            while len(self._query_cache) > 1024:
-                self._query_cache.popitem(last=False)
+        if use_cache:
+            with self._cache_lock:
+                self._query_cache[cache_key] = [_to_record_dict(r) for r in filtered]
+                self._query_cache.move_to_end(cache_key)
+                while len(self._query_cache) > 1024:
+                    self._query_cache.popitem(last=False)
 
         return [_to_record_dict(r) for r in filtered]
 

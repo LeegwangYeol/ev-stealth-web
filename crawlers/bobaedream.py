@@ -60,20 +60,29 @@ def _normalize_iso_timestamp(raw_date_str: str) -> str:
         except (ValueError, OverflowError):
             return now.isoformat()
 
-    # Case: "YY/MM/DD"
-    yymmdd_match = re.match(r"^(\d{2})[./\-](\d{1,2})[./\-](\d{1,2})$", raw)
+    # Case: "YY/MM/DD [HH:MM[:SS]]"
+    yymmdd_match = re.search(
+        r"^(\d{2})[./\-](\d{1,2})[./\-](\d{1,2})(?:\s*(?:\([월화수목금토일]\))?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
+        raw,
+    )
     if yymmdd_match:
         try:
             year = 2000 + int(yymmdd_match.group(1))
             month = int(yymmdd_match.group(2))
             day = int(yymmdd_match.group(3))
-            dt = datetime.datetime(year, month, day, 12, 0, 0, tzinfo=datetime.timezone.utc)
+            hour = int(yymmdd_match.group(4)) if yymmdd_match.group(4) else 12
+            minute = int(yymmdd_match.group(5)) if yymmdd_match.group(5) else 0
+            second = int(yymmdd_match.group(6)) if yymmdd_match.group(6) else 0
+            dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
             return dt.isoformat()
         except (ValueError, OverflowError):
             return now.isoformat()
 
-    # Case: "YYYY-MM-DD HH:MM:SS" or "YYYY.MM.DD HH:MM" or "YYYY.M.D"
-    full_match = re.search(r"(\d{4})[./\-\s]+(\d{1,2})[./\-\s]+(\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?", raw)
+    # Case: "YYYY-MM-DD HH:MM:SS" or "YYYY.MM.DD (화) HH:MM" or "YYYY.M.D"
+    full_match = re.search(
+        r"(\d{4})[./\-\s]+(\d{1,2})[./\-\s]+(\d{1,2})(?:\s*(?:\([월화수목금토일]\))?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
+        raw,
+    )
     if full_match:
         try:
             year = int(full_match.group(1))

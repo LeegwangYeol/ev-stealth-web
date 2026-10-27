@@ -6,7 +6,7 @@ import SubsidyTrackerClient from './SubsidyTrackerClient';
 export const dynamic = 'force-static';
 
 export const metadata: Metadata = {
-  title: '전국 지자체별 전기차 실시간 보조금 소진율 추적기 | EV Stealth Web',
+  title: '전국 지자체별 전기차 실시간 보조금 소진율 추적기 | Global EV Hub',
   description:
     '2026년 환경부 무공해차 통합누리집(ev.or.kr) 및 17개 광역시도 지자체별 전기차 실시간 보조금 소진율, 접수·출고 대수, 잔여 쿼터 긴급 소진 경보 및 실구매 체감가 시뮬레이션 계산기.',
   keywords: [
@@ -25,11 +25,12 @@ export const metadata: Metadata = {
     '모델Y 보조금',
   ],
   openGraph: {
-    title: '전국 지자체별 전기차 실시간 보조금 소진율 추적기 | EV Stealth Web',
+    title: '전국 지자체별 전기차 실시간 보조금 소진율 추적기 | Global EV Hub',
     description:
       '내 거주 지자체의 전기차 보조금 잔여량과 5단계 소진 경보, 차종별 5,500만/8,500만 원 상한제 실구매가를 실시간으로 계산하세요.',
     type: 'website',
     locale: 'ko_KR',
+    siteName: 'Global EV Hub',
   },
 };
 

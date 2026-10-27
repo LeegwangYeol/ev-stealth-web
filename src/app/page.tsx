@@ -1,6 +1,31 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 export const dynamic = 'force-static';
+
+export const metadata: Metadata = {
+  title: "글로벌 EV 중고차 연식별 피하기 가이드 | Global EV Hub",
+  description:
+    "특정 모델과 연식별(Model Year) 고질병, 배터리 결함, 실시간 전국 보조금 소진율 및 감가방어율을 완벽 분석하는 글로벌 전기차 데이터 허브.",
+  keywords: [
+    "전기차 연식별 가이드",
+    "전기차 결함 리포트",
+    "전기차 보조금 소진율",
+    "전기차 감가율",
+    "아이오닉5 결함",
+    "EV6 ICCU",
+    "테슬라 모델3 고질병",
+    "Global EV Hub",
+  ],
+  openGraph: {
+    title: "글로벌 EV 중고차 연식별 피하기 가이드 | Global EV Hub",
+    description:
+      "특정 모델과 연식별(Model Year) 고질병, 배터리 결함, 실시간 전국 보조금 소진율 및 감가방어율을 완벽 분석하는 글로벌 전기차 데이터 허브.",
+    type: "website",
+    locale: "ko_KR",
+    siteName: "Global EV Hub",
+  },
+};
 
 export default function Home() {
   return (

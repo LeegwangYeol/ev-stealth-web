@@ -212,7 +212,11 @@ class ContextualDefectFilter:
         Returns:
             (is_authentic_owner, reason)
         """
-        has_anchor = any(anchor in text for anchor in OWNERSHIP_ANCHORS)
+        operational_anchors = [
+            "시동", "시동 걸", "시동 켰", "시동 켜", "주행 중", "주행하", "주행했",
+            "운전 중", "운전하", "운전했", "차를 몰", "몰았", "충전기 꽂", "충전 중", "충전하"
+        ]
+        has_anchor = any(anchor in text for anchor in OWNERSHIP_ANCHORS) or any(op in text for op in operational_anchors)
         has_symptom = any(symptom in text for symptom in SYMPTOM_PREDICATES)
 
         # If text explicitly mentions defect slang or defect nouns, treat symptom as verified
@@ -298,8 +302,18 @@ class ContextualDefectFilter:
             if w_strip == "안":
                 if j > 0 and window[j - 1] in ("말도", "납득이", "이해가"):
                     continue
-                # Verbs following '안' that describe malfunction symptoms rather than defect negation (e.g. 인식도 안 되고, 시동도 안 걸리고)
-                malfunction_verbs = ("되고", "된다", "돼서", "열리고", "열려", "켜지고", "켜져", "걸리고", "걸려", "빠지고", "먹히고")
+                # Verbs following '안' that describe malfunction symptoms rather than defect negation (e.g. 인식도 안 되고, 시동도 안 걸리고, 터치도 안 됨)
+                malfunction_verbs = (
+                    "되고", "된다", "돼서", "됨", "돼",
+                    "열리고", "열려", "열림", "열린다",
+                    "켜지고", "켜져", "켜짐", "켜진다",
+                    "걸리고", "걸려", "걸림", "걸린다",
+                    "빠지고", "빠져", "빠짐", "빠진다",
+                    "먹히고", "먹혀", "먹힘", "먹힌다",
+                    "나오고", "나와", "나옴", "나온다",
+                    "돌아가고", "돌아가", "돌아감", "돌아간다",
+                    "작동하고", "작동해", "작동함", "작동된다", "작동",
+                )
                 if j + 1 < len(window) and any(window[j + 1].startswith(mv) for mv in malfunction_verbs):
                     continue
                 return True

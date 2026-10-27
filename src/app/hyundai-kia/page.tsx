@@ -117,14 +117,14 @@ export default function HyundaiKiaPage() {
             prefetch={true}
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
           >
-            <div className="flex items-center gap-2 text-emerald-600 font-bold text-base mb-1">
+            <div className="flex items-center gap-2 text-emerald-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📉</span>
               <span>전기차 감가·배터리 수명 계산기</span>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed">
               보조금 수령 후 5년간의 잔존가치, 배터리 잔존성능(SoH), 연차별 총소유비용(TCO)을 정밀 시뮬레이션합니다.
             </p>
-            <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-semibold mt-3 group-hover:underline">
+            <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-semibold mt-3 group-hover:underline">
               감가율 계산하기 &rarr;
             </span>
           </Link>
@@ -134,14 +134,14 @@ export default function HyundaiKiaPage() {
             prefetch={true}
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
           >
-            <div className="flex items-center gap-2 text-amber-600 font-bold text-base mb-1">
+            <div className="flex items-center gap-2 text-amber-800 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">⚡</span>
               <span>전국 지자체 실시간 보조금 소진율</span>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed">
               환경부 및 17개 광역시도별 보조금 소진율, 마감 임박 경보, 5,500만 원 상한제 차등 지급액을 확인합니다.
             </p>
-            <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-semibold mt-3 group-hover:underline">
+            <span className="inline-flex items-center gap-1 text-xs text-amber-800 font-semibold mt-3 group-hover:underline">
               보조금 소진율 확인하기 &rarr;
             </span>
           </Link>

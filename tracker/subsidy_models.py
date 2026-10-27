@@ -132,17 +132,17 @@ class CategoryMetrics:
         if not isinstance(data, dict):
             data = {}
         return cls(
-            announced_units=_safe_int(data.get("announced_units", 0)),
-            applied_units=_safe_int(data.get("applied_units", 0)),
-            delivered_units=_safe_int(data.get("delivered_units", 0)),
-            remaining_units=_safe_int(data.get("remaining_units", 0)),
-            depletion_rate=_safe_float(data.get("depletion_rate", 0.0)),
-            delivery_rate=_safe_float(data.get("delivery_rate", 0.0)),
+            announced_units=max(0, _safe_int(data.get("announced_units", 0))),
+            applied_units=max(0, _safe_int(data.get("applied_units", 0))),
+            delivered_units=max(0, _safe_int(data.get("delivered_units", 0))),
+            remaining_units=max(0, _safe_int(data.get("remaining_units", 0))),
+            depletion_rate=max(0.0, _safe_float(data.get("depletion_rate", 0.0))),
+            delivery_rate=max(0.0, _safe_float(data.get("delivery_rate", 0.0))),
             status=str(data.get("status") or "HEALTHY"),
-            max_local_subsidy_krw=_safe_int(data.get("max_local_subsidy_krw", 0)),
-            max_total_subsidy_krw=_safe_int(data.get("max_total_subsidy_krw", 0)),
-            total_budget_krw=_safe_int(data.get("total_budget_krw", 0)),
-            remaining_budget_krw=_safe_int(data.get("remaining_budget_krw", 0)),
+            max_local_subsidy_krw=max(0, _safe_int(data.get("max_local_subsidy_krw", 0))),
+            max_total_subsidy_krw=max(0, _safe_int(data.get("max_total_subsidy_krw", 0))),
+            total_budget_krw=max(0, _safe_int(data.get("total_budget_krw", 0))),
+            remaining_budget_krw=max(0, _safe_int(data.get("remaining_budget_krw", 0))),
         )
 
 
@@ -184,17 +184,17 @@ class MunicipalityMetrics:
             data = {}
         return cls(
             name_ko=str(data.get("name_ko") or ""),
-            announced_units=_safe_int(data.get("announced_units", 0)),
-            applied_units=_safe_int(data.get("applied_units", 0)),
-            remaining_units=_safe_int(data.get("remaining_units", 0)),
-            depletion_rate=_safe_float(data.get("depletion_rate", 0.0)),
+            announced_units=max(0, _safe_int(data.get("announced_units", 0))),
+            applied_units=max(0, _safe_int(data.get("applied_units", 0))),
+            remaining_units=max(0, _safe_int(data.get("remaining_units", 0))),
+            depletion_rate=max(0.0, _safe_float(data.get("depletion_rate", 0.0))),
             status=str(data.get("status") or "HEALTHY"),
-            local_subsidy_krw=_safe_int(data.get("local_subsidy_krw", 0)),
+            local_subsidy_krw=max(0, _safe_int(data.get("local_subsidy_krw", 0))),
             muni_id=str(data.get("muni_id") or ""),
             name_en=str(data.get("name_en") or ""),
             category=str(data.get("category") or "passenger"),
-            delivered_units=_safe_int(data.get("delivered_units", 0)),
-            total_subsidy_krw=_safe_int(data.get("total_subsidy_krw", 0)),
+            delivered_units=max(0, _safe_int(data.get("delivered_units", 0))),
+            total_subsidy_krw=max(0, _safe_int(data.get("total_subsidy_krw", 0))),
         )
 
 
@@ -224,6 +224,24 @@ class RegionRecord:
             self.region_id = self.code
         if self.iso_code and not self.region_id:
             self.region_id = self.iso_code
+
+    def __getitem__(self, key: str) -> Any:
+        try:
+            return getattr(self, key)
+        except AttributeError:
+            d = self.to_dict()
+            if key in d:
+                return d[key]
+            raise KeyError(key) from None
+
+    def __contains__(self, key: Any) -> bool:
+        return hasattr(self, str(key)) or key in self.to_dict()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
 
     def to_dict(self) -> Dict[str, Any]:
         result = {
@@ -272,9 +290,9 @@ class RegionRecord:
             name_ko=str(data.get("name_ko") or ""),
             name_en=str(data.get("name_en") or ""),
             tier=str(data.get("tier") or "province"),
-            overall_depletion_rate=_safe_float(data.get("overall_depletion_rate", 0.0)),
+            overall_depletion_rate=max(0.0, _safe_float(data.get("overall_depletion_rate", 0.0))),
             overall_status=str(data.get("overall_status") or "HEALTHY"),
-            residency_requirement_days=_safe_int(data.get("residency_requirement_days", 30), default=30),
+            residency_requirement_days=max(0, _safe_int(data.get("residency_requirement_days", 30), default=30)),
             supplementary_budget_added=bool(data.get("supplementary_budget_added", False)),
             categories=cats,
             municipalities=munis,
@@ -357,6 +375,24 @@ class NationwideSummary:
     category_totals: Dict[str, Any]
     alert_region_counts: Dict[str, int]
 
+    def __getitem__(self, key: str) -> Any:
+        try:
+            return getattr(self, key)
+        except AttributeError:
+            d = self.to_dict()
+            if key in d:
+                return d[key]
+            raise KeyError(key) from None
+
+    def __contains__(self, key: Any) -> bool:
+        return hasattr(self, str(key)) or key in self.to_dict()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "total_announced_units": self.total_announced_units,
@@ -421,13 +457,13 @@ class NationwideSummary:
             alert_region_counts = {}
 
         return cls(
-            total_announced_units=_safe_int(data.get("total_announced_units", 0)),
-            total_applied_units=_safe_int(data.get("total_applied_units", 0)),
-            total_delivered_units=_safe_int(data.get("total_delivered_units", 0)),
-            total_remaining_units=_safe_int(data.get("total_remaining_units", 0)),
-            nationwide_depletion_rate=_safe_float(data.get("nationwide_depletion_rate", 0.0)),
-            total_budget_billion_krw=_safe_float(data.get("total_budget_billion_krw", 0.0)),
-            disbursed_budget_billion_krw=_safe_float(data.get("disbursed_budget_billion_krw", 0.0)),
+            total_announced_units=max(0, _safe_int(data.get("total_announced_units", 0))),
+            total_applied_units=max(0, _safe_int(data.get("total_applied_units", 0))),
+            total_delivered_units=max(0, _safe_int(data.get("total_delivered_units", 0))),
+            total_remaining_units=max(0, _safe_int(data.get("total_remaining_units", 0))),
+            nationwide_depletion_rate=max(0.0, _safe_float(data.get("nationwide_depletion_rate", 0.0))),
+            total_budget_billion_krw=max(0.0, _safe_float(data.get("total_budget_billion_krw", 0.0))),
+            disbursed_budget_billion_krw=max(0.0, _safe_float(data.get("disbursed_budget_billion_krw", 0.0))),
             category_totals=cat_totals,
             alert_region_counts=alert_region_counts,
         )

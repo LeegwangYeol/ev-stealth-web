@@ -108,14 +108,14 @@ export default function GlobalEvPage() {
             prefetch={true}
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
           >
-            <div className="flex items-center gap-2 text-emerald-600 font-bold text-base mb-1">
+            <div className="flex items-center gap-2 text-emerald-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📉</span>
               <span>수입 EV 감가율 & 배터리 잔존가치</span>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed">
               독일 프리미엄 브랜드의 급격한 중고차 감가 곡선과 보증 만료 후 5년 TCO 유지비를 정밀 산출합니다.
             </p>
-            <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-semibold mt-3 group-hover:underline">
+            <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-semibold mt-3 group-hover:underline">
               감가율 계산하기 &rarr;
             </span>
           </Link>
@@ -125,14 +125,14 @@ export default function GlobalEvPage() {
             prefetch={true}
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
           >
-            <div className="flex items-center gap-2 text-amber-600 font-bold text-base mb-1">
+            <div className="flex items-center gap-2 text-amber-800 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">⚡</span>
               <span>수입 전기차 보조금 상한제 시뮬레이터</span>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed">
               출고가 5,500만 원(100%), 8,500만 원(50%), 8,500만 원 초과(0%) 기준 실질 지자체 보조금을 비교합니다.
             </p>
-            <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-semibold mt-3 group-hover:underline">
+            <span className="inline-flex items-center gap-1 text-xs text-amber-800 font-semibold mt-3 group-hover:underline">
               보조금 소진율 확인하기 &rarr;
             </span>
           </Link>

@@ -40,7 +40,7 @@ export default function ErrorBoundary({ error, reset }: ErrorProps) {
             데이터를 불러오거나 처리하는 과정에서 예기치 않은 오류가 발생했습니다. 일시적인 현상일 수 있으니 아래 &apos;다시 시도&apos; 버튼을 눌러주시거나 메인 페이지로 이동해 주세요.
           </p>
           {error?.digest && (
-            <p className="text-xs text-slate-400 font-mono pt-1">
+            <p className="text-xs text-slate-600 font-mono pt-1">
               오류 참조 코드: <span className="bg-slate-100 px-1.5 py-0.5 rounded">{error.digest}</span>
             </p>
           )}

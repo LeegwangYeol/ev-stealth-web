@@ -452,7 +452,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             aria-label="보조금 긴급 소진 주의보"
             className="mt-6 bg-rose-950 border border-rose-500/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm"
           >
-            <div role="alert" className="flex items-center gap-2 text-rose-200">
+            <div role="alert" className="flex flex-wrap items-center gap-2 text-rose-200">
               <span className="text-base" aria-hidden="true">🚨</span>
               <strong className="text-rose-100 font-semibold">마감 임박 특보 (소진율 95% 초과):</strong>
               <div className="flex flex-wrap gap-1.5 ml-1">

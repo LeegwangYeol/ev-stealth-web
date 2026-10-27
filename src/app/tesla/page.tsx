@@ -92,14 +92,14 @@ export default function TeslaPage() {
             prefetch={true}
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
           >
-            <div className="flex items-center gap-2 text-emerald-600 font-bold text-base mb-1">
+            <div className="flex items-center gap-2 text-emerald-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📉</span>
               <span>테슬라 감가방어율 & SoH 계산기</span>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed">
               LFP 및 삼원계(NCM) 배터리 열화율 곡선과 5년 보유 기간 총 유지비(TCO)를 정밀 시뮬레이션합니다.
             </p>
-            <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-semibold mt-3 group-hover:underline">
+            <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-semibold mt-3 group-hover:underline">
               감가율 계산하기 &rarr;
             </span>
           </Link>
@@ -109,14 +109,14 @@ export default function TeslaPage() {
             prefetch={true}
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
           >
-            <div className="flex items-center gap-2 text-amber-600 font-bold text-base mb-1">
+            <div className="flex items-center gap-2 text-amber-800 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">⚡</span>
               <span>모델Y RWD 실시간 보조금 소진율</span>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed">
               지자체별 승용 전기차 쿼터 마감 현황과 가격 상한제 기준 테슬라 실구매 체감가를 확인합니다.
             </p>
-            <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-semibold mt-3 group-hover:underline">
+            <span className="inline-flex items-center gap-1 text-xs text-amber-800 font-semibold mt-3 group-hover:underline">
               보조금 소진율 확인하기 &rarr;
             </span>
           </Link>

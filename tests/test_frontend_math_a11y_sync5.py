@@ -298,10 +298,10 @@ class TestTypeScriptMathAdversarialInputs(unittest.TestCase):
         self.assertEqual(res["ratioBelow55M"], 1.0)
 
         # Exact statutory boundaries
-        self.assertEqual(res["ratioExact55M"], 0.5)
+        self.assertEqual(res["ratioExact55M"], 1.0)
         self.assertEqual(res["ratioMidTier"], 0.5)
         self.assertEqual(res["ratioBelow85M"], 0.5)
-        self.assertEqual(res["ratioExact85M"], 0.0)
+        self.assertEqual(res["ratioExact85M"], 0.5)
         self.assertEqual(res["ratioAbove85M"], 0.0)
 
         # Positive Infinity and Negative Infinity both return 0.0

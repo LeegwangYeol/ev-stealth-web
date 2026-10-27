@@ -40,6 +40,33 @@ def _safe_round(val: Any, decimals: int = 4, default: float = 0.0) -> float:
         return default
 
 
+def _safe_int(val: Any, default: int = 0) -> int:
+    """Safely convert value to int, catching None, NaN, Inf, and non-numeric inputs."""
+    if val is None:
+        return default
+    try:
+        f = float(val)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return int(f)
+    except (ValueError, TypeError, OverflowError):
+        return default
+
+
+def _safe_float(val: Any, default: float = 0.0) -> float:
+    """Safely convert value to float, catching None, NaN, Inf, and non-numeric inputs."""
+    if val is None:
+        return default
+    try:
+        f = float(val)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return f
+    except (ValueError, TypeError, OverflowError):
+        return default
+
+
+
 @dataclass(init=False)
 class RawPost:
     """Raw post extracted by scraper modules."""
@@ -113,9 +140,14 @@ class RawPost:
             if isinstance(raw_comments, (list, tuple, set))
             else []
         )
+        pid = _get("post_id", None)
+        if pid is None or (isinstance(pid, str) and not pid.strip()):
+            pid = _get("id", None)
+        post_id = str(pid) if pid is not None else ""
+
         return cls(
             platform=str(_get("source") or _get("platform") or "unknown"),
-            post_id=str(_get("post_id") or _get("id") or ""),
+            post_id=post_id,
             url=str(_get("url") or ""),
             title=str(_get("title") or ""),
             content=str(_get("content") or ""),
@@ -217,6 +249,11 @@ class ComplaintRecord:
     def date_str(self) -> str:
         """Extract YYYY-MM-DD from created_at or default to today."""
         if self.created_at:
+            # Handle Korean explicit date format e.g. "2026년 10월 27일" or "2026년 9월 8일"
+            match_kr = re.search(r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?", str(self.created_at))
+            if match_kr:
+                y, m, d = match_kr.group(1), match_kr.group(2).zfill(2), match_kr.group(3).zfill(2)
+                return f"{y}-{m}-{d}"
             # Handle Korean spaced or dotted date patterns e.g. "2026. 10. 25." or "2026. 9. 8." or slash/dash
             match = re.search(r"(\d{4})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})", str(self.created_at))
             if match:
@@ -328,6 +365,19 @@ class DailyReportStatistics:
             "critical_defect_count": self.critical_defect_count,
         }
 
+    @classmethod
+    def from_dict(cls, data: Any) -> DailyReportStatistics:
+        if isinstance(data, cls):
+            return data
+        if not isinstance(data, dict):
+            return cls()
+        return cls(
+            total_scraped=max(0, _safe_int(data.get("total_scraped", 0))),
+            total_filtered_defects=max(0, _safe_int(data.get("total_filtered_defects", 0))),
+            avg_negativity_score=_safe_float(data.get("avg_negativity_score", 0.0)),
+            critical_defect_count=max(0, _safe_int(data.get("critical_defect_count", 0))),
+        )
+
 
 @dataclass
 class DailyReportPayload:
@@ -360,3 +410,38 @@ class DailyReportPayload:
             "top_defect_categories": list(self.top_defect_categories),
             "reports": list(self.reports),
         }
+
+    @classmethod
+    def from_dict(cls, data: Any) -> DailyReportPayload:
+        if isinstance(data, cls):
+            return data
+        if not isinstance(data, dict):
+            return cls(generated_at=datetime.now(timezone.utc).isoformat())
+
+        gen_at = str(data.get("generated_at") or datetime.now(timezone.utc).isoformat())
+        pipe_ver = str(data.get("pipeline_version") or "1.0.0")
+
+        raw_stats = data.get("statistics")
+        if isinstance(raw_stats, DailyReportStatistics):
+            stats = raw_stats
+        elif isinstance(raw_stats, dict):
+            stats = DailyReportStatistics.from_dict(raw_stats)
+        else:
+            stats = DailyReportStatistics()
+
+        raw_reports = data.get("reports")
+        reports = [r for r in raw_reports if isinstance(r, dict)] if isinstance(raw_reports, (list, tuple)) else []
+
+        raw_cats = data.get("top_defect_categories")
+        top_cats = [c for c in raw_cats if isinstance(c, dict)] if isinstance(raw_cats, (list, tuple)) else []
+
+        tot_complaints = _safe_int(data.get("total_complaints_today", len(reports)))
+
+        return cls(
+            generated_at=gen_at,
+            pipeline_version=pipe_ver,
+            statistics=stats,
+            reports=reports,
+            total_complaints_today=tot_complaints,
+            top_defect_categories=top_cats,
+        )

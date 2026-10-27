@@ -101,7 +101,7 @@ export interface VinCheckResult {
 }
 
 // Year code mapping according to ISO 3779 standard (Position 10)
-const VIN_YEAR_MAP: Record<string, number> = {
+export const VIN_YEAR_MAP: Record<string, number> = {
   G: 2016,
   H: 2017,
   J: 2018,
@@ -120,7 +120,7 @@ const VIN_YEAR_MAP: Record<string, number> = {
 };
 
 // Known WMI prefixes fallback (Positions 1-3)
-const WMI_MAP: Record<string, { brand: string; country: string }> = {
+export const WMI_MAP: Record<string, { brand: string; country: string }> = {
   KM8: { brand: '현대자동차', country: '대한민국' },
   KMH: { brand: '제네시스', country: '대한민국' },
   KND: { brand: '기아', country: '대한민국' },
@@ -366,8 +366,7 @@ export function decodeVinAndCheckRecalls(rawVin: string, customDb?: RecallDataba
   const decodedYear = VIN_YEAR_MAP[yearChar];
 
   // 2. Decode Prefix (WMI + VDS)
-  // Match against known prefixes, prioritizing the longest match
-  const sortedPrefixes = [...db.vin_prefixes].sort((a, b) => b.prefix.length - a.prefix.length);
+  const sortedPrefixes = [...(db.vin_prefixes || [])].sort((a, b) => b.prefix.length - a.prefix.length);
   const matchedPrefix = sortedPrefixes.find((p) => vin.startsWith(p.prefix));
 
   let decodedBrand = matchedPrefix?.brand;
@@ -390,7 +389,7 @@ export function decodeVinAndCheckRecalls(rawVin: string, customDb?: RecallDataba
   // 3. Match Battery Profile
   let matchedBatteryProfile: BatterySafetyProfile | undefined;
   if (decodedModel) {
-    matchedBatteryProfile = db.battery_profiles.find((bp) => {
+    matchedBatteryProfile = (db.battery_profiles || []).find((bp) => {
       const pModel = bp.model_name.toLowerCase();
       const dModel = (decodedModel || '').toLowerCase();
       return pModel.includes(dModel) || dModel.includes(pModel);
@@ -398,8 +397,7 @@ export function decodeVinAndCheckRecalls(rawVin: string, customDb?: RecallDataba
   }
 
   // 4. Match Recall Campaigns
-  const matchingRecalls = db.recalls.filter((campaign) => {
-    // Brand match check
+  const matchingRecalls = (db.recalls || []).filter((campaign) => {
     const brandMatches =
       decodedBrand &&
       (campaign.brand.toLowerCase().includes(decodedBrand.toLowerCase()) ||
@@ -409,12 +407,10 @@ export function decodeVinAndCheckRecalls(rawVin: string, customDb?: RecallDataba
 
     if (!brandMatches) return false;
 
-    // If model is known, check if model name matches target_model with collision protection
     if (decodedModel && !isModelMatchForCampaign(decodedModel, campaign.target_model)) {
       return false;
     }
 
-    // Year match check against target_model_years
     if (decodedYear && !isYearMatchForCampaign(decodedYear, campaign.target_model_years)) {
       return false;
     }
@@ -515,12 +511,10 @@ export function checkRecallsByModel(
 
     if (!brandMatches) return false;
 
-    // Model match check with collision protection
     if (!isModelMatchForCampaign(cleanModel, campaign.target_model)) {
       return false;
     }
 
-    // If year is specified, check if it falls within the campaign's target_model_years
     if (year && !isYearMatchForCampaign(year, campaign.target_model_years)) {
       return false;
     }
@@ -548,7 +542,12 @@ export function checkRecallsByModel(
     decodedBrand: cleanBrand,
     decodedModel: cleanModel,
     decodedYear: year,
-    decodedCountry: matchedBatteryProfile?.brand === '현대자동차' || matchedBatteryProfile?.brand === '기아' || matchedBatteryProfile?.brand === '제네시스' ? '대한민국' : undefined,
+    decodedCountry:
+      matchedBatteryProfile?.brand === '현대자동차' ||
+      matchedBatteryProfile?.brand === '기아' ||
+      matchedBatteryProfile?.brand === '제네시스'
+        ? '대한민국'
+        : undefined,
     batteryProfile: matchedBatteryProfile,
     recalls: matchingRecalls,
     activeCampaignsCount: matchingRecalls.filter((r) => r.status === 'ACTIVE').length,
@@ -576,6 +575,7 @@ export function getDistinctBrands(customDb?: RecallDatabase): string[] {
 
 /**
  * Returns list of vehicle models for a selected brand.
+ * Unions models from db.recalls (target_model), battery_profiles, vin_prefixes, and custom db.vehicles.
  */
 export function getModelsForBrand(brand: string, customDb?: RecallDatabase): string[] {
   if (!brand || typeof brand !== 'string' || !brand.trim()) {
@@ -621,4 +621,91 @@ export function getModelsForBrand(brand: string, customDb?: RecallDatabase): str
     });
 
   return Array.from(models);
+}
+
+/**
+ * Pure calculation of key recall and battery safety metrics from a RecallDatabase.
+ */
+export function calculateRecallKPIs(customDb?: RecallDatabase): {
+  totalCampaigns: number;
+  activeCampaigns: number;
+  totalAffectedVehiclesKdm: number;
+  fireHazardCampaigns: number;
+  lossOfPowerCampaigns: number;
+  otaRemedyCampaigns: number;
+  otaRemedyRatePct: number;
+  criticalMonitoringBatteryCount: number;
+  brandDistribution: Record<string, number>;
+  riskLevelDistribution: Record<RecallRiskLevel, number>;
+  remedyTypeDistribution: Record<RemedyMethod, number>;
+} {
+  const db = customDb || getRecallDatabase();
+  const recalls = db.recalls || [];
+  const batteryProfiles = db.battery_profiles || [];
+
+  const totalCampaigns = recalls.length;
+  let activeCampaigns = 0;
+  let totalAffectedVehicles = 0;
+  let fireHazards = 0;
+  let lossOfPower = 0;
+  let otaRemedies = 0;
+
+  const brandDistribution: Record<string, number> = {};
+  const riskLevelDistribution: Record<RecallRiskLevel, number> = {
+    FIRE_HAZARD: 0,
+    LOSS_OF_POWER: 0,
+    BRAKE_STEERING: 0,
+    SOFTWARE_REGULATION: 0,
+    STRUCTURAL_DEFECT: 0,
+  };
+  const remedyTypeDistribution: Record<RemedyMethod, number> = {
+    HARDWARE_REPLACE: 0,
+    SOFTWARE_UPDATE_SERVICE: 0,
+    OTA_WIRELESS: 0,
+    INSPECTION_ONLY: 0,
+  };
+
+  for (const campaign of recalls) {
+    if (campaign.status === 'ACTIVE') activeCampaigns++;
+    if (Number.isFinite(campaign.affected_kdm_units) && campaign.affected_kdm_units > 0) {
+      totalAffectedVehicles += campaign.affected_kdm_units;
+    }
+    if (campaign.risk_level === 'FIRE_HAZARD') fireHazards++;
+    if (campaign.risk_level === 'LOSS_OF_POWER') lossOfPower++;
+    if (campaign.remedy_type === 'OTA_WIRELESS') otaRemedies++;
+
+    if (campaign.brand) {
+      brandDistribution[campaign.brand] = (brandDistribution[campaign.brand] || 0) + 1;
+    }
+
+    if (campaign.risk_level && campaign.risk_level in riskLevelDistribution) {
+      riskLevelDistribution[campaign.risk_level]++;
+    }
+
+    if (campaign.remedy_type && campaign.remedy_type in remedyTypeDistribution) {
+      remedyTypeDistribution[campaign.remedy_type]++;
+    }
+  }
+
+  const otaRemedyRatePct = totalCampaigns > 0
+    ? Math.round((otaRemedies / totalCampaigns) * 1000) / 10
+    : 0;
+
+  const criticalMonitoringBatteryCount = batteryProfiles.filter(
+    (bp) => bp.fire_incident_status === 'CRITICAL_MONITORING'
+  ).length;
+
+  return {
+    totalCampaigns,
+    activeCampaigns,
+    totalAffectedVehiclesKdm: totalAffectedVehicles,
+    fireHazardCampaigns: fireHazards,
+    lossOfPowerCampaigns: lossOfPower,
+    otaRemedyCampaigns: otaRemedies,
+    otaRemedyRatePct,
+    criticalMonitoringBatteryCount,
+    brandDistribution,
+    riskLevelDistribution,
+    remedyTypeDistribution,
+  };
 }

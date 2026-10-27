@@ -405,6 +405,14 @@ class ScraperPipeline:
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         primary_written: Optional[str] = None
 
+        # If scrape produced 0 defects, check if an existing authentic mirror file already exists
+        existing_mirror: Optional[str] = None
+        if len(defect_complaints) == 0:
+            for p in unique_paths:
+                if os.path.exists(p) and os.path.isfile(p) and os.path.getsize(p) > 0:
+                    existing_mirror = p
+                    break
+
         for out_path in unique_paths:
             try:
                 if len(defect_complaints) > 0:
@@ -428,6 +436,14 @@ class ScraperPipeline:
                             f"Scrape produced 0 authentic defects. Preserving existing reports at {out_path}."
                         )
                         results_summary["preserved_paths"].append(out_path)
+                    elif existing_mirror is not None:
+                        # Replicate authentic content from the existing mirror instead of creating an empty payload
+                        logger.warning(
+                            f"Scrape produced 0 authentic defects and {out_path} does not exist. "
+                            f"Replicating authentic contents from existing mirror at {existing_mirror}."
+                        )
+                        _atomic_copy_file(existing_mirror, out_path)
+                        results_summary["written_paths"].append(out_path)
                     else:
                         logger.warning(
                             f"Scrape produced 0 authentic defects and {out_path} does not exist. "

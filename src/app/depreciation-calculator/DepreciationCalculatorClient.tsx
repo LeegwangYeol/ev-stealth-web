@@ -1995,7 +1995,7 @@ export default function DepreciationCalculatorClient({
             <span className="text-xs text-slate-600 font-medium block">
               {holdingYears}년 누적 연료비 절감
             </span>
-            <span className="text-xl sm:text-2xl font-black text-emerald-600 block mt-1">
+            <span className="text-xl sm:text-2xl font-black text-emerald-700 block mt-1">
               +{(tcoResult.fuelSavingsKrw / 10000).toLocaleString()}{' '}
               <span className="text-xs font-semibold text-slate-600">만원</span>
             </span>

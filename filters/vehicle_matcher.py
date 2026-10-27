@@ -41,10 +41,10 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     (re.compile(r"(캐스퍼\s*(일렉트릭|ev|전기차|electric)|casper\s*(electric|ev))", re.IGNORECASE), "캐스퍼 일렉트릭", BRAND_HYUNDAI),
     (re.compile(r"(포터\s*(일렉트릭|ev|전기차)|porter\s*ev)", re.IGNORECASE), "포터 EV", BRAND_HYUNDAI),
     (re.compile(r"(?<![a-zA-Z0-9])ST1(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "ST1", BRAND_HYUNDAI),
-    (re.compile(r"(gv\s*60|제네시스\s*gv\s*60)", re.IGNORECASE), "GV60", BRAND_HYUNDAI),
-    (re.compile(r"(gv\s*70\s*(전동화|ev)|electrified\s*gv\s*70)", re.IGNORECASE), "GV70 EV", BRAND_HYUNDAI),
-    (re.compile(r"(g\s*80\s*(전동화|ev)|electrified\s*g\s*80)", re.IGNORECASE), "G80 EV", BRAND_HYUNDAI),
-    (re.compile(r"(제네시스\s*(전기차|ev|일렉트릭|전동화)|genesis\s*(ev|electric))", re.IGNORECASE), "제네시스 EV", BRAND_HYUNDAI),
+    (re.compile(r"(gv\s*60|(electrified|일렉트리파이드)\s*gv\s*60|제네시스\s*gv\s*60)", re.IGNORECASE), "GV60", BRAND_HYUNDAI),
+    (re.compile(r"(gv\s*70\s*(전동화|ev|일렉트릭)|(electrified|일렉트리파이드)\s*gv\s*70)", re.IGNORECASE), "GV70 EV", BRAND_HYUNDAI),
+    (re.compile(r"(g\s*80\s*(전동화|ev|일렉트릭)|(electrified|일렉트리파이드)\s*g\s*80)", re.IGNORECASE), "G80 EV", BRAND_HYUNDAI),
+    (re.compile(r"(제네시스\s*(전기차|ev|일렉트릭|전동화)|(electrified|일렉트리파이드)\s*제네시스|genesis\s*(ev|electric))", re.IGNORECASE), "제네시스 EV", BRAND_HYUNDAI),
     (re.compile(r"(제네시스|genesis)", re.IGNORECASE), "제네시스", BRAND_HYUNDAI),
 
     # -----------------------------------------------------------------
@@ -133,7 +133,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
 BRAND_KEYWORDS: List[Tuple[Pattern[str], str]] = [
     (re.compile(r"(테슬라|tesla|테슬람|개슬라|개스라|기가상하이)", re.IGNORECASE), BRAND_TESLA),
     (re.compile(r"(현대자동차|현대차|현대\s*전기차|현기차|현기충|흉기차|흉기|블루핸즈|e-gmp|이피트)", re.IGNORECASE), BRAND_HYUNDAI),
-    (re.compile(r"(제네시스|genesis|gv\s*60|gv\s*70|g\s*80)", re.IGNORECASE), BRAND_HYUNDAI),
+    (re.compile(r"(제네시스|genesis|(?:electrified|일렉트리파이드)?\s*(?:gv\s*60|gv\s*70|g\s*80))", re.IGNORECASE), BRAND_HYUNDAI),
     (re.compile(r"(기아차|기아\s*전기차|기아|오토큐)", re.IGNORECASE), BRAND_KIA),
     (re.compile(r"(byd|비야디|짱깨차|짱차|중국\s*전기차)", re.IGNORECASE), BRAND_BYD),
     (re.compile(r"(벤츠|bmw|아우디|포르쉐|폴스타|볼보|쉐보레|폭스바겐|리비안|루시드|샤오미)", re.IGNORECASE), BRAND_OTHER),
