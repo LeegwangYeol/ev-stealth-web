@@ -625,9 +625,9 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
         {/* Community Source Selector Badges */}
         <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-slate-700">출처 플랫폼:</span>
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               {SOURCE_OPTIONS.map((src) => {
                 const isSelected = selectedSource === src.id;
                 const count = sourceCounts[src.id] || 0;

@@ -31,7 +31,7 @@ export default function Home() {
   return (
     <div className="flex flex-col items-center justify-center space-y-12 py-20">
       <section aria-labelledby="home-hero-heading" className="text-center space-y-4">
-        <h1 id="home-hero-heading" className="text-5xl font-extrabold tracking-tight text-slate-900">
+        <h1 id="home-hero-heading" className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900">
           글로벌 EV 중고차 연식별 피하기 가이드
         </h1>
         <p className="text-xl text-gray-600 max-w-2xl mx-auto">
@@ -44,7 +44,7 @@ export default function Home() {
           prefetch={true}
           className="group block p-6 bg-gradient-to-br from-amber-950 via-slate-900 to-yellow-950 text-white border border-amber-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-amber-400 transition-all duration-300 md:col-span-2 lg:col-span-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="px-3 py-1 bg-amber-500/30 text-amber-300 border border-amber-400/40 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping motion-reduce:animate-none inline-block" aria-hidden="true" />
                 스케줄러 실시간 연동
@@ -71,7 +71,7 @@ export default function Home() {
           prefetch={true}
           className="group block p-6 bg-gradient-to-br from-emerald-950 via-slate-900 to-teal-950 text-white border border-emerald-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-emerald-400 transition-all duration-300 md:col-span-2 lg:col-span-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="px-3 py-1 bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 rounded-full text-xs font-bold uppercase tracking-wider">
                 신규 확장
               </span>
@@ -97,7 +97,7 @@ export default function Home() {
           prefetch={false}
           className="group block p-6 bg-gradient-to-br from-indigo-900 via-slate-900 to-blue-950 text-white border border-indigo-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-indigo-400 transition-all duration-300 md:col-span-2 lg:col-span-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="px-3 py-1 bg-indigo-500/30 text-indigo-300 border border-indigo-400/40 rounded-full text-xs font-bold uppercase tracking-wider">
                 핵심 신규 포털
               </span>
@@ -117,7 +117,7 @@ export default function Home() {
           prefetch={false}
           className="group block p-6 bg-gradient-to-br from-rose-950 via-slate-900 to-amber-950 text-white border border-rose-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-rose-400 transition-all duration-300 md:col-span-2 lg:col-span-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="px-3 py-1 bg-rose-500/30 text-rose-300 border border-rose-400/40 rounded-full text-xs font-bold uppercase tracking-wider">
                 국토부·NHTSA 공인 연동
               </span>

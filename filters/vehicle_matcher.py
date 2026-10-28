@@ -35,9 +35,11 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     # -----------------------------------------------------------------
     (re.compile(r"(아이오닉\s*5\s*N|ioniq\s*5\s*n)", re.IGNORECASE), "아이오닉5 N", BRAND_HYUNDAI),
     (re.compile(r"(아이오닉\s*5|ioniq\s*5)", re.IGNORECASE), "아이오닉5", BRAND_HYUNDAI),
+    (re.compile(r"(아이오닉\s*6\s*N|ioniq\s*6\s*n)", re.IGNORECASE), "아이오닉6 N", BRAND_HYUNDAI),
     (re.compile(r"(아이오닉\s*6|ioniq\s*6)", re.IGNORECASE), "아이오닉6", BRAND_HYUNDAI),
     (re.compile(r"(아이오닉\s*9|ioniq\s*9)", re.IGNORECASE), "아이오닉9", BRAND_HYUNDAI),
     (re.compile(r"(코나\s*(일렉트릭|ev|전기차|electric)|kona\s*(ev|electric))", re.IGNORECASE), "코나 EV", BRAND_HYUNDAI),
+    (re.compile(r"(캐스퍼\s*일렉트릭\s*크로스|casper\s*cross)", re.IGNORECASE), "캐스퍼 일렉트릭", BRAND_HYUNDAI),
     (re.compile(r"(캐스퍼\s*(일렉트릭|ev|전기차|electric)|casper\s*(electric|ev))", re.IGNORECASE), "캐스퍼 일렉트릭", BRAND_HYUNDAI),
     (re.compile(r"(포터\s*(일렉트릭|ev|전기차)|porter\s*ev)", re.IGNORECASE), "포터 EV", BRAND_HYUNDAI),
     (re.compile(r"(?<![a-zA-Z0-9])ST1(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "ST1", BRAND_HYUNDAI),
@@ -52,6 +54,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     # -----------------------------------------------------------------
     (re.compile(r"(?<![a-zA-Z0-9])(ev\s*6\s*gt)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "EV6 GT", BRAND_KIA),
     (re.compile(r"(?<![a-zA-Z0-9])(ev\s*6)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "EV6", BRAND_KIA),
+    (re.compile(r"(?<![a-zA-Z0-9])(ev\s*9\s*gt)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "EV9 GT", BRAND_KIA),
     (re.compile(r"(?<![a-zA-Z0-9])(ev\s*9)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "EV9", BRAND_KIA),
     (re.compile(r"(?<![a-zA-Z0-9])(ev\s*3)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "EV3", BRAND_KIA),
     (re.compile(r"(?<![a-zA-Z0-9])(ev\s*4)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "EV4", BRAND_KIA),
@@ -113,7 +116,9 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     # -----------------------------------------------------------------
     (re.compile(r"(타이칸|taycan)", re.IGNORECASE), "타이칸", BRAND_OTHER),
     (re.compile(r"(폴스타\s*2|polestar\s*2)", re.IGNORECASE), "폴스타 2", BRAND_OTHER),
+    (re.compile(r"(폴스타\s*3|polestar\s*3)", re.IGNORECASE), "폴스타 3", BRAND_OTHER),
     (re.compile(r"(폴스타\s*4|polestar\s*4)", re.IGNORECASE), "폴스타 4", BRAND_OTHER),
+    (re.compile(r"(폴스타\s*5|polestar\s*5)", re.IGNORECASE), "폴스타 5", BRAND_OTHER),
     (re.compile(r"(?<![a-zA-Z0-9])(eqe\s*350\+?|eqe\s*53|eqe)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "EQE", BRAND_OTHER),
     (re.compile(r"(?<![a-zA-Z0-9])(eqs\s*450\+?|eqs\s*580|eqs)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "EQS", BRAND_OTHER),
     (re.compile(r"(?<![a-zA-Z0-9])(eqa|eqb|eqc)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "EQ Series", BRAND_OTHER),

@@ -739,7 +739,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
               {/* 1-Click Sample VIN Quick Selector Buttons */}
               <div className="mt-6 pt-6 border-t border-slate-800/80">
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex flex-wrap items-center justify-between gap-1 mb-3">
                   <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                     💡 차대번호가 기억나지 않으시나요? 1초 샘플 차대번호 클릭:
                   </span>
@@ -881,7 +881,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       : '✅'}
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-black/50">
                         {checkResult.overallRiskGrade === 'CRITICAL'
                           ? '긴급 안전 주의보 발령'

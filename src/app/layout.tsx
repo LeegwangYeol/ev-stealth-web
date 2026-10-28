@@ -35,8 +35,15 @@ import GlobalNavListener from "@/components/GlobalNavListener";
 import SiteFooter from "@/components/layout/SiteFooter";
 
 export const metadata: Metadata = {
-  title: "Global EV Critical Issues Hub",
-  description: "글로벌 전기차 결함 및 수리비 폭탄 리포트",
+  title: "Global EV Critical Issues Hub | Global EV Hub",
+  description: "글로벌 전기차 결함, 리콜 정보, 실시간 보조금 소진율 및 감가방어율 종합 분석 포털",
+  openGraph: {
+    title: "Global EV Critical Issues Hub | Global EV Hub",
+    description: "글로벌 전기차 결함, 리콜 정보, 실시간 보조금 소진율 및 감가방어율 종합 분석 포털",
+    siteName: "Global EV Hub",
+    locale: "ko_KR",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
@@ -101,7 +108,7 @@ export default function RootLayout({
             <details className="md:hidden relative group" id="mobile-nav-drawer" data-testid="mobile-drawer-toggle">
               <summary
                 aria-label="모바일 내비게이션 메뉴 토글"
-                className="list-none flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-sm font-medium cursor-pointer border border-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus:ring-2 focus:ring-blue-400 select-none"
+                className="list-none flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-sm font-medium cursor-pointer border border-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus:ring-2 focus:ring-blue-400 select-none"
               >
                 <svg className="w-5 h-5 block group-open:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -173,17 +180,17 @@ export default function RootLayout({
                 </Link>
                 <div className="h-px border-t border-slate-800 my-1" />
                 <div className="text-[11px] font-semibold text-slate-400 px-2 py-0.5">제조사별 피하기 가이드</div>
-                <div className="grid grid-cols-2 gap-1">
-                  <Link href="/hyundai-kia" prefetch={false} className="px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Link href="/hyundai-kia" prefetch={false} className="px-2.5 py-2 min-h-[36px] flex items-center rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
                     현대/기아
                   </Link>
-                  <Link href="/tesla" prefetch={false} className="px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                  <Link href="/tesla" prefetch={false} className="px-2.5 py-2 min-h-[36px] flex items-center rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
                     테슬라
                   </Link>
-                  <Link href="/byd" prefetch={false} className="px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                  <Link href="/byd" prefetch={false} className="px-2.5 py-2 min-h-[36px] flex items-center rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
                     BYD
                   </Link>
-                  <Link href="/global-brands" prefetch={false} className="px-2.5 py-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                  <Link href="/global-brands" prefetch={false} className="px-2.5 py-2 min-h-[36px] flex items-center rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
                     기타 글로벌
                   </Link>
                 </div>

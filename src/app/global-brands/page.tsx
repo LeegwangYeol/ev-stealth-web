@@ -6,12 +6,19 @@ export const dynamic = 'force-static';
 export const metadata: Metadata = {
   title: '글로벌 EV 브랜드 연식별 결함 및 구매 가이드 | Global EV Hub',
   description: '폭스바겐 ID.4, 쉐보레 볼트 EV, 폴스타 2, 벤츠 EQE/EQS 등 유럽/북미 전기차 연식별 결함 및 중고차 구매 가이드',
+  openGraph: {
+    title: '글로벌 EV 브랜드 연식별 결함 및 구매 가이드 | Global EV Hub',
+    description: '폭스바겐 ID.4, 쉐보레 볼트 EV, 폴스타 2, 벤츠 EQE/EQS 등 유럽/북미 전기차 연식별 결함 및 중고차 구매 가이드',
+    siteName: 'Global EV Hub',
+    locale: 'ko_KR',
+    type: 'website',
+  },
 };
 
 export default function GlobalEvPage() {
   return (
     <div className="space-y-8 py-10 max-w-4xl mx-auto">
-      <h1 className="text-4xl font-bold border-b pb-4">유럽 및 북미 EV 연식별 가이드 (폭스바겐, 리비안, 폴스타 등)</h1>
+      <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold border-b pb-4">유럽 및 북미 EV 연식별 가이드 (폭스바겐, 리비안, 폴스타 등)</h1>
       
       <section className="space-y-4" aria-labelledby="heading-bolt-ev">
         <h2 id="heading-bolt-ev" className="text-3xl font-semibold text-gray-800">쉐보레 볼트 EV / EUV</h2>

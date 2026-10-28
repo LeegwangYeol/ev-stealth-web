@@ -11,6 +11,8 @@ body {
   color: var(--foreground);
   background: var(--background);
   font-family: var(--font-geist-sans), Arial, sans-serif;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 @layer utilities {

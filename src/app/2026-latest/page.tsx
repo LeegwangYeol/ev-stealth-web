@@ -1,17 +1,25 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 export const dynamic = 'force-static';
 
 export const metadata: Metadata = {
   title: '2026년식 KDM EV 초기 품질 리포트 | Global EV Hub',
   description: '올해 출고된 2026년식 최신 전기차(아이오닉5, EV3, 아이오닉9, 모델Y, 시라이언7)의 한국 차주 실제 평가와 초기 결함을 100% 원문 출처와 함께 분석했습니다.',
+  openGraph: {
+    title: '2026년식 KDM EV 초기 품질 리포트 | Global EV Hub',
+    description: '올해 출고된 2026년식 최신 전기차(아이오닉5, EV3, 아이오닉9, 모델Y, 시라이언7)의 한국 차주 실제 평가와 초기 결함을 100% 원문 출처와 함께 분석했습니다.',
+    siteName: 'Global EV Hub',
+    locale: 'ko_KR',
+    type: 'website',
+  },
 };
 
 export default function Latest2026Page() {
   return (
     <div className="space-y-10">
       <header className="border-b pb-6">
-        <h1 className="text-4xl font-extrabold text-slate-900 mb-4">2026년식 KDM(국내 내수용) EV 초기 품질 리포트</h1>
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">2026년식 KDM(국내 내수용) EV 초기 품질 리포트</h1>
         <p className="text-lg text-gray-600">
           올해 막 출고된 2026년식 최신 전기차(아이오닉 5 페이스리프트, EV3, 아이오닉 9, 테슬라 모델Y, BYD 시라이언 7)의 한국 차주 실제 평가와 초기 결함을 100% 원문 출처(보배드림, 레딧 등)와 함께 분석했습니다.
         </p>
@@ -109,6 +117,88 @@ export default function Latest2026Page() {
               <strong>출처:</strong> <a href="https://m.bobaedream.co.kr/board/bbs_view/best/1008916/2/8?cmt=1" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">보배드림 아이오닉9 배터리 결함<span className="sr-only"> (새 창에서 열림)</span></a>
             </li>
           </ul>
+        </div>
+      </section>
+
+      {/* 연계 서비스 바로가기 (Cross-Tool CTAs) */}
+      <section aria-labelledby="heading-cross-tools" className="mt-12 pt-8 border-t border-slate-200">
+        <div className="mb-6">
+          <h2 id="heading-cross-tools" className="text-3xl font-bold text-slate-800 mb-2 border-l-4 border-blue-600 pl-4">
+            연계 서비스 바로가기
+          </h2>
+          <p className="text-base text-gray-600">
+            2026년식 최신 전기차 분석과 함께 보조금 실시간 소진율, 감가율 시뮬레이션, 결함 통계 및 공식 리콜 조치를 바로 확인하세요.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Link
+            href="/subsidy-tracker"
+            prefetch={true}
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+          >
+            <div className="flex items-center gap-2 text-amber-800 font-bold text-base mb-1">
+              <span className="text-xl" aria-hidden="true">⚡</span>
+              <span>지자체 보조금 실시간 소진율 추적기</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              환경부 및 17개 광역시도별 보조금 소진율, 마감 임박 경보, 5,500만 원 상한제 차등 지급액을 실시간 확인합니다.
+            </p>
+            <span className="inline-flex items-center gap-1 text-xs text-amber-800 font-semibold mt-3 group-hover:underline">
+              보조금 소진율 확인하기 &rarr;
+            </span>
+          </Link>
+
+          <Link
+            href="/depreciation-calculator"
+            prefetch={true}
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          >
+            <div className="flex items-center gap-2 text-emerald-700 font-bold text-base mb-1">
+              <span className="text-xl" aria-hidden="true">📉</span>
+              <span>전기차 감가율 및 배터리 수명 시뮬레이터</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              보조금 수령 후 5년간의 잔존가치, 배터리 잔존성능(SoH), 연차별 총소유비용(TCO)을 정밀 시뮬레이션합니다.
+            </p>
+            <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-semibold mt-3 group-hover:underline">
+              감가율 계산하기 &rarr;
+            </span>
+          </Link>
+
+          <Link
+            href="/reliability-analytics"
+            prefetch={false}
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            <div className="flex items-center gap-2 text-blue-700 font-bold text-base mb-1">
+              <span className="text-xl" aria-hidden="true">📊</span>
+              <span>실차주 결함 통계 및 고질병 랭킹</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              현대·기아·테슬라 등 브랜드별 결함 심각도 지수(DSI), 다발 결함 부품 랭킹 및 예상 수리비를 확인합니다.
+            </p>
+            <span className="inline-flex items-center gap-1 text-xs text-blue-700 font-semibold mt-3 group-hover:underline">
+              결함 통계 조회하기 &rarr;
+            </span>
+          </Link>
+
+          <Link
+            href="/recall-portal"
+            prefetch={false}
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-rose-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+          >
+            <div className="flex items-center gap-2 text-rose-700 font-bold text-base mb-1">
+              <span className="text-xl" aria-hidden="true">🚨</span>
+              <span>공식 리콜 및 배터리 제조사 조회</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              차대번호(VIN) 17자리 또는 모델명으로 국토교통부 공식 리콜 조치 여부 및 탑재 배터리 제조사를 즉시 조회합니다.
+            </p>
+            <span className="inline-flex items-center gap-1 text-xs text-rose-700 font-semibold mt-3 group-hover:underline">
+              리콜 및 배터리 확인하기 &rarr;
+            </span>
+          </Link>
         </div>
       </section>
 

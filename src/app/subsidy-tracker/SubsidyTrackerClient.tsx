@@ -355,7 +355,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-amber-500/10 via-blue-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-xs font-semibold tracking-wide">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping motion-reduce:animate-none inline-block" aria-hidden="true" />
               실시간 스케줄러 동기화 완료
@@ -507,7 +507,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                     : 'bg-slate-950 hover:bg-slate-800 border-slate-800 text-slate-300'
                 }`}
               >
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className={`text-xs px-2 py-0.5 rounded font-semibold border ${getBadgeStyle(key)}`}>
                     {getStatusLabel(key)}
                   </span>
@@ -672,7 +672,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         tabIndex={0}
         className="space-y-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
       >
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 id="regional-grid-heading" className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
             <span aria-hidden="true">🗺️</span> 17개 광역시도별 보조금 소진율 &amp; 잔여 쿼터 현황
           </h2>
@@ -1140,7 +1140,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
 
           {/* 3. Custom MSRP Option */}
           <div className="space-y-3 p-4 bg-slate-950 border border-slate-800 rounded-2xl">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <label htmlFor="custom-msrp-toggle-checkbox" className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-300 uppercase tracking-wider">
                 <input
                   id="custom-msrp-toggle-checkbox"
@@ -1181,7 +1181,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                     원
                   </span>
                 </div>
-                <div className="flex gap-2 text-[11px]">
+                <div className="flex flex-wrap gap-2 text-[11px]">
                   <button
                     type="button"
                     onClick={() => setCustomMsrpInput('54000000')}

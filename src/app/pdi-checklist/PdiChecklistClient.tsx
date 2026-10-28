@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 
 export type ChecklistItem = {
   id: string;
@@ -176,12 +177,12 @@ export default function PdiChecklistClient() {
             </p>
           </div>
           {mounted && (
-            <div className="flex items-center gap-2 self-start sm:self-auto">
+            <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
               <button
                 onClick={toggleAllItems}
                 type="button"
                 aria-pressed={isAllChecked}
-                className={`px-3.5 py-2 text-xs font-semibold border rounded-lg shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                className={`px-3.5 py-2 min-h-[40px] text-xs font-semibold border rounded-lg shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   isAllChecked
                     ? 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100'
                     : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
@@ -192,7 +193,7 @@ export default function PdiChecklistClient() {
               <button
                 onClick={resetChecklist}
                 type="button"
-                className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:text-red-700 bg-white hover:bg-red-50 border border-slate-300 rounded-lg shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="px-3.5 py-2 min-h-[40px] text-xs font-semibold text-slate-600 hover:text-red-700 bg-white hover:bg-red-50 border border-slate-300 rounded-lg shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 체크리스트 초기화
               </button>
@@ -212,7 +213,7 @@ export default function PdiChecklistClient() {
       <div className="sticky top-0 bg-white/90 backdrop-blur-md p-4 rounded-xl border border-gray-200 shadow-sm z-10 space-y-3">
         <div className="flex justify-between items-center">
           <span className="font-semibold text-gray-700">검수 진행률 ({checkedCount}/{items.length})</span>
-          <span className="font-bold text-blue-600">{progress}%</span>
+          <span className="font-bold text-blue-700">{progress}%</span>
         </div>
         <div
           role="progressbar"
@@ -249,7 +250,7 @@ export default function PdiChecklistClient() {
                 onClick={() => setSelectedCategory('ALL')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   isSelected
-                    ? 'bg-blue-600 text-white border-blue-600'
+                    ? 'bg-blue-700 text-white border-blue-700'
                     : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
                 }`}
               >
@@ -275,7 +276,7 @@ export default function PdiChecklistClient() {
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   isSelected
-                    ? 'bg-blue-600 text-white border-blue-600'
+                    ? 'bg-blue-700 text-white border-blue-700'
                     : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
                 }`}
               >
@@ -332,15 +333,98 @@ export default function PdiChecklistClient() {
       </div>
 
       {progress === 100 && (
-        <div
+        <section
           role="status"
           aria-live="polite"
+          aria-labelledby="pdi-completion-title"
           className="bg-green-50 border border-green-200 text-green-800 p-6 rounded-2xl text-center shadow-sm animate-pulse motion-reduce:animate-none"
         >
-          <h2 className="text-2xl font-bold mb-2">🎉 검수 완료!</h2>
+          <h2 id="pdi-completion-title" className="text-2xl font-bold mb-2">🎉 검수 완료!</h2>
           <p>모든 항목을 확인하셨습니다. 이상이 없다면 안심하고 인수증에 서명하세요.</p>
-        </div>
+        </section>
       )}
+
+      {/* 💡 신차 인수 후 추천 서비스 (Recommended EV Services) */}
+      <section aria-labelledby="heading-recommended-services" className="pt-8 border-t border-gray-200">
+        <div className="mb-6">
+          <h2 id="heading-recommended-services" className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <span aria-hidden="true">💡</span> 신차 인수 후 추천 서비스 (Recommended EV Services)
+          </h2>
+          <p className="text-sm text-slate-600 mt-1">
+            신차 인수를 성공적으로 마치셨나요? 보조금 수령 확인부터 향후 차량 유지관리까지 필수 서비스를 이용해보세요.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Link
+            href="/subsidy-tracker"
+            prefetch={true}
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+          >
+            <div className="flex items-center gap-2 text-amber-800 font-bold text-base mb-1">
+              <span className="text-xl" aria-hidden="true">⚡</span>
+              <span>지자체 보조금 실시간 소진율 추적기</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              환경부 및 17개 지자체별 실시간 전기차 보조금 소진율과 마감 임박 경보를 확인합니다.
+            </p>
+            <span className="inline-flex items-center gap-1 text-xs text-amber-800 font-semibold mt-3 group-hover:underline">
+              보조금 소진율 확인하기 &rarr;
+            </span>
+          </Link>
+
+          <Link
+            href="/depreciation-calculator"
+            prefetch={true}
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          >
+            <div className="flex items-center gap-2 text-emerald-700 font-bold text-base mb-1">
+              <span className="text-xl" aria-hidden="true">📉</span>
+              <span>전기차 감가율 및 배터리 수명 시뮬레이터</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              보조금 수령 후 5년간의 예상 잔존가치, 배터리 잔존성능(SoH), 연차별 총소유비용(TCO)을 정밀 계산합니다.
+            </p>
+            <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-semibold mt-3 group-hover:underline">
+              감가율 계산하기 &rarr;
+            </span>
+          </Link>
+
+          <Link
+            href="/reliability-analytics"
+            prefetch={false}
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            <div className="flex items-center gap-2 text-blue-700 font-bold text-base mb-1">
+              <span className="text-xl" aria-hidden="true">📊</span>
+              <span>실차주 결함 통계 및 고질병 랭킹</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              실제 차주들의 결함 신고 데이터와 고질병 위험도 랭킹, 부품별 수리비 통계를 분석합니다.
+            </p>
+            <span className="inline-flex items-center gap-1 text-xs text-blue-700 font-semibold mt-3 group-hover:underline">
+              결함 통계 조회하기 &rarr;
+            </span>
+          </Link>
+
+          <Link
+            href="/recall-portal"
+            prefetch={false}
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-rose-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+          >
+            <div className="flex items-center gap-2 text-rose-700 font-bold text-base mb-1">
+              <span className="text-xl" aria-hidden="true">🚨</span>
+              <span>공식 리콜 및 배터리 제조사 조회</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              차대번호(VIN) 17자리 또는 모델명으로 국토교통부 공식 리콜 조치 여부 및 탑재 배터리 제조사를 즉시 조회합니다.
+            </p>
+            <span className="inline-flex items-center gap-1 text-xs text-rose-700 font-semibold mt-3 group-hover:underline">
+              리콜 및 배터리 확인하기 &rarr;
+            </span>
+          </Link>
+        </div>
+      </section>
     </div>
   );
 }

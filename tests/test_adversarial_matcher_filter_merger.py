@@ -255,6 +255,42 @@ class TestVehicleMatcherEdgeCases(unittest.TestCase):
                 f"Expected correct match for '{phrase}'",
             )
 
+    def test_08_expanded_2026_ev_models(self):
+        """Verify enhanced 2026 EV model patterns and their precedence."""
+        cases = [
+            # EV9 GT vs EV9
+            ("기아 EV9 GT 출고했습니다", (BRAND_KIA, "EV9 GT")),
+            ("ev 9 gt 서스펜션 반응", (BRAND_KIA, "EV9 GT")),
+            ("EV9 GT는 가속력이 좋습니다", (BRAND_KIA, "EV9 GT")),
+            ("EV9으로 패밀리카 결정", (BRAND_KIA, "EV9")),
+            ("ev 9 에어 서스펜션", (BRAND_KIA, "EV9")),
+            ("기아 EV9 차주 모임", (BRAND_KIA, "EV9")),
+
+            # 아이오닉6 N vs 아이오닉6
+            ("아이오닉 6 N 트랙 랩타임", (BRAND_HYUNDAI, "아이오닉6 N")),
+            ("아이오닉6N 브레이크 반응", (BRAND_HYUNDAI, "아이오닉6 N")),
+            ("ioniq 6 n 팝콘 사운드", (BRAND_HYUNDAI, "아이오닉6 N")),
+            ("아이오닉 6 주행거리 및 전비", (BRAND_HYUNDAI, "아이오닉6")),
+            ("아이오닉6 고속도로 주행기", (BRAND_HYUNDAI, "아이오닉6")),
+            ("ioniq 6 충전 속도", (BRAND_HYUNDAI, "아이오닉6")),
+
+            # 폴스타 3 & 폴스타 5
+            ("폴스타 3 에어 서스펜션 승차감", (BRAND_OTHER, "폴스타 3")),
+            ("polestar 3 국내 출시가", (BRAND_OTHER, "폴스타 3")),
+            ("폴스타 5 800V 시스템", (BRAND_OTHER, "폴스타 5")),
+            ("polestar 5 제로백 스펙", (BRAND_OTHER, "폴스타 5")),
+
+            # 캐스퍼 일렉트릭 크로스 vs 캐스퍼 일렉트릭
+            ("캐스퍼 일렉트릭 크로스 오프로드 패키지", (BRAND_HYUNDAI, "캐스퍼 일렉트릭")),
+            ("캐스퍼일렉트릭크로스 출고", (BRAND_HYUNDAI, "캐스퍼 일렉트릭")),
+            ("casper cross 디자인 유출", (BRAND_HYUNDAI, "캐스퍼 일렉트릭")),
+            ("캐스퍼 일렉트릭 전비 후기", (BRAND_HYUNDAI, "캐스퍼 일렉트릭")),
+            ("casper ev 배터리 잔량", (BRAND_HYUNDAI, "캐스퍼 일렉트릭")),
+        ]
+        for text, expected in cases:
+            actual = extract_vehicle_info(text)
+            self.assertEqual(actual, expected, f"Failed on 2026 EV model case: '{text}'")
+
 
 class TestDefectFilterRobustness(unittest.TestCase):
     """Stress tests for defect filter: rhetorical defect complaints vs spam/inquiries."""

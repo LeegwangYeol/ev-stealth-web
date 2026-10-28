@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     '전기차 유지비 비교',
   ],
   openGraph: {
-    title: '전기차 감가방어율 & 배터리 수명 계산기 (2026 국내 실거래 기반)',
+    title: '전기차 감가방어율 & 배터리 수명 계산기 (2026 국내 실거래 기반) | Global EV Hub',
     description:
       '내 차 5년 뒤 중고 시세와 배터리 수명(SoH)은? 법정 보조금 환수액 및 내연기관 대비 5개년 유지비 절감액을 1초 만에 시뮬레이션하세요.',
     type: 'website',

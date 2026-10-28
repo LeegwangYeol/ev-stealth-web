@@ -115,14 +115,20 @@ class CategoryMetrics:
     def __getitem__(self, key: str) -> Any:
         try:
             return getattr(self, key)
-        except AttributeError:
+        except (AttributeError, TypeError):
+            d = self.to_dict()
+            if key in d:
+                return d[key]
             raise KeyError(key) from None
 
     def __contains__(self, key: Any) -> bool:
-        return hasattr(self, str(key))
+        return hasattr(self, str(key)) or key in self.to_dict()
 
     def get(self, key: str, default: Any = None) -> Any:
-        return getattr(self, key, default)
+        try:
+            return self[key]
+        except KeyError:
+            return default
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -166,14 +172,20 @@ class MunicipalityMetrics:
     def __getitem__(self, key: str) -> Any:
         try:
             return getattr(self, key)
-        except AttributeError:
+        except (AttributeError, TypeError):
+            d = self.to_dict()
+            if key in d:
+                return d[key]
             raise KeyError(key) from None
 
     def __contains__(self, key: Any) -> bool:
-        return hasattr(self, str(key))
+        return hasattr(self, str(key)) or key in self.to_dict()
 
     def get(self, key: str, default: Any = None) -> Any:
-        return getattr(self, key, default)
+        try:
+            return self[key]
+        except KeyError:
+            return default
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -228,7 +240,7 @@ class RegionRecord:
     def __getitem__(self, key: str) -> Any:
         try:
             return getattr(self, key)
-        except AttributeError:
+        except (AttributeError, TypeError):
             d = self.to_dict()
             if key in d:
                 return d[key]
@@ -316,6 +328,24 @@ class PopularModelEntry:
     national_subsidy_krw: int
     regional_subsidy_samples: Dict[str, Dict[str, int]]
 
+    def __getitem__(self, key: str) -> Any:
+        try:
+            return getattr(self, key)
+        except (AttributeError, TypeError):
+            d = self.to_dict()
+            if key in d:
+                return d[key]
+            raise KeyError(key) from None
+
+    def __contains__(self, key: Any) -> bool:
+        return hasattr(self, str(key)) or key in self.to_dict()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
@@ -378,7 +408,7 @@ class NationwideSummary:
     def __getitem__(self, key: str) -> Any:
         try:
             return getattr(self, key)
-        except AttributeError:
+        except (AttributeError, TypeError):
             d = self.to_dict()
             if key in d:
                 return d[key]

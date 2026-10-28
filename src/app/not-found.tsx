@@ -4,6 +4,13 @@ import Link from 'next/link';
 export const metadata: Metadata = {
   title: '페이지를 찾을 수 없습니다 (404) | Global EV Hub',
   description: '요청하신 페이지가 존재하지 않거나 주소가 변경되었습니다.',
+  openGraph: {
+    title: '페이지를 찾을 수 없습니다 (404) | Global EV Hub',
+    description: '요청하신 페이지가 존재하지 않거나 주소가 변경되었습니다.',
+    siteName: 'Global EV Hub',
+    locale: 'ko_KR',
+    type: 'website',
+  },
 };
 
 /**

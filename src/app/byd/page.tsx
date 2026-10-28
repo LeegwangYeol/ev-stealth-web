@@ -6,12 +6,19 @@ export const dynamic = 'force-static';
 export const metadata: Metadata = {
   title: 'BYD 전기차 연식별 결함 및 구매 가이드 | Global EV Hub',
   description: 'BYD 돌핀, 시라이언 7, 씰, 아토 3 연식별(2021~2026) 에어컨 백색가루, 하체 부식, 조향장치 결함 및 구매 가이드',
+  openGraph: {
+    title: 'BYD 전기차 연식별 결함 및 구매 가이드 | Global EV Hub',
+    description: 'BYD 돌핀, 시라이언 7, 씰, 아토 3 연식별(2021~2026) 에어컨 백색가루, 하체 부식, 조향장치 결함 및 구매 가이드',
+    siteName: 'Global EV Hub',
+    locale: 'ko_KR',
+    type: 'website',
+  },
 };
 
 export default function BydPage() {
   return (
     <div className="space-y-8 py-10 max-w-4xl mx-auto">
-      <h1 className="text-4xl font-bold border-b pb-4">BYD 연식별 구매 가이드 (피해야 할 연식)</h1>
+      <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold border-b pb-4">BYD 연식별 구매 가이드 (피해야 할 연식)</h1>
       
       <section className="space-y-4" aria-labelledby="heading-byd-dolphin">
         <h2 id="heading-byd-dolphin" className="text-3xl font-semibold text-gray-800">돌핀 (Dolphin)</h2>

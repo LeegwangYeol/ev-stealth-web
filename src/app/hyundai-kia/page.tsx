@@ -6,12 +6,19 @@ export const dynamic = 'force-static';
 export const metadata: Metadata = {
   title: '현대/기아 전기차 연식별 결함 및 구매 가이드 | Global EV Hub',
   description: '아이오닉5, EV6, EV9 등 현대/기아 전기차 연식별(2021~2026) ICCU 결함, 고질병 분석 및 피해야 할 연식 가이드',
+  openGraph: {
+    title: '현대/기아 전기차 연식별 결함 및 구매 가이드 | Global EV Hub',
+    description: '아이오닉5, EV6, EV9 등 현대/기아 전기차 연식별(2021~2026) ICCU 결함, 고질병 분석 및 피해야 할 연식 가이드',
+    siteName: 'Global EV Hub',
+    locale: 'ko_KR',
+    type: 'website',
+  },
 };
 
 export default function HyundaiKiaPage() {
   return (
     <div className="space-y-8 py-10 max-w-4xl mx-auto">
-      <h1 className="text-4xl font-bold border-b pb-4">현대/기아 연식별 구매 가이드 (피해야 할 연식)</h1>
+      <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold border-b pb-4">현대/기아 연식별 구매 가이드 (피해야 할 연식)</h1>
       
       <section className="space-y-4" aria-labelledby="heading-ioniq5">
         <h2 id="heading-ioniq5" className="text-3xl font-semibold text-gray-800">아이오닉 5 (Ioniq 5)</h2>

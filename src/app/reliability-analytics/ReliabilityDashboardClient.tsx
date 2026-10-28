@@ -747,7 +747,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           </div>
 
           {/* Chart Tab Selector */}
-          <div role="tablist" aria-label="데이터 시각화 차트 선택" className="inline-flex bg-slate-100 p-1.5 rounded-xl self-start sm:self-auto">
+          <div role="tablist" aria-label="데이터 시각화 차트 선택" className="inline-flex max-w-full overflow-x-auto bg-slate-100 p-1.5 rounded-xl self-start sm:self-auto">
             {CHART_TABS.map((tab, idx) => {
               const isSelected = activeChartTab === tab.id;
               return (
@@ -788,7 +788,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 <div className="font-medium text-slate-700">
                   💡 셀을 클릭하거나 마우스를 올리면 해당 연식의 결함 증상과 차주 코멘트를 확인하실 수 있습니다.
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                   <span className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded-full bg-rose-500 inline-block" aria-hidden="true" />
                     <span>회피 (AVOID)</span>
@@ -850,7 +850,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-700 shadow-xl animate-fade-in motion-reduce:animate-none flex flex-col sm:flex-row justify-between gap-4"
                 >
                   <div className="space-y-1 max-w-2xl">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-bold text-base text-blue-300">
                         {hoveredCell.brandName} {hoveredCell.modelName} ({hoveredCell.year}년식)
                       </span>

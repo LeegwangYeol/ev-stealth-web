@@ -24,11 +24,12 @@ export const metadata: Metadata = {
     '아파트 지하주차장 전기차',
   ],
   openGraph: {
-    title: '전기차 공식 리콜 & 배터리 제조사 화재 안전 포털',
+    title: '전기차 공식 리콜 & 배터리 제조사 화재 안전 포털 | Global EV Hub',
     description:
       '내 차 배터리 제조사와 공식 리콜을 1초 만에 확인하세요. 국토교통부 공시 데이터 및 지하주차장 안전 가이드 탑재.',
     type: 'website',
     locale: 'ko_KR',
+    siteName: 'Global EV Hub',
   },
 };
 

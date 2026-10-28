@@ -25,6 +25,8 @@ export const metadata: Metadata = {
     description:
       '9대 제조사 22개 모델 89개 연식의 실제 차주 제보 1,280건 심층 분석. 결함 심각도 지수(DSI), 연식별 위험 히트맵, 보증 외 수리비 매트릭스.',
     type: 'website',
+    locale: 'ko_KR',
+    siteName: 'Global EV Hub',
   },
 };
 
