@@ -1309,7 +1309,9 @@ export default function DepreciationCalculatorClient({
                       rx="4"
                       fill={isSelectedYear ? '#3b82f6' : '#2563eb'}
                       className="transition-all duration-300 hover:opacity-90"
-                    />
+                    >
+                      <title>{`${selectedModel.model_name} ${pt.year}년차: ${chartViewMode === 'price' ? `${Math.round(pt.evResidualPriceKrw / 10000)}만원` : `${pt.evResidualPct.toFixed(0)}%`}`}</title>
+                    </rect>
                     <text
                       x={groupX - 19}
                       y={Math.max(25, yEv - 6)}
@@ -1332,7 +1334,9 @@ export default function DepreciationCalculatorClient({
                       rx="4"
                       fill="#10b981"
                       className="transition-all duration-300 hover:opacity-90"
-                    />
+                    >
+                      <title>{`${pt.year}년차 전기차 전체 평균: ${chartViewMode === 'price' ? `${Math.round(pt.evClassAvgPrice / 10000)}만원` : `${pt.evClassAvgPct.toFixed(0)}%`}`}</title>
+                    </rect>
 
                     {/* Bar 3: ICE Benchmark */}
                     <rect
@@ -1343,7 +1347,9 @@ export default function DepreciationCalculatorClient({
                       rx="4"
                       fill="#64748b"
                       className="transition-all duration-300 hover:opacity-90"
-                    />
+                    >
+                      <title>{`${pt.year}년차 동급 내연기관(가솔린): ${chartViewMode === 'price' ? `${Math.round(pt.iceBenchmarkPrice / 10000)}만원` : `${pt.iceBenchmarkPct.toFixed(0)}%`}`}</title>
+                    </rect>
 
                     {/* X-axis Year Label */}
                     <text

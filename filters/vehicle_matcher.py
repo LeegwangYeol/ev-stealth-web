@@ -38,6 +38,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     (re.compile(r"(아이오닉\s*6\s*N|ioniq\s*6\s*n)", re.IGNORECASE), "아이오닉6 N", BRAND_HYUNDAI),
     (re.compile(r"(아이오닉\s*6|ioniq\s*6)", re.IGNORECASE), "아이오닉6", BRAND_HYUNDAI),
     (re.compile(r"(아이오닉\s*9|ioniq\s*9)", re.IGNORECASE), "아이오닉9", BRAND_HYUNDAI),
+    (re.compile(r"(아이오닉\s*7|ioniq\s*7)", re.IGNORECASE), "아이오닉7", BRAND_HYUNDAI),
     (re.compile(r"(코나\s*(일렉트릭|ev|전기차|electric)|kona\s*(ev|electric))", re.IGNORECASE), "코나 EV", BRAND_HYUNDAI),
     (re.compile(r"(캐스퍼\s*일렉트릭\s*크로스|casper\s*cross)", re.IGNORECASE), "캐스퍼 일렉트릭", BRAND_HYUNDAI),
     (re.compile(r"(캐스퍼\s*(일렉트릭|ev|전기차|electric)|casper\s*(electric|ev))", re.IGNORECASE), "캐스퍼 일렉트릭", BRAND_HYUNDAI),
@@ -57,6 +58,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     (re.compile(r"(?<![a-zA-Z0-9])(ev\s*9\s*gt)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "EV9 GT", BRAND_KIA),
     (re.compile(r"(?<![a-zA-Z0-9])(ev\s*9)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "EV9", BRAND_KIA),
     (re.compile(r"(?<![a-zA-Z0-9])(ev\s*3)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "EV3", BRAND_KIA),
+    (re.compile(r"(?<![a-zA-Z0-9])(ev\s*2)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "EV2", BRAND_KIA),
     (re.compile(r"(?<![a-zA-Z0-9])(ev\s*4)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "EV4", BRAND_KIA),
     (re.compile(r"(?<![a-zA-Z0-9])(ev\s*5)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "EV5", BRAND_KIA),
     (re.compile(r"(니로\s*(일렉트릭|ev|플러스|전기차)|niro\s*ev)", re.IGNORECASE), "니로 EV", BRAND_KIA),
@@ -94,6 +96,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     (re.compile(r"(모델\s*s|model\s*s|\bms\b)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "Model S", BRAND_TESLA),
     (re.compile(r"(모델\s*x|model\s*x|\bmx\b)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "Model X", BRAND_TESLA),
     (re.compile(r"(사이버트럭|cybertruck)", re.IGNORECASE), "Cybertruck", BRAND_TESLA),
+    (re.compile(r"(모델\s*2|model\s*2)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "Model 2", BRAND_TESLA),
 
     # -----------------------------------------------------------------
     # BYD Models
@@ -107,7 +110,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
         r")(?=[은는이가을를의에과와도만로]|으로|입|했|하|(?:\s|$)|[^a-zA-Z0-9가-힣]|$)",
         re.IGNORECASE,
     ), "씰", BRAND_BYD),
-    (re.compile(r"(시라이언\s*7?|sealion\s*7?)", re.IGNORECASE), "시라이언", BRAND_BYD),
+    (re.compile(r"([시씨]라이언\s*0?7?|sealion\s*0?7?)", re.IGNORECASE), "시라이언", BRAND_BYD),
     (re.compile(r"\b(byd\s*한|byd\s*han)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "한", BRAND_BYD),
     (re.compile(r"\b(byd\s*탕|byd\s*tang)(?=[은는이가을를의에과와도만로]|으로|[^a-zA-Z0-9가-힣]|$)", re.IGNORECASE), "탕", BRAND_BYD),
 
@@ -131,6 +134,8 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     (re.compile(r"(리비안|rivian|r1t|r1s)", re.IGNORECASE), "Rivian", BRAND_OTHER),
     (re.compile(r"(루시드\s*에어|lucid\s*air|루시드)", re.IGNORECASE), "Lucid Air", BRAND_OTHER),
     (re.compile(r"(샤오미\s*su7|su7)", re.IGNORECASE), "샤오미 SU7", BRAND_OTHER),
+    (re.compile(r"(폭스바겐\s*id\s*\.?\s*4|vw\s*id\s*\.?\s*4|\bid\s*\.?\s*4\b)", re.IGNORECASE), "Volkswagen ID.4", BRAND_OTHER),
+    (re.compile(r"(폭스바겐\s*id\s*\.?\s*버즈|vw\s*id\s*\.?\s*buzz|\bid\s*\.?\s*buzz\b|\bid\s*버즈\b)", re.IGNORECASE), "Volkswagen ID.Buzz", BRAND_OTHER),
 ]
 
 
@@ -141,7 +146,7 @@ BRAND_KEYWORDS: List[Tuple[Pattern[str], str]] = [
     (re.compile(r"(제네시스|genesis|(?:electrified|일렉트리파이드)?\s*(?:gv\s*60|gv\s*70|g\s*80))", re.IGNORECASE), BRAND_HYUNDAI),
     (re.compile(r"(기아차|기아\s*전기차|기아|오토큐)", re.IGNORECASE), BRAND_KIA),
     (re.compile(r"(byd|비야디|짱깨차|짱차|중국\s*전기차)", re.IGNORECASE), BRAND_BYD),
-    (re.compile(r"(벤츠|bmw|아우디|포르쉐|폴스타|볼보|쉐보레|폭스바겐|리비안|루시드|샤오미)", re.IGNORECASE), BRAND_OTHER),
+    (re.compile(r"(벤츠|bmw|아우디|포르쉐|폴스타|볼보|쉐보레|폭스바겐|volkswagen|vw|리비안|루시드|샤오미)", re.IGNORECASE), BRAND_OTHER),
 ]
 
 

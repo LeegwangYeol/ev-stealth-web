@@ -126,6 +126,36 @@ class RawPost:
             "author": self.author,
         }
 
+    def __getitem__(self, key: str) -> Any:
+        try:
+            return getattr(self, key)
+        except AttributeError:
+            d = self.to_dict()
+            if key in d:
+                return d[key]
+            raise KeyError(key) from None
+
+    def __contains__(self, key: Any) -> bool:
+        return hasattr(self, str(key)) or key in self.to_dict()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def keys(self):
+        return self.to_dict().keys()
+
+    def values(self):
+        return self.to_dict().values()
+
+    def items(self):
+        return self.to_dict().items()
+
+    def __iter__(self):
+        return iter(self.to_dict())
+
     @classmethod
     def from_dict(cls, data: Any) -> RawPost:
         if isinstance(data, cls):
@@ -174,6 +204,39 @@ class DSIBreakdown:
             "social": _safe_round(self.social, 2),
             "convenience": _safe_round(self.convenience, 2),
         }
+
+    def __getitem__(self, key: str) -> float:
+        try:
+            val = getattr(self, key)
+            if isinstance(val, (int, float)):
+                return float(val)
+        except AttributeError:
+            pass
+        d = self.to_dict()
+        if key in d:
+            return d[key]
+        raise KeyError(key) from None
+
+    def __contains__(self, key: Any) -> bool:
+        return hasattr(self, str(key)) or key in self.to_dict()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def keys(self):
+        return self.to_dict().keys()
+
+    def values(self):
+        return self.to_dict().values()
+
+    def items(self):
+        return self.to_dict().items()
+
+    def __iter__(self):
+        return iter(self.to_dict())
 
     @classmethod
     def from_dict(cls, data: Any) -> Optional[DSIBreakdown]:
@@ -621,6 +684,18 @@ class ComplaintRecord:
         except KeyError:
             return default
 
+    def keys(self):
+        return self.to_admin_report_dict().keys()
+
+    def values(self):
+        return self.to_admin_report_dict().values()
+
+    def items(self):
+        return self.to_admin_report_dict().items()
+
+    def __iter__(self):
+        return iter(self.to_admin_report_dict())
+
 
 @dataclass
 class DailyReportStatistics:
@@ -637,6 +712,36 @@ class DailyReportStatistics:
             "avg_negativity_score": _safe_round(self.avg_negativity_score, 2),
             "critical_defect_count": self.critical_defect_count,
         }
+
+    def __getitem__(self, key: str) -> Any:
+        try:
+            return getattr(self, key)
+        except AttributeError:
+            d = self.to_dict()
+            if key in d:
+                return d[key]
+            raise KeyError(key) from None
+
+    def __contains__(self, key: Any) -> bool:
+        return hasattr(self, str(key)) or key in self.to_dict()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def keys(self):
+        return self.to_dict().keys()
+
+    def values(self):
+        return self.to_dict().values()
+
+    def items(self):
+        return self.to_dict().items()
+
+    def __iter__(self):
+        return iter(self.to_dict())
 
     @classmethod
     def from_dict(cls, data: Any) -> DailyReportStatistics:
@@ -673,6 +778,18 @@ class DailyReportPayload:
 
     def get(self, key: str, default: Any = None) -> Any:
         return self.to_dict().get(key, default)
+
+    def keys(self):
+        return self.to_dict().keys()
+
+    def values(self):
+        return self.to_dict().values()
+
+    def items(self):
+        return self.to_dict().items()
+
+    def __iter__(self):
+        return iter(self.to_dict())
 
     def to_dict(self) -> Dict[str, Any]:
         return {

@@ -956,10 +956,12 @@ export function calculateDepreciation(input: DepreciationCalculationInput): Depr
     99.0
   );
 
-  const basePurchasePriceKrw =
+  const rawBasePurchasePrice =
     Number.isFinite(customPurchasePriceKrw) && (customPurchasePriceKrw as number) >= 0
       ? (customPurchasePriceKrw as number)
       : (priceBasis === 'effective' ? model.net_purchase_price_krw : model.msrp_krw_baseline);
+
+  const basePurchasePriceKrw = Math.min(10_000_000_000, Math.max(0, rawBasePurchasePrice));
 
   const estimatedResidualPriceKrw = Math.round((basePurchasePriceKrw * adjustedResidualPct) / 100);
   const depreciationAmountKrw = basePurchasePriceKrw - estimatedResidualPriceKrw;
