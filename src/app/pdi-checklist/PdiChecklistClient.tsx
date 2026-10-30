@@ -177,7 +177,17 @@ export default function PdiChecklistClient() {
             </p>
           </div>
           {mounted && (
-            <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto print:hidden">
+              <button
+                onClick={() => window.print()}
+                type="button"
+                className="px-3.5 py-2 min-h-[40px] text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-4 0v5H8v-5m6-3h2m-6 0h.01" />
+                </svg>
+                인쇄 / PDF 저장
+              </button>
               <button
                 onClick={toggleAllItems}
                 type="button"
@@ -210,7 +220,7 @@ export default function PdiChecklistClient() {
         </div>
       </header>
 
-      <div className="sticky top-0 bg-white/90 backdrop-blur-md p-4 rounded-xl border border-gray-200 shadow-sm z-10 space-y-3">
+      <div className="sticky top-0 bg-white/90 backdrop-blur-md p-4 rounded-xl border border-gray-200 shadow-sm z-10 space-y-3 print:hidden">
         <div className="flex justify-between items-center">
           <span className="font-semibold text-gray-700">검수 진행률 ({checkedCount}/{items.length})</span>
           <span className="font-bold text-blue-700">{progress}%</span>
@@ -295,16 +305,17 @@ export default function PdiChecklistClient() {
         className="space-y-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
       >
         {displayedCategories.map((category) => (
-          <section key={category} aria-labelledby={`pdi-cat-${category}`} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-            <h2 id={`pdi-cat-${category}`} className="bg-slate-50 border-b border-gray-200 p-4 text-xl font-bold text-slate-800">
+          <fieldset key={category} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:border-gray-300 print:shadow-none">
+            <legend className="sr-only">{category} PDI 점검 항목</legend>
+            <div id={`pdi-cat-${category}`} className="bg-slate-50 print:bg-slate-100 border-b border-gray-200 p-4 text-xl font-bold text-slate-800">
               {category}
-            </h2>
+            </div>
             <div className="divide-y divide-gray-100">
               {(itemsByCategory.get(category) || []).map((item) => (
                 <label
                   key={item.id}
                   htmlFor={`pdi-task-${item.id}`}
-                  className="flex items-start p-4 hover:bg-slate-50 cursor-pointer transition-colors rounded-xl focus-within:ring-2 focus-within:ring-blue-500"
+                  className="flex items-start p-4 hover:bg-slate-50 cursor-pointer transition-colors rounded-xl focus-within:ring-2 focus-within:ring-blue-500 print:py-2 print:hover:bg-transparent"
                 >
                   <input
                     id={`pdi-task-${item.id}`}
@@ -313,14 +324,14 @@ export default function PdiChecklistClient() {
                     aria-label={item.task}
                     aria-describedby={item.warning ? `pdi-warning-${item.id}` : undefined}
                     onChange={() => toggleCheck(item.id)}
-                    className="mt-1 w-6 h-6 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500"
+                    className="mt-1 w-6 h-6 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500 print:accent-blue-600"
                   />
                   <div className="ml-4 flex-1">
-                    <p className={`text-lg ${item.checked ? 'text-slate-600 line-through' : 'text-gray-800'}`}>
+                    <p className={`text-lg ${item.checked ? 'text-slate-600 line-through' : 'text-gray-800'} print:text-base print:text-black`}>
                       {item.task}
                     </p>
                     {item.warning && (
-                      <p id={`pdi-warning-${item.id}`} className={`mt-1 text-sm font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-red-700'}`}>
+                      <p id={`pdi-warning-${item.id}`} className={`mt-1 text-sm font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-red-700'} print:text-xs print:text-red-800`}>
                         ⚠️ 주의: {item.warning}
                       </p>
                     )}
@@ -328,7 +339,7 @@ export default function PdiChecklistClient() {
                 </label>
               ))}
             </div>
-          </section>
+          </fieldset>
         ))}
       </div>
 
@@ -337,7 +348,7 @@ export default function PdiChecklistClient() {
           role="status"
           aria-live="polite"
           aria-labelledby="pdi-completion-title"
-          className="bg-green-50 border border-green-200 text-green-800 p-6 rounded-2xl text-center shadow-sm animate-pulse motion-reduce:animate-none"
+          className="bg-green-50 border border-green-200 text-green-800 p-6 rounded-2xl text-center shadow-sm animate-pulse motion-reduce:animate-none print:bg-white print:border-black print:text-black print:animate-none"
         >
           <h2 id="pdi-completion-title" className="text-2xl font-bold mb-2">🎉 검수 완료!</h2>
           <p>모든 항목을 확인하셨습니다. 이상이 없다면 안심하고 인수증에 서명하세요.</p>
@@ -345,7 +356,7 @@ export default function PdiChecklistClient() {
       )}
 
       {/* 💡 신차 인수 후 추천 서비스 (Recommended EV Services) */}
-      <section aria-labelledby="heading-recommended-services" className="pt-8 border-t border-gray-200">
+      <section aria-labelledby="heading-recommended-services" className="pt-8 border-t border-gray-200 print:hidden">
         <div className="mb-6">
           <h2 id="heading-recommended-services" className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <span aria-hidden="true">💡</span> 신차 인수 후 추천 서비스 (Recommended EV Services)
