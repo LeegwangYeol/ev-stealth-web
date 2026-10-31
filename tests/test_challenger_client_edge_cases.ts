@@ -291,9 +291,14 @@ recordAssert(
   subsidy.getPriceSubsidyRatio(Infinity) === 0.0
 );
 recordAssert(
-  'subsidy:getPriceSubsidyRatio:luxury_85M',
-  'getPriceSubsidyRatio(85_000_000) returns 0.0 (luxury vehicle boundary)',
-  subsidy.getPriceSubsidyRatio(85_000_000) === 0.0
+  'subsidy:getPriceSubsidyRatio:threshold_85M',
+  'getPriceSubsidyRatio(85_000_000) returns 0.5 (exact 50% statutory cap boundary)',
+  subsidy.getPriceSubsidyRatio(85_000_000) === 0.5
+);
+recordAssert(
+  'subsidy:getPriceSubsidyRatio:luxury_85M_plus',
+  'getPriceSubsidyRatio(85_000_001) returns 0.0 (luxury vehicle boundary > 85M)',
+  subsidy.getPriceSubsidyRatio(85_000_001) === 0.0
 );
 recordAssert(
   'subsidy:getPriceSubsidyRatio:negative_default',

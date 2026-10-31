@@ -304,7 +304,9 @@ export function getDsiSeverityLevel(dsi: number): {
   barBgClass: string;
   textColor: string;
 } {
-  if (dsi >= 80) {
+  const safeDsi = Number.isFinite(dsi) ? Math.max(0, dsi) : 0;
+
+  if (safeDsi >= 80) {
     return {
       level: 'CRITICAL',
       label: '치명적 위험 (Critical)',
@@ -313,7 +315,7 @@ export function getDsiSeverityLevel(dsi: number): {
       textColor: 'text-rose-600',
     };
   }
-  if (dsi >= 60) {
+  if (safeDsi >= 60) {
     return {
       level: 'HIGH',
       label: '높은 결함률 (High Risk)',
@@ -322,7 +324,7 @@ export function getDsiSeverityLevel(dsi: number): {
       textColor: 'text-amber-800',
     };
   }
-  if (dsi >= 35) {
+  if (safeDsi >= 35) {
     return {
       level: 'MODERATE',
       label: '주의 필요 (Moderate)',

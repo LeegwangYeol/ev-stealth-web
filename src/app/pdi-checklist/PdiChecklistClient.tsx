@@ -210,7 +210,7 @@ export default function PdiChecklistClient() {
             </div>
           )}
         </div>
-        <div className="mt-3 flex items-center gap-2 text-xs text-slate-600">
+        <div className="mt-3 flex items-center gap-2 text-xs text-slate-600 print:hidden">
           <span aria-hidden="true" className={`w-2 h-2 rounded-full ${mounted ? 'bg-emerald-500' : 'bg-slate-300'}`} />
           <span>{mounted ? '로컬 저장소 동기화 활성화됨 (새로고침 시 체크 상태 유지)' : '초기화 중...'}</span>
         </div>
@@ -305,17 +305,17 @@ export default function PdiChecklistClient() {
         className="space-y-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
       >
         {displayedCategories.map((category) => (
-          <fieldset key={category} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:border-gray-300 print:shadow-none">
+          <fieldset key={category} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:border-gray-300 print:shadow-none print:break-inside-avoid">
             <legend className="sr-only">{category} PDI 점검 항목</legend>
-            <div id={`pdi-cat-${category}`} className="bg-slate-50 print:bg-slate-100 border-b border-gray-200 p-4 text-xl font-bold text-slate-800">
+            <h2 id={`pdi-cat-${category}`} className="bg-slate-50 print:bg-slate-100 border-b border-gray-200 p-4 text-xl font-bold text-slate-800">
               {category}
-            </div>
+            </h2>
             <div className="divide-y divide-gray-100">
               {(itemsByCategory.get(category) || []).map((item) => (
                 <label
                   key={item.id}
                   htmlFor={`pdi-task-${item.id}`}
-                  className="flex items-start p-4 hover:bg-slate-50 cursor-pointer transition-colors rounded-xl focus-within:ring-2 focus-within:ring-blue-500 print:py-2 print:hover:bg-transparent"
+                  className="flex items-start p-4 hover:bg-slate-50 cursor-pointer transition-colors rounded-xl focus-within:ring-2 focus-within:ring-blue-500 print:py-2 print:hover:bg-transparent print:break-inside-avoid"
                 >
                   <input
                     id={`pdi-task-${item.id}`}

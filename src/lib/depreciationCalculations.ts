@@ -857,7 +857,8 @@ export function calculateDepreciation(
   input: DepreciationCalculationInput,
   options?: CalculateDepreciationOptions
 ): DepreciationCalculationResult {
-  const rawYears = input.years;
+  const safeInput = input && typeof input === 'object' ? input : ({} as DepreciationCalculationInput);
+  const rawYears = safeInput.years;
   const years = Number.isFinite(rawYears) ? Math.max(0, rawYears) : 0;
 
   const baselineAnnualMileageKm =
@@ -865,7 +866,7 @@ export function calculateDepreciation(
   const adjustmentFactors =
     options?.adjustmentFactors ?? DEFAULT_ADJUSTMENT_FACTORS;
 
-  const rawMileage = input.mileageKm;
+  const rawMileage = safeInput.mileageKm;
   const defaultMileage = years * baselineAnnualMileageKm;
   const mileageKm = Number.isFinite(rawMileage) ? Math.max(0, rawMileage!) : defaultMileage;
 
@@ -874,9 +875,9 @@ export function calculateDepreciation(
     winterSeason = false,
     priceBasis = 'msrp',
     customPurchasePriceKrw,
-  } = input;
+  } = safeInput;
 
-  let model = input.model || options?.model;
+  let model = safeInput.model || options?.model;
   if (!model && options?.models && modelId) {
     model = options.models.find(
       (m) => m.id.toLowerCase() === modelId.toLowerCase() || m.id === modelId
@@ -958,12 +959,14 @@ export function calculateDepreciation(
     99.0
   );
 
-  const basePurchasePriceKrw =
+  const rawBasePurchasePrice =
     Number.isFinite(customPurchasePriceKrw) && (customPurchasePriceKrw as number) >= 0
       ? (customPurchasePriceKrw as number)
       : priceBasis === 'effective'
       ? model.net_purchase_price_krw
       : model.msrp_krw_baseline;
+
+  const basePurchasePriceKrw = Math.min(10_000_000_000, Math.max(0, rawBasePurchasePrice));
 
   const estimatedResidualPriceKrw = Math.round(
     (basePurchasePriceKrw * adjustedResidualPct) / 100
@@ -1010,6 +1013,7 @@ export function simulateBatteryHealth(
   customChemistries?: Record<string, BatteryChemistryProfile>,
   customReplacementCosts?: BatteryReplacementTier[]
 ): BatteryHealthResult {
+  const safeParams = params && typeof params === 'object' ? params : ({} as BatterySimulationInput);
   const {
     chemistry: chemInput,
     years: rawYears,
@@ -1019,7 +1023,7 @@ export function simulateBatteryHealth(
     storageSoc = 0.5,
     ambientTempC = 25.0,
     vehicleEfficiencyKmPerKwh = 5.2,
-  } = params;
+  } = safeParams;
 
   const isInvalidYears =
     rawYears === undefined ||
@@ -1035,7 +1039,7 @@ export function simulateBatteryHealth(
     DEFAULT_CHEMISTRY_PROFILES[chemistryKey] ||
     DEFAULT_CHEMISTRY_PROFILES.NCM_811;
 
-  const packCapacityKwh = params.packCapacityKwh ?? 77.4;
+  const packCapacityKwh = safeParams.packCapacityKwh ?? 77.4;
   const safeAnnualKm = Number.isFinite(annualKm) && annualKm >= 0 ? annualKm : 15000;
   const rawMileage = Number.isFinite(inputTotalKm)
     ? (inputTotalKm as number)
@@ -1210,7 +1214,11 @@ export function calculateSubsidyClawback(
   nationalSubsidyKrw: number = 0,
   customTiers?: ClawbackTier[]
 ): ClawbackResult {
-  const normalizedMonths = Number.isFinite(heldMonths) ? Math.max(0, heldMonths) : 0;
+  const normalizedMonths = Number.isFinite(heldMonths)
+    ? Math.max(0, heldMonths)
+    : heldMonths === Infinity
+    ? 24
+    : 0;
   const safeLocalSubsidy = Number.isFinite(localSubsidyKrw) ? Math.max(0, localSubsidyKrw) : 0;
   const safeNationalSubsidy = Number.isFinite(nationalSubsidyKrw)
     ? Math.max(0, nationalSubsidyKrw)

@@ -64,7 +64,7 @@ export default function RootLayout({
           본문 바로가기
         </a>
 
-        <header className="bg-slate-900 text-white shadow-md sticky top-0 z-50">
+        <header className="bg-slate-900 text-white shadow-md sticky top-0 z-50 print:hidden">
           <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
             <Link href="/" prefetch={false} className="text-xl font-bold tracking-tight hover:text-blue-300 transition shrink-0 flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg outline-none">
               <span>⚡</span> Global EV Hub

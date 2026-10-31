@@ -136,6 +136,16 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     (re.compile(r"(샤오미\s*su7|su7)", re.IGNORECASE), "샤오미 SU7", BRAND_OTHER),
     (re.compile(r"(폭스바겐\s*id\s*\.?\s*4|vw\s*id\s*\.?\s*4|\bid\s*\.?\s*4\b)", re.IGNORECASE), "Volkswagen ID.4", BRAND_OTHER),
     (re.compile(r"(폭스바겐\s*id\s*\.?\s*버즈|vw\s*id\s*\.?\s*buzz|\bid\s*\.?\s*buzz\b|\bid\s*버즈\b)", re.IGNORECASE), "Volkswagen ID.Buzz", BRAND_OTHER),
+    (
+        re.compile(
+            r"(캐딜락\s*리릭|cadillac\s*lyriq|"
+            r"(?<![a-zA-Z0-9가-힣])리릭(?=[은는이가을를의에과와도만로]|으로|입|했|하|(?:\s|$)|[^a-zA-Z0-9가-힣]|$)|"
+            r"(?<![a-zA-Z0-9])lyriq(?=[은는이가을를의에과와도만로]|으로|입|했|하|(?:\s|$)|[^a-zA-Z0-9가-힣]|$))",
+            re.IGNORECASE,
+        ),
+        "Cadillac Lyriq",
+        BRAND_OTHER,
+    ),
 ]
 
 
@@ -146,7 +156,7 @@ BRAND_KEYWORDS: List[Tuple[Pattern[str], str]] = [
     (re.compile(r"(제네시스|genesis|(?:electrified|일렉트리파이드)?\s*(?:gv\s*60|gv\s*70|g\s*80))", re.IGNORECASE), BRAND_HYUNDAI),
     (re.compile(r"(기아차|기아\s*전기차|기아|오토큐)", re.IGNORECASE), BRAND_KIA),
     (re.compile(r"(byd|비야디|짱깨차|짱차|중국\s*전기차)", re.IGNORECASE), BRAND_BYD),
-    (re.compile(r"(벤츠|bmw|아우디|포르쉐|폴스타|볼보|쉐보레|폭스바겐|volkswagen|vw|리비안|루시드|샤오미)", re.IGNORECASE), BRAND_OTHER),
+    (re.compile(r"(벤츠|mercedes|mercedes-benz|bmw|아우디|audi|포르쉐|porsche|폴스타|polestar|볼보|volvo|쉐보레|chevrolet|chevy|캐딜락|cadillac|폭스바겐|volkswagen|vw|리비안|rivian|루시드|lucid|샤오미|xiaomi)", re.IGNORECASE), BRAND_OTHER),
 ]
 
 

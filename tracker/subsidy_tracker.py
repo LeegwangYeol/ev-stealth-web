@@ -269,6 +269,11 @@ class SubsidyTracker:
 
     def update_region_metrics(self, region: Union[RegionRecord, Dict[str, Any]]) -> Union[RegionRecord, Dict[str, Any]]:
         """Recalculate overall status and depletion rates for a region."""
+        if region is None:
+            return {}
+        if not isinstance(region, dict) and not hasattr(region, "__dict__"):
+            return region
+
         total_announced = 0
         total_applied = 0
 
@@ -348,7 +353,7 @@ class SubsidyTracker:
         if isinstance(region, dict):
             region["overall_depletion_rate"] = overall_rate
             region["overall_status"] = st_eval
-        else:
+        elif hasattr(region, "__dict__"):
             region.overall_depletion_rate = overall_rate
             region.overall_status = st_eval
         return region

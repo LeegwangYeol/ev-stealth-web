@@ -225,7 +225,7 @@ export const REGION_ALIAS_MAP: Readonly<Record<string, string>> = Object.freeze(
  * - MSRP > 85,000,000 KRW or invalid/negative: 0.0 (luxury vehicle exclusion)
  */
 export function getPriceSubsidyRatio(msrpKrw: number): number {
-  if (!Number.isFinite(msrpKrw) || msrpKrw < 0 || msrpKrw === Infinity) {
+  if (!Number.isFinite(msrpKrw) || msrpKrw <= 0 || msrpKrw === Infinity) {
     return 0.0;
   }
   if (msrpKrw <= 55_000_000) {
@@ -254,29 +254,31 @@ export function getRegionByIdFromList(
   const normalized = regionId.trim().toLowerCase();
   if (!normalized) return undefined;
 
+  const validRegions = regions.filter((r): r is RegionEntry => Boolean(r && typeof r === 'object'));
+
   // 1. Direct alias resolution
   const rawAlias = Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, normalized)
     ? REGION_ALIAS_MAP[normalized]
     : Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, regionId.trim())
     ? REGION_ALIAS_MAP[regionId.trim()]
     : undefined;
-  const aliasedId = typeof rawAlias === 'string' ? rawAlias : undefined;
+  const aliasedId = typeof rawAlias === 'string' ? rawAlias.toLowerCase() : undefined;
   if (aliasedId) {
-    const matched = regions.find(
+    const matched = validRegions.find(
       (r) =>
-        r.region_id.toLowerCase() === aliasedId.toLowerCase() ||
-        r.iso_code.toLowerCase() === aliasedId.toLowerCase()
+        (r.region_id && r.region_id.toLowerCase() === aliasedId) ||
+        (r.iso_code && r.iso_code.toLowerCase() === aliasedId)
     );
     if (matched) return matched;
   }
 
   // 2. Direct exact match on ID, ISO code, or localized names
-  const exact = regions.find(
+  const exact = validRegions.find(
     (r) =>
-      r.region_id.toLowerCase() === normalized ||
-      r.iso_code.toLowerCase() === normalized ||
-      r.name_ko.toLowerCase() === normalized ||
-      r.name_en.toLowerCase() === normalized
+      (r.region_id && r.region_id.toLowerCase() === normalized) ||
+      (r.iso_code && r.iso_code.toLowerCase() === normalized) ||
+      (r.name_ko && r.name_ko.toLowerCase() === normalized) ||
+      (r.name_en && r.name_en.toLowerCase() === normalized)
   );
   if (exact) return exact;
 
@@ -286,17 +288,18 @@ export function getRegionByIdFromList(
     const rawStrippedAlias = Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, stripped)
       ? REGION_ALIAS_MAP[stripped]
       : undefined;
-    const strippedAliasedId = typeof rawStrippedAlias === 'string' ? rawStrippedAlias : undefined;
+    const strippedAliasedId = typeof rawStrippedAlias === 'string' ? rawStrippedAlias.toLowerCase() : undefined;
     if (strippedAliasedId) {
-      const matched = regions.find(
+      const matched = validRegions.find(
         (r) =>
-          r.region_id.toLowerCase() === strippedAliasedId.toLowerCase() ||
-          r.iso_code.toLowerCase() === strippedAliasedId.toLowerCase()
+          (r.region_id && r.region_id.toLowerCase() === strippedAliasedId) ||
+          (r.iso_code && r.iso_code.toLowerCase() === strippedAliasedId)
       );
       if (matched) return matched;
     }
 
-    return regions.find((r) => {
+    return validRegions.find((r) => {
+      if (!r.name_ko || typeof r.name_ko !== 'string') return false;
       const rStripped = r.name_ko.toLowerCase().replace(/(특별시|광역시|특별자치시|특별자치도|도)$/, '');
       return (
         rStripped === stripped ||
@@ -321,12 +324,14 @@ export function getModelByIdFromList(
   const normalized = modelId.trim().toLowerCase();
   if (!normalized) return undefined;
 
+  const validModels = models.filter((m): m is PopularModelEntry => Boolean(m && typeof m === 'object'));
+
   // 1. Exact or substring match on raw string
-  const directMatch = models.find(
+  const directMatch = validModels.find(
     (m) =>
-      m.model_id.toLowerCase() === normalized ||
-      m.name_ko.toLowerCase() === normalized ||
-      m.name_ko.toLowerCase().includes(normalized)
+      (m.model_id && m.model_id.toLowerCase() === normalized) ||
+      (m.name_ko && m.name_ko.toLowerCase() === normalized) ||
+      (m.name_ko && m.name_ko.toLowerCase().includes(normalized))
   );
   if (directMatch) return directMatch;
 
@@ -334,10 +339,10 @@ export function getModelByIdFromList(
   const cleanQuery = normalized.replace(/[\s\-_]+/g, '');
   if (!cleanQuery) return undefined;
 
-  return models.find((m) => {
-    const cleanId = m.model_id.toLowerCase().replace(/[\s\-_]+/g, '');
-    const cleanKo = m.name_ko.toLowerCase().replace(/[\s\-_]+/g, '');
-    return cleanId.includes(cleanQuery) || cleanKo.includes(cleanQuery);
+  return validModels.find((m) => {
+    const cleanId = (m.model_id || '').toLowerCase().replace(/[\s\-_]+/g, '');
+    const cleanKo = (m.name_ko || '').toLowerCase().replace(/[\s\-_]+/g, '');
+    return (cleanId && cleanId.includes(cleanQuery)) || (cleanKo && cleanKo.includes(cleanQuery));
   });
 }
 
@@ -355,12 +360,32 @@ export function calculateNetSubsidyPure(
   customMsrp?: number,
   options?: SubsidyCalculatorOptions
 ): SubsidyCalculationResult {
-  const passengerCategory = region.categories?.passenger;
+  const safeModel =
+    model && typeof model === 'object'
+      ? model
+      : ({
+          model_id: 'unknown-model',
+          name_ko: '기본 모델',
+          base_price_krw: 54_100_000,
+          national_subsidy_krw: 0,
+          price_subsidy_ratio: 1.0,
+        } as PopularModelEntry);
+
+  const safeRegion =
+    region && typeof region === 'object'
+      ? region
+      : ({
+          region_id: 'unknown-region',
+          name_ko: '전국 평균',
+          categories: { passenger: { max_local_subsidy_krw: 0, depletion_rate: 0, remaining_units: 0 } },
+        } as unknown as RegionEntry);
+
+  const passengerCategory = safeRegion.categories?.passenger;
 
   // 1. Resolve MSRP and statutory price-cap ratio
   const safeModelPrice =
-    Number.isFinite(model?.base_price_krw) && model.base_price_krw > 0
-      ? Math.min(10_000_000_000, model.base_price_krw)
+    Number.isFinite(safeModel?.base_price_krw) && safeModel.base_price_krw > 0
+      ? Math.min(10_000_000_000, safeModel.base_price_krw)
       : 54_100_000;
 
   let activeMsrp: number;
@@ -382,13 +407,13 @@ export function calculateNetSubsidyPure(
   }
 
   // 2. Calculate National Subsidy
-  const validNationalSubsidy = Number.isFinite(model.national_subsidy_krw)
-    ? model.national_subsidy_krw
+  const validNationalSubsidy = Number.isFinite(safeModel.national_subsidy_krw)
+    ? safeModel.national_subsidy_krw
     : 0;
   let nationalSubsidyKrw = 0;
   if (ratio > 0) {
     if (customMsrp && customMsrp > 0 && Number.isFinite(customMsrp)) {
-      const baseRatio = model.price_subsidy_ratio > 0 ? model.price_subsidy_ratio : 1.0;
+      const baseRatio = safeModel.price_subsidy_ratio > 0 ? safeModel.price_subsidy_ratio : 1.0;
       const unscaledNational = Math.round(validNationalSubsidy / baseRatio);
       nationalSubsidyKrw = Math.min(6_500_000, Math.round(unscaledNational * ratio));
     } else {
@@ -441,22 +466,22 @@ export function calculateNetSubsidyPure(
 
   let warningNotice: string | undefined;
   if (depletionRate >= 95.0) {
-    warningNotice = `🚨 ${region.name_ko}의 승용 보조금 소진율이 ${depletionRate}%로 선착순 마감 직전입니다! 즉시 출고 가능 실재고 매칭이 필요합니다.`;
+    warningNotice = `🚨 ${safeRegion.name_ko}의 승용 보조금 소진율이 ${depletionRate}%로 선착순 마감 직전입니다! 즉시 출고 가능 실재고 매칭이 필요합니다.`;
   } else if (depletionRate >= 80.0) {
-    warningNotice = `⚠️ ${region.name_ko}의 승용 보조금 소진율이 ${depletionRate}%에 달해 조기 마감 위험이 높습니다.`;
+    warningNotice = `⚠️ ${safeRegion.name_ko}의 승용 보조금 소진율이 ${depletionRate}%에 달해 조기 마감 위험이 높습니다.`;
   } else {
-    warningNotice = `✅ ${region.name_ko}의 보조금 잔여량이 비교적 여유롭습니다 (${remainingUnits.toLocaleString()}대 잔여).`;
+    warningNotice = `✅ ${safeRegion.name_ko}의 보조금 잔여량이 비교적 여유롭습니다 (${remainingUnits.toLocaleString()}대 잔여).`;
   }
 
   return {
-    modelId: model.model_id,
-    modelName: model.name_ko,
-    manufacturer: model.manufacturer,
-    batteryType: model.battery_type,
-    batteryCapacityKwh: model.battery_capacity_kwh,
-    ratedRangeKm: model.rated_range_km,
-    regionId: region.region_id,
-    regionName: region.name_ko,
+    modelId: safeModel.model_id,
+    modelName: safeModel.name_ko,
+    manufacturer: safeModel.manufacturer,
+    batteryType: safeModel.battery_type,
+    batteryCapacityKwh: safeModel.battery_capacity_kwh,
+    ratedRangeKm: safeModel.rated_range_km,
+    regionId: safeRegion.region_id,
+    regionName: safeRegion.name_ko,
     msrpKrw: activeMsrp,
     priceSubsidyRatio: ratio,
     nationalSubsidyKrw,
@@ -467,7 +492,7 @@ export function calculateNetSubsidyPure(
     isHighDepletionRisk,
     depletionRate,
     depletionStatus,
-    residencyRequirementDays: region.residency_requirement_days,
+    residencyRequirementDays: safeRegion.residency_requirement_days,
     warningNotice,
     priceCapTierText,
   };
@@ -535,13 +560,14 @@ export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> |
   let healthyCount = 0;
 
   for (const r of regions) {
+    if (!r || typeof r !== 'object') continue;
     const rate = Number.isFinite(r.overall_depletion_rate) ? r.overall_depletion_rate : 0;
     const rem = Number.isFinite(r.categories?.passenger?.remaining_units) ? r.categories.passenger.remaining_units : 0;
     if (rate >= 95.0) {
       criticalCount++;
       criticalList.push({
-        regionId: r.region_id,
-        nameKo: r.name_ko,
+        regionId: r.region_id || '',
+        nameKo: r.name_ko || '',
         depletionRate: rate,
         remainingUnits: rem,
       });

@@ -301,6 +301,73 @@ class TestPdiChecklistClientA11y(unittest.TestCase):
         """
         self.assertIn('aria-pressed={isAllChecked}', self.source)
 
+    def test_pdi_checklist_category_headings_semantic_h2_with_ids(self):
+        """
+        Validate that category headings use valid semantic H2 elements with IDs
+        matching `pdi-cat-${category}` (WCAG 1.3.1 Info and Relationships).
+        """
+        h2_match = re.search(r'<h2\b[^>]*id=\{[`"\']pdi-cat-\$\{category\}[`"\']\}', self.source)
+        self.assertIsNotNone(
+            h2_match,
+            "PdiChecklistClient.tsx must render category headings with <h2 id={`pdi-cat-${category}`}>.",
+        )
+        # Ensure category heading is inside the category fieldset
+        fieldset_block = re.search(r'<fieldset\b[^>]*>([\s\S]*?)</fieldset>', self.source)
+        self.assertIsNotNone(fieldset_block, "PdiChecklistClient.tsx must enclose items in <fieldset>.")
+        self.assertIn('id={`pdi-cat-${category}`}', fieldset_block.group(1))
+
+    def test_pdi_checklist_heading_hierarchy_monotonic(self):
+        """
+        Validate that heading hierarchy in PdiChecklistClient.tsx is monotonic (H1 -> H2 -> H3)
+        with zero skipped heading levels (WCAG 1.3.1 Info and Relationships).
+        """
+        headings = re.findall(r'<h([1-6])\b', self.source)
+        levels = [int(h) for h in headings]
+        self.assertGreater(len(levels), 0, "PdiChecklistClient.tsx must contain headings.")
+        self.assertEqual(levels[0], 1, "First heading must be H1.")
+        prev = 0
+        for lvl in levels:
+            self.assertLessEqual(
+                lvl,
+                prev + 1 if prev != 0 else 1,
+                f"Heading level skipped from H{prev} to H{lvl} in PdiChecklistClient: {levels}",
+            )
+            prev = lvl
+        # Explicit check: all non-H1 headings are H2 (no skipped H3/H4)
+        for lvl in levels[1:]:
+            self.assertEqual(lvl, 2, f"Expected H2 subheadings in PdiChecklistClient, found H{lvl}")
+
+    def test_pdi_checklist_print_utility_classes(self):
+        """
+        Validate print utility classes in PdiChecklistClient.tsx:
+        - print:hidden on non-essential elements (interactive buttons, sync banner, sticky progress, recommendations)
+        - print:break-inside-avoid on fieldsets and row items (WCAG 1.3.4 / 1.4.4 / CSS Paged Media).
+        """
+        # 1. Non-essential interactive elements hidden in print
+        self.assertTrue(
+            bool(re.search(r'className=["\'][^"\']*print:hidden[^"\']*["\'][^>]*>\s*<button[^>]*window\.print', self.source))
+            or bool(re.search(r'<div[^>]*print:hidden[^>]*>[\s\S]*?window\.print', self.source)),
+            "Print and control buttons must have print:hidden.",
+        )
+        self.assertTrue(
+            bool(re.search(r'sticky top-0[^>]*print:hidden', self.source)),
+            "Sticky progress bar and filter tabs must have print:hidden.",
+        )
+        self.assertTrue(
+            bool(re.search(r'<section\b[^>]*heading-recommended-services[^>]*print:hidden', self.source)),
+            "Recommended services cross-links must have print:hidden.",
+        )
+
+        # 2. print:break-inside-avoid on fieldsets and row items
+        self.assertTrue(
+            bool(re.search(r'<fieldset\b[^>]*print:break-inside-avoid', self.source)),
+            "Checklist fieldset must declare print:break-inside-avoid to prevent breaking across pages.",
+        )
+        self.assertTrue(
+            bool(re.search(r'<label\b[^>]*print:break-inside-avoid', self.source)),
+            "Checklist row labels must declare print:break-inside-avoid to keep checkbox and task together.",
+        )
+
 
 
 class TestRecallPortalClientA11y(unittest.TestCase):
@@ -1145,6 +1212,59 @@ class TestLayoutDesktopNavigationA11y(unittest.TestCase):
         self.assertIn('aria-label="모바일 서랍 메뉴"', self.source)
         self.assertIn('focus-visible:ring-2', self.source)
 
+    def test_layout_header_has_print_hidden(self):
+        """
+        Validate that the root header in layout.tsx contains print:hidden
+        to suppress global navigation during print / PDF generation.
+        """
+        header_match = re.search(r'<header\b[^>]*className=["\']([^"\']+)["\']', self.source)
+        self.assertIsNotNone(header_match, "layout.tsx must contain a <header> element.")
+        header_classes = header_match.group(1)
+        self.assertIn("print:hidden", header_classes, "Root <header> in layout.tsx must declare 'print:hidden'.")
+
+    def test_layout_interactive_controls_contrast_and_aria_labels(self):
+        """
+        Validate that all interactive controls in layout.tsx have accessible ARIA labels
+        and WCAG AA compliant color contrast ratios (>= 4.5:1).
+        """
+        # 1. Skip link
+        self.assertIn('href="#main-content"', self.source)
+        self.assertIn("본문 바로가기", self.source)
+        self.assertIn("focus:ring-2", self.source)
+
+        # 2. Brand logo link
+        self.assertIn('href="/"', self.source)
+        self.assertIn("Global EV Hub", self.source)
+
+        # 3. Desktop navigation landmark and ARIA label
+        self.assertIn('aria-label="데스크톱 내비게이션"', self.source)
+
+        # 4. Mobile drawer toggle summary ARIA label & touch target
+        summary_match = re.search(r'<summary\b[^>]*aria-label=["\']([^"\']+)["\'][^>]*>', self.source)
+        self.assertIsNotNone(summary_match, "layout.tsx must define a <summary> toggle with aria-label.")
+        self.assertEqual(summary_match.group(1), "모바일 내비게이션 메뉴 토글")
+        self.assertIn("min-h-[44px]", summary_match.group(0), "Mobile toggle must meet 44px touch target.")
+
+        # 5. Mobile drawer nav landmark and ARIA label
+        self.assertIn('aria-label="모바일 서랍 메뉴"', self.source)
+
+        # 6. Color contrast verification of layout.tsx navigation colors
+        # text-amber-400 (#fbbf24) on bg-slate-900 (#0f172a)
+        cr_amber = calculate_contrast_ratio("#fbbf24", "#0f172a")
+        self.assertGreaterEqual(cr_amber, 4.5, f"Amber nav link contrast {cr_amber:.2f}:1 must meet >= 4.5:1")
+
+        # text-emerald-400 (#34d399) on bg-slate-900 (#0f172a)
+        cr_emerald = calculate_contrast_ratio("#34d399", "#0f172a")
+        self.assertGreaterEqual(cr_emerald, 4.5, f"Emerald nav link contrast {cr_emerald:.2f}:1 must meet >= 4.5:1")
+
+        # text-blue-300 (#93c5fd) on bg-slate-900 (#0f172a)
+        cr_blue = calculate_contrast_ratio("#93c5fd", "#0f172a")
+        self.assertGreaterEqual(cr_blue, 4.5, f"Blue nav link contrast {cr_blue:.2f}:1 must meet >= 4.5:1")
+
+        # text-slate-200 (#e2e8f0) on bg-slate-900 (#0f172a)
+        cr_slate = calculate_contrast_ratio("#e2e8f0", "#0f172a")
+        self.assertGreaterEqual(cr_slate, 4.5, f"Slate nav link contrast {cr_slate:.2f}:1 must meet >= 4.5:1")
+
     def test_site_footer_contentinfo_landmark(self):
         """
         Validate that SiteFooter provides semantic role="contentinfo" and accessible aria-label.
@@ -1860,6 +1980,64 @@ class TestAdversarialA11yEdgeCases(unittest.TestCase):
                 has_focus_ring,
                 f"Component {rel_path} must declare visible focus indicator styles.",
             )
+
+
+class TestAllAppPagesA11yConformance(unittest.TestCase):
+    """
+    Test suite auditing all frontend pages and components in ev-stealth-web/src/app
+    for strict WCAG 2.1 AA compliance:
+    - Monotonic heading hierarchy (no skipped heading levels)
+    - Valid semantic landmarks
+    - Print utility classes
+    """
+
+    def test_all_app_pages_heading_hierarchy_monotonicity(self):
+        """
+        Validate that every TSX page in src/app maintains a monotonic heading hierarchy
+        (H1 -> H2 -> H3 ...) with zero skipped heading levels (WCAG 1.3.1).
+        """
+        app_dir = APP_DIR
+        tsx_files = list(app_dir.rglob("*.tsx"))
+        self.assertGreater(len(tsx_files), 10, "Must audit all app TSX files.")
+
+        violations = []
+        for file_path in tsx_files:
+            rel_path = file_path.relative_to(app_dir)
+            text = file_path.read_text(encoding="utf-8")
+            headings = re.findall(r'<h([1-6])\b', text)
+            levels = [int(h) for h in headings]
+            if not levels:
+                continue
+
+            prev = 0
+            for lvl in levels:
+                if prev != 0 and lvl > prev + 1:
+                    violations.append(f"{rel_path}: skipped from H{prev} to H{lvl} (all headings: {levels})")
+                    break
+                prev = lvl
+
+        self.assertEqual(
+            violations,
+            [],
+            f"Found non-monotonic heading hierarchies in app pages: {violations}",
+        )
+
+    def test_all_app_pages_external_links_have_sr_only_indicators(self):
+        """
+        Validate that external links opening in new tab (target="_blank") across all pages
+        provide screen-reader notifications (WCAG 4.1.2 Name, Role, Value).
+        """
+        app_dir = APP_DIR
+        tsx_files = list(app_dir.rglob("*.tsx"))
+        for file_path in tsx_files:
+            rel_path = file_path.relative_to(app_dir)
+            text = file_path.read_text(encoding="utf-8")
+            target_blank_links = re.findall(r'<a\b[^>]*target=["\']_blank["\'][^>]*>[\s\S]*?</a>', text)
+            for link in target_blank_links:
+                self.assertTrue(
+                    "sr-only" in link or "aria-label" in link,
+                    f"External link in {rel_path} lacks screen reader notification: {link}",
+                )
 
 
 if __name__ == "__main__":
