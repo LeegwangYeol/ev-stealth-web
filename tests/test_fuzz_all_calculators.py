@@ -56,7 +56,7 @@ def _eval_ts_node(script: str, timeout_sec: int = 15) -> Any:
     src_dir = WEB_ROOT / "src"
     try:
         proc = subprocess.run(
-            ["npx", "--no-install", "tsx", "-e", script],
+            ["npx", "-y", "tsx", "-e", script],
             cwd=str(WEB_ROOT),
             capture_output=True,
             text=True,
@@ -302,7 +302,7 @@ class TestFuzzTypeScriptCalculators(unittest.TestCase):
     def test_fuzz_simulate_battery_health_extremes(self) -> None:
         """Fuzz simulateBatteryHealth with boundary and extreme inputs via TypeScript evaluator."""
         script = """
-        import { simulateBatteryHealth } from './src/lib/getDepreciationData';
+        import { simulateBatteryHealth } from './src/lib/depreciationCalculations';
 
         const inputs = [
             { years: 0, totalKm: 0 },
@@ -345,7 +345,7 @@ class TestFuzzTypeScriptCalculators(unittest.TestCase):
     def test_fuzz_subsidy_clawback_extremes(self) -> None:
         """Fuzz calculateSubsidyClawback with boundary held months and subsidies."""
         script = """
-        import { calculateSubsidyClawback } from './src/lib/getDepreciationData';
+        import { calculateSubsidyClawback } from './src/lib/depreciationCalculations';
 
         const testCases = [
             { months: -5, local: 5000000, type: 'intra', nat: 3000000 },
