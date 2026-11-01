@@ -543,10 +543,17 @@ class TestEmpiricalChallengerFindingsAndVulnerabilities(unittest.TestCase):
 
     def test_03_symlink_path_resolution_deduplication(self) -> None:
         """Path.resolve ensures identical physical files behind symlinks are not duplicated."""
-        p1 = Path("/tmp")
-        p2 = Path("/private/tmp")
-        # On macOS, /tmp is a symlink to /private/tmp
-        self.assertEqual(p1.resolve(), p2.resolve())
+        import tempfile
+        import os
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            real_dir = base / "real"
+            real_dir.mkdir()
+            sym_dir = base / "sym"
+            os.symlink(real_dir, sym_dir)
+            p1 = real_dir
+            p2 = sym_dir
+            self.assertEqual(p1.resolve(), p2.resolve())
 
     def test_04_normalize_iso_timestamp_safe_fallback_on_malformed_values(self) -> None:
         """_normalize_iso_timestamp in both crawlers safely falls back on malformed times and dates."""
