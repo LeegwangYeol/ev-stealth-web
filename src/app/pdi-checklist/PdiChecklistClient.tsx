@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import Link from 'next/link';
 
 export type ChecklistItem = {
@@ -25,6 +25,40 @@ export const INITIAL_PDI_ITEMS: ChecklistItem[] = [
 
 const STORAGE_KEY = 'ev_pdi_checklist_state_v1';
 
+export interface PdiItemRowProps {
+  item: ChecklistItem;
+  onToggle: (id: string) => void;
+}
+
+export const PdiItemRow = memo(function PdiItemRow({ item, onToggle }: PdiItemRowProps) {
+  return (
+    <label
+      htmlFor={`pdi-task-${item.id}`}
+      className="flex items-start p-4 hover:bg-slate-50 cursor-pointer transition-colors rounded-xl focus-within:ring-2 focus-within:ring-blue-500 print:py-2 print:hover:bg-transparent print:break-inside-avoid"
+    >
+      <input
+        id={`pdi-task-${item.id}`}
+        type="checkbox"
+        checked={item.checked}
+        aria-label={item.task}
+        aria-describedby={item.warning ? `pdi-warning-${item.id}` : undefined}
+        onChange={() => onToggle(item.id)}
+        className="mt-1 w-6 h-6 text-blue-600 bg-gray-100 border-slate-400 hover:border-slate-500 rounded focus:ring-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500 print:accent-blue-600 cursor-pointer"
+      />
+      <span className="ml-4 flex-1">
+        <span className={`block text-lg font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-gray-800'} print:text-base print:text-black`}>
+          {item.task}
+        </span>
+        {item.warning && (
+          <span id={`pdi-warning-${item.id}`} className={`block mt-1 text-sm font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-red-700'} print:text-xs print:text-red-800`}>
+            ⚠️ 주의: {item.warning}
+          </span>
+        )}
+      </span>
+    </label>
+  );
+});
+
 export default function PdiChecklistClient() {
   const [items, setItems] = useState<ChecklistItem[]>(INITIAL_PDI_ITEMS);
   const [mounted, setMounted] = useState(false);
@@ -40,7 +74,7 @@ export default function PdiChecklistClient() {
           if (Array.isArray(parsed)) {
             setItems((current) =>
               current.map((item) => {
-                const match = parsed.find((p: ChecklistItem) => p.id === item.id);
+                const match = parsed.find((p: unknown): p is ChecklistItem => Boolean(p && typeof p === 'object' && 'id' in p && (p as { id: unknown }).id === item.id));
                 return match ? { ...item, checked: Boolean(match.checked) } : item;
               })
             );
@@ -64,15 +98,15 @@ export default function PdiChecklistClient() {
     }
   }, [items, mounted]);
 
-  const toggleCheck = (id: string) => {
+  const toggleCheck = useCallback((id: string) => {
     setItems((prev) =>
       prev.map((item) =>
         item.id === id ? { ...item, checked: !item.checked } : item
       )
     );
-  };
+  }, []);
 
-  const resetChecklist = () => {
+  const resetChecklist = useCallback(() => {
     if (typeof window !== 'undefined' && window.confirm('체크리스트 상태를 초기화하시겠습니까?')) {
       setItems(INITIAL_PDI_ITEMS);
       try {
@@ -83,16 +117,19 @@ export default function PdiChecklistClient() {
         console.warn('Failed to clear PDI checklist localStorage:', e);
       }
     }
-  };
+  }, []);
 
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
 
   const isAllChecked = useMemo(() => items.length > 0 && items.every((i) => i.checked), [items]);
 
-  const toggleAllItems = () => {
-    const nextChecked = !isAllChecked;
-    setItems((prev) => prev.map((item) => ({ ...item, checked: nextChecked })));
-  };
+  const toggleAllItems = useCallback(() => {
+    setItems((prev) => {
+      const allChecked = prev.length > 0 && prev.every((i) => i.checked);
+      const nextChecked = !allChecked;
+      return prev.map((item) => ({ ...item, checked: nextChecked }));
+    });
+  }, []);
 
   // Memoized category sets and filtered count calculations
   const categories = useMemo(() => Array.from(new Set(items.map((i) => i.category))), [items]);
@@ -100,13 +137,13 @@ export default function PdiChecklistClient() {
   const totalItems = items.length;
   // Guard against division by zero (items.length === 0 ? 0 : Math.round((checkedCount / items.length) * 100))
   const progress = useMemo(() => {
-    return totalItems > 0 ? Math.round((checkedCount / totalItems) * 100) : 0;
-  }, [checkedCount, totalItems]);
+    return items.length === 0 ? 0 : Math.round((checkedCount / items.length) * 100);
+  }, [checkedCount, items.length]);
   const progressPercentage = progress;
 
   const allCategories = useMemo(() => ['ALL', ...categories], [categories]);
 
-  const handleTabKeyDown = (e: React.KeyboardEvent, currentIndex: number) => {
+  const handleTabKeyDown = useCallback((e: React.KeyboardEvent, currentIndex: number) => {
     const count = allCategories.length;
     let nextIndex = -1;
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
@@ -127,7 +164,7 @@ export default function PdiChecklistClient() {
       setSelectedCategory(nextCat);
       document.getElementById(`pdi-tab-${nextIndex}`)?.focus();
     }
-  };
+  }, [allCategories]);
 
   // Memoized category statistics
   const categoryStats = useMemo(() => {
@@ -157,13 +194,6 @@ export default function PdiChecklistClient() {
     return map;
   }, [items, categories]);
 
-  // Displayed categories based on selected category filter
-  const displayedCategories = useMemo(() => {
-    return selectedCategory === 'ALL'
-      ? categories
-      : categories.filter((c) => c === selectedCategory);
-  }, [categories, selectedCategory]);
-
   return (
     <div className="max-w-4xl mx-auto py-10 space-y-8">
       <header className="border-b pb-6">
@@ -181,7 +211,7 @@ export default function PdiChecklistClient() {
               <button
                 onClick={() => window.print()}
                 type="button"
-                className="px-3.5 py-2 min-h-[40px] text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="px-3.5 py-2 min-h-[40px] text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-4 0v5H8v-5m6-3h2m-6 0h.01" />
@@ -192,7 +222,7 @@ export default function PdiChecklistClient() {
                 onClick={toggleAllItems}
                 type="button"
                 aria-pressed={isAllChecked}
-                className={`px-3.5 py-2 min-h-[40px] text-xs font-semibold border rounded-lg shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                className={`px-3.5 py-2 min-h-[40px] text-xs font-semibold border rounded-lg shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                   isAllChecked
                     ? 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100'
                     : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
@@ -203,12 +233,19 @@ export default function PdiChecklistClient() {
               <button
                 onClick={resetChecklist}
                 type="button"
-                className="px-3.5 py-2 min-h-[40px] text-xs font-semibold text-slate-600 hover:text-red-700 bg-white hover:bg-red-50 border border-slate-300 rounded-lg shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="px-3.5 py-2 min-h-[40px] text-xs font-semibold text-slate-700 hover:text-red-700 bg-white hover:bg-red-50 border border-slate-300 hover:border-slate-400 rounded-lg shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
                 체크리스트 초기화
               </button>
             </div>
           )}
+        </div>
+        {/* Print-only inspection meta box for physical delivery inspection */}
+        <div className="hidden print:grid print:grid-cols-2 print:gap-3 print:my-4 print:p-3 print:border print:border-gray-300 print:rounded-lg print:text-xs print:text-black">
+          <div><span className="font-semibold">차량 모델 / 트림:</span> __________________________</div>
+          <div><span className="font-semibold">차대번호 (VIN):</span> __________________________</div>
+          <div><span className="font-semibold">인수 점검 일시:</span> __________________________</div>
+          <div><span className="font-semibold">인수 점검자 (서명):</span> __________________________</div>
         </div>
         <div className="mt-3 flex items-center gap-2 text-xs text-slate-600 print:hidden">
           <span aria-hidden="true" className={`w-2 h-2 rounded-full ${mounted ? 'bg-emerald-500' : 'bg-slate-300'}`} />
@@ -230,9 +267,9 @@ export default function PdiChecklistClient() {
           aria-valuenow={progressPercentage}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-label="PDI 점검 진행률"
+          aria-label="신차 출고 전 점검(PDI) 진행률"
           aria-valuetext={`${progressPercentage}% 검수 완료`}
-          className="w-full bg-gray-200 rounded-full h-3"
+          className="w-full bg-gray-200 border border-gray-300 rounded-full h-3 overflow-hidden"
         >
           <div
             className="bg-blue-600 h-3 rounded-full transition-all duration-500 ease-out"
@@ -243,6 +280,7 @@ export default function PdiChecklistClient() {
         {/* Category Filter Chips with visible focus rings */}
         <div
           role="tablist"
+          aria-orientation="horizontal"
           aria-label="체크리스트 카테고리 필터"
           className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100"
         >
@@ -258,7 +296,7 @@ export default function PdiChecklistClient() {
                 tabIndex={isSelected ? 0 : -1}
                 onKeyDown={(e) => handleTabKeyDown(e, 0)}
                 onClick={() => setSelectedCategory('ALL')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg text-xs font-semibold border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                   isSelected
                     ? 'bg-blue-700 text-white border-blue-700'
                     : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
@@ -284,7 +322,7 @@ export default function PdiChecklistClient() {
                 tabIndex={isSelected ? 0 : -1}
                 onKeyDown={(e) => handleTabKeyDown(e, tabIndex)}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg text-xs font-semibold border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                   isSelected
                     ? 'bg-blue-700 text-white border-blue-700'
                     : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
@@ -304,43 +342,25 @@ export default function PdiChecklistClient() {
         tabIndex={0}
         className="space-y-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
       >
-        {displayedCategories.map((category) => (
-          <fieldset key={category} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:border-gray-300 print:shadow-none print:break-inside-avoid">
-            <legend className="sr-only">{category} PDI 점검 항목</legend>
-            <h2 id={`pdi-cat-${category}`} className="bg-slate-50 print:bg-slate-100 border-b border-gray-200 p-4 text-xl font-bold text-slate-800">
-              {category}
-            </h2>
-            <div className="divide-y divide-gray-100">
-              {(itemsByCategory.get(category) || []).map((item) => (
-                <label
-                  key={item.id}
-                  htmlFor={`pdi-task-${item.id}`}
-                  className="flex items-start p-4 hover:bg-slate-50 cursor-pointer transition-colors rounded-xl focus-within:ring-2 focus-within:ring-blue-500 print:py-2 print:hover:bg-transparent print:break-inside-avoid"
-                >
-                  <input
-                    id={`pdi-task-${item.id}`}
-                    type="checkbox"
-                    checked={item.checked}
-                    aria-label={item.task}
-                    aria-describedby={item.warning ? `pdi-warning-${item.id}` : undefined}
-                    onChange={() => toggleCheck(item.id)}
-                    className="mt-1 w-6 h-6 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500 print:accent-blue-600"
-                  />
-                  <div className="ml-4 flex-1">
-                    <p className={`text-lg ${item.checked ? 'text-slate-600 line-through' : 'text-gray-800'} print:text-base print:text-black`}>
-                      {item.task}
-                    </p>
-                    {item.warning && (
-                      <p id={`pdi-warning-${item.id}`} className={`mt-1 text-sm font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-red-700'} print:text-xs print:text-red-800`}>
-                        ⚠️ 주의: {item.warning}
-                      </p>
-                    )}
-                  </div>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        ))}
+        {categories.map((category) => {
+          const isCategoryActive = selectedCategory === 'ALL' || selectedCategory === category;
+          return (
+            <fieldset
+              key={category}
+              className={`${isCategoryActive ? 'block' : 'hidden print:block'} bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:border-gray-300 print:shadow-none print:break-inside-avoid`}
+            >
+              <legend className="sr-only">{category} 신차 출고 전 점검(PDI) 항목</legend>
+              <h2 id={`pdi-cat-${category}`} className="bg-slate-50 print:bg-slate-100 border-b border-gray-200 p-4 text-xl font-bold text-slate-800">
+                {category}
+              </h2>
+              <div className="divide-y divide-gray-100">
+                {(itemsByCategory.get(category) || []).map((item) => (
+                  <PdiItemRow key={item.id} item={item} onToggle={toggleCheck} />
+                ))}
+              </div>
+            </fieldset>
+          );
+        })}
       </div>
 
       {progress === 100 && (
@@ -359,7 +379,7 @@ export default function PdiChecklistClient() {
       <section aria-labelledby="heading-recommended-services" className="pt-8 border-t border-gray-200 print:hidden">
         <div className="mb-6">
           <h2 id="heading-recommended-services" className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <span aria-hidden="true">💡</span> 신차 인수 후 추천 서비스 (Recommended EV Services)
+            <span aria-hidden="true">💡</span> 신차 인수 후 추천 서비스
           </h2>
           <p className="text-sm text-slate-600 mt-1">
             신차 인수를 성공적으로 마치셨나요? 보조금 수령 확인부터 향후 차량 유지관리까지 필수 서비스를 이용해보세요.

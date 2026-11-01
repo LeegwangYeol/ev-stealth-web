@@ -18,7 +18,13 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import urllib.error
 import urllib.request
 
-from tracker.atomic_writer import atomic_write_json, atomic_write_json_multiple
+from tracker.atomic_writer import (
+    FileLock,
+    atomic_write_json,
+    atomic_write_json_multiple,
+    is_corrupted_or_quarantined_filename,
+    quarantine_corrupted_file,
+)
 from tracker.report_generator import ReportGenerator
 from tracker.subsidy_baseline import (
     COMMERCIAL_NATIONAL_CAP_KRW,
@@ -87,8 +93,10 @@ def calculate_depletion_rate(applied: Union[int, float], announced: Union[int, f
         if announced_val <= 0 or applied_val <= 0:
             return 0.0
         rate = round((applied_val / announced_val) * 100.0, 1)
+        if math.isnan(rate) or math.isinf(rate):
+            return 0.0
         return max(0.0, rate)
-    except (TypeError, ValueError, ZeroDivisionError):
+    except (TypeError, ValueError, ZeroDivisionError, OverflowError):
         return 0.0
 
 
@@ -293,7 +301,8 @@ class SubsidyTracker:
                 rem_budget = safe_total_budget - (safe_app * unit_budget)
                 safe_rem_budget = min(safe_total_budget, max(0, _safe_int_metric(rem_budget, 0)))
             else:
-                safe_rem_budget = min(safe_total_budget, max(0, _safe_int_metric(_metric_val(cat, "remaining_budget_krw", 0), 0)))
+                cat_rem = max(0, _safe_int_metric(_metric_val(cat, "remaining_budget_krw", 0), 0))
+                safe_rem_budget = min(safe_total_budget, cat_rem) if safe_total_budget > 0 else cat_rem
 
             if hasattr(cat, "announced_units"):
                 cat.announced_units = safe_ann
@@ -383,7 +392,12 @@ class SubsidyTracker:
         for r in regions:
             # Region overall status
             st_raw = r.get("overall_status") if isinstance(r, dict) else getattr(r, "overall_status", "")
-            st_key = str(st_raw or "").strip().lower()
+            if hasattr(st_raw, "value"):
+                st_raw = st_raw.value
+            st_str = str(st_raw or "").strip()
+            if "." in st_str:
+                st_str = st_str.split(".")[-1]
+            st_key = st_str.lower()
             if st_key in alert_counts:
                 alert_counts[st_key] += 1
 
@@ -396,7 +410,8 @@ class SubsidyTracker:
                 c_app = max(0, _safe_int_metric(_metric_val(c_data, "applied_units", 0), 0))
                 c_del = max(0, _safe_int_metric(_metric_val(c_data, "delivered_units", 0), 0))
                 c_tot_b = max(0, _safe_int_metric(_metric_val(c_data, "total_budget_krw", 0), 0))
-                c_rem_b = min(c_tot_b, max(0, _safe_int_metric(_metric_val(c_data, "remaining_budget_krw", 0), 0)))
+                c_rem_raw = max(0, _safe_int_metric(_metric_val(c_data, "remaining_budget_krw", 0), 0))
+                c_rem_b = min(c_tot_b, c_rem_raw) if c_tot_b > 0 else c_rem_raw
 
                 cat_counts[c_name]["announced"] += c_ann
                 cat_counts[c_name]["applied"] += c_app
@@ -517,20 +532,13 @@ class SubsidyTracker:
                 return None
         return None
 
-    def quarantine_corrupted_cache(self, cache_path: Union[str, Path]) -> Optional[Path]:
-        """Quarantine a corrupted cache file by renaming it with a timestamp suffix."""
-        p = Path(cache_path)
-        if not p.exists():
-            return None
-        try:
-            ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
-            quarantine_path = p.with_name(f"{p.stem}.corrupt_{ts}{p.suffix}")
-            p.rename(quarantine_path)
-            logger.warning("Quarantined corrupted cache file: %s -> %s", p, quarantine_path)
-            return quarantine_path
-        except OSError as exc:
-            logger.warning("Failed to quarantine corrupted cache file %s: %s", p, exc)
-            return None
+    def quarantine_corrupted_cache(
+        self,
+        cache_path: Union[str, Path],
+        suffix: Optional[str] = None,
+    ) -> Optional[Path]:
+        """Quarantine a corrupted cache file by renaming it with a timestamp suffix or custom suffix."""
+        return quarantine_corrupted_file(cache_path, suffix=suffix)
 
     def discard_corrupted_cache(self, cache_path: Union[str, Path]) -> bool:
         """Discard a corrupted cache file by removing it from disk."""
@@ -557,6 +565,7 @@ class SubsidyTracker:
         - Malformed/truncated JSON or invalid UTF-8 bytes.
         - Non-dictionary or missing root keys.
         - Invalid schema structures (non-list regions, missing categories).
+        - Quarantined / corrupted filename markers (.corrupted, .corrupt_).
         - Degenerate cache states.
 
         If corruption is detected:
@@ -566,6 +575,10 @@ class SubsidyTracker:
         """
         target_path = Path(cache_path) if cache_path else self.cache_fallback_path
         if not target_path or not target_path.exists():
+            return None
+
+        if is_corrupted_or_quarantined_filename(target_path):
+            logger.warning("Ignoring quarantined/corrupted cache path %s", target_path)
             return None
 
         should_quarantine = self.quarantine_corrupted if quarantine is None else quarantine
@@ -588,7 +601,8 @@ class SubsidyTracker:
                         f"Invalid cache schema: expected >= 17 regions, found {len(payload.regions) if payload.regions else 0}"
                     )
                 for idx, r in enumerate(payload.regions):
-                    if not hasattr(r, "categories") or not isinstance(r.categories, dict):
+                    r_cats = r.get("categories") if isinstance(r, dict) else getattr(r, "categories", None)
+                    if r_cats is None or not isinstance(r_cats, dict):
                         raise ValueError(
                             f"Corrupted region record at index {idx}: missing categories dictionary"
                         )
@@ -632,6 +646,31 @@ class SubsidyTracker:
                 for idx, r in enumerate(payload.regions):
                     payload.regions[idx] = self.update_region_metrics(r)
                 payload.nationwide_summary = self.compute_nationwide_summary(payload.regions)
+
+                # Ensure historical trajectory is chronologically sorted and deduplicated
+                if payload.historical_depletion_trajectory:
+                    seen_dates: Set[str] = set()
+                    sorted_pts = sorted(
+                        payload.historical_depletion_trajectory,
+                        key=lambda pt: getattr(pt, "date", "") or (pt.get("date", "") if isinstance(pt, dict) else ""),
+                    )
+                    deduped_history = []
+                    for pt in sorted_pts:
+                        d = getattr(pt, "date", "") or (pt.get("date", "") if isinstance(pt, dict) else "")
+                        if d and d not in seen_dates:
+                            seen_dates.add(d)
+                            deduped_history.append(pt)
+                    payload.historical_depletion_trajectory = (
+                        deduped_history if len(deduped_history) >= 2 else build_initial_baseline().historical_depletion_trajectory
+                    )
+                else:
+                    payload.historical_depletion_trajectory = build_initial_baseline().historical_depletion_trajectory
+
+                if not payload.popular_models_matrix:
+                    payload.popular_models_matrix = build_popular_models()
+                if not payload.alert_thresholds:
+                    payload.alert_thresholds = build_initial_baseline().alert_thresholds
+
                 payload.metadata.generated_at = datetime.now(timezone.utc).isoformat()
                 logger.info("Successfully refreshed tracking data from live endpoint.")
                 return payload, False
@@ -674,7 +713,7 @@ class SubsidyTracker:
         sync_web: bool = False,
         output_path: Optional[Union[str, Path]] = None,
         dry_run: bool = False,
-        quarantine_corrupted: bool = False,
+        quarantine_corrupted: Optional[bool] = None,
         sync_defects: bool = False,
     ) -> SubsidyPayload:
         """Execute complete subsidy collection cycle and atomically save to disk.
@@ -684,9 +723,10 @@ class SubsidyTracker:
             sync_web: bool, output_path: Optional[str], dry_run: bool, sync_defects: bool
         ) -> SubsidyPayload
         """
+        should_quarantine = self.quarantine_corrupted if quarantine_corrupted is None else quarantine_corrupted
         payload, fallback_used = self.execute_tracking_cycle(
             validate_cache=True,
-            quarantine_corrupted=quarantine_corrupted,
+            quarantine_corrupted=should_quarantine,
         )
 
         if not dry_run:
@@ -731,6 +771,9 @@ class SubsidyTracker:
                     if (cwd / "ev-stealth-web" / "public" / "data").exists():
                         destinations.append(cwd / "ev-stealth-web" / "public" / "data" / "ev_subsidy_data.json")
                         destinations.append(cwd / "ev-stealth-web" / "public" / "data" / "subsidy_depletion_data.json")
+                    if (cwd / "public" / "data").exists():
+                        destinations.append(cwd / "public" / "data" / "ev_subsidy_data.json")
+                        destinations.append(cwd / "public" / "data" / "subsidy_depletion_data.json")
 
             # Deduplicate destinations preserving order
             unique_destinations: List[Path] = []

@@ -4,6 +4,8 @@ Pure Python Standard Library implementation with User-Agent rotation, configurab
 jitter (1.5s~3.5s), exponential backoff, cookie jar session handling, and error logging.
 """
 
+from __future__ import annotations
+
 import datetime
 import email.utils
 import html
@@ -44,6 +46,10 @@ USER_AGENT_POOL = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0",
 ]
 
+# Safe memory bounds to prevent memory leaks and out-of-memory crashes
+MAX_RESPONSE_BYTES: int = 10 * 1024 * 1024  # 10MB per HTTP response
+MAX_COOKIEJAR_ENTRIES: int = 500  # Prune cookie jar beyond 500 entries
+
 
 def robust_decode(raw_bytes: Union[bytes, str], declared_encoding: Optional[str] = None) -> str:
     """Decode raw bytes with graceful fallback across Korean and universal charsets.
@@ -56,7 +62,7 @@ def robust_decode(raw_bytes: Union[bytes, str], declared_encoding: Optional[str]
 
     encodings_to_try = [declared_encoding, "utf-8", "cp949", "euc-kr", "latin-1"]
     for enc in encodings_to_try:
-        if not enc:
+        if not enc or not isinstance(enc, str):
             continue
         try:
             return raw_bytes.decode(enc)
@@ -97,12 +103,17 @@ def encode_euc_kr_query(param: Union[str, Dict[str, Any], None]) -> str:
 def clean_html_text(raw_html: str) -> str:
     """
     Strip HTML tags, scripts, styles, decode HTML entities, and normalize whitespace.
+    Resilient against malformed, unclosed, or corrupt DOM snippets.
     """
-    if not raw_html:
+    if not raw_html or not isinstance(raw_html, str):
         return ""
 
-    # Remove script and style elements
-    cleaned = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", raw_html, flags=re.DOTALL | re.IGNORECASE)
+    # Remove null bytes and carriage controls
+    cleaned = raw_html.replace("\x00", " ")
+    # Remove HTML comments
+    cleaned = re.sub(r"<!--.*?-->", " ", cleaned, flags=re.DOTALL)
+    # Remove script and style elements (handling unclosed tags gracefully)
+    cleaned = re.sub(r"<(script|style)[^>]*>(?:.*?</\1>|.*$)", " ", cleaned, flags=re.DOTALL | re.IGNORECASE)
     # Replace block level tags with newlines
     cleaned = re.sub(r"<(br|p|/p|div|/div|li|/li|h\d|/h\d|tr|/tr|dt|/dt|dd|/dd)[^>]*>", "\n", cleaned, flags=re.IGNORECASE)
     # Remove remaining HTML tags
@@ -121,8 +132,9 @@ class SafeHttpClient:
       - Uniform random jitter between requests (default 1.5s ~ 3.5s)
       - User-Agent pool rotation
       - Exponential backoff retry on HTTP 429, 403, 5xx, or network errors
-      - Persistent CookieJar session management
+      - Persistent CookieJar session management with auto-pruning to prevent memory leaks
       - Charset auto-detection with robust decoding fallback
+      - Bounded response stream reading to prevent memory exhaustion
     """
 
     def __init__(
@@ -134,12 +146,16 @@ class SafeHttpClient:
         enable_jitter: bool = True,
         opener: Optional[urllib.request.OpenerDirector] = None,
         cookie_jar: Optional[http.cookiejar.CookieJar] = None,
+        max_response_size: int = MAX_RESPONSE_BYTES,
+        max_cookies: int = MAX_COOKIEJAR_ENTRIES,
     ):
         self.min_delay = min_delay
         self.max_delay = max_delay
         self.max_retries = max_retries
         self.timeout = timeout
         self.enable_jitter = enable_jitter
+        self.max_response_size = max_response_size
+        self.max_cookies = max_cookies
         self.request_count = 0
         self.last_request_time = 0.0
 
@@ -152,12 +168,53 @@ class SafeHttpClient:
                 urllib.request.HTTPCookieProcessor(self.cookie_jar)
             )
 
+    def clear_cookies(self) -> None:
+        """Clear all stored cookies from the session cookie jar."""
+        if hasattr(self.cookie_jar, "clear"):
+            try:
+                self.cookie_jar.clear()
+            except Exception:
+                self.cookie_jar = http.cookiejar.CookieJar()
+        else:
+            self.cookie_jar = http.cookiejar.CookieJar()
+
+    def close(self) -> None:
+        """Release HTTP client session resources, cookie jar, and connection handlers."""
+        self.clear_cookies()
+        if hasattr(self.opener, "close"):
+            try:
+                self.opener.close()
+            except Exception:
+                pass
+
+    def __enter__(self) -> "SafeHttpClient":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        self.close()
+        return False
+
     def get_random_user_agent(self) -> str:
         """Pick a modern browser User-Agent from pool."""
         return random.choice(USER_AGENT_POOL)
 
     def _sleep_with_jitter(self):
         """Perform polite delay with randomized jitter between requests."""
+        # Prune expired cookies to prevent unbounded memory growth
+        if hasattr(self.cookie_jar, "clear_expired_cookies"):
+            try:
+                self.cookie_jar.clear_expired_cookies()
+            except Exception:
+                pass
+        try:
+            if len(self.cookie_jar) > self.max_cookies:
+                logger.info(
+                    f"Cookie jar exceeded {self.max_cookies} entries. Pruning cookies to protect memory."
+                )
+                self.clear_cookies()
+        except Exception:
+            pass
+
         if not self.enable_jitter or self.max_delay <= 0:
             self.last_request_time = time.time()
             self.request_count += 1
@@ -184,6 +241,11 @@ class SafeHttpClient:
         """
         Send a lightweight request to the base URL to collect initial session cookies.
         """
+        if not base_url or not isinstance(base_url, str) or not base_url.strip():
+            logger.info(f"Warming up session on: {base_url}")
+            logger.info("Session warmed up (status 0). Cookies in jar: 0")
+            return False
+
         logger.info(f"Warming up session on: {base_url}")
         try:
             status, _, _ = self.request(base_url, method="GET", referer=referer)
@@ -205,11 +267,20 @@ class SafeHttpClient:
     ) -> Tuple[int, str, bytes]:
         """
         Perform an HTTP request with rate-limiting, headers, exponential backoff retries,
-        and automatic charset decoding.
+        automatic charset decoding, and bounded memory read safety.
 
         Returns:
             Tuple[int, str, bytes]: (status_code, decoded_text, raw_bytes)
         """
+        if not url or not isinstance(url, str) or not url.strip():
+            logger.warning(f"Invalid or empty URL provided to request: {url!r}")
+            return 0, "", b""
+
+        norm_url = url.strip()
+        if not (norm_url.startswith("http://") or norm_url.startswith("https://")):
+            logger.warning(f"Unsupported URL scheme: {norm_url!r}")
+            return 0, "", b""
+
         self._sleep_with_jitter()
 
         req_headers = {
@@ -238,19 +309,44 @@ class SafeHttpClient:
             elif isinstance(data, str):
                 payload_bytes = data.encode("utf-8")
 
-        req_timeout = timeout if timeout is not None else self.timeout
+        try:
+            req_timeout = float(timeout) if timeout is not None else float(self.timeout)
+            if req_timeout <= 0:
+                req_timeout = 15.0
+        except (ValueError, TypeError):
+            req_timeout = 15.0
 
         for attempt in range(1, self.max_retries + 1):
             try:
                 req = urllib.request.Request(
-                    url,
+                    norm_url,
                     data=payload_bytes,
                     headers=req_headers,
                     method=method.upper()
                 )
                 with self.opener.open(req, timeout=req_timeout) as resp:
                     status_code = resp.getcode()
-                    raw_bytes = resp.read()
+
+                    # Stream-read up to max_response_size to prevent memory exhaustion
+                    chunks = []
+                    bytes_read = 0
+                    while True:
+                        try:
+                            chunk = resp.read(65536)
+                        except TypeError:
+                            chunk = resp.read()
+                        if not chunk:
+                            break
+                        chunks.append(chunk)
+                        bytes_read += len(chunk)
+                        if bytes_read >= self.max_response_size:
+                            logger.warning(
+                                f"Response from {norm_url} exceeded max size ({self.max_response_size} bytes). Truncating."
+                            )
+                            break
+                        if len(chunk) > 65536:
+                            break
+                    raw_bytes = b"".join(chunks)
 
                     content_type_header = resp.headers.get("Content-Type", "")
                     content_type = str(content_type_header) if content_type_header is not None else ""
@@ -261,7 +357,7 @@ class SafeHttpClient:
 
             except urllib.error.HTTPError as he:
                 logger.warning(
-                    f"HTTPError {he.code} ({he.reason}) on {url} (Attempt {attempt}/{self.max_retries})"
+                    f"HTTPError {he.code} ({he.reason}) on {norm_url} (Attempt {attempt}/{self.max_retries})"
                 )
                 try:
                     # Retry on rate limiting or server errors
@@ -270,6 +366,8 @@ class SafeHttpClient:
                         backoff = self._calc_backoff(attempt, retry_after=retry_after)
                         logger.info(f"Backing off for {backoff:.2f}s before retry (status {he.code})...")
                         try:
+                            if hasattr(he, "fp") and he.fp:
+                                he.fp.close()
                             he.close()
                         except Exception:
                             pass
@@ -277,27 +375,42 @@ class SafeHttpClient:
                     else:
                         # Return error content if not retrying
                         try:
-                            raw_bytes = he.read()
+                            try:
+                                raw_bytes = he.read(self.max_response_size)
+                            except TypeError:
+                                raw_bytes = he.read()
                             decoded_text = robust_decode(raw_bytes, declared_encoding=encoding or "utf-8")
                             return he.code, decoded_text, raw_bytes
                         except Exception:
                             return he.code, "", b""
                         finally:
                             try:
+                                if hasattr(he, "fp") and he.fp:
+                                    he.fp.close()
                                 he.close()
                             except Exception:
                                 pass
                 finally:
-                    # Guarantee HTTPError response object is closed under Python 3.14
+                    # Guarantee HTTPError and underlying fp are closed under Python 3.14 to eliminate ResourceWarnings
                     try:
+                        if hasattr(he, "fp") and he.fp:
+                            he.fp.close()
                         he.close()
                     except Exception:
                         pass
 
-            except Exception as ex:
-                logger.warning(
-                    f"Network error on {url} (Attempt {attempt}/{self.max_retries}): {ex}"
+            except (TimeoutError, urllib.error.URLError, ConnectionError, OSError, Exception) as ex:
+                is_timeout = isinstance(ex, TimeoutError) or (
+                    isinstance(ex, urllib.error.URLError) and "timed out" in str(ex).lower()
                 )
+                if is_timeout:
+                    logger.warning(
+                        f"Request timeout on {norm_url} (Attempt {attempt}/{self.max_retries}): {ex}"
+                    )
+                else:
+                    logger.warning(
+                        f"Network error on {norm_url} (Attempt {attempt}/{self.max_retries}): {ex}"
+                    )
                 if attempt < self.max_retries:
                     backoff = self._calc_backoff(attempt)
                     logger.info(f"Backing off for {backoff:.2f}s before retry...")
@@ -305,7 +418,7 @@ class SafeHttpClient:
                 else:
                     break
 
-        logger.error(f"Failed to fetch {url} after {self.max_retries} attempts.")
+        logger.error(f"Failed to fetch {norm_url} after {self.max_retries} attempts.")
         return 0, "", b""
 
     def _parse_retry_after(self, he: urllib.error.HTTPError) -> Optional[float]:

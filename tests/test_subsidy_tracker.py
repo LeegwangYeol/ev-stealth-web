@@ -40,6 +40,7 @@ Scope & Behavioral Verification:
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import math
 import os
@@ -1279,6 +1280,148 @@ class TestAdversarialAndBoundaryStress(unittest.TestCase):
             ratio = ref_calculate_price_cap_ratio((i * 10_000) % 150_000_000)
         elapsed = os.times().user - start_time
         self.assertLess(elapsed, 1.0, f"10k scale benchmark took {elapsed:.3f}s (exceeded 1.0s)")
+
+
+# ==============================================================================
+# TEST SUITE 11: EDGE CASES (ZERO VALUES, NULL VALUES, NETWORK TIMEOUTS)
+# ==============================================================================
+
+
+class TestSubsidyTrackerEdgeCasesAndNetworkTimeouts(unittest.TestCase):
+    """Test zero values, null values, NaN/Inf immunity, and network timeout recovery."""
+
+    def test_null_and_zero_values_in_subsidy_calculations(self):
+        """Math helper functions must safely handle None, zero, negative, NaN, and Inf values."""
+        # 1. Depletion Rate null/zero/negative/NaN/Inf
+        self.assertEqual(tracker_calculate_depletion_rate(None, None), 0.0)
+        self.assertEqual(tracker_calculate_depletion_rate(float("nan"), 100), 0.0)
+        self.assertEqual(tracker_calculate_depletion_rate(100, float("nan")), 0.0)
+        self.assertEqual(tracker_calculate_depletion_rate(float("inf"), 100), 0.0)
+        self.assertEqual(tracker_calculate_depletion_rate(100, float("inf")), 0.0)
+        self.assertEqual(tracker_calculate_depletion_rate(-50, 100), 0.0)
+        self.assertEqual(tracker_calculate_depletion_rate(50, -100), 0.0)
+        self.assertEqual(tracker_calculate_depletion_rate(0, 0), 0.0)
+        self.assertEqual(tracker_calculate_depletion_rate(0, 1000), 0.0)
+
+        # 2. Remaining Units null/zero/negative/NaN/Inf
+        self.assertEqual(tracker_calculate_remaining_units(None, None), 0)
+        self.assertEqual(tracker_calculate_remaining_units(float("nan"), 100), 0)
+        self.assertEqual(tracker_calculate_remaining_units(100, float("nan")), 0)
+        self.assertEqual(tracker_calculate_remaining_units(float("inf"), 100), 0)
+        self.assertEqual(tracker_calculate_remaining_units(0, 0), 0)
+        self.assertEqual(tracker_calculate_remaining_units(2000, 1000), 0)  # Over-subscribed clamped to 0
+        self.assertEqual(tracker_calculate_remaining_units(-50, 100), 100)  # Negative clamped to 0
+
+        # 3. Price Cap Ratio null/zero/negative/NaN/Inf
+        self.assertEqual(tracker_calculate_price_cap_ratio(None), 0.0)
+        self.assertEqual(tracker_calculate_price_cap_ratio(0), 0.0)
+        self.assertEqual(tracker_calculate_price_cap_ratio(-10_000_000), 0.0)
+        self.assertEqual(tracker_calculate_price_cap_ratio(float("nan")), 0.0)
+        self.assertEqual(tracker_calculate_price_cap_ratio(float("inf")), 0.0)
+
+        # 4. Net Subsidy null/zero/negative/NaN/Inf
+        s_null = tracker_calculate_net_subsidy(None, None, None, None)
+        self.assertEqual(s_null["national_subsidy_krw"], 0)
+        self.assertEqual(s_null["local_subsidy_krw"], 0)
+        self.assertEqual(s_null["total_subsidy_krw"], 0)
+        self.assertEqual(s_null["net_price_krw"], 0)
+
+        s_zero = tracker_calculate_net_subsidy(0, 0, 0, 0)
+        self.assertEqual(s_zero["total_subsidy_krw"], 0)
+        self.assertEqual(s_zero["net_price_krw"], 0)
+
+        s_neg = tracker_calculate_net_subsidy(-100, -100, -100, -100)
+        self.assertEqual(s_neg["total_subsidy_krw"], 0)
+        self.assertEqual(s_neg["net_price_krw"], 0)
+
+    def test_safe_int_metric_and_metric_val_null_resilience(self):
+        """_safe_int_metric and _metric_val must handle None, NaN, dict, and invalid types."""
+        from tracker.subsidy_tracker import _metric_val, _safe_int_metric
+
+        self.assertEqual(_safe_int_metric(None, default=42), 42)
+        self.assertEqual(_safe_int_metric(float("nan"), default=42), 42)
+        self.assertEqual(_safe_int_metric(float("inf"), default=42), 42)
+        self.assertEqual(_safe_int_metric("invalid_string", default=42), 42)
+        self.assertEqual(_safe_int_metric(123.45), 123)
+
+        self.assertEqual(_metric_val(None, "key", default=99), 99)
+        self.assertEqual(_metric_val({}, "key", default=99), 99)
+        self.assertEqual(_metric_val({"key": 55}, "key", default=99), 55)
+
+    def test_fetch_live_updates_network_timeouts_and_http_errors(self):
+        """SubsidyTracker.fetch_live_updates must catch network timeouts and server errors safely."""
+        import http.client
+        import socket
+        import urllib.error
+        from unittest import mock
+
+        # 1. None endpoint URL returns None immediately
+        tracker_no_endpoint = SubsidyTracker(endpoint_url=None)
+        self.assertIsNone(tracker_no_endpoint.fetch_live_updates())
+
+        # 2. Network timeout (URLError wrapping socket.timeout)
+        tracker_live = SubsidyTracker(
+            endpoint_url="https://invalid.test/api/subsidy",
+            timeout_seconds=0.1,
+        )
+        with mock.patch(
+            "urllib.request.urlopen",
+            side_effect=urllib.error.URLError(socket.timeout("Connection timed out")),
+        ):
+            with mock.patch("time.sleep"):  # Speed up backoff retries
+                result = tracker_live.fetch_live_updates(max_retries=2)
+                self.assertIsNone(result)
+
+        # 3. HTTP 500 Internal Server Error
+        with mock.patch(
+            "urllib.request.urlopen",
+            side_effect=urllib.error.HTTPError(
+                url="https://invalid.test/api/subsidy",
+                code=500,
+                msg="Internal Server Error",
+                hdrs={},
+                fp=None,
+            ),
+        ):
+            with mock.patch("time.sleep"):
+                result_500 = tracker_live.fetch_live_updates(max_retries=2)
+                self.assertIsNone(result_500)
+
+        # 4. HTTP 502 Bad Gateway
+        with mock.patch(
+            "urllib.request.urlopen",
+            side_effect=urllib.error.HTTPError(
+                url="https://invalid.test/api/subsidy",
+                code=502,
+                msg="Bad Gateway",
+                hdrs={},
+                fp=None,
+            ),
+        ):
+            with mock.patch("time.sleep"):
+                result_502 = tracker_live.fetch_live_updates(max_retries=2)
+                self.assertIsNone(result_502)
+
+        # 5. RemoteDisconnected protocol exception
+        with mock.patch(
+            "urllib.request.urlopen",
+            side_effect=http.client.RemoteDisconnected("Remote end closed connection"),
+        ):
+            with mock.patch("time.sleep"):
+                result_disc = tracker_live.fetch_live_updates(max_retries=2)
+                self.assertIsNone(result_disc)
+
+        # 6. Malformed JSON payload returned by remote server
+        mock_resp = mock.MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = b"{broken_json: not_valid"
+        mock_resp.__enter__.return_value = mock_resp
+        mock_resp.__exit__.return_value = None
+
+        with mock.patch("urllib.request.urlopen", return_value=mock_resp):
+            with mock.patch("time.sleep"):
+                result_bad_json = tracker_live.fetch_live_updates(max_retries=2)
+                self.assertIsNone(result_bad_json)
 
 
 if __name__ == "__main__":

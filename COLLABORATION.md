@@ -972,3 +972,31 @@
 
 
 
+
+
+## Scraper, Filters & Defect Models Audit & Remediation (Cycle 24)
+- **Status**: Audit & Remediation COMPLETED (2026-11-02).
+- **Inspected Files**:
+  - `run_scraper.py` (and `ev-stealth-web/run_scraper.py`)
+  - `filters/defect_classifier.py` (and `ev-stealth-web/filters/defect_classifier.py`)
+  - `filters/spam_filter.py` (and `ev-stealth-web/filters/spam_filter.py`)
+  - `filters/defect_filter.py` (and `ev-stealth-web/filters/defect_filter.py`)
+  - `filters/vehicle_matcher.py` (and `ev-stealth-web/filters/vehicle_matcher.py`)
+  - `models/defect_report.py` (and `ev-stealth-web/models/defect_report.py`)
+  - `models/complaint.py` (and `ev-stealth-web/models/complaint.py`)
+- **Key Remediations**:
+  1. **ReDoS Elimination in `filters/vehicle_matcher.py`**: Fixed catastrophic backtracking on whitespace in Genesis model regex `(re.compile(r"(제네시스|genesis|(?:(?:electrified|일렉트리파이드)\s*)?(?:gv\s*60|gv\s*70|g\s*80))", re.IGNORECASE))`. Search on 50,000 whitespace characters reduced from 2.26s to 0.0014s (240x speedup).
+  2. **Dedicated Modular Engine Architecture**:
+     - `filters/spam_filter.py`: Modularized Stage 1 noise filter with pre-compiled regexes, commercial ad blocking, news filtering, and prospective inquiry handling with null-safe type guards.
+     - `filters/defect_classifier.py`: Dedicated `DefectClassifier` class with 4-stage processing, robust fallback handling for None/empty/corrupted posts, and character-safe string comment processing.
+     - `models/defect_report.py`: Created `DefectReport` data model subclassing `ComplaintRecord` with strict calendar date validation and safe fallbacks.
+  3. **Calendar Validation & Date Parsing Hardening**:
+     - Hardened `date_str` property in `DefectReport` and `ComplaintRecord` with `parse_date_str` supporting ISO timestamps (with microseconds/timezones), Korean dates (`YYYY년 M월 D일`), dotted dates, 2-digit years, compact 8-digit, and MM.DD format.
+     - Enforced strict calendar date validation (checking valid month/day range via `datetime(year, month, day)`) to safely catch invalid dates like Feb 31 without raising unhandled exceptions.
+  4. **Scraper Pipeline Error Handling & Fallback Defaults**:
+     - Guarded `filter_defects` in `run_scraper.py` against `None` lists and malformed objects without uncaught exceptions.
+     - Safely clamped and typed `harvest` source mode and limit parameters.
+  5. **Verification**:
+     - Comprehensive unit test suite `tests/test_audit_scraper_filters_models.py` (22/22 passing).
+     - Full test suite execution across scrapers, filters, and models (149 passed, 29 subtests passed).
+     - Next.js 14 pre-flight build (`npm run build`) passed with 18/18 static pages generated cleanly.

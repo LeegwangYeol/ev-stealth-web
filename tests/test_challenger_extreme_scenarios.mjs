@@ -18,12 +18,30 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Dynamically patch getRecallData import for Node.js ESM JSON attribute requirement
-const recallSrcPath = path.resolve(__dirname, '../src/lib/getRecallData.ts');
+let recallSrcPath = path.resolve(__dirname, '../src/lib/getRecallData.ts');
+let jsonImport = "import rawRecallData from '../src/data/ev_recall_database.json' with { type: 'json' };";
+let sanitizeImport = "import { sanitizeSafeUrl } from '../src/lib/sanitizeUrl.ts';";
+let typesImport = "from '../src/types/recall.ts';";
+if (!fs.existsSync(recallSrcPath)) {
+  recallSrcPath = path.resolve(__dirname, '../ev-stealth-web/src/lib/getRecallData.ts');
+  jsonImport = "import rawRecallData from '../ev-stealth-web/src/data/ev_recall_database.json' with { type: 'json' };";
+  sanitizeImport = "import { sanitizeSafeUrl } from '../ev-stealth-web/src/lib/sanitizeUrl.ts';";
+  typesImport = "from '../ev-stealth-web/src/types/recall.ts';";
+}
 const originalRecallSrc = fs.readFileSync(recallSrcPath, 'utf-8');
-const patchedRecallSrc = originalRecallSrc.replace(
-  /import rawRecallData from ['"].*?ev_recall_database\.json['"](?: with \{ type: ['"]json['"] \})?;/,
-  "import rawRecallData from '../src/data/ev_recall_database.json' with { type: 'json' };"
-);
+const patchedRecallSrc = originalRecallSrc
+  .replace(
+    /import rawRecallData from ['"].*?ev_recall_database\.json['"](?: with \{ type: ['"]json['"] \})?;/,
+    jsonImport
+  )
+  .replace(
+    /import\s*\{\s*sanitizeSafeUrl\s*\}\s*from\s*['"]\.\/sanitizeUrl['"];?/,
+    sanitizeImport
+  )
+  .replace(
+    /from\s*['"]@\/types\/recall['"];?/g,
+    typesImport
+  );
 const tempRecallFixture = path.resolve(__dirname, 'temp_recall_extreme_fixture.ts');
 fs.writeFileSync(tempRecallFixture, patchedRecallSrc, 'utf-8');
 let recall;

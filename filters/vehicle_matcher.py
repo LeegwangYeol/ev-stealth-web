@@ -153,7 +153,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
 BRAND_KEYWORDS: List[Tuple[Pattern[str], str]] = [
     (re.compile(r"(테슬라|tesla|테슬람|개슬라|개스라|기가상하이)", re.IGNORECASE), BRAND_TESLA),
     (re.compile(r"(현대자동차|현대차|현대\s*전기차|현기차|현기충|흉기차|흉기|블루핸즈|e-gmp|이피트)", re.IGNORECASE), BRAND_HYUNDAI),
-    (re.compile(r"(제네시스|genesis|(?:electrified|일렉트리파이드)?\s*(?:gv\s*60|gv\s*70|g\s*80))", re.IGNORECASE), BRAND_HYUNDAI),
+    (re.compile(r"(제네시스|genesis|(?:(?:electrified|일렉트리파이드)\s*)?(?:gv\s*60|gv\s*70|g\s*80))", re.IGNORECASE), BRAND_HYUNDAI),
     (re.compile(r"(기아차|기아\s*전기차|기아|오토큐)", re.IGNORECASE), BRAND_KIA),
     (re.compile(r"(byd|비야디|짱깨차|짱차|중국\s*전기차)", re.IGNORECASE), BRAND_BYD),
     (re.compile(r"(벤츠|mercedes|mercedes-benz|bmw|아우디|audi|포르쉐|porsche|폴스타|polestar|볼보|volvo|쉐보레|chevrolet|chevy|캐딜락|cadillac|폭스바겐|volkswagen|vw|리비안|rivian|루시드|lucid|샤오미|xiaomi)", re.IGNORECASE), BRAND_OTHER),

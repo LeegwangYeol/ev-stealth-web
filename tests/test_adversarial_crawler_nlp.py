@@ -572,7 +572,7 @@ class TestNetworkFailureSimulationAdversarial(unittest.TestCase):
 
         mock_resp = MagicMock()
         mock_resp.getcode.return_value = 200
-        mock_resp.read.return_value = b"<html>OK</html>"
+        mock_resp.read.side_effect = [b"<html>OK</html>", b""]
         mock_resp.headers = {"Content-Type": "text/html"}
         mock_resp.__enter__.return_value = mock_resp
         mock_resp.__exit__.return_value = None

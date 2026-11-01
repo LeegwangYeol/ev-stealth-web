@@ -182,7 +182,11 @@ class DefectTracker:
     @staticmethod
     def validate_report_file(file_path: Union[str, Path]) -> bool:
         """Validate that target file exists, contains valid JSON, and has a 'reports' list key."""
+        from tracker.atomic_writer import is_corrupted_or_quarantined_filename
+
         p = Path(file_path)
+        if is_corrupted_or_quarantined_filename(p):
+            return False
         try:
             if not p.is_file() or p.stat().st_size == 0:
                 return False
@@ -621,12 +625,20 @@ class DefectTracker:
         web_dir: Optional[Union[str, Path]] = None,
         dry_run: bool = False,
         run_crawler: bool = False,
+        quarantine_corrupted: bool = True,
     ) -> List[str]:
         """Synchronize defect reports between root data/, web src/data/, and public/data/ with atomic safety and validation.
 
         Validates source file JSON syntax and 'reports' key schema before any file replacement.
-        Guarantees that corrupt files are NEVER propagated.
+        Guarantees that corrupt files are NEVER propagated and isolates corrupted files when quarantine_corrupted is True.
+        Protected by FileLock to eliminate concurrent sync races.
         """
+        from tracker.atomic_writer import (
+            FileLock,
+            is_corrupted_or_quarantined_filename,
+            quarantine_corrupted_file,
+        )
+
         logger.info("DefectTracker: Synchronizing defect reports (daily_reports.json)...")
         if dry_run:
             logger.info("[DRY-RUN] DefectTracker sync skipped file persistence.")
@@ -645,111 +657,131 @@ class DefectTracker:
             public_path = self.get_public_reports_path()
 
         written_paths: List[str] = []
+        sync_lock_path = root_path.parent / ".sync_defect_reports.lock"
 
-        if run_crawler and self.pipeline:
+        with FileLock(sync_lock_path):
+            if run_crawler and self.pipeline:
+                try:
+                    res = self.pipeline.run(
+                        sources="all",
+                        limit=10,
+                        sync_web=True,
+                        web_dir=web_dir,
+                        dry_run=dry_run,
+                    )
+                    written_paths.extend(res.get("written_paths", []))
+                except Exception as exc:
+                    logger.warning(
+                        "Crawler execution in sync_defect_reports encountered: %s. Falling back to mirror synchronization.",
+                        exc,
+                    )
+
+            known_paths: List[Path] = [p for p in [root_path, web_path, public_path] if p is not None]
+            candidate_paths: List[Path] = [p for p in known_paths if p.exists()]
             try:
-                res = self.pipeline.run(
-                    sources="all",
-                    limit=10,
-                    sync_web=True,
-                    web_dir=web_dir,
-                    dry_run=dry_run,
+                candidate_paths.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            except Exception:
+                pass
+
+            source_path: Optional[Path] = None
+            for cand in candidate_paths:
+                if is_corrupted_or_quarantined_filename(cand):
+                    continue
+                if self.validate_report_file(cand):
+                    source_path = cand
+                    break
+                elif quarantine_corrupted:
+                    quarantine_corrupted_file(cand)
+
+            if not source_path:
+                logger.error(
+                    "No candidate defect report file is valid among %s. Aborting sync to prevent corruption propagation.",
+                    candidate_paths,
                 )
-                written_paths.extend(res.get("written_paths", []))
-            except Exception as exc:
-                logger.warning(
-                    "Crawler execution in sync_defect_reports encountered: %s. Falling back to mirror synchronization.",
-                    exc,
-                )
-
-        known_paths: List[Path] = [p for p in [root_path, web_path, public_path] if p is not None]
-        candidate_paths: List[Path] = [p for p in known_paths if p.exists()]
-        try:
-            candidate_paths.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-        except Exception:
-            pass
-
-        source_path: Optional[Path] = None
-        for cand in candidate_paths:
-            if self.validate_report_file(cand):
-                source_path = cand
-                break
-
-        if not source_path:
-            logger.error(
-                "No candidate defect report file is valid among %s. Aborting sync to prevent corruption propagation.",
-                candidate_paths,
-            )
-            return []
-
-        target_paths: List[Path] = []
-        seen_targets: Set[str] = {str(Path(source_path).resolve())}
-        for p in known_paths:
-            resolved_p = str(Path(p).resolve())
-            if resolved_p not in seen_targets and (p.parent.exists() or p.parent.parent.exists()):
-                seen_targets.add(resolved_p)
-                target_paths.append(p)
-
-        if source_path and target_paths and self.validate_report_file(source_path):
-            try:
-                source_stat = source_path.stat()
-                h_src = hashlib.sha256()
-                with open(source_path, "rb") as sf:
-                    while chunk := sf.read(65536):
-                        h_src.update(chunk)
-                source_hash = h_src.hexdigest()
-            except Exception as e:
-                logger.error("Failed to inspect source defect report %s: %s", source_path, e)
                 return []
 
-            for tgt in target_paths:
-                if tgt.exists():
-                    try:
-                        h_tgt = hashlib.sha256()
-                        with open(tgt, "rb") as tf_in:
-                            while chunk := tf_in.read(65536):
-                                h_tgt.update(chunk)
-                        if h_tgt.hexdigest() == source_hash:
-                            try:
-                                tgt_stat = tgt.stat()
-                                if tgt_stat.st_mtime != source_stat.st_mtime:
-                                    os.utime(tgt, (source_stat.st_atime, source_stat.st_mtime))
-                            except OSError:
-                                pass
-                            logger.debug("Skipping redundant defect report sync for %s (SHA-256 match)", tgt)
-                            continue
-                    except Exception as e:
-                        logger.warning("Error verifying SHA-256 on target %s: %s", tgt, e)
+            target_paths: List[Path] = []
+            seen_targets: Set[str] = {str(Path(source_path).resolve())}
+            for p in known_paths:
+                resolved_p = str(Path(p).resolve())
+                if resolved_p not in seen_targets and (p.parent.exists() or p.parent.parent.exists()):
+                    seen_targets.add(resolved_p)
+                    target_paths.append(p)
 
-                temp_name = None
+            if source_path and target_paths and self.validate_report_file(source_path):
                 try:
-                    tgt.parent.mkdir(parents=True, exist_ok=True)
-                    with tempfile.NamedTemporaryFile("wb", dir=str(tgt.parent), delete=False, prefix=".tmp_sync_") as tf:
-                        temp_name = tf.name
-                        with open(source_path, "rb") as sf:
-                            shutil.copyfileobj(sf, tf)
-                        tf.flush()
-                        os.fsync(tf.fileno())
-                    try:
-                        os.chmod(temp_name, 0o644)
-                    except OSError:
-                        pass
-                    os.replace(temp_name, tgt)
-                    # Preserve original source timestamp to prevent oscillation
-                    try:
-                        os.utime(tgt, (source_stat.st_atime, source_stat.st_mtime))
-                    except OSError:
-                        pass
-                    written_paths.append(str(tgt))
-                    logger.info("  ✓ Successfully synchronized defect reports: %s -> %s", source_path, tgt)
+                    source_stat = source_path.stat()
+                    h_src = hashlib.sha256()
+                    with open(source_path, "rb") as sf:
+                        while chunk := sf.read(65536):
+                            h_src.update(chunk)
+                    source_hash = h_src.hexdigest()
                 except Exception as e:
-                    logger.warning("Failed to synchronize defect report to %s: %s", tgt, e)
-                finally:
-                    if temp_name and os.path.exists(temp_name):
+                    logger.error("Failed to inspect source defect report %s: %s", source_path, e)
+                    return []
+
+                for tgt in target_paths:
+                    if tgt.exists():
+                        if is_corrupted_or_quarantined_filename(tgt):
+                            continue
+                        if not self.validate_report_file(tgt):
+                            if quarantine_corrupted:
+                                quarantine_corrupted_file(tgt)
+                        else:
+                            try:
+                                h_tgt = hashlib.sha256()
+                                with open(tgt, "rb") as tf_in:
+                                    while chunk := tf_in.read(65536):
+                                        h_tgt.update(chunk)
+                                if h_tgt.hexdigest() == source_hash:
+                                    try:
+                                        tgt_stat = tgt.stat()
+                                        if tgt_stat.st_mtime != source_stat.st_mtime:
+                                            os.utime(tgt, (source_stat.st_atime, source_stat.st_mtime))
+                                    except OSError:
+                                        pass
+                                    logger.debug("Skipping redundant defect report sync for %s (SHA-256 match)", tgt)
+                                    continue
+                            except Exception as e:
+                                logger.warning("Error verifying SHA-256 on target %s: %s", tgt, e)
+
+                    temp_name = None
+                    try:
+                        tgt.parent.mkdir(parents=True, exist_ok=True)
+                        with tempfile.NamedTemporaryFile("wb", dir=str(tgt.parent), delete=False, prefix=".tmp_sync_") as tf:
+                            temp_name = tf.name
+                            with open(source_path, "rb") as sf:
+                                shutil.copyfileobj(sf, tf)
+                            tf.flush()
+                            os.fsync(tf.fileno())
                         try:
-                            os.unlink(temp_name)
+                            os.chmod(temp_name, 0o644)
                         except OSError:
                             pass
+                        os.replace(temp_name, tgt)
+                        # Preserve original source timestamp to prevent oscillation
+                        try:
+                            os.utime(tgt, (source_stat.st_atime, source_stat.st_mtime))
+                        except OSError:
+                            pass
+                        # Directory fsync to commit new target file
+                        try:
+                            dir_fd = os.open(str(tgt.parent), os.O_RDONLY)
+                            os.fsync(dir_fd)
+                            os.close(dir_fd)
+                        except OSError:
+                            pass
+
+                        written_paths.append(str(tgt))
+                        logger.info("  ✓ Successfully synchronized defect reports: %s -> %s", source_path, tgt)
+                    except Exception as e:
+                        logger.warning("Failed to synchronize defect report to %s: %s", tgt, e)
+                    finally:
+                        if temp_name and os.path.exists(temp_name):
+                            try:
+                                os.unlink(temp_name)
+                            except OSError:
+                                pass
 
         if written_paths:
             self.invalidate_cache()

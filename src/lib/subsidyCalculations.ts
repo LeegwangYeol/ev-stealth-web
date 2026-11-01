@@ -440,8 +440,8 @@ export function calculateNetSubsidyPure(
 
   // 4. Calculate Local Municipal Matching Subsidy
   // Formula: S_local = S_local_max * (S_nat / 6,500,000)
-  const maxLocal = Number.isFinite(passengerCategory?.max_local_subsidy_krw)
-    ? passengerCategory!.max_local_subsidy_krw!
+  const maxLocal = typeof passengerCategory?.max_local_subsidy_krw === 'number' && Number.isFinite(passengerCategory.max_local_subsidy_krw)
+    ? passengerCategory.max_local_subsidy_krw
     : 0;
   let localSubsidyKrw = 0;
   if (nationalSubsidyKrw > 0 && maxLocal > 0) {
@@ -455,13 +455,13 @@ export function calculateNetSubsidyPure(
   const netPurchasePriceKrw = Number.isFinite(rawNetPrice) ? Math.max(0, rawNetPrice) : 0;
 
   // 6. Depletion Risk & Warning Analysis
-  const depletionRate = Number.isFinite(passengerCategory?.depletion_rate)
-    ? passengerCategory!.depletion_rate
+  const depletionRate = typeof passengerCategory?.depletion_rate === 'number' && Number.isFinite(passengerCategory.depletion_rate)
+    ? passengerCategory.depletion_rate
     : 0;
   const isHighDepletionRisk = depletionRate >= 80.0;
   const depletionStatus: AlertSeverity = passengerCategory?.status || 'HEALTHY';
-  const remainingUnits = Number.isFinite(passengerCategory?.remaining_units)
-    ? passengerCategory!.remaining_units
+  const remainingUnits = typeof passengerCategory?.remaining_units === 'number' && Number.isFinite(passengerCategory.remaining_units)
+    ? passengerCategory.remaining_units
     : 0;
 
   let warningNotice: string | undefined;
@@ -529,16 +529,16 @@ export interface SubsidyStatistics {
  */
 export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> | null): SubsidyStatistics {
   const summary = dataset?.nationwide_summary;
-  const regions = Array.isArray(dataset?.regions) ? dataset!.regions : [];
+  const regions = Array.isArray(dataset?.regions) ? dataset.regions : [];
 
-  const announced = Number.isFinite(summary?.total_announced_units) ? summary!.total_announced_units : 0;
-  const applied = Number.isFinite(summary?.total_applied_units) ? summary!.total_applied_units : 0;
-  const delivered = Number.isFinite(summary?.total_delivered_units) ? summary!.total_delivered_units : 0;
-  const remaining = Number.isFinite(summary?.total_remaining_units) ? summary!.total_remaining_units : 0;
+  const announced = typeof summary?.total_announced_units === 'number' && Number.isFinite(summary.total_announced_units) ? summary.total_announced_units : 0;
+  const applied = typeof summary?.total_applied_units === 'number' && Number.isFinite(summary.total_applied_units) ? summary.total_applied_units : 0;
+  const delivered = typeof summary?.total_delivered_units === 'number' && Number.isFinite(summary.total_delivered_units) ? summary.total_delivered_units : 0;
+  const remaining = typeof summary?.total_remaining_units === 'number' && Number.isFinite(summary.total_remaining_units) ? summary.total_remaining_units : 0;
 
   const depletionRate = announced > 0
-    ? Number.isFinite(summary?.nationwide_depletion_rate)
-      ? summary!.nationwide_depletion_rate
+    ? typeof summary?.nationwide_depletion_rate === 'number' && Number.isFinite(summary.nationwide_depletion_rate)
+      ? summary.nationwide_depletion_rate
       : Math.round((applied / announced) * 1000) / 10
     : 0;
 
@@ -546,8 +546,8 @@ export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> |
     ? Math.round((delivered / announced) * 1000) / 10
     : 0;
 
-  const budgetTotal = Number.isFinite(summary?.total_budget_billion_krw) ? summary!.total_budget_billion_krw : 0;
-  const budgetDisbursed = Number.isFinite(summary?.disbursed_budget_billion_krw) ? summary!.disbursed_budget_billion_krw : 0;
+  const budgetTotal = typeof summary?.total_budget_billion_krw === 'number' && Number.isFinite(summary.total_budget_billion_krw) ? summary.total_budget_billion_krw : 0;
+  const budgetDisbursed = typeof summary?.disbursed_budget_billion_krw === 'number' && Number.isFinite(summary.disbursed_budget_billion_krw) ? summary.disbursed_budget_billion_krw : 0;
   const budgetExecutionRatePct = budgetTotal > 0
     ? Math.round((budgetDisbursed / budgetTotal) * 1000) / 10
     : 0;

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timezone
+import hashlib
 import json
 import math
 import os
@@ -204,134 +205,182 @@ def write_daily_reports(
     pipeline_version: str = "1.0.0",
     generated_at: Optional[str] = None,
     merge_existing: bool = True,
+    quarantine_corrupted: bool = True,
 ) -> str:
     """Format and atomically write daily reports JSON to the destination path.
 
     Deduplicates by ID/URL and merges newly discovered defects with existing
     historical reports when merge_existing is True and output_path exists.
+    Protected by inter-process FileLock to eliminate race conditions across multiple
+    sync processes. Guarantees POSIX crash durability (flush, fsync, directory fsync, 0o644).
+    Quarantines corrupted preexisting files when quarantine_corrupted is True.
     Returns the absolute path written.
     """
-    items_to_write: List[Union[ComplaintRecord, Dict[str, Any]]] = list(complaints)
+    from tracker.atomic_writer import (
+        FileLock,
+        _json_default,
+        is_corrupted_or_quarantined_filename,
+        quarantine_corrupted_file,
+        sanitize_nan_inf,
+    )
 
-    existing_reports: List[Dict[str, Any]] = []
-    existing_total_scraped = 0
-    if merge_existing and os.path.exists(output_path):
-        try:
-            existing_data = read_daily_reports(output_path)
-            if isinstance(existing_data, dict):
-                raw_reports = existing_data.get("reports")
-                existing_reports = [r for r in raw_reports if isinstance(r, dict)] if isinstance(raw_reports, list) else []
-                stats = existing_data.get("statistics")
-                if isinstance(stats, dict):
-                    raw_ts = stats.get("total_scraped")
-                    if raw_ts is not None:
-                        existing_total_scraped = int(max(0, _safe_float(raw_ts, len(existing_reports))))
+    dir_path = os.path.dirname(os.path.abspath(output_path))
+    os.makedirs(dir_path, exist_ok=True)
+    lock_file = os.path.join(
+        tempfile.gettempdir(),
+        f".daily_report_{hashlib.sha256(os.path.abspath(output_path).encode('utf-8')).hexdigest()[:16]}.lock",
+    )
+
+    with FileLock(lock_file):
+        items_to_write: List[Union[ComplaintRecord, Dict[str, Any]]] = list(complaints)
+
+        existing_reports: List[Dict[str, Any]] = []
+        existing_total_scraped = 0
+        if merge_existing and os.path.exists(output_path):
+            try:
+                existing_data = read_daily_reports(
+                    output_path,
+                    quarantine_corrupted=quarantine_corrupted,
+                )
+                if isinstance(existing_data, dict):
+                    raw_reports = existing_data.get("reports")
+                    existing_reports = [r for r in raw_reports if isinstance(r, dict)] if isinstance(raw_reports, list) else []
+                    stats = existing_data.get("statistics")
+                    if isinstance(stats, dict):
+                        raw_ts = stats.get("total_scraped")
+                        if raw_ts is not None:
+                            existing_total_scraped = int(max(0, _safe_float(raw_ts, len(existing_reports))))
+                        else:
+                            existing_total_scraped = len(existing_reports)
                     else:
                         existing_total_scraped = len(existing_reports)
                 else:
-                    existing_total_scraped = len(existing_reports)
-            else:
+                    existing_reports = []
+                    existing_total_scraped = 0
+            except Exception:
                 existing_reports = []
                 existing_total_scraped = 0
-        except Exception:
-            existing_reports = []
-            existing_total_scraped = 0
 
-    # Extract new complaint dicts to index by id and url
-    new_payload = format_daily_report_payload(
-        complaints=items_to_write,
-        total_scraped=total_scraped,
-        pipeline_version=pipeline_version,
-        generated_at=generated_at,
-    )
-    new_reports = new_payload.reports
+        # Extract new complaint dicts to index by id and url
+        new_payload = format_daily_report_payload(
+            complaints=items_to_write,
+            total_scraped=total_scraped,
+            pipeline_version=pipeline_version,
+            generated_at=generated_at,
+        )
+        new_reports = new_payload.reports
 
-    seen_ids = set()
-    seen_urls = set()
-    merged_reports: List[Dict[str, Any]] = []
+        seen_ids = set()
+        seen_urls = set()
+        merged_reports: List[Dict[str, Any]] = []
 
-    for nr in new_reports:
-        nid = nr.get("id")
-        nurl = nr.get("url")
-        if (nid and nid in seen_ids) or (nurl and nurl in seen_urls):
-            continue
-        if nid:
-            seen_ids.add(nid)
-        if nurl:
-            seen_urls.add(nurl)
-        merged_reports.append(nr)
+        for nr in new_reports:
+            nid = nr.get("id")
+            nurl = nr.get("url")
+            if (nid and nid in seen_ids) or (nurl and nurl in seen_urls):
+                continue
+            if nid:
+                seen_ids.add(nid)
+            if nurl:
+                seen_urls.add(nurl)
+            merged_reports.append(nr)
 
-    for er in existing_reports:
-        if not isinstance(er, dict):
-            continue
-        eid = er.get("id")
-        eurl = er.get("url")
-        if (eid and eid in seen_ids) or (eurl and eurl in seen_urls):
-            continue
-        if eid:
-            seen_ids.add(eid)
-        if eurl:
-            seen_urls.add(eurl)
-        merged_reports.append(er)
+        for er in existing_reports:
+            if not isinstance(er, dict):
+                continue
+            eid = er.get("id")
+            eurl = er.get("url")
+            if (eid and eid in seen_ids) or (eurl and eurl in seen_urls):
+                continue
+            if eid:
+                seen_ids.add(eid)
+            if eurl:
+                seen_urls.add(eurl)
+            merged_reports.append(er)
 
-    safe_existing_total = int(max(0, existing_total_scraped if existing_total_scraped is not None else len(existing_reports)))
-    if total_scraped is not None:
-        try:
-            safe_new_scraped = int(max(0, _safe_float(total_scraped, 0)))
-        except Exception:
-            safe_new_scraped = 0
-        combined_total_scraped = safe_existing_total + safe_new_scraped
-    else:
-        combined_total_scraped = max(safe_existing_total, len(merged_reports))
-    items_to_write = merged_reports
-    total_scraped = combined_total_scraped
-
-    payload = format_daily_report_payload(
-        complaints=items_to_write,
-        total_scraped=total_scraped,
-        pipeline_version=pipeline_version,
-        generated_at=generated_at,
-    )
-
-    data = payload.to_dict()
-
-    # Ensure parent directory exists
-    dir_path = os.path.dirname(os.path.abspath(output_path))
-    os.makedirs(dir_path, exist_ok=True)
-
-    # Perform atomic write via temporary file with crash durability (flush + fsync)
-    temp_dir = dir_path
-    temp_name: Optional[str] = None
-    try:
-        with tempfile.NamedTemporaryFile("w", dir=temp_dir, delete=False, encoding="utf-8") as tf:
-            temp_name = tf.name
-            from tracker.atomic_writer import _json_default, sanitize_nan_inf
-            sanitized_data = sanitize_nan_inf(data)
-            json.dump(sanitized_data, tf, ensure_ascii=False, indent=2, default=_json_default, allow_nan=False)
-            tf.flush()
-            os.fsync(tf.fileno())
-
-        try:
-            os.chmod(temp_name, 0o644)
-        except OSError:
-            pass
-        os.replace(temp_name, output_path)
-        temp_name = None
-    finally:
-        if temp_name and os.path.exists(temp_name):
+        safe_existing_total = int(max(0, existing_total_scraped if existing_total_scraped is not None else len(existing_reports)))
+        if total_scraped is not None:
             try:
-                os.unlink(temp_name)
+                safe_new_scraped = int(max(0, _safe_float(total_scraped, 0)))
+            except Exception:
+                safe_new_scraped = 0
+            combined_total_scraped = safe_existing_total + safe_new_scraped
+        else:
+            combined_total_scraped = max(safe_existing_total, len(merged_reports))
+        items_to_write = merged_reports
+        total_scraped = combined_total_scraped
+
+        payload = format_daily_report_payload(
+            complaints=items_to_write,
+            total_scraped=total_scraped,
+            pipeline_version=pipeline_version,
+            generated_at=generated_at,
+        )
+
+        data = payload.to_dict()
+
+        # Perform atomic write via temporary file with crash durability (flush + fsync)
+        temp_dir = dir_path
+        temp_name: Optional[str] = None
+        try:
+            with tempfile.NamedTemporaryFile("w", dir=temp_dir, delete=False, encoding="utf-8", prefix=".tmp_daily_", suffix=".json") as tf:
+                temp_name = tf.name
+                sanitized_data = sanitize_nan_inf(data)
+                json.dump(sanitized_data, tf, ensure_ascii=False, indent=2, default=_json_default, allow_nan=False)
+                tf.flush()
+                os.fsync(tf.fileno())
+
+            try:
+                os.chmod(temp_name, 0o644)
             except OSError:
                 pass
+            os.replace(temp_name, output_path)
+            temp_name = None
 
-    return output_path
+            # Issue directory fsync for crash durability
+            try:
+                dir_fd = os.open(str(dir_path), os.O_RDONLY)
+                os.fsync(dir_fd)
+                os.close(dir_fd)
+            except OSError:
+                pass
+        finally:
+            if temp_name and os.path.exists(temp_name):
+                try:
+                    os.unlink(temp_name)
+                except OSError:
+                    pass
+
+        return output_path
 
 
-def read_daily_reports(path: str = DEFAULT_OUTPUT_PATH) -> Dict[str, Any]:
-    """Read and parse daily reports JSON from file defensively."""
+def read_daily_reports(
+    path: str = DEFAULT_OUTPUT_PATH,
+    quarantine_corrupted: bool = False,
+) -> Dict[str, Any]:
+    """Read and parse daily reports JSON from file defensively.
+
+    If quarantine_corrupted is True and the file exists but has corrupt JSON or schema,
+    quarantines the file to .corrupt_<timestamp>.json and returns empty data dict.
+    """
+    p = Path(path)
+    if not p.exists():
+        return {"reports": [], "statistics": {}}
+
+    from tracker.atomic_writer import is_corrupted_or_quarantined_filename, quarantine_corrupted_file
+
+    if is_corrupted_or_quarantined_filename(p):
+        return {"reports": [], "statistics": {}}
+
     try:
-        with open(path, "r", encoding="utf-8-sig") as f:
+        with open(p, "r", encoding="utf-8-sig") as f:
             data = json.load(f)
-            return data if isinstance(data, dict) else {"reports": [], "statistics": {}}
-    except (FileNotFoundError, json.JSONDecodeError, OSError, ValueError):
+        if not isinstance(data, dict):
+            raise ValueError(f"Expected dict root payload, got {type(data).__name__}")
+        if "reports" in data and not isinstance(data["reports"], list):
+            raise ValueError("Invalid schema: 'reports' must be a list")
+        return data
+    except (json.JSONDecodeError, OSError, ValueError):
+        if quarantine_corrupted:
+            quarantine_corrupted_file(p)
         return {"reports": [], "statistics": {}}

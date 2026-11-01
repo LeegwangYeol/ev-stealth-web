@@ -859,7 +859,8 @@ export function calculateDepreciation(
 ): DepreciationCalculationResult {
   const safeInput = input && typeof input === 'object' ? input : ({} as DepreciationCalculationInput);
   const rawYears = safeInput.years;
-  const years = Number.isFinite(rawYears) ? Math.max(0, rawYears) : 0;
+  const parsedYears = typeof rawYears === 'number' ? rawYears : Number(rawYears);
+  const years = Number.isFinite(parsedYears) ? Math.max(0, parsedYears) : 0;
 
   const baselineAnnualMileageKm =
     options?.baselineAnnualMileageKm ?? DEFAULT_BASELINE_ANNUAL_MILEAGE_KM;
@@ -867,8 +868,9 @@ export function calculateDepreciation(
     options?.adjustmentFactors ?? DEFAULT_ADJUSTMENT_FACTORS;
 
   const rawMileage = safeInput.mileageKm;
+  const parsedMileage = typeof rawMileage === 'number' ? rawMileage : Number(rawMileage);
   const defaultMileage = years * baselineAnnualMileageKm;
-  const mileageKm = Number.isFinite(rawMileage) ? Math.max(0, rawMileage!) : defaultMileage;
+  const mileageKm = Number.isFinite(parsedMileage) ? Math.max(0, parsedMileage) : defaultMileage;
 
   const {
     modelId,
@@ -1025,12 +1027,13 @@ export function simulateBatteryHealth(
     vehicleEfficiencyKmPerKwh = 5.2,
   } = safeParams;
 
+  const parsedYears = typeof rawYears === 'number' ? rawYears : Number(rawYears);
   const isInvalidYears =
     rawYears === undefined ||
     rawYears === null ||
-    !Number.isFinite(rawYears) ||
-    rawYears < 0;
-  const safeYears = isInvalidYears ? 3 : rawYears;
+    !Number.isFinite(parsedYears) ||
+    parsedYears < 0;
+  const safeYears = isInvalidYears ? 3 : parsedYears;
 
   const chemistryKey: BatteryChemistryType = normalizeChemistry(chemInput || 'NCM_811');
 
@@ -1214,14 +1217,17 @@ export function calculateSubsidyClawback(
   nationalSubsidyKrw: number = 0,
   customTiers?: ClawbackTier[]
 ): ClawbackResult {
-  const normalizedMonths = Number.isFinite(heldMonths)
-    ? Math.max(0, heldMonths)
-    : heldMonths === Infinity
+  const parsedMonths = typeof heldMonths === 'number' ? heldMonths : Number(heldMonths);
+  const normalizedMonths = Number.isFinite(parsedMonths)
+    ? Math.max(0, parsedMonths)
+    : heldMonths === Infinity || parsedMonths === Infinity
     ? 24
     : 0;
-  const safeLocalSubsidy = Number.isFinite(localSubsidyKrw) ? Math.max(0, localSubsidyKrw) : 0;
-  const safeNationalSubsidy = Number.isFinite(nationalSubsidyKrw)
-    ? Math.max(0, nationalSubsidyKrw)
+  const parsedLocal = typeof localSubsidyKrw === 'number' ? localSubsidyKrw : Number(localSubsidyKrw);
+  const safeLocalSubsidy = Number.isFinite(parsedLocal) ? Math.max(0, parsedLocal) : 0;
+  const parsedNational = typeof nationalSubsidyKrw === 'number' ? nationalSubsidyKrw : Number(nationalSubsidyKrw);
+  const safeNationalSubsidy = Number.isFinite(parsedNational)
+    ? Math.max(0, parsedNational)
     : 0;
 
   const tiers = Array.isArray(customTiers) && customTiers.length > 0
@@ -1404,8 +1410,10 @@ export function calculateTcoComparison(
   let parkingTotalSavings = 0;
   let maintenanceTotalSavings = 0;
 
-  const safeAnnualKm = Number.isFinite(annualKm) && annualKm >= 0 ? annualKm : 15000;
-  const rawYears = Math.min(30, Number.isFinite(years) && years > 0 ? years : 1);
+  const parsedAnnualKm = typeof annualKm === 'number' ? annualKm : Number(annualKm);
+  const safeAnnualKm = Number.isFinite(parsedAnnualKm) && parsedAnnualKm >= 0 ? parsedAnnualKm : 15000;
+  const parsedYears = typeof years === 'number' ? years : Number(years);
+  const rawYears = Math.min(30, Number.isFinite(parsedYears) && parsedYears > 0 ? parsedYears : 1);
   const safeYears = Math.max(1, Math.round(rawYears));
   const fullYears = Math.floor(rawYears);
   const fractionalRemainder = Math.round((rawYears - fullYears) * 10000) / 10000;

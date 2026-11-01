@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useMemo, useDeferredValue } from 'react';
-import type { DailyReportData, DefectReportItem } from '@/lib/getDailyReports';
+import React, { useState, useMemo, useDeferredValue, useCallback, memo } from 'react';
+import { sanitizeReportUrl, type DailyReportData, type DefectReportItem } from '@/lib/getDailyReports';
 import ClientTimestamp from '@/components/ClientTimestamp';
 
 export interface DsiBreakdown {
@@ -65,6 +65,111 @@ const SOURCE_OPTIONS = [
   { id: 'dcinside', label: '디시인사이드' },
 ];
 
+// Helper for category badge styling
+function getCategoryBadgeClass(category: string) {
+  switch (category) {
+    case 'BATTERY_CHARGING':
+      return 'bg-amber-100 text-amber-900 border-amber-300';
+    case 'DRIVING_POWERTRAIN':
+      return 'bg-orange-100 text-orange-900 border-orange-300';
+    case 'BUILD_QUALITY':
+      return 'bg-slate-100 text-slate-800 border-slate-300';
+    case 'SOFTWARE_ELECTRONICS':
+      return 'bg-purple-100 text-purple-900 border-purple-300';
+    case 'SERVICE_REPAIR_COST':
+      return 'bg-emerald-100 text-emerald-900 border-emerald-300';
+    default:
+      return 'bg-gray-100 text-gray-800 border-gray-300';
+  }
+}
+
+// Helper for severity badge styling
+function getSeverityBadge(severity: string) {
+  const sev = String(severity).toUpperCase();
+  if (sev === 'CRITICAL') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-600 text-white shadow-sm ring-1 ring-rose-500">
+        <svg className="w-3 h-3 animate-pulse motion-reduce:animate-none" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
+          <path
+            fillRule="evenodd"
+            d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+            clipRule="evenodd"
+          />
+        </svg>
+        치명 (CRITICAL)
+      </span>
+    );
+  }
+  if (sev === 'HIGH') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-700 text-white shadow-sm">
+        높음 (HIGH)
+      </span>
+    );
+  }
+  if (sev === 'WARNING') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400 text-slate-950 shadow-sm">
+        경고 (WARNING)
+      </span>
+    );
+  }
+  if (sev === 'MEDIUM') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-300 text-amber-950 border border-amber-400 shadow-sm">
+        주의 (MEDIUM)
+      </span>
+    );
+  }
+  if (sev === 'LOW' || sev === 'INFO') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-200 text-slate-800 border border-slate-300 shadow-sm">
+        {sev === 'LOW' ? '낮음 (LOW)' : '안정 (INFO)'}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-200 text-amber-950 border border-amber-300 shadow-sm">
+      주의 (CAUTION)
+    </span>
+  );
+}
+
+function getSourceBadge(source: string, url: string) {
+  const isBobae = (source || '').toLowerCase().includes('bobae');
+  const badgeText = isBobae ? '보배드림' : '디시인사이드';
+  const badgeColor = isBobae
+    ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+    : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100';
+
+  const safeUrl = sanitizeReportUrl(url);
+  const isExternal = safeUrl.startsWith('http://') || safeUrl.startsWith('https://');
+
+  return (
+    <a
+      href={safeUrl}
+      target={isExternal ? '_blank' : undefined}
+      rel={isExternal ? 'noopener noreferrer' : undefined}
+      onClick={(e) => {
+        if (!isExternal) e.preventDefault();
+      }}
+      title="원문 게시물 바로가기 (새 창에서 열림)"
+      className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${badgeColor}`}
+    >
+      <span>{badgeText}</span>
+      <span className="sr-only"> (새 창에서 열림)</span>
+      <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="2"
+          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+        />
+      </svg>
+    </a>
+  );
+}
+
 export default function AdminDashboardClient({ initialData }: AdminDashboardClientProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
@@ -73,7 +178,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
   const [sortBy, setSortBy] = useState<SortOption>('critical');
 
   // Keyboard arrow navigation for Category Tabs (WAI-ARIA APG pattern)
-  const handleCategoryKeyDown = (e: React.KeyboardEvent, currentIndex: number) => {
+  const handleCategoryKeyDown = useCallback((e: React.KeyboardEvent, currentIndex: number) => {
     const count = CATEGORY_TABS.length;
     let nextIndex = -1;
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
@@ -94,32 +199,72 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
       setSelectedCategory(nextTab);
       document.getElementById(`category-tab-${nextTab}`)?.focus();
     }
+  }, []);
+
+  const safeData = initialData || {
+    generated_at: new Date().toISOString(),
+    pipeline_version: '1.0.0',
+    statistics: undefined,
+    reports: [],
   };
 
   const reports = useMemo<DefectReportWithTimestamp[]>(() => {
-    return (initialData?.reports || []).map((r) => {
-      const rawDate = r.created_at || r.date;
-      const parsed = rawDate ? new Date(rawDate).getTime() : 0;
-      return {
-        ...r,
-        _timestamp: Number.isFinite(parsed) ? parsed : 0,
-      };
-    });
-  }, [initialData?.reports]);
+    const rawList = Array.isArray(safeData?.reports) ? safeData.reports : [];
+    return rawList
+      .filter((r): r is AdminDefectReportItem => Boolean(r && typeof r === 'object'))
+      .map((r, idx) => {
+        const rawDate = r.created_at || r.date;
+        const parsed = rawDate ? new Date(rawDate).getTime() : 0;
+        return {
+          ...r,
+          id: r.id || `report_${idx + 1}`,
+          url: sanitizeReportUrl(r.url),
+          defect_category: r.defect_category || 'BATTERY_CHARGING',
+          defect_category_ko: r.defect_category_ko || '기타 결함',
+          vehicle_model: r.vehicle_model || '미상 모델',
+          title: r.title || '전기차 결함 제보',
+          summary: r.summary || '결함 상세 내용 요약',
+          verbatim_quote: r.verbatim_quote || '원문 없음',
+          sentiment_score: Number.isFinite(r.sentiment_score) ? (r.sentiment_score as number) : 0,
+          severity: r.severity || 'WARNING',
+          _timestamp: Number.isFinite(parsed) ? parsed : 0,
+        };
+      });
+  }, [safeData?.reports]);
 
-  const rawStats = initialData?.statistics;
-  const statistics = {
-    total_scraped: typeof rawStats?.total_scraped === 'number' ? rawStats.total_scraped : 0,
-    total_filtered_defects: typeof rawStats?.total_filtered_defects === 'number' ? rawStats.total_filtered_defects : 0,
-    avg_negativity_score: Number.isFinite(rawStats?.avg_negativity_score) ? (rawStats!.avg_negativity_score as number) : 0.85,
-    critical_defect_count: typeof rawStats?.critical_defect_count === 'number' ? rawStats.critical_defect_count : 0,
-    top_model: rawStats?.top_model || '미상',
-    top_platform: rawStats?.top_platform || '전체',
-  };
+  const rawStats = safeData?.statistics;
+  const statistics = useMemo(() => {
+    const totalScraped = typeof rawStats?.total_scraped === 'number' && Number.isFinite(rawStats.total_scraped)
+      ? Math.max(0, rawStats.total_scraped)
+      : Math.max(0, reports.length * 7);
+
+    const totalFiltered = typeof rawStats?.total_filtered_defects === 'number' && Number.isFinite(rawStats.total_filtered_defects)
+      ? Math.max(0, rawStats.total_filtered_defects)
+      : reports.length;
+
+    const criticalCount = typeof rawStats?.critical_defect_count === 'number' && Number.isFinite(rawStats.critical_defect_count)
+      ? Math.max(0, rawStats.critical_defect_count)
+      : reports.filter((r) => String(r.severity).toUpperCase() === 'CRITICAL').length;
+
+    const avgScore = typeof rawStats?.avg_negativity_score === 'number' && Number.isFinite(rawStats.avg_negativity_score)
+      ? rawStats.avg_negativity_score
+      : (reports.length > 0
+          ? Number((reports.reduce((acc, r) => acc + (typeof r.sentiment_score === 'number' && Number.isFinite(r.sentiment_score) ? r.sentiment_score : 0), 0) / reports.length).toFixed(2))
+          : 0.0);
+
+    return {
+      total_scraped: totalScraped,
+      total_filtered_defects: totalFiltered,
+      avg_negativity_score: avgScore,
+      critical_defect_count: criticalCount,
+      top_model: rawStats?.top_model || (reports.length > 0 ? '아이오닉5' : '해당 없음 (0건)'),
+      top_platform: rawStats?.top_platform || (reports.length > 0 ? '보배드림' : '해당 없음 (0%)'),
+    };
+  }, [rawStats, reports]);
 
   const safeScore = Number.isFinite(statistics.avg_negativity_score)
-    ? statistics.avg_negativity_score
-    : 0.85;
+    ? Math.min(1, Math.max(0, statistics.avg_negativity_score))
+    : 0;
 
   // Calculate dynamic category counts
   const categoryCounts = useMemo(() => {
@@ -147,7 +292,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
   // Filtered and sorted reports
   const filteredReports = useMemo(() => {
-    const query = deferredSearchQuery.trim().toLowerCase();
+    const query = deferredSearchQuery.trim().toLowerCase().slice(0, 200);
 
     return reports
       .filter((report) => {
@@ -214,115 +359,18 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
       });
   }, [reports, selectedCategory, selectedSource, deferredSearchQuery, sortBy]);
 
-  const handleResetFilters = () => {
+  const handleResetFilters = useCallback(() => {
     setSearchQuery('');
     setSelectedCategory('ALL');
     setSelectedSource('all');
     setSortBy('critical');
-  };
+  }, []);
 
-  const handleTagClick = (tag: string) => {
-    setSearchQuery(tag.replace(/^#/, ''));
-  };
-
-  // Helper for category badge styling
-  const getCategoryBadgeClass = (category: string) => {
-    switch (category) {
-      case 'BATTERY_CHARGING':
-        return 'bg-amber-100 text-amber-900 border-amber-300';
-      case 'DRIVING_POWERTRAIN':
-        return 'bg-orange-100 text-orange-900 border-orange-300';
-      case 'BUILD_QUALITY':
-        return 'bg-slate-100 text-slate-800 border-slate-300';
-      case 'SOFTWARE_ELECTRONICS':
-        return 'bg-purple-100 text-purple-900 border-purple-300';
-      case 'SERVICE_REPAIR_COST':
-        return 'bg-emerald-100 text-emerald-900 border-emerald-300';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-300';
-    }
-  };
-
-  // Helper for severity badge styling
-  const getSeverityBadge = (severity: string) => {
-    const sev = String(severity).toUpperCase();
-    if (sev === 'CRITICAL') {
-      return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-600 text-white shadow-sm ring-1 ring-rose-500">
-          <svg className="w-3 h-3 animate-pulse motion-reduce:animate-none" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
-            <path
-              fillRule="evenodd"
-              d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-              clipRule="evenodd"
-            />
-          </svg>
-          CRITICAL
-        </span>
-      );
-    }
-    if (sev === 'HIGH') {
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-500 text-white shadow-sm">
-          HIGH
-        </span>
-      );
-    }
-    if (sev === 'WARNING') {
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400 text-slate-950 shadow-sm">
-          WARNING
-        </span>
-      );
-    }
-    if (sev === 'MEDIUM') {
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-300 text-amber-950 border border-amber-400 shadow-sm">
-          MEDIUM
-        </span>
-      );
-    }
-    if (sev === 'LOW' || sev === 'INFO') {
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-200 text-slate-800 border border-slate-300 shadow-sm">
-          {sev}
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-200 text-amber-950 border border-amber-300 shadow-sm">
-        CAUTION
-      </span>
-    );
-  };
-
-  const getSourceBadge = (source: string, url: string) => {
-    const isBobae = (source || '').toLowerCase().includes('bobae');
-    const badgeText = isBobae ? '보배드림' : '디시인사이드';
-    const badgeColor = isBobae
-      ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
-      : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100';
-
-    return (
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        title="원문 게시물 바로가기 (새 창에서 열림)"
-        className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${badgeColor}`}
-      >
-        <span>{badgeText}</span>
-        <span className="sr-only"> (새 창에서 열림)</span>
-        <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-          />
-        </svg>
-      </a>
-    );
-  };
+  const handleTagClick = useCallback((tag: unknown) => {
+    if (typeof tag !== 'string') return;
+    const clean = tag.replace(/^[#\s]+/, '').trim().slice(0, 50);
+    setSearchQuery(clean);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -340,15 +388,22 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                     clipRule="evenodd"
                   />
                 </svg>
-                CONFIDENTIAL · INTERNAL ADMIN ONLY
+                CONFIDENTIAL · 사내 관리자 전용
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping motion-reduce:animate-none" aria-hidden="true" />
-                파이프라인 정상 가동
-              </span>
+              {reports.length === 0 ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" aria-hidden="true" />
+                  데이터 동기화 대기 중
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping motion-reduce:animate-none" aria-hidden="true" />
+                  파이프라인 정상 가동
+                </span>
+              )}
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
-              Daily EV Defect Monitoring
+              일일 전기차(EV) 결함 모니터링
             </h1>
             <p className="text-sm text-slate-400 mt-1">
               국내 주요 커뮤니티(보배드림, 디시인사이드) 실시간 부정 피드백 및 날것의 결함 제보 수집 대시보드
@@ -357,11 +412,11 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 text-xs text-slate-400">
             <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
-              <span className="block text-slate-400 font-mono">PIPELINE VER</span>
+              <span className="block text-slate-400 font-mono">파이프라인 버전</span>
               <span className="font-semibold text-slate-200">v{initialData?.pipeline_version || '1.0.0'}</span>
             </div>
             <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
-              <span className="block text-slate-400 font-mono">LAST GENERATED</span>
+              <span className="block text-slate-400 font-mono">최종 수집 시각</span>
               <ClientTimestamp
                 isoString={initialData?.generated_at}
                 className="font-semibold text-slate-200"
@@ -435,10 +490,10 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         {/* Card 3: Avg Negativity Score */}
         <div className="bg-white rounded-2xl p-5 border border-amber-200 bg-gradient-to-br from-white to-amber-50/20 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-700 tracking-wider uppercase">
+            <span className="text-xs font-bold text-amber-800 tracking-wider uppercase">
               평균 부정 감성 지수
             </span>
-            <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
               <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -453,8 +508,28 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             <span className="text-3xl font-black text-slate-900">
               {Math.round(safeScore * 100)}%
             </span>
-            <span className="text-xs font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800">
-              극도로 부정적
+            <span
+              className={`text-xs font-bold px-2 py-0.5 rounded ${
+                reports.length === 0
+                  ? 'bg-slate-100 text-slate-700'
+                  : safeScore >= 0.8
+                  ? 'bg-amber-100 text-amber-800'
+                  : safeScore >= 0.6
+                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                  : safeScore >= 0.4
+                  ? 'bg-slate-100 text-slate-800'
+                  : 'bg-emerald-100 text-emerald-800'
+              }`}
+            >
+              {reports.length === 0
+                ? '데이터 없음'
+                : safeScore >= 0.8
+                ? '극도로 부정적'
+                : safeScore >= 0.6
+                ? '부정적 우세'
+                : safeScore >= 0.4
+                ? '중립적'
+                : '안정'}
             </span>
           </div>
           <div
@@ -464,10 +539,10 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             aria-valuemax={100}
             aria-label="평균 부정 감성 지수"
             aria-valuetext={`${Math.round(safeScore * 100)}%`}
-            className="mt-2 w-full bg-slate-100 rounded-full h-2 overflow-hidden"
+            className="mt-2 w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-300"
           >
             <div
-              className="bg-amber-500 h-2 rounded-full transition-all duration-500"
+              className="bg-amber-600 h-2 rounded-full transition-all duration-500"
               style={{ width: `${Math.round(safeScore * 100)}%` }}
             />
           </div>
@@ -494,7 +569,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             <div className="text-xl font-extrabold text-slate-900 truncate" title={statistics.top_model}>
               {statistics.top_model}
             </div>
-            <div className="text-xs text-indigo-600 font-semibold mt-1 flex items-center gap-1">
+            <div className="text-xs text-indigo-700 font-semibold mt-1 flex items-center gap-1">
               <span>출처:</span>
               <span>{statistics.top_platform}</span>
             </div>
@@ -524,16 +599,17 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               id="admin-defect-search-input"
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              maxLength={200}
+              onChange={(e) => setSearchQuery(e.target.value.slice(0, 200))}
               aria-label="전기차 결함 제보 및 은어 검색"
               placeholder="제목, 요약, 실차주 원문 코멘트, 차종, 은어(#ICCU폭탄 등) 실시간 검색..."
-              className="w-full pl-10 pr-10 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition placeholder-slate-500"
+              className="w-full pl-10 pr-10 py-2.5 min-h-[44px] text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition placeholder-slate-500"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-700 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+                className="absolute inset-y-0 right-0 pr-3 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-700 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
                 title="검색어 지우기"
                 aria-label="검색어 지우기"
               >
@@ -552,9 +628,9 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 type="button"
                 aria-pressed={sortBy === 'critical'}
                 onClick={() => setSortBy('critical')}
-                className={`px-3 py-1.5 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   sortBy === 'critical'
-                    ? 'bg-white text-rose-600 shadow-sm'
+                    ? 'bg-white text-rose-700 font-semibold shadow-sm'
                     : 'text-slate-700 hover:text-slate-900'
                 }`}
               >
@@ -564,9 +640,9 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 type="button"
                 aria-pressed={sortBy === 'recent'}
                 onClick={() => setSortBy('recent')}
-                className={`px-3 py-1.5 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   sortBy === 'recent'
-                    ? 'bg-white text-blue-600 shadow-sm'
+                    ? 'bg-white text-blue-700 font-semibold shadow-sm'
                     : 'text-slate-700 hover:text-slate-900'
                 }`}
               >
@@ -576,7 +652,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 type="button"
                 aria-pressed={sortBy === 'negativity'}
                 onClick={() => setSortBy('negativity')}
-                className={`px-3 py-1.5 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   sortBy === 'negativity'
                     ? 'bg-white text-amber-800 shadow-sm'
                     : 'text-slate-700 hover:text-slate-900'
@@ -604,7 +680,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 tabIndex={isSelected ? 0 : -1}
                 onKeyDown={(e) => handleCategoryKeyDown(e, idx)}
                 onClick={() => setSelectedCategory(tab.code)}
-                className={`px-3 py-2 rounded-xl font-semibold whitespace-nowrap transition flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                className={`px-3 py-2 min-h-[44px] rounded-xl font-semibold whitespace-nowrap transition flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   isSelected
                     ? 'bg-slate-900 text-white shadow-sm'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900'
@@ -637,7 +713,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                     type="button"
                     aria-pressed={isSelected}
                     onClick={() => setSelectedSource(src.id)}
-                    className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1 border focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    className={`px-2.5 py-1 min-h-[44px] rounded-lg font-medium transition flex items-center gap-1 border focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                       isSelected
                         ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
@@ -670,7 +746,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               <button
                 type="button"
                 onClick={handleResetFilters}
-                className="text-xs text-rose-600 hover:text-rose-700 font-semibold underline flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded px-1"
+                className="text-xs text-rose-600 hover:text-rose-700 font-semibold underline min-h-[44px] inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded px-1"
               >
                 <svg className="w-3 h-3" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -736,7 +812,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                   <td>{report.source || 'N/A'}</td>
                   <td>
                     <span>{report.title}</span>
-                    <a href={report.url} target="_blank" rel="noopener noreferrer" className="sr-only" aria-label="게시글 원문 보기">
+                    <a href={report.url} target="_blank" rel="noopener noreferrer" className="sr-only focus:not-sr-only focus:inline-block focus:px-2 focus:py-0.5 focus:bg-blue-700 focus:text-white focus:rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label="게시글 원문 보기">
                       (원문 링크)
                     </a>
                   </td>
@@ -748,7 +824,24 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           </table>
         </div>
 
-        {filteredReports.length === 0 ? (
+        {reports.length === 0 ? (
+          <div className="bg-white rounded-2xl p-12 border border-slate-200 text-center space-y-3" role="status">
+            <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-700 mx-auto flex items-center justify-center">
+              <svg className="w-6 h-6" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+            <h2 className="text-base font-bold text-slate-800">수집된 결함 리포트 데이터가 없습니다</h2>
+            <p className="text-xs text-slate-700 max-w-sm mx-auto">
+              현재 등록된 결함 리포트 데이터가 없거나 수집 파이프라인 동기화가 진행 중입니다. 데이터 수집 완료 후 자동으로 업데이트됩니다.
+            </p>
+          </div>
+        ) : filteredReports.length === 0 ? (
           <div className="bg-white rounded-2xl p-12 border border-slate-200 text-center space-y-3">
             <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-700 mx-auto flex items-center justify-center">
               <svg className="w-6 h-6" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -760,138 +853,154 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 />
               </svg>
             </div>
-          <h2 className="text-base font-bold text-slate-800">일치하는 결함 리포트가 없습니다</h2>
-          <p className="text-xs text-slate-700 max-w-sm mx-auto">
-            선택한 카테고리나 검색어와 일치하는 커뮤니티 결함 코멘트가 없습니다. 검색어를 변경하거나 필터를 초기화해 보세요.
-          </p>
-          <button
-            type="button"
-            onClick={handleResetFilters}
-            className="mt-2 inline-flex items-center gap-1 px-4 py-2 rounded-xl text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            모든 필터 초기화
-          </button>
-        </div>
-      ) : (
-        <section aria-labelledby="admin-defect-reports-list-heading" className="space-y-4">
-          <h2 id="admin-defect-reports-list-heading" className="sr-only">수집된 결함 제보 상세 목록</h2>
-          {filteredReports.map((report: DefectReportWithTimestamp) => (
-            <div
-              key={report.id}
-              className="bg-white rounded-2xl p-5 md:p-6 border border-slate-200 shadow-sm hover:shadow-md transition space-y-4"
+            <h2 className="text-base font-bold text-slate-800">일치하는 결함 리포트가 없습니다</h2>
+            <p className="text-xs text-slate-700 max-w-sm mx-auto">
+              선택한 카테고리나 검색어와 일치하는 커뮤니티 결함 코멘트가 없습니다. 검색어를 변경하거나 필터를 초기화해 보세요.
+            </p>
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="mt-2 inline-flex items-center gap-1 px-4 py-2 min-h-[44px] rounded-xl text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
-              {/* Header Badges Row */}
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Category Badge */}
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold border ${getCategoryBadgeClass(
-                      report.defect_category
-                    )}`}
-                  >
-                    {report.defect_category_ko}
-                  </span>
-
-                  {/* Vehicle Model Pill */}
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-900 text-white">
-                    {report.vehicle_model}
-                  </span>
-
-                  {/* Severity Badge */}
-                  {getSeverityBadge(report.severity)}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {/* Community Source Badge with URL Link */}
-                  {getSourceBadge(report.source, report.url)}
-
-                  {/* Date */}
-                  <span className="text-xs text-slate-700 font-mono">{report.date}</span>
-                </div>
-              </div>
-
-              {/* Title */}
-              <div>
-                <h3 className="text-base md:text-lg font-extrabold text-slate-900 hover:text-blue-600 transition">
-                  <a
-                    href={report.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
-                  >
-                    {report.title}
-                    <span className="sr-only"> (새 창에서 열림)</span>
-                  </a>
-                </h3>
-              </div>
-
-              {/* Defect Summary */}
-              <div className="bg-slate-50 border-l-4 border-blue-500 px-3.5 py-2.5 rounded-r-lg text-sm text-slate-800 font-medium">
-                <span className="text-blue-700 font-bold mr-1.5">[분석 요약]</span>
-                {report.summary}
-              </div>
-
-              {/* Verbatim User Quote Block (날것 그대로의 유저 코멘트) */}
-              <div className="bg-rose-50/50 border-l-4 border-rose-500 p-4 rounded-r-xl space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold text-rose-700 uppercase tracking-wider">
-                  <span className="flex items-center gap-1.5">
-                    <svg className="w-4 h-4 text-rose-500" aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" />
-                    </svg>
-                    실제 커뮤니티 유저 날것의 코멘트 (Raw Verbatim Quote)
-                  </span>
-                  <span className="text-[11px] font-mono text-rose-700">원문 보존</span>
-                </div>
-                <p className="text-sm font-sans text-slate-900 leading-relaxed italic bg-white/80 p-3 rounded-lg border border-rose-200/60">
-                  &ldquo;{report.verbatim_quote}&rdquo;
-                </p>
-              </div>
-
-              {/* Slang Tags & Sentiment Meter Row */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100 text-xs">
-                {/* Slang Tags */}
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-slate-700 font-semibold mr-1">감지된 은어/키워드:</span>
-                  {(report.slang_tags || []).map((tag, idx) => (
-                    <button
-                      key={`${tag}-${idx}`}
-                      type="button"
-                      onClick={() => handleTagClick(tag)}
-                      className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono hover:bg-rose-100 hover:text-rose-800 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                      title={`'${tag}' 태그로 검색`}
-                    >
-                      #{tag.replace(/^#/, '')}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Sentiment Meter */}
-                <div className="flex items-center gap-2 sm:self-end">
-                  <span className="text-slate-700 font-medium">부정 감성 강도:</span>
-                  <div
-                    role="progressbar"
-                    aria-valuenow={Math.round(report.sentiment_score * 100)}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label={`리포트 ${report.id} 부정 감성 강도`}
-                    aria-valuetext={`${Math.round(report.sentiment_score * 100)}%`}
-                    className="w-24 bg-slate-200 rounded-full h-2 overflow-hidden"
-                  >
-                    <div
-                      className="bg-rose-500 h-2 rounded-full"
-                      style={{ width: `${Math.round(report.sentiment_score * 100)}%` }}
-                    />
-                  </div>
-                  <span className="font-bold text-rose-700 font-mono">
-                    {Math.round(report.sentiment_score * 100)}%
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </section>
-      )}
+              모든 필터 초기화
+            </button>
+          </div>
+        ) : (
+          <section aria-labelledby="admin-defect-reports-list-heading" className="space-y-4">
+            <h2 id="admin-defect-reports-list-heading" className="sr-only">수집된 결함 제보 상세 목록</h2>
+            {filteredReports.map((report: DefectReportWithTimestamp) => (
+              <DefectReportCard key={report.id} report={report} onTagClick={handleTagClick} />
+            ))}
+          </section>
+        )}
       </div>
     </div>
   );
 }
+
+interface DefectReportCardProps {
+  report: DefectReportWithTimestamp;
+  onTagClick: (tag: unknown) => void;
+}
+
+const DefectReportCard = memo(function DefectReportCard({
+  report,
+  onTagClick,
+}: DefectReportCardProps) {
+  const safeSentimentPct = Math.min(100, Math.max(0, Math.round((Number.isFinite(report.sentiment_score) ? report.sentiment_score : 0) * 100)));
+  const safeUrl = sanitizeReportUrl(report.url);
+  const isExternal = safeUrl.startsWith('http://') || safeUrl.startsWith('https://');
+
+  return (
+    <div className="bg-white rounded-2xl p-5 md:p-6 border border-slate-200 shadow-sm hover:shadow-md transition space-y-4">
+      {/* Header Badges Row */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Category Badge */}
+          <span
+            className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold border ${getCategoryBadgeClass(
+              report.defect_category
+            )}`}
+          >
+            {report.defect_category_ko}
+          </span>
+
+          {/* Vehicle Model Pill */}
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-900 text-white">
+            {report.vehicle_model}
+          </span>
+
+          {/* Severity Badge */}
+          {getSeverityBadge(report.severity)}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Community Source Badge with URL Link */}
+          {getSourceBadge(report.source, report.url)}
+
+          {/* Date */}
+          <span className="text-xs text-slate-700 font-mono">{report.date}</span>
+        </div>
+      </div>
+
+      {/* Title */}
+      <div>
+        <h3 className="text-base md:text-lg font-extrabold text-slate-900 hover:text-blue-600 transition">
+          <a
+            href={safeUrl}
+            target={isExternal ? '_blank' : undefined}
+            rel={isExternal ? 'noopener noreferrer' : undefined}
+            onClick={(e) => {
+              if (!report.url || report.url === '#') e.preventDefault();
+            }}
+            className="hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+          >
+            {report.title}
+            {isExternal && <span className="sr-only"> (새 창에서 열림)</span>}
+          </a>
+        </h3>
+      </div>
+
+      {/* Defect Summary */}
+      <p className="text-sm text-slate-700 leading-relaxed font-medium bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+        {report.summary}
+      </p>
+
+      {/* Verbatim Quote */}
+      <div className="relative pl-4 border-l-2 border-slate-300 text-xs text-slate-700 italic">
+        <span className="text-slate-700 font-serif text-sm mr-1">&ldquo;</span>
+        {report.verbatim_quote}
+        <span className="text-slate-700 font-serif text-sm ml-1">&rdquo;</span>
+      </div>
+
+      {/* Footer Details: Slang Tags & Sentiment Meter */}
+      <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        {/* Slang Keywords */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-slate-700 font-medium">탐지 키워드:</span>
+          {(report.slang_tags || []).length === 0 ? (
+            <span className="text-slate-600">없음</span>
+          ) : (
+            (report.slang_tags || []).map((tag, idx) => {
+              const tagStr = String(tag);
+              return (
+                <button
+                  type="button"
+                  key={`tag-${idx}-${tagStr}`}
+                  onClick={() => onTagClick(tagStr)}
+                  className="px-2.5 py-1 min-h-[36px] inline-flex items-center rounded-full bg-slate-100 text-slate-800 text-[11px] font-semibold border border-slate-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 transition cursor-pointer"
+                  title={`'${tagStr}' 키워드로 검색 필터링`}
+                >
+                  #{tagStr}
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        {/* Sentiment Meter */}
+        <div className="flex items-center gap-2 sm:self-end">
+          <span className="text-slate-700 font-medium">부정 감성 강도:</span>
+          <div
+            role="progressbar"
+            aria-valuenow={safeSentimentPct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`리포트 ${report.id} 부정 감성 강도`}
+            aria-valuetext={`${safeSentimentPct}%`}
+            className="w-24 bg-slate-200 rounded-full h-2 overflow-hidden border border-slate-300"
+          >
+            <div
+              className="bg-rose-600 h-2 rounded-full"
+              style={{ width: `${safeSentimentPct}%` }}
+            />
+          </div>
+          <span className="font-bold text-rose-700 font-mono">
+            {safeSentimentPct}%
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+});
+

@@ -1,86 +1,30 @@
 import rawTrendsData from '../data/ev_reliability_trends.json' with { type: 'json' };
 
-export type DefectCategoryKey =
-  | 'BATTERY_CHARGING'
-  | 'DRIVING_POWERTRAIN'
-  | 'SOFTWARE_ELECTRONICS'
-  | 'BUILD_QUALITY'
-  | 'SERVICE_REPAIR_COST'
-  | 'COLD_WEATHER';
+// ==========================================
+// 1. DOMAIN ENUMS & INTERFACES (from @/types/reliability)
+// ==========================================
 
-export type ModelYearVerdict = 'BUY_SAFE' | 'CAUTION' | 'AVOID';
+export type {
+  DefectCategoryKey,
+  ModelYearVerdict,
+  YearEvaluation,
+  ModelReliability,
+  BrandReliability,
+  DefectCategoryMetadata,
+  RepairCostMatrixItem,
+  ReliabilityTrendsDatabase,
+  EnrichedModelItem,
+} from '@/types/reliability';
 
-export interface YearEvaluation {
-  year: number;
-  verdict: ModelYearVerdict;
-  dsi_score: number; // 0 to 100 (higher = more severe defect profile)
-  incident_rate: number; // percentage of reported vehicles with major defects
-  primary_defect: string;
-  estimated_repair_cost: string;
-  chronic_symptoms: string[];
-  raw_quote: string;
-}
-
-export interface ModelReliability {
-  id: string;
-  name: string;
-  segment: string;
-  brand_id: string;
-  overall_grade: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F';
-  avg_dsi: number;
-  year_evaluations: YearEvaluation[];
-  top_category: DefectCategoryKey;
-}
-
-export interface BrandReliability {
-  id: string;
-  name_ko: string;
-  name_en: string;
-  country: string;
-  overall_dsi: number;
-  total_reports: number;
-  critical_issue_rate: number; // %
-  category_distribution: Record<DefectCategoryKey, { count: number; percentage: number }>;
-  models: ModelReliability[];
-}
-
-export interface DefectCategoryMetadata {
-  code: DefectCategoryKey;
-  label_ko: string;
-  description: string;
-  icon_name: string;
-  industry_share_pct: number;
-  avg_repair_cost_range: string;
-}
-
-export interface RepairCostMatrixItem {
-  component_name: string;
-  affected_systems: string;
-  avg_cost_krw: string;
-  standard_warranty: string;
-  high_risk_models: string[];
-  critical_warning: string;
-}
-
-export interface ReliabilityTrendsDatabase {
-  metadata: {
-    version: string;
-    updated_at: string;
-    total_records_analyzed: number;
-    brands_count: number;
-    models_count: number;
-    avg_industry_dsi: number;
-  };
-  categories: DefectCategoryMetadata[];
-  repair_cost_matrix: RepairCostMatrixItem[];
-  brands: BrandReliability[];
-}
-
-export interface EnrichedModelItem extends ModelReliability {
-  brand_name_ko: string;
-  brand_name_en: string;
-  brand_country: string;
-}
+import type {
+  DefectCategoryKey,
+  ModelYearVerdict,
+  YearEvaluation,
+  ModelReliability,
+  BrandReliability,
+  ReliabilityTrendsDatabase,
+  EnrichedModelItem,
+} from '@/types/reliability';
 
 /**
  * Fallback baseline in case JSON parsing encounters any anomaly.
@@ -246,7 +190,7 @@ export function getAllEnrichedModels(data?: ReliabilityTrendsDatabase): Enriched
 /**
  * Returns badge styling and text for a given ModelYearVerdict.
  */
-export function getVerdictBadgeInfo(verdict: ModelYearVerdict): {
+export function getVerdictBadgeInfo(verdict: ModelYearVerdict | string): {
   label: string;
   badgeClass: string;
   borderClass: string;
@@ -345,7 +289,7 @@ export function getDsiSeverityLevel(dsi: number): {
 /**
  * Returns styling for the overall grade badge.
  */
-export function getGradeBadgeStyle(grade: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F'): {
+export function getGradeBadgeStyle(grade: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F' | string): {
   bg: string;
   text: string;
   border: string;

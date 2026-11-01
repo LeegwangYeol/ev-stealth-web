@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, memo } from 'react';
 
 /**
  * GlobalNavListener encapsulates global event listeners for navigation interactions:
@@ -11,7 +11,7 @@ import { useEffect } from 'react';
  * All global event listeners registered via window.addEventListener are explicitly
  * cleaned up via window.removeEventListener on component unmount to prevent memory leaks.
  */
-export default function GlobalNavListener() {
+export const GlobalNavListener = memo(function GlobalNavListener() {
   useEffect(() => {
     // Ensure root navigation links and logo have clean focus-visible:ring-2 styles
     const header = document.querySelector('header');
@@ -74,18 +74,7 @@ export default function GlobalNavListener() {
     };
   }, []);
 
-  return (
-    <style
-      dangerouslySetInnerHTML={{
-        __html: `
-          header a[href="/"]:focus-visible,
-          header nav[data-testid="desktop-nav"] a:focus-visible {
-            outline: none !important;
-            box-shadow: 0 0 0 2px #0f172a, 0 0 0 4px #60a5fa !important;
-            border-radius: 0.5rem;
-          }
-        `,
-      }}
-    />
-  );
-}
+  return null;
+});
+
+export default GlobalNavListener;

@@ -34,6 +34,25 @@ class BaseCrawler(abc.ABC):
             self.client.warm_up_session(base_url)
             self._warmed_up = True
 
+    def clear_session(self) -> None:
+        """Reset session cookies and warm-up state."""
+        if hasattr(self.client, "clear_cookies"):
+            self.client.clear_cookies()
+        self._warmed_up = False
+
+    def close(self) -> None:
+        """Release HTTP client resources and close session."""
+        self.clear_session()
+        if hasattr(self.client, "close"):
+            self.client.close()
+
+    def __enter__(self) -> "BaseCrawler":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        self.close()
+        return False
+
     @abc.abstractmethod
     def parse_post_detail(
         self,
@@ -58,15 +77,24 @@ class BaseCrawler(abc.ABC):
         Includes safe try...except handling around parse_post_detail() so that
         corrupt HTML, broken DOMs, or unexpected markup do not crash the scrape loop.
         """
+        if not post_url or not isinstance(post_url, str) or not post_url.strip():
+            logger.warning(f"Invalid post_url provided to fetch_post: {post_url!r}")
+            return None
+
         base_url = kwargs.get("base_url")
         self.ensure_warm_up(base_url)
-        status, text, _ = self.client.get(post_url, referer=referer)
+        timeout = kwargs.get("timeout")
+        status, text, _ = self.client.get(post_url, referer=referer, timeout=timeout)
         if status != 200 or not text:
             logger.warning(f"Failed to fetch post: {post_url} (status: {status})")
             return None
 
         try:
-            return self.parse_post_detail(text, post_url, **kwargs)
+            detail = self.parse_post_detail(text, post_url, **kwargs)
+            if not isinstance(detail, dict):
+                logger.warning(f"parse_post_detail returned non-dict ({type(detail)}) for {post_url}")
+                return None
+            return detail
         except Exception as e:
             logger.warning(
                 f"Error parsing post detail for {post_url} on corrupt HTML: {e}"

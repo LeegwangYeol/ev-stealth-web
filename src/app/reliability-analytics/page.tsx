@@ -2,11 +2,28 @@ import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { getReliabilityTrendsData } from '@/lib/getReliabilityData';
 import ReliabilityDashboardClient from './ReliabilityDashboardClient';
+import JsonLd from '@/components/JsonLd';
 
 export const dynamic = 'force-static';
 
+const reliabilityJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI)",
+  "url": "https://ev-stealth-web.vercel.app/reliability-analytics",
+  "applicationCategory": "AnalyticsApplication",
+  "operatingSystem": "All",
+  "description":
+    "현대, 기아, 테슬라, BYD, 벤츠, BMW 등 9대 브랜드 22개 차종 89개 연식별 결함 심각도 지수(DSI), 고질병 통계, 중고차 구매 시 절대 피해야 할 연식 가이드 및 보증 외 수리비 매트릭스를 제공합니다.",
+  "provider": {
+    "@type": "Organization",
+    "name": "Global EV Hub",
+    "url": "https://ev-stealth-web.vercel.app",
+  },
+};
+
 export const metadata: Metadata = {
-  title: '전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI) | Global EV Hub',
+  title: '전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI)',
   description:
     '현대, 기아, 테슬라, BYD, 벤츠, BMW 등 9대 브랜드 22개 차종 89개 연식별 결함 심각도 지수(DSI), 고질병 통계, 중고차 구매 시 절대 피해야 할 연식 가이드 및 보증 외 수리비 매트릭스를 제공합니다.',
   keywords: [
@@ -20,13 +37,23 @@ export const metadata: Metadata = {
     '전기차 배터리 교체비용',
     '중고 전기차 피해야할 연식',
   ],
+  alternates: {
+    canonical: '/reliability-analytics',
+  },
   openGraph: {
     title: '전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI) | Global EV Hub',
     description:
       '9대 제조사 22개 모델 89개 연식의 실제 차주 제보 1,280건 심층 분석. 결함 심각도 지수(DSI), 연식별 위험 히트맵, 보증 외 수리비 매트릭스.',
+    url: '/reliability-analytics',
     type: 'website',
     locale: 'ko_KR',
     siteName: 'Global EV Hub',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: '전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI) | Global EV Hub',
+    description:
+      '9대 제조사 22개 모델 89개 연식의 실제 차주 제보 1,280건 심층 분석. 결함 심각도 지수(DSI), 연식별 위험 히트맵, 보증 외 수리비 매트릭스.',
   },
 };
 
@@ -35,6 +62,7 @@ export default function ReliabilityAnalyticsPage() {
 
   return (
     <div className="py-6 sm:py-8 space-y-6">
+      <JsonLd data={reliabilityJsonLd} />
       <Suspense
         fallback={
           <div

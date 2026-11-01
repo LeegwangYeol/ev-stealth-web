@@ -13,15 +13,28 @@ const __dirname = path.dirname(__filename);
 // Read getRecallData.ts and inject 'with { type: "json" }' into memory for testing
 let sourcePath = path.resolve(__dirname, '../src/lib/getRecallData.ts');
 let jsonImport = "import rawRecallData from '../src/data/ev_recall_database.json' with { type: 'json' };";
+let sanitizeImport = "import { sanitizeSafeUrl } from '../src/lib/sanitizeUrl.ts';";
+let typesImport = "from '../src/types/recall.ts';";
 if (!fs.existsSync(sourcePath)) {
   sourcePath = path.resolve(__dirname, '../ev-stealth-web/src/lib/getRecallData.ts');
   jsonImport = "import rawRecallData from '../ev-stealth-web/src/data/ev_recall_database.json' with { type: 'json' };";
+  sanitizeImport = "import { sanitizeSafeUrl } from '../ev-stealth-web/src/lib/sanitizeUrl.ts';";
+  typesImport = "from '../ev-stealth-web/src/types/recall.ts';";
 }
 const originalSource = fs.readFileSync(sourcePath, 'utf-8');
-const patchedSource = originalSource.replace(
-  /import rawRecallData from ['"].*?ev_recall_database\.json['"](?: with \{ type: ['"]json['"] \})?;/,
-  jsonImport
-);
+const patchedSource = originalSource
+  .replace(
+    /import rawRecallData from ['"].*?ev_recall_database\.json['"](?: with \{ type: ['"]json['"] \})?;/,
+    jsonImport
+  )
+  .replace(
+    /import\s*\{\s*sanitizeSafeUrl\s*\}\s*from\s*['"]\.\/sanitizeUrl['"];?/,
+    sanitizeImport
+  )
+  .replace(
+    /from\s*['"]@\/types\/recall['"];?/g,
+    typesImport
+  );
 
 // Write to a temporary TypeScript test fixture inside tests/ (not modifying src/!)
 const testFixturePath = path.resolve(__dirname, 'temp_getRecallData_test_fixture.ts');

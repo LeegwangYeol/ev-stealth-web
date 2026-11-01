@@ -43,6 +43,11 @@ for root_path in reversed(POSSIBLE_ROOTS):
 from crawlers.bobaedream import BobaeDreamCrawler
 from crawlers.dcinside import DCInsideCrawler
 from models.complaint import ComplaintRecord, RawPost
+try:
+    from models.defect_report import DefectReport
+except ImportError:
+    DefectReport = ComplaintRecord  # type: ignore
+
 from utils.http_client import SafeHttpClient
 from utils.json_writer import (
     DEFAULT_OUTPUT_PATH,
@@ -52,9 +57,12 @@ from utils.json_writer import (
 )
 
 try:
-    from filters.defect_filter import ContextualDefectFilter as DefectFilter
+    from filters.defect_classifier import DefectClassifier as DefectFilter
 except ImportError:
-    from filters.defect_filter import DefectFilter  # type: ignore
+    try:
+        from filters.defect_filter import ContextualDefectFilter as DefectFilter
+    except ImportError:
+        from filters.defect_filter import DefectFilter  # type: ignore
 
 logger = logging.getLogger("ScraperRunner")
 
@@ -285,20 +293,27 @@ class ScraperPipeline:
 
         return posts[:limit]
 
-    def harvest(self, source_choice: str, limit: int) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+    def harvest(self, source_choice: Any, limit: Any = 20) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
         """Harvest raw post dictionaries based on selected source mode."""
         valid_sources = {"all", "bobaedream", "dcinside"}
-        selected_source = source_choice.lower().strip() if source_choice else "all"
-        if selected_source not in valid_sources:
+        src_str = str(source_choice or "all").lower().strip()
+        if src_str not in valid_sources:
             logger.warning(f"Unknown source '{source_choice}', falling back to 'all'")
             selected_source = "all"
+        else:
+            selected_source = src_str
+
+        try:
+            clamped_limit = max(1, int(limit))
+        except (ValueError, TypeError):
+            clamped_limit = 20
 
         raw_posts: List[Dict[str, Any]] = []
         stats: Dict[str, int] = {"bobaedream": 0, "dcinside": 0}
 
         if selected_source in ("all", "bobaedream"):
             try:
-                bobae_posts = self.harvest_bobaedream(limit=limit)
+                bobae_posts = self.harvest_bobaedream(limit=clamped_limit)
                 raw_posts.extend(bobae_posts)
                 stats["bobaedream"] = len(bobae_posts)
             except Exception as e:
@@ -306,7 +321,7 @@ class ScraperPipeline:
 
         if selected_source in ("all", "dcinside"):
             try:
-                dc_posts = self.harvest_dcinside(limit=limit)
+                dc_posts = self.harvest_dcinside(limit=clamped_limit)
                 raw_posts.extend(dc_posts)
                 stats["dcinside"] = len(dc_posts)
             except Exception as e:
@@ -314,17 +329,29 @@ class ScraperPipeline:
 
         return raw_posts, stats
 
-    def filter_defects(self, raw_post_dicts: Iterable[Dict[str, Any]]) -> List[ComplaintRecord]:
+    def filter_defects(self, raw_post_dicts: Optional[Iterable[Any]]) -> List[ComplaintRecord]:
         """Classify raw post dictionaries through 4-stage DefectFilter."""
         defects: List[ComplaintRecord] = []
+        if not raw_post_dicts:
+            return defects
+
         for p_dict in raw_post_dicts:
+            if p_dict is None:
+                continue
             try:
                 raw_post = RawPost.from_dict(p_dict)
                 complaint = self.defect_filter.process_post(raw_post)
                 if complaint.is_authentic_defect:
                     defects.append(complaint)
             except Exception as e:
-                logger.warning(f"Failed to process post {p_dict.get('post_id', 'unknown')}: {e}")
+                post_id_val = "unknown"
+                if isinstance(p_dict, dict):
+                    post_id_val = str(p_dict.get("post_id") or p_dict.get("id") or "unknown")
+                elif hasattr(p_dict, "post_id"):
+                    post_id_val = str(getattr(p_dict, "post_id") or "unknown")
+                elif hasattr(p_dict, "id"):
+                    post_id_val = str(getattr(p_dict, "id") or "unknown")
+                logger.warning(f"Failed to process post {post_id_val}: {e}")
         return defects
 
     def run(
@@ -339,7 +366,10 @@ class ScraperPipeline:
     ) -> Dict[str, Any]:
         """Execute end-to-end harvest, filter, and report publishing pipeline."""
         configure_logging(verbose)
-        clamped_limit = max(1, limit)
+        try:
+            clamped_limit = max(1, int(limit))
+        except (ValueError, TypeError):
+            clamped_limit = 20
 
         logger.info(
             f"Starting scraper pipeline: sources={sources}, limit={clamped_limit}, "

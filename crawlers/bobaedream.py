@@ -5,6 +5,8 @@ article body extraction from bodyCont, dynamic AJAX comment extraction from comm
 and returns structured raw post dictionaries adhering to PROJECT.md § Interface Contracts.
 """
 
+from __future__ import annotations
+
 import datetime
 import logging
 import re
@@ -28,8 +30,42 @@ TARGET_BOARDS = {
 }
 
 
-def _normalize_iso_timestamp(raw_date_str: str) -> str:
+def extract_container_content(html_str: str, tag_name: str, class_name: str) -> str:
+    """
+    Extract the inner content of an HTML container by tracking balanced tag depth.
+    Resilient against nested tags of the same name and unclosed child tags.
+    """
+    if not html_str or not isinstance(html_str, str):
+        return ""
+    pattern = re.compile(
+        rf"<{tag_name}\b[^>]*class=[\"'][^\"']*\b{re.escape(class_name)}\b[^\"']*[\"'][^>]*>",
+        re.IGNORECASE,
+    )
+    match = pattern.search(html_str)
+    if not match:
+        return ""
+
+    start_idx = match.end()
+    depth = 1
+    tag_re = re.compile(rf"<(/?)({re.escape(tag_name)})\b[^>]*>", re.IGNORECASE)
+
+    for m in tag_re.finditer(html_str[start_idx:]):
+        is_closing = bool(m.group(1))
+        if is_closing:
+            depth -= 1
+            if depth == 0:
+                return html_str[start_idx : start_idx + m.start()]
+        else:
+            depth += 1
+
+    return html_str[start_idx:]
+
+
+def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
     """Normalize community timestamp into ISO-8601 string."""
+    if not raw_date_str or not isinstance(raw_date_str, str):
+        return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
     raw = raw_date_str.strip()
     if not raw:
         return datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -141,18 +177,35 @@ class BobaeDreamCrawler(BaseCrawler):
         """
         Extract post items from a BobaeDream board list view.
         Matches rows containing /view?code={board_code}&No={post_no}.
+        Resilient against single/double quotes, unquoted hrefs, and parameter order.
         """
+        if not html_content or not isinstance(html_content, str):
+            return []
+
         items: List[Dict[str, Any]] = []
         seen_nos = set()
 
-        # Regex targeting standard and best article list links
-        pattern = r'<a\s+[^>]*href="([^"]*view\?[^"]*code=([^"&]+)[^"]*No=(\d+)[^"]*)"[^>]*>(.*?)</a>'
-        matches = re.findall(pattern, html_content, re.IGNORECASE | re.DOTALL)
+        # Resilient link pattern matching view URLs with No= and code= in any order
+        link_pattern = re.compile(
+            r'<a\b[^>]*href=["\']?([^"\'\s>]*view\?[^"\'\s>]*)["\']?[^>]*>(.*?)</a>',
+            re.IGNORECASE | re.DOTALL,
+        )
 
-        for full_href, code, post_no, raw_title in matches:
+        for match in link_pattern.finditer(html_content):
+            full_href = match.group(1)
+            raw_title = match.group(2)
+
+            no_match = re.search(r"No=(\d+)", full_href, re.IGNORECASE)
+            if not no_match:
+                continue
+            post_no = no_match.group(1)
+
             if post_no in seen_nos:
                 continue
             seen_nos.add(post_no)
+
+            code_match = re.search(r"code=([^&\"'\s>]+)", full_href, re.IGNORECASE)
+            extracted_code = code_match.group(1) if code_match else board_code
 
             clean_title = clean_html_text(raw_title)
             # Filter out empty or notice (공지) titles
@@ -163,14 +216,14 @@ class BobaeDreamCrawler(BaseCrawler):
 
             items.append({
                 "post_id": post_no,
-                "board_code": code or board_code,
+                "board_code": extracted_code,
                 "url": full_url,
                 "title": clean_title,
             })
 
-        # Fallback regex if href parameters are ordered differently: No=123&code=...
+        # Fallback regex if href parameters were matched differently
         if not items:
-            alt_pattern = r'<a\s+[^>]*href="([^"]*view\?[^"]*No=(\d+)[^"]*code=([^"&]+)[^"]*)"[^>]*>(.*?)</a>'
+            alt_pattern = r'<a\s+[^>]*href=["\']([^"\']*view\?[^"\']*No=(\d+)[^"\']*code=([^"\'&]+)[^"\']*)["\'][^>]*>(.*?)</a>'
             alt_matches = re.findall(alt_pattern, html_content, re.IGNORECASE | re.DOTALL)
             for full_href, post_no, code, raw_title in alt_matches:
                 if post_no in seen_nos:
@@ -192,18 +245,18 @@ class BobaeDreamCrawler(BaseCrawler):
     def parse_comments_html(self, comment_html: str) -> List[str]:
         """Parse comment strings from comment_list.php HTML snippet or detail page HTML."""
         comments: List[str] = []
-        if not comment_html:
+        if not comment_html or not isinstance(comment_html, str):
             return comments
 
         # Pattern 1: <dd id="cmt_..."> or <dd class="...comment...">
-        comment_matches = re.findall(r'<dd[^>]*class="[^"]*comment[^"]*"[^>]*>(.*?)</dd>', comment_html, re.DOTALL | re.IGNORECASE)
+        comment_matches = re.findall(r'<dd[^>]*class=["\'][^"\']*comment[^"\']*["\'][^>]*>(.*?)</dd>', comment_html, re.DOTALL | re.IGNORECASE)
         if not comment_matches:
-            comment_matches = re.findall(r'<dd id="cmt_\d+"[^>]*>(.*?)</dd>', comment_html, re.DOTALL | re.IGNORECASE)
+            comment_matches = re.findall(r'<dd id=["\']cmt_\d+["\'][^>]*>(.*?)</dd>', comment_html, re.DOTALL | re.IGNORECASE)
         if not comment_matches:
             # Pattern 2: comment body container
-            comment_matches = re.findall(r'<div class="[^"]*comment_memo[^"]*"[^>]*>(.*?)</div>', comment_html, re.DOTALL | re.IGNORECASE)
+            comment_matches = re.findall(r'<div class=["\'][^"\']*comment_memo[^"\']*["\'][^>]*>(.*?)</div>', comment_html, re.DOTALL | re.IGNORECASE)
         if not comment_matches:
-            comment_matches = re.findall(r'<li[^>]*class="[^"]*comment[^"]*"[^>]*>(.*?)</li>', comment_html, re.DOTALL | re.IGNORECASE)
+            comment_matches = re.findall(r'<li[^>]*class=["\'][^"\']*comment[^"\']*["\'][^>]*>(.*?)</li>', comment_html, re.DOTALL | re.IGNORECASE)
 
         for c_html in comment_matches:
             cleaned = clean_html_text(c_html)
@@ -222,6 +275,9 @@ class BobaeDreamCrawler(BaseCrawler):
         Example in page:
           $("#cmt_list").load("/board_renew/bulletin/comment_list.php?tb=uni_cmt_2609&code=national&No=2415510&Answer=78...", ...)
         """
+        if not html_content or not isinstance(html_content, str):
+            return None
+
         # Match load("/board_renew/bulletin/comment_list.php?...")
         match = re.search(
             r'load\(["\'](/board_renew/bulletin/comment_list\.php\?[^"\']+)["\']',
@@ -246,6 +302,8 @@ class BobaeDreamCrawler(BaseCrawler):
 
     def fetch_ajax_comments(self, ajax_url: str, referer: str) -> List[str]:
         """Fetch and parse dynamic comments from comment_list.php."""
+        if not ajax_url or not isinstance(ajax_url, str):
+            return []
         try:
             status, text, _ = self.client.get(
                 ajax_url,
@@ -280,30 +338,43 @@ class BobaeDreamCrawler(BaseCrawler):
         }
         """
         # 1. Post ID
-        if not post_id:
-            no_match = re.search(r"No=(\d+)", post_url, re.IGNORECASE)
+        if not post_id and post_url:
+            no_match = re.search(r"No=(\d+)", str(post_url), re.IGNORECASE)
             post_id = no_match.group(1) if no_match else ""
+
+        if not html_content or not isinstance(html_content, str) or not html_content.strip():
+            return {
+                "platform": "bobaedream",
+                "post_id": str(post_id or ""),
+                "url": post_url or "",
+                "title": "",
+                "content": "",
+                "comments": [],
+                "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "author": "",
+                "board_code": board_code,
+            }
 
         # 2. Title
         title = ""
-        title_match = re.search(r'<strong class="title"[^>]*>(.*?)</strong>', html_content, re.DOTALL | re.IGNORECASE)
+        title_match = re.search(r'<strong class=["\']title["\'][^>]*>(.*?)</strong>', html_content, re.DOTALL | re.IGNORECASE)
         if not title_match:
-            title_match = re.search(r'<dt[^>]*class="tit"[^>]*>(.*?)</dt>', html_content, re.DOTALL | re.IGNORECASE)
+            title_match = re.search(r'<dt[^>]*class=["\']tit["\'][^>]*>(.*?)</dt>', html_content, re.DOTALL | re.IGNORECASE)
         if not title_match:
-            title_match = re.search(r'<meta property="og:title" content="([^"]*)"', html_content, re.IGNORECASE)
+            title_match = re.search(r'<meta property=["\']og:title["\'] content=["\']([^"\']*)["\']', html_content, re.IGNORECASE)
         if title_match:
             title = clean_html_text(title_match.group(1))
 
         # 3. Author & Date
         author = ""
-        author_match = re.search(r'<span class="author"[^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
+        author_match = re.search(r'<span class=["\']author["\'][^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
         if not author_match:
-            author_match = re.search(r'<span class="userNick"[^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
+            author_match = re.search(r'<span class=["\']userNick["\'][^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
         if author_match:
             author = clean_html_text(author_match.group(1))
 
         raw_date = ""
-        date_match = re.search(r'<td class="date"[^>]*>(.*?)</td>', html_content, re.DOTALL | re.IGNORECASE)
+        date_match = re.search(r'<td class=["\']date["\'][^>]*>(.*?)</td>', html_content, re.DOTALL | re.IGNORECASE)
         if date_match:
             raw_date = clean_html_text(date_match.group(1))
         if not raw_date:
@@ -313,24 +384,26 @@ class BobaeDreamCrawler(BaseCrawler):
 
         created_at_iso = _normalize_iso_timestamp(raw_date)
 
-        # 4. Article body from bodyCont
+        # 4. Article body from bodyCont (uses balanced container parser to preserve nested divs)
         content = ""
-        # Primary container: <div class="bodyCont" ...> ... </div> <!-- //bodyCont
-        body_match = re.search(r'<div class="bodyCont"[^>]*>(.*?)</div>\s*<!--\s*//bodyCont', html_content, re.DOTALL | re.IGNORECASE)
-        if not body_match:
-            # Secondary: un-commented bodyCont
-            body_match = re.search(r'<div class="bodyCont"[^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
-        if not body_match:
-            body_match = re.search(r'<div id="print_area"[^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
-        if not body_match:
-            body_match = re.search(r'<div class="content01"[^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
+        body_extracted = extract_container_content(html_content, "div", "bodyCont")
+        if body_extracted:
+            content = clean_html_text(body_extracted)
 
-        if body_match:
-            content = clean_html_text(body_match.group(1))
+        if not content:
+            # Fallback 1: check with comment anchor
+            body_match = re.search(r'<div class=["\']bodyCont["\'][^>]*>(.*?)</div>\s*<!--\s*//bodyCont', html_content, re.DOTALL | re.IGNORECASE)
+            if not body_match:
+                body_match = re.search(r'<div class=["\']bodyCont["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
+            if not body_match:
+                body_match = re.search(r'<div id=["\']print_area["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
+            if not body_match:
+                body_match = re.search(r'<div class=["\']content01["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
+            if body_match:
+                content = clean_html_text(body_match.group(1))
 
         # 5. Comments (Static + Dynamic AJAX)
         comments: List[str] = []
-        # First try dynamic AJAX comment URL extraction
         ajax_cmt_url = self.extract_ajax_comment_url(html_content)
         if ajax_cmt_url:
             comments = self.fetch_ajax_comments(ajax_cmt_url, referer=post_url)
@@ -341,8 +414,8 @@ class BobaeDreamCrawler(BaseCrawler):
 
         return {
             "platform": "bobaedream",
-            "post_id": str(post_id),
-            "url": post_url,
+            "post_id": str(post_id or ""),
+            "url": post_url or "",
             "title": title,
             "content": content,
             "comments": comments,
@@ -360,10 +433,15 @@ class BobaeDreamCrawler(BaseCrawler):
         **kwargs: Any,
     ) -> Optional[Dict[str, Any]]:
         """Fetch and parse a single post by URL."""
+        if not post_url or not isinstance(post_url, str) or not post_url.strip():
+            logger.warning(f"Invalid BobaeDream post_url provided: {post_url!r}")
+            return None
+
         base_url = kwargs.get("base_url")
         self.ensure_warm_up(base_url)
         eff_referer = referer or f"{BOBAE_BASE_URL}/"
-        status, text, _ = self.client.get(post_url, referer=eff_referer)
+        timeout = kwargs.get("timeout")
+        status, text, _ = self.client.get(post_url, referer=eff_referer, timeout=timeout)
         if status != 200 or not text:
             logger.warning(f"Failed to fetch BobaeDream post: {post_url} (status: {status})")
             return None
@@ -464,3 +542,7 @@ class BobaeDreamCrawler(BaseCrawler):
                 return all_posts[:limit]
 
         return all_posts
+
+
+# Standard alias matching alternate naming conventions
+BobaedreamCrawler = BobaeDreamCrawler

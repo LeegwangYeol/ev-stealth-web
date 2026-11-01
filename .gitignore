@@ -43,3 +43,6 @@ __pycache__/
 *$py.class
 .pytest_cache/
 .agents/
+*.lock
+*.corrupt*
+*.corrupted

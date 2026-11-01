@@ -85,6 +85,8 @@ class AlertThresholdConfig:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> AlertThresholdConfig:
+        if not isinstance(data, dict):
+            data = {}
         return cls(
             min_percent=_safe_float(data.get("min_percent", 0.0)),
             max_percent=_safe_float(data.get("max_percent", 0.0)),
@@ -353,6 +355,9 @@ class PopularModelEntry:
     def from_dict(cls, data: Dict[str, Any]) -> PopularModelEntry:
         if not isinstance(data, dict):
             data = {}
+        reg_samples = data.get("regional_subsidy_samples")
+        if not isinstance(reg_samples, dict):
+            reg_samples = {}
         return cls(
             model_id=str(data.get("model_id") or ""),
             name_ko=str(data.get("name_ko") or ""),
@@ -363,7 +368,7 @@ class PopularModelEntry:
             base_price_krw=_safe_int(data.get("base_price_krw", 0)),
             price_subsidy_ratio=_safe_float(data.get("price_subsidy_ratio", 1.0), default=1.0),
             national_subsidy_krw=_safe_int(data.get("national_subsidy_krw", 0)),
-            regional_subsidy_samples=data.get("regional_subsidy_samples") or {},
+            regional_subsidy_samples=reg_samples,
         )
 
 
@@ -472,15 +477,16 @@ class NationwideSummary:
         if not isinstance(data, dict):
             data = {}
         cat_totals = {}
-        cat_totals_raw = data.get("category_totals") or {}
-        if isinstance(cat_totals_raw, dict):
-            for k, v in cat_totals_raw.items():
-                if isinstance(v, CategoryMetrics):
-                    cat_totals[k] = v
-                elif isinstance(v, dict):
-                    cat_totals[k] = CategoryMetrics.from_dict(v)
-                else:
-                    cat_totals[k] = v
+        cat_totals_raw = data.get("category_totals")
+        if not isinstance(cat_totals_raw, dict):
+            cat_totals_raw = {}
+        for k, v in cat_totals_raw.items():
+            if isinstance(v, CategoryMetrics):
+                cat_totals[k] = v
+            elif isinstance(v, dict):
+                cat_totals[k] = CategoryMetrics.from_dict(v)
+            else:
+                cat_totals[k] = v
 
         alert_region_counts = data.get("alert_region_counts")
         if not isinstance(alert_region_counts, dict):
@@ -583,21 +589,27 @@ class SubsidyPayload:
         ns_dict = data.get("nationwide_summary")
         summary = NationwideSummary.from_dict(ns_dict if isinstance(ns_dict, dict) else {})
 
-        regions_raw = data.get("regions") or []
+        regions_raw = data.get("regions")
+        if not isinstance(regions_raw, (list, tuple)):
+            regions_raw = []
         regions = [
             RegionRecord.from_dict(r) if isinstance(r, dict) else r
             for r in regions_raw
             if isinstance(r, (dict, RegionRecord))
         ]
 
-        models_raw = data.get("popular_models_matrix") or []
+        models_raw = data.get("popular_models_matrix")
+        if not isinstance(models_raw, (list, tuple)):
+            models_raw = []
         models = [
             PopularModelEntry.from_dict(m) if isinstance(m, dict) else m
             for m in models_raw
             if isinstance(m, (dict, PopularModelEntry))
         ]
 
-        history_raw = data.get("historical_depletion_trajectory") or []
+        history_raw = data.get("historical_depletion_trajectory")
+        if not isinstance(history_raw, (list, tuple)):
+            history_raw = []
         history = [
             HistoricalTrajectoryPoint.from_dict(h) if isinstance(h, dict) else h
             for h in history_raw

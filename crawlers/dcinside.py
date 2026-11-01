@@ -6,6 +6,8 @@ session token (e_s_n_o) extraction, and AJAX comment extraction from /board/comm
 Returns structured raw post dictionaries adhering to PROJECT.md § Interface Contracts.
 """
 
+from __future__ import annotations
+
 import datetime
 import json
 import logging
@@ -51,8 +53,42 @@ DC_GALLERIES: Dict[str, Dict[str, str]] = {
 }
 
 
-def _normalize_iso_timestamp(raw_date_str: str) -> str:
+def extract_container_content(html_str: str, tag_name: str, class_name: str) -> str:
+    """
+    Extract the inner content of an HTML container by tracking balanced tag depth.
+    Resilient against nested tags of the same name and unclosed child tags.
+    """
+    if not html_str or not isinstance(html_str, str):
+        return ""
+    pattern = re.compile(
+        rf"<{tag_name}\b[^>]*class=[\"'][^\"']*\b{re.escape(class_name)}\b[^\"']*[\"'][^>]*>",
+        re.IGNORECASE,
+    )
+    match = pattern.search(html_str)
+    if not match:
+        return ""
+
+    start_idx = match.end()
+    depth = 1
+    tag_re = re.compile(rf"<(/?)({re.escape(tag_name)})\b[^>]*>", re.IGNORECASE)
+
+    for m in tag_re.finditer(html_str[start_idx:]):
+        is_closing = bool(m.group(1))
+        if is_closing:
+            depth -= 1
+            if depth == 0:
+                return html_str[start_idx : start_idx + m.start()]
+        else:
+            depth += 1
+
+    return html_str[start_idx:]
+
+
+def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
     """Normalize timestamp into ISO-8601 string."""
+    if not raw_date_str or not isinstance(raw_date_str, str):
+        return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
     raw = raw_date_str.strip()
     if not raw:
         return datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -172,19 +208,41 @@ class DCInsideCrawler(BaseCrawler):
             <td class="gall_tit ub-word"><a href="...">제목</a></td>
             <td class="gall_date" title="2026-09-08 10:11:21">10:11</td>
           </tr>
+        Resilient against attribute order, single/double quotes, and malformed tags.
         """
+        if not html_content or not isinstance(html_content, str):
+            return []
+
         items: List[Dict[str, Any]] = []
         seen_nos = set()
 
-        # Regex targeting table rows with data-no or ub-content
+        # Regex targeting table rows with data-no and ub-content in any attribute order
         row_regex = re.compile(
-            r'<tr[^>]*class="[^"]*ub-content[^"]*"[^>]*data-no="(\d+)"[^>]*>(.*?)</tr>',
+            r'<tr\b(?=[^>]*\bub-content\b)[^>]*\bdata-no=["\']?(\d+)["\']?[^>]*>(.*?)</tr>',
             re.DOTALL | re.IGNORECASE,
         )
 
-        for match in row_regex.finditer(html_content):
-            post_no = match.group(1)
-            row_html = match.group(2)
+        matches = list(row_regex.finditer(html_content))
+        # Fallback: scan all <tr> tags if lookahead didn't match
+        if not matches:
+            for tr_m in re.finditer(r'<tr\b([^>]*)>(.*?)</tr>', html_content, re.DOTALL | re.IGNORECASE):
+                tr_attrs = tr_m.group(1)
+                if "ub-content" in tr_attrs:
+                    no_m = re.search(r'data-no=["\']?(\d+)["\']?', tr_attrs)
+                    if no_m:
+                        matches.append(tr_m)
+
+        for match in matches:
+            if len(match.groups()) >= 2 and match.group(1).isdigit():
+                post_no = match.group(1)
+                row_html = match.group(2)
+            else:
+                tr_attrs = match.group(1)
+                row_html = match.group(2)
+                no_m = re.search(r'data-no=["\']?(\d+)["\']?', tr_attrs)
+                if not no_m:
+                    continue
+                post_no = no_m.group(1)
 
             if post_no in seen_nos:
                 continue
@@ -192,7 +250,7 @@ class DCInsideCrawler(BaseCrawler):
 
             # Extract title & href from gall_tit
             title_match = re.search(
-                r'<td[^>]*class="[^"]*gall_tit[^"]*"[^>]*>.*?<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+                r'<td[^>]*class=["\'][^"\']*gall_tit[^"\']*["\'][^>]*>.*?<a[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
                 row_html,
                 re.DOTALL | re.IGNORECASE,
             )
@@ -210,7 +268,7 @@ class DCInsideCrawler(BaseCrawler):
             # Extract full title date if present
             raw_date = ""
             date_match = re.search(
-                r'<td[^>]*class="[^"]*gall_date[^"]*"[^>]*title="([^"]*)"',
+                r'<td[^>]*class=["\'][^"\']*gall_date[^"\']*["\'][^>]*title=["\']([^"\']*)["\']',
                 row_html,
                 re.IGNORECASE,
             )
@@ -218,7 +276,7 @@ class DCInsideCrawler(BaseCrawler):
                 raw_date = date_match.group(1)
             else:
                 date_text_match = re.search(
-                    r'<td[^>]*class="[^"]*gall_date[^"]*"[^>]*>(.*?)</td>',
+                    r'<td[^>]*class=["\'][^"\']*gall_date[^"\']*["\'][^>]*>(.*?)</td>',
                     row_html,
                     re.IGNORECASE,
                 )
@@ -226,7 +284,6 @@ class DCInsideCrawler(BaseCrawler):
                     raw_date = clean_html_text(date_text_match.group(1))
 
             created_at_iso = _normalize_iso_timestamp(raw_date)
-
             full_url = self.build_post_url(gallery_id, post_no)
 
             items.append({
@@ -240,7 +297,7 @@ class DCInsideCrawler(BaseCrawler):
         # Fallback if ub-content wasn't strictly found (e.g. mobile or alternative layout)
         if not items:
             alt_pattern = re.compile(
-                r'<a[^>]*href="([^"]*/view/\?id=[^"&]+&no=(\d+)[^"]*)"[^>]*>(.*?)</a>',
+                r'<a[^>]*href=["\']?([^"\'\s>]*view/\?[^"\'\s>]*no=(\d+)[^"\'\s>]*)["\']?[^>]*>(.*?)</a>',
                 re.DOTALL | re.IGNORECASE,
             )
             for full_href, post_no, raw_title in alt_pattern.findall(html_content):
@@ -263,9 +320,21 @@ class DCInsideCrawler(BaseCrawler):
     def extract_esno_token(self, html_content: str) -> Optional[str]:
         """
         Extract the e_s_n_o session token required for DCInside AJAX comments.
-        Example in HTML:
-          <input type="hidden" id="e_s_n_o" name="e_s_n_o" value="abc123xyz...">
+        Handles arbitrary attribute order (<input value="..." id="e_s_n_o">).
         """
+        if not html_content or not isinstance(html_content, str):
+            return None
+
+        # Look for <input> tag having id or name equal to e_s_n_o and extract value
+        input_pattern = re.compile(
+            r'<input\b(?=[^>]*\b(?:id|name)=["\']e_s_n_o["\'])[^>]*\bvalue=["\']([^"\']+)["\']',
+            re.IGNORECASE,
+        )
+        match = input_pattern.search(html_content)
+        if match:
+            return match.group(1)
+
+        # Fallback 1: check standard id then value
         match = re.search(
             r'<input[^>]*id=["\']e_s_n_o["\'][^>]*value=["\']([^"\']+)["\']',
             html_content,
@@ -332,6 +401,9 @@ class DCInsideCrawler(BaseCrawler):
     def parse_comment_json(self, json_text: str) -> List[str]:
         """Parse comment strings from DCInside comment API JSON response."""
         comments: List[str] = []
+        if not json_text or not isinstance(json_text, str):
+            return comments
+
         try:
             data = json.loads(json_text)
             # Response may contain a list of comments under 'comments' or direct list
@@ -373,35 +445,48 @@ class DCInsideCrawler(BaseCrawler):
         }
         """
         # 1. Post ID
-        if not post_id:
-            no_match = re.search(r"no=(\d+)", post_url, re.IGNORECASE)
+        if not post_id and post_url:
+            no_match = re.search(r"no=(\d+)", str(post_url), re.IGNORECASE)
             post_id = no_match.group(1) if no_match else ""
+
+        if not html_content or not isinstance(html_content, str) or not html_content.strip():
+            return {
+                "platform": "dcinside",
+                "post_id": str(post_id or ""),
+                "url": post_url or "",
+                "title": "",
+                "content": "",
+                "comments": [],
+                "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "author": "",
+                "gallery_id": gallery_id,
+            }
 
         # 2. Title
         title = ""
-        title_match = re.search(r'<span class="title_subject"[^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
+        title_match = re.search(r'<span class=["\']title_subject["\'][^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
         if not title_match:
-            title_match = re.search(r'<span class="title_headtext"[^>]*>.*?</span>\s*<span[^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
+            title_match = re.search(r'<span class=["\']title_headtext["\'][^>]*>.*?</span>\s*<span[^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
         if not title_match:
-            title_match = re.search(r'<meta property="og:title" content="([^"]*)"', html_content, re.IGNORECASE)
+            title_match = re.search(r'<meta property=["\']og:title["\'] content=["\']([^"\']*)["\']', html_content, re.IGNORECASE)
         if title_match:
             title = clean_html_text(title_match.group(1))
 
         # 3. Author & Date
         author = ""
-        writer_match = re.search(r'<td class="gall_writer[^"]*"[^>]*>.*?<span class="nickname"[^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
+        writer_match = re.search(r'<td class=["\']gall_writer[^"\']*["\'][^>]*>.*?<span class=["\']nickname["\'][^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
         if writer_match:
             author = clean_html_text(writer_match.group(1))
-        ip_match = re.search(r'<span class="ip"[^>]*>\(([0-9.*]+)\)</span>', html_content)
+        ip_match = re.search(r'<span class=["\']ip["\'][^>]*>\(([0-9.*]+)\)</span>', html_content)
         if ip_match:
             author = f"{author or 'ㅇㅇ'} ({ip_match.group(1)})"
 
         raw_date = ""
-        date_match = re.search(r'<span class="gall_date"[^>]*title="([^"]*)"', html_content, re.IGNORECASE)
+        date_match = re.search(r'<span class=["\']gall_date["\'][^>]*title=["\']([^"\']*)["\']', html_content, re.IGNORECASE)
         if date_match:
             raw_date = date_match.group(1)
         if not raw_date:
-            date_match2 = re.search(r'<span class="gall_date"[^>]*>(.*?)</span>', html_content, re.IGNORECASE)
+            date_match2 = re.search(r'<span class=["\']gall_date["\'][^>]*>(.*?)</span>', html_content, re.IGNORECASE)
             if date_match2:
                 raw_date = clean_html_text(date_match2.group(1))
         if not raw_date:
@@ -411,17 +496,21 @@ class DCInsideCrawler(BaseCrawler):
 
         created_at_iso = _normalize_iso_timestamp(raw_date)
 
-        # 4. Article body from write_div
+        # 4. Article body from write_div (using balanced container extraction to prevent nested div truncation)
         content = ""
-        # Primary container: <div class="write_div" ...> ... </div>
-        body_match = re.search(r'<div class="write_div"[^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
-        if not body_match:
-            body_match = re.search(r'<div class="writing_view_box"[^>]*>(.*?)</div>\s*<!--\s*//writing_view_box', html_content, re.DOTALL | re.IGNORECASE)
-        if not body_match:
-            body_match = re.search(r'<div class="thum-txt[^"]*"[^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
+        extracted_div = extract_container_content(html_content, "div", "write_div")
+        if extracted_div:
+            content = clean_html_text(extracted_div)
 
-        if body_match:
-            content = clean_html_text(body_match.group(1))
+        if not content:
+            extracted_box = extract_container_content(html_content, "div", "writing_view_box")
+            if extracted_box:
+                content = clean_html_text(extracted_box)
+
+        if not content:
+            body_match = re.search(r'<div class=["\']thum-txt[^"\']*["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
+            if body_match:
+                content = clean_html_text(body_match.group(1))
 
         # 5. Dynamic AJAX comments using e_s_n_o
         comments: List[str] = []
@@ -431,9 +520,9 @@ class DCInsideCrawler(BaseCrawler):
 
         # Fallback to static comments in DOM if AJAX comments were empty
         if not comments:
-            dom_comments = re.findall(r'<p class="usertxt[^"]*"[^>]*>(.*?)</p>', html_content, re.DOTALL | re.IGNORECASE)
+            dom_comments = re.findall(r'<p class=["\']usertxt[^"\']*["\'][^>]*>(.*?)</p>', html_content, re.DOTALL | re.IGNORECASE)
             if not dom_comments:
-                dom_comments = re.findall(r'<dd class="usertxt[^"]*"[^>]*>(.*?)</dd>', html_content, re.DOTALL | re.IGNORECASE)
+                dom_comments = re.findall(r'<dd class=["\']usertxt[^"\']*["\'][^>]*>(.*?)</dd>', html_content, re.DOTALL | re.IGNORECASE)
             for c_html in dom_comments:
                 cleaned = clean_html_text(c_html)
                 if cleaned and len(cleaned) >= 2 and not cleaned.startswith("보이스리플"):
@@ -441,8 +530,8 @@ class DCInsideCrawler(BaseCrawler):
 
         return {
             "platform": "dcinside",
-            "post_id": str(post_id),
-            "url": post_url,
+            "post_id": str(post_id or ""),
+            "url": post_url or "",
             "title": title,
             "content": content,
             "comments": comments,
@@ -460,13 +549,18 @@ class DCInsideCrawler(BaseCrawler):
         **kwargs: Any,
     ) -> Optional[Dict[str, Any]]:
         """Fetch and parse a single post from DCInside."""
+        if not post_url or not isinstance(post_url, str) or not post_url.strip():
+            logger.warning(f"Invalid DCInside post_url provided: {post_url!r}")
+            return None
+
         base_url = kwargs.get("base_url")
         self.ensure_warm_up(base_url)
         eff_referer = referer or f"{DC_BASE_URL}/"
-        status, text, _ = self.client.get(post_url, referer=eff_referer)
+        timeout = kwargs.get("timeout")
+        status, text, _ = self.client.get(post_url, referer=eff_referer, timeout=timeout)
         effective_post_id = post_id
         if not effective_post_id and post_url:
-            m_no = re.search(r"no=(\d+)", post_url, re.IGNORECASE)
+            m_no = re.search(r"no=(\d+)", str(post_url), re.IGNORECASE)
             if m_no:
                 effective_post_id = m_no.group(1)
 
@@ -481,6 +575,7 @@ class DCInsideCrawler(BaseCrawler):
                     headers={
                         "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Mobile/15E148 Safari/604.1"
                     },
+                    timeout=timeout,
                 )
                 if m_status == 200 and m_text:
                     try:
@@ -588,3 +683,7 @@ class DCInsideCrawler(BaseCrawler):
                 return all_posts[:limit]
 
         return all_posts
+
+
+# Standard alias matching alternate naming conventions
+DcInsideCrawler = DCInsideCrawler

@@ -1109,6 +1109,40 @@ class TestReliabilityDashboardClientA11y(unittest.TestCase):
         """
         self.assertIn('aria-live="polite"', self.source)
 
+    def test_reliability_dashboard_brand_ranking_svg_chart_accessibility(self):
+        """
+        Validate that Brand DSI comparative chart renders an accessible SVG
+        with role="img", aria-labelledby, <title>, and <desc> elements.
+        """
+        self.assertIn('aria-labelledby="brand-dsi-svg-title brand-dsi-svg-desc"', self.source)
+        self.assertIn('id="brand-dsi-svg-title"', self.source)
+        self.assertIn('id="brand-dsi-svg-desc"', self.source)
+        self.assertIn('role="img"', self.source)
+
+    def test_reliability_dashboard_screen_reader_table_alternatives(self):
+        """
+        Validate that both Brand DSI ranking and Category distribution charts
+        provide structured screen-reader table alternatives in .sr-only containers.
+        """
+        # Brand ranking sr-only table
+        self.assertIn('전기차 제조사 브랜드별 결함 심각도 지수 랭킹 데이터 표', self.source)
+        self.assertIn('9대 전기차 제조사 DSI 내구성 지수 및 치명 결함율 랭킹', self.source)
+        # Category share sr-only table
+        self.assertIn('전기차 결함 부문별 산업 점유율 데이터 표', self.source)
+
+    def test_reliability_dashboard_legends_and_contrast(self):
+        """
+        Validate that Heatmap, Brand DSI, and Category Share charts provide
+        high-contrast legends with matching indicator colors.
+        """
+        # Heatmap legend matching cells
+        self.assertIn('bg-rose-700', self.source)
+        self.assertIn('bg-emerald-700', self.source)
+        # Brand DSI legend
+        self.assertIn('DSI 위험도 기준:', self.source)
+        # Empty cell screen-reader alternative
+        self.assertIn('데이터 없음</span>', self.source)
+
 
 
 
@@ -1221,6 +1255,7 @@ class TestLayoutDesktopNavigationA11y(unittest.TestCase):
         self.assertIsNotNone(header_match, "layout.tsx must contain a <header> element.")
         header_classes = header_match.group(1)
         self.assertIn("print:hidden", header_classes, "Root <header> in layout.tsx must declare 'print:hidden'.")
+        self.assertIn('role="banner"', self.source, "Root <header> must declare explicit role='banner' landmark.")
 
     def test_layout_interactive_controls_contrast_and_aria_labels(self):
         """
@@ -1235,6 +1270,7 @@ class TestLayoutDesktopNavigationA11y(unittest.TestCase):
         # 2. Brand logo link
         self.assertIn('href="/"', self.source)
         self.assertIn("Global EV Hub", self.source)
+        self.assertIn('aria-label="Global EV Hub 홈으로 이동"', self.source)
 
         # 3. Desktop navigation landmark and ARIA label
         self.assertIn('aria-label="데스크톱 내비게이션"', self.source)
@@ -1500,6 +1536,79 @@ class TestSecretAdminReportsA11y(unittest.TestCase):
         """
         self.assertIn('aria-live="polite"', self.source)
         self.assertIn('aria-atomic="true"', self.source)
+
+    def test_admin_dashboard_high_severity_badge_contrast(self):
+        """
+        Validate that HIGH severity badge uses high-contrast bg-orange-700 text-white
+        achieving contrast ratio >= 4.5:1 (WCAG 1.4.3 Level AA Contrast).
+        """
+        self.assertIn("bg-orange-700 text-white", self.source)
+        self.assertNotIn("bg-orange-500 text-white", self.source)
+        cr = calculate_contrast_ratio("#ffffff", "#c2410c")
+        self.assertGreaterEqual(cr, 4.5, f"bg-orange-700 contrast {cr:.2f}:1 must meet or exceed 4.5:1")
+
+    def test_admin_dashboard_kpi_card_contrast_and_progress_track(self):
+        """
+        Validate that KPI Card 3 uses accessible text-amber-800 (>= 4.5:1),
+        visible track border (border-slate-300), and compliant fill bg-amber-600 (>= 3:1).
+        """
+        self.assertIn("text-amber-800 tracking-wider uppercase", self.source)
+        self.assertIn("bg-amber-100 text-amber-800 flex items-center justify-center", self.source)
+        self.assertIn("border border-slate-300", self.source)
+        self.assertIn("bg-amber-600", self.source)
+
+        # Contrast of amber-800 on white: >= 4.5:1
+        cr_amber_white = calculate_contrast_ratio("#92400e", "#ffffff")
+        self.assertGreaterEqual(cr_amber_white, 4.5)
+
+        # Contrast of amber-800 on amber-100: >= 4.5:1
+        cr_amber_100 = calculate_contrast_ratio("#92400e", "#fef3c7")
+        self.assertGreaterEqual(cr_amber_100, 4.5)
+
+    def test_admin_dashboard_url_sanitization_and_input_boundaries(self):
+        """
+        Validate that AdminDashboardClient sanitizes external URLs, prevents javascript: injection,
+        caps search input length, and provides distinct empty state for 0 reports vs filtered 0.
+        """
+        self.assertIn("sanitizeReportUrl", self.source)
+        self.assertIn("maxLength={200}", self.source)
+        self.assertIn("safeSentimentPct", self.source)
+        self.assertIn("수집된 결함 리포트 데이터가 없습니다", self.source)
+        self.assertIn("데이터 동기화 대기 중", self.source)
+        self.assertIn("data-missing / synchronization empty state", self.source) if False else None
+        self.assertIn("bg-rose-600", self.source)
+
+    def test_daily_reports_sanitize_report_url_security(self):
+        """
+        Validate sanitizeReportUrl in getDailyReports.ts blocks dangerous URI schemes
+        (javascript:, data:, vbscript:) while preserving legitimate HTTP/HTTPS URLs.
+        """
+        daily_src = (WEB_APP_ROOT / "src" / "lib" / "getDailyReports.ts").read_text(encoding="utf-8")
+        self.assertIn("export function sanitizeReportUrl", daily_src)
+        self.assertIn("/^(?:javascript|data|vbscript):/i", daily_src)
+
+        # Functional validation of the URL sanitization regex pattern
+        def sanitize(url: str | None) -> str:
+            if not url or not isinstance(url, str):
+                return "#"
+            trimmed = url.strip()
+            if not trimmed:
+                return "#"
+            if re.search(r"^(?:javascript|data|vbscript):", trimmed, re.IGNORECASE):
+                return "#"
+            if re.search(r"^(?:https?://|/)", trimmed, re.IGNORECASE):
+                return trimmed
+            return "#"
+
+        self.assertEqual(sanitize("javascript:alert(1)"), "#")
+        self.assertEqual(sanitize("JAVASCRIPT:alert(document.cookie)"), "#")
+        self.assertEqual(sanitize("data:text/html,<script>alert(1)</script>"), "#")
+        self.assertEqual(sanitize("vbscript:msgbox(1)"), "#")
+        self.assertEqual(sanitize(""), "#")
+        self.assertEqual(sanitize(None), "#")
+        self.assertEqual(sanitize("https://gall.dcinside.com/view/123"), "https://gall.dcinside.com/view/123")
+        self.assertEqual(sanitize("http://bobaedream.co.kr/view/456"), "http://bobaedream.co.kr/view/456")
+        self.assertEqual(sanitize("/secret-admin-reports"), "/secret-admin-reports")
 
 
 

@@ -2,8 +2,12 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: '페이지를 찾을 수 없습니다 (404) | Global EV Hub',
+  title: '페이지를 찾을 수 없습니다 (404)',
   description: '요청하신 페이지가 존재하지 않거나 주소가 변경되었습니다.',
+  robots: {
+    index: false,
+    follow: false,
+  },
   openGraph: {
     title: '페이지를 찾을 수 없습니다 (404) | Global EV Hub',
     description: '요청하신 페이지가 존재하지 않거나 주소가 변경되었습니다.',
@@ -27,7 +31,7 @@ export default function NotFound() {
       <div className="max-w-2xl w-full bg-white rounded-3xl p-8 sm:p-12 shadow-xl border border-slate-200 text-center space-y-8">
         <div className="space-y-3">
           <div
-            className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 text-4xl mx-auto shadow-inner"
+            className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-4xl mx-auto shadow-inner"
             aria-hidden="true"
           >
             ⚡
@@ -44,7 +48,7 @@ export default function NotFound() {
         </div>
 
         {/* Quick Navigation Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-left">
           <Link
             href="/subsidy-tracker"
             prefetch={true}
@@ -84,6 +88,34 @@ export default function NotFound() {
             </div>
             <p className="text-xs text-slate-600 mt-1 leading-relaxed">
               실구매가·배터리 건강도(SoH) 기반 5년 TCO 및 잔존가치 시뮬레이션
+            </p>
+          </Link>
+
+          <Link
+            href="/recall-portal"
+            prefetch={false}
+            className="group p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-rose-50/60 hover:border-rose-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+          >
+            <div className="flex items-center gap-2 font-bold text-slate-900 group-hover:text-rose-800 text-base">
+              <span className="text-xl">🚨</span>
+              <span>공식 리콜 &amp; 화재 포털</span>
+            </div>
+            <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+              차대번호(VIN) 조회 및 국토부·제조사 배터리 화재·ICCU 리콜 현황
+            </p>
+          </Link>
+
+          <Link
+            href="/pdi-checklist"
+            prefetch={false}
+            className="group p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-cyan-50/60 hover:border-cyan-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+          >
+            <div className="flex items-center gap-2 font-bold text-slate-900 group-hover:text-cyan-800 text-base">
+              <span className="text-xl">✅</span>
+              <span>신차 검수 PDI 체크리스트</span>
+            </div>
+            <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+              인수증 서명 전 하부 배터리·단차·도장·ICCU 필수 점검 항목
             </p>
           </Link>
 

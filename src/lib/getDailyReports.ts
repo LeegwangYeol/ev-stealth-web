@@ -79,6 +79,22 @@ export const CATEGORY_MAP: Record<string, { code: DefectCategoryCode; ko: string
 };
 
 /**
+ * Safely sanitizes external URLs to prevent javascript: or data: XSS injections.
+ */
+export function sanitizeReportUrl(rawUrl?: unknown): string {
+  if (!rawUrl || typeof rawUrl !== 'string') return '#';
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return '#';
+  if (/^(?:javascript|data|vbscript):/i.test(trimmed)) {
+    return '#';
+  }
+  if (/^(?:https?:\/\/|\/)/i.test(trimmed)) {
+    return trimmed;
+  }
+  return '#';
+}
+
+/**
  * Normalizes any raw item from external JSON to DefectReportItem with safe defaults.
  */
 export function normalizeReport(raw: Record<string, unknown>, index: number): DefectReportItem {
@@ -118,7 +134,7 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
   return {
     id: String(raw.id || `report_${index + 1}`),
     source: String(raw.source || raw.platform || 'bobaedream').toLowerCase(),
-    url: String(raw.url || raw.post_url || '#'),
+    url: sanitizeReportUrl(raw.url || raw.post_url || '#'),
     title: String(raw.title || raw.post_title || '전기차 결함 제보'),
     date: String(raw.date || raw.post_date || new Date().toISOString().split('T')[0]),
     created_at: raw.created_at ? String(raw.created_at) : undefined,
@@ -153,7 +169,7 @@ export function calculateKPIs(
   ).length;
 
   const totalScore = reports.reduce((acc, r) => {
-    const val = Number.isFinite(r.sentiment_score) ? r.sentiment_score! : 0;
+    const val = typeof r.sentiment_score === 'number' && Number.isFinite(r.sentiment_score) ? r.sentiment_score : 0;
     return acc + val;
   }, 0);
   const avgScore = totalFiltered > 0 ? Number((totalScore / totalFiltered).toFixed(2)) : 0.0;
@@ -202,8 +218,8 @@ export function calculateKPIs(
   return {
     total_scraped: totalScraped,
     total_filtered_defects: totalFiltered,
-    avg_negativity_score: Number.isFinite(existingStats?.avg_negativity_score)
-      ? existingStats!.avg_negativity_score!
+    avg_negativity_score: typeof existingStats?.avg_negativity_score === 'number' && Number.isFinite(existingStats.avg_negativity_score)
+      ? existingStats.avg_negativity_score
       : avgScore,
     critical_defect_count: criticalCount,
     top_model: topModelDisplay,
@@ -231,9 +247,11 @@ export function getDailyReports(): DailyReportData {
       ? (rawData as Record<string, unknown>[])
       : (Array.isArray(rawData?.reports) ? rawData.reports : []);
 
-    const reports: DefectReportItem[] = rawReports.map((item: Record<string, unknown>, idx: number) =>
-      normalizeReport(item, idx)
-    );
+    const reports: DefectReportItem[] = rawReports
+      .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+      .map((item: Record<string, unknown>, idx: number) =>
+        normalizeReport(item, idx)
+      );
 
     const statistics = calculateKPIs(reports, rawData?.statistics);
 

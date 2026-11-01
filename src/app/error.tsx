@@ -49,14 +49,24 @@ export default function ErrorBoundary({ error, reset }: ErrorProps) {
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
           <button
             type="button"
-            onClick={() => reset()}
+            onClick={() => {
+              try {
+                reset();
+              } catch {
+                if (typeof window !== 'undefined') {
+                  window.location.reload();
+                }
+              }
+            }}
+            aria-label="다시 시도"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
-            <span>🔄</span> 다시 시도 (Reset)
+            <span>🔄</span> 다시 시도
           </button>
           <Link
             href="/"
             prefetch={false}
+            aria-label="홈으로 이동"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
           >
             <span>🏠</span> 홈으로 이동

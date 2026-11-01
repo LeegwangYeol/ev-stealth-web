@@ -5,7 +5,7 @@ import AdminDashboardClient from './AdminDashboardClient';
 export const dynamic = 'force-static';
 
 export const metadata: Metadata = {
-  title: '데일리 EV 결함 관리자 리포트 | Global EV Hub',
+  title: '데일리 EV 결함 관리자 리포트',
   description: '내부 모니터링 전용 비공개 데일리 EV 결함 관리자 리포트',
   openGraph: {
     title: '데일리 EV 결함 관리자 리포트 | Global EV Hub',

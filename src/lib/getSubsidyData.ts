@@ -563,10 +563,10 @@ export function getCategoryDepletion(
   }
 
   const category = region?.categories?.[categoryKey];
-  const announced = Number.isFinite(category?.announced_units) ? category!.announced_units : 0;
-  const applied = Number.isFinite(category?.applied_units) ? category!.applied_units : 0;
-  const remaining = Number.isFinite(category?.remaining_units) ? category!.remaining_units : 0;
-  const rate = Number.isFinite(category?.depletion_rate) ? category!.depletion_rate : 0;
+  const announced = typeof category?.announced_units === 'number' && Number.isFinite(category.announced_units) ? category.announced_units : 0;
+  const applied = typeof category?.applied_units === 'number' && Number.isFinite(category.applied_units) ? category.applied_units : 0;
+  const remaining = typeof category?.remaining_units === 'number' && Number.isFinite(category.remaining_units) ? category.remaining_units : 0;
+  const rate = typeof category?.depletion_rate === 'number' && Number.isFinite(category.depletion_rate) ? category.depletion_rate : 0;
   const status: AlertSeverity = category?.status || 'HEALTHY';
 
   return {

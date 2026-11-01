@@ -73,7 +73,7 @@ export interface VinPrefixMapping {
   country: string;
   sample_full_vin: string;
   sample_description: string;
-  note: string;
+  note?: string;
 }
 
 export interface RecallDatabaseMetadata {

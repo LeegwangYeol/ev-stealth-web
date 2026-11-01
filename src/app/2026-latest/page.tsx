@@ -1,23 +1,66 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import JsonLd from '@/components/JsonLd';
 
 export const dynamic = 'force-static';
 
+const latest2026JsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "2026년식 KDM(국내 내수용) EV 초기 품질 리포트",
+  "description": "올해 출고된 2026년식 최신 전기차(아이오닉5, EV3, 아이오닉9, 모델Y, 시라이언7)의 한국 차주 실제 평가와 초기 결함 분석",
+  "url": "https://ev-stealth-web.vercel.app/2026-latest",
+  "author": {
+    "@type": "Organization",
+    "name": "Global EV Hub",
+    "url": "https://ev-stealth-web.vercel.app",
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Global EV Hub",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://ev-stealth-web.vercel.app/favicon.ico",
+    },
+  },
+  "mainEntityOfPage": "https://ev-stealth-web.vercel.app/2026-latest",
+};
+
 export const metadata: Metadata = {
-  title: '2026년식 KDM EV 초기 품질 리포트 | Global EV Hub',
+  title: '2026년식 KDM EV 초기 품질 리포트',
   description: '올해 출고된 2026년식 최신 전기차(아이오닉5, EV3, 아이오닉9, 모델Y, 시라이언7)의 한국 차주 실제 평가와 초기 결함을 100% 원문 출처와 함께 분석했습니다.',
+  keywords: [
+    '2026 전기차 결함',
+    'EV3 초기결함',
+    '2026 아이오닉5',
+    '2026 모델Y 주니퍼',
+    '시라이언7 부식',
+    '아이오닉9 결함',
+    'KDM 전기차 품질',
+    '2026 전기차 리포트',
+  ],
+  alternates: {
+    canonical: '/2026-latest',
+  },
   openGraph: {
     title: '2026년식 KDM EV 초기 품질 리포트 | Global EV Hub',
     description: '올해 출고된 2026년식 최신 전기차(아이오닉5, EV3, 아이오닉9, 모델Y, 시라이언7)의 한국 차주 실제 평가와 초기 결함을 100% 원문 출처와 함께 분석했습니다.',
+    url: '/2026-latest',
     siteName: 'Global EV Hub',
     locale: 'ko_KR',
-    type: 'website',
+    type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: '2026년식 KDM EV 초기 품질 리포트 | Global EV Hub',
+    description: '올해 출고된 2026년식 최신 전기차(아이오닉5, EV3, 아이오닉9, 모델Y, 시라이언7)의 한국 차주 실제 평가와 초기 결함을 100% 원문 출처와 함께 분석했습니다.',
   },
 };
 
 export default function Latest2026Page() {
   return (
-    <div className="space-y-10">
+    <div className="space-y-10 max-w-4xl mx-auto py-6 sm:py-10">
+      <JsonLd data={latest2026JsonLd} />
       <header className="border-b pb-6">
         <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">2026년식 KDM(국내 내수용) EV 초기 품질 리포트</h1>
         <p className="text-lg text-gray-600">
@@ -28,10 +71,10 @@ export default function Latest2026Page() {
       {/* 2026 최신 결함 긴급 주의보 콜아웃 (WCAG AA > 7:1 대비: text-yellow-800 on bg-yellow-50) */}
       <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="2026년식 신차 초기 결함 긴급 주의보">
         <h2 className="text-xl font-bold text-yellow-800 flex items-center gap-2">
-          <span aria-hidden="true">⚠️</span> 2026년식 신차 초기 결함 긴급 안내 (CAUTION)
+          <span aria-hidden="true">⚠️</span> 2026년식 신차 초기 결함 긴급 주의보 (CAUTION)
         </h2>
         <p className="text-sm font-semibold text-yellow-800 mt-2 leading-relaxed">
-          올해 출시된 주요 KDM 전기차에서 전자제어(MCU/ICCU) 통신 장애 및 조기 부식, 동력 상실 사례가 보고되고 있습니다. 이상 경고등 점등 시 즉시 안전지대로 대피하고 제조사 무상수리 및 리콜 조치를 받으시기 바랍니다.
+          올해 출시된 주요 국내 출시(KDM) 전기차에서 전자제어(MCU/ICCU) 통신 장애 및 조기 부식, 동력 상실 사례가 보고되고 있습니다. 이상 경고등 점등 시 즉시 안전지대로 대피하고 제조사 무상수리 및 리콜 조치를 받으시기 바랍니다.
         </p>
       </div>
 
@@ -46,7 +89,7 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;도심 주행 중 갑작스러운 동력 상실로 뒤차와 추돌할 뻔해 생명의 위협을 느꼈다.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <a href="https://m.bobaedream.co.kr/board/bbs_view/national/2328953/2/1" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">보배드림 커뮤니티 원문<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://www.autodaily.co.kr/news/articleView.html?idxno=535684" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">오토데일리 기사<span className="sr-only"> (새 창에서 열림)</span></a>
+              <strong>출처:</strong> <a href="https://m.bobaedream.co.kr/board/bbs_view/national/2328953/2/1" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">보배드림 커뮤니티 원문<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://www.autodaily.co.kr/news/articleView.html?idxno=535684" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">오토데일리 기사<span className="sr-only"> (새 창에서 열림)</span></a>
             </li>
           </ul>
         </div>
@@ -63,7 +106,7 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;페이스리프트 신차임에도 이전 모델의 ICCU 문제가 터졌다. 고속 주행 중 출력 저하로 불안감이 큼.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <a href="https://www.reddit.com/r/Ioniq5/comments/1ibf63c/800_miles_in_my_2025_ioniq_5_officially_has_a/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">레딧 차주 인증<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://m.bobaedream.co.kr/board/bbs_view/national/2317279" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">보배드림 출력저하 후기<span className="sr-only"> (새 창에서 열림)</span></a>
+              <strong>출처:</strong> <a href="https://www.reddit.com/r/Ioniq5/comments/1ibf63c/800_miles_in_my_2025_ioniq_5_officially_has_a/" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">레딧 차주 인증<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://m.bobaedream.co.kr/board/bbs_view/national/2317279" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">보배드림 출력저하 후기<span className="sr-only"> (새 창에서 열림)</span></a>
             </li>
           </ul>
         </div>
@@ -80,7 +123,7 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;기가 상하이 생산이라 단차는 나아졌지만, 혹한기 아침에 문이 안 열려서 출근에 큰 차질을 빚었다.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <a href="https://www.bobaedream.co.kr/view?code=cnews&No=872" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">보배드림 문 열림 결함 보도<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://m.bobaedream.co.kr/board/bbs_view/best/927611/2/2?cmt=1" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">하부 소음 후기<span className="sr-only"> (새 창에서 열림)</span></a>
+              <strong>출처:</strong> <a href="https://www.bobaedream.co.kr/view?code=cnews&No=872" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">보배드림 문 열림 결함 보도<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://m.bobaedream.co.kr/board/bbs_view/best/927611/2/2?cmt=1" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">하부 소음 후기<span className="sr-only"> (새 창에서 열림)</span></a>
             </li>
           </ul>
         </div>
@@ -97,7 +140,7 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;가격은 매력적이나 하체 방청 수준이 엉망이라 겨울 염화칼슘 도로를 타면 금방 썩을 것 같다. 내비 번역체도 거슬린다.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <a href="https://www.bobaedream.co.kr/view?code=best&No=888548" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">보배드림 조기 녹(부식) 현상<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://m.bobaedream.co.kr/board/bbs_view/cnews/595" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">충전기 호환성 문제<span className="sr-only"> (새 창에서 열림)</span></a>
+              <strong>출처:</strong> <a href="https://www.bobaedream.co.kr/view?code=best&No=888548" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">보배드림 조기 녹(부식) 현상<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://m.bobaedream.co.kr/board/bbs_view/cnews/595" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">충전기 호환성 문제<span className="sr-only"> (새 창에서 열림)</span></a>
             </li>
           </ul>
         </div>
@@ -111,10 +154,10 @@ export default function Latest2026Page() {
               <strong>초기 결함:</strong> 주행거리 389km 만에 배터리 제어 시스템 경고등 점등 및 고전압 배터리팩 내부 PCB 기판 소손 판정으로 배터리 분해 수리. 2열 도어와 쿼터 글라스 몰딩 간격 유격 불량.
             </li>
             <li>
-              <strong>차주 리얼 후기:</strong> &quot;8천만 원짜리 차를 뽑자마자 고전압 배터리를 통째로 뜯어내야 한다고 해서 환불을 요구 중이다.&quot;
+              <strong>차주 리얼 후기:</strong> &quot;8,000만 원짜리 차를 뽑자마자 고전압 배터리를 통째로 뜯어내야 한다고 해서 환불을 요구 중이다.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <a href="https://m.bobaedream.co.kr/board/bbs_view/best/1008916/2/8?cmt=1" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">보배드림 아이오닉9 배터리 결함<span className="sr-only"> (새 창에서 열림)</span></a>
+              <strong>출처:</strong> <a href="https://m.bobaedream.co.kr/board/bbs_view/best/1008916/2/8?cmt=1" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">보배드림 아이오닉9 배터리 결함<span className="sr-only"> (새 창에서 열림)</span></a>
             </li>
           </ul>
         </div>

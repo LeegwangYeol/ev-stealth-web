@@ -69,16 +69,16 @@ const REMEDY_METHOD_FILTERS = Object.freeze([
   Object.freeze({ key: 'ALL', label: '전체' }),
   Object.freeze({ key: 'HARDWARE_REPLACE', label: '🔧 부품 전량 무상 교체' }),
   Object.freeze({ key: 'SOFTWARE_UPDATE_SERVICE', label: '🛠️ 센터 방문 소프트웨어' }),
-  Object.freeze({ key: 'OTA_WIRELESS', label: '📡 OTA 무선 업데이트' }),
+  Object.freeze({ key: 'OTA_WIRELESS', label: '📡 무선 소프트웨어 업데이트(OTA)' }),
 ]);
 
 // Model year dropdown selection options (frozen module scope)
 const MODEL_YEAR_OPTIONS = Object.freeze([2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018]);
 
 // Frozen fallback collections (Zero-GC)
-const EMPTY_BATTERY_PROFILES: readonly BatterySafetyProfile[] = Object.freeze([]);
-const EMPTY_RECALLS: readonly OfficialRecallCampaign[] = Object.freeze([]);
-const EMPTY_VIN_PREFIXES: readonly VinPrefixMapping[] = Object.freeze([]);
+const EMPTY_BATTERY_PROFILES: BatterySafetyProfile[] = Object.freeze([]) as unknown as BatterySafetyProfile[];
+const EMPTY_RECALLS: OfficialRecallCampaign[] = Object.freeze([]) as unknown as OfficialRecallCampaign[];
+const EMPTY_VIN_PREFIXES: VinPrefixMapping[] = Object.freeze([]) as unknown as VinPrefixMapping[];
 
 function resolveBrand(inputBrand: string, availableBrands: string[]): string | undefined {
   if (!inputBrand || typeof inputBrand !== 'string' || !Array.isArray(availableBrands)) {
@@ -201,14 +201,19 @@ function resolveModelAndBrand(
   }
 
   if (resolvedBrand && resolvedModel) {
+    const targetModelLower = resolvedModel.toLowerCase();
     const brandModels = getModelsForBrand(resolvedBrand, initialDatabase);
     const matchedBrandModel = brandModels.find(
-      (m) =>
-        m.toLowerCase() === resolvedModel!.toLowerCase() ||
-        m.toLowerCase().startsWith(resolvedModel!.toLowerCase()) ||
-        resolvedModel!.toLowerCase().startsWith(m.toLowerCase()) ||
-        m.toLowerCase().includes(resolvedModel!.toLowerCase()) ||
-        resolvedModel!.toLowerCase().includes(m.toLowerCase())
+      (m) => {
+        const mLower = m.toLowerCase();
+        return (
+          mLower === targetModelLower ||
+          mLower.startsWith(targetModelLower) ||
+          targetModelLower.startsWith(mLower) ||
+          mLower.includes(targetModelLower) ||
+          targetModelLower.includes(mLower)
+        );
+      }
     );
     if (matchedBrandModel) {
       resolvedModel = matchedBrandModel;
@@ -263,11 +268,12 @@ function SearchParamsWatcher({
     );
 
     if (resolved) {
-      const year = yearParam ? parseInt(yearParam, 10) : undefined;
+      const parsedYear = yearParam ? parseInt(yearParam, 10) : undefined;
+      const validYear = typeof parsedYear === 'number' && !isNaN(parsedYear) ? parsedYear : undefined;
       onSelectBrandModel(
         resolved.brand,
         resolved.model,
-        isNaN(year as number) ? undefined : year
+        validYear
       );
     }
   }, [searchParams, initialDatabase, availableBrands, onSelectBrandModel, onSelectVin]);
@@ -330,15 +336,15 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
   // Defensive fallbacks for database collections and metadata (Zero-GC)
   const batteryProfiles = useMemo(
-    () => (Array.isArray(initialDatabase?.battery_profiles) ? initialDatabase.battery_profiles : (EMPTY_BATTERY_PROFILES as BatterySafetyProfile[])),
+    () => (Array.isArray(initialDatabase?.battery_profiles) ? initialDatabase.battery_profiles : EMPTY_BATTERY_PROFILES),
     [initialDatabase?.battery_profiles]
   );
   const recalls = useMemo(
-    () => (Array.isArray(initialDatabase?.recalls) ? initialDatabase.recalls : (EMPTY_RECALLS as OfficialRecallCampaign[])),
+    () => (Array.isArray(initialDatabase?.recalls) ? initialDatabase.recalls : EMPTY_RECALLS),
     [initialDatabase?.recalls]
   );
   const vinPrefixes = useMemo(
-    () => (Array.isArray(initialDatabase?.vin_prefixes) ? initialDatabase.vin_prefixes : (EMPTY_VIN_PREFIXES as VinPrefixMapping[])),
+    () => (Array.isArray(initialDatabase?.vin_prefixes) ? initialDatabase.vin_prefixes : EMPTY_VIN_PREFIXES),
     [initialDatabase?.vin_prefixes]
   );
   const metadata = useMemo(
@@ -388,17 +394,17 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
   }, [deferredVinInput]);
 
   // Handle Mode A lookup
-  const handleVinSubmit = (e?: React.FormEvent) => {
+  const handleVinSubmit = useCallback((e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setVinTouched(true);
     if (!vinInput.trim()) return;
 
     const result = decodeVinAndCheckRecalls(vinInput, initialDatabase);
     setCheckResult(result);
-  };
+  }, [vinInput, initialDatabase]);
 
   // Quick 1-click sample VIN handler
-  const handleSelectSampleVin = (sampleVin: string) => {
+  const handleSelectSampleVin = useCallback((sampleVin: string) => {
     setVinInput(sampleVin);
     setVinTouched(true);
     const result = decodeVinAndCheckRecalls(sampleVin, initialDatabase);
@@ -412,17 +418,17 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
       const el = document.getElementById('search-result-section');
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
-  };
+  }, [initialDatabase]);
 
   // Handle Mode B lookup
-  const handleModelSubmit = (e?: React.FormEvent) => {
+  const handleModelSubmit = useCallback((e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!selectedBrand || !selectedModel) return;
 
     const yr = typeof selectedYear === 'number' ? selectedYear : undefined;
     const result = checkRecallsByModel(selectedBrand, selectedModel, yr, initialDatabase);
     setCheckResult(result);
-  };
+  }, [selectedBrand, selectedModel, selectedYear, initialDatabase]);
 
   // Toggle card expansion
   const toggleRecallExpansion = useCallback((id: string) => {
@@ -518,12 +524,12 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-900/60 text-red-200 border border-red-700/50 animate-pulse motion-reduce:animate-none">
-                  🚨 대한민국 국토교통부 & NHTSA 공시 연동
+                  🚨 대한민국 국토교통부 및 미국 도로교통안전국(NHTSA) 공시 연동
                 </span>
                 <span className="text-xs text-slate-400">기준: 2026 최신 개정판</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2.5">
-                <span>전기차 공식 리콜 & 배터리 화재 안전 포털</span>
+                <span>전기차 공식 리콜 및 배터리 화재 안전 포털</span>
               </h1>
               <p className="text-sm text-slate-300 mt-1 max-w-3xl">
                 17자리 차대번호(VIN) 및 차종별 배터리 제조사(파라시스, LG, SK, 삼성, CATL 등), 화재 결함 이력,
@@ -565,7 +571,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
             </div>
 
             <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm">
-              <span className="text-xs text-slate-400 font-medium">국내(KDM) 대상 차량</span>
+              <span className="text-xs text-slate-400 font-medium">국내 출시(KDM) 대상 차량</span>
               <div className="text-xl sm:text-2xl font-black text-amber-400 mt-0.5">
                 {Number.isFinite(metadata?.total_affected_vehicles_kdm)
                   ? metadata.total_affected_vehicles_kdm.toLocaleString()
@@ -601,7 +607,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
-              <span>차량 결함 & 리콜 즉시 판정기</span>
+              <span>차량 결함 및 리콜 즉시 판정기</span>
             </h2>
             <p className="text-sm text-slate-400 mt-1">
               차량등록증의 차대번호 17자리를 입력하거나 제조사·차종을 선택하면 매칭 리콜과 배터리 정보를 즉시 분석합니다.
@@ -609,7 +615,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
           </div>
 
           {/* Mode Switcher Tabs */}
-          <div role="tablist" aria-label="리콜 조회 방식 선택" className="flex border-b border-slate-800 mb-6">
+          <div role="tablist" aria-label="리콜 조회 방식 선택" className="flex flex-col sm:flex-row border-b border-slate-800 mb-6 gap-1 sm:gap-0">
             <button
               type="button"
               role="tab"
@@ -622,7 +628,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 setActiveCheckerMode('VIN');
                 setCheckResult(null);
               }}
-              className={`py-3 px-5 text-sm font-semibold border-b-2 transition flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+              className={`py-3 px-5 min-h-[44px] text-sm font-semibold border-b-2 transition flex items-center justify-center sm:justify-start gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                 activeCheckerMode === 'VIN'
                   ? 'border-blue-500 text-blue-400 bg-blue-950/20'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -645,7 +651,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 setActiveCheckerMode('MODEL');
                 setCheckResult(null);
               }}
-              className={`py-3 px-5 text-sm font-semibold border-b-2 transition flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+              className={`py-3 px-5 min-h-[44px] text-sm font-semibold border-b-2 transition flex items-center justify-center sm:justify-start gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                 activeCheckerMode === 'MODEL'
                   ? 'border-blue-500 text-blue-400 bg-blue-950/20'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -672,7 +678,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       type="text"
                       maxLength={17}
                       value={vinInput}
-                      aria-label="17자리 차대번호(VIN) 입력"
+                      aria-label="17자리 자동차 차대번호(VIN) 입력"
                       aria-invalid={!!vinError}
                       aria-describedby={vinError ? "vin-error-feedback" : undefined}
                       onChange={(e) => {
@@ -715,12 +721,12 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   <button
                     type="submit"
                     disabled={!vinValidation.valid}
-                    className="w-full sm:w-auto px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-400 text-white font-semibold text-sm transition shadow-lg flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                    className="w-full sm:w-auto px-6 py-3 min-h-[44px] rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-400 text-white font-semibold text-sm transition shadow-lg flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
-                    차대번호로 리콜 & 배터리 진단
+                    차대번호로 리콜 및 배터리 진단
                   </button>
 
                   <button
@@ -730,7 +736,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       setVinTouched(false);
                       setCheckResult(null);
                     }}
-                    className="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    className="px-4 py-3 min-h-[44px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                   >
                     초기화
                   </button>
@@ -741,7 +747,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               <div className="mt-6 pt-6 border-t border-slate-800/80">
                 <div className="flex flex-wrap items-center justify-between gap-1 mb-3">
                   <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    💡 차대번호가 기억나지 않으시나요? 1초 샘플 차대번호 클릭:
+                    💡 차대번호가 기억나지 않으시나요? 예시 차대번호 1초 선택:
                   </span>
                   <span className="text-[11px] text-slate-400">실제 KDM 출고 규격</span>
                 </div>
@@ -752,7 +758,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       type="button"
                       aria-label={`${item.brand} ${item.model_name} 샘플 차대번호(${item.sample_full_vin}) 자동 입력`}
                       onClick={() => handleSelectSampleVin(item.sample_full_vin)}
-                      className="p-2.5 rounded-lg bg-slate-900 hover:bg-blue-900/40 border border-slate-800 hover:border-blue-700 text-left transition group focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                      className="p-2.5 rounded-lg bg-slate-900 hover:bg-blue-900/40 border border-slate-800 hover:border-blue-700 text-left transition group focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 min-h-[44px]"
                     >
                       <div className="text-xs font-bold text-white group-hover:text-blue-300 truncate">
                         {item.model_name}
@@ -790,7 +796,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                         const models = getModelsForBrand(newBrand, initialDatabase);
                         setSelectedModel(models[0] || '');
                       }}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                     >
                       {availableBrands.map((b) => (
                         <option key={b} value={b}>
@@ -810,7 +816,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       aria-label="모델 선택"
                       value={selectedModel}
                       onChange={(e) => setSelectedModel(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                     >
                       {availableModels.map((m) => (
                         <option key={m} value={m}>
@@ -830,7 +836,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       aria-label="생산 연식 선택"
                       value={selectedYear}
                       onChange={(e) => setSelectedYear(e.target.value ? Number(e.target.value) : '')}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                     >
                       <option value="">전체 연식 확인</option>
                       {MODEL_YEAR_OPTIONS.map((yr) => (
@@ -845,7 +851,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 <div className="pt-2">
                   <button
                     type="submit"
-                    className="w-full sm:w-auto px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition shadow-lg flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                    className="w-full sm:w-auto px-6 py-3 min-h-[44px] rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition shadow-lg flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -1076,7 +1082,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                           aria-expanded={isExpanded}
                           aria-controls={"campaign-search-detail-" + campaign.id}
                           aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '대처요령 및 상세 펼치기'}`}
-                          className="self-start px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                          className="self-start px-3 py-1.5 min-h-[44px] rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                         >
                           <span>{isExpanded ? '상세 접기' : '대처요령 및 상세'}</span>
                           <svg
@@ -1167,7 +1173,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 </span>
               </div>
               <h2 id="battery-directory-heading" className="text-xl sm:text-2xl font-bold text-white">
-                🔋 전기차 배터리 제조사 & 지하주차장 안전 가이드
+                🔋 전기차 배터리 제조사 및 지하주차장 안전 가이드
               </h2>
               <p className="text-sm text-slate-400 mt-0.5">
                 국내 판매 주요 전기차의 실제 탑재 배터리 셀 제조사(파라시스, LG, SK, 삼성, CATL, BYD) 및 화재 모니터링 상태를 검색하십시오.
@@ -1184,7 +1190,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 onChange={(e) => setBatterySearch(e.target.value)}
                 aria-label="배터리 제조사 및 모델 검색"
                 placeholder="모델명, 제조사, 배터리명 검색..."
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 min-h-[44px] text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
               />
             </div>
           </div>
@@ -1198,7 +1204,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 type="button"
                 onClick={() => setSelectedSupplierFilter(s.key)}
                 aria-pressed={selectedSupplierFilter === s.key}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                   selectedSupplierFilter === s.key
                     ? 'bg-blue-600 text-white font-bold'
                     : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
@@ -1217,7 +1223,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 type="button"
                 onClick={() => setSelectedFireStatusFilter(f.key)}
                 aria-pressed={selectedFireStatusFilter === f.key}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                   selectedFireStatusFilter === f.key
                     ? 'bg-blue-600 text-white font-bold'
                     : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
@@ -1247,71 +1253,16 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       setSelectedSupplierFilter('ALL');
                       setSelectedFireStatusFilter('ALL');
                     }}
-                    className="mt-3 px-3 py-1.5 text-xs font-semibold text-blue-400 bg-blue-950/50 hover:bg-blue-900/50 border border-blue-800/80 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    className="mt-3 px-3 py-1.5 min-h-[44px] inline-flex items-center text-xs font-semibold text-blue-400 bg-blue-950/50 hover:bg-blue-900/50 border border-blue-800/80 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                   >
                     필터 및 검색 초기화
                   </button>
                 )}
               </div>
             ) : (
-              filteredBatteryProfiles.map((p) => {
-                const isCritical = p.fire_incident_status === 'CRITICAL_MONITORING';
-                return (
-                  <div
-                    key={p.model_id}
-                    className={`rounded-2xl p-5 border transition space-y-3 flex flex-col justify-between ${
-                      isCritical
-                        ? 'bg-red-950/20 border-red-800/80 shadow-md shadow-red-950/30'
-                        : 'bg-slate-900/90 border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <span className="text-xs text-slate-400 font-medium">{p.brand}</span>
-                          <h3 className="text-base font-bold text-white">{p.model_name}</h3>
-                          <span className="text-[11px] font-mono text-slate-400">{p.years}</span>
-                        </div>
-                        <span
-                          className={`text-[11px] font-bold px-2 py-0.5 rounded border flex-shrink-0 ${
-                            isCritical
-                              ? 'bg-red-950 text-rose-200 border-red-700 animate-pulse motion-reduce:animate-none'
-                              : p.fire_incident_status === 'RECALLED_RESOLVED'
-                              ? 'bg-amber-950 text-amber-200 border-amber-700'
-                              : 'bg-emerald-950 text-emerald-200 border-emerald-700'
-                          }`}
-                        >
-                          {p.fire_incident_status_ko}
-                        </span>
-                      </div>
-
-                      <div className="bg-black/30 rounded-xl p-3 border border-white/5 space-y-1.5 text-xs">
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">셀 제조사:</span>
-                          <span className="font-bold text-white">{p.cell_supplier}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">셀 화학:</span>
-                          <span className="text-slate-300">{p.cell_chemistry}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">완충 권장 한도:</span>
-                          <span className="font-bold text-blue-300">{p.recommended_soc_limit}%</span>
-                        </div>
-                      </div>
-
-                      <div className="text-xs text-slate-300 pt-1 leading-relaxed">
-                        <strong className="text-amber-300">지하주차 가이드: </strong>
-                        {p.underground_parking_advisory}
-                      </div>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400 truncate">
-                      🛡️ {p.bms_safety_features}
-                    </div>
-                  </div>
-                );
-              })
+              filteredBatteryProfiles.map((p) => (
+                <BatterySafetyCard key={p.model_id} profile={p} />
+              ))
             )}
           </div>
         </section>
@@ -1352,7 +1303,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 onChange={(e) => setRecallSearch(e.target.value)}
                 aria-label="전기차 리콜 캠페인 검색"
                 placeholder="리콜번호, 제목, 차종 검색..."
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 min-h-[44px] text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
               />
             </div>
           </div>
@@ -1366,7 +1317,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 type="button"
                 onClick={() => setSelectedRiskFilter(rf.key)}
                 aria-pressed={selectedRiskFilter === rf.key}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                   selectedRiskFilter === rf.key
                     ? 'bg-blue-600 text-white font-bold'
                     : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
@@ -1385,7 +1336,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 type="button"
                 onClick={() => setSelectedRemedyFilter(rm.key)}
                 aria-pressed={selectedRemedyFilter === rm.key}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                   selectedRemedyFilter === rm.key
                     ? 'bg-blue-600 text-white font-bold'
                     : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
@@ -1415,7 +1366,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       setSelectedRiskFilter('ALL');
                       setSelectedRemedyFilter('ALL');
                     }}
-                    className="mt-3 px-3 py-1.5 text-xs font-semibold text-blue-400 bg-blue-950/50 hover:bg-blue-900/50 border border-blue-800/80 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    className="mt-3 px-3 py-1.5 min-h-[44px] inline-flex items-center text-xs font-semibold text-blue-400 bg-blue-950/50 hover:bg-blue-900/50 border border-blue-800/80 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                   >
                     필터 및 검색 초기화
                   </button>
@@ -1486,7 +1437,7 @@ export const RecallCard = React.memo(function RecallCard({
           aria-expanded={isExpanded}
           aria-controls={"campaign-list-detail-" + campaign.id}
           aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '상세 및 행동요령 펼치기'}`}
-          className="self-start text-xs text-blue-400 hover:text-blue-300 font-medium px-2.5 py-1 rounded bg-slate-800/80 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+          className="self-start text-xs text-blue-400 hover:text-blue-300 font-medium px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center rounded bg-slate-800/80 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
         >
           {isExpanded ? '닫기 ▲' : '상세 및 행동요령 ▼'}
         </button>
@@ -1533,6 +1484,71 @@ export const RecallCard = React.memo(function RecallCard({
           </div>
         </div>
       )}
+    </div>
+  );
+});
+
+export interface BatterySafetyCardProps {
+  profile: BatterySafetyProfile;
+}
+
+export const BatterySafetyCard = React.memo(function BatterySafetyCard({
+  profile: p,
+}: BatterySafetyCardProps) {
+  const isCritical = p.fire_incident_status === 'CRITICAL_MONITORING';
+  return (
+    <div
+      key={p.model_id}
+      className={`rounded-2xl p-5 border transition space-y-3 flex flex-col justify-between ${
+        isCritical
+          ? 'bg-red-950/20 border-red-800/80 shadow-md shadow-red-950/30'
+          : 'bg-slate-900/90 border-slate-800 hover:border-slate-700'
+      }`}
+    >
+      <div className="space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <span className="text-xs text-slate-400 font-medium">{p.brand}</span>
+            <h3 className="text-base font-bold text-white">{p.model_name}</h3>
+            <span className="text-[11px] font-mono text-slate-400">{p.years}</span>
+          </div>
+          <span
+            className={`text-[11px] font-bold px-2 py-0.5 rounded border flex-shrink-0 ${
+              isCritical
+                ? 'bg-red-950 text-rose-200 border-red-700 animate-pulse motion-reduce:animate-none'
+                : p.fire_incident_status === 'RECALLED_RESOLVED'
+                ? 'bg-amber-950 text-amber-200 border-amber-700'
+                : 'bg-emerald-950 text-emerald-200 border-emerald-700'
+            }`}
+          >
+            {p.fire_incident_status_ko}
+          </span>
+        </div>
+
+        <div className="bg-black/30 rounded-xl p-3 border border-white/5 space-y-1.5 text-xs">
+          <div className="flex justify-between">
+            <span className="text-slate-400">셀 제조사:</span>
+            <span className="font-bold text-white">{p.cell_supplier}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-400">셀 화학:</span>
+            <span className="text-slate-300">{p.cell_chemistry}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-400">완충 권장 한도:</span>
+            <span className="font-bold text-blue-300">{p.recommended_soc_limit}%</span>
+          </div>
+        </div>
+
+        <div className="text-xs text-slate-300 pt-1 leading-relaxed">
+          <strong className="text-amber-300">지하주차 가이드: </strong>
+          {p.underground_parking_advisory}
+        </div>
+      </div>
+
+      <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400 truncate">
+        🛡️ {p.bms_safety_features}
+      </div>
     </div>
   );
 });

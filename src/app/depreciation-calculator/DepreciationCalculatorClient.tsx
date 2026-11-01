@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useRef, useDeferredValue, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useDeferredValue, useCallback, memo } from 'react';
 import type {
   DepreciationDatabase,
   EvModelDepreciation,
@@ -59,6 +59,24 @@ const FALLBACK_MODEL: EvModelDepreciation = {
   key_cons_resale: '데이터 동기화 대기 중',
 };
 
+const TRANSFER_OPTIONS: readonly { id: TransferType; title: string; desc: string }[] = Object.freeze([
+  {
+    id: 'intra',
+    title: '관내 이전 (동일 지자체)',
+    desc: '매수인 잔여기간 자동 승계 → 환수금 0원 (면제)',
+  },
+  {
+    id: 'inter',
+    title: '관외 이전 (타 지자체)',
+    desc: '지방비 보조금만 회수요율 적용 환수 (국비 면제)',
+  },
+  {
+    id: 'export',
+    title: '해외 수출 말소',
+    desc: '대기질 개선 취지 상실로 국비+지방비 전액 환수',
+  },
+]);
+
 const FALLBACK_REPLACEMENT_TIER = {
   tier_id: 'tier_2_standard',
   segment_name: '중형 CUV / 세단 (표준)',
@@ -82,6 +100,193 @@ const FALLBACK_REPLACEMENT_TIER = {
 
 // Maximum bounded cache entries for Arrhenius kinetics battery simulation
 const MAX_BATTERY_SIMULATION_CACHE_ENTRIES = 100;
+
+export const getChemistryBadge = (chem: string) => {
+  const upper = chem.toUpperCase();
+  if (upper.includes('LFP')) {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-950 border border-emerald-400">
+        LFP (인산철)
+      </span>
+    );
+  }
+  if (upper.includes('622')) {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-950 border border-blue-400">
+        NCM 622 (중밀도)
+      </span>
+    );
+  }
+  if (upper.includes('NCMA')) {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-cyan-100 text-cyan-950 border border-cyan-400">
+        NCMA (4원계)
+      </span>
+    );
+  }
+  if (upper.includes('NCA')) {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-950 border border-amber-400">
+        NCA (고출력)
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-950 border border-purple-400">
+      NCM 811 (하이니켈)
+    </span>
+  );
+};
+
+export const getDefenseTierBadge = (tier: string) => {
+  switch (tier) {
+    case 'S':
+      return (
+        <span className="px-2 py-0.5 rounded text-xs font-bold bg-amber-400 text-slate-950 shadow-sm">
+          Tier S (방어 최상)
+        </span>
+      );
+    case 'A':
+    case 'A-':
+      return (
+        <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-900 text-white shadow-sm">
+          Tier {tier} (우수)
+        </span>
+      );
+    case 'B+':
+    case 'B':
+    case 'B-':
+      return (
+        <span className="px-2 py-0.5 rounded text-xs font-bold bg-blue-900 text-white shadow-sm">
+          Tier {tier} (보통)
+        </span>
+      );
+    case 'C+':
+    case 'C':
+      return (
+        <span className="px-2 py-0.5 rounded text-xs font-bold bg-orange-900 text-white shadow-sm">
+          Tier {tier} (주의)
+        </span>
+      );
+    case 'D':
+    default:
+      return (
+        <span className="px-2 py-0.5 rounded text-xs font-bold bg-red-900 text-white shadow-sm">
+          Tier {tier} (위험)
+        </span>
+      );
+  }
+};
+
+export const getHealthGradeBadge = (grade: string) => {
+  switch (grade) {
+    case 'GRADE_A':
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-950 border border-emerald-400">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse motion-reduce:animate-none" aria-hidden="true" />
+          Grade A (최상급 / CPO 인증급)
+        </span>
+      );
+    case 'GRADE_B':
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-950 border border-blue-400">
+          <span className="w-2 h-2 rounded-full bg-blue-500" aria-hidden="true" />
+          Grade B (양호 / 정상 마모)
+        </span>
+      );
+    case 'GRADE_C':
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-950 border border-amber-400">
+          <span className="w-2 h-2 rounded-full bg-amber-500" aria-hidden="true" />
+          Grade C (경고 / 급속 열화 진입)
+        </span>
+      );
+    case 'CRITICAL':
+    default:
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-950 border border-red-400 animate-bounce motion-reduce:animate-none">
+          <span className="w-2 h-2 rounded-full bg-red-600" aria-hidden="true" />
+          Critical (수명 만료 / 배터리 교체 대상)
+        </span>
+      );
+  }
+};
+
+interface ModelGridCardProps {
+  model: EvModelDepreciation;
+  isSelected: boolean;
+  onSelect: (model: EvModelDepreciation) => void;
+}
+
+const ModelGridCard = memo(function ModelGridCard({
+  model,
+  isSelected,
+  onSelect,
+}: ModelGridCardProps) {
+  return (
+    <button
+      type="button"
+      aria-pressed={isSelected}
+      onClick={() => onSelect(model)}
+      className={`text-left p-3.5 rounded-xl border transition relative flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+        isSelected
+          ? 'border-blue-600 bg-blue-50/60 ring-2 ring-blue-500/20 shadow-sm'
+          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+      }`}
+    >
+      <div>
+        <div className="flex items-center justify-between gap-1 mb-1">
+          <span className="text-xs font-semibold text-slate-600">
+            {model.brand_name_ko} ({model.brand_name_en})
+          </span>
+          {getDefenseTierBadge(model.resale_defense_tier)}
+        </div>
+
+        <div className="text-sm font-bold text-slate-900 line-clamp-1">
+          {model.model_name}
+        </div>
+        <div className="text-xs text-slate-600 mb-2">{model.segment}</div>
+
+        <div className="flex flex-wrap items-center gap-1.5 mb-2">
+          {getChemistryBadge(model.battery_specs.chemistry)}
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-900 border border-slate-300">
+            {model.battery_specs.capacity_kwh} kWh
+          </span>
+          <span
+            className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold border ${
+              model.battery_specs.voltage_architecture === '800V'
+                ? 'bg-emerald-100 text-emerald-950 border-emerald-400'
+                : 'bg-slate-100 text-slate-900 border-slate-300'
+            }`}
+          >
+            {model.battery_specs.voltage_architecture}
+          </span>
+        </div>
+      </div>
+
+      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+        <div>
+          <span className="text-slate-600">출고가:</span>{' '}
+          <span className="font-semibold text-slate-700">
+            {(model.msrp_krw_baseline / 10000).toLocaleString()}만 원
+          </span>
+        </div>
+        <div>
+          <span className="text-slate-600">실구매:</span>{' '}
+          <span className="font-bold text-blue-700">
+            {(model.net_purchase_price_krw / 10000).toLocaleString()}만 원
+          </span>
+        </div>
+      </div>
+
+      {isSelected && (
+        <div className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow">
+          ✓
+        </div>
+      )}
+    </button>
+  );
+});
 
 export default function DepreciationCalculatorClient({
   initialDatabase,
@@ -176,9 +381,9 @@ export default function DepreciationCalculatorClient({
   // Effective Purchase Price Baseline
   const currentPurchasePrice = useMemo(() => {
     if (customPriceInput !== null && customPriceInput.trim() !== '') {
-      const parsed = parseInt(customPriceInput.replace(/[^0-9]/g, ''), 10);
-      if (!isNaN(parsed) && parsed >= 0) {
-        return Math.min(10_000_000_000, parsed);
+      const parsed = Number(customPriceInput.trim());
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        return Math.min(10_000_000_000, Math.floor(parsed));
       }
     }
     return priceBasis === 'effective'
@@ -454,120 +659,6 @@ export default function DepreciationCalculatorClient({
   }, []);
 
   // ----------------------------------------------------
-  // 5. HELPER BADGE RENDERERS
-  // ----------------------------------------------------
-  const getChemistryBadge = (chem: string) => {
-    const upper = chem.toUpperCase();
-    if (upper.includes('LFP')) {
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-950 border border-emerald-400">
-          LFP (인산철)
-        </span>
-      );
-    }
-    if (upper.includes('622')) {
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-950 border border-blue-400">
-          NCM 622 (중밀도)
-        </span>
-      );
-    }
-    if (upper.includes('NCMA')) {
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-cyan-100 text-cyan-950 border border-cyan-400">
-          NCMA (4원계)
-        </span>
-      );
-    }
-    if (upper.includes('NCA')) {
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-950 border border-amber-400">
-          NCA (고출력)
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-950 border border-purple-400">
-        NCM 811 (하이니켈)
-      </span>
-    );
-  };
-
-  const getDefenseTierBadge = (tier: string) => {
-    switch (tier) {
-      case 'S':
-        return (
-          <span className="px-2 py-0.5 rounded text-xs font-bold bg-amber-400 text-slate-950 shadow-sm">
-            Tier S (방어 최상)
-          </span>
-        );
-      case 'A':
-      case 'A-':
-        return (
-          <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-900 text-white shadow-sm">
-            Tier {tier} (우수)
-          </span>
-        );
-      case 'B+':
-      case 'B':
-      case 'B-':
-        return (
-          <span className="px-2 py-0.5 rounded text-xs font-bold bg-blue-900 text-white shadow-sm">
-            Tier {tier} (보통)
-          </span>
-        );
-      case 'C+':
-      case 'C':
-        return (
-          <span className="px-2 py-0.5 rounded text-xs font-bold bg-orange-900 text-white shadow-sm">
-            Tier {tier} (주의)
-          </span>
-        );
-      case 'D':
-      default:
-        return (
-          <span className="px-2 py-0.5 rounded text-xs font-bold bg-red-900 text-white shadow-sm">
-            Tier {tier} (위험)
-          </span>
-        );
-    }
-  };
-
-  const getHealthGradeBadge = (grade: string) => {
-    switch (grade) {
-      case 'GRADE_A':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-950 border border-emerald-400">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse motion-reduce:animate-none" aria-hidden="true" />
-            Grade A (최상급 / CPO 인증급)
-          </span>
-        );
-      case 'GRADE_B':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-950 border border-blue-400">
-            <span className="w-2 h-2 rounded-full bg-blue-500" aria-hidden="true" />
-            Grade B (양호 / 정상 마모)
-          </span>
-        );
-      case 'GRADE_C':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-950 border border-amber-400">
-            <span className="w-2 h-2 rounded-full bg-amber-500" aria-hidden="true" />
-            Grade C (경고 / 급속 열화 진입)
-          </span>
-        );
-      case 'CRITICAL':
-      default:
-        return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-950 border border-red-400 animate-bounce motion-reduce:animate-none">
-            <span className="w-2 h-2 rounded-full bg-red-600" aria-hidden="true" />
-            Critical (수명 만료 / 배터리 교체 대상)
-          </span>
-        );
-    }
-  };
-
-  // ----------------------------------------------------
   // 6. RENDER
   // ----------------------------------------------------
   return (
@@ -632,32 +723,32 @@ export default function DepreciationCalculatorClient({
             <button
               type="button"
               onClick={() => applyPreset('commute')}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              aria-label="🚗 출퇴근 표준 (3년/1.5만km): 연 1.5만km, 급속 20%, 3년 보유"
+              className="px-3 py-1.5 min-h-[44px] flex items-center rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              aria-label="🚗 출퇴근 표준 프리셋 (3년 보유, 연 1.5만 km, 급속 20%)"
             >
-              🚗 출퇴근 표준 (3년/1.5만km)
+              🚗 출퇴근 표준 (3년/1.5만 km)
             </button>
             <button
               type="button"
               onClick={() => applyPreset('business')}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              aria-label="🚛 장거리 영업 (4년/3.5만km): 연 3.5만km, 급속 65%, 4년 보유"
+              className="px-3 py-1.5 min-h-[44px] flex items-center rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              aria-label="🚛 장거리 영업 프리셋 (4년 보유, 연 3.5만 km, 급속 65%)"
             >
-              🚛 장거리 영업 (4년/3.5만km)
+              🚛 장거리 영업 (4년/3.5만 km)
             </button>
             <button
               type="button"
               onClick={() => applyPreset('leisure')}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              aria-label="🏖️ 주말 레저 (2년/8천km): 연 8천km, 급속 15%, 2년 보유"
+              className="px-3 py-1.5 min-h-[44px] flex items-center rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              aria-label="🏖️ 주말 레저 프리셋 (2년 보유, 연 8,000 km, 급속 15%)"
             >
-              🏖️ 주말 레저 (2년/8천km)
+              🏖️ 주말 레저 (2년/8,000 km)
             </button>
             <button
               type="button"
               onClick={() => applyPreset('earlySell')}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              aria-label="⚠️ 보조금 환수 점검 (18개월 보유): 18개월 보유, 관외 이전"
+              className="px-3 py-1.5 min-h-[44px] flex items-center rounded-lg text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              aria-label="⚠️ 보조금 환수 점검 프리셋 (18개월 보유, 관외 이전)"
             >
               ⚠️ 보조금 환수 점검 (18개월 보유)
             </button>
@@ -689,10 +780,10 @@ export default function DepreciationCalculatorClient({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="모델명, 제조사, 배터리 검색..."
-              className="w-full px-3.5 py-2 pl-9 rounded-xl border border-slate-300 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:border-blue-500 bg-slate-50 placeholder-slate-500"
+              className="w-full px-3.5 py-2 pl-9 min-h-[44px] rounded-xl border border-slate-300 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:border-blue-500 bg-slate-50 placeholder-slate-500"
               aria-label="전기차 모델 검색창"
             />
-            <span className="absolute left-3 top-2.5 text-slate-600 text-sm" aria-hidden="true">🔍</span>
+            <span className="absolute left-3 top-3 text-slate-600 text-sm" aria-hidden="true">🔍</span>
           </div>
         </div>
 
@@ -711,7 +802,7 @@ export default function DepreciationCalculatorClient({
                 tabIndex={isSelected ? 0 : -1}
                 onKeyDown={(e) => handleBrandTabKeyDown(e, idx)}
                 onClick={() => setSelectedBrand(b.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                className={`px-3 py-1.5 min-h-[44px] flex items-center rounded-lg text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   isSelected
                     ? 'bg-blue-600 text-white shadow-sm'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -744,80 +835,21 @@ export default function DepreciationCalculatorClient({
                     setSearchQuery('');
                     setSelectedBrand('all');
                   }}
-                  className="mt-3 px-3.5 py-1.5 text-xs font-semibold text-blue-700 bg-white hover:bg-blue-50 rounded-lg transition border border-slate-300 shadow-sm"
+                  className="mt-3 px-3.5 py-1.5 text-xs font-semibold text-blue-700 bg-white hover:bg-blue-50 rounded-lg transition border border-slate-300 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
                   검색어 및 제조사 필터 초기화
                 </button>
               )}
             </div>
           ) : (
-            filteredModels.map((model) => {
-              const isSelected = model.id === selectedModel.id;
-              return (
-                <button
-                  key={model.id}
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() => handleSelectModel(model)}
-                  className={`text-left p-3.5 rounded-xl border transition relative flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                    isSelected
-                      ? 'border-blue-600 bg-blue-50/60 ring-2 ring-blue-500/20 shadow-sm'
-                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between gap-1 mb-1">
-                      <span className="text-xs font-semibold text-slate-600">
-                        {model.brand_name_ko} ({model.brand_name_en})
-                      </span>
-                      {getDefenseTierBadge(model.resale_defense_tier)}
-                    </div>
-
-                    <div className="text-sm font-bold text-slate-900 line-clamp-1">
-                      {model.model_name}
-                    </div>
-                    <div className="text-xs text-slate-600 mb-2">{model.segment}</div>
-
-                    <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                      {getChemistryBadge(model.battery_specs.chemistry)}
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-900 border border-slate-300">
-                        {model.battery_specs.capacity_kwh} kWh
-                      </span>
-                      <span
-                        className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold border ${
-                          model.battery_specs.voltage_architecture === '800V'
-                            ? 'bg-emerald-100 text-emerald-950 border-emerald-400'
-                            : 'bg-slate-100 text-slate-900 border-slate-300'
-                        }`}
-                      >
-                        {model.battery_specs.voltage_architecture}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                    <div>
-                      <span className="text-slate-600">출고가:</span>{' '}
-                      <span className="font-semibold text-slate-700">
-                        {(model.msrp_krw_baseline / 10000).toLocaleString()}만원
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-600">실구매:</span>{' '}
-                      <span className="font-bold text-blue-700">
-                        {(model.net_purchase_price_krw / 10000).toLocaleString()}만원
-                      </span>
-                    </div>
-                  </div>
-
-                  {isSelected && (
-                    <div className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow">
-                      ✓
-                    </div>
-                  )}
-                </button>
-              );
-            })
+            filteredModels.map((model) => (
+              <ModelGridCard
+                key={model.id}
+                model={model}
+                isSelected={model.id === selectedModel.id}
+                onSelect={handleSelectModel}
+              />
+            ))
           )}
         </div>
       </section>
@@ -838,13 +870,13 @@ export default function DepreciationCalculatorClient({
           </div>
 
           <div className="flex items-center gap-3">
-            <label htmlFor="winter-season-checkbox" className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+            <label htmlFor="winter-season-checkbox" className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer bg-slate-50 px-3 py-1.5 min-h-[44px] rounded-lg border border-slate-200">
               <input
                 id="winter-season-checkbox"
                 type="checkbox"
                 checked={winterSeason}
                 onChange={(e) => setWinterSeason(e.target.checked)}
-                className="w-4 h-4 rounded text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="w-5 h-5 rounded text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 aria-label="혹한기 저온 감가 및 열화 패널티 반영 여부"
               />
               <span>❄️ 혹한기(-5℃) 저온 패널티 반영</span>
@@ -870,9 +902,13 @@ export default function DepreciationCalculatorClient({
               max="5"
               step="0.5"
               value={holdingYears}
-              onChange={(e) => handleYearsChange(parseFloat(e.target.value))}
+              onChange={(e) => {
+                const val = parseFloat(e.target.value);
+                if (Number.isFinite(val)) handleYearsChange(val);
+              }}
               className="w-full accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="차량 보유 기간 설정 (1년에서 5년)"
+              aria-orientation="horizontal"
               aria-valuenow={holdingYears}
               aria-valuemin={1}
               aria-valuemax={5}
@@ -892,7 +928,7 @@ export default function DepreciationCalculatorClient({
                   type="button"
                   onClick={() => handleYearsChange(yr)}
                   aria-pressed={holdingYears === yr}
-                  className={`flex-1 py-1 text-[11px] font-semibold rounded border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  className={`flex-1 py-1 min-h-[44px] flex items-center justify-center text-[11px] font-semibold rounded border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                     holdingYears === yr
                       ? 'bg-blue-600 text-white border-blue-600'
                       : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -922,9 +958,13 @@ export default function DepreciationCalculatorClient({
               max="50000"
               step="1000"
               value={annualMileageKm}
-              onChange={(e) => setAnnualMileageKm(parseInt(e.target.value, 10))}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (Number.isFinite(val)) setAnnualMileageKm(val);
+              }}
               className="w-full accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="연간 주행거리 설정 (5,000km에서 50,000km)"
+              aria-orientation="horizontal"
               aria-valuenow={annualMileageKm}
               aria-valuemin={5000}
               aria-valuemax={50000}
@@ -964,9 +1004,13 @@ export default function DepreciationCalculatorClient({
               max="100"
               step="5"
               value={dcfcRatio}
-              onChange={(e) => setDcfcRatio(parseInt(e.target.value, 10))}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (Number.isFinite(val)) setDcfcRatio(val);
+              }}
               className="w-full accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="급속 충전 비율 설정 (0%에서 100%)"
+              aria-orientation="horizontal"
               aria-valuenow={dcfcRatio}
               aria-valuemin={0}
               aria-valuemax={100}
@@ -979,7 +1023,7 @@ export default function DepreciationCalculatorClient({
             </div>
             <div className="text-[11px] text-slate-600 text-center font-medium bg-white py-1 rounded border border-slate-200 flex justify-around">
               <span>완속 {100 - dcfcRatio}%</span>
-              <span className="text-slate-300">|</span>
+              <span className="text-slate-400" aria-hidden="true">|</span>
               <span className={dcfcRatio > 60 ? 'text-amber-800 font-bold' : ''}>
                 급속 {dcfcRatio}%
               </span>
@@ -993,7 +1037,7 @@ export default function DepreciationCalculatorClient({
               <button
                 type="button"
                 onClick={() => setCustomPriceInput(null)}
-                className="text-[11px] text-blue-700 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
+                className="text-[11px] text-blue-700 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none min-h-[44px] inline-flex items-center"
                 aria-label="기본값 복원: 차량 기본 가격으로 초기화"
               >
                 기본값 복원
@@ -1008,7 +1052,7 @@ export default function DepreciationCalculatorClient({
                   setPriceBasis('effective');
                   setCustomPriceInput(null);
                 }}
-                className={`flex-1 py-1 text-center font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none ${
+                className={`flex-1 py-1 min-h-[44px] flex items-center justify-center text-center font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none ${
                   priceBasis === 'effective'
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-slate-600 hover:bg-slate-100'
@@ -1024,12 +1068,12 @@ export default function DepreciationCalculatorClient({
                   setPriceBasis('msrp');
                   setCustomPriceInput(null);
                 }}
-                className={`flex-1 py-1 text-center font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none ${
+                className={`flex-1 py-1 min-h-[44px] flex items-center justify-center text-center font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none ${
                   priceBasis === 'msrp'
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-slate-600 hover:bg-slate-100'
                 }`}
-                aria-label="출고가(MSRP): 신차 공식 출고가 기준"
+                aria-label="출고가(MSRP, 권장소비자가격) 기준"
               >
                 출고가(MSRP)
               </button>
@@ -1049,14 +1093,14 @@ export default function DepreciationCalculatorClient({
                 onChange={(e) => {
                   setCustomPriceInput(e.target.value);
                 }}
-                className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-right pr-8 bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="w-full px-3 py-2 min-h-[44px] rounded-lg border border-slate-300 text-xs font-bold text-right pr-8 bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 aria-label="차량 구매 가격 직접 입력 (원 단위)"
               />
-              <span className="absolute right-3 top-2 text-xs text-slate-600">원</span>
+              <span className="absolute right-3 top-3 text-xs text-slate-600">원</span>
             </div>
 
             <div className="text-[11px] text-slate-600 text-center">
-              환산: <strong>{(currentPurchasePrice / 10000).toLocaleString()} 만 원</strong>
+              환산: <strong>{(currentPurchasePrice / 10000).toLocaleString()}만 원</strong>
             </div>
           </div>
         </div>
@@ -1094,20 +1138,20 @@ export default function DepreciationCalculatorClient({
                 type="button"
                 onClick={() => setChartViewMode('price')}
                 aria-pressed={chartViewMode === 'price'}
-                className={`px-3 py-1.5 font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none ${
+                className={`px-3 py-1.5 min-h-[44px] flex items-center justify-center font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none ${
                   chartViewMode === 'price'
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-slate-600 hover:bg-slate-100'
                 }`}
-                aria-label="예상 시세 (만원): 금액 단위로 차트 보기"
+                aria-label="예상 시세(만 원 단위)로 차트 보기"
               >
-                예상 시세 (만원)
+                예상 시세 (만 원)
               </button>
               <button
                 type="button"
                 onClick={() => setChartViewMode('percentage')}
                 aria-pressed={chartViewMode === 'percentage'}
-                className={`px-3 py-1.5 font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none ${
+                className={`px-3 py-1.5 min-h-[44px] flex items-center justify-center font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none ${
                   chartViewMode === 'percentage'
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-slate-600 hover:bg-slate-100'
@@ -1144,7 +1188,7 @@ export default function DepreciationCalculatorClient({
               <span className="text-sm font-semibold text-rose-700">만 원</span>
             </div>
             <div className="text-[11px] text-slate-600 mt-1">
-              연평균 감가: -{Math.round(depResult.depreciationAmountKrw / safeYears / 10000).toLocaleString()} 만 원/년
+              연평균 감가: -{Math.round(depResult.depreciationAmountKrw / safeYears / 10000).toLocaleString()}만 원/년
             </div>
           </div>
 
@@ -1512,7 +1556,7 @@ export default function DepreciationCalculatorClient({
               aria-valuenow={Math.round(batteryHealth.sohPct * 10) / 10}
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-label="배터리 잔존 성능"
+              aria-label="배터리 잔존 성능(SoH) 수명"
               aria-valuetext={`${batteryHealth.sohPct.toFixed(1)}%`}
               className="relative w-44 h-44 mx-auto flex items-center justify-center"
             >
@@ -1757,11 +1801,15 @@ export default function DepreciationCalculatorClient({
               step="1"
               value={heldMonths}
               onChange={(e) => {
-                setSyncMonthsWithYears(false);
-                setHeldMonths(parseInt(e.target.value, 10));
+                const val = parseInt(e.target.value, 10);
+                if (Number.isFinite(val)) {
+                  setSyncMonthsWithYears(false);
+                  setHeldMonths(val);
+                }
               }}
               className="w-full accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="보조금 의무운행 기간 중 보유 개월 수 설정"
+              aria-orientation="horizontal"
               aria-valuenow={heldMonths}
               aria-valuemin={0}
               aria-valuemax={36}
@@ -1781,7 +1829,7 @@ export default function DepreciationCalculatorClient({
                   setSyncMonthsWithYears(true);
                   setHeldMonths(Math.round(holdingYears * 12));
                 }}
-                className="text-blue-700 hover:underline text-[11px] font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
+                className="text-blue-700 hover:underline text-[11px] font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none min-h-[44px] inline-flex items-center"
                 aria-label={`보유 기간(${holdingYears}년)과 동기화: 상단 연수와 개월 수 맞춤`}
               >
                 보유 기간({holdingYears}년)과 동기화
@@ -1795,27 +1843,11 @@ export default function DepreciationCalculatorClient({
             <legend className="sr-only">이전 / 매매 유형 선택</legend>
             <span className="text-xs font-bold text-slate-700 block" aria-hidden="true">이전 / 매매 유형 선택</span>
             <div className="space-y-1.5">
-              {[
-                {
-                  id: 'intra' as TransferType,
-                  title: '관내 이전 (동일 지자체)',
-                  desc: '매수인 잔여기간 자동 승계 → 환수금 0원 (면제)',
-                },
-                {
-                  id: 'inter' as TransferType,
-                  title: '관외 이전 (타 지자체)',
-                  desc: '지방비 보조금만 회수요율 적용 환수 (국비 면제)',
-                },
-                {
-                  id: 'export' as TransferType,
-                  title: '해외 수출 말소',
-                  desc: '대기질 개선 취지 상실로 국비+지방비 전액 환수',
-                },
-              ].map((item) => (
+              {TRANSFER_OPTIONS.map((item) => (
                 <label
                   key={item.id}
                   htmlFor={`transfer-type-radio-${item.id}`}
-                  className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer text-xs transition ${
+                  className={`flex items-start gap-2 p-2 min-h-[44px] rounded-lg border cursor-pointer text-xs transition ${
                     transferType === item.id
                       ? 'bg-blue-50 border-blue-500 text-blue-950 font-semibold'
                       : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
@@ -1856,7 +1888,7 @@ export default function DepreciationCalculatorClient({
                     step="100000"
                     value={effectiveNationalSubsidy}
                     onChange={(e) => setCustomNationalSubsidy(Math.max(0, Math.min(100_000_000, parseInt(e.target.value, 10) || 0)))}
-                    className="w-full px-2 py-1 rounded bg-slate-800 border border-slate-700 text-right font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
+                    className="w-full px-3 py-2 min-h-[44px] rounded bg-slate-800 border border-slate-700 text-right font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
                     aria-label="국비 보조금 금액 입력"
                   />
                 </div>
@@ -1872,7 +1904,7 @@ export default function DepreciationCalculatorClient({
                     step="100000"
                     value={effectiveLocalSubsidy}
                     onChange={(e) => setCustomLocalSubsidy(Math.max(0, Math.min(100_000_000, parseInt(e.target.value, 10) || 0)))}
-                    className="w-full px-2 py-1 rounded bg-slate-800 border border-slate-700 text-right font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
+                    className="w-full px-3 py-2 min-h-[44px] rounded bg-slate-800 border border-slate-700 text-right font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
                     aria-label="지방비 보조금 금액 입력"
                   />
                 </div>
@@ -1903,7 +1935,7 @@ export default function DepreciationCalculatorClient({
         {/* 8-Tier Statutory Schedule Table */}
         <div className="pt-2">
           <details className="text-xs text-slate-600 bg-slate-50 rounded-xl border border-slate-200 p-3">
-            <summary className="font-bold text-slate-800 cursor-pointer hover:text-blue-600 select-none">
+            <summary className="font-bold text-slate-800 cursor-pointer hover:text-blue-700 select-none">
               📋 대기환경보전법 시행규칙 [별표 21의2] 8단계 의무운행 회수요율표 보기
             </summary>
             <div
@@ -1911,7 +1943,7 @@ export default function DepreciationCalculatorClient({
               aria-label="8단계 법정 의무운행기간 보조금 회수요율표 스크롤 영역"
               className="mt-3 overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
-              <table className="w-full text-left border-collapse" aria-label="8단계 법정 의무운행기간 보조금 회수요율표">
+              <table className="w-full min-w-[480px] text-left border-collapse" aria-label="8단계 법정 의무운행기간 보조금 회수요율표">
                 <caption className="sr-only">대기환경보전법 시행규칙 8단계 의무운행 회수요율표</caption>
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-600">
@@ -1936,7 +1968,7 @@ export default function DepreciationCalculatorClient({
 
                     return (
                       <tr
-                        key={`${tier.min_months}-${(tier as { max_months?: number; max_months_exclusive: number | null }).max_months ?? tier.max_months_exclusive}`}
+                        key={`${tier.min_months}-${tier.max_months_exclusive ?? 'unlimited'}`}
                         className={
                           isCurrentTier
                             ? 'bg-blue-100/70 font-bold text-blue-950'
@@ -1984,7 +2016,7 @@ export default function DepreciationCalculatorClient({
               id="ice-displacement-select"
               value={iceDisplacementCc}
               onChange={(e) => setIceDisplacementCc(parseInt(e.target.value, 10))}
-              className="px-3 py-1.5 rounded-lg border border-slate-300 font-medium bg-white text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="px-3 py-2 min-h-[44px] rounded-lg border border-slate-300 font-medium bg-white text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               aria-label="비교 대상 내연기관 배기량 선택"
             >
               <option value={1598}>1,600cc 준중형 가솔린 (아반떼급)</option>
@@ -2003,7 +2035,7 @@ export default function DepreciationCalculatorClient({
             </span>
             <span className="text-xl sm:text-2xl font-black text-emerald-700 block mt-1">
               +{(tcoResult.fuelSavingsKrw / 10000).toLocaleString()}{' '}
-              <span className="text-xs font-semibold text-slate-600">만원</span>
+              <span className="text-xs font-semibold text-slate-600">만 원</span>
             </span>
             <span className="text-[11px] text-slate-600 mt-1 block">
               km당: 전기 {tcoResult.evFuelCostPerKm}원 vs 가솔린 {tcoResult.iceFuelCostPerKm}원
@@ -2016,7 +2048,7 @@ export default function DepreciationCalculatorClient({
             </span>
             <span className="text-xl sm:text-2xl font-black text-blue-700 block mt-1">
               +{(tcoResult.taxSavingsKrw / 10000).toLocaleString()}{' '}
-              <span className="text-xs font-semibold text-slate-600">만원</span>
+              <span className="text-xs font-semibold text-slate-600">만 원</span>
             </span>
             <span className="text-[11px] text-slate-600 mt-1 block">
               EV 연 13만 원(지방교육세 포함) 정액
@@ -2029,7 +2061,7 @@ export default function DepreciationCalculatorClient({
             </span>
             <span className="text-xl sm:text-2xl font-black text-indigo-600 block mt-1">
               +{(tcoResult.totalAuxiliarySavingsKrw / 10000).toLocaleString()}{' '}
-              <span className="text-xs font-semibold text-slate-600">만원</span>
+              <span className="text-xs font-semibold text-slate-600">만 원</span>
             </span>
             <span className="text-[11px] text-slate-600 mt-1 block">
               하이패스 50% + 공영주차장 50%
@@ -2042,7 +2074,7 @@ export default function DepreciationCalculatorClient({
             </span>
             <span className="text-xl sm:text-2xl font-black text-white block mt-1">
               +{(tcoResult.totalCumulativeSavingsKrw / 10000).toLocaleString()}{' '}
-              <span className="text-xs font-semibold text-white/90">만원</span>
+              <span className="text-xs font-semibold text-white/90">만 원</span>
             </span>
             <span className="text-[11px] text-white font-medium mt-1 block">
               월평균 +{Math.round(tcoResult.totalCumulativeSavingsKrw / Math.max(1, Math.round(safeYears * 12)) / 10000).toLocaleString()}만 원 절약
@@ -2056,7 +2088,7 @@ export default function DepreciationCalculatorClient({
           aria-label="5개년 총소유비용(TCO) 및 유지비 절감 내역 표 스크롤 영역"
           className="overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
-          <table className="w-full text-xs text-left border-collapse" aria-label="5개년 총소유비용(TCO) 및 유지비 절감 내역">
+          <table className="w-full min-w-[640px] text-xs text-left border-collapse" aria-label="5개년 총소유비용(TCO) 및 유지비 절감 내역">
             <caption className="sr-only">5개년 총소유비용(TCO) 및 내연기관 대비 유지비 절감 내역</caption>
             <thead>
               <tr className="bg-slate-100 text-slate-600 border-b border-slate-200">
@@ -2076,20 +2108,20 @@ export default function DepreciationCalculatorClient({
                 <tr key={row.year} className="hover:bg-slate-50 transition">
                   <th scope="row" className="py-2 px-3 font-bold text-left">{row.year}년차</th>
                   <td className="py-2 px-3">{row.cumulativeKm.toLocaleString()} km</td>
-                  <td className="py-2 px-3">{(row.evElectricityCostKrw / 10000).toFixed(0)}만원</td>
-                  <td className="py-2 px-3">{(row.iceFuelCostKrw / 10000).toFixed(0)}만원</td>
+                  <td className="py-2 px-3">{(row.evElectricityCostKrw / 10000).toFixed(0)}만 원</td>
+                  <td className="py-2 px-3">{(row.iceFuelCostKrw / 10000).toFixed(0)}만 원</td>
                   <td className="py-2 px-3">
-                    {(row.evAutomobileTaxKrw / 10000).toLocaleString(undefined, { maximumFractionDigits: 1 })}만원
+                    {(row.evAutomobileTaxKrw / 10000).toLocaleString(undefined, { maximumFractionDigits: 1 })}만 원
                   </td>
-                  <td className="py-2 px-3">{(row.iceAutomobileTaxKrw / 10000).toFixed(0)}만원</td>
+                  <td className="py-2 px-3">{(row.iceAutomobileTaxKrw / 10000).toFixed(0)}만 원</td>
                   <td className="py-2 px-3">
-                    {((row.tollSavingsKrw + row.parkingSavingsKrw + row.maintenanceSavingsKrw) / 10000).toFixed(0)}만원
+                    {((row.tollSavingsKrw + row.parkingSavingsKrw + row.maintenanceSavingsKrw) / 10000).toFixed(0)}만 원
                   </td>
                   <td className="py-2 px-3 text-right font-semibold text-emerald-700">
-                    +{(row.annualNetSavingsKrw / 10000).toFixed(0)}만원
+                    +{(row.annualNetSavingsKrw / 10000).toFixed(0)}만 원
                   </td>
                   <td className="py-2 px-3 text-right font-extrabold text-blue-700">
-                    +{(row.cumulativeNetSavingsKrw / 10000).toFixed(0)}만원
+                    +{(row.cumulativeNetSavingsKrw / 10000).toFixed(0)}만 원
                   </td>
                 </tr>
               ))}
@@ -2124,7 +2156,7 @@ export default function DepreciationCalculatorClient({
           • 법정 보조금 환수: 환경부 전기자동차 보급사업 보조금 업무처리지침 및 대기환경보전법 시행규칙 제79조의4 [별표 21의2]
         </div>
         <div>
-          • 자동차세 및 연료 단가: 지방세법 제127조 (전기차 연 13만원 정액), 환경부 공공급속충전요금 347.2원/kWh, 한전 비공용완속충전 250원/kWh, 오피넷 전국 평균 가솔린 1,700원/L
+          • 자동차세 및 연료 단가: 지방세법 제127조 (전기차 연 13만 원 정액), 환경부 공공급속충전요금 347.2원/kWh, 한전 비공용완속충전 250원/kWh, 오피넷 전국 평균 가솔린 1,700원/L
         </div>
       </div>
     </div>

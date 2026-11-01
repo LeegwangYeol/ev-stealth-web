@@ -877,25 +877,29 @@ function interpolateBaselineResidual(curve: DepreciationCurve, years: number, ba
  * Accounts for vehicle age, mileage, warranty cliff, chemistry, 800V architecture, and OTA status.
  */
 export function calculateDepreciation(input: DepreciationCalculationInput): DepreciationCalculationResult {
-  const rawYears = input.years;
-  const years = Number.isFinite(rawYears) ? Math.max(0, rawYears) : 0;
+  const safeInput = input && typeof input === 'object' ? input : ({} as DepreciationCalculationInput);
+  const rawYears = safeInput.years;
+  const parsedYears = typeof rawYears === 'number' ? rawYears : Number(rawYears);
+  const years = Number.isFinite(parsedYears) ? Math.max(0, parsedYears) : 0;
 
-  const rawMileage = input.mileageKm;
-  const defaultMileage = years * DATABASE.metadata.baseline_annual_mileage_km;
-  const mileageKm = Number.isFinite(rawMileage) ? Math.max(0, rawMileage!) : defaultMileage;
+  const baselineAnnualMileage = DATABASE?.metadata?.baseline_annual_mileage_km ?? 15000;
+  const rawMileage = safeInput.mileageKm;
+  const parsedMileage = typeof rawMileage === 'number' ? rawMileage : Number(rawMileage);
+  const defaultMileage = years * baselineAnnualMileage;
+  const mileageKm = Number.isFinite(parsedMileage) ? Math.max(0, parsedMileage) : defaultMileage;
 
   const {
     modelId,
     winterSeason = false,
     priceBasis = 'msrp',
     customPurchasePriceKrw,
-  } = input;
+  } = safeInput;
 
-  const model = getModelById(modelId) || DATABASE.models[0] || DEFAULT_FALLBACK_DEPRECIATION_DATABASE.models[0];
+  const model = (modelId ? getModelById(modelId) : undefined) || DATABASE.models[0] || DEFAULT_FALLBACK_DEPRECIATION_DATABASE.models[0];
   const baselineResidualPct = interpolateBaselineResidual(model.depreciation_curve, years, priceBasis);
 
   // 1. Mileage Adjustment
-  const expectedMileage = years * DATABASE.metadata.baseline_annual_mileage_km;
+  const expectedMileage = years * baselineAnnualMileage;
   const deltaMileage = mileageKm - expectedMileage;
   let mileageAdjustment = 0;
   if (deltaMileage > 0) {
@@ -1006,6 +1010,7 @@ export function calculateDepreciation(input: DepreciationCalculationInput): Depr
  * Combines Arrhenius calendar aging and cyclic fatigue with DC fast charging strain.
  */
 export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHealthResult {
+  const safeParams = params && typeof params === 'object' ? params : ({} as BatterySimulationInput);
   const {
     chemistry: chemInput,
     modelId,
@@ -1016,14 +1021,15 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
     storageSoc = 0.50,
     ambientTempC = 25.0,
     vehicleEfficiencyKmPerKwh = 5.2,
-  } = params;
+  } = safeParams;
 
+  const parsedYears = typeof rawYears === 'number' ? rawYears : Number(rawYears);
   const isInvalidYears =
     rawYears === undefined ||
     rawYears === null ||
-    !Number.isFinite(rawYears) ||
-    rawYears < 0;
-  const safeYears = isInvalidYears ? 3 : rawYears;
+    !Number.isFinite(parsedYears) ||
+    parsedYears < 0;
+  const safeYears = isInvalidYears ? 3 : parsedYears;
 
   let model: EvModelDepreciation | undefined;
   if (modelId) {
@@ -1039,7 +1045,7 @@ export function simulateBatteryHealth(params: BatterySimulationInput): BatteryHe
     DATABASE.chemistries?.NCM_811 ||
     DEFAULT_FALLBACK_DEPRECIATION_DATABASE.chemistries[chemistryKey] ||
     DEFAULT_FALLBACK_DEPRECIATION_DATABASE.chemistries.NCM_811;
-  const packCapacityKwh = params.packCapacityKwh ?? model?.battery_specs.capacity_kwh ?? 77.4;
+  const packCapacityKwh = safeParams.packCapacityKwh ?? model?.battery_specs.capacity_kwh ?? 77.4;
   const safeAnnualKm = Number.isFinite(annualKm) && annualKm >= 0 ? annualKm : 15000;
   const rawMileage = Number.isFinite(inputTotalKm)
     ? (inputTotalKm as number)
@@ -1207,7 +1213,12 @@ export function calculateSubsidyClawback(
   transferType: TransferType,
   nationalSubsidyKrw: number = 0
 ): ClawbackResult {
-  const normalizedMonths = Number.isFinite(heldMonths) ? Math.max(0, heldMonths) : 0;
+  const parsedMonths = typeof heldMonths === 'number' ? heldMonths : Number(heldMonths);
+  const normalizedMonths = Number.isFinite(parsedMonths)
+    ? Math.max(0, parsedMonths)
+    : heldMonths === Infinity || parsedMonths === Infinity
+    ? 24
+    : 0;
   const safeLocalSubsidy = Number.isFinite(localSubsidyKrw) ? Math.max(0, localSubsidyKrw) : 0;
   const safeNationalSubsidy = Number.isFinite(nationalSubsidyKrw) ? Math.max(0, nationalSubsidyKrw) : 0;
   const tiers = getDepreciationDatabase().subsidy_clawback_schedule?.tiers;

@@ -1,24 +1,177 @@
 """POSIX crash-durable atomic JSON writer.
 
 Provides transactional file write guarantees via NamedTemporaryFile, flush,
-fsync, and atomic rename (os.replace).
+fsync, atomic rename (os.replace), directory fsync, cross-process advisory locking (FileLock),
+and corrupted payload isolation/quarantine routines.
 """
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from enum import Enum
+import errno
+import hashlib
 import json
 import logging
 import math
 import os
 from pathlib import Path
 import tempfile
+import threading
+import time
 from typing import Any, Callable, Dict, List, Optional, Union
 
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # type: ignore
+
 logger = logging.getLogger(__name__)
+
+
+class FileLock:
+    """Re-entrant cross-process and thread-safe advisory file lock with timeout and backoff."""
+
+    _local = threading.local()
+    _process_locks: Dict[str, threading.RLock] = {}
+    _meta_lock = threading.Lock()
+
+    def __init__(
+        self,
+        lock_path: Union[str, Path],
+        timeout: float = 10.0,
+        poll_interval: float = 0.02,
+    ) -> None:
+        self.lock_path = str(Path(lock_path).resolve())
+        self.timeout = timeout
+        self.poll_interval = poll_interval
+        self.fd: Optional[int] = None
+        with self._meta_lock:
+            if self.lock_path not in self._process_locks:
+                self._process_locks[self.lock_path] = threading.RLock()
+            self._thread_lock = self._process_locks[self.lock_path]
+
+    def __enter__(self) -> FileLock:
+        self._thread_lock.acquire()
+        try:
+            if not hasattr(self._local, "depths"):
+                self._local.depths = {}
+            depth = self._local.depths.get(self.lock_path, 0)
+            if depth > 0:
+                self._local.depths[self.lock_path] = depth + 1
+                return self
+
+            os.makedirs(os.path.dirname(self.lock_path), exist_ok=True)
+            self.fd = os.open(self.lock_path, os.O_CREAT | os.O_RDWR, 0o644)
+            if fcntl is not None:
+                start_time = time.monotonic()
+                while True:
+                    try:
+                        fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        break
+                    except (BlockingIOError, OSError) as exc:
+                        if exc.errno not in (errno.EACCES, errno.EAGAIN, errno.EWOULDBLOCK):
+                            raise
+                        if (time.monotonic() - start_time) >= self.timeout:
+                            logger.warning(
+                                "Timeout (%.1fs) acquiring lock on %s. Proceeding defensively.",
+                                self.timeout,
+                                self.lock_path,
+                            )
+                            break
+                        time.sleep(self.poll_interval)
+
+            self._local.depths[self.lock_path] = 1
+            return self
+        except Exception:
+            self._thread_lock.release()
+            raise
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        try:
+            depth = getattr(self._local, "depths", {}).get(self.lock_path, 0)
+            if depth > 1:
+                self._local.depths[self.lock_path] = depth - 1
+                return
+            if hasattr(self._local, "depths") and self.lock_path in self._local.depths:
+                del self._local.depths[self.lock_path]
+
+            if self.fd is not None:
+                if fcntl is not None:
+                    try:
+                        fcntl.flock(self.fd, fcntl.LOCK_UN)
+                    except OSError:
+                        pass
+                try:
+                    os.close(self.fd)
+                except OSError:
+                    pass
+                self.fd = None
+                try:
+                    if os.path.exists(self.lock_path):
+                        os.unlink(self.lock_path)
+                except OSError:
+                    pass
+        finally:
+            self._thread_lock.release()
+
+
+def is_corrupted_or_quarantined_filename(filename_or_path: Union[str, Path]) -> bool:
+    """Return True if filename indicates a quarantined or corrupted payload."""
+    name = Path(filename_or_path).name.lower()
+    return (
+        ".corrupted" in name
+        or ".corrupt_" in name
+        or name.endswith(".corrupt")
+    )
+
+
+def quarantine_corrupted_file(
+    file_path: Union[str, Path],
+    suffix: Optional[str] = None,
+) -> Optional[Path]:
+    """Quarantine a corrupted cache or payload file by renaming it to an isolated filename.
+
+    Supports standard timestamped pattern (.corrupt_YYYYMMDD_HHMMSS_ffffff.json)
+    and custom suffix isolation (.corrupted).
+    Guarantees POSIX directory fsync durability and standard permissions (0o644).
+    """
+    p = Path(file_path)
+    if not p.exists():
+        return None
+    try:
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+        if suffix:
+            s = suffix if suffix.startswith(".") else f".{suffix}"
+            if s == ".corrupted":
+                quarantine_path = p.with_name(f"{p.stem}.corrupt_{ts}.corrupted")
+            else:
+                quarantine_path = p.with_name(f"{p.stem}{s}")
+        else:
+            quarantine_path = p.with_name(f"{p.stem}.corrupt_{ts}{p.suffix}")
+
+        p.rename(quarantine_path)
+        try:
+            os.chmod(quarantine_path, 0o644)
+        except OSError:
+            pass
+
+        # Directory fsync to ensure quarantine rename is crash-durably committed
+        try:
+            dir_fd = os.open(str(p.parent), os.O_RDONLY)
+            os.fsync(dir_fd)
+            os.close(dir_fd)
+        except OSError:
+            pass
+
+        logger.warning("Quarantined corrupted file: %s -> %s", p, quarantine_path)
+        return quarantine_path
+    except OSError as exc:
+        logger.warning("Failed to quarantine corrupted file %s: %s", p, exc)
+        return None
 
 
 def sanitize_nan_inf(obj: Any) -> Any:
@@ -66,15 +219,20 @@ def atomic_write_json(
     indent: int = 2,
     ensure_ascii: bool = False,
     default: Optional[Callable[[Any], Any]] = None,
+    preserve_mtime: Optional[float] = None,
 ) -> Path:
     """Atomically write data as JSON to target_path using crash-durable semantics.
 
     Steps:
     1. Resolve target directory and create if not existing.
-    2. Write JSON to NamedTemporaryFile in the same filesystem directory.
-    3. Flush application buffers and issue OS fsync on file descriptor.
-    4. Atomically swap temp file with target using os.replace.
-    5. Clean up temporary file in finally block if replacement fails.
+    2. Acquire advisory FileLock to prevent race conditions during multi-process execution.
+    3. Write JSON to NamedTemporaryFile in the same filesystem directory.
+    4. Flush application buffers and issue OS fsync on file descriptor.
+    5. Set POSIX permissions 0o644.
+    6. Atomically swap temp file with target using os.replace.
+    7. Optionally preserve st_mtime.
+    8. Issue directory fsync on parent directory for durability.
+    9. Clean up temporary file in finally block if replacement fails.
 
     Args:
         data: Python dictionary, list, or object providing a `to_dict()` method.
@@ -82,6 +240,7 @@ def atomic_write_json(
         indent: JSON indentation spaces.
         ensure_ascii: Whether to escape non-ASCII characters.
         default: Optional custom serializer function. Defaults to `_json_default`.
+        preserve_mtime: Optional float timestamp to preserve on destination.
 
     Returns:
         Path: The absolute path of the written file.
@@ -102,38 +261,56 @@ def atomic_write_json(
 
     serializer = default if default is not None else _json_default
     temp_name: Optional[str] = None
-    try:
-        # Create temp file in the same directory to ensure atomic os.replace across filesystem boundaries
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            dir=str(dest_dir),
-            delete=False,
-            encoding="utf-8",
-            prefix=".tmp_subsidy_",
-            suffix=".json",
-        ) as tf:
-            temp_name = tf.name
-            json.dump(payload, tf, ensure_ascii=ensure_ascii, indent=indent, default=serializer, allow_nan=False)
-            tf.flush()
-            os.fsync(tf.fileno())
+    lock_file = Path(tempfile.gettempdir()) / f".ev_atomic_{hashlib.sha256(str(dest.resolve()).encode('utf-8')).hexdigest()[:16]}.lock"
 
+    with FileLock(lock_file):
         try:
-            os.chmod(temp_name, 0o644)
-        except OSError:
-            pass
-        os.replace(temp_name, dest)
-        temp_name = None  # Replaced successfully
-        logger.debug("Atomically wrote %s", dest)
-        return dest
-    except Exception as e:
-        logger.error("Failed atomic write to %s: %s", dest, e)
-        raise
-    finally:
-        if temp_name and os.path.exists(temp_name):
+            # Create temp file in the same directory to ensure atomic os.replace across filesystem boundaries
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                dir=str(dest_dir),
+                delete=False,
+                encoding="utf-8",
+                prefix=".tmp_subsidy_",
+                suffix=".json",
+            ) as tf:
+                temp_name = tf.name
+                json.dump(payload, tf, ensure_ascii=ensure_ascii, indent=indent, default=serializer, allow_nan=False)
+                tf.flush()
+                os.fsync(tf.fileno())
+
             try:
-                os.unlink(temp_name)
+                os.chmod(temp_name, 0o644)
             except OSError:
                 pass
+            os.replace(temp_name, dest)
+            temp_name = None  # Replaced successfully
+
+            if preserve_mtime is not None:
+                try:
+                    os.utime(dest, (preserve_mtime, preserve_mtime))
+                except OSError:
+                    pass
+
+            # Directory fsync to commit the replacement to disk
+            try:
+                dir_fd = os.open(str(dest_dir), os.O_RDONLY)
+                os.fsync(dir_fd)
+                os.close(dir_fd)
+            except OSError:
+                pass
+
+            logger.debug("Atomically wrote %s", dest)
+            return dest
+        except Exception as e:
+            logger.error("Failed atomic write to %s: %s", dest, e)
+            raise
+        finally:
+            if temp_name and os.path.exists(temp_name):
+                try:
+                    os.unlink(temp_name)
+                except OSError:
+                    pass
 
 
 def atomic_write_json_multiple(
@@ -142,10 +319,19 @@ def atomic_write_json_multiple(
     indent: int = 2,
     ensure_ascii: bool = False,
     default: Optional[Callable[[Any], Any]] = None,
+    preserve_mtime: Optional[float] = None,
 ) -> List[Path]:
     """Atomically write data as JSON to multiple target paths."""
     written_paths: List[Path] = []
     for p in target_paths:
-        written = atomic_write_json(data, p, indent=indent, ensure_ascii=ensure_ascii, default=default)
+        written = atomic_write_json(
+            data,
+            p,
+            indent=indent,
+            ensure_ascii=ensure_ascii,
+            default=default,
+            preserve_mtime=preserve_mtime,
+        )
         written_paths.append(written)
     return written_paths
+

@@ -163,3 +163,19 @@ export interface SubsidyCalculatorOptions {
   isMultiChildFamily?: boolean; // +10% national subsidy
   isOldDieselScrappage?: boolean; // +1,000,000 KRW flat incentive
 }
+
+export interface SubsidyStatistics {
+  announced: number;
+  applied: number;
+  delivered: number;
+  remaining: number;
+  depletionRate: number;
+  deliveryRate: number;
+  budgetTotal: number;
+  budgetDisbursed: number;
+  budgetExecutionRatePct: number;
+  criticalRegionsCount: number;
+  depletedRegionsCount: number;
+  warningRegionsCount: number;
+}
+
