@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import json
 import logging
@@ -21,7 +22,7 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
-from typing import List, Optional, Set, Union
+from typing import List, Optional, Set, Tuple, Union
 
 # Ensure repository root and tracker package are on sys.path
 _CURRENT_DIR = Path(__file__).resolve().parent
@@ -395,7 +396,7 @@ def parse_arguments(args: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Synchronize output files directly into ev-stealth-web/src/data/.",
     )
-    web_dir_env = os.getenv("EV_TRACKER_WEB_DIR")
+    web_dir_env = (os.getenv("EV_TRACKER_WEB_DIR") or os.getenv("EV_WEB_DIR") or "").strip()
     parser.add_argument(
         "--web-dir",
         type=Path,
@@ -418,10 +419,11 @@ def parse_arguments(args: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Simulate remote network failure to force resilient baseline fallback.",
     )
+    endpoint_env = (os.getenv("EV_SUBSIDY_API_ENDPOINT") or "").strip() or None
     parser.add_argument(
         "--endpoint",
         type=str,
-        default=os.getenv("EV_SUBSIDY_API_ENDPOINT"),
+        default=endpoint_env,
         help="Custom URL for remote subsidy API/scraper endpoint.",
     )
     parser.add_argument(
@@ -463,21 +465,45 @@ def parse_arguments(args: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_false",
         help="Disable defect reports synchronization.",
     )
-    return parser.parse_args(args)
+    parsed = parser.parse_args(args)
+
+    # Sanitize and defend against empty string or bare directory output paths
+    if parsed.output is not None:
+        raw_out_str = str(parsed.output).strip()
+        if not raw_out_str or raw_out_str == ".":
+            parsed.output = DEFAULT_PRIMARY_OUTPUT
+        elif parsed.output.is_dir():
+            parsed.output = parsed.output / "ev_subsidy_data.json"
+    else:
+        parsed.output = DEFAULT_PRIMARY_OUTPUT
+
+    # Sanitize custom web directory argument
+    if parsed.web_dir is not None:
+        raw_web_str = str(parsed.web_dir).strip()
+        if not raw_web_str or raw_web_str == ".":
+            parsed.web_dir = None
+        else:
+            parsed.web_dir = Path(raw_web_str)
+
+    # Sanitize endpoint URL
+    if parsed.endpoint is not None:
+        raw_ep = parsed.endpoint.strip()
+        parsed.endpoint = raw_ep if raw_ep else None
+
+    return parsed
 
 
 parse_args = parse_arguments
 
 
-def main() -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     """Main CLI entrypoint execution loop."""
-    args = parse_arguments()
-    setup_logging(args.verbose)
-
-    logger.info("Initializing Autonomous EV Subsidy Tracker...")
-    logger.info("Configuration: dry_run=%s, sync_web=%s, output=%s", args.dry_run, args.sync_web, args.output)
-
     try:
+        args = parse_arguments(argv)
+        setup_logging(args.verbose)
+
+        logger.info("Initializing Autonomous EV Subsidy Tracker...")
+        logger.info("Configuration: dry_run=%s, sync_web=%s, output=%s", args.dry_run, args.sync_web, args.output)
         tracker = SubsidyTracker(
             endpoint_url=args.endpoint,
             timeout_seconds=5.0,
@@ -623,12 +649,13 @@ def main() -> int:
                 is_target = (args.output == DEFAULT_PRIMARY_OUTPUT)
             auto_bidirectional = both_exist and is_target
             if args.sync_web or auto_bidirectional or (args.sync_defects is True):
-                sync_defect_reports(
-                    web_dir=args.web_dir,
-                    dry_run=True,
-                    run_crawler=False,
-                    quarantine_corrupted=getattr(args, "quarantine_corrupted", True),
-                )
+                if getattr(args, "sync_defects", None) is not False:
+                    sync_defect_reports(
+                        web_dir=args.web_dir,
+                        dry_run=True,
+                        run_crawler=False,
+                        quarantine_corrupted=getattr(args, "quarantine_corrupted", True),
+                    )
 
         # Print executive summary briefing to stdout
         briefing = tracker.generate_briefing(payload, fallback_used=fallback_used)
@@ -637,6 +664,11 @@ def main() -> int:
         logger.info("Subsidy tracking pipeline finished successfully.")
         return 0
 
+    except KeyboardInterrupt:
+        logger.warning("Subsidy tracker pipeline cancelled by user.")
+        return 1
+    except SystemExit as se:
+        return se.code if isinstance(se.code, int) else 1
     except Exception as exc:
         logger.exception("Fatal error in subsidy tracker pipeline: %s", exc)
         return 1

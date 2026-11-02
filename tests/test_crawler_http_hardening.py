@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import http.cookiejar
 import io
+import json
 import unittest
 import urllib.error
 import urllib.request
@@ -253,6 +254,105 @@ class TestDCInsideCrawlerDOMResilience(unittest.TestCase):
 
     def test_dcinside_alias(self):
         self.assertIs(DCInsideCrawler, DcInsideCrawler)
+
+    def test_self_closing_tag_depth_tracking(self):
+        """Self-closing tags inside container do not increment depth incorrectly."""
+        html = '<div class="bodyCont"><div>Valid line</div><div class="divider" /><div>After divider</div></div><div class="footer">Footer</div>'
+        extracted = bd_extract(html, "div", "bodyCont")
+        self.assertIn("Valid line", extracted)
+        self.assertIn("After divider", extracted)
+        self.assertNotIn("Footer", extracted)
+
+    def test_timestamp_month_day_with_time(self):
+        """Community timestamps with 'MM.DD HH:MM' parse correctly into current year ISO timestamps."""
+        from crawlers.bobaedream import _normalize_iso_timestamp as bd_ts
+        from crawlers.dcinside import _normalize_iso_timestamp as dc_ts
+
+        ts_b = bd_ts("09.15 14:25")
+        self.assertIn("-09-15T14:25:00", ts_b)
+
+        ts_d = dc_ts("09.15 10:11")
+        self.assertIn("-09-15T10:11:00", ts_d)
+
+    def test_post_id_zero_falsy_protection(self):
+        """post_id=0 must be preserved as '0' instead of falling back or becoming empty."""
+        crawler_b = BobaeDreamCrawler()
+        res_b = crawler_b.parse_post_detail("<div>test</div>", "https://example.com", post_id=0)  # type: ignore
+        self.assertEqual(res_b["post_id"], "0")
+
+        crawler_d = DCInsideCrawler()
+        res_d = crawler_d.parse_post_detail("<div>test</div>", "https://example.com", post_id=0)  # type: ignore
+        self.assertEqual(res_d["post_id"], "0")
+
+    def test_crawler_relative_url_normalization(self):
+        """Relative post URLs are normalized to absolute domain URLs."""
+        from unittest.mock import MagicMock
+        mock_client = MagicMock(spec=SafeHttpClient)
+        mock_client.get.return_value = (200, "<html><strong class='title'>Title</strong><div class='bodyCont'>Content</div></html>", b"")
+
+        crawler_b = BobaeDreamCrawler(client=mock_client)
+        crawler_b.fetch_post("/view?code=national&No=123")
+        called_url = mock_client.get.call_args[0][0]
+        self.assertTrue(called_url.startswith("https://www.bobaedream.co.kr/view"))
+
+        mock_client_d = MagicMock(spec=SafeHttpClient)
+        mock_client_d.get.return_value = (200, "<html><span class='title_subject'>Title</span><div class='write_div'>Content</div></html>", b"")
+        crawler_d = DCInsideCrawler(client=mock_client_d)
+        crawler_d.fetch_post("/board/view/?id=car_new1&no=456")
+        called_url_d = mock_client_d.get.call_args[0][0]
+        self.assertTrue(called_url_d.startswith("https://gall.dcinside.com/board/view"))
+
+    def test_network_dropout_recovery_in_crawl_loops(self):
+        """Network exceptions on page 2 gracefully exit loop and retain page 1 results."""
+        from unittest.mock import MagicMock
+        mock_client = MagicMock(spec=SafeHttpClient)
+        page1_html = "<a href='/view?code=national&No=101'>아이오닉5 고장</a>"
+        post_html = "<strong class='title'>아이오닉5 고장</strong><div class='bodyCont'>본문</div>"
+
+        def mock_get(url, *args, **kwargs):
+            if "page=1" in url:
+                return (200, page1_html, b"")
+            elif "No=101" in url:
+                return (200, post_html, b"")
+            elif "page=2" in url:
+                raise ConnectionResetError("Connection dropped by peer")
+            return (404, "", b"")
+
+        mock_client.get.side_effect = mock_get
+        crawler = BobaeDreamCrawler(client=mock_client)
+        posts = crawler.crawl_board("national", pages=3)
+        self.assertEqual(len(posts), 1)
+        self.assertEqual(posts[0]["post_id"], "101")
+
+    def test_dcinside_comment_replies_json_parsing(self):
+        """Nested replies in DCInside comment API are parsed."""
+        crawler = DCInsideCrawler()
+        json_data = json.dumps({
+            "comments": [
+                {
+                    "memo": "부품 교체 받으셨나요?",
+                    "sub_comments": [
+                        {"memo": "네 어제 직영센터에서 교체 완료했습니다."}
+                    ]
+                }
+            ]
+        })
+        parsed = crawler.parse_comment_json(json_data)
+        self.assertEqual(len(parsed), 2)
+        self.assertIn("부품 교체", parsed[0])
+        self.assertIn("직영센터", parsed[1])
+
+    def test_limit_zero_returns_empty_list(self):
+        """Passing limit=0 returns empty list without fetching."""
+        crawler_b = BobaeDreamCrawler()
+        self.assertEqual(crawler_b.crawl_board("national", limit=0), [])
+        self.assertEqual(crawler_b.search_board("national", "아이오닉", limit=0), [])
+        self.assertEqual(crawler_b.crawl_posts_by_keyword("아이오닉", limit=0), [])
+
+        crawler_d = DCInsideCrawler()
+        self.assertEqual(crawler_d.crawl_gallery("car_new1", limit=0), [])
+        self.assertEqual(crawler_d.search_gallery("car_new1", "아이오닉", limit=0), [])
+        self.assertEqual(crawler_d.crawl_posts_by_keyword("아이오닉", limit=0), [])
 
 
 if __name__ == "__main__":

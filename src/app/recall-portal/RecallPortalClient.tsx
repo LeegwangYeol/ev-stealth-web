@@ -18,6 +18,7 @@ import {
   getModelsForBrand,
   DEFAULT_RECALL_METADATA,
 } from '@/lib/recallCalculations';
+import { sanitizeSafeUrl, isExternalUrl } from '@/lib/sanitizeUrl';
 
 const BRAND_SYNONYMS: Record<string, string> = {
   tesla: '테슬라',
@@ -680,7 +681,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       value={vinInput}
                       aria-label="17자리 자동차 차대번호(VIN) 입력"
                       aria-invalid={!!vinError}
-                      aria-describedby={vinError ? "vin-error-feedback" : undefined}
+                      aria-describedby={vinError ? "vin-error-feedback" : "vin-format-hint"}
                       onChange={(e) => {
                         setVinInput(e.target.value.toUpperCase());
                         setVinTouched(true);
@@ -692,6 +693,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                           : 'border-slate-700 focus:ring-blue-500/50 focus-visible:ring-blue-500/50 focus:border-blue-500'
                       }`}
                     />
+                    <p id="vin-format-hint" className="sr-only">영문 대문자와 숫자로 구성된 17자리 차량 식별 번호</p>
                     <div className="absolute right-3 top-3.5 text-xs font-mono text-slate-400">
                       {vinInput.replace(/[\s-]/g, '').length}/17
                     </div>
@@ -780,7 +782,8 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
           {activeCheckerMode === 'MODEL' && (
             <div id="model-checker-panel" role="tabpanel" aria-labelledby="model-checker-tab" tabIndex={0} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl">
               <form onSubmit={handleModelSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <fieldset className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-0 p-0 m-0">
+                  <legend className="sr-only">제조사, 모델, 생산 연식 선택 필터</legend>
                   {/* Brand */}
                   <div>
                     <label htmlFor="brand-select" className="block text-xs font-semibold text-slate-300 uppercase mb-2">
@@ -846,7 +849,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       ))}
                     </select>
                   </div>
-                </div>
+                </fieldset>
 
                 <div className="pt-2">
                   <button
@@ -996,7 +999,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                       </svg>
-                      🏢 아파트 지하주차장 이용 및 충전 가이드
+                      <span aria-hidden="true">🏢</span> 아파트 지하주차장 이용 및 충전 가이드
                     </div>
                     <p className="text-xs text-slate-300 leading-relaxed">
                       {checkResult.batteryProfile.underground_parking_advisory}
@@ -1134,15 +1137,21 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                               <span className="font-semibold text-slate-300">고객센터 접수: </span>
                               <span className="text-white font-mono">{campaign.service_center_contact}</span>
                             </div>
-                            <a
-                              href={campaign.official_link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-400 hover:text-blue-300 flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
-                            >
-                              공식 제조사 리콜 공지 확인 &rarr;
-                              <span className="sr-only"> (새 창에서 열림)</span>
-                            </a>
+                            {(() => {
+                              const safeLink = sanitizeSafeUrl(campaign.official_link);
+                              const isExternal = isExternalUrl(safeLink);
+                              return isExternal ? (
+                                <a
+                                  href={safeLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-400 hover:text-blue-300 flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
+                                >
+                                  공식 제조사 리콜 공지 확인 &rarr;
+                                  <span className="sr-only"> (새 창에서 열림)</span>
+                                </a>
+                              ) : null;
+                            })()}
                           </div>
                         </div>
                       )}
@@ -1196,7 +1205,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
           </div>
 
           {/* Filter Chips: Suppliers & Status */}
-          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-800">
+          <div role="group" aria-label="배터리 셀 제조사 필터" className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-800">
             <span className="text-xs font-semibold text-slate-400 mr-2">제조사 필터:</span>
             {supplierFilters.map((s) => (
               <button
@@ -1215,7 +1224,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div role="group" aria-label="화재 리스크 상태별 필터" className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold text-slate-400 mr-2">화재 리스크 상태:</span>
             {FIRE_STATUS_FILTERS.map((f) => (
               <button
@@ -1309,7 +1318,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
           </div>
 
           {/* Filter Chips: Risk & Remedy */}
-          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-800">
+          <div role="group" aria-label="리콜 위험 등급별 필터" className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-800">
             <span className="text-xs font-semibold text-slate-400 mr-2">위험 등급:</span>
             {RISK_LEVEL_FILTERS.map((rf) => (
               <button
@@ -1328,7 +1337,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div role="group" aria-label="시정 조치 유형별 필터" className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold text-slate-400 mr-2">조치 유형:</span>
             {REMEDY_METHOD_FILTERS.map((rm) => (
               <button
@@ -1472,15 +1481,21 @@ export const RecallCard = React.memo(function RecallCard({
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between text-slate-400 pt-1 gap-2">
             <span>고객센터: <strong className="text-white">{campaign.service_center_contact}</strong></span>
-            <a
-              href={campaign.official_link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-400 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
-            >
-              공식 웹사이트 바로가기 &rarr;
-              <span className="sr-only"> (새 창에서 열림)</span>
-            </a>
+            {(() => {
+              const safeLink = sanitizeSafeUrl(campaign.official_link);
+              const isExternal = isExternalUrl(safeLink);
+              return isExternal ? (
+                <a
+                  href={safeLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
+                >
+                  공식 웹사이트 바로가기 &rarr;
+                  <span className="sr-only"> (새 창에서 열림)</span>
+                </a>
+              ) : null;
+            })()}
           </div>
         </div>
       )}

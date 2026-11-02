@@ -55,7 +55,7 @@ export const SubsidyProgressBar = memo(function SubsidyProgressBar({
       {/* WCAG AA Multi-Layer Progress Bar with Non-Text Contrast >= 3:1 */}
       <div
         role="progressbar"
-        aria-valuenow={Math.min(100, Math.round(safeDepletion))}
+        aria-valuenow={Math.min(100, Math.max(0, Math.round(safeDepletion)))}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-label={`${regionName} ${categoryLabel} 보조금 소진율`}
@@ -82,7 +82,7 @@ export const SubsidyProgressBar = memo(function SubsidyProgressBar({
         {remainingPct > 0 && (
           <div
             style={{ width: `${remainingPct}%` }}
-            className="bg-slate-700 h-full"
+            className="bg-slate-600 h-full"
             title={`잔여: ${safeRemaining.toLocaleString()}대 (${remainingPct.toFixed(1)}%)`}
           />
         )}

@@ -212,16 +212,21 @@ class RawPost:
         }
 
     def __getitem__(self, key: str) -> Any:
-        try:
-            return getattr(self, key)
-        except AttributeError:
-            d = self.to_dict()
-            if key in d:
-                return d[key]
-            raise KeyError(key) from None
+        if isinstance(key, str) and hasattr(self, key) and not key.startswith("_"):
+            val = getattr(self, key)
+            if not callable(val):
+                return val
+        d = self.to_dict()
+        if key in d:
+            return d[key]
+        raise KeyError(key) from None
 
     def __contains__(self, key: Any) -> bool:
-        return hasattr(self, str(key)) or key in self.to_dict()
+        if isinstance(key, str) and hasattr(self, key) and not key.startswith("_"):
+            val = getattr(self, key)
+            if not callable(val):
+                return True
+        return key in self.to_dict()
 
     def get(self, key: str, default: Any = None) -> Any:
         try:
@@ -240,6 +245,12 @@ class RawPost:
 
     def __iter__(self):
         return iter(self.to_dict())
+
+    def __len__(self) -> int:
+        return len(self.to_dict())
+
+    def __len__(self) -> int:
+        return len(self.to_dict())
 
     @classmethod
     def from_dict(cls, data: Any) -> RawPost:
@@ -303,7 +314,11 @@ class DSIBreakdown:
         raise KeyError(key) from None
 
     def __contains__(self, key: Any) -> bool:
-        return hasattr(self, str(key)) or key in self.to_dict()
+        if isinstance(key, str) and hasattr(self, key) and not key.startswith("_"):
+            val = getattr(self, key)
+            if not callable(val):
+                return True
+        return key in self.to_dict()
 
     def get(self, key: str, default: Any = None) -> Any:
         try:
@@ -322,6 +337,9 @@ class DSIBreakdown:
 
     def __iter__(self):
         return iter(self.to_dict())
+
+    def __len__(self) -> int:
+        return len(self.to_dict())
 
     @classmethod
     def from_dict(cls, data: Any) -> Optional[DSIBreakdown]:
@@ -369,7 +387,7 @@ class ComplaintRecord:
     @property
     def severity_tier(self) -> str:
         """Map DSI score to 4 severity tiers or return explicit severity."""
-        if self.severity:
+        if self.severity and str(self.severity).strip():
             return str(self.severity).strip().upper()
         if self.severity_index is None:
             return "LOW"
@@ -714,16 +732,21 @@ class ComplaintRecord:
         )
 
     def __getitem__(self, key: str) -> Any:
-        try:
-            return getattr(self, key)
-        except AttributeError:
-            d = self.to_admin_report_dict()
-            if key in d:
-                return d[key]
-            raise KeyError(key) from None
+        if isinstance(key, str) and hasattr(self, key) and not key.startswith("_"):
+            val = getattr(self, key)
+            if not callable(val):
+                return val
+        d = self.to_admin_report_dict()
+        if key in d:
+            return d[key]
+        raise KeyError(key) from None
 
     def __contains__(self, key: Any) -> bool:
-        return hasattr(self, str(key)) or key in self.to_admin_report_dict()
+        if isinstance(key, str) and hasattr(self, key) and not key.startswith("_"):
+            val = getattr(self, key)
+            if not callable(val):
+                return True
+        return key in self.to_admin_report_dict()
 
     def get(self, key: str, default: Any = None) -> Any:
         try:
@@ -743,6 +766,9 @@ class ComplaintRecord:
     def __iter__(self):
         return iter(self.to_admin_report_dict())
 
+    def __len__(self) -> int:
+        return len(self.to_admin_report_dict())
+
 
 @dataclass
 class DailyReportStatistics:
@@ -761,16 +787,21 @@ class DailyReportStatistics:
         }
 
     def __getitem__(self, key: str) -> Any:
-        try:
-            return getattr(self, key)
-        except AttributeError:
-            d = self.to_dict()
-            if key in d:
-                return d[key]
-            raise KeyError(key) from None
+        if isinstance(key, str) and hasattr(self, key) and not key.startswith("_"):
+            val = getattr(self, key)
+            if not callable(val):
+                return val
+        d = self.to_dict()
+        if key in d:
+            return d[key]
+        raise KeyError(key) from None
 
     def __contains__(self, key: Any) -> bool:
-        return hasattr(self, str(key)) or key in self.to_dict()
+        if isinstance(key, str) and hasattr(self, key) and not key.startswith("_"):
+            val = getattr(self, key)
+            if not callable(val):
+                return True
+        return key in self.to_dict()
 
     def get(self, key: str, default: Any = None) -> Any:
         try:
@@ -789,6 +820,12 @@ class DailyReportStatistics:
 
     def __iter__(self):
         return iter(self.to_dict())
+
+    def __len__(self) -> int:
+        return len(self.to_dict())
+
+    def __len__(self) -> int:
+        return len(self.to_dict())
 
     @classmethod
     def from_dict(cls, data: Any) -> DailyReportStatistics:
@@ -815,12 +852,20 @@ class DailyReportPayload:
     top_defect_categories: List[Dict[str, Any]] = field(default_factory=list)
 
     def __getitem__(self, key: str) -> Any:
+        if isinstance(key, str) and hasattr(self, key) and not key.startswith("_"):
+            val = getattr(self, key)
+            if not callable(val):
+                return val
         d = self.to_dict()
-        if key not in d:
-            raise KeyError(key)
-        return d[key]
+        if key in d:
+            return d[key]
+        raise KeyError(key)
 
     def __contains__(self, key: Any) -> bool:
+        if isinstance(key, str) and hasattr(self, key) and not key.startswith("_"):
+            val = getattr(self, key)
+            if not callable(val):
+                return True
         return key in self.to_dict()
 
     def get(self, key: str, default: Any = None) -> Any:
@@ -837,6 +882,9 @@ class DailyReportPayload:
 
     def __iter__(self):
         return iter(self.to_dict())
+
+    def __len__(self) -> int:
+        return len(self.to_dict())
 
     def to_dict(self) -> Dict[str, Any]:
         return {

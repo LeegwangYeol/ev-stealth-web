@@ -31,20 +31,40 @@ class BaseCrawler(abc.ABC):
             force = base_url
             base_url = None
         if (not self._warmed_up or force) and base_url and isinstance(base_url, str):
-            self.client.warm_up_session(base_url)
+            try:
+                if self.client and hasattr(self.client, "warm_up_session"):
+                    self.client.warm_up_session(base_url)
+            except Exception as e:
+                logger.warning(f"Error during session warm up on {base_url}: {e}")
             self._warmed_up = True
 
     def clear_session(self) -> None:
         """Reset session cookies and warm-up state."""
         if hasattr(self.client, "clear_cookies"):
-            self.client.clear_cookies()
+            try:
+                self.client.clear_cookies()
+            except Exception as e:
+                logger.warning(f"Error clearing cookies: {e}")
         self._warmed_up = False
 
     def close(self) -> None:
         """Release HTTP client resources and close session."""
-        self.clear_session()
+        try:
+            self.clear_session()
+        except Exception:
+            pass
         if hasattr(self.client, "close"):
-            self.client.close()
+            try:
+                self.client.close()
+            except Exception as e:
+                logger.warning(f"Error closing HTTP client: {e}")
+
+    def __del__(self) -> None:
+        """Safely release underlying client resources on garbage collection."""
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def __enter__(self) -> "BaseCrawler":
         return self
@@ -84,7 +104,16 @@ class BaseCrawler(abc.ABC):
         base_url = kwargs.get("base_url")
         self.ensure_warm_up(base_url)
         timeout = kwargs.get("timeout")
-        status, text, _ = self.client.get(post_url, referer=referer, timeout=timeout)
+        try:
+            resp = self.client.get(post_url, referer=referer, timeout=timeout)
+            if not resp or not isinstance(resp, (tuple, list)) or len(resp) < 2:
+                logger.warning(f"Failed to fetch post: {post_url} (empty or invalid response)")
+                return None
+            status, text = resp[0], resp[1]
+        except Exception as e:
+            logger.warning(f"Network error fetching post {post_url}: {e}")
+            return None
+
         if status != 200 or not text:
             logger.warning(f"Failed to fetch post: {post_url} (status: {status})")
             return None

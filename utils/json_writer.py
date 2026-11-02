@@ -206,6 +206,8 @@ def write_daily_reports(
     generated_at: Optional[str] = None,
     merge_existing: bool = True,
     quarantine_corrupted: bool = True,
+    mode: Optional[int] = None,
+    preserve_permissions: bool = True,
 ) -> str:
     """Format and atomically write daily reports JSON to the destination path.
 
@@ -214,22 +216,23 @@ def write_daily_reports(
     Protected by inter-process FileLock to eliminate race conditions across multiple
     sync processes. Guarantees POSIX crash durability (flush, fsync, directory fsync, 0o644).
     Quarantines corrupted preexisting files when quarantine_corrupted is True.
+    Preserves existing file permissions when output_path already exists.
     Returns the absolute path written.
     """
     from tracker.atomic_writer import (
         FileLock,
         _json_default,
+        atomic_write_json,
+        get_lock_path,
         is_corrupted_or_quarantined_filename,
         quarantine_corrupted_file,
         sanitize_nan_inf,
     )
 
-    dir_path = os.path.dirname(os.path.abspath(output_path))
-    os.makedirs(dir_path, exist_ok=True)
-    lock_file = os.path.join(
-        tempfile.gettempdir(),
-        f".daily_report_{hashlib.sha256(os.path.abspath(output_path).encode('utf-8')).hexdigest()[:16]}.lock",
-    )
+    dest_path = Path(output_path).resolve()
+    dir_path = dest_path.parent
+    dir_path.mkdir(parents=True, exist_ok=True)
+    lock_file = get_lock_path(dest_path)
 
     with FileLock(lock_file):
         items_to_write: List[Union[ComplaintRecord, Dict[str, Any]]] = list(complaints)
@@ -319,39 +322,19 @@ def write_daily_reports(
 
         data = payload.to_dict()
 
-        # Perform atomic write via temporary file with crash durability (flush + fsync)
-        temp_dir = dir_path
-        temp_name: Optional[str] = None
-        try:
-            with tempfile.NamedTemporaryFile("w", dir=temp_dir, delete=False, encoding="utf-8", prefix=".tmp_daily_", suffix=".json") as tf:
-                temp_name = tf.name
-                sanitized_data = sanitize_nan_inf(data)
-                json.dump(sanitized_data, tf, ensure_ascii=False, indent=2, default=_json_default, allow_nan=False)
-                tf.flush()
-                os.fsync(tf.fileno())
+        # Atomically write daily report payload using crash-durable atomic_write_json
+        atomic_write_json(
+            data,
+            dest_path,
+            indent=2,
+            ensure_ascii=False,
+            default=_json_default,
+            mode=mode,
+            preserve_permissions=preserve_permissions,
+            temp_prefix=".tmp_daily_",
+        )
 
-            try:
-                os.chmod(temp_name, 0o644)
-            except OSError:
-                pass
-            os.replace(temp_name, output_path)
-            temp_name = None
-
-            # Issue directory fsync for crash durability
-            try:
-                dir_fd = os.open(str(dir_path), os.O_RDONLY)
-                os.fsync(dir_fd)
-                os.close(dir_fd)
-            except OSError:
-                pass
-        finally:
-            if temp_name and os.path.exists(temp_name):
-                try:
-                    os.unlink(temp_name)
-                except OSError:
-                    pass
-
-        return output_path
+        return str(output_path)
 
 
 def read_daily_reports(

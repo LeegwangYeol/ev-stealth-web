@@ -60,11 +60,6 @@ const globalJsonLd = {
       "name": "Global EV Hub",
       "url": SITE_URL,
       "logo": `${SITE_URL}/favicon.ico`,
-      "sameAs": [
-        "https://www.ev.or.kr",
-        "https://www.car.go.kr",
-        "https://www.nhtsa.gov",
-      ],
     },
   ],
 };

@@ -29,6 +29,8 @@ from filters.defect_filter import (
     POSITIVE_LEXICON,
     ContextualDefectFilter,
 )
+from filters.defect_classifier import DefectClassifier
+from filters.spam_filter import SpamFilter
 from filters.slang_lexicon import (
     CONCESSIVES,
     DIMINISHERS,
@@ -315,6 +317,101 @@ class TestSlangLexicon(unittest.TestCase):
         """Empty or null strings must safely return empty lists."""
         self.assertEqual(find_matching_slang(""), [])
         self.assertEqual(find_matching_slang(None), [])
+
+
+class TestHangulParticleAndBoundaryResilience(unittest.TestCase):
+    """Test Korean particle attachments, lookaround boundaries, and score bounds."""
+
+    def setUp(self):
+        self.classifier = DefectClassifier()
+        self.spam_filter = SpamFilter()
+
+    def test_vehicle_matcher_hangul_particle_attachments(self):
+        """Vehicle models followed by various Korean particles must match accurately."""
+        cases = [
+            ("M3는 승차감이 어때요?", BRAND_TESLA, "Model 3"),
+            ("M3보다 좋은 차 있나요?", BRAND_TESLA, "Model 3"),
+            ("M3가 고장났어요", BRAND_TESLA, "Model 3"),
+            ("M3를 계약했습니다", BRAND_TESLA, "Model 3"),
+            ("M3의 단차 점검", BRAND_TESLA, "Model 3"),
+            ("M3도 충전되나요?", BRAND_TESLA, "Model 3"),
+            ("M3로 바꿨어요", BRAND_TESLA, "Model 3"),
+            ("M3랑 비교해주세요", BRAND_TESLA, "Model 3"),
+            ("MS는 최고예요", BRAND_TESLA, "Model S"),
+            ("MX는 팔콘윙이 멋져요", BRAND_TESLA, "Model X"),
+            ("EV6보다 낫다", BRAND_KIA, "EV6"),
+            ("EV6랑 비교해보니", BRAND_KIA, "EV6"),
+            ("EV6타고 여행 다녀옴", BRAND_KIA, "EV6"),
+            ("EV6차주입니다", BRAND_KIA, "EV6"),
+            ("ST1보다 포터가 낫다", BRAND_HYUNDAI, "ST1"),
+            ("비야디 한은 세단입니다", BRAND_BYD, "한"),
+            ("비야디 탕은 SUV입니다", BRAND_BYD, "탕"),
+            ("ID4는 괜찮나요?", BRAND_OTHER, "Volkswagen ID.4"),
+            ("ID 버즈는 예쁘네요", BRAND_OTHER, "Volkswagen ID.Buzz"),
+        ]
+        for text, expected_brand, expected_model in cases:
+            brand, model = extract_vehicle_info(text)
+            self.assertEqual(brand, expected_brand, f"Failed brand on {text}")
+            self.assertEqual(model, expected_model, f"Failed model on {text}")
+
+    def test_vehicle_matcher_boundary_collision_protection(self):
+        """Non-automotive English abbreviations must not collide with car models."""
+        collisions = [
+            ("M3 맥북 샀어요", BRAND_OTHER, "전기차"),
+            ("애플 M3 칩 성능", BRAND_OTHER, "전기차"),
+            ("MS 윈도우 11 업데이트", BRAND_OTHER, "전기차"),
+            ("MS 오피스 설치", BRAND_OTHER, "전기차"),
+            ("500 ms 지연 발생", BRAND_OTHER, "전기차"),
+            ("MX 마스터 3 마우스 추천", BRAND_OTHER, "전기차"),
+        ]
+        for text, expected_brand, expected_model in collisions:
+            brand, model = extract_vehicle_info(text)
+            self.assertEqual(brand, expected_brand, f"Collision misidentified {text} as {brand}")
+            self.assertEqual(model, expected_model, f"Collision misidentified {text} as {model}")
+
+    def test_defect_classifier_negation_inflections(self):
+        """Negated defects with various Korean inflections must not be classified as complaints."""
+        negated_samples = [
+            "단차가 없습니다. 아주 훌륭합니다.",
+            "잡소리 안들려요. 너무 만족합니다.",
+            "소음 전혀 안납니다.",
+        ]
+        for text in negated_samples:
+            rec = self.classifier.classify(text)
+            self.assertFalse(rec.is_authentic_defect, f"Negated sample '{text}' classified as defect complaint!")
+
+    def test_defect_classifier_nvh_symptom_acceptance(self):
+        """Genuine NVH noise/vibration defect complaints must pass Stage 2 and qualify."""
+        text = "내 차 주행 중에 소음 너무 심합니다. 진짜 스트레스 받네요."
+        rec = self.classifier.classify(text)
+        self.assertTrue(rec.is_authentic_defect, f"Valid NVH complaint rejected: {rec.filter_reason}")
+        self.assertEqual(rec.defect_category, "BUILD_QUALITY")
+
+    def test_dsi_and_breakdown_score_bounds(self):
+        """DSI and all 5 DSIBreakdown components must stay strictly within [0.0, 10.0]."""
+        extreme_texts = [
+            "급발진으로 죽을 뻔하고 황천길 갈 뻔 화재 배터리 폭발",
+            "아주 만족스러운 양품 출고 완벽",
+            "",
+        ]
+        for text in extreme_texts:
+            dsi, breakdown = self.classifier.compute_dsi(text, "DRIVING_POWERTRAIN")
+            self.assertTrue(0.0 <= dsi <= 10.0, f"DSI {dsi} out of bounds")
+            self.assertTrue(0.0 <= breakdown.safety <= 10.0)
+            self.assertTrue(0.0 <= breakdown.functional <= 10.0)
+            self.assertTrue(0.0 <= breakdown.economic <= 10.0)
+            self.assertTrue(0.0 <= breakdown.social <= 10.0)
+            self.assertTrue(0.0 <= breakdown.convenience <= 10.0)
+
+    def test_spam_filter_owner_inquiry_preservation(self):
+        """Authentic owner questions reporting actual defect symptoms must not be discarded as spam."""
+        valid_question = "내 차 ICCU 터져서 견인됐는데 수리비 얼마나 나올지 궁금합니다."
+        is_spam, reason = self.spam_filter.evaluate_stage1_noise(valid_question)
+        self.assertFalse(is_spam, f"Valid owner question discarded as spam: {reason}")
+
+        prospective_inquiry = "전기차 살까요 말까요? 모델Y 승차감 어떤가요? 궁금합니다."
+        is_spam, reason = self.spam_filter.evaluate_stage1_noise(prospective_inquiry)
+        self.assertTrue(is_spam, "Prospective buyer inquiry not filtered")
 
 
 if __name__ == "__main__":

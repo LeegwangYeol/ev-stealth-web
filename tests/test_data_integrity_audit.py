@@ -22,8 +22,20 @@ import tempfile
 import unittest
 from typing import Any, Dict, List
 
+def _find_repo_root() -> Path:
+    candidates = [
+        Path(__file__).resolve().parent.parent,
+        Path(__file__).resolve().parent.parent.parent,
+        Path.cwd(),
+        Path.cwd().parent,
+    ]
+    for p in candidates:
+        if (p / "ev-stealth-web").is_dir() and (p / "data").is_dir():
+            return p
+    return Path(__file__).resolve().parent.parent
+
 # Ensure project root is in sys.path
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = _find_repo_root()
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 

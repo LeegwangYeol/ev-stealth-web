@@ -154,7 +154,7 @@ def calculate_net_subsidy(
             safe_msrp = 0
         else:
             f_msrp = float(msrp)
-            safe_msrp = 0 if (math.isnan(f_msrp) or math.isinf(f_msrp)) else int(f_msrp)
+            safe_msrp = 0 if (math.isnan(f_msrp) or math.isinf(f_msrp)) else max(0, int(f_msrp))
     except (ValueError, TypeError, OverflowError):
         safe_msrp = 0
 
@@ -192,23 +192,25 @@ def calculate_net_subsidy(
 
 
 def _metric_val(metric: Any, key: str, default: Any = 0) -> Any:
-    """Safely extract metric attribute or dict key, supporting dict and dataclass instances."""
+    """Safely extract metric attribute or dict key, supporting dict, Mapping, and dataclass instances."""
     if metric is None:
         return default
-    if isinstance(metric, dict):
-        return metric.get(key, default)
-    return getattr(metric, key, default)
+    if hasattr(metric, "get") and callable(getattr(metric, "get")):
+        val = metric.get(key, default)
+        return default if val is None else val
+    val = getattr(metric, key, default)
+    return default if val is None else val
 
 
 def _safe_int_metric(val: Any, default: int = 0) -> int:
-    """Safely cast value to int, gracefully handling NaN, Inf, None, invalid types."""
+    """Safely cast value to int, gracefully handling NaN, Inf, None, float strings, and invalid types."""
     if val is None:
         return default
     try:
-        if isinstance(val, float):
-            if math.isnan(val) or math.isinf(val):
-                return default
-        return int(val)
+        f = float(val)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return int(f)
     except (ValueError, TypeError, OverflowError):
         return default
 
@@ -477,7 +479,8 @@ class SubsidyTracker:
                     },
                 )
                 with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
-                    if resp.status == 200:
+                    resp_status = getattr(resp, "status", getattr(resp, "code", 200))
+                    if resp_status == 200:
                         raw_bytes = resp.read(MAX_RESPONSE_BYTES)
                         declared_encoding = None
                         if hasattr(resp, "headers") and hasattr(resp.headers, "get_content_charset"):
@@ -493,7 +496,7 @@ class SubsidyTracker:
                         return json.loads(raw_data)
                     logger.warning(
                         "Remote server returned non-200 status: %d (attempt %d/%d)",
-                        resp.status,
+                        resp_status,
                         attempt,
                         max_retries,
                     )
@@ -805,14 +808,24 @@ class SubsidyTracker:
         export_models_matrix: bool = True,
     ) -> List[Path]:
         """Atomically persist payload to all destination paths and export models matrix."""
-        written = atomic_write_json_multiple(payload, destination_paths)
+        # Deduplicate paths preserving order
+        unique_destinations: List[Path] = []
+        seen_paths = set()
+        for dst in destination_paths:
+            target = Path(dst)
+            resolved_key = str(target.resolve()) if target.exists() else str(target.absolute())
+            if resolved_key not in seen_paths:
+                seen_paths.add(resolved_key)
+                unique_destinations.append(target)
+
+        written = atomic_write_json_multiple(payload, unique_destinations)
         for w in written:
             logger.info("Saved subsidy dataset: %s", w)
 
         if export_models_matrix:
             matrix_data = build_comprehensive_models_matrix()
             seen_matrix_dirs = set()
-            for p in destination_paths:
+            for p in unique_destinations:
                 parent_dir = Path(p).parent.resolve()
                 if parent_dir not in seen_matrix_dirs:
                     seen_matrix_dirs.add(parent_dir)

@@ -15,6 +15,7 @@ import {
 import { calculateNetSubsidy, getRegionById, getModelById } from '@/lib/getSubsidyData';
 import ClientTimestamp from '@/components/ClientTimestamp';
 import SubsidyErrorBoundary from '@/components/subsidy/SubsidyErrorBoundary';
+import SubsidyBadge from '@/components/subsidy/SubsidyBadge';
 
 const SubsidyTableView = dynamic(() => import('@/components/subsidy/SubsidyTableView'), {
   ssr: true,
@@ -155,7 +156,7 @@ const FALLBACK_THRESHOLDS: Record<AlertSeverity, AlertThresholdConfig> = Object.
     label_ko: '원활 (신청 여유)',
     severity: 'HEALTHY',
     color_hex: '#10B981',
-    badge_class: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    badge_class: 'bg-emerald-950 text-emerald-300 border-emerald-500/40',
     recommended_action: '보조금 잔여량이 충분하여 신청 접수 후 통상 1~2주 내 교부 결정됩니다.',
   },
   CAUTION: {
@@ -164,7 +165,7 @@ const FALLBACK_THRESHOLDS: Record<AlertSeverity, AlertThresholdConfig> = Object.
     label_ko: '주의 (소진 가속)',
     severity: 'CAUTION',
     color_hex: '#F59E0B',
-    badge_class: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+    badge_class: 'bg-amber-950 text-amber-300 border-amber-500/40',
     recommended_action: '출고 예정 시기가 1~2개월 이내인 경우 조속한 서류 접수를 권장합니다.',
   },
   WARNING: {
@@ -173,7 +174,7 @@ const FALLBACK_THRESHOLDS: Record<AlertSeverity, AlertThresholdConfig> = Object.
     label_ko: '경고 (마감 임박)',
     severity: 'WARNING',
     color_hex: '#F97316',
-    badge_class: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+    badge_class: 'bg-orange-950 text-orange-300 border-orange-500/40',
     recommended_action: '잔여 예산 소진이 임박했습니다. 즉시 출고 가능한 실재고 매칭이 필요합니다.',
   },
   CRITICAL: {
@@ -528,6 +529,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 key={key}
                 type="button"
                 aria-pressed={isSelected}
+                aria-label={`${t?.label_ko || key} 경보 필터 ${isSelected ? '해제' : '적용'}`}
                 onClick={() => setAlertFilter(isSelected ? 'ALL' : key)}
                 className={`p-3 rounded-xl border text-left transition flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                   isSelected
@@ -632,6 +634,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 key={zone.id}
                 type="button"
                 aria-pressed={zoneFilter === zone.id}
+                aria-label={`${zone.label} 권역 필터 ${zoneFilter === zone.id ? '해제' : '적용'}`}
                 onClick={() => setZoneFilter(zone.id)}
                 className={`px-2.5 py-1.5 min-h-[44px] flex items-center justify-center rounded-lg border font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                   zoneFilter === zone.id
@@ -716,7 +719,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 type="button"
                 aria-pressed={viewMode === 'grid'}
                 onClick={() => setViewMode('grid')}
-                className={`px-3 py-1.5 rounded-lg font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
+                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center justify-center rounded-lg font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                   viewMode === 'grid'
                     ? 'bg-blue-600 text-white shadow'
                     : 'text-slate-400 hover:text-white'
@@ -728,7 +731,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 type="button"
                 aria-pressed={viewMode === 'table'}
                 onClick={() => setViewMode('table')}
-                className={`px-3 py-1.5 rounded-lg font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
+                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center justify-center rounded-lg font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                   viewMode === 'table'
                     ? 'bg-blue-600 text-white shadow'
                     : 'text-slate-400 hover:text-white'
@@ -823,11 +826,11 @@ const RegionCard = React.memo(function RegionCard({
   };
 
   const announcedUnits = Number.isFinite(cat?.announced_units) ? Math.max(0, cat.announced_units) : 0;
-  const safeAnnounced = announcedUnits > 0 ? announcedUnits : 1;
   const safeDelivered = Number.isFinite(cat?.delivered_units) ? cat.delivered_units : 0;
   const safeDepletion = Number.isFinite(cat?.depletion_rate) ? cat.depletion_rate : 0;
   const safeRemaining = Number.isFinite(cat?.remaining_units) ? cat.remaining_units : 0;
   const safeApplied = Number.isFinite(cat?.applied_units) ? cat.applied_units : 0;
+  const safeAnnounced = Number.isFinite(cat?.announced_units) ? Math.max(0, cat.announced_units) : 0;
 
   const rawDeliveredPct = announcedUnits > 0 ? Math.round((safeDelivered / safeAnnounced) * 100) : 0;
   const deliveredPct = Number.isFinite(rawDeliveredPct) ? Math.min(100, Math.max(0, rawDeliveredPct)) : 0;
@@ -847,9 +850,7 @@ const RegionCard = React.memo(function RegionCard({
             </div>
             <div className="text-xs text-slate-400">{region.name_en}</div>
           </div>
-          <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${getBadgeStyle(cat?.status || 'available')}`}>
-            {getStatusLabel(cat?.status || 'available')}
-          </span>
+          <SubsidyBadge status={cat?.status || 'available'} />
         </div>
 
         {/* Progress Bar (Dual Layer: Delivered vs Pending vs Remaining) */}
@@ -865,7 +866,7 @@ const RegionCard = React.memo(function RegionCard({
 
           <div
             role="progressbar"
-            aria-valuenow={Math.min(100, Math.round(safeDepletion))}
+            aria-valuenow={Math.min(100, Math.max(0, Math.round(safeDepletion)))}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-label={`${region.name_ko} ${selectedCategory === 'passenger' ? '전기승용' : selectedCategory === 'commercial' ? '전기화물' : '전기승합'} 보조금 소진율`}
@@ -884,25 +885,26 @@ const RegionCard = React.memo(function RegionCard({
               className="bg-amber-400 h-full border-r border-slate-950 transition-all duration-500"
               title={`접수 대기: ${Math.max(0, safeApplied - safeDelivered).toLocaleString()}대 (${pendingPct.toFixed(1)}%)`}
             />
-            {/* Layer 3: Remaining (slate track) */}
+            {/* Layer 3: Remaining */}
             <div
               style={{ width: `${remainingPct}%` }}
-              className="bg-slate-700 h-full"
-              title={`잔여: ${safeRemaining.toLocaleString()}대 (${remainingPct.toFixed(1)}%)`}
+              className="bg-slate-900 h-full"
+              title={`잔여 쿼터: ${safeRemaining.toLocaleString()}대 (${remainingPct.toFixed(1)}%)`}
             />
           </div>
 
-          <div className="flex justify-between text-[10px] text-slate-400">
+          {/* Legend / Sub-metrics with WCAG AAA Contrast Indicators */}
+          <div className="flex justify-between text-[10px] text-slate-300 font-medium pt-0.5">
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" aria-hidden="true" />
               출고 {safeDelivered.toLocaleString()}대
             </span>
             <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" aria-hidden="true" />
-              심사중 {Math.max(0, safeApplied - safeDelivered).toLocaleString()}대
+              <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" aria-hidden="true" />
+              접수 대기 {Math.max(0, safeApplied - safeDelivered).toLocaleString()}대
             </span>
             <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-slate-700 inline-block" aria-hidden="true" />
+              <span className="w-2 h-2 rounded-full bg-slate-400 inline-block border border-slate-500" aria-hidden="true" />
               잔여 {safeRemaining.toLocaleString()}대
             </span>
           </div>
@@ -961,6 +963,7 @@ const RegionCard = React.memo(function RegionCard({
               <div
                 id={'muni-details-' + region.region_id}
                 tabIndex={0}
+                role="region"
                 aria-label={`${region.name_ko} 세부 시·군·구 보조금 현황 목록`}
                 className="mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               >
@@ -977,8 +980,9 @@ const RegionCard = React.memo(function RegionCard({
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-slate-400">잔여 {muni.remaining_units ?? 0}대</span>
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${getBadgeStyle(muni.status || 'available')}`}>
-                        {getStatusLabel(muni.status || 'available')} {(Number.isFinite(muni.depletion_rate) ? muni.depletion_rate : 0).toFixed(1)}%
+                      <SubsidyBadge status={muni.status || 'available'} />
+                      <span className="font-mono text-amber-300 font-semibold text-[10px]">
+                        {(Number.isFinite(muni.depletion_rate) ? muni.depletion_rate : 0).toFixed(1)}%
                       </span>
                     </div>
                   </div>
@@ -1127,6 +1131,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             </label>
             <select
               id="model-select"
+              aria-label="차량 모델 선택"
               value={activeModel?.model_id || selectedModelId}
               onChange={(e) => onSelectModelId(e.target.value)}
               className="w-full py-3 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"

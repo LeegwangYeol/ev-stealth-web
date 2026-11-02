@@ -1,4 +1,5 @@
 import rawReportData from '../data/daily_reports.json' with { type: 'json' };
+import { sanitizeSafeUrl, sanitizeText } from './sanitizeUrl';
 
 export type DefectCategoryCode =
   | 'BATTERY_CHARGING'
@@ -88,10 +89,7 @@ export function sanitizeReportUrl(rawUrl?: unknown): string {
   if (/^(?:javascript|data|vbscript):/i.test(trimmed)) {
     return '#';
   }
-  if (/^(?:https?:\/\/|\/)/i.test(trimmed)) {
-    return trimmed;
-  }
-  return '#';
+  return sanitizeSafeUrl(trimmed);
 }
 
 /**
@@ -99,13 +97,13 @@ export function sanitizeReportUrl(rawUrl?: unknown): string {
  */
 export function normalizeReport(raw: Record<string, unknown>, index: number): DefectReportItem {
   if (!raw || typeof raw !== 'object') raw = {};
-  const rawCat = String(raw.defect_category || raw.category || 'BATTERY_CHARGING');
+  const rawCat = sanitizeText(raw.defect_category || raw.category || 'BATTERY_CHARGING');
   const catInfo = CATEGORY_MAP[rawCat] || {
     code: rawCat,
-    ko: (raw.defect_category_ko || raw.category_ko || '기타 결함') as string,
+    ko: sanitizeText(raw.defect_category_ko || raw.category_ko || '기타 결함'),
   };
 
-  const rawSeverity = String(raw.severity || raw.severity_tier || 'WARNING').toUpperCase();
+  const rawSeverity = sanitizeText(raw.severity || raw.severity_tier || 'WARNING').toUpperCase();
   let severity: SeverityLevel = 'WARNING';
   if (rawSeverity.includes('CRITICAL')) {
     severity = 'CRITICAL';
@@ -132,25 +130,25 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
     : (Array.isArray(raw.slang_terms) ? raw.slang_terms : []);
 
   return {
-    id: String(raw.id || `report_${index + 1}`),
-    source: String(raw.source || raw.platform || 'bobaedream').toLowerCase(),
+    id: sanitizeText(raw.id || `report_${index + 1}`),
+    source: sanitizeText(raw.source || raw.platform || 'bobaedream').toLowerCase(),
     url: sanitizeReportUrl(raw.url || raw.post_url || '#'),
-    title: String(raw.title || raw.post_title || '전기차 결함 제보'),
-    date: String(raw.date || raw.post_date || new Date().toISOString().split('T')[0]),
-    created_at: raw.created_at ? String(raw.created_at) : undefined,
-    vehicle_model: String(raw.vehicle_model || raw.target_vehicle || '미상 모델'),
-    vehicle_brand: raw.vehicle_brand ? String(raw.vehicle_brand) : undefined,
-    target_vehicle: raw.target_vehicle ? String(raw.target_vehicle) : undefined,
+    title: sanitizeText(raw.title || raw.post_title || '전기차 결함 제보'),
+    date: sanitizeText(raw.date || raw.post_date || new Date().toISOString().split('T')[0]),
+    created_at: raw.created_at ? sanitizeText(raw.created_at) : undefined,
+    vehicle_model: sanitizeText(raw.vehicle_model || raw.target_vehicle || '미상 모델'),
+    vehicle_brand: raw.vehicle_brand ? sanitizeText(raw.vehicle_brand) : undefined,
+    target_vehicle: raw.target_vehicle ? sanitizeText(raw.target_vehicle) : undefined,
     defect_category: catInfo.code,
-    defect_category_ko: String(raw.defect_category_ko || catInfo.ko),
-    summary: String(raw.summary || raw.defect_summary || raw.defect_topic || '결함 상세 내용 요약'),
-    verbatim_quote: String(raw.verbatim_quote || raw.raw_quote || raw.content || '원문 없음'),
-    slang_tags: slang.map((s: unknown) => String(s)),
+    defect_category_ko: sanitizeText(raw.defect_category_ko || catInfo.ko),
+    summary: sanitizeText(raw.summary || raw.defect_summary || raw.defect_topic || '결함 상세 내용 요약'),
+    verbatim_quote: sanitizeText(raw.verbatim_quote || raw.raw_quote || raw.content || '원문 없음'),
+    slang_tags: slang.map((s: unknown) => sanitizeText(s)).filter(Boolean),
     sentiment_score: Number(score.toFixed(2)),
     sentiment_polarity: Number.isFinite(raw.sentiment_polarity) ? Number(raw.sentiment_polarity) : undefined,
     severity,
     severity_index: Number.isFinite(raw.severity_index) ? Number(raw.severity_index) : undefined,
-    author: raw.author ? String(raw.author) : undefined,
+    author: raw.author ? sanitizeText(raw.author) : undefined,
     is_authentic_defect: typeof raw.is_authentic_defect === 'boolean' ? raw.is_authentic_defect : true,
     dsi_breakdown: (raw.dsi_breakdown && typeof raw.dsi_breakdown === 'object') ? (raw.dsi_breakdown as DefectReportItem['dsi_breakdown']) : undefined,
   };
@@ -174,39 +172,39 @@ export function calculateKPIs(
   }, 0);
   const avgScore = totalFiltered > 0 ? Number((totalScore / totalFiltered).toFixed(2)) : 0.0;
 
-  // Calculate top vehicle model
-  const modelCounts: Record<string, number> = {};
+  // Calculate top vehicle model with prototype-safe Map
+  const modelCounts = new Map<string, number>();
   for (const r of reports) {
     if (r.vehicle_model) {
-      modelCounts[r.vehicle_model] = (modelCounts[r.vehicle_model] || 0) + 1;
+      modelCounts.set(r.vehicle_model, (modelCounts.get(r.vehicle_model) || 0) + 1);
     }
   }
   let topModelName = '아이오닉5';
   let maxModelCount = 0;
-  for (const [model, count] of Object.entries(modelCounts)) {
+  modelCounts.forEach((count, model) => {
     if (count > maxModelCount) {
       maxModelCount = count;
       topModelName = model;
     }
-  }
+  });
   const topModelDisplay = totalFiltered > 0 && maxModelCount > 0
     ? `${topModelName} (${maxModelCount}건)`
     : '해당 없음 (0건)';
 
-  // Calculate top community platform
-  const platformCounts: Record<string, number> = {};
+  // Calculate top community platform with prototype-safe Map
+  const platformCounts = new Map<string, number>();
   for (const r of reports) {
     const src = r.source.toLowerCase();
-    platformCounts[src] = (platformCounts[src] || 0) + 1;
+    platformCounts.set(src, (platformCounts.get(src) || 0) + 1);
   }
   let topPlatformKey = 'bobaedream';
   let maxPlatformCount = 0;
-  for (const [platform, count] of Object.entries(platformCounts)) {
+  platformCounts.forEach((count, platform) => {
     if (count > maxPlatformCount) {
       maxPlatformCount = count;
       topPlatformKey = platform;
     }
-  }
+  });
   const platformRatio = totalFiltered > 0 ? Math.round((maxPlatformCount / totalFiltered) * 100) : 0;
   const platformNameKo = topPlatformKey.includes('bobae') ? '보배드림' : '디시인사이드';
   const topPlatformDisplay = totalFiltered > 0

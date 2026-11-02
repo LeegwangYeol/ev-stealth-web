@@ -2,7 +2,7 @@
 
 import React, { memo, useCallback } from 'react';
 import { RegionEntry, CategoryMetrics } from '@/types/subsidy';
-import SubsidyBadge from './SubsidyBadge';
+import SubsidyBadge, { getStatusLabel } from './SubsidyBadge';
 
 export type CategoryType = 'passenger' | 'commercial' | 'bus';
 export type SortOption = 'DEPLETION_DESC' | 'DEPLETION_ASC' | 'REMAINING_ASC' | 'LOCAL_SUBSIDY_DESC' | 'NAME_ASC';
@@ -111,12 +111,12 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
             </span>
             <div
               role="progressbar"
-              aria-valuenow={Math.min(100, Math.round(depletionRate))}
+              aria-valuenow={Math.min(100, Math.max(0, Math.round(depletionRate)))}
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-label={`${region.name_ko} 소진율`}
-              aria-valuetext={`${depletionRate.toFixed(1)}%`}
-              className="w-24 bg-slate-900 rounded-full h-2 overflow-hidden flex border border-slate-700"
+              aria-label={`${region.name_ko} ${selectedCategory === 'passenger' ? '전기승용' : selectedCategory === 'commercial' ? '전기화물' : '전기승합'} 소진율`}
+              aria-valuetext={`소진율 ${depletionRate.toFixed(1)}% (${getStatusLabel(cat.status || 'available')}), 잔여 ${remaining.toLocaleString()}대`}
+              className="w-24 bg-slate-900 rounded-full h-2 overflow-hidden flex border border-slate-500"
             >
               <div
                 style={{ width: `${Math.min(100, Math.max(0, depletionRate))}%` }}
@@ -156,7 +156,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
               aria-expanded={isExpanded}
               aria-controls={'muni-details-' + region.region_id}
               aria-label={`${region.name_ko} 세부 시·군·구 ${region.municipalities?.length ?? 0}개 현황 ${isExpanded ? '접기' : '보기'}`}
-              className="px-2.5 py-1 text-xs rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium border border-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+              className="px-2.5 py-1.5 min-h-[36px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium border border-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
               {isExpanded ? '접기 ▲' : `${region.municipalities?.length}개 시·군 ▼`}
             </button>
@@ -171,7 +171,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
             type="button"
             onClick={() => onSelectForCalc(region.region_id)}
             aria-label={`${region.name_ko} 보조금으로 계산기 설정`}
-            className="px-3 py-1 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+            className="px-3 py-1.5 min-h-[36px] inline-flex items-center justify-center text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
           >
             계산 ⚡
           </button>
@@ -184,9 +184,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
           <td colSpan={10} className="p-0 bg-slate-900/90 border-b border-slate-800">
             <div
               id={'muni-details-' + region.region_id}
-              tabIndex={0}
-              aria-label={`${region.name_ko} 세부 시·군·구 보조금 현황 목록`}
-              className="p-4 space-y-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="p-4 space-y-2"
             >
               <div className="flex items-center justify-between text-xs text-slate-300 font-bold mb-2">
                 <span>📍 {region.name_ko} 관할 세부 시·군·구별 보조금 및 소진율 내역</span>
@@ -195,7 +193,12 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
                 </span>
               </div>
 
-              <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950">
+              <div
+                tabIndex={0}
+                role="region"
+                aria-label={`${region.name_ko} 세부 시·군·구 보조금 현황 스크롤 영역`}
+                className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
                 <table
                   className="w-full text-xs text-left border-collapse"
                   aria-label={`${region.name_ko} 세부 시·군·구 보조금 현황표`}
@@ -294,8 +297,8 @@ export const SubsidyTableView = memo(function SubsidyTableView({
               <button
                 type="button"
                 onClick={() => onSortChange(sortOption === 'NAME_ASC' ? 'DEPLETION_DESC' : 'NAME_ASC')}
-                aria-label={`지역명 정렬 (현재: ${getSortAria('NAME', sortOption)})`}
-                className="inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded px-1"
+                aria-label={`지역명 ${sortOption === 'NAME_ASC' ? '내림차순 정렬 전환' : '오름차순 정렬 전환'}`}
+                className="min-h-[36px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5"
               >
                 <span>지역명</span>
                 <span aria-hidden="true" className="text-slate-400 text-xs">
@@ -317,8 +320,8 @@ export const SubsidyTableView = memo(function SubsidyTableView({
               <button
                 type="button"
                 onClick={() => onSortChange(sortOption === 'REMAINING_ASC' ? 'DEPLETION_DESC' : 'REMAINING_ASC')}
-                aria-label={`잔여 대수 정렬 (현재: ${getSortAria('REMAINING', sortOption)})`}
-                className="inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded px-1 ml-auto"
+                aria-label={`잔여 대수 ${sortOption === 'REMAINING_ASC' ? '내림차순 정렬 전환' : '오름차순 정렬 전환'}`}
+                className="min-h-[36px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5 ml-auto"
               >
                 <span>잔여 대수</span>
                 <span aria-hidden="true" className="text-slate-400 text-xs">
@@ -334,8 +337,8 @@ export const SubsidyTableView = memo(function SubsidyTableView({
               <button
                 type="button"
                 onClick={handleToggleDepletionSort}
-                aria-label={`소진율 정렬 (현재: ${getSortAria('DEPLETION', sortOption)})`}
-                className="inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded px-1"
+                aria-label={`소진율 ${sortOption === 'DEPLETION_DESC' ? '오름차순 정렬 전환' : '내림차순 정렬 전환'}`}
+                className="min-h-[36px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5"
               >
                 <span>소진율</span>
                 <span aria-hidden="true" className="text-slate-400 text-xs">
@@ -351,8 +354,8 @@ export const SubsidyTableView = memo(function SubsidyTableView({
               <button
                 type="button"
                 onClick={() => onSortChange(sortOption === 'LOCAL_SUBSIDY_DESC' ? 'DEPLETION_DESC' : 'LOCAL_SUBSIDY_DESC')}
-                aria-label={`지방비 지원금 정렬 (현재: ${getSortAria('LOCAL_SUBSIDY', sortOption)})`}
-                className="inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded px-1 ml-auto"
+                aria-label={`지방비 지원금 ${sortOption === 'LOCAL_SUBSIDY_DESC' ? '기본 정렬로 전환' : '내림차순 정렬 전환'}`}
+                className="min-h-[36px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5 ml-auto"
               >
                 <span>지방비 최대</span>
                 <span aria-hidden="true" className="text-slate-400 text-xs">

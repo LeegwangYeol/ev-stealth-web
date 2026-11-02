@@ -33,12 +33,12 @@ TARGET_BOARDS = {
 def extract_container_content(html_str: str, tag_name: str, class_name: str) -> str:
     """
     Extract the inner content of an HTML container by tracking balanced tag depth.
-    Resilient against nested tags of the same name and unclosed child tags.
+    Resilient against nested tags of the same name, self-closing tags, and unclosed child tags.
     """
     if not html_str or not isinstance(html_str, str):
         return ""
     pattern = re.compile(
-        rf"<{tag_name}\b[^>]*class=[\"'][^\"']*\b{re.escape(class_name)}\b[^\"']*[\"'][^>]*>",
+        rf"<{tag_name}\b[^>]*class\s*=\s*[\"'][^\"']*\b{re.escape(class_name)}\b[^\"']*[\"'][^>]*>",
         re.IGNORECASE,
     )
     match = pattern.search(html_str)
@@ -47,15 +47,19 @@ def extract_container_content(html_str: str, tag_name: str, class_name: str) -> 
 
     start_idx = match.end()
     depth = 1
-    tag_re = re.compile(rf"<(/?)({re.escape(tag_name)})\b[^>]*>", re.IGNORECASE)
+    tag_re = re.compile(rf"<(/?)({re.escape(tag_name)})\b([^>]*)>", re.IGNORECASE)
 
     for m in tag_re.finditer(html_str[start_idx:]):
         is_closing = bool(m.group(1))
+        tag_attrs = m.group(3)
         if is_closing:
             depth -= 1
             if depth == 0:
                 return html_str[start_idx : start_idx + m.start()]
         else:
+            # Skip self-closing tags (e.g. <div ... />)
+            if tag_attrs and tag_attrs.rstrip().endswith("/"):
+                continue
             depth += 1
 
     return html_str[start_idx:]
@@ -72,7 +76,7 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
 
     now = datetime.datetime.now(datetime.timezone.utc)
 
-    # Case: "14:25" or "14:25:30" (Today's post)
+    # Case 1: "14:25" or "14:25:30" (Today's post)
     time_match = re.match(r"^(\d{1,2}):(\d{2})(?::(\d{2}))?$", raw)
     if time_match:
         try:
@@ -84,37 +88,7 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
         except (ValueError, OverflowError):
             return now.isoformat()
 
-    # Case: "MM/DD" or "MM.DD" or "MM-DD"
-    month_day_match = re.match(r"^(\d{1,2})[./\-](\d{1,2})$", raw)
-    if month_day_match:
-        try:
-            month = int(month_day_match.group(1))
-            day = int(month_day_match.group(2))
-            year = now.year
-            dt = datetime.datetime(year, month, day, 12, 0, 0, tzinfo=datetime.timezone.utc)
-            return dt.isoformat()
-        except (ValueError, OverflowError):
-            return now.isoformat()
-
-    # Case: "YY/MM/DD [HH:MM[:SS]]"
-    yymmdd_match = re.search(
-        r"^(\d{2})[./\-](\d{1,2})[./\-](\d{1,2})(?:\s*(?:\([월화수목금토일]\))?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
-        raw,
-    )
-    if yymmdd_match:
-        try:
-            year = 2000 + int(yymmdd_match.group(1))
-            month = int(yymmdd_match.group(2))
-            day = int(yymmdd_match.group(3))
-            hour = int(yymmdd_match.group(4)) if yymmdd_match.group(4) else 12
-            minute = int(yymmdd_match.group(5)) if yymmdd_match.group(5) else 0
-            second = int(yymmdd_match.group(6)) if yymmdd_match.group(6) else 0
-            dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
-            return dt.isoformat()
-        except (ValueError, OverflowError):
-            return now.isoformat()
-
-    # Case: "YYYY-MM-DD HH:MM:SS" or "YYYY.MM.DD (화) HH:MM" or "YYYY.M.D"
+    # Case 2: "YYYY-MM-DD HH:MM:SS" or "YYYY.MM.DD (화) HH:MM" or "YYYY.M.D"
     full_match = re.search(
         r"(\d{4})[./\-\s]+(\d{1,2})[./\-\s]+(\d{1,2})(?:\s*(?:\([월화수목금토일]\))?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
         raw,
@@ -127,6 +101,43 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
             hour = int(full_match.group(4)) if full_match.group(4) else 12
             minute = int(full_match.group(5)) if full_match.group(5) else 0
             second = int(full_match.group(6)) if full_match.group(6) else 0
+            dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
+            return dt.isoformat()
+        except (ValueError, OverflowError):
+            return now.isoformat()
+
+    # Case 3: "YY/MM/DD [HH:MM[:SS]]"
+    yymmdd_match = re.search(
+        r"^(\d{2})[./\-](\d{1,2})[./\-](\d{1,2})(?:\s*(?:\([월화수목금토일]\))?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
+        raw,
+    )
+    if yymmdd_match:
+        try:
+            yy = int(yymmdd_match.group(1))
+            year = 2000 + yy if yy < 70 else 1900 + yy
+            month = int(yymmdd_match.group(2))
+            day = int(yymmdd_match.group(3))
+            hour = int(yymmdd_match.group(4)) if yymmdd_match.group(4) else 12
+            minute = int(yymmdd_match.group(5)) if yymmdd_match.group(5) else 0
+            second = int(yymmdd_match.group(6)) if yymmdd_match.group(6) else 0
+            dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
+            return dt.isoformat()
+        except (ValueError, OverflowError):
+            return now.isoformat()
+
+    # Case 4: "MM/DD [HH:MM[:SS]]" or "MM.DD [HH:MM]"
+    month_day_match = re.match(
+        r"^(\d{1,2})[./\-](\d{1,2})(?:\s*(?:\([월화수목금토일]\))?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?$",
+        raw,
+    )
+    if month_day_match:
+        try:
+            month = int(month_day_match.group(1))
+            day = int(month_day_match.group(2))
+            hour = int(month_day_match.group(3)) if month_day_match.group(3) else 12
+            minute = int(month_day_match.group(4)) if month_day_match.group(4) else 0
+            second = int(month_day_match.group(5)) if month_day_match.group(5) else 0
+            year = now.year
             dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
             return dt.isoformat()
         except (ValueError, OverflowError):
@@ -152,7 +163,11 @@ class BobaeDreamCrawler(BaseCrawler):
             base_url = None
         target_url = base_url or BOBAE_BASE_URL
         if (not self._warmed_up or force) and target_url:
-            self.client.warm_up_session(target_url)
+            try:
+                if self.client and hasattr(self.client, "warm_up_session"):
+                    self.client.warm_up_session(target_url)
+            except Exception as e:
+                logger.warning(f"BobaeDream warm_up_session notice: {e}")
             self._warmed_up = True
 
     def build_search_url(self, board_code: str, keyword: str, page: int = 1) -> str:
@@ -160,10 +175,12 @@ class BobaeDreamCrawler(BaseCrawler):
         Build search URL with EUC-KR percent-encoded keyword parameter.
         URL format: https://www.bobaedream.co.kr/list?code={board_code}&s_cate=&s_key=sub_bod&search={encoded_kw}&page={page}
         """
-        encoded_kw = encode_euc_kr_query(keyword)
+        code = str(board_code or "national").strip()
+        eff_page = max(1, int(page)) if str(page).isdigit() else 1
+        encoded_kw = encode_euc_kr_query(keyword or "")
         return (
-            f"{BOBAE_LIST_URL}?code={board_code}&s_cate=&s_key=sub_bod"
-            f"&search={encoded_kw}&page={page}"
+            f"{BOBAE_LIST_URL}?code={code}&s_cate=&s_key=sub_bod"
+            f"&search={encoded_kw}&page={eff_page}"
         )
 
     def build_list_url(self, board_code: str, page: int = 1) -> str:
@@ -171,7 +188,9 @@ class BobaeDreamCrawler(BaseCrawler):
         Build general list URL without search filters.
         URL format: https://www.bobaedream.co.kr/list?code={board_code}&page={page}
         """
-        return f"{BOBAE_LIST_URL}?code={board_code}&page={page}"
+        code = str(board_code or "national").strip()
+        eff_page = max(1, int(page)) if str(page).isdigit() else 1
+        return f"{BOBAE_LIST_URL}?code={code}&page={eff_page}"
 
     def parse_list_page(self, html_content: str, board_code: str) -> List[Dict[str, Any]]:
         """
@@ -212,7 +231,13 @@ class BobaeDreamCrawler(BaseCrawler):
             if not clean_title or len(clean_title) < 2 or "공지" in clean_title:
                 continue
 
-            full_url = full_href if full_href.startswith("http") else f"{BOBAE_BASE_URL}{full_href}"
+            full_href_clean = full_href.strip()
+            if full_href_clean.startswith("http://") or full_href_clean.startswith("https://"):
+                full_url = full_href_clean
+            elif full_href_clean.startswith("/"):
+                full_url = f"{BOBAE_BASE_URL}{full_href_clean}"
+            else:
+                full_url = f"{BOBAE_BASE_URL}/{full_href_clean}"
 
             items.append({
                 "post_id": post_no,
@@ -232,7 +257,13 @@ class BobaeDreamCrawler(BaseCrawler):
                 clean_title = clean_html_text(raw_title)
                 if not clean_title or len(clean_title) < 2 or "공지" in clean_title:
                     continue
-                full_url = full_href if full_href.startswith("http") else f"{BOBAE_BASE_URL}{full_href}"
+                full_href_clean = full_href.strip()
+                if full_href_clean.startswith("http://") or full_href_clean.startswith("https://"):
+                    full_url = full_href_clean
+                elif full_href_clean.startswith("/"):
+                    full_url = f"{BOBAE_BASE_URL}{full_href_clean}"
+                else:
+                    full_url = f"{BOBAE_BASE_URL}/{full_href_clean}"
                 items.append({
                     "post_id": post_no,
                     "board_code": code or board_code,
@@ -278,9 +309,9 @@ class BobaeDreamCrawler(BaseCrawler):
         if not html_content or not isinstance(html_content, str):
             return None
 
-        # Match load("/board_renew/bulletin/comment_list.php?...")
+        # Match load("/board_renew/bulletin/comment_list.php?...") or load("http...")
         match = re.search(
-            r'load\(["\'](/board_renew/bulletin/comment_list\.php\?[^"\']+)["\']',
+            r'load\(["\'](?:https?://[^/"\']+)?(/board_renew/bulletin/comment_list\.php\?[^"\']+)["\']',
             html_content,
             re.IGNORECASE,
         )
@@ -290,7 +321,7 @@ class BobaeDreamCrawler(BaseCrawler):
 
         # Alternative: match direct comment_list.php URL in any script or data attr
         alt_match = re.search(
-            r'["\'](/board_renew/bulletin/comment_list\.php\?[^"\']+)["\']',
+            r'["\'](?:https?://[^/"\']+)?(/board_renew/bulletin/comment_list\.php\?[^"\']+)["\']',
             html_content,
             re.IGNORECASE,
         )
@@ -300,15 +331,23 @@ class BobaeDreamCrawler(BaseCrawler):
 
         return None
 
-    def fetch_ajax_comments(self, ajax_url: str, referer: str) -> List[str]:
+    def fetch_ajax_comments(
+        self,
+        ajax_url: str,
+        referer: str,
+        timeout: Optional[float] = None,
+    ) -> List[str]:
         """Fetch and parse dynamic comments from comment_list.php."""
         if not ajax_url or not isinstance(ajax_url, str):
             return []
         try:
+            if not self.client:
+                return []
             status, text, _ = self.client.get(
                 ajax_url,
                 referer=referer,
                 headers={"X-Requested-With": "XMLHttpRequest"},
+                timeout=timeout,
             )
             if status == 200 and text:
                 return self.parse_comments_html(text)
@@ -337,15 +376,15 @@ class BobaeDreamCrawler(BaseCrawler):
           "created_at": str (ISO-8601)
         }
         """
-        # 1. Post ID
-        if not post_id and post_url:
+        # 1. Post ID - zero falsy guard
+        if (post_id is None or str(post_id).strip() == "") and post_url:
             no_match = re.search(r"No=(\d+)", str(post_url), re.IGNORECASE)
             post_id = no_match.group(1) if no_match else ""
 
         if not html_content or not isinstance(html_content, str) or not html_content.strip():
             return {
                 "platform": "bobaedream",
-                "post_id": str(post_id or ""),
+                "post_id": str(post_id) if post_id is not None else "",
                 "url": post_url or "",
                 "title": "",
                 "content": "",
@@ -355,14 +394,23 @@ class BobaeDreamCrawler(BaseCrawler):
                 "board_code": board_code,
             }
 
-        # 2. Title
+        # 2. Title - resilient against attribute order and tag structures
         title = ""
         title_match = re.search(r'<strong class=["\']title["\'][^>]*>(.*?)</strong>', html_content, re.DOTALL | re.IGNORECASE)
         if not title_match:
             title_match = re.search(r'<dt[^>]*class=["\']tit["\'][^>]*>(.*?)</dt>', html_content, re.DOTALL | re.IGNORECASE)
         if not title_match:
+            title_match = re.search(r'<meta\b(?=[^>]*\bproperty=["\']og:title["\'])[^>]*\bcontent=["\']([^"\']*)["\']', html_content, re.IGNORECASE)
+        if not title_match:
             title_match = re.search(r'<meta property=["\']og:title["\'] content=["\']([^"\']*)["\']', html_content, re.IGNORECASE)
-        if title_match:
+        if not title_match:
+            title_tag = re.search(r'<title[^>]*>(.*?)</title>', html_content, re.DOTALL | re.IGNORECASE)
+            if title_tag:
+                clean_t = clean_html_text(title_tag.group(1))
+                clean_t = re.sub(r"\s*-\s*보배드림.*$", "", clean_t).strip()
+                if clean_t:
+                    title = clean_t
+        if title_match and not title:
             title = clean_html_text(title_match.group(1))
 
         # 3. Author & Date
@@ -404,9 +452,10 @@ class BobaeDreamCrawler(BaseCrawler):
 
         # 5. Comments (Static + Dynamic AJAX)
         comments: List[str] = []
+        timeout = kwargs.get("timeout")
         ajax_cmt_url = self.extract_ajax_comment_url(html_content)
         if ajax_cmt_url:
-            comments = self.fetch_ajax_comments(ajax_cmt_url, referer=post_url)
+            comments = self.fetch_ajax_comments(ajax_cmt_url, referer=post_url, timeout=timeout)
 
         # Fallback to static comments parsed from page HTML if AJAX gave nothing
         if not comments:
@@ -414,7 +463,7 @@ class BobaeDreamCrawler(BaseCrawler):
 
         return {
             "platform": "bobaedream",
-            "post_id": str(post_id or ""),
+            "post_id": str(post_id) if post_id is not None else "",
             "url": post_url or "",
             "title": title,
             "content": content,
@@ -432,24 +481,41 @@ class BobaeDreamCrawler(BaseCrawler):
         referer: Optional[str] = None,
         **kwargs: Any,
     ) -> Optional[Dict[str, Any]]:
-        """Fetch and parse a single post by URL."""
+        """Fetch and parse a single post by URL with relative URL normalization and network safety."""
         if not post_url or not isinstance(post_url, str) or not post_url.strip():
             logger.warning(f"Invalid BobaeDream post_url provided: {post_url!r}")
             return None
+
+        # Defensively normalize relative URLs
+        eff_url = post_url.strip()
+        if eff_url.startswith("/"):
+            eff_url = f"{BOBAE_BASE_URL}{eff_url}"
+        elif not (eff_url.startswith("http://") or eff_url.startswith("https://")):
+            eff_url = f"{BOBAE_BASE_URL}/{eff_url}"
 
         base_url = kwargs.get("base_url")
         self.ensure_warm_up(base_url)
         eff_referer = referer or f"{BOBAE_BASE_URL}/"
         timeout = kwargs.get("timeout")
-        status, text, _ = self.client.get(post_url, referer=eff_referer, timeout=timeout)
+
+        try:
+            resp = self.client.get(eff_url, referer=eff_referer, timeout=timeout)
+            if not resp or not isinstance(resp, (tuple, list)) or len(resp) < 2:
+                logger.warning(f"Failed to fetch BobaeDream post: {eff_url} (empty or invalid response)")
+                return None
+            status, text = resp[0], resp[1]
+        except Exception as e:
+            logger.warning(f"Network error fetching BobaeDream post {eff_url}: {e}")
+            return None
+
         if status != 200 or not text:
-            logger.warning(f"Failed to fetch BobaeDream post: {post_url} (status: {status})")
+            logger.warning(f"Failed to fetch BobaeDream post: {eff_url} (status: {status})")
             return None
 
         try:
-            return self.parse_post_detail(text, post_url, board_code=board_code, post_id=post_id or "", **kwargs)
+            return self.parse_post_detail(text, eff_url, board_code=board_code, post_id=post_id or "", **kwargs)
         except Exception as e:
-            logger.warning(f"Error parsing BobaeDream post detail ({post_url}) on corrupt HTML: {e}")
+            logger.warning(f"Error parsing BobaeDream post detail ({eff_url}) on corrupt HTML: {e}")
             return None
 
     def crawl_board(
@@ -462,15 +528,27 @@ class BobaeDreamCrawler(BaseCrawler):
         Crawl recent posts from a specific board without search keywords.
         Supported boards: national, import, electric.
         """
+        if limit is not None and limit <= 0:
+            return []
+
         self.ensure_warm_up()
         results: List[Dict[str, Any]] = []
 
         for page in range(1, pages + 1):
             url = self.build_list_url(board_code, page=page)
             logger.info(f"Crawling BobaeDream [{board_code}] list (Page {page}): {url}")
-            status, text, _ = self.client.get(url, referer=f"{BOBAE_BASE_URL}/")
+            try:
+                resp = self.client.get(url, referer=f"{BOBAE_BASE_URL}/")
+                if not resp or not isinstance(resp, (tuple, list)) or len(resp) < 2:
+                    logger.warning(f"Failed to fetch list for {board_code} page {page}")
+                    break
+                status, text = resp[0], resp[1]
+            except Exception as e:
+                logger.warning(f"Network dropout fetching list for {board_code} page {page}: {e}")
+                break
+
             if status != 200 or not text:
-                logger.warning(f"Failed to fetch list for {board_code} page {page}")
+                logger.warning(f"Failed to fetch list for {board_code} page {page} (status: {status})")
                 break
 
             items = self.parse_list_page(text, board_code)
@@ -479,7 +557,7 @@ class BobaeDreamCrawler(BaseCrawler):
                 break
 
             for item in items:
-                post = self.fetch_post(item["url"], board_code=board_code, post_id=item["post_id"])
+                post = self.fetch_post(item.get("url", ""), board_code=board_code, post_id=item.get("post_id", ""))
                 if post:
                     results.append(post)
                     if limit and len(results) >= limit:
@@ -497,15 +575,27 @@ class BobaeDreamCrawler(BaseCrawler):
         """
         Search a specific BobaeDream board with an EUC-KR encoded query.
         """
+        if limit is not None and limit <= 0:
+            return []
+
         self.ensure_warm_up()
         results: List[Dict[str, Any]] = []
 
         for page in range(1, pages + 1):
             url = self.build_search_url(board_code, keyword, page=page)
             logger.info(f"Searching BobaeDream [{board_code}] for '{keyword}' (Page {page}): {url}")
-            status, text, _ = self.client.get(url, referer=f"{BOBAE_BASE_URL}/")
+            try:
+                resp = self.client.get(url, referer=f"{BOBAE_BASE_URL}/")
+                if not resp or not isinstance(resp, (tuple, list)) or len(resp) < 2:
+                    logger.warning(f"Search request failed for {board_code} keyword '{keyword}' page {page}")
+                    break
+                status, text = resp[0], resp[1]
+            except Exception as e:
+                logger.warning(f"Network dropout during search for {board_code} keyword '{keyword}' page {page}: {e}")
+                break
+
             if status != 200 or not text:
-                logger.warning(f"Search request failed for {board_code} keyword '{keyword}' page {page}")
+                logger.warning(f"Search request failed for {board_code} keyword '{keyword}' page {page} (status: {status})")
                 break
 
             items = self.parse_list_page(text, board_code)
@@ -514,7 +604,7 @@ class BobaeDreamCrawler(BaseCrawler):
                 break
 
             for item in items:
-                post = self.fetch_post(item["url"], board_code=board_code, post_id=item["post_id"])
+                post = self.fetch_post(item.get("url", ""), board_code=board_code, post_id=item.get("post_id", ""))
                 if post:
                     results.append(post)
                     if limit and len(results) >= limit:
@@ -532,11 +622,15 @@ class BobaeDreamCrawler(BaseCrawler):
         """
         Search across target boards (national, import, electric) for a given keyword.
         """
-        target_boards = boards or ["national", "import", "electric"]
+        if limit is not None and limit <= 0:
+            return []
+
+        target_boards = list(boards) if boards is not None else ["national", "import", "electric"]
         all_posts: List[Dict[str, Any]] = []
 
         for board in target_boards:
-            board_posts = self.search_board(board, keyword, pages=max_pages, limit=limit)
+            remaining_limit = (limit - len(all_posts)) if limit is not None else None
+            board_posts = self.search_board(board, keyword, pages=max_pages, limit=remaining_limit)
             all_posts.extend(board_posts)
             if limit and len(all_posts) >= limit:
                 return all_posts[:limit]

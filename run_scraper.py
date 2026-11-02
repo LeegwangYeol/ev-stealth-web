@@ -21,7 +21,7 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 # Ensure bot and project roots are present in sys.path
 CURRENT_DIR = Path(__file__).resolve().parent
@@ -69,9 +69,16 @@ logger = logging.getLogger("ScraperRunner")
 
 def _resolve_web_reports_path(custom_web_dir: Optional[Union[str, Path]] = None) -> Path:
     if custom_web_dir:
-        return Path(custom_web_dir) / "daily_reports.json"
-    env_dir = os.getenv("EV_SCRAPER_WEB_DIR")
-    if env_dir:
+        raw_web = str(custom_web_dir).strip()
+        if raw_web and raw_web != ".":
+            return Path(raw_web) / "daily_reports.json"
+    env_dir = (
+        os.getenv("EV_SCRAPER_WEB_DIR")
+        or os.getenv("EV_TRACKER_WEB_DIR")
+        or os.getenv("EV_WEB_DIR")
+        or ""
+    ).strip()
+    if env_dir and env_dir != ".":
         return Path(env_dir) / "daily_reports.json"
     candidates = [
         CURRENT_DIR / "ev-stealth-web" / "src" / "data" / "daily_reports.json",
@@ -94,10 +101,12 @@ def _resolve_public_reports_path(custom_web_dir: Optional[Union[str, Path]] = No
         CURRENT_DIR.parent / "src" / "my-e-car" / "ev-stealth-web" / "public" / "data" / "daily_reports.json",
     ]
     if custom_web_dir:
-        custom_public = Path(custom_web_dir).parent / "public" / "data" / "daily_reports.json"
-        candidates.insert(0, custom_public)
-        custom_public_2 = Path(custom_web_dir).parent.parent / "public" / "data" / "daily_reports.json"
-        candidates.insert(1, custom_public_2)
+        raw_web = str(custom_web_dir).strip()
+        if raw_web and raw_web != ".":
+            custom_public = Path(raw_web).parent / "public" / "data" / "daily_reports.json"
+            candidates.insert(0, custom_public)
+            custom_public_2 = Path(raw_web).parent.parent / "public" / "data" / "daily_reports.json"
+            candidates.insert(1, custom_public_2)
     for c in candidates:
         if c.parent.exists():
             return c
@@ -200,7 +209,12 @@ def create_parser() -> argparse.ArgumentParser:
         default=False,
         help=f"Directly write daily report JSON to Next.js admin data directory ({WEB_DATA_DAILY_REPORTS_PATH}).",
     )
-    web_dir_env = os.getenv("EV_SCRAPER_WEB_DIR")
+    web_dir_env = (
+        os.getenv("EV_SCRAPER_WEB_DIR")
+        or os.getenv("EV_TRACKER_WEB_DIR")
+        or os.getenv("EV_WEB_DIR")
+        or ""
+    ).strip()
     parser.add_argument(
         "--web-dir",
         type=Path,
@@ -295,23 +309,33 @@ class ScraperPipeline:
 
     def harvest(self, source_choice: Any, limit: Any = 20) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
         """Harvest raw post dictionaries based on selected source mode."""
-        valid_sources = {"all", "bobaedream", "dcinside"}
-        src_str = str(source_choice or "all").lower().strip()
-        if src_str not in valid_sources:
-            logger.warning(f"Unknown source '{source_choice}', falling back to 'all'")
-            selected_source = "all"
+        # Support comma-separated strings (e.g. "bobaedream,dcinside"), lists, aliases
+        if isinstance(source_choice, (list, tuple, set)):
+            raw_sources = [str(s).lower().strip() for s in source_choice]
         else:
-            selected_source = src_str
+            raw_sources = [s.strip().lower() for s in str(source_choice or "all").split(",") if s.strip()]
+
+        selected_sources: Set[str] = set()
+        for s in raw_sources:
+            if s in ("all", "*"):
+                selected_sources.update(["bobaedream", "dcinside"])
+            elif s in ("bobaedream", "bobae", "b"):
+                selected_sources.add("bobaedream")
+            elif s in ("dcinside", "dc", "d"):
+                selected_sources.add("dcinside")
+            else:
+                logger.warning(f"Unknown source '{s}', falling back to 'all'")
+                selected_sources.update(["bobaedream", "dcinside"])
 
         try:
-            clamped_limit = max(1, int(limit))
+            clamped_limit = min(500, max(1, int(limit)))
         except (ValueError, TypeError):
             clamped_limit = 20
 
         raw_posts: List[Dict[str, Any]] = []
         stats: Dict[str, int] = {"bobaedream": 0, "dcinside": 0}
 
-        if selected_source in ("all", "bobaedream"):
+        if "bobaedream" in selected_sources:
             try:
                 bobae_posts = self.harvest_bobaedream(limit=clamped_limit)
                 raw_posts.extend(bobae_posts)
@@ -319,7 +343,7 @@ class ScraperPipeline:
             except Exception as e:
                 logger.warning(f"BobaeDream crawler encountered an unhandled error: {e}")
 
-        if selected_source in ("all", "dcinside"):
+        if "dcinside" in selected_sources:
             try:
                 dc_posts = self.harvest_dcinside(limit=clamped_limit)
                 raw_posts.extend(dc_posts)
@@ -500,13 +524,21 @@ class ScraperPipeline:
 
 def main(argv: Optional[List[str]] = None) -> int:
     """CLI runner main entrypoint returning standard process exit codes."""
-    parser = create_parser()
-    args = parser.parse_args(argv)
-
-    # Determine desired output path
-    output_dest = args.output or args.output_path
-
+    verbose = False
     try:
+        parser = create_parser()
+        args = parser.parse_args(argv)
+        verbose = args.verbose
+
+        # Sanitize --web-dir
+        if args.web_dir is not None:
+            raw_web = str(args.web_dir).strip()
+            args.web_dir = Path(raw_web) if raw_web and raw_web != "." else None
+
+        # Determine desired output path
+        raw_out = (args.output or args.output_path or "")
+        output_dest = raw_out.strip() if isinstance(raw_out, str) and raw_out.strip() and raw_out.strip() != "." else None
+
         pipeline = ScraperPipeline()
         summary = pipeline.run(
             sources=args.sources,
@@ -527,7 +559,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     except SystemExit as se:
         return se.code if isinstance(se.code, int) else 1
     except Exception as exc:
-        logger.error(f"Fatal error during scraper execution: {exc}", exc_info=args.verbose)
+        logger.error(f"Fatal error during scraper execution: {exc}", exc_info=verbose)
         return 1
 
 

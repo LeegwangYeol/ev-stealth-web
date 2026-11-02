@@ -143,7 +143,8 @@ class DefectClassifier:
         defect_keywords = [
             "고장", "결함", "오작동", "버그", "불량", "하자", "긁", "안 닦",
             "튕김", "에러", "불통", "누수", "화재", "멈춤", "물이 흥건", "물 고이",
-            "물 차", "물 새", "워터파크", "동력 상실", "경고등"
+            "물 차", "물 새", "워터파크", "동력 상실", "경고등",
+            "소음", "잡소리", "이음", "떨림", "흔들림", "진동", "단차"
         ]
         if any(dk in text_str for dk in defect_keywords):
             has_symptom = True
@@ -243,11 +244,19 @@ class DefectClassifier:
                     continue
                 return True
 
-            # 1. Single-character negators (못, 없) must require exact token match
-            if w_strip in ("못", "없"):
+            # 1. Any inflection of '없다' (e.g. 없다, 없고, 없음, 없네, 없습니다, 없네요, 없어서, 없더군요, 없더라고요, 없었던, 없었어요, 없는, 없으므로)
+            if w_strip.startswith("없"):
                 return True
 
-            # 2. Multi-character negators from NEGATORS
+            # Perception verb negation (e.g. 안들림, 안들려, 안들립니다, 안보임, 안보여, 안보입니다, 안느껴짐, 안느껴져, 안남, 안나요, 안납니다)
+            if w_strip.startswith("안") and any(w_strip.startswith(p) for p in ("안들", "안보", "안느껴", "안남", "안나")):
+                return True
+
+            # 2. Exact match for single-character negator '못'
+            if w_strip == "못":
+                return True
+
+            # 3. Multi-character negators from NEGATORS
             for neg in NEGATORS:
                 if neg in ("안", "못", "없"):
                     continue
@@ -369,6 +378,8 @@ class DefectClassifier:
                     matched_terms.append(pos_word)
 
         if total_weight == 0.0:
+            if negated_defects:
+                return 0.70, [f"negated_{d}" for d in negated_defects]
             return -0.55, matched_terms
 
         final_polarity = total_score / total_weight
@@ -461,6 +472,12 @@ class DefectClassifier:
             s_functional = max(s_functional, 7.5)
             s_social = max(s_social, 8.0)
             s_convenience = max(s_convenience, 7.5)
+
+        s_safety = max(0.0, min(10.0, s_safety))
+        s_functional = max(0.0, min(10.0, s_functional))
+        s_economic = max(0.0, min(10.0, s_economic))
+        s_social = max(0.0, min(10.0, s_social))
+        s_convenience = max(0.0, min(10.0, s_convenience))
 
         dsi_score = (
             0.35 * s_safety

@@ -280,7 +280,7 @@ const ModelGridCard = memo(function ModelGridCard({
       </div>
 
       {isSelected && (
-        <div className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow">
+        <div aria-hidden="true" className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow">
           ✓
         </div>
       )}
@@ -1044,7 +1044,7 @@ export default function DepreciationCalculatorClient({
               </button>
             </div>
 
-            <div className="flex rounded-lg overflow-hidden border border-slate-200 text-xs">
+            <div role="group" aria-label="차량 기준 가격 유형 선택" className="flex rounded-lg overflow-hidden border border-slate-200 text-xs">
               <button
                 type="button"
                 aria-pressed={priceBasis === 'effective'}
@@ -1096,7 +1096,7 @@ export default function DepreciationCalculatorClient({
                 className="w-full px-3 py-2 min-h-[44px] rounded-lg border border-slate-300 text-xs font-bold text-right pr-8 bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 aria-label="차량 구매 가격 직접 입력 (원 단위)"
               />
-              <span className="absolute right-3 top-3 text-xs text-slate-600">원</span>
+              <span aria-hidden="true" className="absolute right-3 top-3 text-xs text-slate-600">원</span>
             </div>
 
             <div className="text-[11px] text-slate-600 text-center">
@@ -1109,12 +1109,10 @@ export default function DepreciationCalculatorClient({
       {/* 5. MULTI-YEAR DEPRECIATION CHART & RESALE VALUE PROJECTION */}
       <section
         aria-labelledby="depreciation-chart-heading"
-        aria-live="polite"
-        aria-atomic="true"
         className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-6"
       >
         {/* Dynamic calculation live summary for screen readers */}
-        <div className="sr-only" aria-live="polite" aria-atomic="true">
+        <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
           {selectedModel.brand_name_ko} {selectedModel.model_name} {holdingYears}년 보유 기준 예상 잔존 시세는 {Math.round(depResult.estimatedResidualPriceKrw / 10000).toLocaleString()}만 원(잔존율 {depResult.adjustedResidualPct}%), 배터리 잔여 수명은 {batteryHealth.sohPct.toFixed(1)}%, {holdingYears}개년 누적 절감액은 {Math.round(tcoResult.totalCumulativeSavingsKrw / 10000).toLocaleString()}만 원입니다.
         </div>
 
@@ -1165,7 +1163,7 @@ export default function DepreciationCalculatorClient({
         </div>
 
         {/* 4 Key KPI Result Cards */}
-        <div aria-live="polite" aria-atomic="true" className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {/* KPI 1: Estimated Resale Price */}
           <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
             <div className="text-xs font-bold text-blue-800">
@@ -1764,7 +1762,7 @@ export default function DepreciationCalculatorClient({
               : 'bg-amber-50 border-amber-300 text-amber-950'
           }`}
         >
-          <span className="text-2xl">{clawbackResult.isExempt ? '✅' : '⚠️'}</span>
+          <span aria-hidden="true" className="text-2xl">{clawbackResult.isExempt ? '✅' : '⚠️'}</span>
           <div className="space-y-0.5 flex-1 text-xs sm:text-sm">
             <div className="font-bold">
               {clawbackResult.isExempt
@@ -1859,12 +1857,12 @@ export default function DepreciationCalculatorClient({
                     name="transferTypeRadio"
                     checked={transferType === item.id}
                     onChange={() => setTransferType(item.id)}
+                    aria-describedby={`transfer-desc-${item.id}`}
                     className="mt-0.5 text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                    aria-label={item.title}
                   />
                   <div>
                     <div className="font-bold">{item.title}</div>
-                    <div className="text-[11px] text-slate-700">{item.desc}</div>
+                    <div id={`transfer-desc-${item.id}`} className="text-[11px] text-slate-700">{item.desc}</div>
                   </div>
                 </label>
               ))}
@@ -1935,7 +1933,7 @@ export default function DepreciationCalculatorClient({
         {/* 8-Tier Statutory Schedule Table */}
         <div className="pt-2">
           <details className="text-xs text-slate-600 bg-slate-50 rounded-xl border border-slate-200 p-3">
-            <summary className="font-bold text-slate-800 cursor-pointer hover:text-blue-700 select-none">
+            <summary className="font-bold text-slate-800 cursor-pointer hover:text-blue-700 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded p-1">
               📋 대기환경보전법 시행규칙 [별표 21의2] 8단계 의무운행 회수요율표 보기
             </summary>
             <div

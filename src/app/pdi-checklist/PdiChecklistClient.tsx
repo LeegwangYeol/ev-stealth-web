@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import Link from 'next/link';
+import { safeJsonParse } from '@/lib/sanitizeUrl';
 
 export type ChecklistItem = {
   id: string;
@@ -51,7 +52,7 @@ export const PdiItemRow = memo(function PdiItemRow({ item, onToggle }: PdiItemRo
         </span>
         {item.warning && (
           <span id={`pdi-warning-${item.id}`} className={`block mt-1 text-sm font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-red-700'} print:text-xs print:text-red-800`}>
-            ⚠️ 주의: {item.warning}
+            <span aria-hidden="true">⚠️ </span>주의: {item.warning}
           </span>
         )}
       </span>
@@ -70,7 +71,7 @@ export default function PdiChecklistClient() {
       if (typeof window !== 'undefined' && window.localStorage) {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
-          const parsed = JSON.parse(saved);
+          const parsed = safeJsonParse<ChecklistItem[]>(saved, []);
           if (Array.isArray(parsed)) {
             setItems((current) =>
               current.map((item) => {
@@ -211,7 +212,7 @@ export default function PdiChecklistClient() {
               <button
                 onClick={() => window.print()}
                 type="button"
-                className="px-3.5 py-2 min-h-[40px] text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                className="px-3.5 py-2 min-h-[44px] text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-4 0v5H8v-5m6-3h2m-6 0h.01" />
@@ -222,7 +223,7 @@ export default function PdiChecklistClient() {
                 onClick={toggleAllItems}
                 type="button"
                 aria-pressed={isAllChecked}
-                className={`px-3.5 py-2 min-h-[40px] text-xs font-semibold border rounded-lg shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+                className={`px-3.5 py-2 min-h-[44px] text-xs font-semibold border rounded-lg shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                   isAllChecked
                     ? 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100'
                     : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
@@ -233,7 +234,7 @@ export default function PdiChecklistClient() {
               <button
                 onClick={resetChecklist}
                 type="button"
-                className="px-3.5 py-2 min-h-[40px] text-xs font-semibold text-slate-700 hover:text-red-700 bg-white hover:bg-red-50 border border-slate-300 hover:border-slate-400 rounded-lg shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                className="px-3.5 py-2 min-h-[44px] text-xs font-semibold text-slate-700 hover:text-red-700 bg-white hover:bg-red-50 border border-slate-300 hover:border-slate-400 rounded-lg shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
                 체크리스트 초기화
               </button>
@@ -347,6 +348,7 @@ export default function PdiChecklistClient() {
           return (
             <fieldset
               key={category}
+              aria-labelledby={`pdi-cat-${category}`}
               className={`${isCategoryActive ? 'block' : 'hidden print:block'} bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:border-gray-300 print:shadow-none print:break-inside-avoid`}
             >
               <legend className="sr-only">{category} 신차 출고 전 점검(PDI) 항목</legend>

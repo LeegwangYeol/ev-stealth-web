@@ -95,7 +95,8 @@ DEFECT_QUESTION_KEYWORDS: Tuple[str, ...] = (
     "오작동", "버그", "불량", "하자", "방전", "단차", "잡소리",
     "급발진", "먹통", "블랙아웃", "물 새", "물이 흥건", "물 고이",
     "물 차", "경고등", "시동", "꺼짐", "수리비", "전손", "에러",
-    "불통", "워터파크", "피쉬테일", "덜컹", "찌걱", "동력 상실"
+    "불통", "워터파크", "피쉬테일", "덜컹", "찌걱", "동력 상실",
+    "소음", "이음", "떨림", "진동"
 )
 
 # Brand pejoratives used in flame wars
@@ -165,15 +166,17 @@ class SpamFilter:
                 has_component = True
                 break
 
+        has_defect_keyword = any(dk in text_lower for dk in DEFECT_QUESTION_KEYWORDS)
+        has_defect_slang = any(e.defect_category is not None for e in find_matching_slang(text_str))
+
         # 4. Prospective Buyer Queries / General Inquiries Filter (~나요?, ~가요?, 살까요, 궁금)
         inquiry_terms = ["살까요", "궁금"]
         if any(term in text_str for term in inquiry_terms):
-            return True, "Prospective buyer inquiry or advice-seeking question rather than defect complaint"
+            if not (has_defect_keyword or has_defect_slang):
+                return True, "Prospective buyer inquiry or advice-seeking question rather than defect complaint"
 
         if any(pat.search(text_str) for pat in INQUIRY_REGEXES):
             # Retain authentic owner defect complaints ending with question markers
-            has_defect_keyword = any(dk in text_lower for dk in DEFECT_QUESTION_KEYWORDS)
-            has_defect_slang = any(e.defect_category is not None for e in find_matching_slang(text_str))
             if not (has_defect_keyword or has_defect_slang or has_component):
                 return True, "Prospective buyer inquiry or advice-seeking question rather than defect complaint"
 

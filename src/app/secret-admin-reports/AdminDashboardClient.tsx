@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useDeferredValue, useCallback, memo } from 'react';
+import React, { useState, useMemo, useDeferredValue, useCallback, useRef, useEffect, memo } from 'react';
 import { sanitizeReportUrl, type DailyReportData, type DefectReportItem } from '@/lib/getDailyReports';
 import ClientTimestamp from '@/components/ClientTimestamp';
 
@@ -176,6 +176,71 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedSource, setSelectedSource] = useState('all');
   const [sortBy, setSortBy] = useState<SortOption>('critical');
+
+  // Accessible Modal Dialog State & Focus Management
+  const [activeModalReport, setActiveModalReport] = useState<DefectReportWithTimestamp | null>(null);
+  const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const handleOpenModal = useCallback((report: DefectReportWithTimestamp, triggerEl?: HTMLButtonElement) => {
+    if (triggerEl) {
+      triggerButtonRef.current = triggerEl;
+    }
+    setActiveModalReport(report);
+  }, []);
+
+  const handleCloseModal = useCallback(() => {
+    setActiveModalReport(null);
+    // Keyboard accessibility: return focus to the trigger element that opened the dialog
+    setTimeout(() => {
+      triggerButtonRef.current?.focus();
+    }, 0);
+  }, []);
+
+  // Trap focus inside modal & keyboard dismissibility (Escape key)
+  const handleModalKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCloseModal();
+      return;
+    }
+
+    if (e.key === 'Tab' && modalRef.current) {
+      const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusableElements.length === 0) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        }
+      } else {
+        if (document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      }
+    }
+  }, [handleCloseModal]);
+
+  // Focus close button on mount & body scroll lock
+  useEffect(() => {
+    if (activeModalReport) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      closeButtonRef.current?.focus();
+
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [activeModalReport]);
 
   // Keyboard arrow navigation for Category Tabs (WAI-ARIA APG pattern)
   const handleCategoryKeyDown = useCallback((e: React.KeyboardEvent, currentIndex: number) => {
@@ -601,6 +666,12 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               value={searchQuery}
               maxLength={200}
               onChange={(e) => setSearchQuery(e.target.value.slice(0, 200))}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape' && searchQuery) {
+                  e.preventDefault();
+                  setSearchQuery('');
+                }
+              }}
               aria-label="전기차 결함 제보 및 은어 검색"
               placeholder="제목, 요약, 실차주 원문 코멘트, 차종, 은어(#ICCU폭탄 등) 실시간 검색..."
               className="w-full pl-10 pr-10 py-2.5 min-h-[44px] text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition placeholder-slate-500"
@@ -842,7 +913,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             </p>
           </div>
         ) : filteredReports.length === 0 ? (
-          <div className="bg-white rounded-2xl p-12 border border-slate-200 text-center space-y-3">
+          <div className="bg-white rounded-2xl p-12 border border-slate-200 text-center space-y-3" role="status" aria-live="polite">
             <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-700 mx-auto flex items-center justify-center">
               <svg className="w-6 h-6" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -869,11 +940,160 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           <section aria-labelledby="admin-defect-reports-list-heading" className="space-y-4">
             <h2 id="admin-defect-reports-list-heading" className="sr-only">수집된 결함 제보 상세 목록</h2>
             {filteredReports.map((report: DefectReportWithTimestamp) => (
-              <DefectReportCard key={report.id} report={report} onTagClick={handleTagClick} />
+              <DefectReportCard
+                key={report.id}
+                report={report}
+                onTagClick={handleTagClick}
+                onOpenModal={handleOpenModal}
+              />
             ))}
           </section>
         )}
       </div>
+
+      {/* Accessible Detail Modal Dialog for Admin Defect Inspection */}
+      {activeModalReport && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto"
+          onClick={handleCloseModal}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="defect-modal-title"
+            aria-describedby="defect-modal-desc"
+            ref={modalRef}
+            onKeyDown={handleModalKeyDown}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-6 relative focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 my-8"
+            tabIndex={-1}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold border ${getCategoryBadgeClass(
+                      activeModalReport.defect_category
+                    )}`}
+                  >
+                    {activeModalReport.defect_category_ko}
+                  </span>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-900 text-white">
+                    {activeModalReport.vehicle_model}
+                  </span>
+                  {getSeverityBadge(activeModalReport.severity)}
+                </div>
+                <h2 id="defect-modal-title" className="text-xl font-extrabold text-slate-900 mt-2">
+                  {activeModalReport.title}
+                </h2>
+              </div>
+
+              <button
+                ref={closeButtonRef}
+                type="button"
+                onClick={handleCloseModal}
+                aria-label="결함 상세 대화상자 닫기"
+                className="p-2 min-w-[44px] min-h-[44px] rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 flex items-center justify-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Description & Content */}
+            <div id="defect-modal-desc" className="space-y-4">
+              <div>
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">결함 상세 요약</h3>
+                <p className="text-sm text-slate-800 leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                  {activeModalReport.summary}
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">실차주 원문 코멘트</h3>
+                <blockquote className="text-xs text-slate-700 italic border-l-2 border-slate-300 pl-3 py-1 bg-slate-50/50 rounded-r-xl">
+                  &ldquo;{activeModalReport.verbatim_quote}&rdquo;
+                </blockquote>
+              </div>
+
+              {/* DSI Breakdown Grid */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <svg className="w-4 h-4 text-blue-600" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  DSI 다면 결함 심각도 지표 (Defect Severity Index)
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                    <span className="block text-slate-500 text-[11px]">안전성</span>
+                    <span className="font-extrabold text-slate-900 text-sm">{activeModalReport.dsi_breakdown?.safety ?? 0}</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                    <span className="block text-slate-500 text-[11px]">기능성</span>
+                    <span className="font-extrabold text-slate-900 text-sm">{activeModalReport.dsi_breakdown?.functional ?? 0}</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                    <span className="block text-slate-500 text-[11px]">경제성</span>
+                    <span className="font-extrabold text-slate-900 text-sm">{activeModalReport.dsi_breakdown?.economic ?? 0}</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                    <span className="block text-slate-500 text-[11px]">사회성</span>
+                    <span className="font-extrabold text-slate-900 text-sm">{activeModalReport.dsi_breakdown?.social ?? 0}</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                    <span className="block text-slate-500 text-[11px]">편의성</span>
+                    <span className="font-extrabold text-slate-900 text-sm">{activeModalReport.dsi_breakdown?.convenience ?? 0}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Telemetry Details */}
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 pt-2 border-t border-slate-100">
+                <div>
+                  <span>작성자: </span>
+                  <strong className="text-slate-800">{activeModalReport.author || '익명 제보자'}</strong>
+                </div>
+                <div>
+                  <span>수집 일자: </span>
+                  <strong className="text-slate-800 font-mono">{activeModalReport.date}</strong>
+                </div>
+                <div>
+                  <span>부정 감성 지수: </span>
+                  <strong className="text-rose-600 font-mono">{Math.round((activeModalReport.sentiment_score || 0) * 100)}%</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={handleCloseModal}
+                className="px-4 py-2 min-h-[44px] rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                닫기 (Esc)
+              </button>
+              {activeModalReport.url && activeModalReport.url !== '#' && (
+                <a
+                  href={sanitizeReportUrl(activeModalReport.url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 min-h-[44px] inline-flex items-center gap-1.5 rounded-xl text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                  <span>원문 링크 바로가기</span>
+                  <span className="sr-only"> (새 창에서 열림)</span>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -881,11 +1101,13 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 interface DefectReportCardProps {
   report: DefectReportWithTimestamp;
   onTagClick: (tag: unknown) => void;
+  onOpenModal: (report: DefectReportWithTimestamp, triggerEl?: HTMLButtonElement) => void;
 }
 
 const DefectReportCard = memo(function DefectReportCard({
   report,
   onTagClick,
+  onOpenModal,
 }: DefectReportCardProps) {
   const safeSentimentPct = Math.min(100, Math.max(0, Math.round((Number.isFinite(report.sentiment_score) ? report.sentiment_score : 0) * 100)));
   const safeUrl = sanitizeReportUrl(report.url);
@@ -915,6 +1137,21 @@ const DefectReportCard = memo(function DefectReportCard({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Detailed Inspection Modal Trigger */}
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            onClick={(e) => onOpenModal(report, e.currentTarget)}
+            className="px-2.5 py-1 min-h-[36px] sm:min-h-[44px] inline-flex items-center gap-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            title="결함 상세 분석 및 DSI 지표 모달 열기"
+          >
+            <svg className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            <span>심층 분석</span>
+          </button>
+
           {/* Community Source Badge with URL Link */}
           {getSourceBadge(report.source, report.url)}
 
@@ -968,7 +1205,7 @@ const DefectReportCard = memo(function DefectReportCard({
                   type="button"
                   key={`tag-${idx}-${tagStr}`}
                   onClick={() => onTagClick(tagStr)}
-                  className="px-2.5 py-1 min-h-[36px] inline-flex items-center rounded-full bg-slate-100 text-slate-800 text-[11px] font-semibold border border-slate-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 transition cursor-pointer"
+                  className="px-2.5 py-1 min-h-[44px] inline-flex items-center rounded-full bg-slate-100 text-slate-800 text-[11px] font-semibold border border-slate-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   title={`'${tagStr}' 키워드로 검색 필터링`}
                 >
                   #{tagStr}

@@ -8,10 +8,11 @@ export const dynamic = 'force-static';
 
 const recallJsonLd = {
   "@context": "https://schema.org",
-  "@type": "GovernmentService",
+  "@type": "WebApplication",
   "name": "전기차 공식 리콜 & 배터리 제조사 화재 안전 포털",
   "url": "https://ev-stealth-web.vercel.app/recall-portal",
-  "serviceType": "EV Safety & Recall Intelligence",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "All",
   "description":
     "대한민국 국토교통부(MOLIT) 및 미국 NHTSA 공식 전기차 리콜 캠페인 실시간 조회. 17자리 차대번호(VIN) 및 차종별 배터리 셀 제조사, 화재 위험도 및 아파트 지하주차장 충전 안전 가이드 제공.",
   "provider": {

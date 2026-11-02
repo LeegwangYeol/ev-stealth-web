@@ -18,10 +18,10 @@ def _safe_int(val: Any, default: int = 0) -> int:
     if val is None:
         return default
     try:
-        if isinstance(val, float):
-            if math.isnan(val) or math.isinf(val):
-                return default
-        return int(val)
+        f = float(val)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return int(f)
     except (ValueError, TypeError, OverflowError):
         return default
 
@@ -39,6 +39,27 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
         return default
 
 
+def _mapping_getitem(obj: Any, key: Any) -> Any:
+    """Safely retrieve key value for Mapping protocol without exposing methods."""
+    if isinstance(key, str) and hasattr(obj, key) and not key.startswith("_"):
+        val = getattr(obj, key)
+        if not callable(val):
+            return val
+    d = obj.to_dict()
+    if key in d:
+        return d[key]
+    raise KeyError(key)
+
+
+def _mapping_contains(obj: Any, key: Any) -> bool:
+    """Check key containment for Mapping protocol without exposing methods."""
+    if isinstance(key, str) and hasattr(obj, key) and not key.startswith("_"):
+        val = getattr(obj, key)
+        if not callable(val):
+            return True
+    return key in obj.to_dict()
+
+
 class AlertSeverity(str, Enum):
     """5-tier alert severity levels for EV subsidy depletion."""
 
@@ -49,20 +70,16 @@ class AlertSeverity(str, Enum):
     DEPLETED = "DEPLETED"
 
     @classmethod
-    def from_rate(cls, rate: float) -> AlertSeverity:
+    def from_rate(cls, rate: Any) -> AlertSeverity:
         """Determine alert severity tier based on depletion percentage."""
-        try:
-            if rate is None or math.isnan(rate) or math.isinf(rate):
-                return cls.HEALTHY
-        except (TypeError, ValueError):
-            return cls.HEALTHY
-        if rate >= 100.0:
+        r = _safe_float(rate, default=0.0)
+        if r >= 100.0:
             return cls.DEPLETED
-        elif rate >= 95.0:
+        elif r >= 95.0:
             return cls.CRITICAL
-        elif rate >= 80.0:
+        elif r >= 80.0:
             return cls.WARNING
-        elif rate >= 60.0:
+        elif r >= 60.0:
             return cls.CAUTION
         else:
             return cls.HEALTHY
@@ -83,8 +100,37 @@ class AlertThresholdConfig:
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
+    def __getitem__(self, key: Any) -> Any:
+        return _mapping_getitem(self, key)
+
+    def __contains__(self, key: Any) -> bool:
+        return _mapping_contains(self, key)
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def keys(self):
+        return self.to_dict().keys()
+
+    def values(self):
+        return self.to_dict().values()
+
+    def items(self):
+        return self.to_dict().items()
+
+    def __iter__(self):
+        return iter(self.to_dict())
+
+    def __len__(self) -> int:
+        return len(self.to_dict())
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> AlertThresholdConfig:
+    def from_dict(cls, data: Any) -> AlertThresholdConfig:
+        if isinstance(data, cls):
+            return data
         if not isinstance(data, dict):
             data = {}
         return cls(
@@ -114,29 +160,40 @@ class CategoryMetrics:
     total_budget_krw: int = 0
     remaining_budget_krw: int = 0
 
-    def __getitem__(self, key: str) -> Any:
-        try:
-            return getattr(self, key)
-        except (AttributeError, TypeError):
-            d = self.to_dict()
-            if key in d:
-                return d[key]
-            raise KeyError(key) from None
+    def __getitem__(self, key: Any) -> Any:
+        return _mapping_getitem(self, key)
 
     def __contains__(self, key: Any) -> bool:
-        return hasattr(self, str(key)) or key in self.to_dict()
+        return _mapping_contains(self, key)
 
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, key: Any, default: Any = None) -> Any:
         try:
             return self[key]
         except KeyError:
             return default
 
+    def keys(self):
+        return self.to_dict().keys()
+
+    def values(self):
+        return self.to_dict().values()
+
+    def items(self):
+        return self.to_dict().items()
+
+    def __iter__(self):
+        return iter(self.to_dict())
+
+    def __len__(self) -> int:
+        return len(self.to_dict())
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> CategoryMetrics:
+    def from_dict(cls, data: Any) -> CategoryMetrics:
+        if isinstance(data, cls):
+            return data
         if not isinstance(data, dict):
             data = {}
         return cls(
@@ -171,29 +228,40 @@ class MunicipalityMetrics:
     delivered_units: Optional[int] = 0
     total_subsidy_krw: int = 0
 
-    def __getitem__(self, key: str) -> Any:
-        try:
-            return getattr(self, key)
-        except (AttributeError, TypeError):
-            d = self.to_dict()
-            if key in d:
-                return d[key]
-            raise KeyError(key) from None
+    def __getitem__(self, key: Any) -> Any:
+        return _mapping_getitem(self, key)
 
     def __contains__(self, key: Any) -> bool:
-        return hasattr(self, str(key)) or key in self.to_dict()
+        return _mapping_contains(self, key)
 
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, key: Any, default: Any = None) -> Any:
         try:
             return self[key]
         except KeyError:
             return default
 
+    def keys(self):
+        return self.to_dict().keys()
+
+    def values(self):
+        return self.to_dict().values()
+
+    def items(self):
+        return self.to_dict().items()
+
+    def __iter__(self):
+        return iter(self.to_dict())
+
+    def __len__(self) -> int:
+        return len(self.to_dict())
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> MunicipalityMetrics:
+    def from_dict(cls, data: Any) -> MunicipalityMetrics:
+        if isinstance(data, cls):
+            return data
         if not isinstance(data, dict):
             data = {}
         return cls(
@@ -238,24 +306,37 @@ class RegionRecord:
             self.region_id = self.code
         if self.iso_code and not self.region_id:
             self.region_id = self.iso_code
+        if self.categories is None:
+            self.categories = {}
+        if self.municipalities is None:
+            self.municipalities = []
 
-    def __getitem__(self, key: str) -> Any:
-        try:
-            return getattr(self, key)
-        except (AttributeError, TypeError):
-            d = self.to_dict()
-            if key in d:
-                return d[key]
-            raise KeyError(key) from None
+    def __getitem__(self, key: Any) -> Any:
+        return _mapping_getitem(self, key)
 
     def __contains__(self, key: Any) -> bool:
-        return hasattr(self, str(key)) or key in self.to_dict()
+        return _mapping_contains(self, key)
 
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, key: Any, default: Any = None) -> Any:
         try:
             return self[key]
         except KeyError:
             return default
+
+    def keys(self):
+        return self.to_dict().keys()
+
+    def values(self):
+        return self.to_dict().values()
+
+    def items(self):
+        return self.to_dict().items()
+
+    def __iter__(self):
+        return iter(self.to_dict())
+
+    def __len__(self) -> int:
+        return len(self.to_dict())
 
     def to_dict(self) -> Dict[str, Any]:
         result = {
@@ -277,7 +358,9 @@ class RegionRecord:
         return result
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> RegionRecord:
+    def from_dict(cls, data: Any) -> RegionRecord:
+        if isinstance(data, cls):
+            return data
         if not isinstance(data, dict):
             data = {}
         cats = {}
@@ -330,29 +413,40 @@ class PopularModelEntry:
     national_subsidy_krw: int
     regional_subsidy_samples: Dict[str, Dict[str, int]]
 
-    def __getitem__(self, key: str) -> Any:
-        try:
-            return getattr(self, key)
-        except (AttributeError, TypeError):
-            d = self.to_dict()
-            if key in d:
-                return d[key]
-            raise KeyError(key) from None
+    def __getitem__(self, key: Any) -> Any:
+        return _mapping_getitem(self, key)
 
     def __contains__(self, key: Any) -> bool:
-        return hasattr(self, str(key)) or key in self.to_dict()
+        return _mapping_contains(self, key)
 
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, key: Any, default: Any = None) -> Any:
         try:
             return self[key]
         except KeyError:
             return default
 
+    def keys(self):
+        return self.to_dict().keys()
+
+    def values(self):
+        return self.to_dict().values()
+
+    def items(self):
+        return self.to_dict().items()
+
+    def __iter__(self):
+        return iter(self.to_dict())
+
+    def __len__(self) -> int:
+        return len(self.to_dict())
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> PopularModelEntry:
+    def from_dict(cls, data: Any) -> PopularModelEntry:
+        if isinstance(data, cls):
+            return data
         if not isinstance(data, dict):
             data = {}
         reg_samples = data.get("regional_subsidy_samples")
@@ -381,11 +475,40 @@ class HistoricalTrajectoryPoint:
     commercial_rate: float
     overall_rate: float
 
+    def __getitem__(self, key: Any) -> Any:
+        return _mapping_getitem(self, key)
+
+    def __contains__(self, key: Any) -> bool:
+        return _mapping_contains(self, key)
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def keys(self):
+        return self.to_dict().keys()
+
+    def values(self):
+        return self.to_dict().values()
+
+    def items(self):
+        return self.to_dict().items()
+
+    def __iter__(self):
+        return iter(self.to_dict())
+
+    def __len__(self) -> int:
+        return len(self.to_dict())
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> HistoricalTrajectoryPoint:
+    def from_dict(cls, data: Any) -> HistoricalTrajectoryPoint:
+        if isinstance(data, cls):
+            return data
         if not isinstance(data, dict):
             data = {}
         return cls(
@@ -410,23 +533,32 @@ class NationwideSummary:
     category_totals: Dict[str, Any]
     alert_region_counts: Dict[str, int]
 
-    def __getitem__(self, key: str) -> Any:
-        try:
-            return getattr(self, key)
-        except (AttributeError, TypeError):
-            d = self.to_dict()
-            if key in d:
-                return d[key]
-            raise KeyError(key) from None
+    def __getitem__(self, key: Any) -> Any:
+        return _mapping_getitem(self, key)
 
     def __contains__(self, key: Any) -> bool:
-        return hasattr(self, str(key)) or key in self.to_dict()
+        return _mapping_contains(self, key)
 
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, key: Any, default: Any = None) -> Any:
         try:
             return self[key]
         except KeyError:
             return default
+
+    def keys(self):
+        return self.to_dict().keys()
+
+    def values(self):
+        return self.to_dict().values()
+
+    def items(self):
+        return self.to_dict().items()
+
+    def __iter__(self):
+        return iter(self.to_dict())
+
+    def __len__(self) -> int:
+        return len(self.to_dict())
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -473,7 +605,9 @@ class NationwideSummary:
             return 0
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> NationwideSummary:
+    def from_dict(cls, data: Any) -> NationwideSummary:
+        if isinstance(data, cls):
+            return data
         if not isinstance(data, dict):
             data = {}
         cat_totals = {}
@@ -517,11 +651,40 @@ class SubsidyMetadata:
     total_municipalities_tracked: int
     currency: str = "KRW"
 
+    def __getitem__(self, key: Any) -> Any:
+        return _mapping_getitem(self, key)
+
+    def __contains__(self, key: Any) -> bool:
+        return _mapping_contains(self, key)
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def keys(self):
+        return self.to_dict().keys()
+
+    def values(self):
+        return self.to_dict().values()
+
+    def items(self):
+        return self.to_dict().items()
+
+    def __iter__(self):
+        return iter(self.to_dict())
+
+    def __len__(self) -> int:
+        return len(self.to_dict())
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> SubsidyMetadata:
+    def from_dict(cls, data: Any) -> SubsidyMetadata:
+        if isinstance(data, cls):
+            return data
         if not isinstance(data, dict):
             data = {}
         ds = data.get("data_sources")
@@ -548,6 +711,33 @@ class SubsidyPayload:
     popular_models_matrix: List[PopularModelEntry]
     historical_depletion_trajectory: List[HistoricalTrajectoryPoint]
 
+    def __getitem__(self, key: Any) -> Any:
+        return _mapping_getitem(self, key)
+
+    def __contains__(self, key: Any) -> bool:
+        return _mapping_contains(self, key)
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def keys(self):
+        return self.to_dict().keys()
+
+    def values(self):
+        return self.to_dict().values()
+
+    def items(self):
+        return self.to_dict().items()
+
+    def __iter__(self):
+        return iter(self.to_dict())
+
+    def __len__(self) -> int:
+        return len(self.to_dict())
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "metadata": self.metadata.to_dict() if hasattr(self.metadata, "to_dict") else self.metadata,
@@ -571,11 +761,16 @@ class SubsidyPayload:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> SubsidyPayload:
+    def from_dict(cls, data: Any) -> SubsidyPayload:
+        if isinstance(data, cls):
+            return data
         if not isinstance(data, dict):
             data = {}
         meta_dict = data.get("metadata")
-        metadata = SubsidyMetadata.from_dict(meta_dict if isinstance(meta_dict, dict) else {})
+        if isinstance(meta_dict, SubsidyMetadata):
+            metadata = meta_dict
+        else:
+            metadata = SubsidyMetadata.from_dict(meta_dict if isinstance(meta_dict, dict) else {})
 
         alert_thresholds = {}
         at_dict = data.get("alert_thresholds") or {}
@@ -587,7 +782,10 @@ class SubsidyPayload:
                     alert_thresholds[k] = AlertThresholdConfig.from_dict(v)
 
         ns_dict = data.get("nationwide_summary")
-        summary = NationwideSummary.from_dict(ns_dict if isinstance(ns_dict, dict) else {})
+        if isinstance(ns_dict, NationwideSummary):
+            summary = ns_dict
+        else:
+            summary = NationwideSummary.from_dict(ns_dict if isinstance(ns_dict, dict) else {})
 
         regions_raw = data.get("regions")
         if not isinstance(regions_raw, (list, tuple)):
