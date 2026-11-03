@@ -767,8 +767,10 @@ class DefectTracker:
                         # Directory fsync to commit new target file
                         try:
                             dir_fd = os.open(str(tgt.parent), os.O_RDONLY)
-                            os.fsync(dir_fd)
-                            os.close(dir_fd)
+                            try:
+                                os.fsync(dir_fd)
+                            finally:
+                                os.close(dir_fd)
                         except OSError:
                             pass
 
