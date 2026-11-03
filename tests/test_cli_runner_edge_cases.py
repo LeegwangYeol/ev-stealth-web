@@ -146,6 +146,132 @@ class TestCLIRunnerEdgeCases(unittest.TestCase):
         # run_scraper invalid flag returns 2
         self.assertEqual(run_scraper.main(["--completely-bogus-flag"]), 2)
 
+    def test_run_scraper_target_date_parsing_valid(self) -> None:
+        """Verify parse_target_date accepts YYYY-MM-DD, dots, slashes, and ISO-8601."""
+        self.assertIsNone(run_scraper.parse_target_date(None))
+        self.assertIsNone(run_scraper.parse_target_date(""))
+        self.assertIsNone(run_scraper.parse_target_date("   "))
+
+        # YYYY-MM-DD
+        d1 = run_scraper.parse_target_date("2026-11-04")
+        self.assertEqual(d1, "2026-11-04T00:00:00+00:00")
+
+        # YYYY.MM.DD
+        d2 = run_scraper.parse_target_date("2026.11.04")
+        self.assertEqual(d2, "2026-11-04T00:00:00+00:00")
+
+        # YYYY/MM/DD
+        d3 = run_scraper.parse_target_date("2026/11/04")
+        self.assertEqual(d3, "2026-11-04T00:00:00+00:00")
+
+        # Full ISO string
+        d4 = run_scraper.parse_target_date("2026-11-04T12:30:00Z")
+        self.assertEqual(d4, "2026-11-04T12:30:00+00:00")
+
+    def test_run_scraper_target_date_parsing_invalid(self) -> None:
+        """Verify parse_target_date raises ArgumentTypeError on malformed date string."""
+        import argparse
+        with self.assertRaises(argparse.ArgumentTypeError):
+            run_scraper.parse_target_date("invalid-date-string")
+        with self.assertRaises(argparse.ArgumentTypeError):
+            run_scraper.parse_target_date("2026-99-99")
+
+        # Verify CLI exits with code 2 on invalid target date
+        ret = run_scraper.main(["--target-date", "bogus-date"])
+        self.assertEqual(ret, 2)
+
+    def test_run_scraper_target_date_propagation_in_run(self) -> None:
+        """Verify target_date argument propagates to results_summary and writer."""
+        pipeline = run_scraper.ScraperPipeline(
+            bobae_crawler=MagicMock(),
+            dc_crawler=MagicMock(),
+            defect_filter=MagicMock(),
+        )
+        pipeline.harvest = MagicMock(return_value=([], {"bobaedream": 0, "dcinside": 0}))
+        res = pipeline.run(dry_run=True, target_date="2026-11-04T00:00:00+00:00")
+        self.assertEqual(res["target_date"], "2026-11-04T00:00:00+00:00")
+
+    def test_run_scraper_output_directory_resolution(self) -> None:
+        """Verify directory passed as --output in run_scraper appends daily_reports.json."""
+        with tempfile.TemporaryDirectory() as td:
+            with patch("run_scraper.ScraperPipeline.run") as mock_run:
+                mock_run.return_value = {"total_scraped": 0}
+                ret = run_scraper.main(["--output", td, "--dry-run"])
+                self.assertEqual(ret, 0)
+                mock_run.assert_called_once()
+                call_args = mock_run.call_args[1]
+                self.assertEqual(call_args["output_path"], str(Path(td) / "daily_reports.json"))
+
+    def test_run_scraper_signal_handling(self) -> None:
+        """Verify _signal_handler sets shutdown flag, raises KeyboardInterrupt on SIGINT and SystemExit on SIGTERM."""
+        import signal
+        run_scraper._SHUTDOWN_REQUESTED = False
+
+        # SIGINT raises KeyboardInterrupt
+        with self.assertRaises(KeyboardInterrupt):
+            run_scraper._signal_handler(signal.SIGINT, None)
+        self.assertTrue(run_scraper._SHUTDOWN_REQUESTED)
+
+        # SIGTERM raises SystemExit(143)
+        with self.assertRaises(SystemExit) as cm:
+            run_scraper._signal_handler(signal.SIGTERM, None)
+        self.assertEqual(cm.exception.code, 128 + signal.SIGTERM)
+
+        # Reset flag
+        run_scraper._SHUTDOWN_REQUESTED = False
+
+    def test_run_scraper_repo_root_and_paths(self) -> None:
+        """Verify _find_repo_root and path resolvers locate project data directories."""
+        repo_root = run_scraper._find_repo_root()
+        self.assertTrue(repo_root.is_dir())
+        self.assertTrue((repo_root / "data").exists() or (repo_root / "ev-stealth-web").exists())
+
+        web_path = run_scraper._resolve_web_reports_path()
+        self.assertTrue(str(web_path).endswith("daily_reports.json"))
+
+        root_path = run_scraper._resolve_root_reports_path()
+        self.assertTrue(str(root_path).endswith("daily_reports.json"))
+
+    def test_run_scraper_main_with_target_date_dry_run(self) -> None:
+        """Verify run_scraper.main executes cleanly with --target-date and mocked harvest."""
+        with patch.object(run_scraper.ScraperPipeline, "harvest", return_value=([], {"bobaedream": 0, "dcinside": 0})):
+            ret = run_scraper.main(["--dry-run", "--target-date", "2026-11-04"])
+            self.assertEqual(ret, 0)
+
+    def test_run_scraper_sh_dry_run_with_target_date(self) -> None:
+        """Verify run_scraper.sh forwards arguments including --target-date successfully."""
+        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as tf:
+            tf.write("import sys; sys.exit(0 if '--target-date' in sys.argv and '2026-11-04' in sys.argv else 99)\n")
+            custom_py = tf.name
+        try:
+            env = os.environ.copy()
+            env["RUNNER_PY"] = custom_py
+            res = subprocess.run(
+                ["bash", str(REPO_ROOT / "run_scraper.sh"), "--dry-run", "--target-date", "2026-11-04"],
+                capture_output=True,
+                text=True,
+                cwd=str(REPO_ROOT),
+                env=env,
+            )
+            self.assertEqual(res.returncode, 0, f"STDOUT: {res.stdout}\nSTDERR: {res.stderr}")
+            self.assertIn("DAILY EV MONITORING PIPELINE", res.stdout)
+            self.assertIn("[SUCCESS]", res.stdout)
+        finally:
+            if os.path.exists(custom_py):
+                os.unlink(custom_py)
+
+    def test_run_scraper_sh_invalid_date_exit_code_2(self) -> None:
+        """Verify run_scraper.sh returns exit code 2 and [ERROR] on invalid target date."""
+        res = subprocess.run(
+            ["bash", str(REPO_ROOT / "run_scraper.sh"), "--target-date", "invalid-target-date"],
+            capture_output=True,
+            text=True,
+            cwd=str(REPO_ROOT),
+        )
+        self.assertEqual(res.returncode, 2)
+        combined = res.stdout + res.stderr
+        self.assertIn("[ERROR] Scraper pipeline failed with exit code 2", combined)
+
     def test_shell_runner_py_override(self) -> None:
         """Verify run_tracker.sh and run_scraper.sh respect RUNNER_PY environment override."""
         with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as tf:

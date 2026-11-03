@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": "1.0.0",
-    "generated_at": "2026-11-02T19:32:56.678695+00:00",
+    "generated_at": "2026-11-03T19:47:55.711838+00:00",
     "policy_year": 2026,
     "data_sources": [
       "환경부 무공해차 통합누리집 (ev.or.kr)",
@@ -67,6 +67,8 @@
     "nationwide_depletion_rate": 89.4,
     "total_budget_billion_krw": 2105.1,
     "disbursed_budget_billion_krw": 1893.4,
+    "total_budget_krw": 2105100000000,
+    "disbursed_budget_krw": 1893400000000,
     "category_totals": {
       "passenger": {
         "announced_units": 110400,
@@ -108,6 +110,7 @@
     {
       "region_id": "KR-11",
       "iso_code": "KR-11",
+      "code": "KR-11",
       "name_ko": "서울특별시",
       "name_en": "Seoul",
       "tier": "special_city",
@@ -248,6 +251,7 @@
     {
       "region_id": "KR-41",
       "iso_code": "KR-41",
+      "code": "KR-41",
       "name_ko": "경기도",
       "name_en": "Gyeonggi",
       "tier": "province",
@@ -444,6 +448,7 @@
     {
       "region_id": "KR-26",
       "iso_code": "KR-26",
+      "code": "KR-26",
       "name_ko": "부산광역시",
       "name_en": "Busan",
       "tier": "metropolitan_city",
@@ -556,6 +561,7 @@
     {
       "region_id": "KR-27",
       "iso_code": "KR-27",
+      "code": "KR-27",
       "name_ko": "대구광역시",
       "name_en": "Daegu",
       "tier": "metropolitan_city",
@@ -668,6 +674,7 @@
     {
       "region_id": "KR-28",
       "iso_code": "KR-28",
+      "code": "KR-28",
       "name_ko": "인천광역시",
       "name_en": "Incheon",
       "tier": "metropolitan_city",
@@ -780,6 +787,7 @@
     {
       "region_id": "KR-29",
       "iso_code": "KR-29",
+      "code": "KR-29",
       "name_ko": "광주광역시",
       "name_en": "Gwangju",
       "tier": "metropolitan_city",
@@ -878,6 +886,7 @@
     {
       "region_id": "KR-30",
       "iso_code": "KR-30",
+      "code": "KR-30",
       "name_ko": "대전광역시",
       "name_en": "Daejeon",
       "tier": "metropolitan_city",
@@ -976,6 +985,7 @@
     {
       "region_id": "KR-31",
       "iso_code": "KR-31",
+      "code": "KR-31",
       "name_ko": "울산광역시",
       "name_en": "Ulsan",
       "tier": "metropolitan_city",
@@ -1074,6 +1084,7 @@
     {
       "region_id": "KR-36",
       "iso_code": "KR-36",
+      "code": "KR-36",
       "name_ko": "세종특별자치시",
       "name_en": "Sejong",
       "tier": "special_self_governing_city",
@@ -1144,6 +1155,7 @@
     {
       "region_id": "KR-42",
       "iso_code": "KR-42",
+      "code": "KR-42",
       "name_ko": "강원특별자치도",
       "name_en": "Gangwon",
       "tier": "special_self_governing_province",
@@ -1256,6 +1268,7 @@
     {
       "region_id": "KR-43",
       "iso_code": "KR-43",
+      "code": "KR-43",
       "name_ko": "충청북도",
       "name_en": "Chungbuk",
       "tier": "province",
@@ -1368,6 +1381,7 @@
     {
       "region_id": "KR-44",
       "iso_code": "KR-44",
+      "code": "KR-44",
       "name_ko": "충청남도",
       "name_en": "Chungnam",
       "tier": "province",
@@ -1494,6 +1508,7 @@
     {
       "region_id": "KR-45",
       "iso_code": "KR-45",
+      "code": "KR-45",
       "name_ko": "전북특별자치도",
       "name_en": "Jeonbuk",
       "tier": "special_self_governing_province",
@@ -1606,6 +1621,7 @@
     {
       "region_id": "KR-46",
       "iso_code": "KR-46",
+      "code": "KR-46",
       "name_ko": "전라남도",
       "name_en": "Jeonnam",
       "tier": "province",
@@ -1746,6 +1762,7 @@
     {
       "region_id": "KR-47",
       "iso_code": "KR-47",
+      "code": "KR-47",
       "name_ko": "경상북도",
       "name_en": "Gyeongbuk",
       "tier": "province",
@@ -1872,6 +1889,7 @@
     {
       "region_id": "KR-48",
       "iso_code": "KR-48",
+      "code": "KR-48",
       "name_ko": "경상남도",
       "name_en": "Gyeongnam",
       "tier": "province",
@@ -1998,6 +2016,7 @@
     {
       "region_id": "KR-49",
       "iso_code": "KR-49",
+      "code": "KR-49",
       "name_ko": "제주특별자치도",
       "name_en": "Jeju",
       "tier": "special_self_governing_province",

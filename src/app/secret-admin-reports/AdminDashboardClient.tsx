@@ -1,8 +1,19 @@
 "use client";
 
 import React, { useState, useMemo, useDeferredValue, useCallback, useRef, useEffect, memo } from 'react';
-import { sanitizeReportUrl, type DailyReportData, type DefectReportItem } from '@/lib/getDailyReports';
+import {
+  sanitizeReportUrl,
+  getSafeSentimentScore,
+  getFallbackReportData,
+  type DailyReportData,
+  type DefectReportItem,
+} from '@/lib/getDailyReports';
 import ClientTimestamp from '@/components/ClientTimestamp';
+
+export function formatSentimentPercent(score: unknown): number {
+  const safe = getSafeSentimentScore(score, 0);
+  return Math.min(100, Math.max(0, Math.round(safe * 100)));
+}
 
 export interface DsiBreakdown {
   safety?: number;
@@ -48,6 +59,7 @@ const SEVERITY_WEIGHT: Record<string, number> = {
 
 interface DefectReportWithTimestamp extends AdminDefectReportItem {
   _timestamp: number;
+  _searchIndex: string;
 }
 
 const CATEGORY_TABS: CategoryTab[] = [
@@ -85,10 +97,10 @@ function getCategoryBadgeClass(category: string) {
 
 // Helper for severity badge styling
 function getSeverityBadge(severity: string) {
-  const sev = String(severity).toUpperCase();
-  if (sev === 'CRITICAL') {
+  const sev = String(severity || '').toUpperCase();
+  if (sev.includes('CRITICAL')) {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-600 text-white shadow-sm ring-1 ring-rose-500">
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-700 text-white shadow-sm ring-1 ring-rose-600">
         <svg className="w-3 h-3 animate-pulse motion-reduce:animate-none" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
           <path
             fillRule="evenodd"
@@ -102,34 +114,41 @@ function getSeverityBadge(severity: string) {
   }
   if (sev === 'HIGH') {
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-700 text-white shadow-sm">
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-700 text-white shadow-sm ring-1 ring-orange-600">
         높음 (HIGH)
       </span>
     );
   }
   if (sev === 'WARNING') {
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400 text-slate-950 shadow-sm">
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400 text-slate-950 border border-amber-500 shadow-sm">
         경고 (WARNING)
       </span>
     );
   }
   if (sev === 'MEDIUM') {
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-300 text-amber-950 border border-amber-400 shadow-sm">
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-950 border border-amber-400 shadow-sm">
         주의 (MEDIUM)
       </span>
     );
   }
-  if (sev === 'LOW' || sev === 'INFO') {
+  if (sev === 'LOW') {
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-200 text-slate-800 border border-slate-300 shadow-sm">
-        {sev === 'LOW' ? '낮음 (LOW)' : '안정 (INFO)'}
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-950 border border-emerald-300 shadow-sm">
+        낮음 (LOW)
+      </span>
+    );
+  }
+  if (sev === 'INFO') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-900 border border-slate-300 shadow-sm">
+        안정 (INFO)
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-200 text-amber-950 border border-amber-300 shadow-sm">
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-950 border border-amber-300 shadow-sm">
       주의 (CAUTION)
     </span>
   );
@@ -139,22 +158,30 @@ function getSourceBadge(source: string, url: string) {
   const isBobae = (source || '').toLowerCase().includes('bobae');
   const badgeText = isBobae ? '보배드림' : '디시인사이드';
   const badgeColor = isBobae
-    ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
-    : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100';
+    ? 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100'
+    : 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100';
 
   const safeUrl = sanitizeReportUrl(url);
   const isExternal = safeUrl.startsWith('http://') || safeUrl.startsWith('https://');
 
+  if (!isExternal) {
+    return (
+      <span
+        title={`출처: ${badgeText} (원문 링크 없음)`}
+        className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border font-semibold ${badgeColor}`}
+      >
+        <span>{badgeText}</span>
+      </span>
+    );
+  }
+
   return (
     <a
       href={safeUrl}
-      target={isExternal ? '_blank' : undefined}
-      rel={isExternal ? 'noopener noreferrer' : undefined}
-      onClick={(e) => {
-        if (!isExternal) e.preventDefault();
-      }}
-      title="원문 게시물 바로가기 (새 창에서 열림)"
-      className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${badgeColor}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`${badgeText} 원문 게시물 바로가기 (새 창에서 열림)`}
+      className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${badgeColor}`}
     >
       <span>{badgeText}</span>
       <span className="sr-only"> (새 창에서 열림)</span>
@@ -266,12 +293,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     }
   }, []);
 
-  const safeData = initialData || {
-    generated_at: new Date().toISOString(),
-    pipeline_version: '1.0.0',
-    statistics: undefined,
-    reports: [],
-  };
+  const safeData = initialData || getFallbackReportData();
 
   const reports = useMemo<DefectReportWithTimestamp[]>(() => {
     const rawList = Array.isArray(safeData?.reports) ? safeData.reports : [];
@@ -280,19 +302,39 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
       .map((r, idx) => {
         const rawDate = r.created_at || r.date;
         const parsed = rawDate ? new Date(rawDate).getTime() : 0;
+        const catCode = r.defect_category || 'BATTERY_CHARGING';
+        const catKo = r.defect_category_ko || '기타 결함';
+        const rawSlang = Array.isArray(r.slang_tags) ? r.slang_tags : [];
+        const slangList = rawSlang
+          .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+          .map((t) => t.trim());
+
+        const searchIndex = [
+          r.title || '',
+          r.summary || '',
+          r.verbatim_quote || '',
+          r.vehicle_model || '',
+          r.vehicle_brand || '',
+          catKo,
+          ...slangList,
+        ].join(' ').toLowerCase();
+
         return {
           ...r,
-          id: r.id || `report_${idx + 1}`,
+          id: r.id ? String(r.id) : `report_${idx + 1}`,
+          source: (r.source || 'bobaedream').toLowerCase(),
           url: sanitizeReportUrl(r.url),
-          defect_category: r.defect_category || 'BATTERY_CHARGING',
-          defect_category_ko: r.defect_category_ko || '기타 결함',
+          defect_category: catCode,
+          defect_category_ko: catKo,
           vehicle_model: r.vehicle_model || '미상 모델',
           title: r.title || '전기차 결함 제보',
           summary: r.summary || '결함 상세 내용 요약',
           verbatim_quote: r.verbatim_quote || '원문 없음',
-          sentiment_score: Number.isFinite(r.sentiment_score) ? (r.sentiment_score as number) : 0,
+          slang_tags: slangList,
+          sentiment_score: getSafeSentimentScore(r.sentiment_score, 0.85),
           severity: r.severity || 'WARNING',
           _timestamp: Number.isFinite(parsed) ? parsed : 0,
+          _searchIndex: searchIndex,
         };
       });
   }, [safeData?.reports]);
@@ -309,10 +351,10 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
     const criticalCount = typeof rawStats?.critical_defect_count === 'number' && Number.isFinite(rawStats.critical_defect_count)
       ? Math.max(0, rawStats.critical_defect_count)
-      : reports.filter((r) => String(r.severity).toUpperCase() === 'CRITICAL').length;
+      : reports.filter((r) => String(r.severity || '').toUpperCase() === 'CRITICAL').length;
 
     const avgScore = typeof rawStats?.avg_negativity_score === 'number' && Number.isFinite(rawStats.avg_negativity_score)
-      ? rawStats.avg_negativity_score
+      ? getSafeSentimentScore(rawStats.avg_negativity_score, 0.85)
       : (reports.length > 0
           ? Number((reports.reduce((acc, r) => acc + (typeof r.sentiment_score === 'number' && Number.isFinite(r.sentiment_score) ? r.sentiment_score : 0), 0) / reports.length).toFixed(2))
           : 0.0);
@@ -327,35 +369,43 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     };
   }, [rawStats, reports]);
 
-  const safeScore = Number.isFinite(statistics.avg_negativity_score)
-    ? Math.min(1, Math.max(0, statistics.avg_negativity_score))
-    : 0;
+  const safeScore = getSafeSentimentScore(statistics.avg_negativity_score, 0.0);
 
-  // Calculate dynamic category counts
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { ALL: reports.length };
-    CATEGORY_TABS.forEach((cat) => {
-      if (cat.code !== 'ALL') {
-        counts[cat.code] = reports.filter(
-          (r) => r.defect_category === cat.code || r.defect_category_ko === cat.label
-        ).length;
+  // Calculate dynamic category and source counts in a single O(N) pass
+  const { categoryCounts, sourceCounts } = useMemo(() => {
+    const catCounts: Record<string, number> = { ALL: reports.length };
+    for (const cat of CATEGORY_TABS) {
+      if (cat.code !== 'ALL') catCounts[cat.code] = 0;
+    }
+    const srcCounts: Record<string, number> = { all: reports.length };
+    for (const src of SOURCE_OPTIONS) {
+      if (src.id !== 'all') srcCounts[src.id] = 0;
+    }
+
+    const catLabelMap = new Map(CATEGORY_TABS.map((c) => [c.label, c.code]));
+
+    for (const r of reports) {
+      // Category count
+      const catCode = r.defect_category;
+      if (catCounts[catCode] !== undefined) {
+        catCounts[catCode]++;
+      } else {
+        const mappedCode = catLabelMap.get(r.defect_category_ko);
+        if (mappedCode && catCounts[mappedCode] !== undefined) {
+          catCounts[mappedCode]++;
+        }
       }
-    });
-    return counts;
+
+      // Source count
+      const srcId = (r.source || '').toLowerCase();
+      if (srcCounts[srcId] !== undefined) {
+        srcCounts[srcId]++;
+      }
+    }
+    return { categoryCounts: catCounts, sourceCounts: srcCounts };
   }, [reports]);
 
-  // Calculate dynamic source counts
-  const sourceCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: reports.length };
-    SOURCE_OPTIONS.forEach((s) => {
-      if (s.id !== 'all') {
-        counts[s.id] = reports.filter((r) => (r.source || '').toLowerCase() === s.id).length;
-      }
-    });
-    return counts;
-  }, [reports]);
-
-  // Filtered and sorted reports
+  // Filtered and sorted reports with fast precomputed index
   const filteredReports = useMemo(() => {
     const query = deferredSearchQuery.trim().toLowerCase().slice(0, 200);
 
@@ -377,27 +427,10 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           }
         }
 
-        // Search query filter
+        // Search query filter (Precomputed index check)
         if (query) {
-          const matchTitle = (report.title || '').toLowerCase().includes(query);
-          const matchSummary = (report.summary || '').toLowerCase().includes(query);
-          const matchQuote = (report.verbatim_quote || '').toLowerCase().includes(query);
-          const matchModel = (report.vehicle_model || '').toLowerCase().includes(query);
           const matchBrand = (report.vehicle_brand || '').toLowerCase().includes(query);
-          const matchCategory = (report.defect_category_ko || '').toLowerCase().includes(query);
-          const matchSlang = report.slang_tags?.some((tag) =>
-            typeof tag === 'string' && tag.toLowerCase().includes(query)
-          ) ?? false;
-
-          if (
-            !matchTitle &&
-            !matchSummary &&
-            !matchQuote &&
-            !matchModel &&
-            !matchBrand &&
-            !matchCategory &&
-            !matchSlang
-          ) {
+          if (!report._searchIndex.includes(query) && !matchBrand) {
             return false;
           }
         }
@@ -406,8 +439,14 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
       })
       .sort((a, b) => {
         if (sortBy === 'critical') {
-          const weightA = SEVERITY_WEIGHT[String(a.severity).toUpperCase()] || 0;
-          const weightB = SEVERITY_WEIGHT[String(b.severity).toUpperCase()] || 0;
+          const sevA = String(a.severity || '').toUpperCase();
+          const sevB = String(b.severity || '').toUpperCase();
+          const weightA = Object.prototype.hasOwnProperty.call(SEVERITY_WEIGHT, sevA)
+            ? SEVERITY_WEIGHT[sevA]
+            : 0;
+          const weightB = Object.prototype.hasOwnProperty.call(SEVERITY_WEIGHT, sevB)
+            ? SEVERITY_WEIGHT[sevB]
+            : 0;
           if (weightB !== weightA) return weightB - weightA;
           return (b.sentiment_score || 0) - (a.sentiment_score || 0);
         }
@@ -498,10 +537,10 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         {/* Card 1: Total Defects */}
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-700 tracking-wider uppercase">
+            <span className="text-xs font-bold text-slate-800 tracking-wider uppercase">
               전체 수집 결함
             </span>
-            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center font-bold">
               <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -516,21 +555,21 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             <span className="text-3xl font-black text-slate-900">
               {statistics.total_filtered_defects}
             </span>
-            <span className="text-sm font-semibold text-slate-700">건 분석</span>
+            <span className="text-sm font-semibold text-slate-800">건 분석</span>
           </div>
-          <div className="mt-2 text-xs text-slate-700 flex items-center justify-between">
+          <div className="mt-2 text-xs text-slate-800 flex items-center justify-between">
             <span>스크랩 대상: {statistics.total_scraped}건</span>
-            <span className="text-blue-600 font-medium">유효율 {Math.round((statistics.total_filtered_defects / Math.max(statistics.total_scraped || 0, 1)) * 100)}%</span>
+            <span className="text-blue-700 font-semibold">유효율 {Math.round((statistics.total_filtered_defects / Math.max(statistics.total_scraped || 0, 1)) * 100)}%</span>
           </div>
         </div>
 
         {/* Card 2: Critical Issues */}
         <div className="bg-white rounded-2xl p-5 border border-rose-200 bg-gradient-to-br from-white to-rose-50/30 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-rose-700 tracking-wider uppercase">
+            <span className="text-xs font-bold text-rose-800 tracking-wider uppercase">
               치명적 안전 결함
             </span>
-            <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-800 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-800 flex items-center justify-center font-bold">
               <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -542,12 +581,12 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-rose-600">
+            <span className="text-3xl font-black text-rose-700">
               {statistics.critical_defect_count}
             </span>
-            <span className="text-sm font-bold text-rose-700">건 위험</span>
+            <span className="text-sm font-bold text-rose-800">건 위험</span>
           </div>
-          <div className="mt-2 text-xs text-rose-700 font-medium">
+          <div className="mt-2 text-xs text-rose-800 font-semibold">
             동력상실 · 화재위험 · 급제동 긴급 모니터링
           </div>
         </div>
@@ -558,7 +597,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             <span className="text-xs font-bold text-amber-800 tracking-wider uppercase">
               평균 부정 감성 지수
             </span>
-            <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
               <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -576,14 +615,14 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             <span
               className={`text-xs font-bold px-2 py-0.5 rounded ${
                 reports.length === 0
-                  ? 'bg-slate-100 text-slate-700'
-                  : safeScore >= 0.8
-                  ? 'bg-amber-100 text-amber-800'
-                  : safeScore >= 0.6
-                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                  : safeScore >= 0.4
                   ? 'bg-slate-100 text-slate-800'
-                  : 'bg-emerald-100 text-emerald-800'
+                  : safeScore >= 0.8
+                  ? 'bg-rose-100 text-rose-900 border border-rose-300'
+                  : safeScore >= 0.6
+                  ? 'bg-amber-100 text-amber-950 border border-amber-300'
+                  : safeScore >= 0.4
+                  ? 'bg-slate-100 text-slate-900 border border-slate-300'
+                  : 'bg-emerald-100 text-emerald-950 border border-emerald-300'
               }`}
             >
               {reports.length === 0
@@ -604,7 +643,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             aria-valuemax={100}
             aria-label="평균 부정 감성 지수"
             aria-valuetext={`${Math.round(safeScore * 100)}%`}
-            className="mt-2 w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-300"
+            className="mt-2 w-full bg-slate-200 rounded-full h-2 overflow-hidden border border-slate-300"
           >
             <div
               className="bg-amber-600 h-2 rounded-full transition-all duration-500"
@@ -616,10 +655,10 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         {/* Card 4: Top Platform & Model */}
         <div className="bg-white rounded-2xl p-5 border border-indigo-200 bg-gradient-to-br from-white to-indigo-50/20 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-indigo-700 tracking-wider uppercase">
+            <span className="text-xs font-bold text-indigo-900 tracking-wider uppercase">
               최다 제보 차종 / 플랫폼
             </span>
-            <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-800 flex items-center justify-center font-bold">
               <svg className="w-5 h-5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -634,7 +673,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             <div className="text-xl font-extrabold text-slate-900 truncate" title={statistics.top_model}>
               {statistics.top_model}
             </div>
-            <div className="text-xs text-indigo-700 font-semibold mt-1 flex items-center gap-1">
+            <div className="text-xs text-indigo-900 font-semibold mt-1 flex items-center gap-1">
               <span>출처:</span>
               <span>{statistics.top_platform}</span>
             </div>
@@ -875,22 +914,28 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             <tbody>
               {filteredReports.map((report, idx) => (
                 <tr key={`sr-report-${report.id}`}>
-                  <th scope="row">{idx + 1}</th>
-                  <td>{report.date}</td>
-                  <td>{report.vehicle_model}</td>
-                  <td>{report.defect_category_ko}</td>
-                  <td>{report.severity}</td>
-                  <td>{report.source || 'N/A'}</td>
-                  <td>
-                    <span>{report.title}</span>
-                    <a href={report.url} target="_blank" rel="noopener noreferrer" className="sr-only focus:not-sr-only focus:inline-block focus:px-2 focus:py-0.5 focus:bg-blue-700 focus:text-white focus:rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label="게시글 원문 보기">
-                      (원문 링크)
-                    </a>
-                  </td>
-                  <td>{report.summary}</td>
-                  <td>{Math.round((report.sentiment_score || 0) * 100)}%</td>
-                </tr>
-              ))}
+                    <th scope="row">{idx + 1}</th>
+                    <td>{report.date}</td>
+                    <td>{report.vehicle_model}</td>
+                    <td>{report.defect_category_ko}</td>
+                    <td>{report.severity}</td>
+                    <td>{report.source || 'N/A'}</td>
+                    <td>
+                      <span>{report.title}</span>
+                      <a
+                        href={report.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="sr-only focus:not-sr-only focus:inline-block focus:px-2 focus:py-0.5 focus:bg-blue-700 focus:text-white focus:rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                        aria-label="게시글 원문 보기"
+                      >
+                        (원문 링크)
+                      </a>
+                    </td>
+                    <td>{report.summary}</td>
+                    <td>{formatSentimentPercent(report.sentiment_score)}%</td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
@@ -1062,7 +1107,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 </div>
                 <div>
                   <span>부정 감성 지수: </span>
-                  <strong className="text-rose-600 font-mono">{Math.round((activeModalReport.sentiment_score || 0) * 100)}%</strong>
+                  <strong className="text-rose-700 font-mono">{formatSentimentPercent(activeModalReport.sentiment_score)}%</strong>
                 </div>
               </div>
             </div>
@@ -1072,24 +1117,29 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               <button
                 type="button"
                 onClick={handleCloseModal}
-                className="px-4 py-2 min-h-[44px] rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="px-4 py-2 min-h-[44px] rounded-xl text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 닫기 (Esc)
               </button>
-              {activeModalReport.url && activeModalReport.url !== '#' && (
-                <a
-                  href={sanitizeReportUrl(activeModalReport.url)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 min-h-[44px] inline-flex items-center gap-1.5 rounded-xl text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                >
-                  <span>원문 링크 바로가기</span>
-                  <span className="sr-only"> (새 창에서 열림)</span>
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-              )}
+              {(() => {
+                const safeModalUrl = sanitizeReportUrl(activeModalReport.url);
+                const isExt = safeModalUrl.startsWith('http://') || safeModalUrl.startsWith('https://');
+                if (!isExt) return null;
+                return (
+                  <a
+                    href={safeModalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 min-h-[44px] inline-flex items-center gap-1.5 rounded-xl text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  >
+                    <span>원문 링크 바로가기</span>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -1109,9 +1159,13 @@ const DefectReportCard = memo(function DefectReportCard({
   onTagClick,
   onOpenModal,
 }: DefectReportCardProps) {
-  const safeSentimentPct = Math.min(100, Math.max(0, Math.round((Number.isFinite(report.sentiment_score) ? report.sentiment_score : 0) * 100)));
+  const safeSentimentPct = formatSentimentPercent(report.sentiment_score);
   const safeUrl = sanitizeReportUrl(report.url);
   const isExternal = safeUrl.startsWith('http://') || safeUrl.startsWith('https://');
+
+  const handleOpenModalClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    onOpenModal(report, e.currentTarget);
+  }, [onOpenModal, report]);
 
   return (
     <div className="bg-white rounded-2xl p-5 md:p-6 border border-slate-200 shadow-sm hover:shadow-md transition space-y-4">
@@ -1141,7 +1195,7 @@ const DefectReportCard = memo(function DefectReportCard({
           <button
             type="button"
             aria-haspopup="dialog"
-            onClick={(e) => onOpenModal(report, e.currentTarget)}
+            onClick={handleOpenModalClick}
             className="px-2.5 py-1 min-h-[36px] sm:min-h-[44px] inline-flex items-center gap-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             title="결함 상세 분석 및 DSI 지표 모달 열기"
           >
@@ -1156,45 +1210,46 @@ const DefectReportCard = memo(function DefectReportCard({
           {getSourceBadge(report.source, report.url)}
 
           {/* Date */}
-          <span className="text-xs text-slate-700 font-mono">{report.date}</span>
+          <span className="text-xs text-slate-800 font-mono font-medium">{report.date}</span>
         </div>
       </div>
 
       {/* Title */}
       <div>
-        <h3 className="text-base md:text-lg font-extrabold text-slate-900 hover:text-blue-600 transition">
-          <a
-            href={safeUrl}
-            target={isExternal ? '_blank' : undefined}
-            rel={isExternal ? 'noopener noreferrer' : undefined}
-            onClick={(e) => {
-              if (!report.url || report.url === '#') e.preventDefault();
-            }}
-            className="hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
-          >
-            {report.title}
-            {isExternal && <span className="sr-only"> (새 창에서 열림)</span>}
-          </a>
+        <h3 className="text-base md:text-lg font-extrabold text-slate-900 transition">
+          {isExternal ? (
+            <a
+              href={safeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:underline hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+            >
+              {report.title}
+              <span className="sr-only"> (새 창에서 열림)</span>
+            </a>
+          ) : (
+            <span className="text-slate-900">{report.title}</span>
+          )}
         </h3>
       </div>
 
       {/* Defect Summary */}
-      <p className="text-sm text-slate-700 leading-relaxed font-medium bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+      <p className="text-sm text-slate-800 leading-relaxed font-medium bg-slate-50/70 p-3.5 rounded-xl border border-slate-200">
         {report.summary}
       </p>
 
       {/* Verbatim Quote */}
-      <div className="relative pl-4 border-l-2 border-slate-300 text-xs text-slate-700 italic">
-        <span className="text-slate-700 font-serif text-sm mr-1">&ldquo;</span>
+      <div className="relative pl-4 border-l-2 border-slate-400 text-xs text-slate-800 italic">
+        <span className="text-slate-800 font-serif text-sm mr-1">&ldquo;</span>
         {report.verbatim_quote}
-        <span className="text-slate-700 font-serif text-sm ml-1">&rdquo;</span>
+        <span className="text-slate-800 font-serif text-sm ml-1">&rdquo;</span>
       </div>
 
       {/* Footer Details: Slang Tags & Sentiment Meter */}
       <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
         {/* Slang Keywords */}
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-slate-700 font-medium">탐지 키워드:</span>
+          <span className="text-slate-800 font-medium">탐지 키워드:</span>
           {(report.slang_tags || []).length === 0 ? (
             <span className="text-slate-600">없음</span>
           ) : (
@@ -1205,7 +1260,7 @@ const DefectReportCard = memo(function DefectReportCard({
                   type="button"
                   key={`tag-${idx}-${tagStr}`}
                   onClick={() => onTagClick(tagStr)}
-                  className="px-2.5 py-1 min-h-[44px] inline-flex items-center rounded-full bg-slate-100 text-slate-800 text-[11px] font-semibold border border-slate-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="px-2.5 py-1 min-h-[44px] inline-flex items-center rounded-full bg-slate-100 text-slate-800 text-[11px] font-semibold border border-slate-200 hover:bg-blue-50 hover:text-blue-800 hover:border-blue-300 transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   title={`'${tagStr}' 키워드로 검색 필터링`}
                 >
                   #{tagStr}
@@ -1217,7 +1272,7 @@ const DefectReportCard = memo(function DefectReportCard({
 
         {/* Sentiment Meter */}
         <div className="flex items-center gap-2 sm:self-end">
-          <span className="text-slate-700 font-medium">부정 감성 강도:</span>
+          <span className="text-slate-800 font-medium">부정 감성 강도:</span>
           <div
             role="progressbar"
             aria-valuenow={safeSentimentPct}
@@ -1228,7 +1283,7 @@ const DefectReportCard = memo(function DefectReportCard({
             className="w-24 bg-slate-200 rounded-full h-2 overflow-hidden border border-slate-300"
           >
             <div
-              className="bg-rose-600 h-2 rounded-full"
+              className="bg-rose-700 h-2 rounded-full"
               style={{ width: `${safeSentimentPct}%` }}
             />
           </div>

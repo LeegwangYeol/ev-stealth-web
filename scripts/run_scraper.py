@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Alias forwarding entrypoint for ev-stealth-web/run_scraper.py.
+Alias forwarding entrypoint for run_scraper.py.
 Provides backward compatibility when invoked from scripts/run_scraper.py.
 """
 import runpy

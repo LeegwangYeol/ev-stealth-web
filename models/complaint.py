@@ -8,10 +8,10 @@ Authoritative source:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import math
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 
 DEFECT_CATEGORY_KO_MAP: Dict[str, str] = {
@@ -22,9 +22,70 @@ DEFECT_CATEGORY_KO_MAP: Dict[str, str] = {
     "SERVICE_REPAIR_COST": "AS/수리비",
 }
 
-CANONICAL_CATEGORIES = list(DEFECT_CATEGORY_KO_MAP.keys())
+CANONICAL_CATEGORIES: List[str] = list(DEFECT_CATEGORY_KO_MAP.keys())
 
-VALID_BRANDS = ["Hyundai", "Kia", "Tesla", "BYD", "Other"]
+VALID_BRANDS: List[str] = ["Hyundai", "Kia", "Tesla", "BYD", "Other"]
+
+VALID_SEVERITY_LEVELS: List[str] = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+
+
+def validate_severity(sev: Any) -> bool:
+    """Validate whether severity level is one of canonical levels CRITICAL, HIGH, MEDIUM, LOW."""
+    if not isinstance(sev, str):
+        return False
+    return sev.strip().upper() in VALID_SEVERITY_LEVELS
+
+
+def normalize_severity(severity: Any, severity_index: Any = None, default: str = "LOW") -> str:
+    """Normalize severity level string or compute from DSI index."""
+    if severity is not None and str(severity).strip():
+        s = str(severity).strip().upper()
+        if s in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
+            return s
+        if s in ("WARNING", "MAJOR", "URGENT"):
+            return "HIGH"
+        if s in ("CAUTION", "MODERATE", "MINOR"):
+            return "MEDIUM"
+        if s in ("INFO", "INFORMATIONAL", "NEGLIGIBLE", "LOW"):
+            return "LOW"
+    try:
+        val = float(severity_index)
+        if not (math.isnan(val) or math.isinf(val)):
+            if val >= 8.0:
+                return "CRITICAL"
+            if val >= 6.0:
+                return "HIGH"
+            if val >= 4.0:
+                return "MEDIUM"
+            return "LOW"
+    except (ValueError, TypeError, OverflowError):
+        pass
+    return default
+
+
+def validate_category(category: Any) -> bool:
+    """Validate whether category is in CANONICAL_CATEGORIES or Korean mappings."""
+    if not isinstance(category, str):
+        return False
+    s = category.strip()
+    return (
+        s.upper() in DEFECT_CATEGORY_KO_MAP
+        or s in DEFECT_CATEGORY_KO_MAP.values()
+    )
+
+
+def normalize_category(category: Any, default: str = "BUILD_QUALITY") -> str:
+    """Normalize category string (case-insensitive English or Korean) to canonical uppercase English."""
+    if not category:
+        return default
+    s = str(category).strip()
+    s_upper = s.upper()
+    if s_upper in DEFECT_CATEGORY_KO_MAP:
+        return s_upper
+    for k, v in DEFECT_CATEGORY_KO_MAP.items():
+        if s == v or s_upper == v.upper():
+            return k
+    return default
 
 
 def _safe_round(val: Any, decimals: int = 4, default: float = 0.0) -> float:
@@ -66,20 +127,26 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
         return default
 
 
+def _safe_clamp(val: Any, min_val: float = -1.0, max_val: float = 1.0, default: float = 0.0) -> float:
+    """Safely convert numeric value and clamp to [min_val, max_val]."""
+    f = _safe_float(val, default)
+    if f < min_val:
+        return min_val
+    if f > max_val:
+        return max_val
+    return f
+
 
 def parse_date_str(created_at: Any) -> str:
     """Extract YYYY-MM-DD from created_at or default safely to today (UTC).
 
     Guarantees calendar validity and never raises uncaught exceptions.
+    Handles ISO 8601, Korean formats (4-digit and 2-digit years), dotted (with trailing dot),
+    slashed, compacted (8-digit and 6-digit), and Unix epoch timestamps.
     """
     today_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     if created_at is None:
         return today_iso
-    s = str(created_at).strip()
-    if not s:
-        return today_iso
-
-    current_year = datetime.now(timezone.utc).year
 
     def _validate_date(year: int, month: int, day: int) -> Optional[str]:
         try:
@@ -90,10 +157,49 @@ def parse_date_str(created_at: Any) -> str:
             pass
         return None
 
-    # 1. Handle Korean explicit date format e.g. "2026년 10월 27일" or "2026년 9월 8일"
+    # Fast-path for date or datetime instances
+    if isinstance(created_at, datetime):
+        return _validate_date(created_at.year, created_at.month, created_at.day) or today_iso
+    elif isinstance(created_at, date):
+        return _validate_date(created_at.year, created_at.month, created_at.day) or today_iso
+    elif hasattr(created_at, "year") and hasattr(created_at, "month") and hasattr(created_at, "day"):
+        try:
+            return _validate_date(int(created_at.year), int(created_at.month), int(created_at.day)) or today_iso
+        except (ValueError, TypeError):
+            pass
+
+    # Numeric Unix timestamps (epoch seconds or milliseconds)
+    if isinstance(created_at, (int, float)) and not isinstance(created_at, bool):
+        try:
+            ts = float(created_at)
+            if 1_000_000_000 <= ts <= 2_500_000_000:
+                dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+                return dt.strftime("%Y-%m-%d")
+            elif 1_000_000_000_000 <= ts <= 2_500_000_000_000:
+                dt = datetime.fromtimestamp(ts / 1000.0, tz=timezone.utc)
+                return dt.strftime("%Y-%m-%d")
+        except (ValueError, OverflowError, OSError):
+            pass
+
+    s = str(created_at).strip()
+    if not s:
+        return today_iso
+
+    current_year = datetime.now(timezone.utc).year
+
+    # 1a. Handle 4-digit Korean explicit date format e.g. "2026년 10월 27일" or "2026년 9월 8일"
     match_kr = re.search(r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?", s)
     if match_kr:
         v = _validate_date(int(match_kr.group(1)), int(match_kr.group(2)), int(match_kr.group(3)))
+        if v:
+            return v
+
+    # 1b. Handle 2-digit Korean explicit date format e.g. "26년 10월 27일" or "26년 9월 8일"
+    match_kr_2 = re.search(r"(?:^|[^\d])(\d{2})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?", s)
+    if match_kr_2:
+        yy = int(match_kr_2.group(1))
+        y = 2000 + yy if yy < 70 else 1900 + yy
+        v = _validate_date(y, int(match_kr_2.group(2)), int(match_kr_2.group(3)))
         if v:
             return v
 
@@ -126,14 +232,23 @@ def parse_date_str(created_at: Any) -> str:
         if v:
             return v
 
-    # 5. Handle month-day only format e.g. "10.28" or "10-28" (DCInside current-year posts)
+    # 5. Handle 6-digit compact dates e.g. "261028" (YYMMDD)
+    match_compact_6 = re.search(r"^(\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$", s)
+    if match_compact_6:
+        yy = int(match_compact_6.group(1))
+        y = 2000 + yy if yy < 70 else 1900 + yy
+        v = _validate_date(y, int(match_compact_6.group(2)), int(match_compact_6.group(3)))
+        if v:
+            return v
+
+    # 6. Handle month-day only format e.g. "10.28" or "10-28" (DCInside current-year posts)
     match_md = re.search(r"^(0[1-9]|1[0-2])[./\-](0[1-9]|[12]\d|3[01])$", s)
     if match_md:
         v = _validate_date(current_year, int(match_md.group(1)), int(match_md.group(2)))
         if v:
             return v
 
-    # 6. Normalization fallback
+    # 7. Normalization fallback
     norm_date = s.replace("/", "-").replace(".", "-")
     if len(norm_date) >= 10 and norm_date[4] == "-" and norm_date[7] == "-":
         try:
@@ -145,7 +260,9 @@ def parse_date_str(created_at: Any) -> str:
             pass
     try:
         dt = datetime.fromisoformat(norm_date.replace("Z", "+00:00"))
-        return dt.strftime("%Y-%m-%d")
+        v = _validate_date(dt.year, dt.month, dt.day)
+        if v:
+            return v
     except Exception:
         pass
 
@@ -249,9 +366,6 @@ class RawPost:
     def __len__(self) -> int:
         return len(self.to_dict())
 
-    def __len__(self) -> int:
-        return len(self.to_dict())
-
     @classmethod
     def from_dict(cls, data: Any) -> RawPost:
         if isinstance(data, cls):
@@ -302,12 +416,6 @@ class DSIBreakdown:
         }
 
     def __getitem__(self, key: str) -> float:
-        try:
-            val = getattr(self, key)
-            if isinstance(val, (int, float)):
-                return float(val)
-        except AttributeError:
-            pass
         d = self.to_dict()
         if key in d:
             return d[key]
@@ -346,15 +454,23 @@ class DSIBreakdown:
         """Convert dict or DSIBreakdown instance safely into a DSIBreakdown object."""
         if isinstance(data, cls):
             return data
-        if not isinstance(data, dict):
-            return None
-        return cls(
-            safety=_safe_float(data.get("safety", 0.0)),
-            functional=_safe_float(data.get("functional", 0.0)),
-            economic=_safe_float(data.get("economic", 0.0)),
-            social=_safe_float(data.get("social", 0.0)),
-            convenience=_safe_float(data.get("convenience", 0.0)),
-        )
+        if hasattr(data, "get") and callable(data.get):
+            return cls(
+                safety=_safe_float(data.get("safety", 0.0)),
+                functional=_safe_float(data.get("functional", 0.0)),
+                economic=_safe_float(data.get("economic", 0.0)),
+                social=_safe_float(data.get("social", 0.0)),
+                convenience=_safe_float(data.get("convenience", 0.0)),
+            )
+        if isinstance(data, dict):
+            return cls(
+                safety=_safe_float(data.get("safety", 0.0)),
+                functional=_safe_float(data.get("functional", 0.0)),
+                economic=_safe_float(data.get("economic", 0.0)),
+                social=_safe_float(data.get("social", 0.0)),
+                convenience=_safe_float(data.get("convenience", 0.0)),
+            )
+        return None
 
 
 @dataclass
@@ -379,10 +495,35 @@ class ComplaintRecord:
     dsi_breakdown: Optional[DSIBreakdown] = None
     filter_reason: str = ""
     severity: Optional[str] = None
+    confidence_score: float = 0.0
+
+    def __post_init__(self) -> None:
+        """Sanitize default factory values, ensure copy resilience, and clamp sentiment bounds."""
+        if self.slang_terms_detected is None:
+            self.slang_terms_detected = []
+        elif not isinstance(self.slang_terms_detected, list):
+            self.slang_terms_detected = list(self.slang_terms_detected)
+        if self.sentiment_polarity is not None:
+            try:
+                p = float(self.sentiment_polarity)
+                if not (math.isnan(p) or math.isinf(p)):
+                    self.sentiment_polarity = max(-1.0, min(1.0, p))
+            except (ValueError, TypeError, OverflowError):
+                pass
 
     @property
     def defect_category_ko(self) -> str:
-        return DEFECT_CATEGORY_KO_MAP.get(self.defect_category, "기타 결함")
+        cat = self.defect_category
+        if cat in DEFECT_CATEGORY_KO_MAP:
+            return DEFECT_CATEGORY_KO_MAP[cat]
+        if cat:
+            cat_upper = cat.upper()
+            if cat_upper in DEFECT_CATEGORY_KO_MAP:
+                return DEFECT_CATEGORY_KO_MAP[cat_upper]
+            for k, v in DEFECT_CATEGORY_KO_MAP.items():
+                if cat == v or cat_upper == v.upper():
+                    return v
+        return "기타 결함"
 
     @property
     def severity_tier(self) -> str:
@@ -405,6 +546,11 @@ class ComplaintRecord:
         if val >= 4.0:
             return "MEDIUM"
         return "LOW"
+
+    @property
+    def canonical_severity(self) -> str:
+        """Return validated canonical severity level: CRITICAL, HIGH, MEDIUM, or LOW."""
+        return normalize_severity(self.severity, self.severity_index, default="LOW")
 
     @property
     def sentiment_tier(self) -> str:
@@ -446,10 +592,11 @@ class ComplaintRecord:
             "summary": self.summary,
             "verbatim_quote": self.verbatim_quote,
             "slang_terms_detected": list(self.slang_terms_detected or []),
-            "sentiment_polarity": _safe_round(self.sentiment_polarity, 4),
-            "negativity_score": _safe_round(self.negativity_score, 4),
+            "sentiment_polarity": _safe_round(_safe_clamp(self.sentiment_polarity, -1.0, 1.0, 0.0), 4),
+            "negativity_score": _safe_round(_safe_clamp(self.negativity_score, 0.0, 1.0, 0.0), 4),
             "severity_index": _safe_round(self.severity_index, 2),
             "is_authentic_defect": self.is_authentic_defect,
+            "confidence_score": _safe_round(self.confidence_score, 4),
         }
 
     def to_admin_report_dict(self) -> Dict[str, Any]:
@@ -475,13 +622,14 @@ class ComplaintRecord:
             "raw_quote": self.verbatim_quote,
             "slang_tags": list(self.slang_terms_detected or []),
             "slang_terms_detected": list(self.slang_terms_detected or []),
-            "sentiment_score": _safe_round(self.negativity_score, 4),
-            "sentiment_polarity": _safe_round(self.sentiment_polarity, 4),
-            "negativity_score": _safe_round(self.negativity_score, 4),
+            "sentiment_score": _safe_round(_safe_clamp(self.negativity_score, 0.0, 1.0, 0.0), 4),
+            "sentiment_polarity": _safe_round(_safe_clamp(self.sentiment_polarity, -1.0, 1.0, 0.0), 4),
+            "negativity_score": _safe_round(_safe_clamp(self.negativity_score, 0.0, 1.0, 0.0), 4),
             "sentiment_tier": self.sentiment_tier,
             "severity": self.severity_tier,
             "severity_index": _safe_round(self.severity_index, 2),
             "is_authentic_defect": self.is_authentic_defect,
+            "confidence_score": _safe_round(self.confidence_score, 4),
         }
         if self.dsi_breakdown:
             res["dsi_breakdown"] = self.dsi_breakdown.to_dict()
@@ -648,11 +796,20 @@ class ComplaintRecord:
 
         # 8. defect_category (support category or Korean category alias)
         defect_cat = _get_str("defect_category", "category")
-        if not defect_cat:
+        if defect_cat:
+            cat_upper = defect_cat.upper()
+            if cat_upper in DEFECT_CATEGORY_KO_MAP:
+                defect_cat = cat_upper
+            else:
+                for k, v in DEFECT_CATEGORY_KO_MAP.items():
+                    if defect_cat == v or cat_upper == v.upper():
+                        defect_cat = k
+                        break
+        else:
             cat_ko = _get_str("defect_category_ko")
             if cat_ko:
                 for k, v in DEFECT_CATEGORY_KO_MAP.items():
-                    if v == cat_ko:
+                    if v == cat_ko or k == cat_ko.upper():
                         defect_cat = k
                         break
 
@@ -675,14 +832,14 @@ class ComplaintRecord:
         else:
             slang_terms = []
 
-        # 12. sentiment_polarity
-        polarity = _safe_float(_get("sentiment_polarity"), 0.0)
+        # 12. sentiment_polarity (clamped [-1.0, 1.0])
+        polarity = _safe_round(_safe_clamp(_get("sentiment_polarity"), -1.0, 1.0, 0.0), 4)
 
-        # 13. negativity_score / sentiment_score
+        # 13. negativity_score / sentiment_score (clamped [0.0, 1.0])
         raw_neg = _get("negativity_score")
         if raw_neg is None:
             raw_neg = _get("sentiment_score")
-        negativity = _safe_float(raw_neg, 0.0)
+        negativity = _safe_round(_safe_clamp(raw_neg, 0.0, 1.0, 0.0), 4)
 
         # 14. severity_index
         sev_idx = _safe_float(_get("severity_index"), 0.0)
@@ -697,6 +854,8 @@ class ComplaintRecord:
             dsi = raw_dsi
         elif isinstance(raw_dsi, dict):
             dsi = DSIBreakdown.from_dict(raw_dsi)
+        elif hasattr(raw_dsi, "get") and callable(raw_dsi.get):
+            dsi = DSIBreakdown.from_dict(raw_dsi)
         else:
             dsi = None
 
@@ -708,6 +867,9 @@ class ComplaintRecord:
         if raw_sev is None:
             raw_sev = _get("severity_tier")
         severity = str(raw_sev).strip() if raw_sev is not None else None
+
+        # 19. confidence_score
+        confidence_score = _safe_float(_get("confidence_score", 0.0), default=0.0)
 
         return cls(
             id=rec_id,
@@ -729,6 +891,7 @@ class ComplaintRecord:
             dsi_breakdown=dsi,
             filter_reason=filter_reason,
             severity=severity,
+            confidence_score=confidence_score,
         )
 
     def __getitem__(self, key: str) -> Any:
@@ -824,13 +987,15 @@ class DailyReportStatistics:
     def __len__(self) -> int:
         return len(self.to_dict())
 
-    def __len__(self) -> int:
-        return len(self.to_dict())
-
     @classmethod
     def from_dict(cls, data: Any) -> DailyReportStatistics:
         if isinstance(data, cls):
-            return data
+            return cls(
+                total_scraped=data.total_scraped,
+                total_filtered_defects=data.total_filtered_defects,
+                avg_negativity_score=data.avg_negativity_score,
+                critical_defect_count=data.critical_defect_count,
+            )
         if not isinstance(data, dict):
             return cls()
         return cls(
@@ -839,6 +1004,16 @@ class DailyReportStatistics:
             avg_negativity_score=_safe_float(data.get("avg_negativity_score", 0.0)),
             critical_defect_count=max(0, _safe_int(data.get("critical_defect_count", 0))),
         )
+
+
+def _serialize_report_entry(r: Any) -> Dict[str, Any]:
+    if hasattr(r, "to_admin_report_dict") and callable(r.to_admin_report_dict):
+        return r.to_admin_report_dict()
+    if hasattr(r, "to_dict") and callable(r.to_dict):
+        return r.to_dict()
+    if isinstance(r, dict):
+        return dict(r)
+    return {}
 
 
 @dataclass
@@ -890,16 +1065,23 @@ class DailyReportPayload:
         return {
             "generated_at": self.generated_at,
             "pipeline_version": self.pipeline_version,
-            "statistics": self.statistics.to_dict(),
+            "statistics": self.statistics.to_dict() if hasattr(self.statistics, "to_dict") else dict(self.statistics),
             "total_complaints_today": self.total_complaints_today,
-            "top_defect_categories": list(self.top_defect_categories),
-            "reports": list(self.reports),
+            "top_defect_categories": [dict(c) for c in self.top_defect_categories if isinstance(c, dict)],
+            "reports": [_serialize_report_entry(r) for r in self.reports],
         }
 
     @classmethod
     def from_dict(cls, data: Any) -> DailyReportPayload:
         if isinstance(data, cls):
-            return data
+            return cls(
+                generated_at=data.generated_at,
+                pipeline_version=data.pipeline_version,
+                statistics=DailyReportStatistics.from_dict(data.statistics),
+                reports=[_serialize_report_entry(r) for r in data.reports],
+                total_complaints_today=data.total_complaints_today,
+                top_defect_categories=[dict(c) for c in data.top_defect_categories if isinstance(c, dict)],
+            )
         if not isinstance(data, dict):
             return cls(generated_at=datetime.now(timezone.utc).isoformat())
 
@@ -908,17 +1090,17 @@ class DailyReportPayload:
 
         raw_stats = data.get("statistics")
         if isinstance(raw_stats, DailyReportStatistics):
-            stats = raw_stats
+            stats = DailyReportStatistics.from_dict(raw_stats)
         elif isinstance(raw_stats, dict):
             stats = DailyReportStatistics.from_dict(raw_stats)
         else:
             stats = DailyReportStatistics()
 
         raw_reports = data.get("reports")
-        reports = [r for r in raw_reports if isinstance(r, dict)] if isinstance(raw_reports, (list, tuple)) else []
+        reports = [_serialize_report_entry(r) for r in raw_reports] if isinstance(raw_reports, (list, tuple)) else []
 
         raw_cats = data.get("top_defect_categories")
-        top_cats = [c for c in raw_cats if isinstance(c, dict)] if isinstance(raw_cats, (list, tuple)) else []
+        top_cats = [dict(c) for c in raw_cats if isinstance(c, dict)] if isinstance(raw_cats, (list, tuple)) else []
 
         tot_complaints = _safe_int(data.get("total_complaints_today", len(reports)))
 

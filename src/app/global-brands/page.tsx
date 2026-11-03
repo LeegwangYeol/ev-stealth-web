@@ -3,6 +3,7 @@ import Link from 'next/link';
 import JsonLd from '@/components/JsonLd';
 
 export const dynamic = 'force-static';
+export const revalidate = false;
 
 const globalBrandsJsonLd = {
   "@context": "https://schema.org",
@@ -10,6 +11,9 @@ const globalBrandsJsonLd = {
   "headline": "글로벌 EV 브랜드 연식별 결함 및 구매 가이드",
   "description": "폭스바겐 ID.4, 쉐보레 볼트 EV, 폴스타 2, 벤츠 EQE/EQS 등 유럽/북미 전기차 연식별 결함 및 중고차 구매 가이드",
   "url": "https://ev-stealth-web.vercel.app/global-brands",
+  "inLanguage": "ko-KR",
+  "datePublished": "2026-01-01T00:00:00+09:00",
+  "dateModified": "2026-11-01T00:00:00+09:00",
   "author": {
     "@type": "Organization",
     "name": "Global EV Hub",
@@ -49,6 +53,8 @@ export const metadata: Metadata = {
     siteName: 'Global EV Hub',
     locale: 'ko_KR',
     type: 'article',
+    publishedTime: '2026-01-01T00:00:00+09:00',
+    modifiedTime: '2026-11-01T00:00:00+09:00',
   },
   twitter: {
     card: 'summary_large_image',
@@ -59,10 +65,10 @@ export const metadata: Metadata = {
 
 export default function GlobalEvPage() {
   return (
-    <div className="space-y-8 py-10 max-w-4xl mx-auto">
+    <article className="space-y-8 py-6 sm:py-10 max-w-4xl mx-auto">
       <JsonLd data={globalBrandsJsonLd} />
       <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold border-b pb-4 text-slate-900">
-        유럽 및 북미 EV 연식별 가이드 (폭스바겐, 리비안, 폴스타 등)
+        유럽 및 북미 EV 연식별 가이드 (폭스바겐, 쉐보레, 볼보/폴스타, 벤츠 등)
       </h1>
       
       <section className="space-y-4" aria-labelledby="heading-bolt-ev">
@@ -234,6 +240,6 @@ export default function GlobalEvPage() {
           </Link>
         </div>
       </section>
-    </div>
+    </article>
   );
 }

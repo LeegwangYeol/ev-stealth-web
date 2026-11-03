@@ -77,7 +77,7 @@ export default class SubsidyErrorBoundary extends Component<Props, State> {
             <h3 id="subsidy-error-title" className="text-base sm:text-lg font-bold text-white">
               {this.props.fallbackTitle || '보조금 계산 중 오류가 발생했습니다'}
             </h3>
-            <p id="subsidy-error-desc" className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+            <p id="subsidy-error-desc" className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
               입력값 또는 지자체 쿼터 데이터를 처리하는 과정에서 일시적인 예외가 발생했습니다.
               {this.state.error?.message ? ` (${this.state.error.message})` : ''}
             </p>

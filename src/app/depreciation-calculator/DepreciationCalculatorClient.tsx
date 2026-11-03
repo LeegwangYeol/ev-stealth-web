@@ -248,18 +248,18 @@ const ModelGridCard = memo(function ModelGridCard({
         <div className="text-xs text-slate-600 mb-2">{model.segment}</div>
 
         <div className="flex flex-wrap items-center gap-1.5 mb-2">
-          {getChemistryBadge(model.battery_specs.chemistry)}
+          {getChemistryBadge(model.battery_specs?.chemistry ?? 'NCM_811')}
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-900 border border-slate-300">
-            {model.battery_specs.capacity_kwh} kWh
+            {model.battery_specs?.capacity_kwh ?? 77.4} kWh
           </span>
           <span
             className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold border ${
-              model.battery_specs.voltage_architecture === '800V'
+              model.battery_specs?.voltage_architecture === '800V'
                 ? 'bg-emerald-100 text-emerald-950 border-emerald-400'
                 : 'bg-slate-100 text-slate-900 border-slate-300'
             }`}
           >
-            {model.battery_specs.voltage_architecture}
+            {model.battery_specs?.voltage_architecture ?? '400V'}
           </span>
         </div>
       </div>
@@ -268,7 +268,7 @@ const ModelGridCard = memo(function ModelGridCard({
         <div>
           <span className="text-slate-600">출고가:</span>{' '}
           <span className="font-semibold text-slate-700">
-            {(model.msrp_krw_baseline / 10000).toLocaleString()}만 원
+            {((model.msrp_krw_baseline ?? 55_000_000) / 10000).toLocaleString()}만 원
           </span>
         </div>
         <div>
@@ -387,17 +387,17 @@ export default function DepreciationCalculatorClient({
       }
     }
     return priceBasis === 'effective'
-      ? selectedModel.net_purchase_price_krw
-      : selectedModel.msrp_krw_baseline;
+      ? (selectedModel?.net_purchase_price_krw ?? 48_000_000)
+      : (selectedModel?.msrp_krw_baseline ?? 55_000_000);
   }, [customPriceInput, priceBasis, selectedModel]);
 
   // Subsidy breakdown for selected model
   const defaultLocalSubsidy = useMemo(() => {
-    return Math.round(selectedModel.avg_subsidy_krw * 0.45);
+    return Math.round((selectedModel?.avg_subsidy_krw ?? 7_000_000) * 0.45);
   }, [selectedModel]);
 
   const defaultNationalSubsidy = useMemo(() => {
-    return Math.round(selectedModel.avg_subsidy_krw * 0.55);
+    return Math.round((selectedModel?.avg_subsidy_krw ?? 7_000_000) * 0.55);
   }, [selectedModel]);
 
   const effectiveLocalSubsidy =
@@ -415,9 +415,10 @@ export default function DepreciationCalculatorClient({
 
   // Sync heldMonths if sync is active
   const handleYearsChange = useCallback((years: number) => {
-    setHoldingYears(years);
+    const validYears = Number.isFinite(years) ? Math.max(0.5, Math.min(10, years)) : 3;
+    setHoldingYears(validYears);
     if (syncMonthsWithYears) {
-      setHeldMonths(Math.round(years * 12));
+      setHeldMonths(Math.round(validYears * 12));
     }
   }, [syncMonthsWithYears]);
 
@@ -547,7 +548,9 @@ export default function DepreciationCalculatorClient({
   const batteryHealth = useMemo(() => {
     const dcfcRatioVal = dcfcRatio / 100;
     const ambientTempC = winterSeason ? -5 : 22;
-    const cacheKey = `${selectedModel.id}_${selectedModel.battery_specs.chemistry}_${holdingYears}_${totalMileage}_${annualMileageKm}_${dcfcRatioVal}_${ambientTempC}_${selectedModel.battery_specs.capacity_kwh}`;
+    const modelChemistry = selectedModel.battery_specs?.chemistry ?? 'NCM_811';
+    const modelCapacity = selectedModel.battery_specs?.capacity_kwh ?? 77.4;
+    const cacheKey = `${selectedModel.id}_${modelChemistry}_${holdingYears}_${totalMileage}_${annualMileageKm}_${dcfcRatioVal}_${ambientTempC}_${modelCapacity}`;
 
     const cached = batterySimulationCache.current.get(cacheKey);
     if (cached) {
@@ -559,14 +562,14 @@ export default function DepreciationCalculatorClient({
 
     const simResult = simulateBatteryHealth({
       modelId: selectedModel.id,
-      chemistry: selectedModel.battery_specs.chemistry,
+      chemistry: modelChemistry,
       years: holdingYears,
       totalKm: totalMileage,
       annualKm: annualMileageKm,
       dcfcRatio: dcfcRatioVal,
       storageSoc: 0.6,
       ambientTempC,
-      packCapacityKwh: selectedModel.battery_specs.capacity_kwh,
+      packCapacityKwh: modelCapacity,
     });
 
     // Bounded cache eviction: cap at 100 entries using true LRU eviction
@@ -581,8 +584,8 @@ export default function DepreciationCalculatorClient({
     return simResult;
   }, [
     selectedModel.id,
-    selectedModel.battery_specs.chemistry,
-    selectedModel.battery_specs.capacity_kwh,
+    selectedModel.battery_specs?.chemistry,
+    selectedModel.battery_specs?.capacity_kwh,
     holdingYears,
     totalMileage,
     annualMileageKm,
@@ -960,7 +963,7 @@ export default function DepreciationCalculatorClient({
               value={annualMileageKm}
               onChange={(e) => {
                 const val = parseInt(e.target.value, 10);
-                if (Number.isFinite(val)) setAnnualMileageKm(val);
+                if (Number.isFinite(val)) setAnnualMileageKm(Math.max(1000, Math.min(100000, val)));
               }}
               className="w-full accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="연간 주행거리 설정 (5,000km에서 50,000km)"
@@ -1006,7 +1009,7 @@ export default function DepreciationCalculatorClient({
               value={dcfcRatio}
               onChange={(e) => {
                 const val = parseInt(e.target.value, 10);
-                if (Number.isFinite(val)) setDcfcRatio(val);
+                if (Number.isFinite(val)) setDcfcRatio(Math.max(0, Math.min(100, val)));
               }}
               className="w-full accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="급속 충전 비율 설정 (0%에서 100%)"
@@ -1098,6 +1101,17 @@ export default function DepreciationCalculatorClient({
               />
               <span aria-hidden="true" className="absolute right-3 top-3 text-xs text-slate-600">원</span>
             </div>
+
+            {customPriceInput !== null && customPriceInput.trim() !== '' && Number(customPriceInput) < 0 && (
+              <span className="text-[11px] text-red-600 font-semibold block text-center" role="alert">
+                0원 이상 입력해야 합니다. (기본 출고가로 대체됨)
+              </span>
+            )}
+            {customPriceInput !== null && customPriceInput.trim() !== '' && Number(customPriceInput) > 10_000_000_000 && (
+              <span className="text-[11px] text-amber-700 font-semibold block text-center" role="alert">
+                최대 한도(100억 원)로 제한됩니다.
+              </span>
+            )}
 
             <div className="text-[11px] text-slate-600 text-center">
               환산: <strong>{(currentPurchasePrice / 10000).toLocaleString()}만 원</strong>
@@ -1238,15 +1252,15 @@ export default function DepreciationCalculatorClient({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
             <div className="flex items-center gap-4">
               <span className="flex items-center gap-1.5 font-semibold text-blue-400">
-                <span className="w-3 h-3 rounded bg-blue-500 inline-block" />
+                <span className="w-3 h-3 rounded bg-blue-500 inline-block" aria-hidden="true" />
                 {selectedModel.model_name} (선택 차량)
               </span>
               <span className="flex items-center gap-1.5 font-semibold text-emerald-400">
-                <span className="w-3 h-3 rounded bg-emerald-500 inline-block" />
+                <span className="w-3 h-3 rounded bg-emerald-500 inline-block" aria-hidden="true" />
                 전기차 전체 평균
               </span>
               <span className="flex items-center gap-1.5 font-semibold text-slate-400">
-                <span className="w-3 h-3 rounded bg-slate-500 inline-block" />
+                <span className="w-3 h-3 rounded bg-slate-500 inline-block" aria-hidden="true" />
                 동급 내연기관(가솔린)
               </span>
             </div>
@@ -1265,8 +1279,10 @@ export default function DepreciationCalculatorClient({
               viewBox="0 0 700 280"
               className="w-full min-w-[550px] h-64 select-none"
               role="img"
-              aria-label="연차별 잔존가치 프로젝션 비교 차트"
+              aria-labelledby="dep-chart-title dep-chart-desc"
             >
+              <title id="dep-chart-title">{selectedModel.brand_name_ko} {selectedModel.model_name} 연차별 잔존가치 프로젝션 비교 차트</title>
+              <desc id="dep-chart-desc">1년차부터 5년차까지 {selectedModel.model_name}의 연차별 예상 잔존 시세 및 잔존율을 전기차 전체 평균 및 동급 가솔린 내연기관 차량과 비교하는 시각화 차트입니다.</desc>
               {/* Grid Lines */}
               {[0, 1, 2, 3, 4].map((i) => {
                 const y = 30 + i * 50;
@@ -1559,6 +1575,7 @@ export default function DepreciationCalculatorClient({
               className="relative w-44 h-44 mx-auto flex items-center justify-center"
             >
               <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
+                <title>배터리 잔존 성능(SoH) 원형 게이지</title>
                 {/* Track Circle */}
                 <circle
                   cx="50"
@@ -1872,7 +1889,22 @@ export default function DepreciationCalculatorClient({
           {/* Control 3: Subsidy Input & Total Clawback Result */}
           <div className="bg-slate-900 text-white p-5 rounded-xl border border-slate-800 flex flex-col justify-between space-y-4">
             <div className="space-y-2">
-              <span className="text-xs font-bold text-slate-300">보조금 지원금액 입력</span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-300">보조금 지원금액 입력</span>
+                {(customLocalSubsidy !== null || customNationalSubsidy !== null) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomLocalSubsidy(null);
+                      setCustomNationalSubsidy(null);
+                    }}
+                    className="text-[11px] text-blue-400 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded min-h-[32px] inline-flex items-center"
+                    aria-label="보조금 기본값 복원: 차량 기본 보조금으로 초기화"
+                  >
+                    기본값 복원
+                  </button>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
                   <label htmlFor="nationalSubsidyInput" className="text-slate-400 block text-[11px]">
@@ -2013,7 +2045,10 @@ export default function DepreciationCalculatorClient({
             <select
               id="ice-displacement-select"
               value={iceDisplacementCc}
-              onChange={(e) => setIceDisplacementCc(parseInt(e.target.value, 10))}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                setIceDisplacementCc(Number.isFinite(val) && val > 0 ? val : 1998);
+              }}
               className="px-3 py-2 min-h-[44px] rounded-lg border border-slate-300 font-medium bg-white text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               aria-label="비교 대상 내연기관 배기량 선택"
             >

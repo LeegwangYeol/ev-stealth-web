@@ -76,44 +76,324 @@ get_baseline_models = build_popular_models
 get_baseline_dataset = build_initial_baseline
 
 
+# ============================================================================
+# Authoritative Statutory Regional Grouping Configuration
+# ============================================================================
+
+# Metropolitan Cities (8): 서울, 부산, 대구, 인천, 광주, 대전, 울산, 세종
+METROPOLITAN_CITIES: Tuple[str, ...] = (
+    "서울",
+    "부산",
+    "대구",
+    "인천",
+    "광주",
+    "대전",
+    "울산",
+    "세종",
+)
+
+# Provinces (9): 경기, 강원, 충북, 충남, 전북, 전남, 경북, 경남, 제주
+PROVINCES: Tuple[str, ...] = (
+    "경기",
+    "강원",
+    "충북",
+    "충남",
+    "전북",
+    "전남",
+    "경북",
+    "경남",
+    "제주",
+)
+
+METROPOLITAN_CITY_CODES: Tuple[str, ...] = (
+    "KR-11",  # 서울특별시
+    "KR-26",  # 부산광역시
+    "KR-27",  # 대구광역시
+    "KR-28",  # 인천광역시
+    "KR-29",  # 광주광역시
+    "KR-30",  # 대전광역시
+    "KR-31",  # 울산광역시
+    "KR-36",  # 세종특별자치시
+)
+
+PROVINCE_CODES: Tuple[str, ...] = (
+    "KR-41",  # 경기도
+    "KR-42",  # 강원특별자치도
+    "KR-43",  # 충청북도
+    "KR-44",  # 충청남도
+    "KR-45",  # 전북특별자치도
+    "KR-46",  # 전라남도
+    "KR-47",  # 경상북도
+    "KR-48",  # 경상남도
+    "KR-49",  # 제주특별자치도
+)
+
+REGIONAL_GROUP_METROPOLITAN: str = "metropolitan_cities"
+REGIONAL_GROUP_PROVINCES: str = "provinces"
+REGIONAL_GROUP_OTHER: str = "other"
+
+
 def get_baseline_thresholds() -> Dict[str, Any]:
     """Return default 5-tier alert threshold configuration dictionary."""
     return DEFAULT_ALERT_THRESHOLDS
 
 
-def calculate_depletion_rate(applied: Union[int, float], announced: Union[int, float]) -> float:
-    """Calculate EV subsidy depletion rate as percentage with zero-division guard and negative clamping."""
+def calculate_depletion_rate(
+    applied: Union[int, float] = 0,
+    announced: Union[int, float, None] = None,
+    clamp_100: bool = False,
+    quota: Union[int, float, None] = None,
+    clamp: bool = False,
+    max_rate: Optional[float] = None,
+) -> float:
+    """Calculate EV subsidy depletion rate as percentage with zero-division guard and negative clamping.
+
+    Formula:
+        (applied / quota) * 100.0
+
+    Args:
+        applied: Number of received applications (int or float).
+        announced: Total allocated quota units (legacy alias).
+        clamp_100: If True, clamp result to [0.0, 100.0]. Defaults to False to track
+                   over-exhaustion / waitlisted status (> 100.0%).
+        quota: Total allocated quota units (standard naming). Takes precedence over announced if provided.
+        clamp: Alias for clamp_100.
+        max_rate: Optional upper bound ceiling for rate clamping.
+
+    Returns:
+        Depletion percentage rounded to 1 decimal place, guaranteed non-negative.
+    """
     try:
-        if announced is None or applied is None:
+        target_quota = quota if quota is not None else announced
+        if target_quota is None or applied is None:
             return 0.0
-        announced_val = float(announced)
+        quota_val = float(target_quota)
         applied_val = float(applied)
-        if math.isnan(announced_val) or math.isnan(applied_val) or math.isinf(announced_val) or math.isinf(applied_val):
+        if math.isnan(quota_val) or math.isnan(applied_val) or math.isinf(quota_val) or math.isinf(applied_val):
             return 0.0
-        if announced_val <= 0 or applied_val <= 0:
+        if quota_val <= 0.0 or applied_val <= 0.0:
             return 0.0
-        rate = round((applied_val / announced_val) * 100.0, 1)
+        rate = round((applied_val / quota_val) * 100.0, 1)
         if math.isnan(rate) or math.isinf(rate):
             return 0.0
-        return max(0.0, rate)
+        rate = max(0.0, rate)
+        if clamp_100 or clamp:
+            rate = min(100.0, rate)
+        if max_rate is not None:
+            try:
+                rate = min(float(max_rate), rate)
+            except (ValueError, TypeError):
+                pass
+        return rate
     except (TypeError, ValueError, ZeroDivisionError, OverflowError):
         return 0.0
 
 
-def calculate_remaining_units(applied: Union[int, float], announced: Union[int, float]) -> int:
-    """Calculate remaining quota units clamped at zero for over-subscription or negative values."""
+def is_depletion_over_exhausted(depletion_rate: Union[int, float]) -> bool:
+    """Return True if depletion rate strictly exceeds 100.0% (over-exhaustion / waitlisted)."""
     try:
-        if announced is None or applied is None:
+        r = float(depletion_rate)
+        return not (math.isnan(r) or math.isinf(r)) and r > 100.0
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+
+def calculate_remaining_units(
+    applied: Union[int, float] = 0,
+    announced: Union[int, float, None] = None,
+    quota: Union[int, float, None] = None,
+) -> int:
+    """Calculate remaining quota units clamped at zero: max(0, quota - applied).
+
+    Args:
+        applied: Number of received applications.
+        announced: Total allocated quota units.
+        quota: Standard alias for total allocated quota units.
+
+    Returns:
+        Remaining units as non-negative integer (clamped to 0 upon over-subscription).
+    """
+    try:
+        target_quota = quota if quota is not None else announced
+        if target_quota is None or applied is None:
             return 0
-        announced_f = float(announced)
+        quota_f = float(target_quota)
         applied_f = float(applied)
-        if math.isnan(announced_f) or math.isnan(applied_f) or math.isinf(announced_f) or math.isinf(applied_f):
+        if math.isnan(quota_f) or math.isnan(applied_f) or math.isinf(quota_f) or math.isinf(applied_f):
             return 0
-        safe_announced = max(0, int(announced_f))
+        safe_quota = max(0, int(quota_f))
         safe_applied = max(0, int(applied_f))
-        return max(0, safe_announced - safe_applied)
+        return max(0, safe_quota - safe_applied)
     except (TypeError, ValueError, OverflowError):
         return 0
+
+
+def calculate_waitlist_units(
+    applied: Union[int, float] = 0,
+    announced: Union[int, float, None] = None,
+    quota: Union[int, float, None] = None,
+) -> int:
+    """Calculate waitlisted/over-subscribed units beyond announced quota: max(0, applied - quota)."""
+    try:
+        target_quota = quota if quota is not None else announced
+        if target_quota is None or applied is None:
+            return 0
+        quota_f = float(target_quota)
+        applied_f = float(applied)
+        if math.isnan(quota_f) or math.isnan(applied_f) or math.isinf(quota_f) or math.isinf(applied_f):
+            return 0
+        safe_quota = max(0, int(quota_f))
+        safe_applied = max(0, int(applied_f))
+        return max(0, safe_applied - safe_quota)
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def calculate_delivery_rate(
+    delivered: Union[int, float] = 0,
+    announced: Union[int, float, None] = None,
+    quota: Union[int, float, None] = None,
+    clamp_100: bool = False,
+) -> float:
+    """Calculate EV delivery rate percentage against announced quota: (delivered / quota) * 100."""
+    return calculate_depletion_rate(applied=delivered, announced=announced, quota=quota, clamp_100=clamp_100)
+
+
+def calculate_pending_deliveries(
+    applied: Union[int, float] = 0,
+    delivered: Union[int, float] = 0,
+) -> int:
+    """Calculate pending delivery units (applied - delivered) clamped at zero."""
+    try:
+        if applied is None or delivered is None:
+            return 0
+        applied_f = float(applied)
+        delivered_f = float(delivered)
+        if math.isnan(applied_f) or math.isnan(delivered_f) or math.isinf(applied_f) or math.isinf(delivered_f):
+            return 0
+        safe_applied = max(0, int(applied_f))
+        safe_delivered = max(0, int(delivered_f))
+        return max(0, safe_applied - safe_delivered)
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def classify_region_group(region: Union[RegionRecord, Dict[str, Any], str, None]) -> str:
+    """Classify region into 'metropolitan_cities', 'provinces', or 'other'.
+
+    Groups:
+    - Metropolitan cities (8): 서울, 부산, 대구, 인천, 광주, 대전, 울산, 세종
+    - Provinces (9): 경기, 강원, 충북, 충남, 전북, 전남, 경북, 경남, 제주
+    """
+    if region is None:
+        return REGIONAL_GROUP_OTHER
+
+    if isinstance(region, str):
+        ident = region.strip()
+        if not ident:
+            return REGIONAL_GROUP_OTHER
+        if ident in METROPOLITAN_CITY_CODES:
+            return REGIONAL_GROUP_METROPOLITAN
+        if ident in PROVINCE_CODES:
+            return REGIONAL_GROUP_PROVINCES
+        for city in METROPOLITAN_CITIES:
+            if city in ident:
+                return REGIONAL_GROUP_METROPOLITAN
+        for prov in PROVINCES:
+            if prov in ident:
+                return REGIONAL_GROUP_PROVINCES
+        ident_lower = ident.lower()
+        if any(c in ident_lower for c in ("seoul", "busan", "daegu", "incheon", "gwangju", "daejeon", "ulsan", "sejong")):
+            return REGIONAL_GROUP_METROPOLITAN
+        if any(p in ident_lower for p in ("gyeonggi", "gangwon", "chungbuk", "chungnam", "jeonbuk", "jeonnam", "gyeongbuk", "gyeongnam", "jeju")):
+            return REGIONAL_GROUP_PROVINCES
+        return REGIONAL_GROUP_OTHER
+
+    iso_code = _metric_val(region, "iso_code", "") or _metric_val(region, "region_id", "")
+    iso_str = str(iso_code).strip()
+    if iso_str in METROPOLITAN_CITY_CODES:
+        return REGIONAL_GROUP_METROPOLITAN
+    if iso_str in PROVINCE_CODES:
+        return REGIONAL_GROUP_PROVINCES
+
+    name_ko = str(_metric_val(region, "name_ko", "")).strip()
+    for city in METROPOLITAN_CITIES:
+        if city in name_ko:
+            return REGIONAL_GROUP_METROPOLITAN
+    for prov in PROVINCES:
+        if prov in name_ko:
+            return REGIONAL_GROUP_PROVINCES
+
+    name_en = str(_metric_val(region, "name_en", "")).strip().lower()
+    if any(c in name_en for c in ("seoul", "busan", "daegu", "incheon", "gwangju", "daejeon", "ulsan", "sejong")):
+        return REGIONAL_GROUP_METROPOLITAN
+    if any(p in name_en for p in ("gyeonggi", "gangwon", "chungbuk", "chungnam", "jeonbuk", "jeonnam", "gyeongbuk", "gyeongnam", "jeju")):
+        return REGIONAL_GROUP_PROVINCES
+
+    tier = str(_metric_val(region, "tier", "")).strip().lower()
+    if tier in ("special_city", "metropolitan_city", "special_self_governing_city"):
+        return REGIONAL_GROUP_METROPOLITAN
+    if tier in ("province", "special_self_governing_province"):
+        return REGIONAL_GROUP_PROVINCES
+
+    return REGIONAL_GROUP_OTHER
+
+
+def is_metropolitan_city(region: Union[RegionRecord, Dict[str, Any], str, None]) -> bool:
+    """Return True if region is one of the 8 Metropolitan cities."""
+    return classify_region_group(region) == REGIONAL_GROUP_METROPOLITAN
+
+
+def is_province(region: Union[RegionRecord, Dict[str, Any], str, None]) -> bool:
+    """Return True if region is one of the 9 Provinces."""
+    return classify_region_group(region) == REGIONAL_GROUP_PROVINCES
+
+
+def group_regions_by_type(
+    regions: Optional[List[Union[RegionRecord, Dict[str, Any]]]] = None,
+) -> Dict[str, List[Any]]:
+    """Group 17 administrative regions into Metropolitan cities (8) and Provinces (9).
+
+    Returns:
+    {
+        "metropolitan_cities": [서울, 부산, 대구, 인천, 광주, 대전, 울산, 세종],
+        "provinces": [경기, 강원, 충북, 충남, 전북, 전남, 경북, 경남, 제주],
+    }
+    """
+    if regions is None:
+        regions = build_baseline_regions()
+
+    grouped: Dict[str, List[Any]] = {
+        REGIONAL_GROUP_METROPOLITAN: [],
+        REGIONAL_GROUP_PROVINCES: [],
+    }
+
+    for r in regions:
+        grp = classify_region_group(r)
+        if grp == REGIONAL_GROUP_METROPOLITAN:
+            grouped[REGIONAL_GROUP_METROPOLITAN].append(r)
+        elif grp == REGIONAL_GROUP_PROVINCES:
+            grouped[REGIONAL_GROUP_PROVINCES].append(r)
+        else:
+            if "other" not in grouped:
+                grouped["other"] = []
+            grouped["other"].append(r)
+
+    return grouped
+
+
+group_regions_by_category = group_regions_by_type
+
+
+def generate_fallback_payload() -> SubsidyPayload:
+    """Generate authoritative verified 2026 fallback baseline dataset with updated metrics."""
+    payload = build_initial_baseline()
+    tracker = SubsidyTracker()
+    for idx, r in enumerate(payload.regions):
+        payload.regions[idx] = tracker.update_region_metrics(r)
+    payload.nationwide_summary = tracker.compute_nationwide_summary(payload.regions)
+    payload.metadata.generated_at = datetime.now(timezone.utc).isoformat()
+    return payload
 
 
 def classify_alert_tier(depletion_rate: float) -> str:
@@ -204,6 +484,8 @@ def _metric_val(metric: Any, key: str, default: Any = 0) -> Any:
 
 def _safe_int_metric(val: Any, default: int = 0) -> int:
     """Safely cast value to int, gracefully handling NaN, Inf, None, float strings, and invalid types."""
+    if type(val) is int:
+        return val
     if val is None:
         return default
     try:
@@ -842,6 +1124,68 @@ class SubsidyTracker:
         """Generate formatted executive markdown summary briefing."""
         return self.report_generator.generate_subsidy_briefing(payload, fallback_used=fallback_used)
 
+    def group_regions(
+        self,
+        regions: Optional[List[Union[RegionRecord, Dict[str, Any]]]] = None,
+    ) -> Dict[str, List[Any]]:
+        """Group regions into metropolitan cities (8) and provinces (9)."""
+        return group_regions_by_type(regions)
+
+    def compute_regional_group_summaries(
+        self,
+        regions: Optional[List[Union[RegionRecord, Dict[str, Any]]]] = None,
+    ) -> Dict[str, Dict[str, Any]]:
+        """Compute aggregate metrics for Metropolitan Cities (8) and Provinces (9)."""
+        grouped = self.group_regions(regions)
+        summaries: Dict[str, Dict[str, Any]] = {}
+        for group_name, reg_list in grouped.items():
+            tot_ann = 0
+            tot_app = 0
+            tot_del = 0
+            for r in reg_list:
+                cats = (r.get("categories") if isinstance(r, dict) else getattr(r, "categories", None)) or {}
+                for c in cats.values():
+                    tot_ann += max(0, _safe_int_metric(_metric_val(c, "announced_units", 0), 0))
+                    tot_app += max(0, _safe_int_metric(_metric_val(c, "applied_units", 0), 0))
+                    tot_del += max(0, _safe_int_metric(_metric_val(c, "delivered_units", 0), 0))
+            rem = calculate_remaining_units(tot_app, tot_ann)
+            rate = calculate_depletion_rate(tot_app, tot_ann)
+            del_rate = calculate_delivery_rate(tot_del, tot_ann)
+            pending_del = calculate_pending_deliveries(tot_app, tot_del)
+            waitlist = calculate_waitlist_units(tot_app, tot_ann)
+            summaries[group_name] = {
+                "region_count": len(reg_list),
+                "total_announced_units": tot_ann,
+                "total_applied_units": tot_app,
+                "total_delivered_units": tot_del,
+                "total_remaining_units": rem,
+                "total_pending_deliveries": pending_del,
+                "total_waitlist_units": waitlist,
+                "depletion_rate": rate,
+                "delivery_rate": del_rate,
+                "status": self.evaluate_status(rate).value,
+                "regions": [
+                    _metric_val(r, "name_ko", "") or _metric_val(r, "region_id", "")
+                    for r in reg_list
+                ],
+            }
+        return summaries
+
+    def get_fallback_payload(self) -> SubsidyPayload:
+        """Return fresh authoritative fallback baseline dataset."""
+        return generate_fallback_payload()
+
+
+def generate_fallback_payload() -> SubsidyPayload:
+    """Generate authoritative verified 2026 fallback baseline dataset with updated metrics."""
+    payload = build_initial_baseline()
+    tracker = SubsidyTracker()
+    for idx, r in enumerate(payload.regions):
+        payload.regions[idx] = tracker.update_region_metrics(r)
+    payload.nationwide_summary = tracker.compute_nationwide_summary(payload.regions)
+    payload.metadata.generated_at = datetime.now(timezone.utc).isoformat()
+    return payload
+
 
 def build_comprehensive_models_matrix() -> List[Dict[str, Any]]:
     """Build comprehensive 2026 Korean EV models matrix (18 models) with statutory subsidy specs."""
@@ -1027,10 +1371,26 @@ __all__ = [
     "get_baseline_dataset",
     "calculate_depletion_rate",
     "calculate_remaining_units",
+    "calculate_waitlist_units",
+    "calculate_delivery_rate",
+    "calculate_pending_deliveries",
+    "is_depletion_over_exhausted",
     "classify_alert_tier",
     "calculate_price_cap_ratio",
     "calculate_net_subsidy",
     "build_comprehensive_models_matrix",
     "export_models_subsidy_matrix",
+    "classify_region_group",
+    "is_metropolitan_city",
+    "is_province",
+    "group_regions_by_type",
+    "group_regions_by_category",
+    "generate_fallback_payload",
+    "METROPOLITAN_CITIES",
+    "PROVINCES",
+    "METROPOLITAN_CITY_CODES",
+    "PROVINCE_CODES",
+    "REGIONAL_GROUP_METROPOLITAN",
+    "REGIONAL_GROUP_PROVINCES",
     "_metric_val",
 ]

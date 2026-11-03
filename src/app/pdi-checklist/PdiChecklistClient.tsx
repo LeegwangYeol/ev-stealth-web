@@ -32,6 +32,13 @@ export interface PdiItemRowProps {
 }
 
 export const PdiItemRow = memo(function PdiItemRow({ item, onToggle }: PdiItemRowProps) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      onToggle(item.id);
+    }
+  };
+
   return (
     <label
       htmlFor={`pdi-task-${item.id}`}
@@ -44,14 +51,15 @@ export const PdiItemRow = memo(function PdiItemRow({ item, onToggle }: PdiItemRo
         aria-label={item.task}
         aria-describedby={item.warning ? `pdi-warning-${item.id}` : undefined}
         onChange={() => onToggle(item.id)}
+        onKeyDown={handleKeyDown}
         className="mt-1 w-6 h-6 text-blue-600 bg-gray-100 border-slate-400 hover:border-slate-500 rounded focus:ring-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500 print:accent-blue-600 cursor-pointer"
       />
       <span className="ml-4 flex-1">
-        <span className={`block text-lg font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-gray-800'} print:text-base print:text-black`}>
+        <span className={`block text-lg font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-slate-900'} print:text-base print:text-black`}>
           {item.task}
         </span>
         {item.warning && (
-          <span id={`pdi-warning-${item.id}`} className={`block mt-1 text-sm font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-red-700'} print:text-xs print:text-red-800`}>
+          <span id={`pdi-warning-${item.id}`} className={`block mt-1 text-sm font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-red-800'} print:text-xs print:text-red-800`}>
             <span aria-hidden="true">⚠️ </span>주의: {item.warning}
           </span>
         )}
@@ -72,7 +80,7 @@ export default function PdiChecklistClient() {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
           const parsed = safeJsonParse<ChecklistItem[]>(saved, []);
-          if (Array.isArray(parsed)) {
+          if (Array.isArray(parsed) && parsed.length > 0) {
             setItems((current) =>
               current.map((item) => {
                 const match = parsed.find((p: unknown): p is ChecklistItem => Boolean(p && typeof p === 'object' && 'id' in p && (p as { id: unknown }).id === item.id));
@@ -85,6 +93,30 @@ export default function PdiChecklistClient() {
     } catch (e) {
       console.warn('Failed to load PDI checklist from localStorage:', e);
     }
+  }, []);
+
+  // Cross-tab synchronization via storage event
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY && e.newValue) {
+        try {
+          const parsed = safeJsonParse<ChecklistItem[]>(e.newValue, []);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setItems((current) =>
+              current.map((item) => {
+                const match = parsed.find((p: unknown): p is ChecklistItem => Boolean(p && typeof p === 'object' && 'id' in p && (p as { id: unknown }).id === item.id));
+                return match ? { ...item, checked: Boolean(match.checked) } : item;
+              })
+            );
+          }
+        } catch {
+          // Ignore concurrent write issues
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   // Save changes to localStorage after mounted
@@ -136,6 +168,7 @@ export default function PdiChecklistClient() {
   const categories = useMemo(() => Array.from(new Set(items.map((i) => i.category))), [items]);
   const checkedCount = useMemo(() => items.filter((i) => i.checked).length, [items]);
   const totalItems = items.length;
+
   // Guard against division by zero (items.length === 0 ? 0 : Math.round((checkedCount / items.length) * 100))
   const progress = useMemo(() => {
     return items.length === 0 ? 0 : Math.round((checkedCount / items.length) * 100);
@@ -248,8 +281,8 @@ export default function PdiChecklistClient() {
           <div><span className="font-semibold">인수 점검 일시:</span> __________________________</div>
           <div><span className="font-semibold">인수 점검자 (서명):</span> __________________________</div>
         </div>
-        <div className="mt-3 flex items-center gap-2 text-xs text-slate-600 print:hidden">
-          <span aria-hidden="true" className={`w-2 h-2 rounded-full ${mounted ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+        <div className="mt-3 flex items-center gap-2 text-xs text-slate-700 print:hidden">
+          <span aria-hidden="true" className={`w-2.5 h-2.5 rounded-full ${mounted ? 'bg-emerald-600' : 'bg-slate-400'}`} />
           <span>{mounted ? '로컬 저장소 동기화 활성화됨 (새로고침 시 체크 상태 유지)' : '초기화 중...'}</span>
         </div>
         {/* Screen Reader Dynamic Progression Announcement */}
@@ -260,8 +293,8 @@ export default function PdiChecklistClient() {
 
       <div className="sticky top-0 bg-white/90 backdrop-blur-md p-4 rounded-xl border border-gray-200 shadow-sm z-10 space-y-3 print:hidden">
         <div className="flex justify-between items-center">
-          <span className="font-semibold text-gray-700">검수 진행률 ({checkedCount}/{items.length})</span>
-          <span className="font-bold text-blue-700">{progress}%</span>
+          <span className="font-semibold text-slate-800">검수 진행률 ({checkedCount}/{items.length})</span>
+          <span className={`font-bold ${isAllChecked ? 'text-emerald-700' : 'text-blue-700'}`}>{progress}%</span>
         </div>
         <div
           role="progressbar"
@@ -270,10 +303,12 @@ export default function PdiChecklistClient() {
           aria-valuemax={100}
           aria-label="신차 출고 전 점검(PDI) 진행률"
           aria-valuetext={`${progressPercentage}% 검수 완료`}
-          className="w-full bg-gray-200 border border-gray-300 rounded-full h-3 overflow-hidden"
+          className="w-full bg-slate-200 border border-slate-300 rounded-full h-3 overflow-hidden"
         >
           <div
-            className="bg-blue-600 h-3 rounded-full transition-all duration-500 ease-out"
+            className={`h-3 rounded-full transition-all duration-500 ease-out ${
+              isAllChecked ? 'bg-emerald-600' : 'bg-blue-600'
+            }`}
             style={{ width: `${progressPercentage}%` }}
           />
         </div>
@@ -370,10 +405,10 @@ export default function PdiChecklistClient() {
           role="status"
           aria-live="polite"
           aria-labelledby="pdi-completion-title"
-          className="bg-green-50 border border-green-200 text-green-800 p-6 rounded-2xl text-center shadow-sm animate-pulse motion-reduce:animate-none print:bg-white print:border-black print:text-black print:animate-none"
+          className="bg-emerald-50 border border-emerald-300 text-emerald-950 p-6 rounded-2xl text-center shadow-sm animate-pulse motion-reduce:animate-none print:bg-white print:border-black print:text-black print:animate-none"
         >
-          <h2 id="pdi-completion-title" className="text-2xl font-bold mb-2">🎉 검수 완료!</h2>
-          <p>모든 항목을 확인하셨습니다. 이상이 없다면 안심하고 인수증에 서명하세요.</p>
+          <h2 id="pdi-completion-title" className="text-2xl font-bold mb-2 text-emerald-900">🎉 검수 완료!</h2>
+          <p className="text-emerald-800 font-medium">모든 항목을 확인하셨습니다. 이상이 없다면 안심하고 인수증에 서명하세요.</p>
         </section>
       )}
 

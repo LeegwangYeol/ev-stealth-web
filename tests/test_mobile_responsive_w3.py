@@ -147,9 +147,9 @@ def test_pdi_checklist_touch_targets_and_flex_wrapping():
     with open(PAGES_UNDER_TEST['pdi-checklist-client'], 'r', encoding='utf-8') as f:
         content = f.read()
 
-    # Header controls wrap and have min touch targets
+    # Header controls wrap and have min touch targets (meeting WCAG 2.5.5 minimum 40px/44px)
     assert 'flex flex-wrap items-center gap-2 self-start sm:self-auto' in content
-    assert 'min-h-[40px]' in content
+    assert 'min-h-[44px]' in content or 'min-h-[40px]' in content
     # Checkbox touch size
     assert 'w-6 h-6' in content
 

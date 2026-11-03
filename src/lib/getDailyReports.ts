@@ -80,7 +80,7 @@ export const CATEGORY_MAP: Record<string, { code: DefectCategoryCode; ko: string
 };
 
 /**
- * Safely sanitizes external URLs to prevent javascript: or data: XSS injections.
+ * Safely sanitizes external URLs to prevent javascript:, data:, vbscript: or other XSS injections.
  */
 export function sanitizeReportUrl(rawUrl?: unknown): string {
   if (!rawUrl || typeof rawUrl !== 'string') return '#';
@@ -89,7 +89,32 @@ export function sanitizeReportUrl(rawUrl?: unknown): string {
   if (/^(?:javascript|data|vbscript):/i.test(trimmed)) {
     return '#';
   }
+  // Catch percent-encoded schemes like %6a%61%76%61%73%63%72%69%70%74:
+  try {
+    const decoded = decodeURIComponent(trimmed).replace(/\s+/g, '').toLowerCase();
+    if (/^(?:javascript|data|vbscript|blob|file|about):/.test(decoded)) {
+      return '#';
+    }
+  } catch {
+    // Malformed URI encoding
+  }
   return sanitizeSafeUrl(trimmed);
+}
+
+/**
+ * Normalizes and bounds sentiment/negativity scores safely between 0.00 and 1.00.
+ */
+export function getSafeSentimentScore(rawScore?: unknown, fallback = 0.85): number {
+  if (typeof rawScore !== 'number' || !Number.isFinite(rawScore)) {
+    return fallback;
+  }
+  let val = Math.abs(rawScore);
+  // If score was provided on a 0-100 scale (e.g. 85), scale down to 0-1
+  if (val > 1.0 && val <= 100.0) {
+    val = val / 100.0;
+  }
+  const clamped = Math.min(1.0, Math.max(0.0, val));
+  return Number(clamped.toFixed(2));
 }
 
 /**
@@ -98,7 +123,7 @@ export function sanitizeReportUrl(rawUrl?: unknown): string {
 export function normalizeReport(raw: Record<string, unknown>, index: number): DefectReportItem {
   if (!raw || typeof raw !== 'object') raw = {};
   const rawCat = sanitizeText(raw.defect_category || raw.category || 'BATTERY_CHARGING');
-  const catInfo = CATEGORY_MAP[rawCat] || {
+  const catInfo = (Object.prototype.hasOwnProperty.call(CATEGORY_MAP, rawCat) && CATEGORY_MAP[rawCat]) || {
     code: rawCat,
     ko: sanitizeText(raw.defect_category_ko || raw.category_ko || '기타 결함'),
   };
@@ -121,13 +146,30 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
     severity = 'INFO';
   }
 
-  const score = Number.isFinite(raw.sentiment_score)
-    ? Math.abs(raw.sentiment_score as number)
+  const rawScore = Number.isFinite(raw.sentiment_score)
+    ? (raw.sentiment_score as number)
     : (Number.isFinite(raw.negativity_score) ? (raw.negativity_score as number) : 0.85);
+  const score = getSafeSentimentScore(rawScore, 0.85);
 
-  const slang = Array.isArray(raw.slang_tags)
+  const rawSlang = Array.isArray(raw.slang_tags)
     ? raw.slang_tags
     : (Array.isArray(raw.slang_terms) ? raw.slang_terms : []);
+  const slangTags = rawSlang
+    .map((s: unknown) => sanitizeText(s))
+    .filter((s): s is string => Boolean(s && s.length > 0));
+
+  const rawDsi = raw.dsi_breakdown && typeof raw.dsi_breakdown === 'object'
+    ? (raw.dsi_breakdown as Record<string, unknown>)
+    : null;
+  const dsiBreakdown: DefectReportItem['dsi_breakdown'] = rawDsi
+    ? {
+        safety: typeof rawDsi.safety === 'number' && Number.isFinite(rawDsi.safety) ? rawDsi.safety : 0,
+        functional: typeof rawDsi.functional === 'number' && Number.isFinite(rawDsi.functional) ? rawDsi.functional : 0,
+        economic: typeof rawDsi.economic === 'number' && Number.isFinite(rawDsi.economic) ? rawDsi.economic : 0,
+        social: typeof rawDsi.social === 'number' && Number.isFinite(rawDsi.social) ? rawDsi.social : 0,
+        convenience: typeof rawDsi.convenience === 'number' && Number.isFinite(rawDsi.convenience) ? rawDsi.convenience : 0,
+      }
+    : undefined;
 
   return {
     id: sanitizeText(raw.id || `report_${index + 1}`),
@@ -143,14 +185,14 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
     defect_category_ko: sanitizeText(raw.defect_category_ko || catInfo.ko),
     summary: sanitizeText(raw.summary || raw.defect_summary || raw.defect_topic || '결함 상세 내용 요약'),
     verbatim_quote: sanitizeText(raw.verbatim_quote || raw.raw_quote || raw.content || '원문 없음'),
-    slang_tags: slang.map((s: unknown) => sanitizeText(s)).filter(Boolean),
-    sentiment_score: Number(score.toFixed(2)),
+    slang_tags: slangTags,
+    sentiment_score: score,
     sentiment_polarity: Number.isFinite(raw.sentiment_polarity) ? Number(raw.sentiment_polarity) : undefined,
     severity,
     severity_index: Number.isFinite(raw.severity_index) ? Number(raw.severity_index) : undefined,
     author: raw.author ? sanitizeText(raw.author) : undefined,
     is_authentic_defect: typeof raw.is_authentic_defect === 'boolean' ? raw.is_authentic_defect : true,
-    dsi_breakdown: (raw.dsi_breakdown && typeof raw.dsi_breakdown === 'object') ? (raw.dsi_breakdown as DefectReportItem['dsi_breakdown']) : undefined,
+    dsi_breakdown: dsiBreakdown,
   };
 }
 
@@ -161,20 +203,25 @@ export function calculateKPIs(
   reports: DefectReportItem[],
   existingStats?: Partial<ReportStatistics>
 ): ReportStatistics {
-  const totalFiltered = reports.length;
-  const criticalCount = reports.filter(
-    (r) => String(r.severity).toUpperCase() === 'CRITICAL'
+  const safeReports = Array.isArray(reports)
+    ? reports.filter((r): r is DefectReportItem => Boolean(r && typeof r === 'object'))
+    : [];
+  const totalFiltered = safeReports.length;
+  const criticalCount = safeReports.filter(
+    (r) => String(r.severity || '').toUpperCase() === 'CRITICAL'
   ).length;
 
-  const totalScore = reports.reduce((acc, r) => {
-    const val = typeof r.sentiment_score === 'number' && Number.isFinite(r.sentiment_score) ? r.sentiment_score : 0;
+  const totalScore = safeReports.reduce((acc, r) => {
+    const val = typeof r.sentiment_score === 'number' && Number.isFinite(r.sentiment_score)
+      ? Math.min(1.0, Math.max(0.0, Math.abs(r.sentiment_score)))
+      : 0;
     return acc + val;
   }, 0);
   const avgScore = totalFiltered > 0 ? Number((totalScore / totalFiltered).toFixed(2)) : 0.0;
 
   // Calculate top vehicle model with prototype-safe Map
   const modelCounts = new Map<string, number>();
-  for (const r of reports) {
+  for (const r of safeReports) {
     if (r.vehicle_model) {
       modelCounts.set(r.vehicle_model, (modelCounts.get(r.vehicle_model) || 0) + 1);
     }
@@ -193,8 +240,8 @@ export function calculateKPIs(
 
   // Calculate top community platform with prototype-safe Map
   const platformCounts = new Map<string, number>();
-  for (const r of reports) {
-    const src = r.source.toLowerCase();
+  for (const r of safeReports) {
+    const src = (r.source || 'bobaedream').toLowerCase();
     platformCounts.set(src, (platformCounts.get(src) || 0) + 1);
   }
   let topPlatformKey = 'bobaedream';
@@ -217,16 +264,42 @@ export function calculateKPIs(
     total_scraped: totalScraped,
     total_filtered_defects: totalFiltered,
     avg_negativity_score: typeof existingStats?.avg_negativity_score === 'number' && Number.isFinite(existingStats.avg_negativity_score)
-      ? existingStats.avg_negativity_score
+      ? getSafeSentimentScore(existingStats.avg_negativity_score, avgScore)
       : avgScore,
-    critical_defect_count: criticalCount,
-    top_model: topModelDisplay,
-    top_platform: topPlatformDisplay,
+    critical_defect_count: typeof existingStats?.critical_defect_count === 'number' && Number.isFinite(existingStats.critical_defect_count)
+      ? Math.max(0, existingStats.critical_defect_count)
+      : criticalCount,
+    top_model: typeof existingStats?.top_model === 'string' && existingStats.top_model.trim()
+      ? sanitizeText(existingStats.top_model)
+      : topModelDisplay,
+    top_platform: typeof existingStats?.top_platform === 'string' && existingStats.top_platform.trim()
+      ? sanitizeText(existingStats.top_platform)
+      : topPlatformDisplay,
   };
 }
 
 export const calculateReportStatistics = calculateKPIs;
 
+/**
+ * Returns safe fallback Daily EV Defect Reports data when loading fails or data is empty.
+ */
+export function getFallbackReportData(): DailyReportData {
+  return {
+    generated_at: new Date().toISOString(),
+    pipeline_version: '1.0.0',
+    statistics: {
+      total_scraped: 0,
+      total_filtered_defects: 0,
+      avg_negativity_score: 0.0,
+      critical_defect_count: 0,
+      top_model: '해당 없음 (0건)',
+      top_platform: '해당 없음 (0%)',
+    },
+    total_complaints_today: 0,
+    top_defect_categories: [],
+    reports: [],
+  };
+}
 
 /**
  * Main type-safe loader for Daily EV Defect Reports.
@@ -238,8 +311,18 @@ export function getDailyReports(): DailyReportData {
       generated_at?: string;
       pipeline_version?: string;
       statistics?: Partial<ReportStatistics>;
+      total_complaints_today?: number;
+      top_defect_categories?: Array<{
+        category: string;
+        count: number;
+        ratio: number;
+      }>;
       reports?: Record<string, unknown>[];
-    };
+    } | null | undefined;
+
+    if (!rawData || typeof rawData !== 'object') {
+      return getFallbackReportData();
+    }
 
     const rawReports = Array.isArray(rawData)
       ? (rawData as Record<string, unknown>[])
@@ -253,34 +336,32 @@ export function getDailyReports(): DailyReportData {
 
     const statistics = calculateKPIs(reports, rawData?.statistics);
 
+    const safeTopCategories = Array.isArray(rawData?.top_defect_categories)
+      ? rawData.top_defect_categories
+          .filter((cat): cat is { category: string; count: number; ratio: number } => Boolean(cat && typeof cat === 'object'))
+          .map((cat) => ({
+            category: sanitizeText(cat.category || 'UNKNOWN'),
+            count: typeof cat.count === 'number' && Number.isFinite(cat.count) ? Math.max(0, cat.count) : 0,
+            ratio: typeof cat.ratio === 'number' && Number.isFinite(cat.ratio) ? Math.min(1, Math.max(0, cat.ratio)) : 0,
+          }))
+      : [];
+
     return {
-      generated_at: rawData?.generated_at || new Date().toISOString(),
-      pipeline_version: rawData?.pipeline_version || '1.0.0',
+      generated_at: typeof rawData?.generated_at === 'string' && rawData.generated_at.trim()
+        ? sanitizeText(rawData.generated_at)
+        : new Date().toISOString(),
+      pipeline_version: typeof rawData?.pipeline_version === 'string' && rawData.pipeline_version.trim()
+        ? sanitizeText(rawData.pipeline_version)
+        : '1.0.0',
       statistics,
-      total_complaints_today: typeof (rawData as Record<string, unknown>)?.total_complaints_today === 'number'
-        ? ((rawData as Record<string, unknown>).total_complaints_today as number)
-        : undefined,
-      top_defect_categories: Array.isArray((rawData as Record<string, unknown>)?.top_defect_categories)
-        ? ((rawData as Record<string, unknown>).top_defect_categories as DailyReportData['top_defect_categories'])
-        : undefined,
+      total_complaints_today: typeof rawData?.total_complaints_today === 'number' && Number.isFinite(rawData.total_complaints_today)
+        ? Math.max(0, rawData.total_complaints_today)
+        : reports.length,
+      top_defect_categories: safeTopCategories,
       reports,
     };
   } catch (error) {
     console.error('Failed to load daily reports, using safe fallback:', error);
-    return {
-      generated_at: new Date().toISOString(),
-      pipeline_version: '1.0.0',
-      statistics: {
-        total_scraped: 0,
-        total_filtered_defects: 0,
-        avg_negativity_score: 0.85,
-        critical_defect_count: 0,
-        top_model: '해당 없음 (0건)',
-        top_platform: '해당 없음 (0%)',
-      },
-      total_complaints_today: 0,
-      top_defect_categories: [],
-      reports: [],
-    };
+    return getFallbackReportData();
   }
 }

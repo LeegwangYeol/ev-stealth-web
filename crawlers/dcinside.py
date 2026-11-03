@@ -9,6 +9,7 @@ Returns structured raw post dictionaries adhering to PROJECT.md § Interface Con
 from __future__ import annotations
 
 import datetime
+import html
 import json
 import logging
 import re
@@ -52,19 +53,48 @@ DC_GALLERIES: Dict[str, Dict[str, str]] = {
     },
 }
 
+# Pre-compiled regular expressions for maximum throughput and memory efficiency
+RE_HTML_COMMENTS = re.compile(r"<!--.*?-->", re.DOTALL)
+RE_SCRIPT_STYLE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
+RE_UB_CONTENT_ROW = re.compile(
+    r'<tr\b(?=[^>]*\bub-content\b)[^>]*\bdata-no=["\']?(\d+)["\']?[^>]*>(.*?)</tr>',
+    re.DOTALL | re.IGNORECASE,
+)
+RE_ALL_TR = re.compile(r'<tr\b([^>]*)>(.*?)</tr>', re.DOTALL | re.IGNORECASE)
+RE_POST_NO = re.compile(r"[?&]no=(\d+)", re.IGNORECASE)
+RE_POST_PATH_NO = re.compile(r"/(?:board|mgallery/board|mini/board)/[\w\-]+/(\d+)", re.IGNORECASE)
+RE_POST_NUMERIC = re.compile(r"/(\d{4,})(?:[/?#]|$)", re.IGNORECASE)
+RE_GALL_TIT_CELL = re.compile(r'<td[^>]*class=["\'][^"\']*gall_tit[^"\']*["\'][^>]*>(.*?)</td>', re.DOTALL | re.IGNORECASE)
+RE_ANCHOR_TAG = re.compile(r"<a\b([^>]*)>(.*?)</a>", re.DOTALL | re.IGNORECASE)
+RE_REPLY_NUM = re.compile(r'<(?:span|em|a)\b[^>]*class=["\'][^"\']*reply_num[^"\']*["\'][^>]*>.*?<\/(?:span|em|a)>', re.DOTALL | re.IGNORECASE)
+RE_ESNO_INPUT = re.compile(
+    r'<input\b(?=[^>]*\b(?:id|name)=["\']e_s_n_o["\'])[^>]*\bvalue=["\']([^"\']+)["\']',
+    re.IGNORECASE,
+)
+
 
 def extract_container_content(html_str: str, tag_name: str, class_name: str) -> str:
     """
     Extract the inner content of an HTML container by tracking balanced tag depth.
-    Resilient against nested tags of the same name, self-closing tags, and unclosed child tags.
+    Resilient against nested tags of the same name, self-closing tags, unclosed child tags,
+    and closing tags inside HTML comments or scripts.
     """
     if not html_str or not isinstance(html_str, str):
         return ""
+
+    # Mask comments and scripts with equal-length whitespace so dummy tags inside them
+    # do not prematurely decrement depth counters, while preserving exact character offsets.
+    def _repl(m: re.Match[str]) -> str:
+        return " " * len(m.group(0))
+
+    masked = RE_HTML_COMMENTS.sub(_repl, html_str)
+    masked = RE_SCRIPT_STYLE.sub(_repl, masked)
+
     pattern = re.compile(
-        rf"<{tag_name}\b[^>]*class\s*=\s*[\"'][^\"']*\b{re.escape(class_name)}\b[^\"']*[\"'][^>]*>",
+        rf"<{tag_name}\b[^>]*class\s*=\s*[\"']?[^\"'>]*\b{re.escape(class_name)}\b[^\"'>]*[\"']?[^>]*>",
         re.IGNORECASE,
     )
-    match = pattern.search(html_str)
+    match = pattern.search(masked)
     if not match:
         return ""
 
@@ -72,7 +102,7 @@ def extract_container_content(html_str: str, tag_name: str, class_name: str) -> 
     depth = 1
     tag_re = re.compile(rf"<(/?)({re.escape(tag_name)})\b([^>]*)>", re.IGNORECASE)
 
-    for m in tag_re.finditer(html_str[start_idx:]):
+    for m in tag_re.finditer(masked[start_idx:]):
         is_closing = bool(m.group(1))
         tag_attrs = m.group(3)
         if is_closing:
@@ -89,7 +119,7 @@ def extract_container_content(html_str: str, tag_name: str, class_name: str) -> 
 
 
 def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
-    """Normalize timestamp into ISO-8601 string."""
+    """Normalize timestamp into ISO-8601 string with UTC timezone."""
     if not raw_date_str or not isinstance(raw_date_str, str):
         return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
@@ -99,59 +129,96 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
 
     now = datetime.datetime.now(datetime.timezone.utc)
 
-    # Full timestamp: "2026-09-08 10:11:21" or "2026.09.08 (화) 10:11" or "2026.9.8"
-    full_match = re.search(r"(\d{4})[./\-\s]+(\d{1,2})[./\-\s]+(\d{1,2})(?:\s*(?:\([월화수목금토일]\))?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?", raw)
+    # 1. Try ISO-8601 parsing directly if format matches
+    if "T" in raw or (raw.count("-") == 2 and ":" in raw):
+        try:
+            clean_iso = raw.replace("Z", "+00:00")
+            dt = datetime.datetime.fromisoformat(clean_iso)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+            return dt.astimezone(datetime.timezone.utc).isoformat()
+        except (ValueError, TypeError):
+            pass
+
+    # 2. Relative times: "방금", "10분 전", "1시간 전", "어제"
+    if "방금" in raw:
+        return now.isoformat()
+    rel_min = re.search(r"(\d+)\s*분\s*전", raw)
+    if rel_min:
+        return (now - datetime.timedelta(minutes=int(rel_min.group(1)))).isoformat()
+    rel_hour = re.search(r"(\d+)\s*시간\s*전", raw)
+    if rel_hour:
+        return (now - datetime.timedelta(hours=int(rel_hour.group(1)))).isoformat()
+    rel_day = re.search(r"(\d+)\s*일\s*전", raw)
+    if rel_day:
+        return (now - datetime.timedelta(days=int(rel_day.group(1)))).isoformat()
+    if "어제" in raw:
+        return (now - datetime.timedelta(days=1)).isoformat()
+
+    # 3. Full timestamp: "2026-09-08 10:11:21" or "2026.09.08 (화) 10:11" or "2026.9.8"
+    full_match = re.search(
+        r"(\d{4})[./\-\s]+(\d{1,2})[./\-\s]+(\d{1,2})(?:[\sT]*(?:\([월화수목금토일]\))?[\sT]*(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
+        raw,
+    )
     if full_match:
         try:
             year = int(full_match.group(1))
             month = int(full_match.group(2))
             day = int(full_match.group(3))
-            hour = int(full_match.group(4)) if full_match.group(4) else 12
-            minute = int(full_match.group(5)) if full_match.group(5) else 0
-            second = int(full_match.group(6)) if full_match.group(6) else 0
+            hour = int(full_match.group(4)) if full_match.group(4) is not None else 12
+            minute = int(full_match.group(5)) if full_match.group(5) is not None else 0
+            second = int(full_match.group(6)) if full_match.group(6) is not None else 0
             dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
             return dt.isoformat()
         except (ValueError, OverflowError):
             return now.isoformat()
 
-    # Case: "YY/MM/DD" or "YY.MM.DD"
-    yymmdd_match = re.match(r"^(\d{2})[./\-](\d{1,2})[./\-](\d{1,2})(?:\s*(?:\([월화수목금토일]\))?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?$", raw)
+    # 4. Case: "YY/MM/DD" or "YY.MM.DD"
+    yymmdd_match = re.match(
+        r"^(\d{2})[./\-](\d{1,2})[./\-](\d{1,2})(?:[\sT]*(?:\([월화수목금토일]\))?[\sT]*(\d{1,2}):(\d{2})(?::(\d{2}))?)?$",
+        raw,
+    )
     if yymmdd_match:
         try:
             yy = int(yymmdd_match.group(1))
             year = 2000 + yy if yy < 70 else 1900 + yy
             month = int(yymmdd_match.group(2))
             day = int(yymmdd_match.group(3))
-            hour = int(yymmdd_match.group(4)) if yymmdd_match.group(4) else 12
-            minute = int(yymmdd_match.group(5)) if yymmdd_match.group(5) else 0
-            second = int(yymmdd_match.group(6)) if yymmdd_match.group(6) else 0
+            hour = int(yymmdd_match.group(4)) if yymmdd_match.group(4) is not None else 12
+            minute = int(yymmdd_match.group(5)) if yymmdd_match.group(5) is not None else 0
+            second = int(yymmdd_match.group(6)) if yymmdd_match.group(6) is not None else 0
             dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
             return dt.isoformat()
         except (ValueError, OverflowError):
             return now.isoformat()
 
-    # Time only: "10:11"
+    # 5. Time only: "10:11" or "10:11:20"
     time_match = re.match(r"^(\d{1,2}):(\d{2})(?::(\d{2}))?$", raw)
     if time_match:
         try:
             hour = int(time_match.group(1))
             minute = int(time_match.group(2))
-            second = int(time_match.group(3)) if time_match.group(3) else 0
+            second = int(time_match.group(3)) if time_match.group(3) is not None else 0
             dt = now.replace(hour=hour, minute=minute, second=second, microsecond=0)
             return dt.isoformat()
         except (ValueError, OverflowError):
             return now.isoformat()
 
-    # Month-day: "09.08" or "09.08 10:11"
-    md_match = re.match(r"^(\d{1,2})[./\-](\d{1,2})(?:\s*(?:\([월화수목금토일]\))?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?$", raw)
+    # 6. Month-day: "09.08" or "09.08 10:11"
+    md_match = re.match(
+        r"^(\d{1,2})[./\-](\d{1,2})(?:[\sT]*(?:\([월화수목금토일]\))?[\sT]*(\d{1,2}):(\d{2})(?::(\d{2}))?)?$",
+        raw,
+    )
     if md_match:
         try:
             month = int(md_match.group(1))
             day = int(md_match.group(2))
-            hour = int(md_match.group(3)) if md_match.group(3) else 12
-            minute = int(md_match.group(4)) if md_match.group(4) else 0
-            second = int(md_match.group(5)) if md_match.group(5) else 0
-            dt = datetime.datetime(now.year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
+            hour = int(md_match.group(3)) if md_match.group(3) is not None else 12
+            minute = int(md_match.group(4)) if md_match.group(4) is not None else 0
+            second = int(md_match.group(5)) if md_match.group(5) is not None else 0
+            # Year rollover guard: if crawling in Jan but post date is Nov/Dec, post belongs to previous year
+            year = now.year - 1 if (now.month == 1 and month >= 11) else now.year
+            dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
             return dt.isoformat()
         except (ValueError, OverflowError):
             return now.isoformat()
@@ -186,7 +253,7 @@ class DCInsideCrawler(BaseCrawler):
 
     def get_gallery_prefix(self, gallery_id: str) -> str:
         """Determine URL route prefix for the gallery (board, mini/board, mgallery/board)."""
-        gid = str(gallery_id or "").strip()
+        gid = str(gallery_id or "").strip().lower()
         info = DC_GALLERIES.get(gid)
         if info:
             return info["prefix"]
@@ -197,14 +264,20 @@ class DCInsideCrawler(BaseCrawler):
         """Build standard gallery list URL."""
         prefix = self.get_gallery_prefix(gallery_id)
         gid = str(gallery_id or "").strip()
-        eff_page = max(1, int(page)) if str(page).isdigit() else 1
+        try:
+            eff_page = max(1, int(page))
+        except (ValueError, TypeError):
+            eff_page = 1
         return f"{DC_BASE_URL}/{prefix}/lists/?id={gid}&page={eff_page}"
 
     def build_search_url(self, gallery_id: str, keyword: str, page: int = 1) -> str:
         """Build UTF-8 encoded search URL."""
         prefix = self.get_gallery_prefix(gallery_id)
         gid = str(gallery_id or "").strip()
-        eff_page = max(1, int(page)) if str(page).isdigit() else 1
+        try:
+            eff_page = max(1, int(page))
+        except (ValueError, TypeError):
+            eff_page = 1
         encoded_kw = urllib.parse.quote(str(keyword or ""))
         return (
             f"{DC_BASE_URL}/{prefix}/lists/?"
@@ -236,53 +309,99 @@ class DCInsideCrawler(BaseCrawler):
         seen_nos = set()
 
         # Regex targeting table rows with data-no and ub-content in any attribute order
-        row_regex = re.compile(
-            r'<tr\b(?=[^>]*\bub-content\b)[^>]*\bdata-no=["\']?(\d+)["\']?[^>]*>(.*?)</tr>',
-            re.DOTALL | re.IGNORECASE,
-        )
-
-        matches = list(row_regex.finditer(html_content))
+        matches = list(RE_UB_CONTENT_ROW.finditer(html_content))
         # Fallback: scan all <tr> tags if lookahead didn't match
         if not matches:
-            for tr_m in re.finditer(r'<tr\b([^>]*)>(.*?)</tr>', html_content, re.DOTALL | re.IGNORECASE):
+            for tr_m in RE_ALL_TR.finditer(html_content):
                 tr_attrs = tr_m.group(1)
                 if "ub-content" in tr_attrs:
-                    no_m = re.search(r'data-no=["\']?(\d+)["\']?', tr_attrs)
-                    if no_m:
-                        matches.append(tr_m)
+                    matches.append(tr_m)
 
         for match in matches:
-            if len(match.groups()) >= 2 and match.group(1).isdigit():
+            if len(match.groups()) >= 2 and match.group(1) and match.group(1).isdigit():
                 post_no = match.group(1)
                 row_html = match.group(2)
+                tr_attrs = ""
             else:
                 tr_attrs = match.group(1)
                 row_html = match.group(2)
                 no_m = re.search(r'data-no=["\']?(\d+)["\']?', tr_attrs)
-                if not no_m:
-                    continue
-                post_no = no_m.group(1)
+                post_no = no_m.group(1) if no_m else ""
 
-            if post_no in seen_nos:
+            # Check if post_no can be extracted from gall_num cell or href inside row
+            if not post_no:
+                num_cell = re.search(r'<td[^>]*class=["\'][^"\']*gall_num[^"\']*["\'][^>]*>\s*(\d+)\s*</td>', row_html, re.IGNORECASE)
+                if num_cell:
+                    post_no = num_cell.group(1)
+                else:
+                    href_no = RE_POST_NO.search(row_html)
+                    if href_no:
+                        post_no = href_no.group(1)
+
+            if not post_no or post_no in seen_nos:
                 continue
-            seen_nos.add(post_no)
 
-            # Extract title & href from gall_tit
-            title_match = re.search(
-                r'<td[^>]*class=["\'][^"\']*gall_tit[^"\']*["\'][^>]*>.*?<a[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
-                row_html,
-                re.DOTALL | re.IGNORECASE,
+            # Detect genuine notice row: class ub-notice or gall_num having "공지"
+            is_notice = (
+                "ub-notice" in tr_attrs
+                or "ub-notice" in row_html[:200]
+                or bool(re.search(r'<td[^>]*class=["\'][^"\']*gall_num[^"\']*["\'][^>]*>\s*(?:공지|설문|AD)\s*</td>', row_html, re.IGNORECASE))
             )
-            if not title_match:
+            if is_notice:
                 continue
 
-            raw_href = title_match.group(1)
-            raw_title = title_match.group(2)
+            # Extract title & href from gall_tit cell
+            gall_tit_m = RE_GALL_TIT_CELL.search(row_html)
+            tit_cell_html = gall_tit_m.group(1) if gall_tit_m else row_html
+
+            # Find all anchor tags inside gall_tit
+            anchors = RE_ANCHOR_TAG.findall(tit_cell_html)
+            raw_href = ""
+            raw_title = ""
+
+            if anchors:
+                best_anchor = None
+                # Prefer anchor linking directly to post view (containing view, no=, or post_no)
+                for a_attrs, a_inner in anchors:
+                    href_m = re.search(r'href=["\']([^"\']+)["\']', a_attrs, re.IGNORECASE)
+                    href_val = href_m.group(1) if href_m else ""
+                    if "reply_num" in a_attrs or "reply_numbox" in a_attrs:
+                        continue
+                    if "view" in href_val or "no=" in href_val or (post_no and post_no in href_val):
+                        best_anchor = (href_val, a_inner)
+                        break
+
+                if not best_anchor:
+                    # Pick non-reply anchor with longest text
+                    candidates = []
+                    for a_attrs, a_inner in anchors:
+                        if "reply_num" in a_attrs or "reply_numbox" in a_attrs:
+                            continue
+                        href_m = re.search(r'href=["\']([^"\']+)["\']', a_attrs, re.IGNORECASE)
+                        href_val = href_m.group(1) if href_m else ""
+                        candidates.append((href_val, a_inner))
+                    if candidates:
+                        best_anchor = max(candidates, key=lambda c: len(clean_html_text(c[1])))
+
+                if best_anchor:
+                    raw_href, raw_title = best_anchor
+
+            if not raw_title:
+                continue
+
+            # Strip nested reply count elements from title
+            raw_title = RE_REPLY_NUM.sub("", raw_title)
             clean_title = clean_html_text(raw_title)
 
-            # Skip empty or announcement rows
-            if not clean_title or len(clean_title) < 2 or "공지" in clean_title:
+            # Extra HTML entity unescape if entities remain
+            if clean_title and "&" in clean_title and re.search(r"&[a-zA-Z#0-9]+;", clean_title):
+                clean_title = html.unescape(clean_title)
+
+            # Skip empty or notice titles (e.g. starting with [공지])
+            if not clean_title or len(clean_title) < 2 or clean_title.startswith("[공지]") or clean_title.startswith("공지:"):
                 continue
+
+            seen_nos.add(post_no)
 
             # Extract full title date if present
             raw_date = ""
@@ -291,8 +410,8 @@ class DCInsideCrawler(BaseCrawler):
                 row_html,
                 re.IGNORECASE,
             )
-            if date_match:
-                raw_date = date_match.group(1)
+            if date_match and date_match.group(1).strip():
+                raw_date = date_match.group(1).strip()
             else:
                 date_text_match = re.search(
                     r'<td[^>]*class=["\'][^"\']*gall_date[^"\']*["\'][^>]*>(.*?)</td>',
@@ -316,16 +435,20 @@ class DCInsideCrawler(BaseCrawler):
         # Fallback if ub-content wasn't strictly found (e.g. mobile or alternative layout)
         if not items:
             alt_pattern = re.compile(
-                r'<a[^>]*href=["\']?([^"\'\s>]*view/?\?[^"\'\s>]*no=(\d+)[^"\'\s>]*)["\']?[^>]*>(.*?)</a>',
+                r'<a[^>]*href=["\']?([^"\'\s>]*?(?:view/?\?[^"\'\s>]*no=|/(?:board|mgallery|mini)/[\w\-]+/|/view/)(\d+)[^"\'\s>]*)["\']?[^>]*>(.*?)</a>',
                 re.DOTALL | re.IGNORECASE,
             )
             for full_href, post_no, raw_title in alt_pattern.findall(html_content):
                 if post_no in seen_nos:
                     continue
-                seen_nos.add(post_no)
+                # Strip reply numbers
+                raw_title = RE_REPLY_NUM.sub("", raw_title)
                 clean_title = clean_html_text(raw_title)
-                if not clean_title or len(clean_title) < 2 or "공지" in clean_title:
+                if clean_title and "&" in clean_title and re.search(r"&[a-zA-Z#0-9]+;", clean_title):
+                    clean_title = html.unescape(clean_title)
+                if not clean_title or len(clean_title) < 2 or clean_title.startswith("[공지]"):
                     continue
+                seen_nos.add(post_no)
                 items.append({
                     "post_id": post_no,
                     "gallery_id": gallery_id,
@@ -345,15 +468,11 @@ class DCInsideCrawler(BaseCrawler):
             return None
 
         # Look for <input> tag having id or name equal to e_s_n_o and extract value
-        input_pattern = re.compile(
-            r'<input\b(?=[^>]*\b(?:id|name)=["\']e_s_n_o["\'])[^>]*\bvalue=["\']([^"\']+)["\']',
-            re.IGNORECASE,
-        )
-        match = input_pattern.search(html_content)
+        match = RE_ESNO_INPUT.search(html_content)
         if match:
             return match.group(1)
 
-        # Fallback 1: check standard id then value
+        # Fallback: check standard id then value
         match = re.search(
             r'<input[^>]*id=["\']e_s_n_o["\'][^>]*value=["\']([^"\']+)["\']',
             html_content,
@@ -362,6 +481,18 @@ class DCInsideCrawler(BaseCrawler):
         if not match:
             match = re.search(
                 r'<input[^>]*name=["\']e_s_n_o["\'][^>]*value=["\']([^"\']+)["\']',
+                html_content,
+                re.IGNORECASE,
+            )
+        if not match:
+            match = re.search(
+                r'<input[^>]*value=["\']([^"\']+)["\'][^>]*id=["\']e_s_n_o["\']',
+                html_content,
+                re.IGNORECASE,
+            )
+        if not match:
+            match = re.search(
+                r'<input[^>]*value=["\']([^"\']+)["\'][^>]*name=["\']e_s_n_o["\']',
                 html_content,
                 re.IGNORECASE,
             )
@@ -429,28 +560,59 @@ class DCInsideCrawler(BaseCrawler):
 
         try:
             data = json.loads(json_text)
-            # Response may contain a list of comments under 'comments' or direct list
-            items = data.get("comments", []) if isinstance(data, dict) else data
+            # Response may contain a list of comments under 'comments', 'comment_list', 'data' or direct list
+            items = []
+            if isinstance(data, dict):
+                items = data.get("comments") or data.get("comment_list") or data.get("data") or []
+                if isinstance(items, dict):
+                    items = list(items.values())
+            elif isinstance(data, list):
+                items = data
+
             if not isinstance(items, list):
                 return comments
 
             for item in items:
                 if not isinstance(item, dict):
                     continue
-                memo = str(item.get("memo") or item.get("comment_memo") or "")
+                # Skip deleted comments
+                if item.get("del_yn") == "Y" or item.get("is_delete"):
+                    continue
+
+                memo = str(item.get("memo") or item.get("comment_memo") or item.get("msg") or item.get("content") or "")
                 cleaned = clean_html_text(memo)
-                if cleaned and len(cleaned) >= 2 and not cleaned.startswith("보이스리플"):
+                if cleaned and "&" in cleaned and re.search(r"&[a-zA-Z#0-9]+;", cleaned):
+                    cleaned = html.unescape(cleaned)
+
+                if (
+                    cleaned
+                    and len(cleaned) >= 2
+                    and not cleaned.strip().startswith(("보이스리플", "[보이스리플]", "(보이스리플)"))
+                    and "삭제된 댓글입니다" not in cleaned
+                ):
                     comments.append(cleaned)
 
                 # Check sub_comments or replies
                 sub_items = item.get("sub_comments") or item.get("replies")
+                if isinstance(sub_items, dict):
+                    sub_items = list(sub_items.values())
                 if isinstance(sub_items, list):
                     for sub in sub_items:
-                        if isinstance(sub, dict):
-                            sub_memo = str(sub.get("memo") or sub.get("comment_memo") or "")
-                            sub_cleaned = clean_html_text(sub_memo)
-                            if sub_cleaned and len(sub_cleaned) >= 2 and not sub_cleaned.startswith("보이스리플"):
-                                comments.append(sub_cleaned)
+                        if not isinstance(sub, dict):
+                            continue
+                        if sub.get("del_yn") == "Y" or sub.get("is_delete"):
+                            continue
+                        sub_memo = str(sub.get("memo") or sub.get("comment_memo") or sub.get("msg") or sub.get("content") or "")
+                        sub_cleaned = clean_html_text(sub_memo)
+                        if sub_cleaned and "&" in sub_cleaned and re.search(r"&[a-zA-Z#0-9]+;", sub_cleaned):
+                            sub_cleaned = html.unescape(sub_cleaned)
+                        if (
+                            sub_cleaned
+                            and len(sub_cleaned) >= 2
+                            and not sub_cleaned.strip().startswith(("보이스리플", "[보이스리플]", "(보이스리플)"))
+                            and "삭제된 댓글입니다" not in sub_cleaned
+                        ):
+                            comments.append(sub_cleaned)
         except Exception as e:
             logger.debug(f"JSON comment parse notice: {e}")
 
@@ -477,48 +639,104 @@ class DCInsideCrawler(BaseCrawler):
           "created_at": str (ISO-8601)
         }
         """
-        # 1. Post ID - zero falsy guard
-        if (post_id is None or str(post_id).strip() == "") and post_url:
-            no_match = re.search(r"no=(\d+)", str(post_url), re.IGNORECASE)
-            post_id = no_match.group(1) if no_match else ""
+        # 1. Post ID - zero falsy guard and multi-format URL inspection
+        eff_post_id = str(post_id).strip() if post_id is not None else ""
+        if not eff_post_id and post_url:
+            no_match = RE_POST_NO.search(str(post_url))
+            if not no_match:
+                no_match = RE_POST_PATH_NO.search(str(post_url))
+            if not no_match:
+                no_match = RE_POST_NUMERIC.search(str(post_url))
+            eff_post_id = no_match.group(1) if no_match else ""
+
+        # Auto-detect gallery_id from URL if left default or blank
+        eff_gallery_id = str(gallery_id or "").strip().lower()
+        if (not eff_gallery_id or eff_gallery_id == "car_new1") and post_url:
+            gid_m = re.search(r"[?&]id=([a-zA-Z0-9_]+)", str(post_url), re.IGNORECASE)
+            if not gid_m:
+                gid_m = re.search(r"/(?:board|mgallery/board|mini/board)/([a-zA-Z0-9_]+)/\d+", str(post_url), re.IGNORECASE)
+            if gid_m:
+                eff_gallery_id = gid_m.group(1).lower()
+        if not eff_gallery_id:
+            eff_gallery_id = "car_new1"
 
         if not html_content or not isinstance(html_content, str) or not html_content.strip():
             return {
                 "platform": "dcinside",
-                "post_id": str(post_id) if post_id is not None else "",
+                "post_id": eff_post_id,
                 "url": post_url or "",
                 "title": "",
                 "content": "",
                 "comments": [],
                 "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "author": "",
-                "gallery_id": gallery_id,
+                "gallery_id": eff_gallery_id,
             }
 
-        # 2. Title - resilient against attribute order and tag structures
+        # 2. Title - resilient against attribute order, tag structures, and multi-class declarations
         title = ""
-        title_match = re.search(r'<span class=["\']title_subject["\'][^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
+        title_match = re.search(
+            r'<(?:span|div|h[1-6]|p)\b(?=[^>]*\bclass=["\']?[^"\'>]*\btitle_subject\b)[^>]*>(.*?)</(?:span|div|h[1-6]|p)>',
+            html_content,
+            re.DOTALL | re.IGNORECASE,
+        )
         if not title_match:
-            title_match = re.search(r'<span class=["\']title_headtext["\'][^>]*>.*?</span>\s*<span[^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
+            title_match = re.search(
+                r'<(?:span|div|h[1-6]|p)\b(?=[^>]*\bclass=["\']?[^"\'>]*\btitle_headtext\b)[^>]*>.*?</(?:span|div|h[1-6]|p)>\s*<(?:span|div|h[1-6]|p)[^>]*>(.*?)</(?:span|div|h[1-6]|p)>',
+                html_content,
+                re.DOTALL | re.IGNORECASE,
+            )
         if not title_match:
-            title_match = re.search(r'<meta\b(?=[^>]*\bproperty=["\']og:title["\'])[^>]*\bcontent=["\']([^"\']*)["\']', html_content, re.IGNORECASE)
+            # Mobile title
+            title_match = re.search(
+                r'<(?:h[1-6]|div|span)\b(?=[^>]*\bclass=["\']?[^"\'>]*\b(?:tit|gallview-tit-box)\b)[^>]*>(.*?)</(?:h[1-6]|div|span)>',
+                html_content,
+                re.DOTALL | re.IGNORECASE,
+            )
         if not title_match:
-            title_match = re.search(r'<meta property=["\']og:title["\'] content=["\']([^"\']*)["\']', html_content, re.IGNORECASE)
+            title_match = re.search(
+                r'<meta\b(?=[^>]*\b(?:property|name)=["\']og:title["\'])[^>]*\bcontent=["\']([^"\']*)["\']',
+                html_content,
+                re.IGNORECASE,
+            )
+        if not title_match:
+            title_match = re.search(
+                r'<meta\b(?=[^>]*\bcontent=["\']([^"\']*)["\'])[^>]*\b(?:property|name)=["\']og:title["\']',
+                html_content,
+                re.IGNORECASE,
+            )
         if not title_match:
             title_tag = re.search(r'<title[^>]*>(.*?)</title>', html_content, re.DOTALL | re.IGNORECASE)
             if title_tag:
                 clean_t = clean_html_text(title_tag.group(1))
-                clean_t = re.sub(r"\s*-\s*.*(?:갤러리|디시인사이드).*$", "", clean_t).strip()
+                # Strip gallery suffix non-greedily without deleting title subtitles with dashes
+                clean_t = re.sub(
+                    r"\s*[-|:]\s*[^-\n|:]*(?:갤러리|디시인사이드|dcinside)[^-\n|:]*$",
+                    "",
+                    clean_t,
+                    flags=re.IGNORECASE,
+                ).strip()
                 if clean_t:
                     title = clean_t
         if title_match and not title:
             title = clean_html_text(title_match.group(1))
 
+        if title and "&" in title and re.search(r"&[a-zA-Z#0-9]+;", title):
+            title = html.unescape(title)
+
         # 3. Author & Date
         author = ""
-        writer_match = re.search(r'<td class=["\']gall_writer[^"\']*["\'][^>]*>.*?<span class=["\']nickname["\'][^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
+        writer_match = re.search(
+            r'<td class=["\']gall_writer[^"\']*["\'][^>]*>.*?<span class=["\']nickname["\'][^>]*>(.*?)</span>',
+            html_content,
+            re.DOTALL | re.IGNORECASE,
+        )
         if not writer_match:
             writer_match = re.search(r'<span class=["\']nickname["\'][^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
+        if not writer_match:
+            writer_match = re.search(r'data-nick=["\']([^"\']+)["\']', html_content, re.IGNORECASE)
+        if not writer_match:
+            writer_match = re.search(r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\bwriter\b)[^>]*>(.*?)</span>', html_content, re.IGNORECASE)
         if writer_match:
             author = clean_html_text(writer_match.group(1))
         ip_match = re.search(r'<span class=["\']ip["\'][^>]*>\(([0-9.*]+)\)</span>', html_content)
@@ -527,14 +745,14 @@ class DCInsideCrawler(BaseCrawler):
 
         raw_date = ""
         date_match = re.search(r'<span class=["\']gall_date["\'][^>]*title=["\']([^"\']*)["\']', html_content, re.IGNORECASE)
-        if date_match:
-            raw_date = date_match.group(1)
+        if date_match and date_match.group(1).strip():
+            raw_date = date_match.group(1).strip()
         if not raw_date:
             date_match2 = re.search(r'<span class=["\']gall_date["\'][^>]*>(.*?)</span>', html_content, re.IGNORECASE)
             if date_match2:
                 raw_date = clean_html_text(date_match2.group(1))
         if not raw_date:
-            generic_date = re.search(r'(\d{4}[.\-/]\d{2}[.\-/]\d{2}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)', html_content)
+            generic_date = re.search(r'(\d{4}[.\-/]\d{2}[.\-/]\d{2}(?:[\sT]+\d{2}:\d{2}(?::\d{2})?)?)', html_content)
             if generic_date:
                 raw_date = generic_date.group(1)
 
@@ -566,35 +784,40 @@ class DCInsideCrawler(BaseCrawler):
             if meta_desc:
                 content = clean_html_text(meta_desc.group(1))
 
+        if content and "&" in content and re.search(r"&[a-zA-Z#0-9]+;", content):
+            content = html.unescape(content)
+
         # 5. Dynamic AJAX comments using e_s_n_o
         comments: List[str] = []
         timeout = kwargs.get("timeout")
         e_s_n_o = self.extract_esno_token(html_content)
-        if e_s_n_o and post_id:
-            comments = self.fetch_ajax_comments(gallery_id, post_id, e_s_n_o, post_url=post_url, timeout=timeout)
+        if e_s_n_o and eff_post_id:
+            comments = self.fetch_ajax_comments(eff_gallery_id, eff_post_id, e_s_n_o, post_url=post_url, timeout=timeout)
 
         # Fallback to static comments in DOM if AJAX comments were empty
         if not comments:
-            dom_comments = re.findall(r'<p class=["\']usertxt[^"\']*["\'][^>]*>(.*?)</p>', html_content, re.DOTALL | re.IGNORECASE)
-            if not dom_comments:
-                dom_comments = re.findall(r'<dd class=["\']usertxt[^"\']*["\'][^>]*>(.*?)</dd>', html_content, re.DOTALL | re.IGNORECASE)
-            if not dom_comments:
-                dom_comments = re.findall(r'<div class=["\']reply_info[^"\']*["\'][^>]*>.*?<p class=["\']txt[^"\']*["\'][^>]*>(.*?)</p>', html_content, re.DOTALL | re.IGNORECASE)
+            dom_comments = re.findall(
+                r'<(?:p|dd|span|div)\b(?=[^>]*\bclass=["\']?[^"\'>]*\b(?:usertxt|txt|comment_memo)\b)[^>]*>(.*?)</(?:p|dd|span|div)>',
+                html_content,
+                re.DOTALL | re.IGNORECASE,
+            )
             for c_html in dom_comments:
                 cleaned = clean_html_text(c_html)
-                if cleaned and len(cleaned) >= 2 and not cleaned.startswith("보이스리플"):
+                if cleaned and "&" in cleaned and re.search(r"&[a-zA-Z#0-9]+;", cleaned):
+                    cleaned = html.unescape(cleaned)
+                if cleaned and len(cleaned) >= 2 and not cleaned.strip().startswith(("보이스리플", "[보이스리플]", "(보이스리플)")):
                     comments.append(cleaned)
 
         return {
             "platform": "dcinside",
-            "post_id": str(post_id) if post_id is not None else "",
+            "post_id": eff_post_id,
             "url": post_url or "",
             "title": title,
             "content": content,
             "comments": comments,
             "created_at": created_at_iso,
             "author": author,
-            "gallery_id": gallery_id,
+            "gallery_id": eff_gallery_id,
         }
 
     def fetch_post(
@@ -610,6 +833,11 @@ class DCInsideCrawler(BaseCrawler):
             logger.warning(f"Invalid DCInside post_url provided: {post_url!r}")
             return None
 
+        # LSP compliance: if gallery_id is passed a URL (as in base crawler fetch_post(url, referer)), handle gracefully
+        if isinstance(gallery_id, str) and (gallery_id.startswith("http://") or gallery_id.startswith("https://")):
+            referer = gallery_id
+            gallery_id = "car_new1"
+
         # Defensively normalize relative URLs
         eff_url = post_url.strip()
         if eff_url.startswith("/"):
@@ -622,6 +850,9 @@ class DCInsideCrawler(BaseCrawler):
         eff_referer = referer or f"{DC_BASE_URL}/"
         timeout = kwargs.get("timeout")
 
+        if not self.client:
+            return None
+
         try:
             resp = self.client.get(eff_url, referer=eff_referer, timeout=timeout)
             if not resp or not isinstance(resp, (tuple, list)) or len(resp) < 2:
@@ -632,17 +863,31 @@ class DCInsideCrawler(BaseCrawler):
             logger.warning(f"Network error fetching DCInside post {eff_url}: {e}")
             status, text = 0, ""
 
-        effective_post_id = post_id
+        effective_post_id = str(post_id or "").strip()
         if not effective_post_id and eff_url:
-            m_no = re.search(r"no=(\d+)", str(eff_url), re.IGNORECASE)
+            m_no = RE_POST_NO.search(eff_url)
+            if not m_no:
+                m_no = RE_POST_PATH_NO.search(eff_url)
+            if not m_no:
+                m_no = RE_POST_NUMERIC.search(eff_url)
             if m_no:
                 effective_post_id = m_no.group(1)
+
+        effective_gallery_id = str(gallery_id or "").strip().lower()
+        if (not effective_gallery_id or effective_gallery_id == "car_new1") and eff_url:
+            m_gid = re.search(r"[?&]id=([a-zA-Z0-9_]+)", eff_url, re.IGNORECASE)
+            if not m_gid:
+                m_gid = re.search(r"/(?:board|mgallery/board|mini/board)/([a-zA-Z0-9_]+)/\d+", eff_url, re.IGNORECASE)
+            if m_gid:
+                effective_gallery_id = m_gid.group(1).lower()
+        if not effective_gallery_id:
+            effective_gallery_id = "car_new1"
 
         if status != 200 or not text:
             # Try fallback to mobile view URL
             if effective_post_id:
-                prefix = self.get_gallery_prefix(gallery_id)
-                mobile_url = f"{DC_MOBILE_BASE_URL}/{prefix}/{gallery_id}/{effective_post_id}"
+                # Canonical mobile route: m.dcinside.com/board/{gallery_id}/{post_id}
+                mobile_url = f"{DC_MOBILE_BASE_URL}/board/{effective_gallery_id}/{effective_post_id}"
                 try:
                     m_resp = self.client.get(
                         mobile_url,
@@ -656,7 +901,13 @@ class DCInsideCrawler(BaseCrawler):
                         m_status, m_text = m_resp[0], m_resp[1]
                         if m_status == 200 and m_text:
                             try:
-                                return self.parse_post_detail(m_text, eff_url, gallery_id=gallery_id, post_id=effective_post_id, **kwargs)
+                                return self.parse_post_detail(
+                                    m_text,
+                                    eff_url,
+                                    gallery_id=effective_gallery_id,
+                                    post_id=effective_post_id,
+                                    **kwargs,
+                                )
                             except Exception as e:
                                 logger.warning(f"Error parsing DCInside mobile post detail ({eff_url}) on corrupt HTML: {e}")
                                 return None
@@ -667,7 +918,13 @@ class DCInsideCrawler(BaseCrawler):
             return None
 
         try:
-            return self.parse_post_detail(text, eff_url, gallery_id=gallery_id, post_id=effective_post_id or "", **kwargs)
+            return self.parse_post_detail(
+                text,
+                eff_url,
+                gallery_id=effective_gallery_id,
+                post_id=effective_post_id or "",
+                **kwargs,
+            )
         except Exception as e:
             logger.warning(f"Error parsing DCInside post detail ({eff_url}) on corrupt HTML: {e}")
             return None
@@ -684,11 +941,15 @@ class DCInsideCrawler(BaseCrawler):
         """
         if limit is not None and limit <= 0:
             return []
+        if not self.client:
+            return []
 
         self.ensure_warm_up()
         results: List[Dict[str, Any]] = []
+        seen_pids = set()
+        eff_pages = max(1, int(pages)) if str(pages).isdigit() else 1
 
-        for page in range(1, pages + 1):
+        for page in range(1, eff_pages + 1):
             url = self.build_list_url(gallery_id, page=page)
             logger.info(f"Crawling DCInside [{gallery_id}] list (Page {page}): {url}")
             try:
@@ -711,7 +972,13 @@ class DCInsideCrawler(BaseCrawler):
                 break
 
             for item in items:
-                post = self.fetch_post(item.get("url", ""), gallery_id=gallery_id, post_id=item.get("post_id", ""))
+                pid = item.get("post_id", "")
+                if pid and pid in seen_pids:
+                    continue
+                if pid:
+                    seen_pids.add(pid)
+
+                post = self.fetch_post(item.get("url", ""), gallery_id=gallery_id, post_id=pid)
                 if post:
                     results.append(post)
                     if limit and len(results) >= limit:
@@ -731,11 +998,15 @@ class DCInsideCrawler(BaseCrawler):
         """
         if limit is not None and limit <= 0:
             return []
+        if not self.client:
+            return []
 
         self.ensure_warm_up()
         results: List[Dict[str, Any]] = []
+        seen_pids = set()
+        eff_pages = max(1, int(pages)) if str(pages).isdigit() else 1
 
-        for page in range(1, pages + 1):
+        for page in range(1, eff_pages + 1):
             url = self.build_search_url(gallery_id, keyword, page=page)
             logger.info(f"Searching DCInside [{gallery_id}] for '{keyword}' (Page {page}): {url}")
             try:
@@ -758,7 +1029,13 @@ class DCInsideCrawler(BaseCrawler):
                 break
 
             for item in items:
-                post = self.fetch_post(item.get("url", ""), gallery_id=gallery_id, post_id=item.get("post_id", ""))
+                pid = item.get("post_id", "")
+                if pid and pid in seen_pids:
+                    continue
+                if pid:
+                    seen_pids.add(pid)
+
+                post = self.fetch_post(item.get("url", ""), gallery_id=gallery_id, post_id=pid)
                 if post:
                     results.append(post)
                     if limit and len(results) >= limit:
@@ -781,13 +1058,20 @@ class DCInsideCrawler(BaseCrawler):
 
         target_galleries = list(galleries) if galleries is not None else ["car_new1", "electriccar"]
         all_posts: List[Dict[str, Any]] = []
+        seen_pids = set()
 
         for gall in target_galleries:
             remaining_limit = (limit - len(all_posts)) if limit is not None else None
             gall_posts = self.search_gallery(gall, keyword, pages=max_pages, limit=remaining_limit)
-            all_posts.extend(gall_posts)
-            if limit and len(all_posts) >= limit:
-                return all_posts[:limit]
+            for p in gall_posts:
+                pid = p.get("post_id", "")
+                if pid and pid in seen_pids:
+                    continue
+                if pid:
+                    seen_pids.add(pid)
+                all_posts.append(p)
+                if limit and len(all_posts) >= limit:
+                    return all_posts[:limit]
 
         return all_posts
 

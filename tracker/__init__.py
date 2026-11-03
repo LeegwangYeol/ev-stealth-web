@@ -24,11 +24,14 @@ from tracker.subsidy_models import (
     NationwideSummary,
     PopularModelEntry,
     RegionRecord,
+    RegionSubsidy,
     SubsidyMetadata,
     SubsidyPayload,
+    SubsidySnapshot,
+    VehicleSubsidy,
 )
 from tracker.defect_tracker import DefectTracker
-from tracker.report_generator import ReportGenerator
+from tracker.report_generator import ReportGenerator, format_currency_krw, format_percentage
 from tracker.subsidy_tracker import (
     SubsidyTracker,
     calculate_depletion_rate,
@@ -54,10 +57,16 @@ __all__ = [
     "RegionRecord",
     "SubsidyMetadata",
     "SubsidyPayload",
+    # Model Aliases
+    "RegionSubsidy",
+    "VehicleSubsidy",
+    "SubsidySnapshot",
     # Main Engines & Formatters
     "SubsidyTracker",
     "DefectTracker",
     "ReportGenerator",
+    "format_currency_krw",
+    "format_percentage",
     # Persistence
     "atomic_write_json",
     "atomic_write_json_multiple",
@@ -82,4 +91,3 @@ __all__ = [
     "calculate_price_cap_ratio",
     "calculate_net_subsidy",
 ]
-

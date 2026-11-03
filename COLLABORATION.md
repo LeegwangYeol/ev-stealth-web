@@ -6,7 +6,28 @@
 - **Working Directory**: `/Users/a7890/src/my-e-car/ev-stealth-web`
 - **Integrity Mode**: Benchmark / Infinite Evolution (zero stubs, zero lint errors/warnings, 100% test pass rate, empirical verification)
 
-## Current Execution Status: CYCLE 24 PROACTIVE REMEDIATION & HARMONIZATION COMPLETED (Cycle 24: 2026-11-03 / Request: 2026-11-02T19:02:00Z)
+## Current Execution Status: SPAM FILTER DEEP AUDIT & HARDENING COMPLETED (Cycle 25: 2026-11-04)
+- **Component**: `filters/spam_filter.py` and `ev-stealth-web/filters/spam_filter.py`
+- **Audit Scope**:
+  1. Regex patterns for promotional ads, commercial spam, dealer links, affiliate codes, scam promotions.
+  2. Filtering out speculative financial or unrelated political discussions.
+  3. Preventing false positives on genuine owner complaints that include price or dealer names.
+  4. Input validation (None, non-string, extremely long text strings, null bytes).
+  5. 100% Bitwise mirror parity & 16-test comprehensive hardening test suite.
+- **Key Remediations**:
+  - Implemented pre-compiled regex groups: `AFFILIATE_REGEXES`, `DEALER_PROMO_REGEXES`, `CONTACT_SPAM_REGEXES`, `SCAM_PROMO_REGEXES`, `HARD_ILLICIT_REGEXES`.
+  - Expanded `COMMERCIAL_SPAM_KEYWORDS` with illegal gambling, loan cashing, and reading room keywords.
+  - Added `POLITICAL_TERMS` to filter partisan flame wars without vehicle defect basis.
+  - Expanded `FINANCIAL_SPECULATION_TERMS` for crypto and derivative trading discussions.
+  - Built owner defect context guard (`is_owner_complaint`) ensuring owner complaints mentioning dealer disputes, repair quotes, and depreciation are never falsely discarded.
+  - Implemented robust `sanitize_input` stripping null bytes (`\x00`), capping text at 50k chars, handling single-character, non-alphanumeric emojis/symbols, and foreign languages safely.
+- **Verification**:
+  - `tests/test_spam_filter_hardening.py`: 16/16 PASS (0.08s).
+  - `tests/test_defect_classification_audit.py`: 21/21 PASS.
+  - Full suite (`test_filters`, `test_audit_scraper_filters_models`, `test_defect_classification_audit`, `test_spam_filter_hardening`, `test_e2e_pipeline`): 194/194 PASS.
+  - 100% bitwise parity confirmed across root and `ev-stealth-web/`.
+
+## Historical Execution Status: CYCLE 24 PROACTIVE REMEDIATION & HARMONIZATION COMPLETED (Cycle 24: 2026-11-03 / Request: 2026-11-02T19:02:00Z)
 - **Project Orchestrator**: `orchestrator_daily_sync_24` (`f19fadac-f16e-4b20-8e30-0b9e1d6f9868`)
 - **Status**: **`CYCLE 24 PROACTIVE REMEDIATION & HARMONIZATION COMPLETED`**
 - **Official Final Verdict**: **`VICTORY CONFIRMED`** (Phase A Timeline: PASS, Phase B Integrity: PASS, Phase C Tests: PASS, Phase D Parity: PASS)
@@ -1058,3 +1079,85 @@
      - `tests/test_frontend_a11y_wcag.py` (and mirror `ev-stealth-web/tests/test_frontend_a11y_wcag.py`): 90/90 tests passed (100%).
      - Mirror parity confirmed: 0 diff between `tests/test_frontend_a11y_wcag.py` and `ev-stealth-web/tests/test_frontend_a11y_wcag.py`.
      - Next.js 14 pre-flight build (`npm run build`) passed with exit code 0 (18/18 static pages cleanly prerendered, `/secret-admin-reports` 8.46 kB).
+
+
+## Cycle 25 Adversarial Hardening Suite (`tests/test_cycle25_hardening.py`)
+- **Status**: Completed & 100% Passing (2026-11-04).
+- **Lead Quality Architect**: Swarm Specialized Agent.
+- **Scope & Coverage** (21 comprehensive tests across 5 test classes):
+  1. **Subsidy Calculation Extremes** (`TestCycle25SubsidyCalculationExtremes` - 5 tests):
+     - `test_01_subsidy_zero_quota_depletion_and_remaining`: 0 announced quota handling, zero division protection, 0 remaining units, HEALTHY tier.
+     - `test_02_subsidy_negative_remaining_and_negative_inputs`: Clamping of negative announced, applied, delivered, and MSRP inputs; non-negative net subsidy calculation.
+     - `test_03_subsidy_100_plus_depletion_rates_and_alert_severity`: Over-subscribed subsidies (100% ~ 1000%), zero remaining units clamp, and DEPLETED status assignment.
+     - `test_04_subsidy_invalid_and_adversarial_region_names`: Empty, None, SQL injection, XSS payloads in region names handled gracefully in nationwide aggregation.
+     - `test_05_subsidy_empty_models_list_and_matrix_export_resilience`: Automatic fallback restoration of baseline models on empty input, 18-model matrix export integrity.
+  2. **Defect Classifier NLP Fuzzing** (`TestCycle25DefectClassifierFuzzing` - 5 tests):
+     - `test_06_defect_classifier_extreme_emoji_combinations`: 200+ pure emojis, genuine defect complaints with warning emojis (high DSI >= 8.0), commercial emoji spam rejection.
+     - `test_07_defect_classifier_unicode_homoglyphs_and_invisible_chars`: Cyrillic lookalikes (U+0435), zero-width spaces (U+200B, U+200C, U+FEFF), RTL overrides (U+202E), fullwidth Latin, zalgo diacritics without crashes.
+     - `test_08_defect_classifier_sql_xss_injection_payloads`: SQL and XSS payloads in post text, author, URL, comments serialized cleanly as valid RFC 8259 JSON.
+     - `test_09_defect_classifier_empty_string_and_whitespace`: Empty and whitespace-only text inputs gracefully return non-authentic ComplaintRecord.
+     - `test_10_defect_classifier_none_post_and_null_attributes`: None post and None attributes handled safely with string comment defense.
+  3. **Atomic Writer Concurrency & Resilience** (`TestCycle25AtomicWriterConcurrencyAndResilience` - 4 tests):
+     - `test_11_concurrent_writes_same_destination_integrity`: 8 threads concurrently writing 15 iterations each to the same target file via `atomic_write_json` without corruption.
+     - `test_12_read_while_write_zero_corruption`: Simultaneous reader and writer threads proving zero `JSONDecodeError`s and zero partial reads.
+     - `test_13_permission_preservation_existing_modes_and_override`: Preservation of pre-existing POSIX modes (0o600, 0o640) and explicit mode overrides.
+     - `test_14_atomic_write_multiple_and_cleanup_resilience`: Multi-destination persistence and automatic unlinking of stale temporary files.
+  4. **Crawler Resilience Simulation** (`TestCycle25CrawlerResilienceSimulation` - 4 tests):
+     - `test_15_simulated_429_rate_limit_retry_after_and_recovery`: HTTP 429 Too Many Requests with Retry-After header parsing and exponential backoff retry recovery.
+     - `test_16_simulated_persistent_429_rate_limit_graceful_exhaustion`: Persistent 429 status returned cleanly and `BaseCrawler.fetch_post` returns None without unhandled crashes.
+     - `test_17_partial_http_reads_and_timeout_recovery`: IncompleteRead and socket timeout recovery returning safe fallback tuples `(0, "", b"")`.
+     - `test_18_malformed_html_parsing_without_crashes`: Corrupted DOMs, unclosed tags, null bytes, and non-UTF8 charsets handled cleanly by crawlers and decoders.
+  5. **Vehicle Matcher Edge Cases** (`TestCycle25VehicleMatcherEdgeCases` - 3 tests):
+     - `test_19_mixed_korean_english_slang_matching`: Mixed Korean-English slang for Hyundai, Kia, Tesla, BYD, and Other brands.
+     - `test_20_partial_model_names_and_distinctions`: Dedicated partial model recognition for Ioniq/Ioniq EV, Tesla M3 vs BMW M3, Kia EV6 vs EV6 GT, etc.
+     - `test_21_case_insensitivity_matrix`: 100% case-insensitivity across uppercase, lowercase, and title case.
+- **Verification**:
+  - `tests/test_cycle25_hardening.py`: 21/21 passed in 0.40s.
+  - `ev-stealth-web/tests/test_cycle25_hardening.py`: 21/21 passed in 0.44s.
+  - Bitwise SHA-256 parity: `dcadfda4d98e695661136928bdc9bf6e1bdd2e700db31abb6ca92246d4c99916` (100% identical).
+  - Regression check: 130 passed across adjacent hardening suites.
+
+
+## Vehicle Matcher & Slang Lexicon Deep Audit & Hardening (Cycle 25)
+- **Status**: Completed & 100% Passing (2026-11-04).
+- **Inspected Files**:
+  - `filters/vehicle_matcher.py` (and mirror `ev-stealth-web/filters/vehicle_matcher.py`)
+  - `filters/slang_lexicon.py` (and mirror `ev-stealth-web/filters/slang_lexicon.py`)
+  - `tests/test_vehicle_matcher_slang_audit.py` (and mirror `ev-stealth-web/tests/test_vehicle_matcher_slang_audit.py`)
+- **Key Enhancements & Remediations**:
+  1. **EV Model Matching Logic Across Domestic & Imported Lines**:
+     - **Domestic**:
+       - Hyundai: Expanded Ioniq family (`아이오닉 5/6/9/7/5N/6N`), generic `아이오닉` (`아이오닉 일렉트릭`, `아이오닉 전기차`), `코나 EV`, `캐스퍼 일렉트릭`, `포터 EV`, `ST1`.
+       - Electrified Genesis: `GV60`, `GV70 EV` (`GV70 전동화`, `GV70e`), `G80 EV` (`G80 전동화`, `G80e`), generic `제네시스 EV`.
+       - Kia: Full support for `EV3/EV6/EV9/EV2/EV4/EV5/EV6 GT/EV9 GT`, `니로 EV`, `레이 EV`, `봉고 EV`, plus full colloquial Hangul spellings (`이븨3`, `이브이3`, `이븨6`, `이브이6`, `이븨9`, `이브이9`, `이븨4`, `이브이5`).
+       - KGM / Ssangyong: Integrated `토레스 EVX` (`토레스 EVX`, `토레스 evx`, `토레스 전기차`, `torres evx`) with `BRAND_OTHER` canonical mapping and `BRAND_KEYWORDS` coverage.
+     - **Imported**:
+       - Tesla: `Model 3 Highland`, `Model 3`, `Model Y Juniper`, `Model Y`, `Model S`, `Model X`, `Cybertruck`, `Model 2`. Added Hangul spellings (`모델와이`, `모델쓰리/스리`, `모델에스`, `모델엑스`, `사트/싸트`).
+       - BYD: `Atto 3`, `Seal` (`비야디 씰`, `씰 EV`), `Dolphin`, `Sealion` (`시라이언 07`), `Han`, `Tang`.
+       - Mercedes: `EQE` (`EQE 350+`, `EQE 53`, `EQE SUV`), `EQS` (`EQS 450+`, `EQS 580`, `EQS SUV`), `EQ Series` (`EQA`, `EQB`, `EQC`).
+       - BMW: `BMW i4` (`i4 M50`), `BMW iX3`, `BMW iX` (`iX 40`, `iX 50`, `iX M60`), `BMW i Series` (`i5`, `i7`, `iX1`, `iX2`).
+       - Polestar: `Polestar 2`, `Polestar 4`, `Polestar 3`, `Polestar 5`, generic `폴스타`.
+  2. **Korean Slang & Colloquialisms Catalog Expansion**:
+     - Added 13 new high-priority community terms to `RAW_SLANG_ENTRIES` (expanding catalog from 93 to 106 entries):
+       - `메기`: Catfish styling pejorative for pre-facelift Model 3 and Ioniq 6.
+       - `깜빡이`, `버튼식 깜빡이`, `깜빡이 버튼`: Stalkless steering wheel button hazards and MCU blackout turn signal sound mute defects.
+       - `테쪽이`: Problem-child Tesla slang for erratic software/phantom braking behavior.
+       - `삼식이`: Community nickname for Tesla Model 3.
+       - `이븨`, `이브이`: Kia EV / EV colloquial terms.
+       - `아이오닉`: Hyundai E-GMP EV brand term.
+       - `모델와이`: Tesla Model Y Hangul phonetics.
+       - `비야디`, `씰`: BYD official Hangul terms.
+       - `벤츠 화재`: Mercedes EQE underground parking thermal runaway fire.
+     - Added `삼식이`, `테쪽이`, `이븨`, `이브이` to `OWNERSHIP_ANCHORS`.
+     - Added `깜빡이`, `소리 안 남`, `소리 안 나`, `소리 안`, `반응 없음`, `반응 안 함`, `터치 안 됨` to `SYMPTOM_PREDICATES`.
+  3. **Multi-Model Ambiguity Resolution Engine**:
+     - Developed `_find_and_resolve_candidates(text)` replacing static loop order:
+       - Subsumption pruning: Sub-model spans strictly inside longer composite models (e.g., `아이오닉5` inside `아이오닉5 N`, `EV6` inside `EV6 GT`, `Model 3` inside `Model 3 Highland`, `주니퍼` inside `MY 주니퍼`) are safely pruned.
+       - Ownership & defect affinity: Candidates immediately followed by ownership cues (`차주`, `오너`, `출고`, `타는데`, `기변`, `결함`, `화재`) receive +80 contextual score boosts.
+       - Left-to-right prominence: Head vehicles in comparison headlines (`EV6 vs 아이오닉5` -> EV6, `아이오닉5 vs EV6` -> 아이오닉5) resolve deterministically.
+       - Structural title-over-content hierarchy: Resolves title models first before checking content.
+  4. **Verification & Mirror Parity**:
+     - Created dedicated 20-test test suite `tests/test_vehicle_matcher_slang_audit.py` (20/20 passed in 0.010s).
+     - Full filter test suites (`test_filters.py`, `test_adversarial_matcher_filter_merger.py`, `test_cycle23_hardening.py`, `test_vehicle_matcher_slang_audit.py`): 80/80 passed.
+     - 100% bitwise mirror parity maintained across `crawlers/`, `filters/`, `models/`, `tracker/`, `utils/`, and `tests/`.
+

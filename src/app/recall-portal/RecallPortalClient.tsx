@@ -318,12 +318,17 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
   // Scroll timer ref to track and clear timeouts
   const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Debounce timer ref for VIN auto-lookup
+  const vinDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Clear pending timers on unmount to prevent memory leaks
   useEffect(() => {
     return () => {
       if (scrollTimerRef.current) {
         clearTimeout(scrollTimerRef.current);
+      }
+      if (vinDebounceTimerRef.current) {
+        clearTimeout(vinDebounceTimerRef.current);
       }
     };
   }, []);
@@ -371,7 +376,10 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
   // Handler for VIN query parameter auto-selection (?vin=...)
   const handleSelectVinFromParams = useCallback(
     (vin: string) => {
-      const cleanVin = vin.trim().toUpperCase();
+      if (vinDebounceTimerRef.current) {
+        clearTimeout(vinDebounceTimerRef.current);
+      }
+      const cleanVin = vin.trim().toUpperCase().replace(/[\s-]/g, '');
       setVinInput(cleanVin);
       setVinTouched(true);
       setActiveCheckerMode('VIN');
@@ -394,18 +402,62 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     return validateVinString(deferredVinInput);
   }, [deferredVinInput]);
 
+  // Debounced input change handler for VIN search
+  const handleVinChange = useCallback((value: string) => {
+    const uppercaseVal = value.toUpperCase();
+    setVinInput(uppercaseVal);
+    setVinTouched(true);
+
+    if (vinDebounceTimerRef.current) {
+      clearTimeout(vinDebounceTimerRef.current);
+    }
+
+    const clean = uppercaseVal.trim().replace(/[\s-]/g, '');
+
+    // Invalidate stale VIN check result if length is incomplete
+    if (clean.length < 17) {
+      setCheckResult((prev) => (prev && prev.mode === 'VIN' ? null : prev));
+      return;
+    }
+
+    // When 17 characters entered, debounce auto-search (350ms)
+    if (clean.length === 17) {
+      vinDebounceTimerRef.current = setTimeout(() => {
+        const valResult = validateVinString(clean);
+        if (valResult.valid) {
+          const result = decodeVinAndCheckRecalls(clean, initialDatabase);
+          setCheckResult(result);
+        }
+      }, 350);
+    }
+  }, [initialDatabase]);
+
   // Handle Mode A lookup
   const handleVinSubmit = useCallback((e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setVinTouched(true);
-    if (!vinInput.trim()) return;
+    if (vinDebounceTimerRef.current) {
+      clearTimeout(vinDebounceTimerRef.current);
+    }
+    const clean = vinInput.trim().toUpperCase().replace(/[\s-]/g, '');
+    if (!clean) return;
 
-    const result = decodeVinAndCheckRecalls(vinInput, initialDatabase);
+    const validation = validateVinString(clean);
+    if (!validation.valid) {
+      const result = decodeVinAndCheckRecalls(clean, initialDatabase);
+      setCheckResult(result);
+      return;
+    }
+
+    const result = decodeVinAndCheckRecalls(clean, initialDatabase);
     setCheckResult(result);
   }, [vinInput, initialDatabase]);
 
   // Quick 1-click sample VIN handler
   const handleSelectSampleVin = useCallback((sampleVin: string) => {
+    if (vinDebounceTimerRef.current) {
+      clearTimeout(vinDebounceTimerRef.current);
+    }
     setVinInput(sampleVin);
     setVinTouched(true);
     const result = decodeVinAndCheckRecalls(sampleVin, initialDatabase);
@@ -544,9 +596,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 href="https://www.car.go.kr"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[44px] rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
               >
-                <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                 </svg>
                 자동차리콜센터 공식
@@ -554,7 +606,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               </a>
               <a
                 href="#battery-directory"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[44px] rounded-lg text-xs font-semibold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
               >
                 🔋 배터리 제조사 공개표
               </a>
@@ -682,10 +734,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       aria-label="17자리 자동차 차대번호(VIN) 입력"
                       aria-invalid={!!vinError}
                       aria-describedby={vinError ? "vin-error-feedback" : "vin-format-hint"}
-                      onChange={(e) => {
-                        setVinInput(e.target.value.toUpperCase());
-                        setVinTouched(true);
-                      }}
+                      onChange={(e) => handleVinChange(e.target.value)}
                       placeholder="예: KM8KN4AE4NU123456 또는 W1K295112PF123456"
                       className={`w-full bg-slate-900 border rounded-xl px-4 py-3.5 text-base font-mono tracking-wider text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus-visible:ring-2 transition ${
                         vinError
@@ -693,7 +742,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                           : 'border-slate-700 focus:ring-blue-500/50 focus-visible:ring-blue-500/50 focus:border-blue-500'
                       }`}
                     />
-                    <p id="vin-format-hint" className="sr-only">영문 대문자와 숫자로 구성된 17자리 차량 식별 번호</p>
+                    <p id="vin-format-hint" className="sr-only">영문 대문자와 숫자로 구성된 17자리 차량 식별 번호 (I, O, Q 제외)</p>
                     <div className="absolute right-3 top-3.5 text-xs font-mono text-slate-400">
                       {vinInput.replace(/[\s-]/g, '').length}/17
                     </div>
@@ -701,8 +750,8 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
                   {/* Realtime validation feedback */}
                   {vinError && (
-                    <p id="vin-error-feedback" role="alert" className="mt-2 text-xs text-red-400 flex items-center gap-1.5">
-                      <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                    <p id="vin-error-feedback" role="alert" aria-live="assertive" className="mt-2 text-xs text-red-400 flex items-center gap-1.5 font-medium">
+                      <svg className="w-4 h-4 flex-shrink-0 text-red-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                       </svg>
                       {vinError}
@@ -710,8 +759,8 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   )}
 
                   {vinTouched && vinValidation.valid && (
-                    <p className="mt-2 text-xs text-emerald-400 flex items-center gap-1.5">
-                      <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                    <p className="mt-2 text-xs text-emerald-400 flex items-center gap-1.5 font-medium">
+                      <svg className="w-4 h-4 flex-shrink-0 text-emerald-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
                       유효한 ISO 3779 17자리 차대번호 형식입니다.
@@ -734,6 +783,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   <button
                     type="button"
                     onClick={() => {
+                      if (vinDebounceTimerRef.current) {
+                        clearTimeout(vinDebounceTimerRef.current);
+                      }
                       setVinInput('');
                       setVinTouched(false);
                       setCheckResult(null);
@@ -765,10 +817,10 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       <div className="text-xs font-bold text-white group-hover:text-blue-300 truncate">
                         {item.model_name}
                       </div>
-                      <div className="text-[10px] text-slate-400 truncate mt-0.5">
+                      <div className="text-[10px] text-slate-300 truncate mt-0.5">
                         {item.brand}
                       </div>
-                      <div className="text-[10px] font-mono text-blue-400/90 truncate mt-1">
+                      <div className="text-[10px] font-mono text-blue-300 truncate mt-1">
                         {item.prefix}...
                       </div>
                     </button>
@@ -870,296 +922,377 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
         {/* 3. Live Search Result Display */}
         {checkResult && (
           <section id="search-result-section" aria-labelledby="search-result-heading" aria-live="polite" className="space-y-6 scroll-mt-24">
-            {/* Overall Risk Banner */}
-            <div
-              className={`rounded-2xl p-6 shadow-2xl border ${
-                checkResult.overallRiskGrade === 'CRITICAL'
-                  ? 'bg-gradient-to-br from-red-950 via-red-900 to-slate-950 border-red-700 text-white'
-                  : checkResult.overallRiskGrade === 'WARNING'
-                  ? 'bg-gradient-to-br from-amber-950 via-amber-900 to-slate-950 border-amber-700 text-white'
-                  : 'bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-950 border-emerald-700 text-white'
-              }`}
-            >
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            {!checkResult.valid ? (
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="rounded-2xl p-6 sm:p-8 shadow-2xl border border-red-700 bg-gradient-to-br from-red-950 via-red-900 to-slate-950 text-white space-y-4"
+              >
                 <div className="flex items-start gap-4">
-                  <div className="p-3 rounded-xl bg-black/40 text-2xl flex-shrink-0">
-                    {checkResult.overallRiskGrade === 'CRITICAL'
-                      ? '🚨'
-                      : checkResult.overallRiskGrade === 'WARNING'
-                      ? '⚠️'
-                      : '✅'}
+                  <div className="p-3 rounded-xl bg-black/40 text-2xl flex-shrink-0" aria-hidden="true">
+                    ⚠️
                   </div>
-                  <div>
+                  <div className="space-y-2 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-black/50">
-                        {checkResult.overallRiskGrade === 'CRITICAL'
-                          ? '긴급 안전 주의보 발령'
-                          : checkResult.overallRiskGrade === 'WARNING'
-                          ? '안전 리콜 조치 권고'
-                          : '안전 검증 완료'}
+                      <span className="text-xs font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-red-950 text-red-200 border border-red-700">
+                        차대번호(VIN) 유효성 검증 실패
                       </span>
                       <span className="text-xs text-slate-300">
-                        조회 일시:{' '}
-                        <ClientTimestamp
-                          isoString={checkResult.timestamp}
-                          fallback="최근"
-                          options={{ year: 'numeric', month: 'numeric', day: 'numeric' }}
-                        />
+                        입력값: <span className="font-mono text-amber-300 font-bold">{checkResult.query || '(공백)'}</span>
                       </span>
                     </div>
 
-                    <h2 id="search-result-heading" className="text-xl sm:text-2xl font-black mt-1">
-                      {checkResult.decodedBrand || '미확인 브랜드'} {checkResult.decodedModel?.trim() ? checkResult.decodedModel : '미확인 모델'}{' '}
-                      {checkResult.decodedYear ? `${checkResult.decodedYear}년식` : ''} 판정 결과
+                    <h2 id="search-result-heading" className="text-xl sm:text-2xl font-black text-white">
+                      차대번호 표준 규격(ISO 3779) 불일치 안내
                     </h2>
 
-                    <p className="text-sm text-slate-200 mt-1 max-w-3xl leading-relaxed">
-                      {checkResult.mode === 'VIN' && !checkResult.decodedModel && (
-                        <span className="block text-amber-300 text-xs font-semibold mb-1">
-                          ℹ️ 차대번호(VIN) 기준 제조사는 식별되었으나 세부 모델 정보가 데이터베이스에 매핑되지 않았습니다.
+                    <p className="text-sm text-red-200 leading-relaxed font-medium">
+                      {checkResult.validationError || '입력하신 차대번호가 국제 표준 17자리 형식과 일치하지 않습니다.'}
+                    </p>
+
+                    <div className="pt-2 text-xs text-slate-300 space-y-1 bg-black/40 p-4 rounded-xl border border-red-800/60">
+                      <p className="font-semibold text-amber-300 flex items-center gap-1.5">
+                        <span aria-hidden="true">💡</span> 올바른 차대번호 확인 및 입력 요령:
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 text-slate-300 pt-1">
+                        <li>자동차등록증(차량등록증) 5번 항목 [차대번호] 17자리를 확인해 주십시오.</li>
+                        <li>차량 운전석 전면 유리창 하단 또는 운전석 B필러 도어 스티커에서도 확인 가능합니다.</li>
+                        <li>국제 규격상 숫자 1, 0과의 혼동을 막기 위해 <strong>I(아이), O(오), Q(큐)</strong>는 사용되지 않습니다.</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Overall Risk Banner */}
+                <div
+                  className={`rounded-2xl p-6 shadow-2xl border ${
+                    checkResult.overallRiskGrade === 'CRITICAL'
+                      ? 'bg-gradient-to-br from-red-950 via-red-900 to-slate-950 border-red-700 text-white'
+                      : checkResult.overallRiskGrade === 'WARNING'
+                      ? 'bg-gradient-to-br from-amber-950 via-amber-900 to-slate-950 border-amber-700 text-white'
+                      : 'bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-950 border-emerald-700 text-white'
+                  }`}
+                >
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-start gap-4">
+                      <div className="p-3 rounded-xl bg-black/40 text-2xl flex-shrink-0">
+                        {checkResult.overallRiskGrade === 'CRITICAL'
+                          ? '🚨'
+                          : checkResult.overallRiskGrade === 'WARNING'
+                          ? '⚠️'
+                          : '✅'}
+                      </div>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-black/50">
+                            {checkResult.overallRiskGrade === 'CRITICAL'
+                              ? '긴급 안전 주의보 발령'
+                              : checkResult.overallRiskGrade === 'WARNING'
+                              ? '안전 리콜 조치 권고'
+                              : '안전 검증 완료'}
+                          </span>
+                          <span className="text-xs text-slate-300">
+                            조회 일시:{' '}
+                            <ClientTimestamp
+                              isoString={checkResult.timestamp}
+                              fallback="최근"
+                              options={{ year: 'numeric', month: 'numeric', day: 'numeric' }}
+                            />
+                          </span>
+                        </div>
+
+                        <h2 id="search-result-heading" className="text-xl sm:text-2xl font-black mt-1">
+                          {checkResult.decodedBrand || '미확인 브랜드'} {checkResult.decodedModel?.trim() ? checkResult.decodedModel : '미확인 모델'}{' '}
+                          {checkResult.decodedYear ? `${checkResult.decodedYear}년식` : ''} 판정 결과
+                        </h2>
+
+                        <p className="text-sm text-slate-200 mt-1 max-w-3xl leading-relaxed">
+                          {checkResult.mode === 'VIN' && !checkResult.decodedModel && (
+                            <span className="block text-amber-300 text-xs font-semibold mb-1">
+                              ℹ️ 차대번호(VIN) 기준 제조사는 식별되었으나 세부 모델 정보가 데이터베이스에 매핑되지 않았습니다.
+                            </span>
+                          )}
+                          {checkResult.hasFireRisk
+                            ? '배터리 열폭주 화재 위험 또는 정부 특별 안전점검 대상 모델입니다. 즉시 완충 한도 설정 및 공식 서비스센터 점검을 완료하십시오.'
+                            : checkResult.hasPowerLoss
+                            ? '통합충전제어장치(ICCU) 파손 또는 주행 중 동력 상실 결함 관련 공식 리콜이 발령되어 있습니다. 센터 방문 무상 소프트웨어 업데이트가 필요합니다.'
+                            : checkResult.recalls.length > 0
+                            ? `총 ${checkResult.recalls.length}건의 안전 리콜 및 무상수리 캠페인이 확인되었습니다.`
+                            : '현재 정부 국토교통부 및 해외 규제당국에 등록된 긴급 안전 리콜 대상이 확인되지 않았습니다.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-row md:flex-col items-end justify-between md:justify-center border-t md:border-t-0 md:border-l border-white/10 pt-3 md:pt-0 md:pl-6 gap-2">
+                      <div className="text-right">
+                        <span className="text-xs text-slate-300">매칭 리콜</span>
+                        <div className="text-2xl font-black">{checkResult.recalls.length}건</div>
+                      </div>
+                      {checkResult.decodedCountry && (
+                        <span className="text-xs px-2 py-1 rounded bg-black/40 text-slate-300">
+                          제조국: {checkResult.decodedCountry}
                         </span>
                       )}
-                      {checkResult.hasFireRisk
-                        ? '배터리 열폭주 화재 위험 또는 정부 특별 안전점검 대상 모델입니다. 즉시 완충 한도 설정 및 공식 서비스센터 점검을 완료하십시오.'
-                        : checkResult.hasPowerLoss
-                        ? '통합충전제어장치(ICCU) 파손 또는 주행 중 동력 상실 결함 관련 공식 리콜이 발령되어 있습니다. 센터 방문 무상 소프트웨어 업데이트가 필요합니다.'
-                        : checkResult.recalls.length > 0
-                        ? `총 ${checkResult.recalls.length}건의 안전 리콜 및 무상수리 캠페인이 확인되었습니다.`
-                        : '현재 정부 국토교통부 및 해외 규제당국에 등록된 긴급 안전 리콜 대상이 확인되지 않았습니다.'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-row md:flex-col items-end justify-between md:justify-center border-t md:border-t-0 md:border-l border-white/10 pt-3 md:pt-0 md:pl-6 gap-2">
-                  <div className="text-right">
-                    <span className="text-xs text-slate-300">매칭 리콜</span>
-                    <div className="text-2xl font-black">{checkResult.recalls.length}건</div>
-                  </div>
-                  {checkResult.decodedCountry && (
-                    <span className="text-xs px-2 py-1 rounded bg-black/40 text-slate-300">
-                      제조국: {checkResult.decodedCountry}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Battery Safety Profile Card & Underground Parking Advisory */}
-            {checkResult.batteryProfile && (
-              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-7 shadow-lg space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800 gap-2">
-                  <div>
-                    <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">
-                      배터리 공급사 및 셀 상세 정보
-                    </span>
-                    <h3 className="text-lg font-bold text-white mt-0.5">
-                      {checkResult.batteryProfile.model_name} 배터리 안전 제원
-                    </h3>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-xs px-3 py-1 rounded-full font-bold border ${
-                        checkResult.batteryProfile.fire_incident_status === 'CRITICAL_MONITORING'
-                          ? 'bg-red-950/80 text-red-300 border-red-700'
-                          : checkResult.batteryProfile.fire_incident_status === 'RECALLED_RESOLVED'
-                          ? 'bg-amber-950/80 text-amber-300 border-amber-700'
-                          : 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
-                      }`}
-                    >
-                      {checkResult.batteryProfile.fire_incident_status_ko}
-                    </span>
-                    <span className="text-xs px-3 py-1 rounded-full font-bold bg-blue-950 text-blue-300 border border-blue-800">
-                      완충 권장 한도: {checkResult.batteryProfile.recommended_soc_limit}%
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div className="bg-slate-900/90 rounded-xl p-4 border border-slate-800 space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">배터리 셀 제조사:</span>
-                      <span className="font-bold text-white">{checkResult.batteryProfile.cell_supplier}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">배터리 셀 화학(Chemistry):</span>
-                      <span className="font-medium text-slate-200">{checkResult.batteryProfile.cell_chemistry}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">적용 생산 기간:</span>
-                      <span className="font-mono text-slate-300">{checkResult.batteryProfile.years}</span>
-                    </div>
-                    <div className="pt-2 border-t border-slate-800/80 text-xs text-slate-300">
-                      <span className="font-semibold text-blue-400">BMS 안전 보호 기술:</span>{' '}
-                      {checkResult.batteryProfile.bms_safety_features}
-                    </div>
-                  </div>
-
-                  <div className="bg-amber-950/30 border border-amber-800/50 rounded-xl p-4 space-y-2">
-                    <div className="flex items-center gap-2 text-amber-300 font-bold text-xs">
-                      <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                      <span aria-hidden="true">🏢</span> 아파트 지하주차장 이용 및 충전 가이드
-                    </div>
-                    <p className="text-xs text-slate-300 leading-relaxed">
-                      {checkResult.batteryProfile.underground_parking_advisory}
-                    </p>
-                    <div className="pt-2 text-[11px] text-amber-200/80">
-                      * 아파트 관리사무소 화재 예방 수칙 및 국토교통부 권고 기준 준수 권장.
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
 
-            {/* Matched Recall Campaign Cards */}
-            <div className="space-y-4">
-              <div aria-live="polite" aria-atomic="true" className="sr-only">
-                {checkResult.recalls.length === 0
-                  ? '해당 차종 조건에 일치하는 활성 리콜이 없습니다.'
-                  : `해당 차종 대상 정부 공시 리콜 총 ${checkResult.recalls.length}건이 조회되었습니다.`}
-              </div>
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <span>해당 차종 대상 정부 공시 리콜 세부 내역 ({checkResult.recalls.length}건)</span>
-              </h3>
-
-              {checkResult.recalls.length === 0 ? (
-                <div className="bg-slate-950 border border-slate-800 rounded-xl p-8 text-center text-slate-400">
-                  <p className="text-base font-semibold text-slate-300">
-                    현재 조회하신 조건에 해당하는 활성 리콜이 없습니다.
-                  </p>
-                  <p className="text-xs text-slate-400 mt-1">
-                    정기적인 소프트웨어 업데이트(OTA) 및 공식 서비스센터 무상점검을 권장합니다.
-                  </p>
-                </div>
-              ) : (
-                checkResult.recalls.map((campaign) => {
-                  const isExpanded = expandedRecallIds.has(campaign.id);
-                  return (
-                    <div
-                      key={campaign.id}
-                      className="bg-slate-950 border border-slate-800 rounded-2xl p-6 shadow-md hover:border-slate-700 transition space-y-4"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
-                              {campaign.campaign_no}
-                            </span>
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                              {campaign.agency_ko}
-                            </span>
-                            <span
-                              className={`text-xs font-bold px-2 py-0.5 rounded ${
-                                campaign.risk_level === 'FIRE_HAZARD'
-                                  ? 'bg-red-950 text-red-300 border border-red-800'
-                                  : campaign.risk_level === 'LOSS_OF_POWER'
-                                  ? 'bg-orange-950 text-orange-300 border border-orange-800'
-                                  : 'bg-slate-800 text-slate-300'
-                              }`}
-                            >
-                              {campaign.risk_level_ko}
-                            </span>
-                            <span className="text-xs font-medium px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60">
-                              {campaign.remedy_type_ko}
-                            </span>
-                          </div>
-
-                          <h4 className="text-base sm:text-lg font-bold text-white pt-1">
-                            {campaign.defect_title}
-                          </h4>
-                          <div className="text-xs text-slate-400">
-                            대상: <strong className="text-slate-200">{campaign.target_model}</strong> (
-                            {campaign.target_model_years}) | 대상 대수: 약{' '}
-                            <span className="text-amber-400 font-semibold">
-                              {Number.isFinite(campaign?.affected_kdm_units)
-                                ? campaign.affected_kdm_units.toLocaleString()
-                                : '0'}대
-                            </span>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => toggleRecallExpansion(campaign.id)}
-                          aria-expanded={isExpanded}
-                          aria-controls={"campaign-search-detail-" + campaign.id}
-                          aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '대처요령 및 상세 펼치기'}`}
-                          className="self-start px-3 py-1.5 min-h-[44px] rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                {/* Battery Safety Profile Card & Underground Parking Advisory */}
+                {checkResult.batteryProfile && (
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-7 shadow-lg space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800 gap-2">
+                      <div>
+                        <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">
+                          배터리 공급사 및 셀 상세 정보
+                        </span>
+                        <h3 className="text-lg font-bold text-white mt-0.5">
+                          {checkResult.batteryProfile.model_name} 배터리 안전 제원
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-xs px-3 py-1 rounded-full font-bold border ${
+                            checkResult.batteryProfile.fire_incident_status === 'CRITICAL_MONITORING'
+                              ? 'bg-red-950/80 text-red-300 border-red-700'
+                              : checkResult.batteryProfile.fire_incident_status === 'RECALLED_RESOLVED'
+                              ? 'bg-amber-950/80 text-amber-300 border-amber-700'
+                              : 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
+                          }`}
                         >
-                          <span>{isExpanded ? '상세 접기' : '대처요령 및 상세'}</span>
-                          <svg
-                            className={`w-3.5 h-3.5 transform transition-transform ${
-                              isExpanded ? 'rotate-180' : ''
-                            }`}
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                            aria-hidden="true"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </button>
+                          {checkResult.batteryProfile.fire_incident_status_ko}
+                        </span>
+                        <span className="text-xs px-3 py-1 rounded-full font-bold bg-blue-950 text-blue-300 border border-blue-800">
+                          완충 권장 한도: {checkResult.batteryProfile.recommended_soc_limit}%
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div className="bg-slate-900/90 rounded-xl p-4 border border-slate-800 space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">배터리 셀 제조사:</span>
+                          <span className="font-bold text-white">{checkResult.batteryProfile.cell_supplier}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">배터리 셀 화학(Chemistry):</span>
+                          <span className="font-medium text-slate-200">{checkResult.batteryProfile.cell_chemistry}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">적용 생산 기간:</span>
+                          <span className="font-mono text-slate-300">{checkResult.batteryProfile.years}</span>
+                        </div>
+                        <div className="pt-2 border-t border-slate-800/80 text-xs text-slate-300">
+                          <span className="font-semibold text-blue-400">BMS 안전 보호 기술:</span>{' '}
+                          {checkResult.batteryProfile.bms_safety_features}
+                        </div>
                       </div>
 
-                      {/* Defect overview */}
-                      <p className="text-sm text-slate-300 leading-relaxed bg-slate-900/60 rounded-xl p-3.5 border border-slate-800/70">
-                        <strong className="text-slate-200">결함 원인: </strong>
-                        {campaign.defect_detail}
-                      </p>
-
-                      {/* Expandable full remedy and consumer emergency guide */}
-                      {isExpanded && (
-                        <div id={"campaign-search-detail-" + campaign.id} className="space-y-3 pt-2 border-t border-slate-800">
-                          <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-4 text-xs text-slate-200 space-y-1">
-                            <div className="font-bold text-blue-300 flex items-center gap-1.5">
-                              <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              </svg>
-                              제조사 공식 무상 시정 조치 방법
-                            </div>
-                            <p className="leading-relaxed">{campaign.remedy_action}</p>
-                          </div>
-
-                          <div className="bg-red-950/30 border border-red-800/50 rounded-xl p-4 text-xs text-slate-200 space-y-1">
-                            <div className="font-bold text-red-300 flex items-center gap-1.5">
-                              <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                              </svg>
-                              🚨 차주 긴급 대처 행동 요령
-                            </div>
-                            <p className="leading-relaxed">{campaign.consumer_emergency_guide}</p>
-                          </div>
-
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-400 pt-2 gap-2">
-                            <div>
-                              <span className="font-semibold text-slate-300">고객센터 접수: </span>
-                              <span className="text-white font-mono">{campaign.service_center_contact}</span>
-                            </div>
-                            {(() => {
-                              const safeLink = sanitizeSafeUrl(campaign.official_link);
-                              const isExternal = isExternalUrl(safeLink);
-                              return isExternal ? (
-                                <a
-                                  href={safeLink}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-400 hover:text-blue-300 flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
-                                >
-                                  공식 제조사 리콜 공지 확인 &rarr;
-                                  <span className="sr-only"> (새 창에서 열림)</span>
-                                </a>
-                              ) : null;
-                            })()}
-                          </div>
+                      <div className="bg-amber-950/30 border border-amber-800/50 rounded-xl p-4 space-y-2">
+                        <div className="flex items-center gap-2 text-amber-300 font-bold text-xs">
+                          <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          <span aria-hidden="true">🏢</span> 아파트 지하주차장 이용 및 충전 가이드
                         </div>
-                      )}
+                        <p className="text-xs text-slate-200 leading-relaxed font-medium">
+                          {checkResult.batteryProfile.underground_parking_advisory}
+                        </p>
+                        <div className="pt-2 text-[11px] text-amber-300">
+                          * 아파트 관리사무소 화재 예방 수칙 및 국토교통부 권고 기준 준수 권장.
+                        </div>
+                      </div>
                     </div>
-                  );
-                })
-              )}
-            </div>
+                  </div>
+                )}
+
+                {/* VIN Empty Battery Info note */}
+                {checkResult.mode === 'VIN' && !checkResult.batteryProfile && (
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 text-sm space-y-2">
+                    <div className="flex items-center gap-2 text-blue-400 font-semibold text-xs">
+                      <span aria-hidden="true">🔋</span>
+                      <span>배터리 실명제 공시 안내</span>
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      차대번호 기준 제조사({checkResult.decodedBrand || '해당 제조사'})는 식별되었으나, 
+                      본 세부 트림의 배터리 셀 제조사 정보는 하단의 [배터리 제조사 공개표]에서 차종명으로 직접 검색하시거나 차량등록증의 제원표를 확인해 주십시오.
+                    </p>
+                  </div>
+                )}
+
+                {/* Matched Recall Campaign Cards */}
+                <div className="space-y-4">
+                  <div aria-live="polite" aria-atomic="true" className="sr-only">
+                    {checkResult.recalls.length === 0
+                      ? '해당 차종 조건에 일치하는 활성 리콜이 없습니다.'
+                      : `해당 차종 대상 정부 공시 리콜 총 ${checkResult.recalls.length}건이 조회되었습니다.`}
+                  </div>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <span>해당 차종 대상 정부 공시 리콜 세부 내역 ({checkResult.recalls.length}건)</span>
+                  </h3>
+
+                  {checkResult.recalls.length === 0 ? (
+                    <div className="bg-slate-950 border border-emerald-900/50 rounded-2xl p-8 text-center space-y-3">
+                      <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-950/80 border border-emerald-700/60 text-2xl text-emerald-300 mx-auto" aria-hidden="true">
+                        ✓
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-base font-bold text-emerald-300">
+                          조회된 차종 조건에 등록된 공식 안전 리콜이 없습니다
+                        </p>
+                        <p className="text-xs text-slate-300 max-w-xl mx-auto leading-relaxed">
+                          대한민국 국토교통부(MOLIT) 및 미국 NHTSA 공시 데이터베이스 대조 결과, 현재 발령된 긴급 안전 리콜 또는 시정명령 캠페인이 없습니다.
+                        </p>
+                      </div>
+                      <div className="pt-2 flex flex-wrap items-center justify-center gap-3 text-xs">
+                        <span className="text-slate-400">
+                          * 정기적인 무선 소프트웨어(OTA) 업데이트 및 제조사 공식 서비스센터 정기점검을 권장합니다.
+                        </span>
+                        <a
+                          href="https://www.car.go.kr"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[44px] rounded-lg text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-blue-300 border border-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                        >
+                          <span>자동차리콜센터(car.go.kr) 실시간 1:1 확인</span>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                          <span className="sr-only"> (새 창에서 열림)</span>
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    checkResult.recalls.map((campaign) => {
+                      const isExpanded = expandedRecallIds.has(campaign.id);
+                      return (
+                        <div
+                          key={campaign.id}
+                          className="bg-slate-950 border border-slate-800 rounded-2xl p-6 shadow-md hover:border-slate-700 transition space-y-4"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
+                                  {campaign.campaign_no}
+                                </span>
+                                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                                  {campaign.agency_ko}
+                                </span>
+                                <span
+                                  className={`text-xs font-bold px-2 py-0.5 rounded ${
+                                    campaign.risk_level === 'FIRE_HAZARD'
+                                      ? 'bg-red-950 text-red-300 border border-red-800'
+                                      : campaign.risk_level === 'LOSS_OF_POWER'
+                                      ? 'bg-orange-950 text-orange-300 border border-orange-800'
+                                      : 'bg-slate-800 text-slate-300'
+                                  }`}
+                                >
+                                  {campaign.risk_level_ko}
+                                </span>
+                                <span className="text-xs font-medium px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60">
+                                  {campaign.remedy_type_ko}
+                                </span>
+                              </div>
+
+                              <h4 className="text-base sm:text-lg font-bold text-white pt-1">
+                                {campaign.defect_title}
+                              </h4>
+                              <div className="text-xs text-slate-400">
+                                대상: <strong className="text-slate-200">{campaign.target_model}</strong> (
+                                {campaign.target_model_years}) | 대상 대수: 약{' '}
+                                <span className="text-amber-400 font-semibold">
+                                  {Number.isFinite(campaign?.affected_kdm_units)
+                                    ? campaign.affected_kdm_units.toLocaleString()
+                                    : '0'}대
+                                </span>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => toggleRecallExpansion(campaign.id)}
+                              aria-expanded={isExpanded}
+                              aria-controls={"campaign-search-detail-" + campaign.id}
+                              aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '대처요령 및 상세 펼치기'}`}
+                              className="self-start px-3 py-1.5 min-h-[44px] rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                            >
+                              <span>{isExpanded ? '상세 접기' : '대처요령 및 상세'}</span>
+                              <svg
+                                className={`w-3.5 h-3.5 transform transition-transform ${
+                                  isExpanded ? 'rotate-180' : ''
+                                }`}
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+                          </div>
+
+                          {/* Defect overview */}
+                          <p className="text-sm text-slate-300 leading-relaxed bg-slate-900/60 rounded-xl p-3.5 border border-slate-800/70">
+                            <strong className="text-slate-200">결함 원인: </strong>
+                            {campaign.defect_detail}
+                          </p>
+
+                          {/* Expandable full remedy and consumer emergency guide */}
+                          {isExpanded && (
+                            <div id={"campaign-search-detail-" + campaign.id} className="space-y-3 pt-2 border-t border-slate-800">
+                              <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-4 text-xs text-slate-200 space-y-1">
+                                <div className="font-bold text-blue-300 flex items-center gap-1.5">
+                                  <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  </svg>
+                                  제조사 공식 무상 시정 조치 방법
+                                </div>
+                                <p className="leading-relaxed">{campaign.remedy_action}</p>
+                              </div>
+
+                              <div className="bg-red-950/30 border border-red-800/50 rounded-xl p-4 text-xs text-slate-200 space-y-1">
+                                <div className="font-bold text-red-300 flex items-center gap-1.5">
+                                  <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                  </svg>
+                                  🚨 차주 긴급 대처 행동 요령
+                                </div>
+                                <p className="leading-relaxed">{campaign.consumer_emergency_guide}</p>
+                              </div>
+
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-400 pt-2 gap-2">
+                                <div>
+                                  <span className="font-semibold text-slate-300">고객센터 접수: </span>
+                                  <span className="text-white font-mono">{campaign.service_center_contact}</span>
+                                </div>
+                                {(() => {
+                                  const safeLink = sanitizeSafeUrl(campaign.official_link);
+                                  const isExternal = isExternalUrl(safeLink);
+                                  return isExternal ? (
+                                    <a
+                                      href={safeLink}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 min-h-[44px] px-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                                    >
+                                      공식 제조사 리콜 공지 확인 &rarr;
+                                      <span className="sr-only"> (새 창에서 열림)</span>
+                                    </a>
+                                  ) : null;
+                                })()}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </>
+            )}
           </section>
         )}
 
@@ -1262,7 +1395,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       setSelectedSupplierFilter('ALL');
                       setSelectedFireStatusFilter('ALL');
                     }}
-                    className="mt-3 px-3 py-1.5 min-h-[44px] inline-flex items-center text-xs font-semibold text-blue-400 bg-blue-950/50 hover:bg-blue-900/50 border border-blue-800/80 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    className="mt-3 px-3.5 py-2 min-h-[44px] inline-flex items-center text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                   >
                     필터 및 검색 초기화
                   </button>
@@ -1375,7 +1508,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       setSelectedRiskFilter('ALL');
                       setSelectedRemedyFilter('ALL');
                     }}
-                    className="mt-3 px-3 py-1.5 min-h-[44px] inline-flex items-center text-xs font-semibold text-blue-400 bg-blue-950/50 hover:bg-blue-900/50 border border-blue-800/80 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    className="mt-3 px-3.5 py-2 min-h-[44px] inline-flex items-center text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                   >
                     필터 및 검색 초기화
                   </button>
@@ -1489,7 +1622,7 @@ export const RecallCard = React.memo(function RecallCard({
                   href={safeLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-400 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none"
+                  className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 min-h-[44px] px-2 rounded-lg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   공식 웹사이트 바로가기 &rarr;
                   <span className="sr-only"> (새 창에서 열림)</span>

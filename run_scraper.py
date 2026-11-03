@@ -18,9 +18,12 @@ import datetime
 import logging
 import os
 from pathlib import Path
+import re
 import shutil
+import signal
 import sys
 import tempfile
+import threading
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 # Ensure bot and project roots are present in sys.path
@@ -66,6 +69,54 @@ except ImportError:
 
 logger = logging.getLogger("ScraperRunner")
 
+_SHUTDOWN_REQUESTED = False
+
+
+def _signal_handler(signum: int, frame: Any) -> None:
+    """Handle termination signals by setting shutdown flag and raising exception for graceful unwind."""
+    global _SHUTDOWN_REQUESTED
+    _SHUTDOWN_REQUESTED = True
+    sig_name = signal.Signals(signum).name if hasattr(signal, "Signals") else f"signal {signum}"
+    logger.warning(f"Received termination {sig_name}. Halting scraper pipeline gracefully...")
+    if signum == signal.SIGINT:
+        raise KeyboardInterrupt(f"Scraper runner interrupted by {sig_name}")
+    else:
+        raise SystemExit(128 + signum)
+
+
+def setup_signal_handlers() -> None:
+    """Register graceful termination signal handlers for SIGINT and SIGTERM."""
+    if threading.current_thread() is threading.main_thread():
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                signal.signal(sig, _signal_handler)
+            except (ValueError, OSError, AttributeError):
+                pass
+
+
+def _find_repo_root() -> Path:
+    """Locate canonical repository root directory resilient to symlinks and nested execution."""
+    candidates = [
+        CURRENT_DIR,
+        CURRENT_DIR.parent,
+        CURRENT_DIR.parent.parent,
+        Path.cwd(),
+        Path.cwd().parent,
+    ]
+    for c in candidates:
+        if (c / "data").is_dir() and (
+            (c / "ev-stealth-web").is_dir()
+            or (c / "run_scraper.py").is_file()
+            or (c / "run_tracker.py").is_file()
+        ):
+            return c.resolve()
+    if CURRENT_DIR.name == "ev-stealth-web":
+        return CURRENT_DIR.parent.resolve()
+    return CURRENT_DIR.resolve()
+
+
+REPO_ROOT = _find_repo_root()
+
 
 def _resolve_web_reports_path(custom_web_dir: Optional[Union[str, Path]] = None) -> Path:
     if custom_web_dir:
@@ -81,6 +132,8 @@ def _resolve_web_reports_path(custom_web_dir: Optional[Union[str, Path]] = None)
     if env_dir and env_dir != ".":
         return Path(env_dir) / "daily_reports.json"
     candidates = [
+        REPO_ROOT / "ev-stealth-web" / "src" / "data" / "daily_reports.json",
+        REPO_ROOT / "src" / "data" / "daily_reports.json",
         CURRENT_DIR / "ev-stealth-web" / "src" / "data" / "daily_reports.json",
         CURRENT_DIR / "src" / "data" / "daily_reports.json",
         CURRENT_DIR.parent / "ev-stealth-web" / "src" / "data" / "daily_reports.json",
@@ -88,13 +141,15 @@ def _resolve_web_reports_path(custom_web_dir: Optional[Union[str, Path]] = None)
     ]
     for c in candidates:
         if c.parent.exists():
-            return c
-    return candidates[0]
+            return c.resolve()
+    return candidates[0].resolve()
 
 
 def _resolve_public_reports_path(custom_web_dir: Optional[Union[str, Path]] = None) -> Path:
     """Resolve repository public data/daily_reports.json path for Triple Mirror Parity."""
     candidates = [
+        REPO_ROOT / "ev-stealth-web" / "public" / "data" / "daily_reports.json",
+        REPO_ROOT / "public" / "data" / "daily_reports.json",
         CURRENT_DIR / "ev-stealth-web" / "public" / "data" / "daily_reports.json",
         CURRENT_DIR / "public" / "data" / "daily_reports.json",
         CURRENT_DIR.parent / "ev-stealth-web" / "public" / "data" / "daily_reports.json",
@@ -109,21 +164,22 @@ def _resolve_public_reports_path(custom_web_dir: Optional[Union[str, Path]] = No
             candidates.insert(1, custom_public_2)
     for c in candidates:
         if c.parent.exists():
-            return c
-    return candidates[0]
-
+            return c.resolve()
+    return candidates[0].resolve()
 
 
 def _resolve_root_reports_path() -> Path:
     """Resolve repository root data/daily_reports.json path."""
     candidates = [
+        REPO_ROOT / "data" / "daily_reports.json",
         CURRENT_DIR / "data" / "daily_reports.json",
         CURRENT_DIR.parent / "data" / "daily_reports.json",
+        CURRENT_DIR.parent.parent / "data" / "daily_reports.json",
     ]
     for c in candidates:
         if c.parent.exists():
-            return c
-    return candidates[0]
+            return c.resolve()
+    return candidates[0].resolve()
 
 
 def _atomic_copy_file(src_path: Union[str, Path], dest_path: Union[str, Path]) -> str:
@@ -166,6 +222,41 @@ def configure_logging(verbose: bool = False) -> None:
     )
 
 
+def parse_target_date(date_str: Optional[str]) -> Optional[str]:
+    """Parse and normalize target date CLI argument to ISO-8601 string.
+
+    Accepts:
+    - YYYY-MM-DD, YYYY.MM.DD, YYYY/MM/DD
+    - Full ISO-8601 strings (e.g. 2026-11-04T00:00:00Z)
+    Raises argparse.ArgumentTypeError on malformed date string.
+    """
+    if not date_str:
+        return None
+    val = str(date_str).strip()
+    if not val:
+        return None
+
+    m_simple = re.match(r"^(\d{4})[./\-](\d{1,2})[./\-](\d{1,2})$", val)
+    if m_simple:
+        y, m, d = int(m_simple.group(1)), int(m_simple.group(2)), int(m_simple.group(3))
+        try:
+            dt = datetime.datetime(y, m, d, 0, 0, 0, tzinfo=datetime.timezone.utc)
+            return dt.isoformat()
+        except ValueError as e:
+            raise argparse.ArgumentTypeError(f"Invalid calendar date '{val}': {e}")
+
+    clean_iso = val.replace("Z", "+00:00")
+    try:
+        dt = datetime.datetime.fromisoformat(clean_iso)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        return dt.isoformat()
+    except Exception:
+        raise argparse.ArgumentTypeError(
+            f"Invalid target date '{val}'. Expected YYYY-MM-DD or ISO-8601 string."
+        )
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create CLI argument parser adhering to PROJECT.md and specifications.md."""
     parser = argparse.ArgumentParser(
@@ -187,6 +278,14 @@ def create_parser() -> argparse.ArgumentParser:
         type=int,
         default=20,
         help="Maximum posts to crawl per community board/gallery (default: 20, minimum: 1).",
+    )
+    parser.add_argument(
+        "--target-date",
+        "--date",
+        dest="target_date",
+        type=parse_target_date,
+        default=None,
+        help="Target publication or report date (YYYY-MM-DD or ISO-8601).",
     )
     parser.add_argument(
         "--output",
@@ -259,6 +358,9 @@ class ScraperPipeline:
         target_boards = ["national", "electric", "import"]
 
         for board in target_boards:
+            if _SHUTDOWN_REQUESTED:
+                logger.warning("Shutdown requested. Halting BobaeDream crawl.")
+                break
             try:
                 logger.info(f"Crawling BobaeDream board '{board}' (limit={limit})...")
                 board_posts = self.bobae_crawler.crawl_board(board, pages=1, limit=limit)
@@ -269,7 +371,7 @@ class ScraperPipeline:
                 logger.warning(f"Error while crawling BobaeDream board '{board}': {e}")
 
         # If board crawl returned few or no posts, fallback to EV keyword search
-        if len(posts) < limit:
+        if not _SHUTDOWN_REQUESTED and len(posts) < limit:
             remaining = limit - len(posts)
             try:
                 logger.info(f"Searching BobaeDream for '전기차' (remaining limit={remaining})...")
@@ -286,6 +388,9 @@ class ScraperPipeline:
         target_galleries = ["car_new1", "electriccar", "tesla", "ioniq", "byd"]
 
         for gall in target_galleries:
+            if _SHUTDOWN_REQUESTED:
+                logger.warning("Shutdown requested. Halting DCInside crawl.")
+                break
             try:
                 logger.info(f"Crawling DCInside gallery '{gall}' (limit={limit})...")
                 gall_posts = self.dc_crawler.crawl_gallery(gall, pages=1, limit=limit)
@@ -296,7 +401,7 @@ class ScraperPipeline:
                 logger.warning(f"Error while crawling DCInside gallery '{gall}': {e}")
 
         # Fallback to EV search if gallery listings yielded fewer posts
-        if len(posts) < limit:
+        if not _SHUTDOWN_REQUESTED and len(posts) < limit:
             remaining = limit - len(posts)
             try:
                 logger.info(f"Searching DCInside for '전기차' (remaining limit={remaining})...")
@@ -336,20 +441,26 @@ class ScraperPipeline:
         stats: Dict[str, int] = {"bobaedream": 0, "dcinside": 0}
 
         if "bobaedream" in selected_sources:
-            try:
-                bobae_posts = self.harvest_bobaedream(limit=clamped_limit)
-                raw_posts.extend(bobae_posts)
-                stats["bobaedream"] = len(bobae_posts)
-            except Exception as e:
-                logger.warning(f"BobaeDream crawler encountered an unhandled error: {e}")
+            if _SHUTDOWN_REQUESTED:
+                logger.warning("Shutdown requested. Skipping BobaeDream harvest.")
+            else:
+                try:
+                    bobae_posts = self.harvest_bobaedream(limit=clamped_limit)
+                    raw_posts.extend(bobae_posts)
+                    stats["bobaedream"] = len(bobae_posts)
+                except Exception as e:
+                    logger.warning(f"BobaeDream crawler encountered an unhandled error: {e}")
 
         if "dcinside" in selected_sources:
-            try:
-                dc_posts = self.harvest_dcinside(limit=clamped_limit)
-                raw_posts.extend(dc_posts)
-                stats["dcinside"] = len(dc_posts)
-            except Exception as e:
-                logger.warning(f"DCInside crawler encountered an unhandled error: {e}")
+            if _SHUTDOWN_REQUESTED:
+                logger.warning("Shutdown requested. Skipping DCInside harvest.")
+            else:
+                try:
+                    dc_posts = self.harvest_dcinside(limit=clamped_limit)
+                    raw_posts.extend(dc_posts)
+                    stats["dcinside"] = len(dc_posts)
+                except Exception as e:
+                    logger.warning(f"DCInside crawler encountered an unhandled error: {e}")
 
         return raw_posts, stats
 
@@ -387,6 +498,7 @@ class ScraperPipeline:
         dry_run: bool = False,
         verbose: bool = False,
         web_dir: Optional[Union[str, Path]] = None,
+        target_date: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Execute end-to-end harvest, filter, and report publishing pipeline."""
         configure_logging(verbose)
@@ -397,7 +509,7 @@ class ScraperPipeline:
 
         logger.info(
             f"Starting scraper pipeline: sources={sources}, limit={clamped_limit}, "
-            f"sync_web={sync_web}, dry_run={dry_run}"
+            f"sync_web={sync_web}, dry_run={dry_run}, target_date={target_date}"
         )
 
         # 1. Harvest raw posts
@@ -436,6 +548,9 @@ class ScraperPipeline:
             if path_str not in unique_paths:
                 unique_paths.append(path_str)
 
+        # Normal write mode with graceful degradation and bitwise parity replication
+        now_iso = target_date or datetime.datetime.now(datetime.timezone.utc).isoformat()
+
         # 4. Handle persistence or dry-run
         results_summary: Dict[str, Any] = {
             "total_scraped": total_scraped,
@@ -445,6 +560,7 @@ class ScraperPipeline:
             "dry_run": dry_run,
             "written_paths": [],
             "preserved_paths": [],
+            "target_date": now_iso,
         }
 
         if dry_run:
@@ -454,9 +570,6 @@ class ScraperPipeline:
                 f"Skipping disk write for targets: {unique_paths}."
             )
             return results_summary
-
-        # Normal write mode with graceful degradation and bitwise parity replication
-        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
         primary_written: Optional[str] = None
 
         # If scrape produced 0 defects, check if an existing authentic mirror file already exists
@@ -525,6 +638,7 @@ class ScraperPipeline:
 def main(argv: Optional[List[str]] = None) -> int:
     """CLI runner main entrypoint returning standard process exit codes."""
     verbose = False
+    setup_signal_handlers()
     try:
         parser = create_parser()
         args = parser.parse_args(argv)
@@ -535,9 +649,13 @@ def main(argv: Optional[List[str]] = None) -> int:
             raw_web = str(args.web_dir).strip()
             args.web_dir = Path(raw_web) if raw_web and raw_web != "." else None
 
-        # Determine desired output path
+        # Determine desired output path and sanitize directory inputs
         raw_out = (args.output or args.output_path or "")
         output_dest = raw_out.strip() if isinstance(raw_out, str) and raw_out.strip() and raw_out.strip() != "." else None
+        if output_dest:
+            dest_p = Path(output_dest)
+            if dest_p.is_dir():
+                output_dest = str(dest_p / "daily_reports.json")
 
         pipeline = ScraperPipeline()
         summary = pipeline.run(
@@ -548,6 +666,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             dry_run=args.dry_run,
             verbose=args.verbose,
             web_dir=args.web_dir,
+            target_date=args.target_date,
         )
         if summary.get("total_scraped", 0) == 0:
             logger.warning("Scraping completed with 0 posts harvested across sources (network outage or empty boards). Exiting gracefully.")

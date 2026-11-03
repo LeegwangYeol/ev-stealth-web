@@ -215,6 +215,78 @@ class TestValidationScriptsGracefulMissingFields(unittest.TestCase):
             self.assertTrue(any("Expected dict" in e for e in errors))
             self.assertTrue(any("Missing category" in e for e in errors))
 
+    def test_validate_subsidy_data_detects_quota_and_percentage_anomalies(self) -> None:
+        """validate_subsidy_data detects quota mismatch, bad percentage bounds, and corrupted municipalities."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            f_bad = tmp / "bad_quotas.json"
+
+            # Create payload with deliberate mathematical anomalies
+            bad_payload = {
+                "metadata": {"version": "1.0.0", "generated_at": "2026-01-01", "policy_year": 2026, "currency": "KRW"},
+                "alert_thresholds": {
+                    "HEALTHY": {"min_percent": 80.0, "max_percent": 50.0, "severity": "HEALTHY"},  # inverted!
+                    "CAUTION": {"min_percent": 50.0, "max_percent": 80.0, "severity": "CAUTION"},
+                    "WARNING": {"min_percent": 80.0, "max_percent": 95.0, "severity": "WARNING"},
+                    "CRITICAL": {"min_percent": 95.0, "max_percent": 100.0, "severity": "CRITICAL"},
+                    "DEPLETED": {"min_percent": 100.0, "max_percent": 200.0, "severity": "DEPLETED"},
+                },
+                "nationwide_summary": {
+                    "total_announced_units": 1000,
+                    "total_applied_units": 800,
+                    "total_remaining_units": 99999,  # quota mismatch!
+                    "nationwide_depletion_rate": 20.0,  # rate mismatch: 800/1000 = 80%!
+                },
+                "regions": [
+                    {
+                        "region_id": "KR-11",
+                        "name_ko": "서울특별시",
+                        "categories": {
+                            "passenger": {
+                                "announced_units": 500,
+                                "applied_units": 400,
+                                "remaining_units": 5000,  # mismatch!
+                                "depletion_rate": 10.0,  # mismatch!
+                                "status": "UNKNOWN_STATUS",  # invalid status!
+                            },
+                            "commercial": {
+                                "announced_units": 100,
+                                "applied_units": 50,
+                                "remaining_units": 50,
+                                "depletion_rate": 50.0,
+                                "status": "HEALTHY",
+                            },
+                            "bus": {
+                                "announced_units": 50,
+                                "applied_units": 20,
+                                "remaining_units": 30,
+                                "depletion_rate": 40.0,
+                                "status": "HEALTHY",
+                            },
+                        },
+                        "municipalities": [
+                            {
+                                "name_ko": "강남구",
+                                "announced_units": 100,
+                                "applied_units": 90,
+                                "remaining_units": 500,  # mismatch!
+                                "depletion_rate": 10.0,  # mismatch!
+                                "status": "INVALID_TIER",
+                            }
+                        ],
+                    }
+                ],
+            }
+            f_bad.write_text(json.dumps(bad_payload), encoding="utf-8")
+            is_valid, errors, _ = validate_subsidy_data(f_bad)
+            self.assertFalse(is_valid)
+            self.assertTrue(any("invalid percentage bounds" in e for e in errors))
+            self.assertTrue(any("Nationwide quota mismatch" in e for e in errors))
+            self.assertTrue(any("Nationwide depletion rate" in e for e in errors))
+            self.assertTrue(any("Category 'passenger' quota mismatch" in e for e in errors))
+            self.assertTrue(any("Municipality '강남구' quota mismatch" in e for e in errors))
+            self.assertTrue(any("UNKNOWN_STATUS" in e for e in errors))
+
     def test_validate_models_matrix_handles_degenerate_records(self) -> None:
         """validate_models_matrix handles non-dict entries and missing specifications cleanly."""
         with tempfile.TemporaryDirectory() as tmpdir:

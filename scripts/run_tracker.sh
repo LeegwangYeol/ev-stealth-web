@@ -28,8 +28,10 @@ done
 SCRIPT_DIR="$(cd -P "$(dirname "${SOURCE}")" >/dev/null 2>&1 && pwd)"
 
 # 2. Locate Runner Script
-RUNNER_PY=""
-if [ -f "${SCRIPT_DIR}/run_tracker.py" ]; then
+RUNNER_PY="${RUNNER_PY:-}"
+if [ -n "${RUNNER_PY}" ] && [ -f "${RUNNER_PY}" ]; then
+    : # Keep user/environment-specified RUNNER_PY
+elif [ -f "${SCRIPT_DIR}/run_tracker.py" ]; then
     RUNNER_PY="${SCRIPT_DIR}/run_tracker.py"
 elif [ -f "${SCRIPT_DIR}/scripts/run_tracker.py" ]; then
     RUNNER_PY="${SCRIPT_DIR}/scripts/run_tracker.py"

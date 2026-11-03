@@ -2,6 +2,7 @@
 
 Encapsulates:
 - Executive markdown summary briefings for EV subsidy depletion monitoring.
+- Vehicle model pricing and regional subsidy matrix tables.
 - Defect incident briefings and community trend summaries.
 - Comprehensive statistical reporting and metric aggregation formatting.
 """
@@ -88,53 +89,119 @@ def _safe_sev(record: Any) -> float:
     return _safe_float_val(raw, 0.0)
 
 
+def format_currency_krw(amount: Any, unit: str = "auto") -> str:
+    """Format Korean Won (KRW) currency cleanly into '만 원' or '억 원' representations.
+
+    Args:
+        amount: Integer/float in KRW, or float in billion KRW (if unit='billion'/'억 원').
+        unit: 'auto', '만 원' ('man'), '억 원' ('billion'/'eok').
+
+    Returns:
+        Formatted string, e.g. '1,150만 원', '1,893.4억 원', '0원'.
+    """
+    if amount is None:
+        return "0원"
+    try:
+        f = float(amount)
+        if math.isnan(f) or math.isinf(f):
+            return "0원"
+    except (ValueError, TypeError, OverflowError):
+        return "0원"
+
+    unit_lower = str(unit).strip().lower()
+    if unit_lower in ("billion", "억 원", "억원", "eok"):
+        val_str = f"{f:,.1f}" if (f % 1 != 0) else f"{int(f):,}"
+        return f"{val_str}억 원"
+
+    if unit_lower in ("man", "만 원", "만원"):
+        man_val = f / 10_000
+        val_str = f"{man_val:,.1f}" if (man_val % 1 != 0) else f"{int(man_val):,}"
+        return f"{val_str}만 원"
+
+    # auto mode
+    if abs(f) >= 100_000_000:  # >= 1억 원
+        eok_val = f / 100_000_000
+        val_str = f"{eok_val:,.1f}" if (eok_val % 1 != 0) else f"{int(eok_val):,}"
+        return f"{val_str}억 원"
+    elif abs(f) >= 10_000:  # >= 1만 원
+        man_val = f / 10_000
+        val_str = f"{man_val:,.1f}" if (man_val % 1 != 0) else f"{int(man_val):,}"
+        return f"{val_str}만 원"
+    else:
+        return f"{int(f):,}원"
+
+
+def format_percentage(val: Any, decimals: int = 1) -> str:
+    """Safely format percentage value with specified decimal precision."""
+    f = _safe_float_val(val, 0.0)
+    if decimals <= 0 or (f % 1 == 0 and decimals == 0):
+        return f"{int(f)}%"
+    fmt = f"{{:,.{decimals}f}}%"
+    return fmt.format(f)
+
+
 class ReportGenerator:
     """Encapsulates executive markdown briefing and statistical reporting formatting."""
 
     _safe_sev = staticmethod(_safe_sev)
+    format_currency_krw = staticmethod(format_currency_krw)
+    format_percentage = staticmethod(format_percentage)
 
     def __init__(self) -> None:
         pass
 
     def generate_subsidy_briefing(
         self,
-        payload: SubsidyPayload,
+        payload: Optional[Union[SubsidyPayload, Dict[str, Any], Any]],
         fallback_used: bool = False,
+        include_models: bool = False,
     ) -> str:
         """Generate formatted executive markdown summary briefing for subsidy depletion.
 
         Maintains exact statutory formatting expected by downstream systems and CLI.
         """
-        summary = _get_field(payload, "nationwide_summary", None) or payload
+        summary = _get_field(payload, "nationwide_summary", None) or payload or {}
         metadata = _get_field(payload, "metadata", None)
         gen_time = (
             _get_field(metadata, "generated_at", None)
             or _get_field(metadata, "updated_at", None)
             or _get_field(payload, "generated_at", None)
-            or _get_field(payload, "updated_at", "")
+            or _get_field(payload, "updated_at", None)
+            or datetime.now(timezone.utc).isoformat()
         )
 
         def _get_passenger_remaining(region: Any) -> int:
             cats = _get_field(region, "categories", None)
-            if not isinstance(cats, dict):
-                return 0
-            p_cat = cats.get("passenger")
-            if p_cat is None:
-                return 0
-            val = _metric_val(p_cat, "remaining_units", 0)
-            return max(0, _safe_int_val(val, 0))
+            if isinstance(cats, dict):
+                p_cat = cats.get("passenger")
+                if p_cat is not None:
+                    return max(0, _safe_int_val(_metric_val(p_cat, "remaining_units", 0)))
+            elif isinstance(cats, (list, tuple)):
+                for c in cats:
+                    c_name = str(_get_field(c, "category", "") or _get_field(c, "name", "")).strip().lower()
+                    if c_name == "passenger":
+                        return max(0, _safe_int_val(_metric_val(c, "remaining_units", 0)))
+            return 0
 
         regions_list = _get_field(payload, "regions", []) or []
-        critical_regions = [
-            f"{_get_field(r, 'name_ko', '')} ({_safe_float_val(_get_field(r, 'overall_depletion_rate', 0.0))}%, 잔여: {_get_passenger_remaining(r):,}대)"
-            for r in regions_list
-            if str(_get_field(r, "overall_status", "")).strip().upper() in ("CRITICAL", "DEPLETED")
-        ]
-        warning_regions = [
-            f"{_get_field(r, 'name_ko', '')} ({_safe_float_val(_get_field(r, 'overall_depletion_rate', 0.0))}%, 잔여: {_get_passenger_remaining(r):,}대)"
-            for r in regions_list
-            if str(_get_field(r, "overall_status", "")).strip().upper() == "WARNING"
-        ]
+        if not isinstance(regions_list, (list, tuple)):
+            regions_list = []
+
+        critical_regions = []
+        warning_regions = []
+        for r in regions_list:
+            if not r:
+                continue
+            name = _get_field(r, 'name_ko', '') or _get_field(r, 'region_id', '') or '지자체'
+            rate_val = _safe_float_val(_get_field(r, 'overall_depletion_rate', 0.0))
+            rem_units = _get_passenger_remaining(r)
+            status_raw = str(_get_field(r, "overall_status", "")).strip().upper()
+
+            label = f"{name} ({rate_val}%, 잔여: {rem_units:,}대)"
+            if status_raw in ("CRITICAL", "DEPLETED"):
+                critical_regions.append(label)
+            elif status_raw == "WARNING":
+                warning_regions.append(label)
 
         category_totals = _get_field(summary, "category_totals", {}) or {}
         if not isinstance(category_totals, dict):
@@ -145,11 +212,21 @@ class ReportGenerator:
 
         tot_ann = _safe_int_val(_get_field(summary, "total_announced_units", 0))
         tot_app = _safe_int_val(_get_field(summary, "total_applied_units", 0))
+
         disb_b = _safe_float_val(_get_field(summary, "disbursed_budget_billion_krw", 0.0))
         tot_b = _safe_float_val(_get_field(summary, "total_budget_billion_krw", 0.0))
+        if disb_b == 0.0:
+            disb_krw = _get_field(summary, "disbursed_budget_krw", 0)
+            if disb_krw:
+                disb_b = _safe_float_val(disb_krw) / 1_000_000_000
+        if tot_b == 0.0:
+            tot_krw = _get_field(summary, "total_budget_krw", 0)
+            if tot_krw:
+                tot_b = _safe_float_val(tot_krw) / 1_000_000_000
+
         disb_str = f"{disb_b:,.1f}" if (disb_b % 1 != 0) else f"{int(disb_b):,}"
         tot_str = f"{tot_b:,.1f}" if (tot_b % 1 != 0) else f"{int(tot_b):,}"
-        dep_rate = _safe_float_val(_get_field(summary, "nationwide_depletion_rate", 0.0))
+        dep_rate = _safe_float_val(_get_field(summary, "nationwide_depletion_rate", _get_field(summary, "depletion_rate", 0.0)))
 
         p_ann = _safe_int_val(_metric_val(p_info, "announced_units", 0))
         p_app = _safe_int_val(_metric_val(p_info, "applied_units", 0))
@@ -201,6 +278,90 @@ class ReportGenerator:
             "- 대구, 울산, 경북, 제주는 보조금 마감 직전(소진율 96%~99%)입니다. 실계약자는 대기 순번 및 제조사 즉시 출고 재고를 확인하십시오.",
             "- 전남(신안 1,150만 원), 경북(울릉 1,100만 원), 충남(태안 900만 원) 등 군 단위 지역은 고액 보조금이 지급되나 거주기간 요건(30~90일)을 확인해야 합니다.",
         ]
+
+        if include_models:
+            lines.extend([
+                "",
+                self.generate_vehicle_subsidy_briefing(payload),
+            ])
+
+        return "\n".join(lines)
+
+    def generate_vehicle_subsidy_briefing(
+        self,
+        payload_or_models: Optional[Union[SubsidyPayload, List[Any], Any]],
+        target_region: str = "KR-11",
+    ) -> str:
+        """Generate formatted markdown table of popular EV models with national & regional subsidies."""
+        if payload_or_models is None:
+            models = []
+        elif isinstance(payload_or_models, list):
+            models = payload_or_models
+        else:
+            models = _get_field(payload_or_models, "popular_models_matrix", None)
+            if models is None:
+                models = _get_field(payload_or_models, "vehicles", [])
+        if not isinstance(models, (list, tuple)):
+            models = []
+
+        region_names = {
+            "KR-11": "서울특별시",
+            "KR-26": "부산광역시",
+            "KR-27": "대구광역시",
+            "KR-28": "인천광역시",
+            "KR-29": "광주광역시",
+            "KR-30": "대전광역시",
+            "KR-31": "울산광역시",
+            "KR-50": "세종특별자치시",
+            "KR-41": "경기도",
+            "KR-49": "제주특별자치도",
+        }
+        reg_name = region_names.get(target_region, target_region)
+
+        lines = [
+            f"## 🚗 주요 인기 전기차 국비·지방비 보조금 및 실구매가 매트릭스 (기준: {reg_name})",
+        ]
+
+        if not models:
+            lines.append("  - 등록된 주요 인기 차종 정보가 없습니다.")
+            return "\n".join(lines)
+
+        lines.extend([
+            "| 제조사 | 모델명 | 기본가격 | 국비 보조금 | 지방비 보조금 | 총 보조금 | 실구매가 (체감가) |",
+            "|---|---|---|---|---|---|---|",
+        ])
+
+        for m in models:
+            if not m:
+                continue
+            maker = str(_get_field(m, "manufacturer") or _get_field(m, "brand") or "미지정")
+            name = str(_get_field(m, "name_ko") or _get_field(m, "name") or "미지정 차종")
+            base_price = max(0, _safe_int_val(_get_field(m, "base_price_krw", _get_field(m, "price", 0))))
+            nat_sub = max(0, _safe_int_val(_get_field(m, "national_subsidy_krw", _get_field(m, "national_subsidy", 0))))
+
+            local_sub = 0
+            if hasattr(m, "get_regional_subsidy") and callable(getattr(m, "get_regional_subsidy")):
+                local_sub = m.get_regional_subsidy(target_region)
+            else:
+                samples = _get_field(m, "regional_subsidy_samples", {}) or {}
+                if isinstance(samples, dict):
+                    entry = samples.get(target_region, {})
+                    if isinstance(entry, dict):
+                        local_sub = max(0, _safe_int_val(entry.get("local_subsidy_krw", 0)))
+                    elif isinstance(entry, (int, float)):
+                        local_sub = max(0, _safe_int_val(entry))
+
+            total_sub = nat_sub + local_sub
+            final_price = max(0, base_price - total_sub)
+
+            base_str = format_currency_krw(base_price, unit="만 원")
+            nat_str = format_currency_krw(nat_sub, unit="만 원")
+            loc_str = format_currency_krw(local_sub, unit="만 원")
+            tot_str = format_currency_krw(total_sub, unit="만 원")
+            fin_str = format_currency_krw(final_price, unit="만 원")
+
+            lines.append(f"| {maker} | {name} | {base_str} | {nat_str} | {loc_str} | {tot_str} | **{fin_str}** |")
+
         return "\n".join(lines)
 
     def generate_defect_briefing(
@@ -208,13 +369,17 @@ class ReportGenerator:
         report_data: Union[Dict[str, Any], List[Any], Any],
     ) -> str:
         """Generate executive markdown summary briefing for daily EV defect reports."""
-        if isinstance(report_data, list):
+        if report_data is None:
+            reports = []
+            stats = {}
+            gen_time = datetime.now(timezone.utc).isoformat()
+        elif isinstance(report_data, list):
             reports = report_data
             stats = {}
             gen_time = datetime.now(timezone.utc).isoformat()
         else:
-            reports = _get_field(report_data, "reports", [])
-            stats = _get_field(report_data, "statistics", {})
+            reports = _get_field(report_data, "reports", []) or []
+            stats = _get_field(report_data, "statistics", {}) or {}
             gen_time = _get_field(report_data, "generated_at", datetime.now(timezone.utc).isoformat())
 
         total_reports = len(reports)
@@ -273,10 +438,12 @@ class ReportGenerator:
 
     def generate_statistical_report(
         self,
-        records: List[Any],
+        records: Optional[List[Any]],
         summary_stats: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Encapsulate statistical reporting formatting into publication-grade Markdown."""
+        if records is None:
+            records = []
         total_records = len(records)
         stats = summary_stats or {}
 
@@ -348,14 +515,15 @@ class ReportGenerator:
         subsidy_payload: Optional[SubsidyPayload] = None,
         defect_reports: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None,
         fallback_used: bool = False,
+        include_models: bool = False,
     ) -> str:
         """Combine subsidy status and defect report highlights into a unified executive markdown document."""
         sections: List[str] = []
         if subsidy_payload is not None:
-            sections.append(self.generate_subsidy_briefing(subsidy_payload, fallback_used=fallback_used))
+            sections.append(self.generate_subsidy_briefing(subsidy_payload, fallback_used=fallback_used, include_models=include_models))
         if defect_reports is not None:
             sections.append(self.generate_defect_briefing(defect_reports))
         return "\n\n---\n\n".join(sections)
 
 
-__all__ = ["ReportGenerator"]
+__all__ = ["ReportGenerator", "format_currency_krw", "format_percentage"]

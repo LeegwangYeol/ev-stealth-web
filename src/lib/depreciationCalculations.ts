@@ -909,8 +909,10 @@ export function calculateDepreciation(
   }
 
   // 2. Warranty Cliff
-  const remainingWarrantyYears = model.warranty.years - years;
-  const remainingWarrantyKm = model.warranty.km - mileageKm;
+  const warrantyYears = model?.warranty?.years ?? 8;
+  const warrantyKm = model?.warranty?.km ?? 160000;
+  const remainingWarrantyYears = warrantyYears - years;
+  const remainingWarrantyKm = warrantyKm - mileageKm;
   const isExpired = remainingWarrantyYears <= 0 || remainingWarrantyKm <= 0;
   const isApproachingCliff =
     !isExpired && (remainingWarrantyYears <= 2 || remainingWarrantyKm <= 25000);
@@ -924,8 +926,9 @@ export function calculateDepreciation(
   }
 
   // 3. Chemistry Aging Adjustment
-  let batteryChemistryBonus = model.factor_weights.chemistry_aging;
-  if (model.battery_specs.chemistry.includes('LFP')) {
+  const modelChemistry = model?.battery_specs?.chemistry ?? 'NCM_811';
+  let batteryChemistryBonus = model?.factor_weights?.chemistry_aging ?? 0;
+  if (modelChemistry.includes('LFP')) {
     // Smooth monotonic ramp from year 2.0 to 3.0 to ensure discrete chemistry bonuses never invert the depreciation curve
     const lfpBonusRamp = clamp(years - 2.0, 0.0, 1.0);
     batteryChemistryBonus += 0.01 * lfpBonusRamp;
@@ -934,7 +937,7 @@ export function calculateDepreciation(
   // 4. Winter Season Adjustment
   let winterAdjustment = 0;
   if (winterSeason) {
-    if (model.battery_specs.chemistry.includes('LFP')) {
+    if (modelChemistry.includes('LFP')) {
       winterAdjustment = -0.035;
     } else {
       winterAdjustment = -0.015;
@@ -942,8 +945,8 @@ export function calculateDepreciation(
   }
 
   // 5. Hardware Architecture & OTA
-  const architectureAdjustment = model.factor_weights.architecture_800v;
-  const otaAdjustment = model.factor_weights.ota_maturity;
+  const architectureAdjustment = model?.factor_weights?.architecture_800v ?? 0;
+  const otaAdjustment = model?.factor_weights?.ota_maturity ?? 0;
 
   // Combine Total Adjustments
   const totalAdjustmentPct =
@@ -961,12 +964,19 @@ export function calculateDepreciation(
     99.0
   );
 
+  const parsedCustomPrice =
+    typeof customPurchasePriceKrw === 'number'
+      ? customPurchasePriceKrw
+      : typeof customPurchasePriceKrw === 'string' && (customPurchasePriceKrw as string).trim() !== ''
+      ? Number((customPurchasePriceKrw as string).trim())
+      : NaN;
+
   const rawBasePurchasePrice =
-    Number.isFinite(customPurchasePriceKrw) && (customPurchasePriceKrw as number) >= 0
-      ? (customPurchasePriceKrw as number)
+    Number.isFinite(parsedCustomPrice) && parsedCustomPrice >= 0
+      ? parsedCustomPrice
       : priceBasis === 'effective'
-      ? model.net_purchase_price_krw
-      : model.msrp_krw_baseline;
+      ? (model?.net_purchase_price_krw ?? 48_000_000)
+      : (model?.msrp_krw_baseline ?? 55_000_000);
 
   const basePurchasePriceKrw = Math.min(10_000_000_000, Math.max(0, rawBasePurchasePrice));
 
@@ -985,7 +995,7 @@ export function calculateDepreciation(
     adjustedResidualPct,
     estimatedResidualPriceKrw,
     depreciationAmountKrw,
-    defenseTier: model.resale_defense_tier,
+    defenseTier: model?.resale_defense_tier ?? 'B',
     factorAdjustments: {
       warrantyCliffPenalty: Math.round(warrantyCliffPenalty * 1000) / 10,
       batteryChemistryBonus: Math.round(batteryChemistryBonus * 1000) / 10,
@@ -1001,8 +1011,8 @@ export function calculateDepreciation(
       remainingYears: Math.max(0, Math.round(remainingWarrantyYears * 10) / 10),
       remainingKm: Math.max(0, remainingWarrantyKm),
     },
-    keyPros: model.key_pros_resale,
-    keyCons: model.key_cons_resale,
+    keyPros: model?.key_pros_resale ?? '데이터 동기화 완료',
+    keyCons: model?.key_cons_resale ?? '정기 점검 필요',
   };
 }
 
@@ -1042,10 +1052,28 @@ export function simulateBatteryHealth(
     DEFAULT_CHEMISTRY_PROFILES[chemistryKey] ||
     DEFAULT_CHEMISTRY_PROFILES.NCM_811;
 
-  const packCapacityKwh = safeParams.packCapacityKwh ?? 77.4;
-  const safeAnnualKm = Number.isFinite(annualKm) && annualKm >= 0 ? annualKm : 15000;
-  const rawMileage = Number.isFinite(inputTotalKm)
-    ? (inputTotalKm as number)
+  const parsedPackCapacity =
+    typeof safeParams.packCapacityKwh === 'number'
+      ? safeParams.packCapacityKwh
+      : typeof safeParams.packCapacityKwh === 'string' && (safeParams.packCapacityKwh as string).trim() !== ''
+      ? Number((safeParams.packCapacityKwh as string).trim())
+      : 77.4;
+  const packCapacityKwh = Number.isFinite(parsedPackCapacity) && parsedPackCapacity > 0 ? parsedPackCapacity : 77.4;
+
+  const parsedAnnualKm = typeof annualKm === 'number'
+    ? annualKm
+    : typeof annualKm === 'string' && (annualKm as string).trim() !== ''
+    ? Number((annualKm as string).trim())
+    : NaN;
+  const safeAnnualKm = Number.isFinite(parsedAnnualKm) && parsedAnnualKm >= 0 ? parsedAnnualKm : 15000;
+
+  const parsedInputTotalKm = typeof inputTotalKm === 'number'
+    ? inputTotalKm
+    : typeof inputTotalKm === 'string' && (inputTotalKm as string).trim() !== ''
+    ? Number((inputTotalKm as string).trim())
+    : NaN;
+  const rawMileage = Number.isFinite(parsedInputTotalKm)
+    ? parsedInputTotalKm
     : safeYears * safeAnnualKm;
   const safeMileage = Math.max(0, rawMileage);
 
@@ -1053,9 +1081,27 @@ export function simulateBatteryHealth(
   const R_GAS = 8.314462;
   const T_REF_K = 298.15;
   const SOC_REF = 0.5;
-  const safeTempC = Number.isFinite(ambientTempC) ? ambientTempC : 25.0;
-  const safeStorageSoc = Number.isFinite(storageSoc) ? clamp(storageSoc, 0.0, 1.0) : 0.5;
-  const safeDcfcRatio = Number.isFinite(dcfcRatio) ? clamp(dcfcRatio, 0.0, 1.0) : 0.25;
+
+  const parsedAmbientTemp = typeof ambientTempC === 'number'
+    ? ambientTempC
+    : typeof ambientTempC === 'string' && (ambientTempC as string).trim() !== ''
+    ? Number((ambientTempC as string).trim())
+    : NaN;
+  const safeTempC = Number.isFinite(parsedAmbientTemp) ? parsedAmbientTemp : 25.0;
+
+  const parsedStorageSoc = typeof storageSoc === 'number'
+    ? storageSoc
+    : typeof storageSoc === 'string' && (storageSoc as string).trim() !== ''
+    ? Number((storageSoc as string).trim())
+    : NaN;
+  const safeStorageSoc = Number.isFinite(parsedStorageSoc) ? clamp(parsedStorageSoc, 0.0, 1.0) : 0.5;
+
+  const parsedDcfcRatio = typeof dcfcRatio === 'number'
+    ? dcfcRatio
+    : typeof dcfcRatio === 'string' && (dcfcRatio as string).trim() !== ''
+    ? Number((dcfcRatio as string).trim())
+    : NaN;
+  const safeDcfcRatio = Number.isFinite(parsedDcfcRatio) ? clamp(parsedDcfcRatio, 0.0, 1.0) : 0.25;
   const tempK = Math.max(1.0, safeTempC + 273.15);
 
   const arrheniusFactor = Math.exp(
@@ -1074,13 +1120,18 @@ export function simulateBatteryHealth(
       : kCal * Math.pow(Math.max(0.1, safeYears), chemProfile.calendar_time_exponent_z);
 
   // B. Cyclic Aging via Mechanical Strain & DCFC Factor
+  const parsedEfficiency = typeof vehicleEfficiencyKmPerKwh === 'number'
+    ? vehicleEfficiencyKmPerKwh
+    : typeof vehicleEfficiencyKmPerKwh === 'string' && (vehicleEfficiencyKmPerKwh as string).trim() !== ''
+    ? Number((vehicleEfficiencyKmPerKwh as string).trim())
+    : NaN;
   const safeEfficiency =
-    Number.isFinite(vehicleEfficiencyKmPerKwh) && (vehicleEfficiencyKmPerKwh as number) > 0
-      ? (vehicleEfficiencyKmPerKwh as number)
+    Number.isFinite(parsedEfficiency) && parsedEfficiency > 0
+      ? parsedEfficiency
       : 5.2;
   const safeCapacity =
-    Number.isFinite(packCapacityKwh) && (packCapacityKwh as number) > 0
-      ? (packCapacityKwh as number)
+    Number.isFinite(packCapacityKwh) && packCapacityKwh > 0
+      ? packCapacityKwh
       : 77.4;
 
   const energyThroughputKwh = safeMileage / Math.max(1.0, safeEfficiency);
@@ -1217,17 +1268,29 @@ export function calculateSubsidyClawback(
   nationalSubsidyKrw: number = 0,
   customTiers?: ClawbackTier[]
 ): ClawbackResult {
-  const parsedMonths = typeof heldMonths === 'number' ? heldMonths : Number(heldMonths);
+  const parsedMonths = typeof heldMonths === 'number'
+    ? heldMonths
+    : typeof heldMonths === 'string' && (heldMonths as string).trim() !== ''
+    ? Number((heldMonths as string).trim())
+    : NaN;
   const normalizedMonths = Number.isFinite(parsedMonths)
     ? Math.max(0, parsedMonths)
     : heldMonths === Infinity || parsedMonths === Infinity
     ? 24
     : 0;
-  const parsedLocal = typeof localSubsidyKrw === 'number' ? localSubsidyKrw : Number(localSubsidyKrw);
-  const safeLocalSubsidy = Number.isFinite(parsedLocal) ? Math.max(0, parsedLocal) : 0;
-  const parsedNational = typeof nationalSubsidyKrw === 'number' ? nationalSubsidyKrw : Number(nationalSubsidyKrw);
+  const parsedLocal = typeof localSubsidyKrw === 'number'
+    ? localSubsidyKrw
+    : typeof localSubsidyKrw === 'string' && (localSubsidyKrw as string).trim() !== ''
+    ? Number((localSubsidyKrw as string).trim())
+    : NaN;
+  const safeLocalSubsidy = Number.isFinite(parsedLocal) ? Math.max(0, Math.min(100_000_000, parsedLocal)) : 0;
+  const parsedNational = typeof nationalSubsidyKrw === 'number'
+    ? nationalSubsidyKrw
+    : typeof nationalSubsidyKrw === 'string' && (nationalSubsidyKrw as string).trim() !== ''
+    ? Number((nationalSubsidyKrw as string).trim())
+    : NaN;
   const safeNationalSubsidy = Number.isFinite(parsedNational)
-    ? Math.max(0, parsedNational)
+    ? Math.max(0, Math.min(100_000_000, parsedNational))
     : 0;
 
   const tiers = Array.isArray(customTiers) && customTiers.length > 0
@@ -1350,8 +1413,13 @@ export function calculateTcoComparison(
   customParams?: TcoParameters
 ): TcoResult {
   const params = customParams || DEFAULT_TCO_PARAMETERS;
-  const safeSlowRatio = Number.isFinite(slowChargingRatio)
-    ? clamp(slowChargingRatio, 0.0, 1.0)
+  const parsedSlowRatio = typeof slowChargingRatio === 'number'
+    ? slowChargingRatio
+    : typeof slowChargingRatio === 'string' && (slowChargingRatio as string).trim() !== ''
+    ? Number((slowChargingRatio as string).trim())
+    : NaN;
+  const safeSlowRatio = Number.isFinite(parsedSlowRatio)
+    ? clamp(parsedSlowRatio, 0.0, 1.0)
     : 0.7;
   const fastChargingRatio = 1.0 - safeSlowRatio;
 
@@ -1360,9 +1428,14 @@ export function calculateTcoComparison(
     safeSlowRatio * params.fuel_tariffs.ev_slow_charging_krw_per_kwh +
     fastChargingRatio * params.fuel_tariffs.ev_fast_charging_krw_per_kwh;
 
+  const parsedEvEff = typeof evEfficiencyKmPerKwh === 'number'
+    ? evEfficiencyKmPerKwh
+    : typeof evEfficiencyKmPerKwh === 'string' && (evEfficiencyKmPerKwh as string).trim() !== ''
+    ? Number((evEfficiencyKmPerKwh as string).trim())
+    : NaN;
   const safeEvEff =
-    Number.isFinite(evEfficiencyKmPerKwh) && evEfficiencyKmPerKwh > 0
-      ? evEfficiencyKmPerKwh
+    Number.isFinite(parsedEvEff) && parsedEvEff > 0
+      ? parsedEvEff
       : 5.2;
   const iceFuelEconomy = params.efficiency_baselines.ice_gasoline_economy_km_per_liter;
   const safeIceEff =
@@ -1374,9 +1447,14 @@ export function calculateTcoComparison(
 
   // 2. Base ICE Tax Calculation Function
   const calculateIceAnnualTax = (yearIndex: number): number => {
+    const parsedCc = typeof iceDisplacementCc === 'number'
+      ? iceDisplacementCc
+      : typeof iceDisplacementCc === 'string' && (iceDisplacementCc as string).trim() !== ''
+      ? Number((iceDisplacementCc as string).trim())
+      : NaN;
     const safeCc =
-      Number.isFinite(iceDisplacementCc) && iceDisplacementCc > 0
-        ? iceDisplacementCc
+      Number.isFinite(parsedCc) && parsedCc > 0
+        ? parsedCc
         : 1998;
     let ratePerCc = 200;
     if (safeCc <= 1000) {
@@ -1410,9 +1488,17 @@ export function calculateTcoComparison(
   let parkingTotalSavings = 0;
   let maintenanceTotalSavings = 0;
 
-  const parsedAnnualKm = typeof annualKm === 'number' ? annualKm : Number(annualKm);
-  const safeAnnualKm = Number.isFinite(parsedAnnualKm) && parsedAnnualKm >= 0 ? parsedAnnualKm : 15000;
-  const parsedYears = typeof years === 'number' ? years : Number(years);
+  const parsedAnnualKm = typeof annualKm === 'number'
+    ? annualKm
+    : typeof annualKm === 'string' && (annualKm as string).trim() !== ''
+    ? Number((annualKm as string).trim())
+    : NaN;
+  const safeAnnualKm = Number.isFinite(parsedAnnualKm) && parsedAnnualKm >= 0 ? Math.min(10_000_000, parsedAnnualKm) : 15000;
+  const parsedYears = typeof years === 'number'
+    ? years
+    : typeof years === 'string' && (years as string).trim() !== ''
+    ? Number((years as string).trim())
+    : NaN;
   const rawYears = Math.min(30, Number.isFinite(parsedYears) && parsedYears > 0 ? parsedYears : 1);
   const safeYears = Math.max(1, Math.round(rawYears));
   const fullYears = Math.floor(rawYears);

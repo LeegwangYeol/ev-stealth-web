@@ -19,22 +19,29 @@
 set -euo pipefail
 
 # 1. Canonical Physical Path Resolution (resolving symlinks)
-SOURCE="${BASH_SOURCE[0]}"
+SOURCE="${BASH_SOURCE[0]:-$0}"
 while [ -h "${SOURCE}" ]; do
     DIR="$(cd -P "$(dirname "${SOURCE}")" >/dev/null 2>&1 && pwd)"
     SOURCE="$(readlink "${SOURCE}")"
-    [[ ${SOURCE} != /* ]] && SOURCE="${DIR}/${SOURCE}"
+    case "${SOURCE}" in
+        /*) ;;
+        *) SOURCE="${DIR}/${SOURCE}" ;;
+    esac
 done
 SCRIPT_DIR="$(cd -P "$(dirname "${SOURCE}")" >/dev/null 2>&1 && pwd)"
 
 # 2. Locate Runner Script
-RUNNER_PY=""
-if [ -f "${SCRIPT_DIR}/run_scraper.py" ]; then
+RUNNER_PY="${RUNNER_PY:-}"
+if [ -n "${RUNNER_PY}" ] && [ -f "${RUNNER_PY}" ]; then
+    : # Keep user/environment-specified RUNNER_PY
+elif [ -f "${SCRIPT_DIR}/run_scraper.py" ]; then
     RUNNER_PY="${SCRIPT_DIR}/run_scraper.py"
 elif [ -f "${SCRIPT_DIR}/scripts/run_scraper.py" ]; then
     RUNNER_PY="${SCRIPT_DIR}/scripts/run_scraper.py"
 elif [ -f "${SCRIPT_DIR}/../run_scraper.py" ]; then
     RUNNER_PY="${SCRIPT_DIR}/../run_scraper.py"
+elif [ -f "${SCRIPT_DIR}/../../run_scraper.py" ]; then
+    RUNNER_PY="${SCRIPT_DIR}/../../run_scraper.py"
 elif [ -f "${SCRIPT_DIR}/teamwork_projects/ev_daily_monitor_bot/run_scraper.py" ]; then
     RUNNER_PY="${SCRIPT_DIR}/teamwork_projects/ev_daily_monitor_bot/run_scraper.py"
 elif [ -f "${SCRIPT_DIR}/../teamwork_projects/ev_daily_monitor_bot/run_scraper.py" ]; then
@@ -43,16 +50,18 @@ elif [ -f "${SCRIPT_DIR}/ev-stealth-web/run_scraper.py" ]; then
     RUNNER_PY="${SCRIPT_DIR}/ev-stealth-web/run_scraper.py"
 elif [ -f "${SCRIPT_DIR}/../ev-stealth-web/run_scraper.py" ]; then
     RUNNER_PY="${SCRIPT_DIR}/../ev-stealth-web/run_scraper.py"
+elif [ -f "${SCRIPT_DIR}/../../ev-stealth-web/run_scraper.py" ]; then
+    RUNNER_PY="${SCRIPT_DIR}/../../ev-stealth-web/run_scraper.py"
 fi
 
 if [ -z "${RUNNER_PY}" ] || [ ! -f "${RUNNER_PY}" ]; then
-    echo "[ERROR] Could not locate 'run_scraper.py' entrypoint." >&2
+    echo "[ERROR] Could not locate 'run_scraper.py' entrypoint in ${SCRIPT_DIR}." >&2
     exit 2
 fi
 
 # 3. Resolve Python Interpreter (verifying executable & Python 3.8+ compatibility)
 is_valid_python() {
-    local candidate="$1"
+    candidate="$1"
     if [ -z "${candidate}" ]; then
         return 1
     fi

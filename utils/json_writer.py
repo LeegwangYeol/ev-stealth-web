@@ -229,6 +229,9 @@ def write_daily_reports(
         sanitize_nan_inf,
     )
 
+    if not output_path or not str(output_path).strip():
+        raise ValueError("output_path cannot be empty")
+
     dest_path = Path(output_path).resolve()
     dir_path = dest_path.parent
     dir_path.mkdir(parents=True, exist_ok=True)
@@ -346,8 +349,11 @@ def read_daily_reports(
     If quarantine_corrupted is True and the file exists but has corrupt JSON or schema,
     quarantines the file to .corrupt_<timestamp>.json and returns empty data dict.
     """
+    if not path or not str(path).strip():
+        return {"reports": [], "statistics": {}}
+
     p = Path(path)
-    if not p.exists():
+    if not p.exists() or p.is_dir():
         return {"reports": [], "statistics": {}}
 
     from tracker.atomic_writer import is_corrupted_or_quarantined_filename, quarantine_corrupted_file

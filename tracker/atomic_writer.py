@@ -30,6 +30,14 @@ try:
 except ImportError:
     fcntl = None  # type: ignore
 
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None  # type: ignore
+
+import shutil
+import uuid
+
 logger = logging.getLogger(__name__)
 
 
@@ -71,7 +79,10 @@ class FileLock:
                 return self
 
             os.makedirs(os.path.dirname(self.lock_path), exist_ok=True)
-            self.fd = os.open(self.lock_path, os.O_CREAT | os.O_RDWR, 0o644)
+            flags = os.O_CREAT | os.O_RDWR
+            if hasattr(os, "O_BINARY"):
+                flags |= os.O_BINARY
+            self.fd = os.open(self.lock_path, flags, 0o644)
             if fcntl is not None:
                 start_time = time.monotonic()
                 while True:
@@ -81,13 +92,15 @@ class FileLock:
                         try:
                             f_stat = os.fstat(self.fd)
                             p_stat = os.stat(self.lock_path)
-                            if f_stat.st_ino != p_stat.st_ino or f_stat.st_dev != p_stat.st_dev:
+                            if f_stat.st_ino != 0 and (
+                                f_stat.st_ino != p_stat.st_ino or f_stat.st_dev != p_stat.st_dev
+                            ):
                                 os.close(self.fd)
-                                self.fd = os.open(self.lock_path, os.O_CREAT | os.O_RDWR, 0o644)
+                                self.fd = os.open(self.lock_path, flags, 0o644)
                                 continue
                         except OSError:
                             os.close(self.fd)
-                            self.fd = os.open(self.lock_path, os.O_CREAT | os.O_RDWR, 0o644)
+                            self.fd = os.open(self.lock_path, flags, 0o644)
                             continue
                         break
                     except (BlockingIOError, OSError) as exc:
@@ -96,6 +109,24 @@ class FileLock:
                         if (time.monotonic() - start_time) >= self.timeout:
                             logger.warning(
                                 "Timeout (%.1fs) acquiring lock on %s. Proceeding defensively.",
+                                self.timeout,
+                                self.lock_path,
+                            )
+                            break
+                        time.sleep(self.poll_interval)
+            elif msvcrt is not None:
+                start_time = time.monotonic()
+                while True:
+                    try:
+                        os.lseek(self.fd, 0, os.SEEK_SET)
+                        msvcrt.locking(self.fd, msvcrt.LK_NBLCK, 1)
+                        break
+                    except (BlockingIOError, OSError) as exc:
+                        if exc.errno not in (errno.EACCES, getattr(errno, "EDEADLK", 36), getattr(errno, "EAGAIN", 11)):
+                            raise
+                        if (time.monotonic() - start_time) >= self.timeout:
+                            logger.warning(
+                                "Timeout (%.1fs) acquiring Windows lock on %s. Proceeding defensively.",
                                 self.timeout,
                                 self.lock_path,
                             )
@@ -131,6 +162,12 @@ class FileLock:
                         fcntl.flock(fd_to_close, fcntl.LOCK_UN)
                     except OSError:
                         pass
+                elif msvcrt is not None:
+                    try:
+                        os.lseek(fd_to_close, 0, os.SEEK_SET)
+                        msvcrt.locking(fd_to_close, msvcrt.LK_UNLCK, 1)
+                    except OSError:
+                        pass
                 try:
                     os.close(fd_to_close)
                 except OSError:
@@ -149,7 +186,7 @@ def get_lock_path(target_path: Union[str, Path]) -> Path:
 
 def cleanup_stale_temp_files(
     directory: Union[str, Path],
-    prefix: str = ".tmp_subsidy_",
+    prefix: Union[str, tuple[str, ...], list[str]] = (".tmp_", ".tmp_subsidy_", ".tmp_daily_"),
     max_age_seconds: float = 3600.0,
 ) -> int:
     """Defensively unlink orphaned temporary files older than max_age_seconds."""
@@ -158,9 +195,10 @@ def cleanup_stale_temp_files(
         return 0
     cleaned = 0
     now = time.time()
+    prefixes = (prefix,) if isinstance(prefix, str) else tuple(prefix)
     try:
         for entry in d.iterdir():
-            if entry.name.startswith(prefix) and entry.is_file():
+            if any(entry.name.startswith(p) for p in prefixes) and entry.is_file():
                 try:
                     if (now - entry.stat().st_mtime) > max_age_seconds:
                         entry.unlink(missing_ok=True)
@@ -190,10 +228,11 @@ def quarantine_corrupted_file(
 
     Supports standard timestamped pattern (.corrupt_YYYYMMDD_HHMMSS_ffffff.json)
     and custom suffix isolation (.corrupted).
-    Guarantees POSIX directory fsync durability and standard permissions (0o644).
+    Guarantees atomic replace, cross-device EXDEV fallback, POSIX directory fsync durability,
+    and standard permissions (0o644).
     """
     p = Path(file_path)
-    if not p.exists():
+    if not p.exists() or p.is_dir():
         return None
     try:
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
@@ -206,7 +245,23 @@ def quarantine_corrupted_file(
         else:
             quarantine_path = p.with_name(f"{p.stem}.corrupt_{ts}{p.suffix}")
 
-        p.rename(quarantine_path)
+        try:
+            os.replace(str(p), str(quarantine_path))
+        except OSError as exc:
+            if exc.errno == errno.EXDEV:
+                shutil.copyfile(str(p), str(quarantine_path))
+                try:
+                    with open(quarantine_path, "a+b") as qf:
+                        os.fsync(qf.fileno())
+                except OSError:
+                    pass
+                try:
+                    os.unlink(str(p))
+                except OSError:
+                    pass
+            else:
+                raise
+
         try:
             os.chmod(quarantine_path, 0o644)
         except OSError:
@@ -229,8 +284,12 @@ def quarantine_corrupted_file(
         return None
 
 
-def sanitize_nan_inf(obj: Any) -> Any:
-    """Recursively convert float/Decimal NaN and Inf to 0.0 to guarantee RFC 8259 JSON compliance."""
+def sanitize_nan_inf(obj: Any, seen: Optional[set[int]] = None) -> Any:
+    """Recursively convert float/Decimal NaN and Inf to 0.0 to guarantee RFC 8259 JSON compliance.
+
+    Guards against circular reference cycles, non-string keys, complex numbers,
+    UUIDs, dates, and frozensets.
+    """
     if isinstance(obj, float):
         if math.isnan(obj) or math.isinf(obj):
             return 0.0
@@ -239,30 +298,97 @@ def sanitize_nan_inf(obj: Any) -> Any:
         if obj.is_nan() or obj.is_infinite():
             return 0.0
         return float(obj)
-    elif isinstance(obj, (dict, Mapping)):
-        return {k: sanitize_nan_inf(v) for k, v in obj.items()}
-    elif isinstance(obj, (list, tuple, set)):
-        return [sanitize_nan_inf(v) for v in obj]
+    elif isinstance(obj, complex):
+        real_val = 0.0 if (math.isnan(obj.real) or math.isinf(obj.real)) else float(obj.real)
+        imag_val = 0.0 if (math.isnan(obj.imag) or math.isinf(obj.imag)) else float(obj.imag)
+        return {"real": real_val, "imag": imag_val}
+    elif isinstance(obj, (bytes, bytearray)):
+        return obj.decode("utf-8", errors="replace")
+    elif isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    elif isinstance(obj, Path):
+        return str(obj)
+    elif isinstance(obj, Enum):
+        return obj.value
+    elif isinstance(obj, uuid.UUID):
+        return str(obj)
+
+    if isinstance(obj, (dict, Mapping)):
+        if seen is None:
+            seen = set()
+        obj_id = id(obj)
+        if obj_id in seen:
+            raise ValueError("Circular reference detected in dict structure")
+        seen.add(obj_id)
+        try:
+            res = {}
+            for k, v in obj.items():
+                if isinstance(k, float) and (math.isnan(k) or math.isinf(k)):
+                    sanitized_k = "0.0"
+                elif isinstance(k, (date, datetime)):
+                    sanitized_k = k.isoformat()
+                elif isinstance(k, Enum):
+                    sanitized_k = str(k.value)
+                elif isinstance(k, Path):
+                    sanitized_k = str(k)
+                elif isinstance(k, uuid.UUID):
+                    sanitized_k = str(k)
+                else:
+                    sanitized_k = k
+                res[sanitized_k] = sanitize_nan_inf(v, seen)
+            return res
+        finally:
+            seen.remove(obj_id)
+
+    elif isinstance(obj, (list, tuple, set, frozenset)):
+        if seen is None:
+            seen = set()
+        obj_id = id(obj)
+        if obj_id in seen:
+            raise ValueError("Circular reference detected in sequence structure")
+        seen.add(obj_id)
+        try:
+            return [sanitize_nan_inf(v, seen) for v in obj]
+        finally:
+            seen.remove(obj_id)
+
     return obj
 
 
 def _json_default(obj: Any) -> Any:
-    """Serialize Path, datetime, date, set, frozenset, Enum, dataclass, and to_dict objects to valid JSON primitives."""
+    """Serialize Path, datetime, date, set, frozenset, Enum, UUID, complex, dataclass, and custom dict objects."""
     if isinstance(obj, (datetime, date)):
         return obj.isoformat()
     if isinstance(obj, Path):
         return str(obj)
     if isinstance(obj, (set, frozenset)):
-        return list(obj)
+        return [sanitize_nan_inf(v) for v in obj]
     if isinstance(obj, Enum):
         return obj.value
-    import decimal
-    if isinstance(obj, decimal.Decimal):
+    if isinstance(obj, Decimal):
         if obj.is_nan() or obj.is_infinite():
             return 0.0
         return float(obj)
+    if isinstance(obj, complex):
+        real_val = 0.0 if (math.isnan(obj.real) or math.isinf(obj.real)) else float(obj.real)
+        imag_val = 0.0 if (math.isnan(obj.imag) or math.isinf(obj.imag)) else float(obj.imag)
+        return {"real": real_val, "imag": imag_val}
+    if isinstance(obj, (bytes, bytearray)):
+        return obj.decode("utf-8", errors="replace")
+    if isinstance(obj, uuid.UUID):
+        return str(obj)
     if hasattr(obj, "to_dict") and callable(getattr(obj, "to_dict")):
         return sanitize_nan_inf(obj.to_dict())
+    if hasattr(obj, "as_dict") and callable(getattr(obj, "as_dict")):
+        return sanitize_nan_inf(obj.as_dict())
+    if hasattr(obj, "model_dump") and callable(getattr(obj, "model_dump")):
+        return sanitize_nan_inf(obj.model_dump())
+    if hasattr(obj, "dict") and callable(getattr(obj, "dict")):
+        return sanitize_nan_inf(obj.dict())
+    if hasattr(obj, "tolist") and callable(getattr(obj, "tolist")):
+        return sanitize_nan_inf(obj.tolist())
+    if hasattr(obj, "item") and callable(getattr(obj, "item")):
+        return sanitize_nan_inf(obj.item())
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         return sanitize_nan_inf(dataclasses.asdict(obj))
     if isinstance(obj, Mapping):
@@ -315,9 +441,15 @@ def atomic_write_json(
     dest_dir = dest.parent
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    # Convert object with to_dict if present
+    # Convert object with to_dict / as_dict / model_dump / dataclass if present
     if hasattr(data, "to_dict") and callable(getattr(data, "to_dict")):
         payload = data.to_dict()
+    elif hasattr(data, "as_dict") and callable(getattr(data, "as_dict")):
+        payload = data.as_dict()
+    elif hasattr(data, "model_dump") and callable(getattr(data, "model_dump")):
+        payload = data.model_dump()
+    elif dataclasses.is_dataclass(data) and not isinstance(data, type):
+        payload = dataclasses.asdict(data)
     else:
         payload = data
 
@@ -372,8 +504,25 @@ def atomic_write_json(
                 except OSError:
                     pass
 
-            os.replace(temp_name, dest)
-            temp_name = None  # Replaced successfully
+            try:
+                os.replace(temp_name, dest)
+            except OSError as exc:
+                if exc.errno == errno.EXDEV:
+                    # Fallback for cross-device or overlayfs filesystems
+                    shutil.copyfile(temp_name, str(dest))
+                    try:
+                        with open(dest, "a+b") as df:
+                            os.fsync(df.fileno())
+                    except OSError:
+                        pass
+                    try:
+                        os.unlink(temp_name)
+                    except OSError:
+                        pass
+                else:
+                    raise
+
+            temp_name = None  # Replaced or copied successfully
 
             if preserve_mtime is not None:
                 try:
@@ -393,6 +542,12 @@ def atomic_write_json(
 
             logger.debug("Atomically wrote %s", dest)
             return dest
+        except OSError as e:
+            if e.errno in (errno.ENOSPC, getattr(errno, "EDQUOT", errno.ENOSPC)):
+                logger.error("Disk space or quota exhausted (errno %d) during atomic write to %s: %s", e.errno, dest, e)
+            else:
+                logger.error("Failed atomic write to %s: %s", dest, e)
+            raise
         except Exception as e:
             logger.error("Failed atomic write to %s: %s", dest, e)
             raise

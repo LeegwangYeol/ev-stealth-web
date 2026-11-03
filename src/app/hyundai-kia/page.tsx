@@ -3,6 +3,7 @@ import Link from 'next/link';
 import JsonLd from '@/components/JsonLd';
 
 export const dynamic = 'force-static';
+export const revalidate = false;
 
 const hyundaiKiaJsonLd = {
   "@context": "https://schema.org",
@@ -10,6 +11,9 @@ const hyundaiKiaJsonLd = {
   "headline": "현대/기아 전기차 연식별 결함 및 구매 가이드",
   "description": "아이오닉5, EV6, EV9 등 현대/기아 전기차 연식별(2021~2026) ICCU 결함, 고질병 분석 및 피해야 할 연식 가이드",
   "url": "https://ev-stealth-web.vercel.app/hyundai-kia",
+  "inLanguage": "ko-KR",
+  "datePublished": "2026-01-01T00:00:00+09:00",
+  "dateModified": "2026-11-01T00:00:00+09:00",
   "author": {
     "@type": "Organization",
     "name": "Global EV Hub",
@@ -50,6 +54,8 @@ export const metadata: Metadata = {
     siteName: 'Global EV Hub',
     locale: 'ko_KR',
     type: 'article',
+    publishedTime: '2026-01-01T00:00:00+09:00',
+    modifiedTime: '2026-11-01T00:00:00+09:00',
   },
   twitter: {
     card: 'summary_large_image',
@@ -60,7 +66,7 @@ export const metadata: Metadata = {
 
 export default function HyundaiKiaPage() {
   return (
-    <div className="space-y-8 py-10 max-w-4xl mx-auto">
+    <article className="space-y-8 py-6 sm:py-10 max-w-4xl mx-auto">
       <JsonLd data={hyundaiKiaJsonLd} />
       <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold border-b pb-4 text-slate-900">
         현대/기아 연식별 구매 가이드 (피해야 할 연식)
@@ -242,6 +248,6 @@ export default function HyundaiKiaPage() {
           </Link>
         </div>
       </section>
-    </div>
+    </article>
   );
 }

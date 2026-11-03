@@ -3,6 +3,7 @@ import Link from 'next/link';
 import JsonLd from '@/components/JsonLd';
 
 export const dynamic = 'force-static';
+export const revalidate = false;
 
 const latest2026JsonLd = {
   "@context": "https://schema.org",
@@ -10,6 +11,9 @@ const latest2026JsonLd = {
   "headline": "2026년식 KDM(국내 내수용) EV 초기 품질 리포트",
   "description": "올해 출고된 2026년식 최신 전기차(아이오닉5, EV3, 아이오닉9, 모델Y, 시라이언7)의 한국 차주 실제 평가와 초기 결함 분석",
   "url": "https://ev-stealth-web.vercel.app/2026-latest",
+  "inLanguage": "ko-KR",
+  "datePublished": "2026-01-01T00:00:00+09:00",
+  "dateModified": "2026-11-01T00:00:00+09:00",
   "author": {
     "@type": "Organization",
     "name": "Global EV Hub",
@@ -49,6 +53,8 @@ export const metadata: Metadata = {
     siteName: 'Global EV Hub',
     locale: 'ko_KR',
     type: 'article',
+    publishedTime: '2026-01-01T00:00:00+09:00',
+    modifiedTime: '2026-11-01T00:00:00+09:00',
   },
   twitter: {
     card: 'summary_large_image',
@@ -59,7 +65,7 @@ export const metadata: Metadata = {
 
 export default function Latest2026Page() {
   return (
-    <div className="space-y-10 max-w-4xl mx-auto py-6 sm:py-10">
+    <article className="space-y-10 max-w-4xl mx-auto py-6 sm:py-10">
       <JsonLd data={latest2026JsonLd} />
       <header className="border-b pb-6">
         <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">2026년식 KDM(국내 내수용) EV 초기 품질 리포트</h1>
@@ -69,8 +75,8 @@ export default function Latest2026Page() {
       </header>
 
       {/* 2026 최신 결함 긴급 주의보 콜아웃 (WCAG AA > 7:1 대비: text-yellow-800 on bg-yellow-50) */}
-      <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="2026년식 신차 초기 결함 긴급 주의보">
-        <h2 className="text-xl font-bold text-yellow-800 flex items-center gap-2">
+      <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="2026년식 신차 초기 결함 긴급 주의보" aria-labelledby="heading-alert-2026">
+        <h2 id="heading-alert-2026" className="text-xl font-bold text-yellow-800 flex items-center gap-2">
           <span aria-hidden="true">⚠️</span> 2026년식 신차 초기 결함 긴급 주의보 (CAUTION)
         </h2>
         <p className="text-sm font-semibold text-yellow-800 mt-2 leading-relaxed">
@@ -81,7 +87,7 @@ export default function Latest2026Page() {
       <section aria-labelledby="heading-ev3-2026">
         <h2 id="heading-ev3-2026" className="text-3xl font-bold text-slate-800 mb-6 border-l-4 border-red-500 pl-4">1. 기아 EV3 (2026)</h2>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-          <ul className="list-disc list-inside space-y-3 text-gray-700">
+          <ul className="list-disc pl-6 space-y-3 text-gray-700">
             <li>
               <strong>초기 결함:</strong> 주행 중 계기판에 &quot;전기차 시스템을 점검하십시오&quot; 문구가 뜨며 시동이 꺼지고 동력이 차단되는 결함(MCU 통신 오류). 한국교통안전공단 무상수리 및 리콜 실시.
             </li>
@@ -89,7 +95,7 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;도심 주행 중 갑작스러운 동력 상실로 뒤차와 추돌할 뻔해 생명의 위협을 느꼈다.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <a href="https://m.bobaedream.co.kr/board/bbs_view/national/2328953/2/1" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">보배드림 커뮤니티 원문<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://www.autodaily.co.kr/news/articleView.html?idxno=535684" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">오토데일리 기사<span className="sr-only"> (새 창에서 열림)</span></a>
+              <strong>출처:</strong> <a href="https://m.bobaedream.co.kr/board/bbs_view/national/2328953/2/1" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 rounded outline-none">보배드림 커뮤니티 원문<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://www.autodaily.co.kr/news/articleView.html?idxno=535684" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 rounded outline-none">오토데일리 기사<span className="sr-only"> (새 창에서 열림)</span></a>
             </li>
           </ul>
         </div>
@@ -98,7 +104,7 @@ export default function Latest2026Page() {
       <section aria-labelledby="heading-ioniq5-2026">
         <h2 id="heading-ioniq5-2026" className="text-3xl font-bold text-slate-800 mb-6 border-l-4 border-blue-500 pl-4">2. 더 뉴 아이오닉 5 페이스리프트 (2026)</h2>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-          <ul className="list-disc list-inside space-y-3 text-gray-700">
+          <ul className="list-disc pl-6 space-y-3 text-gray-700">
             <li>
               <strong>초기 결함:</strong> 이전 연식의 고질병인 ICCU(통합충전제어장치) 고장으로 주행 중 거북이 모드(출력 제한) 발생 및 완속/급속 충전 불능 상태 돌입. 신규 ccNC 인포테인먼트 무선 카플레이 멈춤 버그.
             </li>
@@ -106,7 +112,7 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;페이스리프트 신차임에도 이전 모델의 ICCU 문제가 터졌다. 고속 주행 중 출력 저하로 불안감이 큼.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <a href="https://www.reddit.com/r/Ioniq5/comments/1ibf63c/800_miles_in_my_2025_ioniq_5_officially_has_a/" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">레딧 차주 인증<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://m.bobaedream.co.kr/board/bbs_view/national/2317279" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">보배드림 출력저하 후기<span className="sr-only"> (새 창에서 열림)</span></a>
+              <strong>출처:</strong> <a href="https://www.reddit.com/r/Ioniq5/comments/1ibf63c/800_miles_in_my_2025_ioniq_5_officially_has_a/" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 rounded outline-none">레딧 차주 인증<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://m.bobaedream.co.kr/board/bbs_view/national/2317279" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 rounded outline-none">보배드림 출력저하 후기<span className="sr-only"> (새 창에서 열림)</span></a>
             </li>
           </ul>
         </div>
@@ -115,7 +121,7 @@ export default function Latest2026Page() {
       <section aria-labelledby="heading-modely-2026">
         <h2 id="heading-modely-2026" className="text-3xl font-bold text-slate-800 mb-6 border-l-4 border-indigo-500 pl-4">3. 테슬라 모델 Y (2026 주니퍼 리프레시 / 테슬라 코리아)</h2>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-          <ul className="list-disc list-inside space-y-3 text-gray-700">
+          <ul className="list-disc pl-6 space-y-3 text-gray-700">
             <li>
               <strong>초기 결함:</strong> 동절기 12V 저전압 배터리 전력 부족 시 플러시 도어 핸들이 얼거나 래치가 열리지 않아 탑승 불가. 컨트롤 암 부싱 조기 마모로 방지턱 통과 시 덜컹거림 찌걱 소음 발생.
             </li>
@@ -123,7 +129,7 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;기가 상하이 생산이라 단차는 나아졌지만, 혹한기 아침에 문이 안 열려서 출근에 큰 차질을 빚었다.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <a href="https://www.bobaedream.co.kr/view?code=cnews&No=872" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">보배드림 문 열림 결함 보도<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://m.bobaedream.co.kr/board/bbs_view/best/927611/2/2?cmt=1" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">하부 소음 후기<span className="sr-only"> (새 창에서 열림)</span></a>
+              <strong>출처:</strong> <a href="https://www.bobaedream.co.kr/view?code=cnews&No=872" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 rounded outline-none">보배드림 문 열림 결함 보도<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://m.bobaedream.co.kr/board/bbs_view/best/927611/2/2?cmt=1" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 rounded outline-none">하부 소음 후기<span className="sr-only"> (새 창에서 열림)</span></a>
             </li>
           </ul>
         </div>
@@ -132,7 +138,7 @@ export default function Latest2026Page() {
       <section aria-labelledby="heading-sealion7-2026">
         <h2 id="heading-sealion7-2026" className="text-3xl font-bold text-slate-800 mb-6 border-l-4 border-green-500 pl-4">4. BYD 시라이언 7 (2026 BYD 코리아)</h2>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-          <ul className="list-disc list-inside space-y-3 text-gray-700">
+          <ul className="list-disc pl-6 space-y-3 text-gray-700">
             <li>
               <strong>초기 결함:</strong> 섀시 하부 서브프레임 접합부 및 휠 하우스 안쪽 용접 부위 조기 부식(녹) 현상 발견. DiLink 인포테인먼트의 어색한 한글 번역 및 공공 급속 충전기(E-pit 등) 충전 타임아웃 오류.
             </li>
@@ -140,7 +146,7 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;가격은 매력적이나 하체 방청 수준이 엉망이라 겨울 염화칼슘 도로를 타면 금방 썩을 것 같다. 내비 번역체도 거슬린다.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <a href="https://www.bobaedream.co.kr/view?code=best&No=888548" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">보배드림 조기 녹(부식) 현상<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://m.bobaedream.co.kr/board/bbs_view/cnews/595" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">충전기 호환성 문제<span className="sr-only"> (새 창에서 열림)</span></a>
+              <strong>출처:</strong> <a href="https://www.bobaedream.co.kr/view?code=best&No=888548" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 rounded outline-none">보배드림 조기 녹(부식) 현상<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://m.bobaedream.co.kr/board/bbs_view/cnews/595" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 rounded outline-none">충전기 호환성 문제<span className="sr-only"> (새 창에서 열림)</span></a>
             </li>
           </ul>
         </div>
@@ -149,7 +155,7 @@ export default function Latest2026Page() {
       <section aria-labelledby="heading-ioniq9-2026">
         <h2 id="heading-ioniq9-2026" className="text-3xl font-bold text-slate-800 mb-6 border-l-4 border-yellow-500 pl-4">5. 현대 아이오닉 9 (2026 플래그십)</h2>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-          <ul className="list-disc list-inside space-y-3 text-gray-700">
+          <ul className="list-disc pl-6 space-y-3 text-gray-700">
             <li>
               <strong>초기 결함:</strong> 주행거리 389km 만에 배터리 제어 시스템 경고등 점등 및 고전압 배터리팩 내부 PCB 기판 소손 판정으로 배터리 분해 수리. 2열 도어와 쿼터 글라스 몰딩 간격 유격 불량.
             </li>
@@ -157,7 +163,7 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;8,000만 원짜리 차를 뽑자마자 고전압 배터리를 통째로 뜯어내야 한다고 해서 환불을 요구 중이다.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <a href="https://m.bobaedream.co.kr/board/bbs_view/best/1008916/2/8?cmt=1" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none">보배드림 아이오닉9 배터리 결함<span className="sr-only"> (새 창에서 열림)</span></a>
+              <strong>출처:</strong> <a href="https://m.bobaedream.co.kr/board/bbs_view/best/1008916/2/8?cmt=1" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 rounded outline-none">보배드림 아이오닉9 배터리 결함<span className="sr-only"> (새 창에서 열림)</span></a>
             </li>
           </ul>
         </div>
@@ -178,7 +184,8 @@ export default function Latest2026Page() {
           <Link
             href="/subsidy-tracker"
             prefetch={true}
-            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+            aria-label="지자체 보조금 실시간 소진율 추적기 바로가기"
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
           >
             <div className="flex items-center gap-2 text-amber-800 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">⚡</span>
@@ -188,14 +195,15 @@ export default function Latest2026Page() {
               환경부 및 17개 광역시도별 보조금 소진율, 마감 임박 경보, 5,500만 원 상한제 차등 지급액을 실시간 확인합니다.
             </p>
             <span className="inline-flex items-center gap-1 text-xs text-amber-800 font-semibold mt-3 group-hover:underline">
-              보조금 소진율 확인하기 &rarr;
+              보조금 소진율 확인하기 <span aria-hidden="true">&rarr;</span>
             </span>
           </Link>
 
           <Link
             href="/depreciation-calculator"
             prefetch={true}
-            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+            aria-label="전기차 감가율 및 배터리 수명 시뮬레이터 바로가기"
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
           >
             <div className="flex items-center gap-2 text-emerald-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📉</span>
@@ -205,14 +213,15 @@ export default function Latest2026Page() {
               보조금 수령 후 5년간의 잔존가치, 배터리 잔존성능(SoH), 연차별 총소유비용(TCO)을 정밀 시뮬레이션합니다.
             </p>
             <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-semibold mt-3 group-hover:underline">
-              감가율 계산하기 &rarr;
+              감가율 계산하기 <span aria-hidden="true">&rarr;</span>
             </span>
           </Link>
 
           <Link
             href="/reliability-analytics"
             prefetch={false}
-            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            aria-label="실차주 결함 통계 및 고질병 랭킹 바로가기"
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
           >
             <div className="flex items-center gap-2 text-blue-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📊</span>
@@ -222,14 +231,15 @@ export default function Latest2026Page() {
               현대·기아·테슬라 등 브랜드별 결함 심각도 지수(DSI), 다발 결함 부품 랭킹 및 예상 수리비를 확인합니다.
             </p>
             <span className="inline-flex items-center gap-1 text-xs text-blue-700 font-semibold mt-3 group-hover:underline">
-              결함 통계 조회하기 &rarr;
+              결함 통계 조회하기 <span aria-hidden="true">&rarr;</span>
             </span>
           </Link>
 
           <Link
             href="/recall-portal"
             prefetch={false}
-            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-rose-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+            aria-label="공식 리콜 및 배터리 제조사 조회 바로가기"
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-rose-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
           >
             <div className="flex items-center gap-2 text-rose-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">🚨</span>
@@ -239,12 +249,11 @@ export default function Latest2026Page() {
               차대번호(VIN) 17자리 또는 모델명으로 국토교통부 공식 리콜 조치 여부 및 탑재 배터리 제조사를 즉시 조회합니다.
             </p>
             <span className="inline-flex items-center gap-1 text-xs text-rose-700 font-semibold mt-3 group-hover:underline">
-              리콜 및 배터리 확인하기 &rarr;
+              리콜 및 배터리 확인하기 <span aria-hidden="true">&rarr;</span>
             </span>
           </Link>
         </div>
       </section>
-
-    </div>
+    </article>
   );
 }

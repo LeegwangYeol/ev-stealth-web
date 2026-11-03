@@ -355,5 +355,191 @@ class TestDCInsideCrawlerDOMResilience(unittest.TestCase):
         self.assertEqual(crawler_d.crawl_posts_by_keyword("아이오닉", limit=0), [])
 
 
+class TestHttpAdvancedErrorRecoveryAndBaseCrawlerLifecycle(unittest.TestCase):
+    """
+    Unit test coverage for:
+    - BaseCrawler lifecycle, properties (cookies, timeout, is_warmed_up), method stubs, client ownership
+    - SafeHttpClient error recovery: RemoteDisconnected, IncompleteRead, SSLError, Cloudflare 520, 408
+    - User-Agent rotation vs session pinning, custom headers (Accept-Language), cookie dict access
+    - Partial response salvage on IncompleteRead disconnect
+    """
+
+    def test_remote_disconnected_recovery_and_retry(self):
+        """RemoteDisconnected error triggers retry and logs appropriately."""
+        import http.client
+        resp_mock = unittest.mock.MagicMock()
+        resp_mock.getcode.return_value = 200
+        resp_mock.headers = {"Content-Type": "text/html; charset=utf-8"}
+        resp_mock.read.side_effect = [b"<html>Recovered after disconnect</html>", b""]
+
+        mock_opener = unittest.mock.MagicMock()
+        mock_opener.open.side_effect = [
+            urllib.error.URLError(http.client.RemoteDisconnected("Remote end closed connection without response")),
+            resp_mock,
+        ]
+        client = SafeHttpClient(max_retries=2, enable_jitter=False, opener=mock_opener)
+        status, text, raw = client.get("https://example.com/test-disconnect")
+        self.assertEqual(status, 200)
+        self.assertIn("Recovered after disconnect", text)
+        self.assertEqual(mock_opener.open.call_count, 2)
+
+    def test_incomplete_read_partial_salvage_on_final_attempt(self):
+        """On final retry attempt, IncompleteRead partial bytes are salvaged rather than dropped."""
+        import http.client
+        resp_mock = unittest.mock.MagicMock()
+        resp_mock.getcode.return_value = 200
+        resp_mock.headers = {"Content-Type": "text/html; charset=utf-8"}
+        resp_mock.read.side_effect = http.client.IncompleteRead(
+            b"<html><div class='salvaged'>Partial Content</div>", 100
+        )
+
+        mock_opener = unittest.mock.MagicMock()
+        mock_opener.open.return_value = resp_mock
+
+        client = SafeHttpClient(max_retries=1, enable_jitter=False, opener=mock_opener)
+        status, text, raw = client.get("https://example.com/test-incomplete")
+        self.assertEqual(status, 200)
+        self.assertIn("Partial Content", text)
+        self.assertTrue(raw.startswith(b"<html>"))
+
+    def test_ssl_error_recovery_and_retry(self):
+        """SSL error triggers exponential backoff retry and recovers on success."""
+        import ssl
+        resp_mock = unittest.mock.MagicMock()
+        resp_mock.getcode.return_value = 200
+        resp_mock.headers = {"Content-Type": "text/html; charset=utf-8"}
+        resp_mock.read.side_effect = [b"<html>SSL Handshake Success</html>", b""]
+
+        mock_opener = unittest.mock.MagicMock()
+        mock_opener.open.side_effect = [
+            ssl.SSLEOFError("EOF occurred in violation of protocol"),
+            resp_mock,
+        ]
+        client = SafeHttpClient(max_retries=2, enable_jitter=False, opener=mock_opener)
+        status, text, raw = client.get("https://example.com/test-ssl")
+        self.assertEqual(status, 200)
+        self.assertIn("SSL Handshake Success", text)
+        self.assertEqual(mock_opener.open.call_count, 2)
+
+    def test_custom_headers_and_accept_language(self):
+        """Custom default_headers and Accept-Language are forwarded to request."""
+        client = SafeHttpClient(
+            default_headers={"Accept-Language": "en-US,en;q=0.9", "X-Custom-Bot": "EVSwarm/1.0"},
+            enable_jitter=False,
+        )
+        mock_opener = unittest.mock.MagicMock()
+        resp_mock = unittest.mock.MagicMock()
+        resp_mock.getcode.return_value = 200
+        resp_mock.headers = {}
+        resp_mock.read.side_effect = [b"ok", b""]
+        mock_opener.open.return_value = resp_mock
+        client.opener = mock_opener
+
+        client.get("https://example.com/custom-headers", headers={"X-Per-Req": "123"})
+        req = mock_opener.open.call_args[0][0]
+        self.assertEqual(req.headers["Accept-language"], "en-US,en;q=0.9")
+        self.assertEqual(req.headers["X-custom-bot"], "EVSwarm/1.0")
+        self.assertEqual(req.headers["X-per-req"], "123")
+
+    def test_user_agent_session_pinning(self):
+        """When rotate_user_agent=False, User-Agent remains consistent across requests."""
+        client = SafeHttpClient(
+            user_agent="EV-Special-Agent/2026",
+            rotate_user_agent=False,
+            enable_jitter=False,
+        )
+        mock_opener = unittest.mock.MagicMock()
+        resp_mock = unittest.mock.MagicMock()
+        resp_mock.getcode.return_value = 200
+        resp_mock.headers = {}
+        resp_mock.read.side_effect = [b"ok", b""]
+        mock_opener.open.return_value = resp_mock
+        client.opener = mock_opener
+
+        client.get("https://example.com/req1")
+        req1 = mock_opener.open.call_args[0][0]
+        self.assertEqual(req1.headers["User-agent"], "EV-Special-Agent/2026")
+
+        client.get("https://example.com/req2")
+        req2 = mock_opener.open.call_args[0][0]
+        self.assertEqual(req2.headers["User-agent"], "EV-Special-Agent/2026")
+
+    def test_get_cookie_dict_and_cookies_property(self):
+        """get_cookie_dict returns key-value pairs matching cookie jar."""
+        jar = http.cookiejar.CookieJar()
+        c = http.cookiejar.Cookie(
+            version=0, name="session_id", value="sess_abc123", port=None, port_specified=False,
+            domain="example.com", domain_specified=True, domain_initial_dot=False,
+            path="/", path_specified=True, secure=False, expires=None, discard=False,
+            comment=None, comment_url=None, rest={}, rfc2109=False,
+        )
+        jar.set_cookie(c)
+        client = SafeHttpClient(cookie_jar=jar, enable_jitter=False)
+        cookies = client.get_cookie_dict()
+        self.assertEqual(cookies.get("session_id"), "sess_abc123")
+
+        # BaseCrawler exposes cookies property
+        class DummyCrawler(BaseCrawler):
+            def parse_post_detail(self, html_content: str, post_url: str, **kwargs):
+                return {}
+
+        crawler = DummyCrawler(client=client)
+        self.assertEqual(crawler.cookies.get("session_id"), "sess_abc123")
+
+    def test_base_crawler_lifecycle_and_stubs(self):
+        """BaseCrawler default timeout, stubs, and client ownership behavior."""
+        class DummyCrawler(BaseCrawler):
+            def parse_post_detail(self, html_content: str, post_url: str, **kwargs):
+                return {"post_id": "99", "url": post_url}
+
+        # 1. Default timeout and base_url
+        mock_client = unittest.mock.MagicMock(spec=SafeHttpClient)
+        mock_client.warm_up_session.return_value = True
+        crawler = DummyCrawler(client=mock_client, timeout=25.0, base_url="https://community.example.com")
+        self.assertEqual(crawler.timeout, 25.0)
+        self.assertEqual(crawler.base_url, "https://community.example.com")
+        self.assertFalse(crawler.is_warmed_up)
+
+        # 2. Method stubs
+        self.assertEqual(crawler.crawl_posts_by_keyword("테슬라"), [])
+        self.assertEqual(crawler.fetch_ajax_comments("https://example.com/post"), [])
+        with self.assertRaises(NotImplementedError):
+            crawler.build_list_url()
+        with self.assertRaises(NotImplementedError):
+            crawler.build_search_url()
+
+        # 3. reset_session alias
+        crawler.ensure_warm_up("https://community.example.com")
+        self.assertTrue(crawler.is_warmed_up)
+        crawler.reset_session()
+        self.assertFalse(crawler.is_warmed_up)
+
+        # 4. Injected client is not closed on crawler.close() unless force=True
+        mock_shared_client = unittest.mock.MagicMock(spec=SafeHttpClient)
+        crawler_shared = DummyCrawler(client=mock_shared_client)
+        self.assertFalse(crawler_shared._owns_client)
+        crawler_shared.close()
+        mock_shared_client.close.assert_not_called()
+
+        crawler_shared.close(force=True)
+        mock_shared_client.close.assert_called_once()
+
+    def test_cloudflare_and_timeout_status_retries(self):
+        """HTTP 408, 520 Cloudflare origin error trigger retry with backoff."""
+        mock_opener = unittest.mock.MagicMock()
+        err_408 = urllib.error.HTTPError("https://example.com", 408, "Request Timeout", hdrs={}, fp=io.BytesIO(b""))
+        resp_mock = unittest.mock.MagicMock()
+        resp_mock.getcode.return_value = 200
+        resp_mock.headers = {}
+        resp_mock.read.side_effect = [b"ok after 408", b""]
+
+        mock_opener.open.side_effect = [err_408, resp_mock]
+        client = SafeHttpClient(max_retries=2, enable_jitter=False, opener=mock_opener)
+        status, text, _ = client.get("https://example.com/test-408")
+        self.assertEqual(status, 200)
+        self.assertEqual(text, "ok after 408")
+        self.assertEqual(mock_opener.open.call_count, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

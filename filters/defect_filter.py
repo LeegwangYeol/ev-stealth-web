@@ -22,6 +22,7 @@ import re
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from filters.defect_classifier import (
+    COMPOUND_DEFECT_RULES,
     NEGATIVE_LEXICON,
     POSITIVE_LEXICON,
     DefectClassifier,

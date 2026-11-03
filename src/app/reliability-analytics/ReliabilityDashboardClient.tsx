@@ -46,10 +46,10 @@ const CATEGORY_BG_COLORS: Record<DefectCategoryKey, string> = {
 
 const CATEGORY_TAG_COLORS: Record<DefectCategoryKey, { bg: string; text: string; border: string }> = {
   BATTERY_CHARGING: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
-  DRIVING_POWERTRAIN: { bg: 'bg-amber-50', text: 'text-amber-800', border: 'border-amber-200' },
+  DRIVING_POWERTRAIN: { bg: 'bg-amber-50', text: 'text-amber-900', border: 'border-amber-200' },
   SOFTWARE_ELECTRONICS: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
   BUILD_QUALITY: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
-  SERVICE_REPAIR_COST: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+  SERVICE_REPAIR_COST: { bg: 'bg-emerald-50', text: 'text-emerald-800', border: 'border-emerald-200' },
   COLD_WEATHER: { bg: 'bg-cyan-50', text: 'text-cyan-800', border: 'border-cyan-200' },
 };
 
@@ -158,7 +158,7 @@ const HeatmapRow = React.memo(function HeatmapRow({
     <tr className="group hover:bg-slate-50/80 transition">
       <th
         scope="row"
-        className="p-3 font-bold text-slate-900 sticky left-0 bg-white group-hover:bg-slate-50/80 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] text-left font-normal sm:font-bold"
+        className="p-3 font-bold text-slate-900 sticky left-0 bg-white group-hover:bg-slate-50/80 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] text-left"
       >
         <div className="truncate max-w-[130px] sm:max-w-none">{model.name}</div>
       </th>
@@ -320,7 +320,8 @@ const CategoryShareCard = React.memo(function CategoryShareCard({
       type="button"
       onClick={() => onToggle(cat.code)}
       aria-pressed={isSelected}
-      aria-label={`${cat.label_ko} 결함 부문, 산업 점유율 ${cat.industry_share_pct}%, 평균 예상 수리비: ${cat.avg_repair_cost_range}`}
+      aria-labelledby={`cat-title-${cat.code}`}
+      aria-describedby={`cat-desc-${cat.code} cat-cost-${cat.code}`}
       className={`w-full text-left p-4 rounded-2xl border transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
         isSelected
           ? 'ring-2 ring-indigo-300 bg-indigo-50/50 border-indigo-300'
@@ -330,15 +331,15 @@ const CategoryShareCard = React.memo(function CategoryShareCard({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className={`w-3 h-3 rounded-full ${dotColor} inline-block shadow-sm`} aria-hidden="true" />
-          <span className="font-bold text-sm text-slate-900">{cat.label_ko}</span>
+          <span id={`cat-title-${cat.code}`} className="font-bold text-sm text-slate-900">{cat.label_ko}</span>
         </div>
         <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${color.text} bg-white shadow-sm border ${color.border}`}>
           {cat.industry_share_pct}%
         </span>
       </div>
-      <p className="text-xs text-slate-600 mt-2 leading-relaxed">{cat.description}</p>
-      <div className="mt-3 pt-2 border-t border-slate-200/60 text-[11px] font-medium text-slate-600">
-        평균 예상 수리비: <strong className="text-slate-800">{cat.avg_repair_cost_range}</strong>
+      <p id={`cat-desc-${cat.code}`} className="text-xs text-slate-700 mt-2 leading-relaxed">{cat.description}</p>
+      <div id={`cat-cost-${cat.code}`} className="mt-3 pt-2 border-t border-slate-200/60 text-[11px] font-medium text-slate-700">
+        평균 예상 수리비: <strong className="text-slate-900">{cat.avg_repair_cost_range}</strong>
       </div>
     </button>
   );
@@ -352,8 +353,11 @@ interface RepairCostMatrixRowProps {
 
 const RepairCostMatrixRow = React.memo(function RepairCostMatrixRow({ item }: RepairCostMatrixRowProps) {
   return (
-    <tr className="hover:bg-slate-50 transition">
-      <th scope="row" className="p-4 font-bold text-slate-900 align-top text-left font-normal sm:font-bold">
+    <tr className="hover:bg-slate-50 transition group">
+      <th
+        scope="row"
+        className="p-4 font-bold text-slate-900 align-top text-left sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]"
+      >
         <div>{item.component_name}</div>
         <div className="text-[11px] text-slate-600 font-normal mt-1">
           {item.affected_systems}
@@ -362,7 +366,7 @@ const RepairCostMatrixRow = React.memo(function RepairCostMatrixRow({ item }: Re
       <td className="p-4 font-extrabold text-rose-700 align-top whitespace-nowrap">
         {item.avg_cost_krw}
       </td>
-      <td className="p-4 text-slate-600 align-top text-xs">
+      <td className="p-4 text-slate-700 align-top text-xs">
         {item.standard_warranty}
       </td>
       <td className="p-4 align-top">
@@ -656,6 +660,18 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     setHoveredCell(null);
   }, []);
 
+  // Escape key listener for accessible dismissal of detail card
+  useEffect(() => {
+    if (!hoveredCell) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setHoveredCell(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [hoveredCell]);
+
   const handleBrandToggle = useCallback((brandId: string) => {
     setSelectedBrand((prev) => (prev === brandId ? 'ALL' : brandId));
   }, []);
@@ -717,43 +733,63 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
         {/* KPI Score Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-8 pt-8 border-t border-slate-800">
-          <div className="bg-slate-800/80 backdrop-blur rounded-2xl p-4 sm:p-5 border border-slate-700">
-            <div className="text-xs sm:text-sm text-slate-400 font-medium">분석 결함 제보</div>
+          <div
+            role="region"
+            aria-labelledby="kpi-records-heading"
+            aria-describedby="kpi-records-desc"
+            className="bg-slate-800/80 backdrop-blur rounded-2xl p-4 sm:p-5 border border-slate-700"
+          >
+            <div id="kpi-records-heading" className="text-xs sm:text-sm text-slate-400 font-medium">분석 결함 제보</div>
             <div className="text-2xl sm:text-3xl font-black text-white mt-1">
               {(Number.isFinite(metadata?.total_records_analyzed) ? metadata.total_records_analyzed : 0).toLocaleString()}건
             </div>
-            <div className="text-xs text-blue-400 mt-1 font-medium">
+            <div id="kpi-records-desc" className="text-xs text-blue-400 mt-1 font-medium">
               9개 브랜드 · {metadata.models_count}개 모델 조사
             </div>
           </div>
 
-          <div className="bg-slate-800/80 backdrop-blur rounded-2xl p-4 sm:p-5 border border-slate-700">
-            <div className="text-xs sm:text-sm text-slate-400 font-medium">산업 평균 DSI 점수</div>
+          <div
+            role="region"
+            aria-labelledby="kpi-dsi-heading"
+            aria-describedby="kpi-dsi-desc"
+            className="bg-slate-800/80 backdrop-blur rounded-2xl p-4 sm:p-5 border border-slate-700"
+          >
+            <div id="kpi-dsi-heading" className="text-xs sm:text-sm text-slate-400 font-medium">산업 평균 DSI 점수</div>
             <div className="text-2xl sm:text-3xl font-black text-amber-400 mt-1">
               {metadata.avg_industry_dsi}
               <span className="text-sm font-normal text-slate-400 ml-1">/ 100</span>
             </div>
-            <div className="text-xs text-amber-300/80 mt-1 font-medium">
+            <div id="kpi-dsi-desc" className="text-xs text-amber-300 mt-1 font-medium">
               결함 심각도 지수 (높을수록 위험)
             </div>
           </div>
 
-          <div className="bg-slate-800/80 backdrop-blur rounded-2xl p-4 sm:p-5 border border-slate-700">
-            <div className="text-xs sm:text-sm text-slate-400 font-medium">구매 회피 (AVOID) 연식</div>
+          <div
+            role="region"
+            aria-labelledby="kpi-avoid-heading"
+            aria-describedby="kpi-avoid-desc"
+            className="bg-slate-800/80 backdrop-blur rounded-2xl p-4 sm:p-5 border border-slate-700"
+          >
+            <div id="kpi-avoid-heading" className="text-xs sm:text-sm text-slate-400 font-medium">구매 회피 (AVOID) 연식</div>
             <div className="text-2xl sm:text-3xl font-black text-rose-400 mt-1">
               {avoidPercentage}%
             </div>
-            <div className="text-xs text-rose-300/80 mt-1 font-medium">
+            <div id="kpi-avoid-desc" className="text-xs text-rose-300 mt-1 font-medium">
               총 {totalEvaluationsCount}개 중 {avoidEvaluationsCount}개 연식 위험
             </div>
           </div>
 
-          <div className="bg-slate-800/80 backdrop-blur rounded-2xl p-4 sm:p-5 border border-slate-700">
-            <div className="text-xs sm:text-sm text-slate-400 font-medium">최다 결함 발생 부문</div>
+          <div
+            role="region"
+            aria-labelledby="kpi-category-heading"
+            aria-describedby="kpi-category-desc"
+            className="bg-slate-800/80 backdrop-blur rounded-2xl p-4 sm:p-5 border border-slate-700"
+          >
+            <div id="kpi-category-heading" className="text-xs sm:text-sm text-slate-400 font-medium">최다 결함 발생 부문</div>
             <div className="text-2xl sm:text-3xl font-black text-emerald-400 mt-1">
               38.4%
             </div>
-            <div className="text-xs text-emerald-300/80 mt-1 font-medium">
+            <div id="kpi-category-desc" className="text-xs text-emerald-300 mt-1 font-medium">
               배터리 &amp; 고전압 충전 계통
             </div>
           </div>
@@ -838,11 +874,14 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               {/* Heatmap Grid Wrapper */}
               <div
                 tabIndex={0}
+                role="region"
                 aria-label="연식별 전기차 신뢰성 및 결함 심각도 매트릭스 표 스크롤 영역"
                 className="overflow-x-auto border border-slate-200 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
-                <table className="w-full text-left text-xs sm:text-sm border-collapse" aria-label="연식별 전기차 신뢰성 및 결함 심각도(DSI) 매트릭스">
-                  <caption className="sr-only">연식별 전기차 신뢰성 및 결함 심각도(DSI) 매트릭스</caption>
+                <table className="w-full min-w-[680px] text-left text-xs sm:text-sm border-collapse" aria-label="연식별 전기차 신뢰성 및 결함 심각도(DSI) 매트릭스">
+                  <caption className="sr-only">
+                    연식별 전기차 신뢰성 및 결함 심각도(DSI) 매트릭스 - 모델별 2017년부터 2025년까지의 구매 권장(SAFE), 주의(CAUTION), 회피(AVOID) 평가 현황
+                  </caption>
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200">
                       <th scope="col" className="p-3 font-semibold text-slate-700 min-w-[140px] sticky left-0 bg-slate-50 z-10">
@@ -1443,14 +1482,20 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
         <div
           tabIndex={0}
+          role="region"
           aria-label="보증 만료 후 부품별 수리비 매트릭스 표 스크롤 영역"
           className="overflow-x-auto border border-slate-200 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
           <table className="w-full min-w-[700px] text-left text-xs sm:text-sm border-collapse" aria-label="보증 만료 후 폭탄 수리비 및 핵심 부품별 교체 비용 매트릭스">
-            <caption className="sr-only">보증 만료 후 폭탄 수리비 및 핵심 부품별 교체 비용 매트릭스</caption>
+            <caption className="p-4 text-left font-bold text-slate-900 text-sm sm:text-base border-b border-slate-100 bg-slate-50/50">
+              보증 만료 후 폭탄 수리비 및 핵심 부품별 교체 비용 매트릭스
+              <span className="block text-xs font-normal text-slate-500 mt-1">
+                주요 전동화 부품별 표준 보증 기간, 고위험 취약 모델 및 센터 공식 견적 비교
+              </span>
+            </caption>
             <thead>
               <tr className="bg-slate-900 text-white">
-                <th scope="col" className="p-4 font-semibold min-w-[180px]">핵심 부품명</th>
+                <th scope="col" className="p-4 font-semibold min-w-[180px] sticky left-0 bg-slate-900 z-10">핵심 부품명</th>
                 <th scope="col" className="p-4 font-semibold min-w-[160px]">예상 교체 비용</th>
                 <th scope="col" className="p-4 font-semibold min-w-[140px]">표준 보증 기준</th>
                 <th scope="col" className="p-4 font-semibold min-w-[180px]">고위험 취약 차종</th>
@@ -1498,15 +1543,18 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
   const dsiInfo = getDsiSeverityLevel(safeDsi);
 
   return (
-    <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between">
+    <article
+      aria-labelledby={`model-title-${model.id}`}
+      className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between"
+    >
       <div className="space-y-4">
         {/* Card Header */}
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-xs font-semibold text-blue-600 tracking-wide uppercase">
+            <div className="text-xs font-semibold text-blue-700 tracking-wide uppercase">
               {model.brand_name_ko} · {model.segment}
             </div>
-            <h3 className="text-xl font-extrabold text-slate-900 mt-0.5 tracking-tight">
+            <h3 id={`model-title-${model.id}`} className="text-xl font-extrabold text-slate-900 mt-0.5 tracking-tight">
               {model.name}
             </h3>
           </div>
@@ -1519,9 +1567,16 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
         </div>
 
         {/* DSI Gauge */}
-        <div className="bg-slate-50 rounded-2xl p-3.5 border border-slate-100 space-y-2">
+        <div
+          role="region"
+          aria-labelledby={`model-dsi-title-${model.id}`}
+          aria-describedby={`model-dsi-desc-${model.id}`}
+          className="bg-slate-50 rounded-2xl p-3.5 border border-slate-100 space-y-2"
+        >
           <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-slate-700">평균 결함 심각도 (DSI)</span>
+            <span id={`model-dsi-title-${model.id}`} className="font-semibold text-slate-700">
+              평균 결함 심각도 (DSI)
+            </span>
             <span className={`font-black text-sm ${dsiInfo.textColor}`}>
               {safeDsi.toFixed(1)}점
             </span>
@@ -1533,6 +1588,7 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
             aria-valuemax={100}
             aria-label={`${model.brand_name_ko} ${model.name} 평균 결함 심각도 지수 DSI`}
             aria-valuetext={`${safeDsi.toFixed(1)}점 (${dsiInfo.label})`}
+            aria-describedby={`model-dsi-desc-${model.id}`}
             className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden"
           >
             <div
@@ -1540,7 +1596,7 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
               style={{ width: `${Math.min(100, Math.max(10, safeDsi))}%` }}
             />
           </div>
-          <div className="flex justify-between text-[10px] text-slate-700 font-semibold">
+          <div id={`model-dsi-desc-${model.id}`} className="flex justify-between text-[10px] text-slate-700 font-semibold">
             <span>안전 (0점)</span>
             <span className={dsiInfo.textColor}>{dsiInfo.label}</span>
             <span>치명 (100점)</span>
@@ -1550,17 +1606,18 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
         {/* Year Evaluations Accordion List */}
         <div className="space-y-2">
           <div className="text-xs font-bold text-slate-700">연식별 내구성 평가</div>
-          <div
+          <ul
+            role="list"
             tabIndex={0}
             aria-label={`${model.brand_name_ko} ${model.name} 연식별 평가 목록`}
-            role="region"
-            className="space-y-2 max-h-56 overflow-y-auto pr-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg outline-none"
+            className="space-y-2 max-h-56 overflow-y-auto pr-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg outline-none list-none m-0 p-0"
           >
             {(model.year_evaluations || []).map((yEval) => {
               const vInfo = getVerdictBadgeInfo(yEval.verdict);
+              const safeRate = Number.isFinite(yEval.incident_rate) ? yEval.incident_rate : 0;
 
               return (
-                <div
+                <li
                   key={yEval.year}
                   className={`p-2.5 rounded-xl border text-xs space-y-1 ${
                     yEval.verdict === 'AVOID'
@@ -1580,21 +1637,21 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
                     {yEval.primary_defect}
                   </div>
                   <div className="flex items-center justify-between text-[10px] text-slate-700 pt-1 border-t border-slate-200/40">
-                    <span>발생률: <strong>{yEval.incident_rate}%</strong></span>
+                    <span>발생률: <strong>{safeRate}%</strong></span>
                     <span>예상 수리비: <strong>{yEval.estimated_repair_cost}</strong></span>
                   </div>
-                </div>
+                </li>
               );
             })}
-          </div>
+          </ul>
         </div>
 
         {/* Authentic Owner Quote */}
         {model.year_evaluations?.[0]?.raw_quote && (
           <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-xs text-slate-700 italic">
-            <span className="text-slate-600 font-serif mr-1">&ldquo;</span>
+            <span className="text-slate-700 font-serif mr-1">&ldquo;</span>
             {model.year_evaluations[0].raw_quote}
-            <span className="text-slate-600 font-serif ml-1">&rdquo;</span>
+            <span className="text-slate-700 font-serif ml-1">&rdquo;</span>
           </div>
         )}
       </div>
@@ -1610,6 +1667,6 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
           <span>&rarr;</span>
         </Link>
       </div>
-    </div>
+    </article>
   );
 });

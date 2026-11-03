@@ -42,70 +42,61 @@ from tracker.subsidy_tracker import SubsidyTracker
 logger = logging.getLogger("run_tracker")
 
 
+def _find_repo_root() -> Path:
+    """Locate canonical repository root."""
+    candidates = [
+        _CURRENT_DIR,
+        _CURRENT_DIR.parent,
+        _CURRENT_DIR.parent.parent,
+    ]
+    for c in candidates:
+        if (c / "data").is_dir() and (c / "ev-stealth-web").is_dir():
+            return c
+    for c in candidates:
+        if (c / "data").is_dir() or (c / "ev-stealth-web" / "src" / "data").is_dir():
+            return c
+    return _CURRENT_DIR
+
+
 def _resolve_default_paths():
     """Adaptively resolve primary and web targets depending on execution directory with bidirectional auto-sync."""
-    if (_CURRENT_DIR / "data").exists() and (_CURRENT_DIR / "ev-stealth-web" / "src" / "data").exists():
-        # Executing from project root /Users/a7890/src/my-e-car/
+    repo_root = _find_repo_root()
+    root_data = repo_root / "data"
+    web_src_data = repo_root / "ev-stealth-web" / "src" / "data"
+    web_pub_data = repo_root / "ev-stealth-web" / "public" / "data"
+    root_pub_data = repo_root / "public" / "data"
+
+    if (_CURRENT_DIR / "data").exists() and (_CURRENT_DIR / "ev-stealth-web").exists():
         primary_output = _CURRENT_DIR / "data" / "ev_subsidy_data.json"
         web_output = _CURRENT_DIR / "ev-stealth-web" / "src" / "data" / "ev_subsidy_data.json"
         mirror_primary = _CURRENT_DIR / "data" / "subsidy_depletion_data.json"
         mirror_web = _CURRENT_DIR / "ev-stealth-web" / "src" / "data" / "subsidy_depletion_data.json"
-        external_sync_targets = [web_output, mirror_web]
-        if (_CURRENT_DIR / "ev-stealth-web" / "public" / "data").exists():
-            external_sync_targets.extend([
-                _CURRENT_DIR / "ev-stealth-web" / "public" / "data" / "ev_subsidy_data.json",
-                _CURRENT_DIR / "ev-stealth-web" / "public" / "data" / "subsidy_depletion_data.json",
-            ])
-        if (_CURRENT_DIR / "public" / "data").exists():
-            external_sync_targets.extend([
-                _CURRENT_DIR / "public" / "data" / "ev_subsidy_data.json",
-                _CURRENT_DIR / "public" / "data" / "subsidy_depletion_data.json",
-            ])
-        return primary_output, web_output, mirror_primary, mirror_web, external_sync_targets
     elif (_CURRENT_DIR / "src" / "data").exists():
-        # Executing from within ev-stealth-web/
         primary_output = _CURRENT_DIR / "src" / "data" / "ev_subsidy_data.json"
         web_output = _CURRENT_DIR / "src" / "data" / "ev_subsidy_data.json"
         mirror_primary = _CURRENT_DIR / "src" / "data" / "subsidy_depletion_data.json"
         mirror_web = _CURRENT_DIR / "src" / "data" / "subsidy_depletion_data.json"
-        external_sync_targets: List[Path] = []
-        if (_CURRENT_DIR.parent / "data").exists():
-            external_sync_targets.append(_CURRENT_DIR.parent / "data" / "ev_subsidy_data.json")
-            external_sync_targets.append(_CURRENT_DIR.parent / "data" / "subsidy_depletion_data.json")
-        if (_CURRENT_DIR / "public" / "data").exists():
-            external_sync_targets.append(_CURRENT_DIR / "public" / "data" / "ev_subsidy_data.json")
-            external_sync_targets.append(_CURRENT_DIR / "public" / "data" / "subsidy_depletion_data.json")
-        return primary_output, web_output, mirror_primary, mirror_web, external_sync_targets
     else:
-        # Executing from project root or fallback
-        primary_output = _CURRENT_DIR / "data" / "ev_subsidy_data.json"
-        web_output = _CURRENT_DIR / "ev-stealth-web" / "src" / "data" / "ev_subsidy_data.json"
-        mirror_primary = _CURRENT_DIR / "data" / "subsidy_depletion_data.json"
-        mirror_web = _CURRENT_DIR / "ev-stealth-web" / "src" / "data" / "subsidy_depletion_data.json"
-        external_sync_targets = []
-        if (_CURRENT_DIR / "ev-stealth-web" / "src" / "data").exists():
-            external_sync_targets.extend([web_output, mirror_web])
-        elif (_CURRENT_DIR.parent / "data").exists():
-            external_sync_targets.extend([
-                _CURRENT_DIR.parent / "data" / "ev_subsidy_data.json",
-                _CURRENT_DIR.parent / "data" / "subsidy_depletion_data.json",
-            ])
-        if (_CURRENT_DIR / "ev-stealth-web" / "public" / "data").exists():
-            external_sync_targets.extend([
-                _CURRENT_DIR / "ev-stealth-web" / "public" / "data" / "ev_subsidy_data.json",
-                _CURRENT_DIR / "ev-stealth-web" / "public" / "data" / "subsidy_depletion_data.json",
-            ])
-        elif (_CURRENT_DIR.parent / "ev-stealth-web" / "public" / "data").exists():
-            external_sync_targets.extend([
-                _CURRENT_DIR.parent / "ev-stealth-web" / "public" / "data" / "ev_subsidy_data.json",
-                _CURRENT_DIR.parent / "ev-stealth-web" / "public" / "data" / "subsidy_depletion_data.json",
-            ])
-        if (_CURRENT_DIR / "public" / "data").exists():
-            external_sync_targets.extend([
-                _CURRENT_DIR / "public" / "data" / "ev_subsidy_data.json",
-                _CURRENT_DIR / "public" / "data" / "subsidy_depletion_data.json",
-            ])
-        return primary_output, web_output, mirror_primary, mirror_web, external_sync_targets
+        primary_output = root_data / "ev_subsidy_data.json"
+        web_output = web_src_data / "ev_subsidy_data.json"
+        mirror_primary = root_data / "subsidy_depletion_data.json"
+        mirror_web = web_src_data / "subsidy_depletion_data.json"
+
+    external_sync_targets: List[Path] = [
+        root_data / "ev_subsidy_data.json",
+        root_data / "subsidy_depletion_data.json",
+        web_src_data / "ev_subsidy_data.json",
+        web_src_data / "subsidy_depletion_data.json",
+        web_pub_data / "ev_subsidy_data.json",
+        web_pub_data / "subsidy_depletion_data.json",
+    ]
+    if root_pub_data.parent.exists() or root_pub_data.exists():
+        external_sync_targets.extend([
+            root_pub_data / "ev_subsidy_data.json",
+            root_pub_data / "subsidy_depletion_data.json",
+        ])
+
+    return primary_output, web_output, mirror_primary, mirror_web, external_sync_targets
 
 
 (
@@ -121,7 +112,18 @@ def _is_project_data_dir(path: Path, cwd: Path) -> bool:
     """Check if the path points to the real project data directory."""
     try:
         resolved = path.resolve()
-        for cand in [cwd / "data", cwd.parent / "data", cwd / "ev-stealth-web" / "src" / "data", cwd / "src" / "data"]:
+        repo_root = _find_repo_root()
+        candidate_dirs = [
+            repo_root / "data",
+            repo_root / "ev-stealth-web" / "src" / "data",
+            repo_root / "ev-stealth-web" / "public" / "data",
+            repo_root / "public" / "data",
+            cwd / "data",
+            cwd.parent / "data",
+            cwd / "ev-stealth-web" / "src" / "data",
+            cwd / "src" / "data",
+        ]
+        for cand in candidate_dirs:
             if cand.exists() and resolved == cand.resolve():
                 return True
     except Exception:
@@ -181,37 +183,57 @@ def sync_defect_reports(
         return []
 
     # Resolve web, root, and public paths
-    if web_dir:
-        web_reports_path = Path(web_dir) / "daily_reports.json"
-    elif (_CURRENT_DIR / "ev-stealth-web" / "src" / "data").exists():
-        web_reports_path = _CURRENT_DIR / "ev-stealth-web" / "src" / "data" / "daily_reports.json"
-    elif (_CURRENT_DIR / "src" / "data").exists():
-        web_reports_path = _CURRENT_DIR / "src" / "data" / "daily_reports.json"
-    else:
-        web_reports_path = _CURRENT_DIR / "ev-stealth-web" / "src" / "data" / "daily_reports.json"
-
-    if root_dir:
-        root_reports_path = Path(root_dir) / "daily_reports.json"
-    elif (_CURRENT_DIR / "data").exists():
-        root_reports_path = _CURRENT_DIR / "data" / "daily_reports.json"
-    else:
-        root_reports_path = _CURRENT_DIR.parent / "data" / "daily_reports.json"
-
-    public_reports_paths: List[Path] = []
-    if web_dir and (Path(web_dir).parent / "public" / "data").exists():
-        public_reports_paths.append(Path(web_dir).parent / "public" / "data" / "daily_reports.json")
-    if web_dir and (Path(web_dir).parent.parent / "public" / "data").exists():
-        public_reports_paths.append(Path(web_dir).parent.parent / "public" / "data" / "daily_reports.json")
-    if root_dir and (Path(root_dir).parent / "public" / "data").exists():
-        public_reports_paths.append(Path(root_dir).parent / "public" / "data" / "daily_reports.json")
+    repo_root = _find_repo_root()
     is_custom_run = (root_dir is not None) or (web_dir is not None and not _is_project_data_dir(Path(web_dir), _CURRENT_DIR))
-    if not is_custom_run:
+
+    if is_custom_run:
+        web_reports_path = Path(web_dir) / "daily_reports.json" if web_dir else (_CURRENT_DIR / "daily_reports.json")
+        if root_dir:
+            root_reports_path = Path(root_dir) / "daily_reports.json"
+        elif (_CURRENT_DIR / "data" / "daily_reports.json").exists():
+            root_reports_path = _CURRENT_DIR / "data" / "daily_reports.json"
+        elif (repo_root / "data" / "daily_reports.json").exists():
+            root_reports_path = repo_root / "data" / "daily_reports.json"
+        else:
+            root_reports_path = _CURRENT_DIR / "daily_reports.json"
+        public_reports_paths: List[Path] = []
+        if web_dir and (Path(web_dir).parent / "public" / "data").exists():
+            public_reports_paths.append(Path(web_dir).parent / "public" / "data" / "daily_reports.json")
+        if web_dir and (Path(web_dir).parent.parent / "public" / "data").exists():
+            public_reports_paths.append(Path(web_dir).parent.parent / "public" / "data" / "daily_reports.json")
+        if root_dir and (Path(root_dir).parent / "public" / "data").exists():
+            public_reports_paths.append(Path(root_dir).parent / "public" / "data" / "daily_reports.json")
+    else:
+        if web_dir:
+            w_path = Path(web_dir)
+            if (w_path / "src" / "data").is_dir():
+                web_reports_path = w_path / "src" / "data" / "daily_reports.json"
+            else:
+                web_reports_path = w_path / "daily_reports.json"
+        elif (repo_root / "ev-stealth-web" / "src" / "data").exists():
+            web_reports_path = repo_root / "ev-stealth-web" / "src" / "data" / "daily_reports.json"
+        else:
+            web_reports_path = _CURRENT_DIR / "ev-stealth-web" / "src" / "data" / "daily_reports.json"
+
+        if root_dir:
+            root_reports_path = Path(root_dir) / "daily_reports.json"
+        elif (repo_root / "data").exists():
+            root_reports_path = repo_root / "data" / "daily_reports.json"
+        else:
+            root_reports_path = _CURRENT_DIR / "data" / "daily_reports.json"
+
+        public_reports_paths: List[Path] = [
+            repo_root / "ev-stealth-web" / "public" / "data" / "daily_reports.json",
+            repo_root / "public" / "data" / "daily_reports.json",
+        ]
         if (_CURRENT_DIR / "ev-stealth-web" / "public" / "data").exists():
             public_reports_paths.append(_CURRENT_DIR / "ev-stealth-web" / "public" / "data" / "daily_reports.json")
         if (_CURRENT_DIR / "public" / "data").exists():
             public_reports_paths.append(_CURRENT_DIR / "public" / "data" / "daily_reports.json")
         if (_CURRENT_DIR.parent / "ev-stealth-web" / "public" / "data").exists():
             public_reports_paths.append(_CURRENT_DIR.parent / "ev-stealth-web" / "public" / "data" / "daily_reports.json")
+        if (_CURRENT_DIR.parent / "public" / "data").exists():
+            public_reports_paths.append(_CURRENT_DIR.parent / "public" / "data" / "daily_reports.json")
 
     # Deduplicate public paths preserving order
     seen_pub = set()
@@ -386,10 +408,18 @@ def parse_arguments(args: Optional[List[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--output",
+        "--out",
         "-o",
         type=Path,
         default=DEFAULT_PRIMARY_OUTPUT,
         help="Primary output path for the generated subsidy JSON dataset.",
+    )
+    parser.add_argument(
+        "--format",
+        "-f",
+        choices=["text", "json", "summary", "briefing", "markdown", "md"],
+        default="text",
+        help="Output format for stdout summary/briefing (text, json, markdown). Default: text.",
     )
     parser.add_argument(
         "--sync-web",
@@ -483,7 +513,11 @@ def parse_arguments(args: Optional[List[str]] = None) -> argparse.Namespace:
         if not raw_web_str or raw_web_str == ".":
             parsed.web_dir = None
         else:
-            parsed.web_dir = Path(raw_web_str)
+            w_candidate = Path(raw_web_str)
+            if (w_candidate / "src" / "data").is_dir():
+                parsed.web_dir = w_candidate / "src" / "data"
+            else:
+                parsed.web_dir = w_candidate
 
     # Sanitize endpoint URL
     if parsed.endpoint is not None:
@@ -657,9 +691,15 @@ def main(argv: Optional[List[str]] = None) -> int:
                         quarantine_corrupted=getattr(args, "quarantine_corrupted", True),
                     )
 
-        # Print executive summary briefing to stdout
-        briefing = tracker.generate_briefing(payload, fallback_used=fallback_used)
-        print("\n" + briefing + "\n")
+        # Print output to stdout according to --format
+        if args.format == "json":
+            print(json.dumps(payload.to_dict(), indent=2, ensure_ascii=False))
+        elif args.format in ("markdown", "md"):
+            briefing = tracker.generate_briefing(payload, fallback_used=fallback_used)
+            print("\n" + briefing + "\n")
+        else:
+            briefing = tracker.generate_briefing(payload, fallback_used=fallback_used)
+            print("\n" + briefing + "\n")
 
         logger.info("Subsidy tracking pipeline finished successfully.")
         return 0

@@ -4,7 +4,7 @@ import React from 'react';
 import { AlertSeverity } from '@/types/subsidy';
 
 export interface SubsidyBadgeProps {
-  status: AlertSeverity | string;
+  status?: AlertSeverity | string | null;
   showIcon?: boolean;
   className?: string;
 }
@@ -12,7 +12,7 @@ export interface SubsidyBadgeProps {
 /**
  * Pure Helper: Badge styling with opaque solid backgrounds for compliant WCAG AA contrast (> 7:1)
  */
-export const getBadgeStyle = (status: AlertSeverity | string): string => {
+export const getBadgeStyle = (status?: AlertSeverity | string | null): string => {
   switch (status) {
     case 'HEALTHY':
     case 'available':
@@ -33,7 +33,7 @@ export const getBadgeStyle = (status: AlertSeverity | string): string => {
 /**
  * Pure Helper: Status badge labels with accessible visual indicator
  */
-export const getStatusLabel = (status: AlertSeverity | string): string => {
+export const getStatusLabel = (status?: AlertSeverity | string | null): string => {
   switch (status) {
     case 'HEALTHY':
     case 'available':
@@ -58,12 +58,15 @@ export const SubsidyBadge = React.memo(function SubsidyBadge({
 }: SubsidyBadgeProps) {
   const label = getStatusLabel(status);
   const style = getBadgeStyle(status);
+  const cleanLabel = label.replace(/^[^a-zA-Z0-9가-힣]+\s*/, '');
 
   return (
     <span
-      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold border ${style} ${className}`}
+      role="status"
+      aria-label={`보조금 상태: ${cleanLabel}`}
+      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold border whitespace-nowrap shrink-0 ${style} ${className}`}
     >
-      {showIcon ? label : label.replace(/^[^a-zA-Z0-9가-힣]+\s*/, '')}
+      {showIcon ? label : cleanLabel}
     </span>
   );
 });

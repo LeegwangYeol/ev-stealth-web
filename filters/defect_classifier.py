@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
+import unicodedata
 
 from filters.slang_lexicon import (
     CONCESSIVES,
@@ -49,6 +50,58 @@ from models.complaint import (
     DSIBreakdown,
     RawPost,
 )
+
+# High-precision compound defect phrases mapping to canonical taxonomy
+COMPOUND_DEFECT_RULES: Dict[str, List[str]] = {
+    "BATTERY_CHARGING": [
+        "iccu 폭탄", "iccu 터짐", "iccu 고장", "iccu 리콜", "iccu 교체", "iccu 경고등", "iccu",
+        "통합충전제어장치", "통합 충전 제어 장치", "통합충전제어기", "통합 충전 제어기",
+        "배터리 화재", "배터리 열폭주", "열폭주", "배터리 폭발", "배터리 발화", "배터리 불",
+        "배터리 연기", "화재 발생", "불쇼",
+        "bms 오작동", "bms 오류", "bms 에러", "bms 경고등", "bms 벽돌", "bms 업데이트",
+        "배터리 관리 시스템", "배터리관리시스템", "bms",
+        "12v 방전", "12v 배터리 방전", "완속 충전 불량", "급속 충전 중단", "완속 충전 불가",
+        "급속 충전 불가", "충전구 안 열림", "v2l 오류", "전원공급장치 점검", "전원공급장치"
+    ],
+    "DRIVING_POWERTRAIN": [
+        # Brake / Deceleration failures (Must override generic '먹통' from software!)
+        "브레이크 먹통", "제동 불능", "제동 불가", "스펀지 브레이크", "벽돌 페달",
+        "브레이크 밀림", "브레이크 꺼짐", "브레이크 작동안함", "브레이크 안 밟힘", "브레이크 고장",
+        "페달 먹통", "회생제동 먹통", "회생제동 불능", "회생제동 풀림", "회생제동 털림",
+        # Motor / Reducer noise & vibration (Must override generic '소음'/'잡소리' from build quality!)
+        "모터 감속기 소음", "감속기 소음", "모터 소음", "감속기 잡소리", "감속기 이음",
+        "감속기 쇠소리", "감속기 갈리는", "모터 고주파", "인버터 고주파", "모터 잡소리",
+        "모터 진동", "감속기 진동", "모터 감속기", "고래소리", "귀신소리", "구동 모터",
+        "감속기 오일", "인버터 소음",
+        # Steering & Fishtailing
+        "피시테일", "피시테일링", "피쉬테일", "피쉬테일링", "fishtail", "fishtailing",
+        "조향 장치 이상", "조향 불능", "조향 먹통", "조향 이상", "조향각",
+        "핸들 잠김", "핸들 쏠림", "핸들 털림", "핸들 조향", "mdps 결함", "mdps 이상", "오토스티어 풀림",
+        # Powertrain sudden failures
+        "동력 상실", "동력상실", "구동력 상실", "급발진", "롤백", "출력 저하"
+    ],
+    "BUILD_QUALITY": [
+        # Electronic door catch failures (Must override generic '먹통' from software!)
+        "전자식 도어캐치", "도어캐치", "도어 캐치", "도어캐치 먹통", "도어캐치 실종",
+        "외캐치", "오토플러시", "플러시 핸들", "플러시 도어", "팝업 도어", "팝업 핸들",
+        "도어 손잡이", "손잡이 먹통", "도어 손잡이 안 나옴", "도어 핸들", "동결 고착",
+        # Body / Cabin defects
+        "단차", "누수", "워터파크", "풍절음", "웨더스트립", "도장 불량", "유리 단차",
+        "트렁크 단차", "도어 단차", "찌걱찌걱", "시트 삐걱"
+    ],
+    "SOFTWARE_ELECTRONICS": [
+        # Infotainment & OTA Blackouts
+        "인포테인먼트", "ota 블랙아웃", "계기판 블랙아웃", "화면 블랙아웃", "클러스터 블랙아웃",
+        "화면 꺼짐", "디스플레이 먹통", "내비 먹통", "네비 먹통", "클러스터 먹통",
+        "ota 벽돌", "업데이트 벽돌", "티캠 먹통", "tcam 먹통", "티캠", "tcam",
+        "ccnc", "ccic", "avnt", "헤드업 디스플레이 먹통", "hud 먹통", "어라운드뷰 왜곡",
+        "블랙아웃"
+    ],
+    "SERVICE_REPAIR_COST": [
+        "수리비 폭탄", "전손 처리", "전손", "통교체", "감가상각", "보험료 할증",
+        "서비스센터 입고 지연", "부품 수급 지연", "대차 거부", "대차 불가", "하이테크 입고"
+    ]
+}
 
 # General positive sentiment tokens for praise detection
 POSITIVE_LEXICON: Dict[str, float] = {
@@ -124,9 +177,13 @@ class DefectClassifier:
         Returns:
             (is_authentic_owner, reason)
         """
-        text_str = str(text or "").strip()
-        if not text_str:
-            return False, "Missing first-person ownership anchor: empty text"
+        text_str = unicodedata.normalize("NFC", str(text or "")).strip()
+        if not text_str or len(text_str) <= 1:
+            return False, "Missing first-person ownership anchor: empty or single-character text"
+
+        # Foreign language post without Korean text
+        if not re.search(r"[가-힣]", text_str):
+            return False, "Missing first-person ownership anchor: foreign language post without verified ownership experience"
 
         operational_anchors = [
             "시동", "시동 걸", "시동 켰", "시동 켜", "주행 중", "주행하", "주행했",
@@ -144,9 +201,11 @@ class DefectClassifier:
             "고장", "결함", "오작동", "버그", "불량", "하자", "긁", "안 닦",
             "튕김", "에러", "불통", "누수", "화재", "멈춤", "물이 흥건", "물 고이",
             "물 차", "물 새", "워터파크", "동력 상실", "경고등",
-            "소음", "잡소리", "이음", "떨림", "흔들림", "진동", "단차"
+            "소음", "잡소리", "이음", "떨림", "흔들림", "진동", "단차",
+            "iccu", "bms", "피시테일", "피쉬테일", "fishtail", "도어캐치", "스펀지 브레이크", "열폭주"
         ]
-        if any(dk in text_str for dk in defect_keywords):
+        text_lower = text_str.lower()
+        if any(dk in text_lower for dk in defect_keywords):
             has_symptom = True
 
         # Check for bystander / third-person trolling without genuine owner experience
@@ -403,26 +462,131 @@ class DefectClassifier:
     # STAGE 4: Defect Actionability Gate & 5-Pillar Classification
     # -----------------------------------------------------------------
     def classify_defect_category(self, text: Any, slang_matches: Optional[List[SlangEntry]] = None) -> str:
-        """Assign one of the 5 canonical categories based on matched terms and keywords."""
-        text_str = str(text or "").strip()
+        """Assign one of the 5 canonical categories with high-precision compound rules and priority resolution."""
+        text_str = unicodedata.normalize("NFC", str(text or "")).strip()
         slang_matches = slang_matches if slang_matches is not None else find_matching_slang(text_str)
         category_scores: Dict[str, float] = {cat: 0.0 for cat in CANONICAL_CATEGORIES}
 
-        for entry in slang_matches:
-            if entry.defect_category and entry.defect_category in category_scores:
-                category_scores[entry.defect_category] += entry.severity_weight * 2.5
-
         text_lower = text_str.lower()
+        suppress_software_meoktong = False
+        suppress_build_noise = False
+
+        # 1. High-precision compound defect rules
+        for cat, phrases in COMPOUND_DEFECT_RULES.items():
+            for phrase in sorted(phrases, key=len, reverse=True):
+                if phrase in text_lower:
+                    category_scores[cat] += 12.0
+                    if cat == "DRIVING_POWERTRAIN":
+                        if any(term in phrase for term in ("브레이크", "페달", "제동", "조향")):
+                            suppress_software_meoktong = True
+                        if any(term in phrase for term in ("감속기", "모터", "인버터")):
+                            suppress_build_noise = True
+                    elif cat == "BUILD_QUALITY":
+                        if any(term in phrase for term in ("도어", "캐치", "손잡이", "외캐치", "플러시")):
+                            suppress_software_meoktong = True
+
+        # 2. Slang matches with suppression awareness
+        for entry in slang_matches:
+            if not entry.defect_category or entry.defect_category not in category_scores:
+                continue
+            if entry.term == "먹통" and suppress_software_meoktong:
+                continue
+            if entry.term in ("잡소리", "소음", "찌걱") and suppress_build_noise:
+                continue
+            category_scores[entry.defect_category] += entry.severity_weight * 2.5
+
+        # 3. Category keyword map with word boundary and suppression awareness
         for cat, kw_list in CATEGORY_KEYWORD_MAP.items():
             for kw in kw_list:
-                if kw in text_lower:
+                if kw == "먹통" and suppress_software_meoktong:
+                    continue
+                if kw in ("소음", "잡소리") and suppress_build_noise:
+                    continue
+                if cat == "SERVICE_REPAIR_COST" and kw == "as":
+                    if re.search(r"(?:\b|[^a-zA-Z])(?:as|a/s)(?:\b|[^a-zA-Z])", text_lower):
+                        category_scores[cat] += 1.0
+                elif kw.lower() in text_lower:
                     category_scores[cat] += 1.0
 
-        best_category = max(category_scores.items(), key=lambda x: x[1])
-        if best_category[1] > 0.0:
-            return best_category[0]
+        # 4. Root Cause Priority Resolution:
+        # In EV defect posts, owners frequently describe the secondary repair / dealership experience
+        # (e.g. 'ICCU 터져서 사업소 입고하고 수리비 견적 나옴'). When a primary physical failure (score >= 12.0)
+        # occurred, the root cause physical defect takes precedence over secondary service complaints.
+        # However, if SERVICE_REPAIR_COST has a stronger or compound match while the physical category
+        # only has a generic noun mention (e.g. '배터리 팩 하부 긁힘 견적 2500만원 통교체 전손'),
+        # SERVICE_REPAIR_COST is legitimately preserved.
+        physical_cats = ["BATTERY_CHARGING", "DRIVING_POWERTRAIN", "BUILD_QUALITY", "SOFTWARE_ELECTRONICS"]
+        max_physical_score = max(category_scores[c] for c in physical_cats)
+        service_score = category_scores["SERVICE_REPAIR_COST"]
+
+        if max_physical_score >= 12.0 and service_score > 0.0:
+            category_scores["SERVICE_REPAIR_COST"] = min(service_score, max_physical_score - 1.0)
+
+        # Priority weighting hierarchy in case of close ties:
+        # BATTERY_CHARGING / DRIVING_POWERTRAIN (Safety Critical) > SOFTWARE_ELECTRONICS > BUILD_QUALITY > SERVICE_REPAIR_COST
+        priority_order = ["BATTERY_CHARGING", "DRIVING_POWERTRAIN", "SOFTWARE_ELECTRONICS", "BUILD_QUALITY", "SERVICE_REPAIR_COST"]
+        best_category = max(priority_order, key=lambda c: category_scores[c])
+        if category_scores[best_category] > 0.0:
+            return best_category
 
         return "BUILD_QUALITY"
+
+    def calculate_confidence(
+        self,
+        text: Any,
+        category: str,
+        slang_matches: Optional[List[SlangEntry]] = None,
+        polarity: float = 0.0,
+        negated_defects: Optional[List[str]] = None,
+    ) -> float:
+        """Calculate statistical confidence score [0.0, 1.0] for defect classification and false-positive suppression."""
+        text_str = unicodedata.normalize("NFC", str(text or "")).strip()
+        if not text_str or len(text_str) <= 1:
+            return 0.0
+
+        slang_matches = slang_matches if slang_matches is not None else find_matching_slang(text_str)
+        negated_defects = negated_defects or []
+        text_lower = text_str.lower()
+
+        confidence = 0.0
+
+        # 1. Technical component keyword from category map
+        has_comp_kw = any(kw.lower() in text_lower for kw in CATEGORY_KEYWORD_MAP.get(category, []))
+        if has_comp_kw:
+            confidence += 0.20
+
+        # 2. Defect slang entry for this category
+        cat_slang = [e for e in slang_matches if e.defect_category == category]
+        if cat_slang:
+            max_sev = max(e.severity_weight for e in cat_slang)
+            confidence += 0.25 * (max_sev / 5.0)
+
+        # 3. Operational symptom predicate
+        has_symptom = any(sym in text_str for sym in SYMPTOM_PREDICATES)
+        if has_symptom:
+            confidence += 0.20
+
+        # 4. Ownership anchor
+        has_owner = any(anchor in text_str for anchor in OWNERSHIP_ANCHORS) or any(
+            op in text_str for op in ("시동", "주행 중", "운전 중", "충전 중")
+        )
+        if has_owner:
+            confidence += 0.15
+
+        # 5. High-precision compound defect match
+        category_compounds = COMPOUND_DEFECT_RULES.get(category, [])
+        if any(cp in text_lower for cp in category_compounds):
+            confidence += 0.20
+
+        # False-positive suppression penalties
+        if negated_defects:
+            confidence -= 0.40
+        if polarity > 0.0:
+            confidence -= 0.30 * polarity
+        if len(text_str) < 25:
+            confidence -= 0.15
+
+        return round(max(0.0, min(1.0, confidence)), 4)
 
     def compute_dsi(
         self,
@@ -506,6 +670,9 @@ class DefectClassifier:
             post = RawPost()
         elif isinstance(post, dict):
             post = RawPost.from_dict(post)
+        elif not isinstance(post, RawPost):
+            # Arbitrary non-string object (e.g. int, float, list)
+            post = RawPost(title="", content=str(post or ""))
 
         title_str = str(post.title or "")
         content_str = str(post.content or "")
@@ -551,6 +718,7 @@ class DefectClassifier:
                 severity_index=0.0,
                 is_authentic_defect=False,
                 filter_reason=s1_reason,
+                confidence_score=0.0,
             )
 
         # STAGE 2: Ownership Anchor Validation
@@ -574,6 +742,7 @@ class DefectClassifier:
                 severity_index=0.0,
                 is_authentic_defect=False,
                 filter_reason=s2_reason,
+                confidence_score=0.0,
             )
 
         # STAGE 3: Negation, Concessive Scoping, & Sarcasm Resolution
@@ -584,13 +753,19 @@ class DefectClassifier:
         # STAGE 4: Defect Actionability Gate & 5-Pillar Classification
         category = self.classify_defect_category(full_text, slang_matches)
         dsi_score, dsi_breakdown = self.compute_dsi(full_text, category, slang_matches)
+        confidence_score = self.calculate_confidence(
+            full_text, category, slang_matches, polarity, stage3_res.get("negated_defects", [])
+        )
 
         verbatim_quote = self._extract_verbatim_quote(post)
-        qualifies = (polarity <= -0.30 or dsi_score >= 3.5) and len(verbatim_quote) >= 15
+        qualifies = (polarity <= -0.30 or dsi_score >= 3.5) and len(verbatim_quote) >= 15 and confidence_score >= 0.35
 
         if polarity >= 0.30:
             qualifies = False
             filter_reason = "Praise or negated defects; positive polarity"
+        elif confidence_score < 0.35:
+            qualifies = False
+            filter_reason = f"Low confidence defect signal: confidence={confidence_score:.2f} (< 0.35)"
         elif not qualifies:
             filter_reason = f"Fails gate: polarity={polarity:.2f}, dsi={dsi_score:.2f}, quote_len={len(verbatim_quote)}"
         else:
@@ -617,14 +792,20 @@ class DefectClassifier:
             is_authentic_defect=qualifies,
             dsi_breakdown=dsi_breakdown,
             filter_reason=filter_reason,
+            confidence_score=confidence_score,
         )
 
     def classify(self, post_or_text: Any) -> ComplaintRecord:
-        """Alias for process_post allowing direct text or post dictionary."""
+        """Alias for process_post allowing direct text, dict, or RawPost with bulletproof type safety."""
         if isinstance(post_or_text, str):
             raw = RawPost(title="", content=post_or_text)
             return self.process_post(raw)
-        return self.process_post(post_or_text)
+        if isinstance(post_or_text, RawPost):
+            return self.process_post(post_or_text)
+        if isinstance(post_or_text, dict):
+            return self.process_post(RawPost.from_dict(post_or_text))
+        # Non-string scalar, list, or arbitrary object
+        return self.process_post(RawPost(title="", content=str(post_or_text or "")))
 
     def _extract_verbatim_quote(self, post: RawPost) -> str:
         """Extract the most emotional and colloquial verbatim quote from the post."""

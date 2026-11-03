@@ -77,7 +77,7 @@ export function getVerdictBadgeInfo(verdict: ModelYearVerdict | string): {
         badgeClass: 'bg-rose-100 text-rose-800 border-rose-300',
         borderClass: 'border-rose-400',
         bgClass: 'bg-rose-500',
-        textClass: 'text-rose-700',
+        textClass: 'text-rose-800',
         icon: '🚫',
       };
     case 'CAUTION':
@@ -86,7 +86,7 @@ export function getVerdictBadgeInfo(verdict: ModelYearVerdict | string): {
         badgeClass: 'bg-amber-100 text-amber-900 border-amber-300',
         borderClass: 'border-amber-400',
         bgClass: 'bg-amber-400',
-        textClass: 'text-amber-700',
+        textClass: 'text-amber-900',
         icon: '⚠️',
       };
     case 'BUY_SAFE':
@@ -95,7 +95,7 @@ export function getVerdictBadgeInfo(verdict: ModelYearVerdict | string): {
         badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300',
         borderClass: 'border-emerald-400',
         bgClass: 'bg-emerald-500',
-        textClass: 'text-emerald-700',
+        textClass: 'text-emerald-800',
         icon: '✅',
       };
     default:
@@ -104,7 +104,7 @@ export function getVerdictBadgeInfo(verdict: ModelYearVerdict | string): {
         badgeClass: 'bg-slate-100 text-slate-700 border-slate-300',
         borderClass: 'border-slate-300',
         bgClass: 'bg-slate-400',
-        textClass: 'text-slate-600',
+        textClass: 'text-slate-700',
         icon: 'ℹ️',
       };
   }
@@ -127,9 +127,9 @@ export function getDsiSeverityLevel(dsi: number): {
     return {
       level: 'CRITICAL',
       label: '치명적 위험 (Critical)',
-      colorClass: 'text-rose-600',
+      colorClass: 'text-rose-700',
       barBgClass: 'bg-rose-500',
-      textColor: 'text-rose-600',
+      textColor: 'text-rose-700',
     };
   }
   if (safeDsi >= 60) {

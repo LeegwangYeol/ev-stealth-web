@@ -3,6 +3,7 @@ import Link from 'next/link';
 import JsonLd from '@/components/JsonLd';
 
 export const dynamic = 'force-static';
+export const revalidate = false;
 
 const teslaJsonLd = {
   "@context": "https://schema.org",
@@ -10,6 +11,9 @@ const teslaJsonLd = {
   "headline": "테슬라 연식별 결함 및 구매 가이드",
   "description": "테슬라 모델 3, 모델 Y 연식별(2017~2026) 히터 파괴, 컨트롤 암, 옥토밸브 히트펌프 결함 분석 및 중고차 구매 가이드",
   "url": "https://ev-stealth-web.vercel.app/tesla",
+  "inLanguage": "ko-KR",
+  "datePublished": "2026-01-01T00:00:00+09:00",
+  "dateModified": "2026-11-01T00:00:00+09:00",
   "author": {
     "@type": "Organization",
     "name": "Global EV Hub",
@@ -50,6 +54,8 @@ export const metadata: Metadata = {
     siteName: 'Global EV Hub',
     locale: 'ko_KR',
     type: 'article',
+    publishedTime: '2026-01-01T00:00:00+09:00',
+    modifiedTime: '2026-11-01T00:00:00+09:00',
   },
   twitter: {
     card: 'summary_large_image',
@@ -60,7 +66,7 @@ export const metadata: Metadata = {
 
 export default function TeslaPage() {
   return (
-    <div className="space-y-8 py-10 max-w-4xl mx-auto">
+    <article className="space-y-8 py-6 sm:py-10 max-w-4xl mx-auto">
       <JsonLd data={teslaJsonLd} />
       <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold border-b pb-4 text-slate-900">
         테슬라 연식별 구매 가이드 (피해야 할 연식)
@@ -225,6 +231,6 @@ export default function TeslaPage() {
           </Link>
         </div>
       </section>
-    </div>
+    </article>
   );
 }

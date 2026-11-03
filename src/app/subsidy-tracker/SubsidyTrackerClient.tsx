@@ -64,17 +64,17 @@ export const getBadgeStyle = (status: AlertSeverity | string): string => {
   switch (status) {
     case 'HEALTHY':
     case 'available':
-      return 'bg-emerald-950 text-emerald-300 border-emerald-500/40';
+      return 'bg-emerald-950 text-emerald-300 border-emerald-500/50';
     case 'CAUTION':
-      return 'bg-amber-950 text-amber-300 border-amber-500/40';
+      return 'bg-amber-950 text-amber-300 border-amber-500/50';
     case 'WARNING':
-      return 'bg-orange-950 text-orange-300 border-orange-500/40';
+      return 'bg-orange-950 text-orange-300 border-orange-500/50';
     case 'CRITICAL':
-      return 'bg-rose-950 text-rose-300 border-rose-500/40 animate-pulse motion-reduce:animate-none';
+      return 'bg-rose-950 text-rose-300 border-rose-500/50 animate-pulse motion-reduce:animate-none';
     case 'DEPLETED':
       return 'bg-slate-900 text-slate-200 border-slate-500';
     default:
-      return 'bg-emerald-950 text-emerald-300 border-emerald-500/40';
+      return 'bg-emerald-950 text-emerald-300 border-emerald-500/50';
   }
 };
 
@@ -385,15 +385,19 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
 
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-xs font-semibold tracking-wide">
+            <span
+              role="status"
+              aria-label="실시간 스케줄러 동기화 상태: 정상"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950 border border-emerald-500/50 text-emerald-300 text-xs font-semibold tracking-wide"
+            >
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping motion-reduce:animate-none inline-block" aria-hidden="true" />
               실시간 스케줄러 동기화 완료
             </span>
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-slate-300">
               기준: 2026년 환경부 무공해차 통합누리집 (ev.or.kr)
             </span>
           </div>
-          <span className="text-xs text-slate-400">
+          <span className="text-xs text-slate-300">
             데이터 갱신 시각:{' '}
             <ClientTimestamp
               isoString={initialData?.metadata?.generated_at}
@@ -417,55 +421,56 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
           </p>
         </div>
 
-        {/* Live Nationwide Stat Cards - Solid Opaque Backgrounds */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 mt-8 pt-6 border-t border-slate-800">
+        {/* Live Nationwide Stat Cards - Responsive Grid on Mobile (320px+) & Solid Opaque Backgrounds */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mt-8 pt-6 border-t border-slate-800">
           <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-            <div className="text-xs font-medium text-slate-400">전국 평균 소진율</div>
+            <div className="text-xs font-medium text-slate-300">전국 평균 소진율</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-amber-400 mt-1">
-              {(summary.nationwide_depletion_rate ?? 0).toFixed(1)}%
+              {(Number.isFinite(summary?.nationwide_depletion_rate) ? summary.nationwide_depletion_rate : 0).toFixed(1)}%
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">
+            <div className="text-[11px] text-slate-300 mt-1">
               전체 카테고리 종합
             </div>
           </div>
 
           <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-            <div className="text-xs font-medium text-slate-400">총 공고 대수</div>
+            <div className="text-xs font-medium text-slate-300">총 공고 대수</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-slate-100 mt-1">
-              {(summary.total_announced_units ?? 0).toLocaleString()}
-              <span className="text-xs font-normal text-slate-400 ml-1">대</span>
+              {(Number.isFinite(summary?.total_announced_units) ? Math.max(0, summary.total_announced_units) : 0).toLocaleString()}
+              <span className="text-xs font-normal text-slate-300 ml-1">대</span>
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">
-              총 배정 예산 {(summary.total_budget_billion_krw ?? 0).toLocaleString()}억 원
+            <div className="text-[11px] text-slate-300 mt-1">
+              총 배정 예산 {(Number.isFinite(summary?.total_budget_billion_krw) ? Math.max(0, summary.total_budget_billion_krw) : 0).toLocaleString()}억 원
             </div>
           </div>
 
           <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-            <div className="text-xs font-medium text-slate-400">총 접수 대수</div>
+            <div className="text-xs font-medium text-slate-300">총 접수 대수</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-blue-400 mt-1">
-              {(summary?.total_applied_units ?? 0).toLocaleString()}
-              <span className="text-xs font-normal text-slate-400 ml-1">대</span>
+              {(Number.isFinite(summary?.total_applied_units) ? Math.max(0, summary.total_applied_units) : 0).toLocaleString()}
+              <span className="text-xs font-normal text-slate-300 ml-1">대</span>
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">
-              출고 완료: {(summary?.total_delivered_units ?? 0).toLocaleString()}대
+            <div className="text-[11px] text-slate-300 mt-1">
+              출고 완료: {(Number.isFinite(summary?.total_delivered_units) ? Math.max(0, summary.total_delivered_units) : 0).toLocaleString()}대
             </div>
           </div>
 
           <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-            <div className="text-xs font-medium text-slate-400">전국 잔여 대수</div>
+            <div className="text-xs font-medium text-slate-300">전국 잔여 대수</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-emerald-400 mt-1">
-              {(summary?.total_remaining_units ?? 0).toLocaleString()}
-              <span className="text-xs font-normal text-slate-400 ml-1">대</span>
+              {(Number.isFinite(summary?.total_remaining_units) ? Math.max(0, summary.total_remaining_units) : 0).toLocaleString()}
+              <span className="text-xs font-normal text-slate-300 ml-1">대</span>
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">
-              잔여율 {(100 - (summary?.nationwide_depletion_rate ?? 0)).toFixed(1)}%
+            <div className="text-[11px] text-slate-300 mt-1">
+              잔여율 {(100 - (Number.isFinite(summary?.nationwide_depletion_rate) ? summary.nationwide_depletion_rate : 0)).toFixed(1)}%
             </div>
           </div>
 
-          <div className="col-span-2 md:col-span-1 bg-rose-950 border border-rose-500/40 rounded-2xl p-4 flex flex-col justify-between">
+          <div className="sm:col-span-2 lg:col-span-1 bg-rose-950 border border-rose-500/50 rounded-2xl p-4 flex flex-col justify-between">
             <div className="text-xs font-medium text-rose-300">긴급 마감 위험 지역</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-rose-400 mt-1">
-              {(summary?.alert_region_counts?.critical ?? 0) + (summary?.alert_region_counts?.depleted ?? 0)}
+              {(Number.isFinite(summary?.alert_region_counts?.critical) ? summary.alert_region_counts.critical : 0) +
+                (Number.isFinite(summary?.alert_region_counts?.depleted) ? summary.alert_region_counts.depleted : 0)}
               <span className="text-xs font-normal text-rose-300 ml-1">개 시도</span>
             </div>
             <div className="text-[11px] text-rose-300 mt-1">
@@ -496,7 +501,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                     className="px-2.5 py-1.5 min-h-[44px] inline-flex items-center rounded bg-rose-900 border border-rose-500/50 text-rose-200 hover:bg-rose-800 hover:text-white transition font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                     title={`${crit.name_ko} 보조금 계산기로 이동`}
                   >
-                    {crit.name_ko} ({(crit.categories?.passenger?.depletion_rate ?? 0).toFixed(1)}%)
+                    {crit.name_ko} ({(Number.isFinite(crit.categories?.passenger?.depletion_rate) ? crit.categories.passenger.depletion_rate : 0).toFixed(1)}%)
                   </button>
                 ))}
               </div>
@@ -520,7 +525,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
           <span className="text-xs text-slate-300">배지 클릭 시 해당 경보 지역만 필터링</span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
           {(Object.keys(thresholds) as AlertSeverity[]).map((key) => {
             const t = thresholds[key];
             const isSelected = alertFilter === key;
@@ -553,7 +558,8 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
       </section>
 
       {/* 3. Search & Filter Bar */}
-      <section aria-label="지자체 검색 및 정렬 제어판" className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+      <section aria-labelledby="filter-controls-heading" className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4">
+        <h2 id="filter-controls-heading" className="sr-only">지자체 검색 및 정렬 제어판</h2>
         <div className="flex flex-wrap items-center justify-between gap-4">
           {/* Vehicle Category Selector */}
           <div role="tablist" aria-label="차종 카테고리 선택" className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800 text-xs sm:text-sm font-semibold">
@@ -613,7 +619,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="시·도 또는 세부 시·군·구 검색 (예: 서울, 수원, 성남, 대구, 포항, 울릉)"
-              className="w-full pl-10 pr-9 py-2.5 min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 text-white placeholder-slate-400 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              className="w-full pl-10 pr-9 py-2.5 min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 text-white placeholder-slate-300 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             />
             {searchQuery && (
               <button
@@ -659,7 +665,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 }
               }}
               aria-label="지자체 정렬 방식"
-              className="py-2.5 px-3 min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 text-slate-200 text-xs sm:text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer"
+              className="py-2.5 px-3 min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 text-slate-200 text-xs sm:text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
             >
               <option value="DEPLETION_DESC">소진율 높은 순 (마감임박)</option>
               <option value="DEPLETION_ASC">소진율 낮은 순 (신청여유)</option>
@@ -670,9 +676,9 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
           </div>
         </div>
 
-        {/* Active Filter Clear indicator with aria-live */}
+        {/* Active Filter Clear indicator with role="status" and aria-live */}
         {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || searchQuery || supplementaryOnly) && (
-          <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800" aria-live="polite">
+          <div role="status" className="flex items-center justify-between text-xs text-slate-300 pt-2 border-t border-slate-800" aria-live="polite">
             <span>
               필터 적용 중: 총 <strong>{filteredRegions.length}</strong>개 지역 표시 중
             </span>
@@ -705,7 +711,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             <span aria-hidden="true">🗺️</span> 17개 광역시도별 보조금 소진율 &amp; 잔여 쿼터 현황
           </h2>
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-slate-300 font-medium">
               {selectedCategory === 'passenger' ? '전기승용 기준' : selectedCategory === 'commercial' ? '전기화물 기준' : '전기승합 기준'}
               {filteredRegions.length < regions.length && ` (검색 결과 ${filteredRegions.length}개 지역)`}
             </span>
@@ -846,9 +852,9 @@ const RegionCard = React.memo(function RegionCard({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-lg font-bold text-white">{region.name_ko}</h3>
-              <span className="text-[10px] text-slate-400 uppercase font-mono">{region.iso_code}</span>
+              <span className="text-[10px] text-slate-300 uppercase font-mono font-medium">{region.iso_code}</span>
             </div>
-            <div className="text-xs text-slate-400">{region.name_en}</div>
+            <div className="text-xs text-slate-300">{region.name_en}</div>
           </div>
           <SubsidyBadge status={cat?.status || 'available'} />
         </div>
@@ -859,7 +865,7 @@ const RegionCard = React.memo(function RegionCard({
             <span className="font-semibold text-slate-300">
               소진율 <strong className="text-amber-400 text-sm">{safeDepletion.toFixed(1)}%</strong>
             </span>
-            <span className="text-slate-400 text-[11px]">
+            <span className="text-slate-300 text-[11px] font-medium">
               잔여 <strong className="text-emerald-400 font-bold">{safeRemaining.toLocaleString()}</strong> / {announcedUnits.toLocaleString()}대
             </span>
           </div>
@@ -885,16 +891,16 @@ const RegionCard = React.memo(function RegionCard({
               className="bg-amber-400 h-full border-r border-slate-950 transition-all duration-500"
               title={`접수 대기: ${Math.max(0, safeApplied - safeDelivered).toLocaleString()}대 (${pendingPct.toFixed(1)}%)`}
             />
-            {/* Layer 3: Remaining */}
+            {/* Layer 3: Remaining (slate track with >= 3:1 contrast against bg-slate-950) */}
             <div
               style={{ width: `${remainingPct}%` }}
-              className="bg-slate-900 h-full"
+              className="bg-slate-700 h-full"
               title={`잔여 쿼터: ${safeRemaining.toLocaleString()}대 (${remainingPct.toFixed(1)}%)`}
             />
           </div>
 
           {/* Legend / Sub-metrics with WCAG AAA Contrast Indicators */}
-          <div className="flex justify-between text-[10px] text-slate-300 font-medium pt-0.5">
+          <div className="flex flex-wrap gap-x-2 gap-y-0.5 justify-between text-[10px] sm:text-[11px] text-slate-300 font-medium pt-0.5">
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" aria-hidden="true" />
               출고 {safeDelivered.toLocaleString()}대
@@ -913,15 +919,15 @@ const RegionCard = React.memo(function RegionCard({
         {/* Financial Subsidy Limits - Solid Opaque Backgrounds for Contrast */}
         <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800 text-xs">
           <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
-            <div className="text-[11px] text-slate-400">지자체 최대 지원금</div>
+            <div className="text-[11px] text-slate-300">지자체 최대 지원금</div>
             <div className="text-sm font-bold text-slate-200 mt-0.5">
-              {(((cat?.max_local_subsidy_krw ?? 0)) / 10000).toLocaleString()}만 원
+              {((Number.isFinite(cat?.max_local_subsidy_krw) ? Math.max(0, cat.max_local_subsidy_krw) : 0) / 10000).toLocaleString()}만 원
             </div>
           </div>
           <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
-            <div className="text-[11px] text-slate-400">국비+지방비 합산 최대</div>
+            <div className="text-[11px] text-slate-300">국비+지방비 합산 최대</div>
             <div className="text-sm font-bold text-amber-400 mt-0.5">
-              {(((cat?.max_total_subsidy_krw ?? 0)) / 10000).toLocaleString()}만 원
+              {((Number.isFinite(cat?.max_total_subsidy_krw) ? Math.max(0, cat.max_total_subsidy_krw) : 0) / 10000).toLocaleString()}만 원
             </div>
           </div>
         </div>
@@ -929,7 +935,7 @@ const RegionCard = React.memo(function RegionCard({
         {/* Eligibility & Notes */}
         <div className="flex flex-wrap gap-1.5 pt-1 text-[11px]">
           <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-            거주 요건: {region.residency_requirement_days}일 이상
+            거주 요건: {Number.isFinite(region.residency_requirement_days) ? region.residency_requirement_days : 30}일 이상
           </span>
           {region.supplementary_budget_added && (
             <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/40 font-semibold">
@@ -939,7 +945,7 @@ const RegionCard = React.memo(function RegionCard({
         </div>
 
         {region.notes && (
-          <p className="text-xs text-slate-400 leading-relaxed bg-slate-950 p-2 rounded-lg border border-slate-800">
+          <p className="text-xs text-slate-300 leading-relaxed bg-slate-950 p-2 rounded-lg border border-slate-800">
             ℹ️ {region.notes}
           </p>
         )}
@@ -974,15 +980,15 @@ const RegionCard = React.memo(function RegionCard({
                   >
                     <div>
                       <span className="font-semibold text-slate-200">{muni.name_ko}</span>
-                      <span className="text-slate-400 ml-2">
-                        {((Number.isFinite(muni.local_subsidy_krw) ? muni.local_subsidy_krw : 0) / 10000).toLocaleString()}만 원
+                      <span className="text-slate-300 ml-2">
+                        {((Number.isFinite(muni.local_subsidy_krw) ? Math.max(0, muni.local_subsidy_krw) : 0) / 10000).toLocaleString()}만 원
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-slate-400">잔여 {muni.remaining_units ?? 0}대</span>
+                      <span className="text-slate-300">잔여 {(Number.isFinite(muni.remaining_units) ? Math.max(0, muni.remaining_units) : 0).toLocaleString()}대</span>
                       <SubsidyBadge status={muni.status || 'available'} />
                       <span className="font-mono text-amber-300 font-semibold text-[10px]">
-                        {(Number.isFinite(muni.depletion_rate) ? muni.depletion_rate : 0).toFixed(1)}%
+                        {(Number.isFinite(muni.depletion_rate) ? Math.max(0, muni.depletion_rate) : 0).toFixed(1)}%
                       </span>
                     </div>
                   </div>
@@ -1138,7 +1144,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             >
               {models.map((model) => (
                 <option key={model.model_id} value={model.model_id}>
-                  {model.manufacturer} - {model.name_ko} (출고가 {(model.base_price_krw / 10000).toLocaleString()}만 원)
+                  {model.manufacturer} - {model.name_ko} (출고가 {((Number.isFinite(model.base_price_krw) ? Math.max(0, model.base_price_krw) : 0) / 10000).toLocaleString()}만 원)
                 </option>
               ))}
             </select>
@@ -1168,9 +1174,9 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             {/* Selected Model Spec Card - Solid Opaque Background */}
             {activeModel && (
               <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex flex-wrap items-center justify-between text-xs text-slate-300 gap-2">
-                <span>배터리: <strong>{activeModel.battery_type}</strong> ({activeModel.battery_capacity_kwh} kWh)</span>
-                <span>1회 충전 주행거리: <strong>{activeModel.rated_range_km} km</strong></span>
-                <span>기본 출고가: <strong>{(activeModel.base_price_krw / 10000).toLocaleString()}만 원</strong></span>
+                <span>배터리: <strong>{activeModel.battery_type || 'N/A'}</strong> ({activeModel.battery_capacity_kwh ?? 0} kWh)</span>
+                <span>1회 충전 주행거리: <strong>{activeModel.rated_range_km ?? 0} km</strong></span>
+                <span>기본 출고가: <strong>{((Number.isFinite(activeModel.base_price_krw) ? Math.max(0, activeModel.base_price_krw) : 0) / 10000).toLocaleString()}만 원</strong></span>
               </div>
             )}
           </div>
@@ -1189,12 +1195,12 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             >
               {regions.map((reg) => (
                 <option key={reg.region_id} value={reg.region_id}>
-                  {reg.name_ko} ({(reg.categories?.passenger?.depletion_rate ?? 0).toFixed(1)}% 소진, {getStatusLabel(reg.categories?.passenger?.status || 'available')})
+                  {reg.name_ko} ({(Number.isFinite(reg.categories?.passenger?.depletion_rate) ? reg.categories.passenger.depletion_rate : 0).toFixed(1)}% 소진, {getStatusLabel(reg.categories?.passenger?.status || 'available')})
                 </option>
               ))}
             </select>
             <p id="region-residency-note" className="text-xs text-amber-300 flex items-center gap-1.5 pt-0.5">
-              <span aria-hidden="true">ℹ️</span> 해당 지자체 최소 <strong>{activeRegionForCalc?.residency_requirement_days ?? 30}일 이상</strong> 연속 거주 요건 필요
+              <span aria-hidden="true">ℹ️</span> 해당 지자체 최소 <strong>{Number.isFinite(activeRegionForCalc?.residency_requirement_days) ? activeRegionForCalc.residency_requirement_days : 30}일 이상</strong> 연속 거주 요건 필요
             </p>
           </div>
 
@@ -1323,15 +1329,17 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
 
         {/* Right Column: Live Output & Net Price Card */}
         <div
+          role="region"
+          aria-labelledby="calc-summary-heading"
           aria-live="polite"
           aria-atomic="true"
           className="lg:col-span-5 bg-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-7 space-y-6 shadow-2xl sticky top-24"
         >
           <div>
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
               시뮬레이션 견적 요약
             </span>
-            <h3 className="text-xl font-bold text-white mt-1">
+            <h3 id="calc-summary-heading" className="text-xl font-bold text-white mt-1">
               {calculationResult.modelName}
             </h3>
             <div className="text-xs text-blue-300 font-medium mt-0.5">
@@ -1344,11 +1352,11 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             <div className="flex justify-between items-center text-slate-300">
               <span>차량 출고가 (MSRP)</span>
               <span className="font-semibold text-slate-100">
-                {calculationResult.msrpKrw.toLocaleString()}원
+                {(Number.isFinite(calculationResult.msrpKrw) ? calculationResult.msrpKrw : 0).toLocaleString()}원
               </span>
             </div>
 
-            <div className="flex justify-between items-center text-xs text-slate-400">
+            <div className="flex justify-between items-center text-xs text-slate-300">
               <span>가격상한제 적용 구간</span>
               <span className="font-medium text-amber-300">
                 {calculationResult.priceCapTierText}
@@ -1358,22 +1366,22 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             <div className="flex justify-between items-center text-blue-400">
               <span>(-) 국비 보조금</span>
               <span className="font-semibold">
-                -{calculationResult.nationalSubsidyKrw.toLocaleString()}원
+                -{(Number.isFinite(calculationResult.nationalSubsidyKrw) ? calculationResult.nationalSubsidyKrw : 0).toLocaleString()}원
               </span>
             </div>
 
             <div className="flex justify-between items-center text-blue-400">
               <span>(-) 지자체 지방비 보조금</span>
               <span className="font-semibold">
-                -{calculationResult.localSubsidyKrw.toLocaleString()}원
+                -{(Number.isFinite(calculationResult.localSubsidyKrw) ? calculationResult.localSubsidyKrw : 0).toLocaleString()}원
               </span>
             </div>
 
-            {calculationResult.additionalGrantsKrw > 0 && (
+            {(calculationResult.additionalGrantsKrw ?? 0) > 0 && (
               <div className="flex justify-between items-center text-emerald-400">
                 <span>(-) 추가 지원 &amp; 특별 가산금</span>
                 <span className="font-semibold">
-                  -{calculationResult.additionalGrantsKrw.toLocaleString()}원
+                  -{(Number.isFinite(calculationResult.additionalGrantsKrw) ? calculationResult.additionalGrantsKrw : 0).toLocaleString()}원
                 </span>
               </div>
             )}
@@ -1381,10 +1389,10 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             <div className="h-px bg-slate-800 my-2" />
 
             {/* Total Subsidy Combined */}
-            <div className="flex justify-between items-center text-xs text-slate-400">
+            <div className="flex justify-between items-center text-xs text-slate-300">
               <span>총 지원 혜택 금액</span>
               <span className="font-bold text-slate-200">
-                {calculationResult.totalSubsidyKrw.toLocaleString()}원
+                {(Number.isFinite(calculationResult.totalSubsidyKrw) ? calculationResult.totalSubsidyKrw : 0).toLocaleString()}원
               </span>
             </div>
           </div>
@@ -1395,11 +1403,11 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               최종 실구매 체감가 (소비자 부담액)
             </span>
             <div className="text-3xl sm:text-4xl font-black text-emerald-400 tracking-tight">
-              {Math.round(calculationResult.netPurchasePriceKrw / 10000).toLocaleString()}
+              {Math.round((Number.isFinite(calculationResult.netPurchasePriceKrw) ? calculationResult.netPurchasePriceKrw : 0) / 10000).toLocaleString()}
               <span className="text-xl sm:text-2xl font-bold ml-1 text-emerald-200">만 원</span>
             </div>
             <div className="text-[11px] text-emerald-300">
-              (정확한 금액: {calculationResult.netPurchasePriceKrw.toLocaleString()}원)
+              (정확한 금액: {(Number.isFinite(calculationResult.netPurchasePriceKrw) ? calculationResult.netPurchasePriceKrw : 0).toLocaleString()}원)
             </div>
           </div>
 
@@ -1416,8 +1424,8 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               <span>{calculationResult.regionName} 보조금 예산 소진 위험도 분석</span>
             </div>
             <p>{calculationResult.warningNotice}</p>
-            <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-800 flex flex-wrap justify-between gap-1">
-              <span>거주 요건: 최소 {calculationResult.residencyRequirementDays}일 이상</span>
+            <div className="text-[11px] text-slate-300 pt-1 border-t border-slate-800 flex flex-wrap justify-between gap-1">
+              <span>거주 요건: 최소 {Number.isFinite(calculationResult.residencyRequirementDays) ? calculationResult.residencyRequirementDays : 30}일 이상</span>
               <span>2년 의무 운행 기간 (관외 이전 시 환수)</span>
             </div>
           </div>

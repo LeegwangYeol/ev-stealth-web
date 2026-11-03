@@ -347,6 +347,123 @@ class TestCLIRunner(unittest.TestCase):
         self.assertEqual(res.returncode, 0)
         self.assertIn("[SUCCESS]", res.stdout)
 
+    def test_run_tracker_format_json_and_markdown(self):
+        """CLI runner must output valid JSON or Markdown when requested via --format."""
+        root = Path(__file__).resolve().parent.parent
+        script = root / "run_tracker.py"
+
+        # 1. JSON format
+        res_json = subprocess.run(
+            [sys.executable, str(script), "--dry-run", "--mock-network", "--format", "json"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_json.returncode, 0, f"JSON run failed: {res_json.stderr}")
+        # Parse JSON from stdout
+        lines = [ln for ln in res_json.stdout.splitlines() if not ln.startswith("[")]
+        parsed = json.loads("\n".join(lines).strip())
+        self.assertIn("metadata", parsed)
+        self.assertIn("nationwide_summary", parsed)
+        self.assertIn("regions", parsed)
+        self.assertEqual(len(parsed["regions"]), 17)
+
+        # 2. Markdown format
+        res_md = subprocess.run(
+            [sys.executable, str(script), "--dry-run", "--mock-network", "--format", "markdown"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_md.returncode, 0, f"Markdown run failed: {res_md.stderr}")
+        self.assertIn("# [대한민국 2026 전국 지자체 전기차 보조금", res_md.stdout)
+
+    def test_run_tracker_out_flag_and_invalid_arg_exit_code(self):
+        """CLI runner must accept --out alias and return exit code 2 on invalid flags."""
+        root = Path(__file__).resolve().parent.parent
+        script = root / "run_tracker.py"
+
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tf:
+            tmp_out = tf.name
+
+        try:
+            res_out = subprocess.run(
+                [sys.executable, str(script), "--dry-run", "--mock-network", "--out", tmp_out],
+                cwd=str(root),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res_out.returncode, 0, f"--out run failed: {res_out.stderr}")
+
+            # Invalid argument exit code 2
+            res_bad = subprocess.run(
+                [sys.executable, str(script), "--totally-invalid-cli-flag"],
+                cwd=str(root),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res_bad.returncode, 2)
+        finally:
+            if os.path.exists(tmp_out):
+                os.unlink(tmp_out)
+
+    def test_validate_data_cli_flags_and_exit_codes(self):
+        """scripts/validate_data.py CLI must support --format, --out, and proper exit codes."""
+        root = Path(__file__).resolve().parent.parent
+        val_script = root / "scripts" / "validate_data.py"
+
+        # 1. JSON output format
+        res_json = subprocess.run(
+            [sys.executable, str(val_script), "--format", "json"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_json.returncode, 0, f"validate_data json failed: {res_json.stderr}")
+        val_data = json.loads(res_json.stdout.strip())
+        self.assertTrue(val_data["is_valid"])
+        self.assertEqual(len(val_data["errors"]), 0)
+        self.assertIn("complaints", val_data["stats"])
+        self.assertIn("subsidy", val_data["stats"])
+
+        # 2. Markdown output format
+        res_md = subprocess.run(
+            [sys.executable, str(val_script), "--format", "markdown"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_md.returncode, 0)
+        self.assertIn("# EV Daily Monitoring System", res_md.stdout)
+        self.assertIn("✅ PASS", res_md.stdout)
+
+        # 3. Output file saving
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tf:
+            tmp_report = tf.name
+        try:
+            res_out = subprocess.run(
+                [sys.executable, str(val_script), "--out", tmp_report],
+                cwd=str(root),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res_out.returncode, 0)
+            self.assertTrue(os.path.exists(tmp_report))
+            saved_report = json.loads(Path(tmp_report).read_text(encoding="utf-8"))
+            self.assertTrue(saved_report["is_valid"])
+
+            # 4. Invalid argument exit code 2
+            res_bad = subprocess.run(
+                [sys.executable, str(val_script), "--invalid-cli-arg"],
+                cwd=str(root),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res_bad.returncode, 2)
+        finally:
+            if os.path.exists(tmp_report):
+                os.unlink(tmp_report)
+
     def test_corrupted_cache_fallback(self):
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tf:
             tf.write("{ invalid json corrupted content ...")
