@@ -54,38 +54,60 @@ export interface EvModelDepreciation {
   brand_name_en: string;
   brand_name_ko: string;
   model_name: string;
-  release_year: number;
   segment: string;
-  msrp_base_krw: number;
-  effective_purchase_price_krw: number;
-  subsidy_national_krw: number;
-  subsidy_local_avg_krw: number;
-  total_subsidy_krw: number;
-  resale_defense_tier: ResaleDefenseTier;
-  depreciation_curve: DepreciationCurve;
+  msrp_krw_baseline: number;
+  avg_subsidy_krw: number;
+  net_purchase_price_krw: number;
   battery_specs: BatterySpecs;
   warranty: WarrantyInfo;
   factor_weights: FactorWeights;
-  notable_depreciation_risk: string;
+  software_ota_level: SoftwareOtaLevel;
+  resale_defense_tier: ResaleDefenseTier;
+  depreciation_curve: DepreciationCurve;
+  key_pros_resale: string;
+  key_cons_resale: string;
+  // Compatibility & alias fields:
+  release_year?: number;
+  msrp_base_krw?: number;
+  effective_purchase_price_krw?: number;
+  subsidy_national_krw?: number;
+  subsidy_local_avg_krw?: number;
+  total_subsidy_krw?: number;
+  notable_depreciation_risk?: string;
 }
 
 export interface BatteryReplacementTierCosts {
+  new_pack_krw: number;
+  new_pack_usd?: number;
+  reman_pack_krw: number | null;
+  reman_pack_usd?: number | null;
+  labor_coolant_krw: number;
+  labor_coolant_usd?: number;
+  total_new_installed_krw: number;
+  total_new_installed_usd?: number;
+  total_reman_installed_krw: number | null;
+  total_reman_installed_usd?: number | null;
+  cost_per_kwh_usd?: number;
   module_repair_krw?: number;
   full_pack_oem_krw?: number;
-  remanufactured_pack_krw?: number;
+  remanufactured_pack_krw?: number | null;
   labor_inspection_krw?: number;
 }
 
 export interface BatteryReplacementTier {
+  tier_id: string;
+  segment_name: string;
+  pack_size_kwh_nominal: number;
+  pack_size_range: string;
+  representative_models: string[];
+  costs: BatteryReplacementTierCosts;
+  // Compatibility fields:
   model_id?: string;
-  tier_id?: string;
   brand?: string;
   model_name?: string;
-  segment_name?: string;
   pack_capacity_kwh?: number;
   cell_supplier?: string;
   replacement_cost_krw?: number;
-  costs?: BatteryReplacementTierCosts;
   cost_to_residual_ratio_5yr?: number;
   risk_level?: string;
   out_of_warranty_risk_desc?: string;
@@ -96,15 +118,34 @@ export interface BatteryReplacementTier {
 }
 
 export interface BatteryChemistryProfile {
-  chemistry: BatteryChemistryType;
-  full_name: string;
-  calendar_aging_factor: number;
-  cycle_aging_factor: number;
-  fast_charging_penalty_factor: number;
-  temperature_sensitivity: string;
-  expected_soh_5yr_at_100k_km: number;
-  advantages: string;
-  vulnerabilities: string;
+  id: BatteryChemistryType;
+  name: string;
+  cathode_structure: string;
+  nominal_cell_voltage_v: number;
+  voltage_cutoff_v: number;
+  energy_density_wh_kg: number;
+  cycle_life_to_80_soh: number;
+  calendar_baseline_annual_loss_pct: number;
+  calendar_arrhenius_ea_j_mol: number;
+  soc_stress_coefficient_beta: number;
+  calendar_time_exponent_z: number;
+  cyclic_exponent_w: number;
+  dod_exponent_u: number;
+  dcfc_acceleration_multiplier_max: number;
+  cold_charge_sensitivity_gamma: number;
+  thermal_runaway_temp_c: number;
+  ocv_profile_type: string;
+  cell_balancing_requirement: string;
+  // Compatibility aliases:
+  chemistry?: BatteryChemistryType;
+  full_name?: string;
+  calendar_aging_factor?: number;
+  cycle_aging_factor?: number;
+  fast_charging_penalty_factor?: number;
+  temperature_sensitivity?: string;
+  expected_soh_5yr_at_100k_km?: number;
+  advantages?: string;
+  vulnerabilities?: string;
 }
 
 export interface AdjustmentFactors {
@@ -114,23 +155,39 @@ export interface AdjustmentFactors {
     expired_warranty_penalty: number;
     description: string;
   };
-  battery_chemistry: Record<string, {
-    cycle_life_bonus_yr3_5: number;
-    winter_seasonal_discount: number;
-    fire_safety_reputation_bonus: number;
-    description: string;
-  }>;
+  battery_chemistry:
+    | Record<
+        BatteryChemistryType,
+        {
+          cycle_life_bonus_yr3_5: number;
+          winter_seasonal_discount: number;
+          fire_safety_reputation_bonus: number;
+          description: string;
+        }
+      >
+    | Record<
+        string,
+        {
+          cycle_life_bonus_yr3_5: number;
+          winter_seasonal_discount: number;
+          fire_safety_reputation_bonus: number;
+          description: string;
+        }
+      >;
   facelift_hardware?: {
     platform_800V_premium: number;
     platform_400V_penalty: number;
     major_facelift_compute_shift_penalty: number;
     description: string;
   };
-  software_ota?: Record<string, number> | {
-    full_stack_fota_bonus: number;
-    legacy_infotainment_penalty: number;
-    description: string;
-  };
+  software_ota?:
+    | Record<SoftwareOtaLevel, number>
+    | Record<string, number>
+    | {
+        full_stack_fota_bonus: number;
+        legacy_infotainment_penalty: number;
+        description: string;
+      };
   mileage_sensitivity: {
     base_km_per_year?: number;
     baseline_annual_km?: number;
@@ -164,25 +221,35 @@ export interface SubsidyClawbackSchedule {
 }
 
 export interface IceDisplacementTier {
-  max_cc?: number | null;
-  rate_per_cc_krw?: number;
-  name?: string;
+  max_cc: number | null;
+  rate_per_cc_krw: number;
+  name: string;
   annual_tax_krw?: number;
   description?: string;
 }
 
 export interface TcoFuelTariffs {
+  ev_slow_charging_krw_per_kwh: number;
+  ev_fast_charging_krw_per_kwh: number;
+  ice_gasoline_krw_per_liter: number;
+  ice_diesel_krw_per_liter: number;
+  // Compatibility aliases:
   slow_charging_krw_per_kwh?: number;
   fast_charging_krw_per_kwh?: number;
   gasoline_krw_per_liter?: number;
   diesel_krw_per_liter?: number;
-  ev_slow_charging_krw_per_kwh?: number;
-  ev_fast_charging_krw_per_kwh?: number;
-  ice_gasoline_krw_per_liter?: number;
-  ice_diesel_krw_per_liter?: number;
 }
 
 export interface TcoTaxParameters {
+  ev_annual_tax_krw: number;
+  ev_base_tax_krw: number;
+  ev_education_tax_krw: number;
+  ice_displacement_tiers: IceDisplacementTier[];
+  education_tax_multiplier: number;
+  ice_age_discount_start_year: number;
+  ice_age_discount_rate_per_year: number;
+  ice_age_discount_max: number;
+  // Compatibility aliases:
   ev_annual_automobile_tax_krw?: number;
   ev_annual_auto_tax_krw?: number;
   ice_gasoline_annual_tax_krw?: number;
@@ -191,19 +258,23 @@ export interface TcoTaxParameters {
 }
 
 export interface TcoAuxiliaryBenefits {
+  expressway_toll_discount_rate: number;
+  annual_toll_savings_krw: number;
+  public_parking_discount_rate: number;
+  annual_parking_savings_krw: number;
+  maintenance_annual_savings_krw: number;
+  // Compatibility aliases:
   highway_toll_discount_rate?: number;
-  public_parking_discount_rate?: number;
-  annual_parking_savings_krw?: number;
-  maintenance_annual_savings_krw?: number;
   highway_toll_discount_pct_ev?: number;
   congestion_toll_discount_pct_ev?: number;
   public_parking_discount_pct_ev?: number;
 }
 
 export interface TcoEfficiencyBaselines {
-  ev_efficiency_km_per_kwh?: number;
-  ice_gasoline_economy_km_per_liter?: number;
-  ice_diesel_economy_km_per_liter?: number;
+  ev_efficiency_km_per_kwh: number;
+  ice_gasoline_economy_km_per_liter: number;
+  ice_diesel_economy_km_per_liter: number;
+  // Compatibility aliases:
   ev_standard_km_per_kwh?: number;
   ice_gasoline_standard_km_per_liter?: number;
   ice_diesel_standard_km_per_liter?: number;
@@ -211,34 +282,34 @@ export interface TcoEfficiencyBaselines {
 
 export interface TcoParameters {
   fuel_tariffs: TcoFuelTariffs;
-  efficiency_baselines?: TcoEfficiencyBaselines;
-  tax_parameters?: TcoTaxParameters;
-  auxiliary_benefits?: TcoAuxiliaryBenefits;
+  efficiency_baselines: TcoEfficiencyBaselines;
+  tax_parameters: TcoTaxParameters;
+  auxiliary_benefits: TcoAuxiliaryBenefits;
   tax?: TcoTaxParameters;
 }
 
 export interface DepreciationDatabase {
   metadata: {
     version: string;
-    generated_at?: string;
-    total_models?: number;
-    brands_count?: number;
+    generated_at: string;
+    total_models: number;
+    brands_count: number;
     currency: string;
-    baseline_annual_mileage_km?: number;
-    sources?: string[];
+    baseline_annual_mileage_km: number;
+    sources: string[];
     analysis_base_year?: number;
     data_sources?: string[];
     models_evaluated?: number;
   };
-  market_context?: {
+  market_context: {
     korean_market_status: string;
     cheongna_fire_impact_summary: string;
     subsidy_clawback_rules: string;
   };
   adjustment_factors: AdjustmentFactors;
-  chemistries?: Record<BatteryChemistryType, BatteryChemistryProfile>;
+  chemistries: Record<BatteryChemistryType, BatteryChemistryProfile>;
   battery_chemistry_profiles?: Record<BatteryChemistryType, BatteryChemistryProfile>;
-  battery_replacement_costs?: BatteryReplacementTier[];
+  battery_replacement_costs: BatteryReplacementTier[];
   battery_replacement_matrix?: BatteryReplacementTier[];
   subsidy_clawback_schedule: SubsidyClawbackSchedule;
   tco_parameters: TcoParameters;
@@ -260,13 +331,14 @@ export interface DepreciationCalculationInput {
 }
 
 export interface FactorAdjustmentsBreakdown {
-  warrantyCliffPenalty?: number;
-  batteryChemistryBonus?: number;
-  architectureAdjustment?: number;
-  otaAdjustment?: number;
-  mileageAdjustment?: number;
-  winterAdjustment?: number;
-  totalAdjustmentPct?: number;
+  warrantyCliffPenalty: number;
+  batteryChemistryBonus: number;
+  architectureAdjustment: number;
+  otaAdjustment: number;
+  mileageAdjustment: number;
+  winterAdjustment: number;
+  totalAdjustmentPct: number;
+  // Compatibility aliases:
   warrantyAdjustmentPct?: number;
   mileageAdjustmentPct?: number;
   fastChargingAdjustmentPct?: number;
@@ -277,10 +349,11 @@ export interface FactorAdjustmentsBreakdown {
 }
 
 export interface WarrantyStatus {
-  isApproachingCliff?: boolean;
-  isExpired?: boolean;
+  isApproachingCliff: boolean;
+  isExpired: boolean;
   remainingYears: number;
   remainingKm: number;
+  // Compatibility aliases:
   isUnderWarranty?: boolean;
   remainingWarrantyYears?: number;
   remainingWarrantyKm?: number;
@@ -293,22 +366,23 @@ export interface DepreciationCalculationResult {
   years: number;
   mileageKm: number;
   priceBasis: PriceBasis;
-  basePurchasePriceKrw?: number;
-  initialPriceKrw?: number;
-  baselineResidualPct?: number;
-  baseResidualPct?: number;
+  basePurchasePriceKrw: number;
+  baselineResidualPct: number;
   adjustedResidualPct: number;
-  estimatedResidualPriceKrw?: number;
-  estimatedResalePriceKrw?: number;
+  estimatedResidualPriceKrw: number;
   depreciationAmountKrw: number;
-  depreciationPct?: number;
-  defenseTier?: ResaleDefenseTier;
-  resaleDefenseTier?: ResaleDefenseTier;
-  factorAdjustments?: FactorAdjustmentsBreakdown;
-  factorBreakdown?: FactorAdjustmentsBreakdown;
+  defenseTier: ResaleDefenseTier;
+  factorAdjustments: FactorAdjustmentsBreakdown;
   warrantyStatus: WarrantyStatus;
-  keyPros?: string;
-  keyCons?: string;
+  keyPros: string;
+  keyCons: string;
+  // Compatibility aliases:
+  baseResidualPct?: number;
+  initialPriceKrw?: number;
+  estimatedResalePriceKrw?: number;
+  depreciationPct?: number;
+  resaleDefenseTier?: ResaleDefenseTier;
+  factorBreakdown?: FactorAdjustmentsBreakdown;
 }
 
 export interface BatterySimulationInput {
@@ -329,36 +403,23 @@ export interface BatterySimulationInput {
 
 export interface BatteryHealthResult {
   chemistry: BatteryChemistryType;
-  chemistryName?: string;
-  chemistryFullName?: string;
+  chemistryName: string;
   years: number;
-  heldYears?: number;
   totalKm: number;
-  equivalentFullCycles?: number;
+  equivalentFullCycles: number;
   calendarLossPct: number;
-  cyclicLossPct?: number;
-  cycleLossPct?: number;
-  fastChargeLossPct?: number;
-  totalLossPct?: number;
-  sohPct?: number; // State of Health (100% to 0%)
-  sohPercentage?: number;
-  grade?: BatteryRiskGrade;
-  replacementRiskGrade?: BatteryRiskGrade;
-  gradeLabel?: string;
-  badgeColor?: string;
-  failureRiskPct?: number;
-  winterRangeRetentionPct?: number;
-  usedMarketValuationFactor?: number;
-  usedMarketValuationText?: string;
-  capacityRetentionKwh?: number;
-  originalCapacityKwh?: number;
-  replacementCostKrw?: number;
-  replacementCostRatioToResidual?: number;
-  warrantyRetentionThresholdPct?: number;
-  isWarrantyClaimEligible?: boolean;
-  advisoryMessage?: string;
-  actionRecommendation?: string;
-  replacementCostEstimate?: {
+  cyclicLossPct: number;
+  totalLossPct: number;
+  sohPct: number; // State of Health (100% to 0%)
+  grade: BatteryRiskGrade;
+  gradeLabel: string;
+  badgeColor: string;
+  failureRiskPct: number;
+  winterRangeRetentionPct: number;
+  usedMarketValuationFactor: number;
+  usedMarketValuationText: string;
+  actionRecommendation: string;
+  replacementCostEstimate: {
     tierId: string;
     segmentName: string;
     newPackKrw: number;
@@ -368,23 +429,38 @@ export interface BatteryHealthResult {
     totalRemanInstalledKrw: number | null;
     estimatedCostKrw: number;
   };
+  // Compatibility aliases:
+  heldYears?: number;
+  chemistryFullName?: string;
+  cycleLossPct?: number;
+  fastChargeLossPct?: number;
+  sohPercentage?: number;
+  replacementRiskGrade?: BatteryRiskGrade;
+  capacityRetentionKwh?: number;
+  originalCapacityKwh?: number;
+  replacementCostKrw?: number;
+  replacementCostRatioToResidual?: number;
+  warrantyRetentionThresholdPct?: number;
+  isWarrantyClaimEligible?: boolean;
+  advisoryMessage?: string;
 }
 
 export interface ClawbackResult {
   heldMonths: number;
-  tierLabel?: string;
-  statutoryClawbackRate?: number;
-  effectiveClawbackRate?: number;
-  localSubsidyReceivedKrw?: number;
-  nationalSubsidyReceivedKrw?: number;
-  localClawbackKrw?: number;
-  nationalClawbackKrw?: number;
-  totalClawbackKrw?: number;
+  tierLabel: string;
+  statutoryClawbackRate: number; // e.g. 0.70
+  effectiveClawbackRate: number; // 0 if exempt, else statutory
+  localSubsidyReceivedKrw: number;
+  nationalSubsidyReceivedKrw: number;
+  localClawbackKrw: number;
+  nationalClawbackKrw: number;
+  totalClawbackKrw: number;
   transferType: TransferType;
-  isExempt?: boolean;
+  isExempt: boolean;
+  remainingMonthsOfObligation: number;
+  explanation: string;
+  // Compatibility aliases:
   isClawbackExempt?: boolean;
-  remainingMonthsOfObligation?: number;
-  explanation?: string;
   initialLocalSubsidyKrw?: number;
   initialNationalSubsidyKrw?: number;
   totalInitialSubsidyKrw?: number;
@@ -397,54 +473,59 @@ export interface ClawbackResult {
 
 export interface TcoYearBreakdown {
   year: number;
-  cumulativeKm?: number;
-  evElectricityCostKrw?: number;
+  cumulativeKm: number;
+  evElectricityCostKrw: number;
+  iceFuelCostKrw: number;
+  evAutomobileTaxKrw: number;
+  iceAutomobileTaxKrw: number;
+  tollSavingsKrw: number;
+  parkingSavingsKrw: number;
+  maintenanceSavingsKrw: number;
+  annualNetSavingsKrw: number;
+  cumulativeNetSavingsKrw: number;
+  // Compatibility aliases:
   evFuelCostKrw?: number;
-  iceFuelCostKrw?: number;
   iceGasolineFuelCostKrw?: number;
   iceDieselFuelCostKrw?: number;
-  evAutomobileTaxKrw?: number;
   evAnnualTaxKrw?: number;
-  iceAutomobileTaxKrw?: number;
   iceAnnualTaxKrw?: number;
-  tollSavingsKrw?: number;
-  parkingSavingsKrw?: number;
   evTollParkingDiscountKrw?: number;
-  maintenanceSavingsKrw?: number;
-  annualNetSavingsKrw?: number;
-  cumulativeNetSavingsKrw?: number;
   cumulativeEvNetSavingsVsGasolineKrw?: number;
 }
 
 export interface TcoResult {
   annualKm: number;
-  years?: number;
-  evaluatedYears?: number;
+  years: number;
   totalKm: number;
-  evEfficiencyKmPerKwh?: number;
-  iceFuelEconomyKmPerLiter?: number;
-  blendedElectricityTariffKrwPerKwh?: number;
-  gasolinePriceKrwPerLiter?: number;
-  evFuelCostPerKm?: number;
-  iceFuelCostPerKm?: number;
+  evEfficiencyKmPerKwh: number;
+  iceFuelEconomyKmPerLiter: number;
+  blendedElectricityTariffKrwPerKwh: number;
+  gasolinePriceKrwPerLiter: number;
+  evFuelCostPerKm: number;
+  iceFuelCostPerKm: number;
   evTotalFuelCostKrw: number;
-  iceTotalFuelCostKrw?: number;
+  iceTotalFuelCostKrw: number;
+  fuelSavingsKrw: number;
+  evTotalTaxKrw: number;
+  iceTotalTaxKrw: number;
+  taxSavingsKrw: number;
+  tollSavingsKrw: number;
+  parkingSavingsKrw: number;
+  maintenanceSavingsKrw: number;
+  totalAuxiliarySavingsKrw: number;
+  totalCumulativeSavingsKrw: number;
+  yearlyBreakdown: TcoYearBreakdown[];
+  // Compatibility aliases:
+  evaluatedYears?: number;
   iceGasolineTotalFuelCostKrw?: number;
   iceDieselTotalFuelCostKrw?: number;
-  fuelSavingsKrw?: number;
   fuelSavingsVsGasolineKrw?: number;
-  evTotalTaxKrw?: number;
-  iceTotalTaxKrw?: number;
-  taxSavingsKrw?: number;
   taxSavingsVsGasolineKrw?: number;
-  tollSavingsKrw?: number;
-  parkingSavingsKrw?: number;
   tollParkingSavingsKrw?: number;
-  maintenanceSavingsKrw?: number;
   totalOperatingSavingsVsGasolineKrw?: number;
   netFiveYearSavingsKrw?: number;
   breakEvenKm?: number;
-  yearBreakdowns: TcoYearBreakdown[];
+  yearBreakdowns?: TcoYearBreakdown[];
 }
 
 export interface CalculateDepreciationOptions {

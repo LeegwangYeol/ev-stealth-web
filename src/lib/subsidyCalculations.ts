@@ -77,7 +77,7 @@ export const DEFAULT_SUBSIDY_THRESHOLDS: Readonly<Record<AlertSeverity, Readonly
     label_ko: '마감 (접수 종료)',
     severity: 'DEPLETED' as AlertSeverity,
     color_hex: '#6B7280',
-    badge_class: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
+    badge_class: 'bg-slate-800 text-slate-200 border-slate-600',
     recommended_action: '2026년 공고 예산이 전액 소진되었습니다. 취소분 대기 접수 또는 차년도 사업을 준비하세요.',
   }),
 });
@@ -245,6 +245,7 @@ export function getPriceSubsidyRatio(msrpKrw: number): number {
  * Pure region resolver from a supplied array of regions.
  * Matches by region_id, iso_code, Korean name, English name, canonical alias,
  * or stripped administrative suffix.
+ * Defensively guards against missing properties or non-string attributes.
  */
 export function getRegionByIdFromList(
   regions: readonly RegionEntry[] | undefined,
@@ -266,8 +267,8 @@ export function getRegionByIdFromList(
   if (aliasedId) {
     const matched = validRegions.find(
       (r) =>
-        (r.region_id && r.region_id.toLowerCase() === aliasedId) ||
-        (r.iso_code && r.iso_code.toLowerCase() === aliasedId)
+        (typeof r.region_id === 'string' && r.region_id.toLowerCase() === aliasedId) ||
+        (typeof r.iso_code === 'string' && r.iso_code.toLowerCase() === aliasedId)
     );
     if (matched) return matched;
   }
@@ -275,10 +276,10 @@ export function getRegionByIdFromList(
   // 2. Direct exact match on ID, ISO code, or localized names
   const exact = validRegions.find(
     (r) =>
-      (r.region_id && r.region_id.toLowerCase() === normalized) ||
-      (r.iso_code && r.iso_code.toLowerCase() === normalized) ||
-      (r.name_ko && r.name_ko.toLowerCase() === normalized) ||
-      (r.name_en && r.name_en.toLowerCase() === normalized)
+      (typeof r.region_id === 'string' && r.region_id.toLowerCase() === normalized) ||
+      (typeof r.iso_code === 'string' && r.iso_code.toLowerCase() === normalized) ||
+      (typeof r.name_ko === 'string' && r.name_ko.toLowerCase() === normalized) ||
+      (typeof r.name_en === 'string' && r.name_en.toLowerCase() === normalized)
   );
   if (exact) return exact;
 
@@ -292,8 +293,8 @@ export function getRegionByIdFromList(
     if (strippedAliasedId) {
       const matched = validRegions.find(
         (r) =>
-          (r.region_id && r.region_id.toLowerCase() === strippedAliasedId) ||
-          (r.iso_code && r.iso_code.toLowerCase() === strippedAliasedId)
+          (typeof r.region_id === 'string' && r.region_id.toLowerCase() === strippedAliasedId) ||
+          (typeof r.iso_code === 'string' && r.iso_code.toLowerCase() === strippedAliasedId)
       );
       if (matched) return matched;
     }
@@ -315,6 +316,7 @@ export function getRegionByIdFromList(
 /**
  * Pure model resolver from a supplied array of popular models.
  * Supports whitespace-, hyphen-, and punctuation-normalized queries.
+ * Defensively guards against missing properties or non-string attributes.
  */
 export function getModelByIdFromList(
   models: readonly PopularModelEntry[] | undefined,
@@ -329,9 +331,9 @@ export function getModelByIdFromList(
   // 1. Exact or substring match on raw string
   const directMatch = validModels.find(
     (m) =>
-      (m.model_id && m.model_id.toLowerCase() === normalized) ||
-      (m.name_ko && m.name_ko.toLowerCase() === normalized) ||
-      (m.name_ko && m.name_ko.toLowerCase().includes(normalized))
+      (typeof m.model_id === 'string' && m.model_id.toLowerCase() === normalized) ||
+      (typeof m.name_ko === 'string' && m.name_ko.toLowerCase() === normalized) ||
+      (typeof m.name_ko === 'string' && m.name_ko.toLowerCase().includes(normalized))
   );
   if (directMatch) return directMatch;
 
@@ -340,10 +342,596 @@ export function getModelByIdFromList(
   if (!cleanQuery) return undefined;
 
   return validModels.find((m) => {
-    const cleanId = (m.model_id || '').toLowerCase().replace(/[\s\-_]+/g, '');
-    const cleanKo = (m.name_ko || '').toLowerCase().replace(/[\s\-_]+/g, '');
+    const cleanId = (typeof m.model_id === 'string' ? m.model_id : '').toLowerCase().replace(/[\s\-_]+/g, '');
+    const cleanKo = (typeof m.name_ko === 'string' ? m.name_ko : '').toLowerCase().replace(/[\s\-_]+/g, '');
     return (cleanId && cleanId.includes(cleanQuery)) || (cleanKo && cleanKo.includes(cleanQuery));
   });
+}
+
+// ==========================================
+// 4.1 PURE DEPLETION & DELIVERY RATE CALCULATIONS
+// ==========================================
+
+export interface DepletionRateOptions {
+  clamp100?: boolean;
+  roundDecimals?: number;
+}
+
+/**
+ * Calculates EV subsidy depletion rate as percentage with zero-division guard and negative clamping.
+ *
+ * Formula: (appliedCount / totalQuota) * 100
+ *
+ * Division by Zero & Validation Protection:
+ * - When totalQuota === 0, <= 0, or is not a finite number, returns 0.0.
+ * - When appliedCount is invalid (null, undefined, negative, or not finite), returns 0.0.
+ * - When clamp100 is true, clamps result to 100.0%.
+ * - Rounds to specified decimal places (default: 1 decimal, e.g. 89.4%).
+ */
+export function calculateDepletionRate(
+  appliedCount?: number | null,
+  totalQuota?: number | null,
+  options?: DepletionRateOptions
+): number {
+  if (
+    totalQuota === null ||
+    totalQuota === undefined ||
+    !Number.isFinite(totalQuota) ||
+    totalQuota <= 0
+  ) {
+    return 0.0;
+  }
+  if (
+    appliedCount === null ||
+    appliedCount === undefined ||
+    !Number.isFinite(appliedCount) ||
+    appliedCount <= 0
+  ) {
+    return 0.0;
+  }
+
+  let rate = (appliedCount / totalQuota) * 100;
+  if (options?.clamp100) {
+    rate = Math.min(100.0, rate);
+  }
+
+  const decimals = typeof options?.roundDecimals === 'number' && Number.isFinite(options.roundDecimals) && options.roundDecimals >= 0
+    ? Math.floor(options.roundDecimals)
+    : 1;
+  const factor = Math.pow(10, decimals);
+  const rounded = Math.round(rate * factor) / factor;
+
+  return Number.isFinite(rounded) && rounded >= 0 ? rounded : 0.0;
+}
+
+/**
+ * Calculates EV delivery rate percentage against announced quota: (delivered / quota) * 100.
+ */
+export function calculateDeliveryRate(
+  deliveredCount?: number | null,
+  totalQuota?: number | null,
+  options?: DepletionRateOptions
+): number {
+  return calculateDepletionRate(deliveredCount, totalQuota, options);
+}
+
+/**
+ * Calculates remaining available subsidy units (quota - applied) clamped at 0.
+ */
+export function calculateRemainingUnits(
+  appliedCount?: number | null,
+  totalQuota?: number | null
+): number {
+  if (
+    totalQuota === null ||
+    totalQuota === undefined ||
+    !Number.isFinite(totalQuota) ||
+    totalQuota <= 0
+  ) {
+    return 0;
+  }
+  const safeQuota = Math.floor(totalQuota);
+  if (
+    appliedCount === null ||
+    appliedCount === undefined ||
+    !Number.isFinite(appliedCount) ||
+    appliedCount <= 0
+  ) {
+    return Math.max(0, safeQuota);
+  }
+  const safeApplied = Math.floor(appliedCount);
+  return Math.max(0, safeQuota - safeApplied);
+}
+
+// ==========================================
+// 4.2 NUMBER PARSING & MISSING PROPERTIES GUARDS
+// ==========================================
+
+export interface ParseSubsidyNumberOptions {
+  allowNegative?: boolean;
+  maxKrw?: number;
+  defaultKrw?: number;
+}
+
+/**
+ * Robust Korean currency and subsidy number parser.
+ * Handles:
+ * - Direct numbers, NaN, Infinity, -Infinity.
+ * - Thousands commas: "6,500,000", "55,000,000원".
+ * - Korean units:
+ *   - "만원", "만 원", "만" (x10,000): "650만원" -> 6,500,000, "5,500만" -> 55,000,000.
+ *   - "억원", "억 원", "억" (x100,000,000): "2.1억" -> 210,000,000.
+ *   - Compound: "1억 2,000만 원" -> 120,000,000.
+ *   - "천만원" (x10,000,000): "5천만원" -> 50,000,000.
+ *   - "천원" (x1,000): "5천원" -> 5,000.
+ * - Whitespace, currency symbols ("₩", "KRW", "원").
+ * - Missing properties / null / undefined / unparseable text -> defaultKrw (default: 0).
+ * - Caps at maxKrw (default: 10,000,000,000 KRW).
+ */
+export function parseSubsidyNumber(
+  input: unknown,
+  options?: ParseSubsidyNumberOptions
+): number {
+  const fallback = typeof options?.defaultKrw === 'number' && Number.isFinite(options.defaultKrw)
+    ? options.defaultKrw
+    : 0;
+  const maxCap = typeof options?.maxKrw === 'number' && Number.isFinite(options.maxKrw)
+    ? options.maxKrw
+    : 10_000_000_000;
+  const allowNeg = Boolean(options?.allowNegative);
+
+  if (input === null || input === undefined) {
+    return fallback;
+  }
+
+  if (typeof input === 'number') {
+    if (Number.isNaN(input)) {
+      return fallback;
+    }
+    if (input === Infinity) {
+      return maxCap;
+    }
+    if (input === -Infinity) {
+      return allowNeg ? -maxCap : 0;
+    }
+    if (!Number.isFinite(input)) {
+      return fallback;
+    }
+    if (!allowNeg && input < 0) {
+      return 0;
+    }
+    return Math.min(maxCap, Math.round(input));
+  }
+
+  if (typeof input !== 'string') {
+    return fallback;
+  }
+
+  const raw = input.trim();
+  if (!raw) {
+    return fallback;
+  }
+
+  const isNeg = /^\s*-/.test(raw);
+  const clean = raw.replace(/^[+\-\s]+/, '');
+
+  let total = 0;
+  let matchedKoreanUnit = false;
+
+  // 1. Match '억'
+  const eokMatch = clean.match(/([\d.,]+)\s*억/);
+  if (eokMatch) {
+    const val = parseFloat(eokMatch[1].replace(/,/g, ''));
+    if (Number.isFinite(val)) {
+      total += val * 100_000_000;
+      matchedKoreanUnit = true;
+    }
+  }
+
+  // 2. Match '천만' (e.g. 5천만원)
+  const cheonManMatch = clean.match(/([\d.,]+)\s*천\s*만/);
+  if (cheonManMatch) {
+    const val = parseFloat(cheonManMatch[1].replace(/,/g, ''));
+    if (Number.isFinite(val)) {
+      total += val * 10_000_000;
+      matchedKoreanUnit = true;
+    }
+  } else {
+    // 3. Match '만' (e.g. 650만원, 5,500만 원, 650만)
+    const manMatch = clean.match(/([\d.,]+)\s*만/);
+    if (manMatch) {
+      const val = parseFloat(manMatch[1].replace(/,/g, ''));
+      if (Number.isFinite(val)) {
+        total += val * 10_000;
+        matchedKoreanUnit = true;
+      }
+    }
+  }
+
+  // 4. Match standalone '천' (not followed by '만', e.g. 5천원)
+  const cheonMatch = clean.match(/([\d.,]+)\s*천(?!\s*만)/);
+  if (cheonMatch) {
+    const val = parseFloat(cheonMatch[1].replace(/,/g, ''));
+    if (Number.isFinite(val)) {
+      total += val * 1_000;
+      matchedKoreanUnit = true;
+    }
+  }
+
+  // 5. If no Korean unit was matched, parse as standard raw number with commas/currency symbols
+  if (!matchedKoreanUnit) {
+    const stripped = clean.replace(/[,원₩\sKRWkrw]/g, '');
+    const val = parseFloat(stripped);
+    if (Number.isFinite(val)) {
+      total = val;
+    } else {
+      return fallback;
+    }
+  }
+
+  let finalVal = Math.round(total);
+  if (isNeg) {
+    finalVal = -finalVal;
+  }
+
+  if (!allowNeg && finalVal < 0) {
+    return 0;
+  }
+
+  return Math.min(maxCap, finalVal);
+}
+
+export interface ParsedModelSubsidy {
+  modelId: string;
+  nameKo: string;
+  manufacturer: string;
+  basePriceKrw: number;
+  nationalSubsidyKrw: number;
+  priceSubsidyRatio: number;
+}
+
+/**
+ * Safely parses model subsidy fields guarding against missing properties and malformed strings.
+ */
+export function parseModelSubsidy(model: unknown): ParsedModelSubsidy {
+  const m = (model && typeof model === 'object') ? (model as Record<string, unknown>) : {};
+  const modelId = typeof m.model_id === 'string' ? m.model_id : (typeof m.id === 'string' ? m.id : 'unknown-model');
+  const nameKo = typeof m.name_ko === 'string' ? m.name_ko : (typeof m.name === 'string' ? m.name : '기본 모델');
+  const manufacturer = typeof m.manufacturer === 'string' ? m.manufacturer : (typeof m.brand === 'string' ? m.brand : '기타');
+  const basePriceKrw = parseSubsidyNumber(m.base_price_krw ?? m.basePriceKrw, { defaultKrw: 54_100_000 });
+  const nationalSubsidyKrw = parseSubsidyNumber(m.national_subsidy_krw ?? m.nationalSubsidyKrw, { defaultKrw: 0 });
+
+  const rawRatio = m.price_subsidy_ratio ?? m.priceSubsidyRatio;
+  let priceSubsidyRatio = 1.0;
+  if (typeof rawRatio === 'number' && Number.isFinite(rawRatio) && rawRatio >= 0) {
+    priceSubsidyRatio = Math.min(1.0, rawRatio);
+  } else {
+    priceSubsidyRatio = getPriceSubsidyRatio(basePriceKrw);
+  }
+
+  return {
+    modelId,
+    nameKo,
+    manufacturer,
+    basePriceKrw,
+    nationalSubsidyKrw,
+    priceSubsidyRatio,
+  };
+}
+
+export interface ParsedCategoryMetrics {
+  announcedUnits: number;
+  appliedUnits: number;
+  deliveredUnits: number;
+  remainingUnits: number;
+  depletionRate: number;
+  deliveryRate: number;
+  status: AlertSeverity;
+  maxLocalSubsidyKrw: number;
+  maxTotalSubsidyKrw: number;
+}
+
+/**
+ * Safely parses category metrics, guarding against missing properties, string values, and division by zero.
+ */
+export function parseCategoryMetrics(category: unknown): ParsedCategoryMetrics {
+  const c = (category && typeof category === 'object') ? (category as Record<string, unknown>) : {};
+  const announcedUnits = Math.max(0, parseSubsidyNumber(c.announced_units ?? c.announcedUnits, { defaultKrw: 0 }));
+  const appliedUnits = Math.max(0, parseSubsidyNumber(c.applied_units ?? c.appliedUnits, { defaultKrw: 0 }));
+  const deliveredUnits = Math.max(0, parseSubsidyNumber(c.delivered_units ?? c.deliveredUnits, { defaultKrw: 0 }));
+
+  const rawRemaining = c.remaining_units ?? c.remainingUnits;
+  const remainingUnits = typeof rawRemaining === 'number' && Number.isFinite(rawRemaining) && rawRemaining >= 0
+    ? Math.floor(rawRemaining)
+    : calculateRemainingUnits(appliedUnits, announcedUnits);
+
+  const rawRate = c.depletion_rate ?? c.depletionRate;
+  const depletionRate = typeof rawRate === 'number' && Number.isFinite(rawRate) && rawRate >= 0
+    ? Math.round(rawRate * 10) / 10
+    : calculateDepletionRate(appliedUnits, announcedUnits);
+
+  const rawDelRate = c.delivery_rate ?? c.deliveryRate;
+  const deliveryRate = typeof rawDelRate === 'number' && Number.isFinite(rawDelRate) && rawDelRate >= 0
+    ? Math.round(rawDelRate * 10) / 10
+    : calculateDeliveryRate(deliveredUnits, announcedUnits);
+
+  const maxLocalSubsidyKrw = Math.max(0, parseSubsidyNumber(c.max_local_subsidy_krw ?? c.maxLocalSubsidyKrw, { defaultKrw: 0 }));
+  const maxTotalSubsidyKrw = Math.max(0, parseSubsidyNumber(c.max_total_subsidy_krw ?? c.maxTotalSubsidyKrw, { defaultKrw: 0 }));
+
+  let status: AlertSeverity = 'HEALTHY';
+  if (typeof c.status === 'string' && ['HEALTHY', 'CAUTION', 'WARNING', 'CRITICAL', 'DEPLETED'].includes(c.status)) {
+    status = c.status as AlertSeverity;
+  } else {
+    if (depletionRate >= 100.0) status = 'DEPLETED';
+    else if (depletionRate >= 95.0) status = 'CRITICAL';
+    else if (depletionRate >= 80.0) status = 'WARNING';
+    else if (depletionRate >= 60.0) status = 'CAUTION';
+    else status = 'HEALTHY';
+  }
+
+  return {
+    announcedUnits,
+    appliedUnits,
+    deliveredUnits,
+    remainingUnits,
+    depletionRate,
+    deliveryRate,
+    status,
+    maxLocalSubsidyKrw,
+    maxTotalSubsidyKrw,
+  };
+}
+
+// ==========================================
+// 4.3 SAFE SORTING & RANKING UTILITIES (Zero-NaN / Zero-Infinity)
+// ==========================================
+
+/**
+ * Universal safe number comparator for Array.prototype.sort.
+ * Guarantees:
+ * - NEVER produces NaN.
+ * - Handles +Infinity and -Infinity deterministically without producing NaN on subtraction.
+ * - Places NaN, null, and undefined deterministically at the end.
+ * - Returns 0 for equal values (transitive and deterministic).
+ */
+export function safeCompareNumbers(
+  a: number | null | undefined,
+  b: number | null | undefined,
+  direction: 'asc' | 'desc' = 'asc'
+): number {
+  const isFiniteA = typeof a === 'number' && Number.isFinite(a);
+  const isFiniteB = typeof b === 'number' && Number.isFinite(b);
+
+  if (isFiniteA && isFiniteB) {
+    if (a === b) return 0;
+    return direction === 'asc' ? (a as number) - (b as number) : (b as number) - (a as number);
+  }
+
+  // Handle infinities
+  const isInfA = a === Infinity;
+  const isNegInfA = a === -Infinity;
+  const isInfB = b === Infinity;
+  const isNegInfB = b === -Infinity;
+
+  if (isInfA && isInfB) return 0;
+  if (isNegInfA && isNegInfB) return 0;
+
+  if (isInfA) return direction === 'asc' ? 1 : -1;
+  if (isInfB) return direction === 'asc' ? -1 : 1;
+  if (isNegInfA) return direction === 'asc' ? -1 : 1;
+  if (isNegInfB) return direction === 'asc' ? 1 : -1;
+
+  // Both are invalid (NaN, null, undefined)
+  if (!isFiniteA && !isFiniteB) return 0;
+
+  // Invalid values pushed to the end
+  return !isFiniteA ? 1 : -1;
+}
+
+export type RegionSortOption = 'DEPLETION_DESC' | 'DEPLETION_ASC' | 'REMAINING_ASC' | 'LOCAL_SUBSIDY_DESC' | 'NAME_ASC';
+
+/**
+ * Deterministic, NaN-safe region comparator.
+ */
+export function compareRegions(
+  a: RegionEntry | null | undefined,
+  b: RegionEntry | null | undefined,
+  sortOption: RegionSortOption = 'DEPLETION_DESC',
+  categoryKey: 'passenger' | 'commercial' | 'bus' = 'passenger'
+): number {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+
+  const catA = a.categories?.[categoryKey];
+  const catB = b.categories?.[categoryKey];
+
+  let cmp = 0;
+  switch (sortOption) {
+    case 'DEPLETION_DESC': {
+      const rateA = typeof catA?.depletion_rate === 'number' && !Number.isNaN(catA.depletion_rate)
+        ? catA.depletion_rate
+        : calculateDepletionRate(catA?.applied_units, catA?.announced_units);
+      const rateB = typeof catB?.depletion_rate === 'number' && !Number.isNaN(catB.depletion_rate)
+        ? catB.depletion_rate
+        : calculateDepletionRate(catB?.applied_units, catB?.announced_units);
+      cmp = safeCompareNumbers(rateA, rateB, 'desc');
+      break;
+    }
+    case 'DEPLETION_ASC': {
+      const rateA = typeof catA?.depletion_rate === 'number' && !Number.isNaN(catA.depletion_rate)
+        ? catA.depletion_rate
+        : calculateDepletionRate(catA?.applied_units, catA?.announced_units);
+      const rateB = typeof catB?.depletion_rate === 'number' && !Number.isNaN(catB.depletion_rate)
+        ? catB.depletion_rate
+        : calculateDepletionRate(catB?.applied_units, catB?.announced_units);
+      cmp = safeCompareNumbers(rateA, rateB, 'asc');
+      break;
+    }
+    case 'REMAINING_ASC': {
+      const remA = typeof catA?.remaining_units === 'number' && !Number.isNaN(catA.remaining_units)
+        ? catA.remaining_units
+        : calculateRemainingUnits(catA?.applied_units, catA?.announced_units);
+      const remB = typeof catB?.remaining_units === 'number' && !Number.isNaN(catB.remaining_units)
+        ? catB.remaining_units
+        : calculateRemainingUnits(catB?.applied_units, catB?.announced_units);
+      cmp = safeCompareNumbers(remA, remB, 'asc');
+      break;
+    }
+    case 'LOCAL_SUBSIDY_DESC': {
+      const subA = parseSubsidyNumber(catA?.max_local_subsidy_krw, { defaultKrw: 0 });
+      const subB = parseSubsidyNumber(catB?.max_local_subsidy_krw, { defaultKrw: 0 });
+      cmp = safeCompareNumbers(subA, subB, 'desc');
+      break;
+    }
+    case 'NAME_ASC': {
+      cmp = (a.name_ko || '').localeCompare(b.name_ko || '', 'ko');
+      break;
+    }
+    default:
+      cmp = 0;
+  }
+
+  if (cmp !== 0) return cmp;
+  // Deterministic tie-breaker by name then region_id
+  const nameTie = (a.name_ko || '').localeCompare(b.name_ko || '', 'ko');
+  if (nameTie !== 0) return nameTie;
+  return (a.region_id || '').localeCompare(b.region_id || '');
+}
+
+/**
+ * Non-mutating pure function sorting regions array with guaranteed NaN/Infinity safety.
+ */
+export function sortRegions<T extends RegionEntry>(
+  regions: readonly T[] | null | undefined,
+  sortOption: RegionSortOption = 'DEPLETION_DESC',
+  categoryKey: 'passenger' | 'commercial' | 'bus' = 'passenger'
+): T[] {
+  if (!Array.isArray(regions)) return [];
+  const valid = regions.filter((r): r is T => Boolean(r && typeof r === 'object'));
+  return [...valid].sort((a, b) => compareRegions(a, b, sortOption, categoryKey));
+}
+
+export interface RankedRegionEntry {
+  rank: number;
+  regionId: string;
+  nameKo: string;
+  depletionRate: number;
+  remainingUnits: number;
+  status: AlertSeverity;
+  region: RegionEntry;
+}
+
+/**
+ * Ranks regions by depletion rate descending (1-based standard competition ranking).
+ * Handles ties identically and guards against NaN / Infinity.
+ */
+export function rankRegionsByDepletion(
+  regions: readonly RegionEntry[] | null | undefined,
+  categoryKey: 'passenger' | 'commercial' | 'bus' = 'passenger'
+): RankedRegionEntry[] {
+  if (!Array.isArray(regions)) return [];
+  const sorted = sortRegions(regions, 'DEPLETION_DESC', categoryKey);
+
+  const ranked: RankedRegionEntry[] = [];
+  let currentRank = 1;
+
+  for (let i = 0; i < sorted.length; i++) {
+    const r = sorted[i];
+    const cat = r.categories?.[categoryKey];
+    const rate = typeof cat?.depletion_rate === 'number' && !Number.isNaN(cat.depletion_rate)
+      ? cat.depletion_rate
+      : calculateDepletionRate(cat?.applied_units, cat?.announced_units);
+    const rem = typeof cat?.remaining_units === 'number' && !Number.isNaN(cat.remaining_units)
+      ? cat.remaining_units
+      : calculateRemainingUnits(cat?.applied_units, cat?.announced_units);
+    const status: AlertSeverity = cat?.status || (rate >= 100 ? 'DEPLETED' : rate >= 95 ? 'CRITICAL' : rate >= 80 ? 'WARNING' : rate >= 60 ? 'CAUTION' : 'HEALTHY');
+
+    if (i > 0) {
+      const prev = ranked[i - 1];
+      if (rate === prev.depletionRate) {
+        currentRank = prev.rank;
+      } else {
+        currentRank = i + 1;
+      }
+    }
+
+    ranked.push({
+      rank: currentRank,
+      regionId: r.region_id || '',
+      nameKo: r.name_ko || '',
+      depletionRate: rate,
+      remainingUnits: rem,
+      status,
+      region: r,
+    });
+  }
+
+  return ranked;
+}
+
+export type ModelSortOption = 'PRICE_ASC' | 'PRICE_DESC' | 'SUBSIDY_DESC' | 'RANGE_DESC' | 'NAME_ASC';
+
+/**
+ * Deterministic, NaN-safe vehicle model comparator.
+ */
+export function compareModels(
+  a: PopularModelEntry | null | undefined,
+  b: PopularModelEntry | null | undefined,
+  sortOption: ModelSortOption = 'PRICE_ASC'
+): number {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+
+  let cmp = 0;
+  switch (sortOption) {
+    case 'PRICE_ASC': {
+      const priceA = parseSubsidyNumber(a.base_price_krw, { defaultKrw: 54_100_000 });
+      const priceB = parseSubsidyNumber(b.base_price_krw, { defaultKrw: 54_100_000 });
+      cmp = safeCompareNumbers(priceA, priceB, 'asc');
+      break;
+    }
+    case 'PRICE_DESC': {
+      const priceA = parseSubsidyNumber(a.base_price_krw, { defaultKrw: 54_100_000 });
+      const priceB = parseSubsidyNumber(b.base_price_krw, { defaultKrw: 54_100_000 });
+      cmp = safeCompareNumbers(priceA, priceB, 'desc');
+      break;
+    }
+    case 'SUBSIDY_DESC': {
+      const subA = parseSubsidyNumber(a.national_subsidy_krw, { defaultKrw: 0 });
+      const subB = parseSubsidyNumber(b.national_subsidy_krw, { defaultKrw: 0 });
+      cmp = safeCompareNumbers(subA, subB, 'desc');
+      break;
+    }
+    case 'RANGE_DESC': {
+      const rangeA = typeof a.rated_range_km === 'number' && Number.isFinite(a.rated_range_km) ? a.rated_range_km : 0;
+      const rangeB = typeof b.rated_range_km === 'number' && Number.isFinite(b.rated_range_km) ? b.rated_range_km : 0;
+      cmp = safeCompareNumbers(rangeA, rangeB, 'desc');
+      break;
+    }
+    case 'NAME_ASC': {
+      cmp = (a.name_ko || '').localeCompare(b.name_ko || '', 'ko');
+      break;
+    }
+    default:
+      cmp = 0;
+  }
+
+  if (cmp !== 0) return cmp;
+  return (a.model_id || '').localeCompare(b.model_id || '');
+}
+
+/**
+ * Non-mutating pure function sorting vehicle models array with guaranteed NaN/Infinity safety.
+ */
+export function sortModels<T extends PopularModelEntry>(
+  models: readonly T[] | null | undefined,
+  sortOption: ModelSortOption = 'PRICE_ASC'
+): T[] {
+  if (!Array.isArray(models)) return [];
+  const valid = models.filter((m): m is T => Boolean(m && typeof m === 'object'));
+  return [...valid].sort((a, b) => compareModels(a, b, sortOption));
 }
 
 // ==========================================
@@ -357,7 +945,7 @@ export function getModelByIdFromList(
 export function calculateNetSubsidyPure(
   model: PopularModelEntry,
   region: RegionEntry,
-  customMsrp?: number,
+  customMsrp?: number | string | null,
   options?: SubsidyCalculatorOptions
 ): SubsidyCalculationResult {
   const safeModel =
@@ -383,16 +971,17 @@ export function calculateNetSubsidyPure(
   const passengerCategory = safeRegion.categories?.passenger;
 
   // 1. Resolve MSRP and statutory price-cap ratio
-  const safeModelPrice =
-    Number.isFinite(safeModel?.base_price_krw) && safeModel.base_price_krw > 0
-      ? Math.min(10_000_000_000, safeModel.base_price_krw)
-      : 54_100_000;
+  const safeModelPrice = parseSubsidyNumber(safeModel?.base_price_krw, {
+    defaultKrw: 54_100_000,
+    maxKrw: 10_000_000_000,
+  });
 
   let activeMsrp: number;
   if (customMsrp === Infinity) {
     activeMsrp = 10_000_000_000;
-  } else if (customMsrp !== undefined && customMsrp !== null && Number.isFinite(customMsrp) && customMsrp > 0) {
-    activeMsrp = Math.min(10_000_000_000, customMsrp);
+  } else if (customMsrp !== undefined && customMsrp !== null) {
+    const parsed = parseSubsidyNumber(customMsrp, { maxKrw: 10_000_000_000 });
+    activeMsrp = parsed > 0 ? parsed : safeModelPrice;
   } else {
     activeMsrp = safeModelPrice;
   }
@@ -407,13 +996,14 @@ export function calculateNetSubsidyPure(
   }
 
   // 2. Calculate National Subsidy
-  const validNationalSubsidy = Number.isFinite(safeModel.national_subsidy_krw)
-    ? safeModel.national_subsidy_krw
-    : 0;
+  const validNationalSubsidy = parseSubsidyNumber(safeModel.national_subsidy_krw, { defaultKrw: 0 });
   let nationalSubsidyKrw = 0;
   if (ratio > 0) {
-    if (customMsrp && customMsrp > 0 && Number.isFinite(customMsrp)) {
-      const baseRatio = safeModel.price_subsidy_ratio > 0 ? safeModel.price_subsidy_ratio : 1.0;
+    const parsedCustom = customMsrp !== undefined && customMsrp !== null ? parseSubsidyNumber(customMsrp) : 0;
+    if (parsedCustom > 0) {
+      const baseRatio = Number.isFinite(safeModel.price_subsidy_ratio) && safeModel.price_subsidy_ratio > 0
+        ? safeModel.price_subsidy_ratio
+        : 1.0;
       const unscaledNational = Math.round(validNationalSubsidy / baseRatio);
       nationalSubsidyKrw = Math.min(6_500_000, Math.round(unscaledNational * ratio));
     } else {
@@ -440,9 +1030,7 @@ export function calculateNetSubsidyPure(
 
   // 4. Calculate Local Municipal Matching Subsidy
   // Formula: S_local = S_local_max * (S_nat / 6,500,000)
-  const maxLocal = typeof passengerCategory?.max_local_subsidy_krw === 'number' && Number.isFinite(passengerCategory.max_local_subsidy_krw)
-    ? passengerCategory.max_local_subsidy_krw
-    : 0;
+  const maxLocal = parseSubsidyNumber(passengerCategory?.max_local_subsidy_krw, { defaultKrw: 0 });
   let localSubsidyKrw = 0;
   if (nationalSubsidyKrw > 0 && maxLocal > 0) {
     const calculated = Math.round(maxLocal * (nationalSubsidyKrw / 6_500_000));
@@ -455,14 +1043,18 @@ export function calculateNetSubsidyPure(
   const netPurchasePriceKrw = Number.isFinite(rawNetPrice) ? Math.max(0, rawNetPrice) : 0;
 
   // 6. Depletion Risk & Warning Analysis
+  const catAnnounced = parseSubsidyNumber(passengerCategory?.announced_units, { defaultKrw: 0 });
+  const catApplied = parseSubsidyNumber(passengerCategory?.applied_units, { defaultKrw: 0 });
+
   const depletionRate = typeof passengerCategory?.depletion_rate === 'number' && Number.isFinite(passengerCategory.depletion_rate)
     ? passengerCategory.depletion_rate
-    : 0;
+    : calculateDepletionRate(catApplied, catAnnounced);
+
   const isHighDepletionRisk = depletionRate >= 80.0;
-  const depletionStatus: AlertSeverity = passengerCategory?.status || 'HEALTHY';
+  const depletionStatus: AlertSeverity = passengerCategory?.status || (depletionRate >= 100 ? 'DEPLETED' : depletionRate >= 95 ? 'CRITICAL' : depletionRate >= 80 ? 'WARNING' : depletionRate >= 60 ? 'CAUTION' : 'HEALTHY');
   const remainingUnits = typeof passengerCategory?.remaining_units === 'number' && Number.isFinite(passengerCategory.remaining_units)
     ? passengerCategory.remaining_units
-    : 0;
+    : calculateRemainingUnits(catApplied, catAnnounced);
 
   let warningNotice: string | undefined;
   if (depletionRate >= 95.0) {
@@ -526,29 +1118,32 @@ export interface SubsidyStatistics {
 
 /**
  * Pure calculation of nationwide subsidy statistics from an EVSubsidyDataset.
+ * Protects against division by zero and NaN/Infinity values.
  */
 export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> | null): SubsidyStatistics {
   const summary = dataset?.nationwide_summary;
   const regions = Array.isArray(dataset?.regions) ? dataset.regions : [];
 
-  const announced = typeof summary?.total_announced_units === 'number' && Number.isFinite(summary.total_announced_units) ? summary.total_announced_units : 0;
-  const applied = typeof summary?.total_applied_units === 'number' && Number.isFinite(summary.total_applied_units) ? summary.total_applied_units : 0;
-  const delivered = typeof summary?.total_delivered_units === 'number' && Number.isFinite(summary.total_delivered_units) ? summary.total_delivered_units : 0;
-  const remaining = typeof summary?.total_remaining_units === 'number' && Number.isFinite(summary.total_remaining_units) ? summary.total_remaining_units : 0;
+  const announced = parseSubsidyNumber(summary?.total_announced_units, { defaultKrw: 0 });
+  const applied = parseSubsidyNumber(summary?.total_applied_units, { defaultKrw: 0 });
+  const delivered = parseSubsidyNumber(summary?.total_delivered_units, { defaultKrw: 0 });
+  const remaining = typeof summary?.total_remaining_units === 'number' && Number.isFinite(summary.total_remaining_units)
+    ? summary.total_remaining_units
+    : calculateRemainingUnits(applied, announced);
 
-  const depletionRate = announced > 0
-    ? typeof summary?.nationwide_depletion_rate === 'number' && Number.isFinite(summary.nationwide_depletion_rate)
-      ? summary.nationwide_depletion_rate
-      : Math.round((applied / announced) * 1000) / 10
+  const depletionRate = typeof summary?.nationwide_depletion_rate === 'number' && Number.isFinite(summary.nationwide_depletion_rate)
+    ? summary.nationwide_depletion_rate
+    : calculateDepletionRate(applied, announced);
+
+  const deliveryRate = calculateDeliveryRate(delivered, announced);
+
+  const budgetTotal = typeof summary?.total_budget_billion_krw === 'number' && Number.isFinite(summary.total_budget_billion_krw)
+    ? Math.max(0, summary.total_budget_billion_krw)
     : 0;
-
-  const deliveryRate = announced > 0
-    ? Math.round((delivered / announced) * 1000) / 10
+  const budgetDisbursed = typeof summary?.disbursed_budget_billion_krw === 'number' && Number.isFinite(summary.disbursed_budget_billion_krw)
+    ? Math.max(0, summary.disbursed_budget_billion_krw)
     : 0;
-
-  const budgetTotal = typeof summary?.total_budget_billion_krw === 'number' && Number.isFinite(summary.total_budget_billion_krw) ? summary.total_budget_billion_krw : 0;
-  const budgetDisbursed = typeof summary?.disbursed_budget_billion_krw === 'number' && Number.isFinite(summary.disbursed_budget_billion_krw) ? summary.disbursed_budget_billion_krw : 0;
-  const budgetExecutionRatePct = budgetTotal > 0
+  const budgetExecutionRatePct = budgetTotal > 0 && budgetDisbursed >= 0
     ? Math.round((budgetDisbursed / budgetTotal) * 1000) / 10
     : 0;
 
@@ -561,8 +1156,8 @@ export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> |
 
   for (const r of regions) {
     if (!r || typeof r !== 'object') continue;
-    const rate = Number.isFinite(r.overall_depletion_rate) ? r.overall_depletion_rate : 0;
-    const rem = Number.isFinite(r.categories?.passenger?.remaining_units) ? r.categories.passenger.remaining_units : 0;
+    const rate = typeof r.overall_depletion_rate === 'number' && !Number.isNaN(r.overall_depletion_rate) ? r.overall_depletion_rate : 0;
+    const rem = typeof r.categories?.passenger?.remaining_units === 'number' && !Number.isNaN(r.categories.passenger.remaining_units) ? r.categories.passenger.remaining_units : 0;
     if (rate >= 95.0) {
       criticalCount++;
       criticalList.push({
@@ -580,8 +1175,12 @@ export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> |
     }
   }
 
-  // Sort critical regions descending by depletion rate
-  criticalList.sort((a, b) => b.depletionRate - a.depletionRate);
+  // Sort critical regions descending by depletion rate with full NaN/Infinity guard
+  criticalList.sort((a, b) => {
+    const cmp = safeCompareNumbers(b.depletionRate, a.depletionRate, 'asc');
+    if (cmp !== 0) return cmp;
+    return (a.nameKo || '').localeCompare(b.nameKo || '', 'ko');
+  });
 
   const cat = summary?.category_totals;
 
@@ -602,22 +1201,34 @@ export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> |
     healthyRegionsCount: healthyCount,
     categoryBreakdown: {
       passenger: {
-        announced: cat?.passenger?.announced_units ?? 0,
-        applied: cat?.passenger?.applied_units ?? 0,
-        remaining: cat?.passenger?.remaining_units ?? 0,
-        rate: cat?.passenger?.depletion_rate ?? 0,
+        announced: parseSubsidyNumber(cat?.passenger?.announced_units, { defaultKrw: 0 }),
+        applied: parseSubsidyNumber(cat?.passenger?.applied_units, { defaultKrw: 0 }),
+        remaining: typeof cat?.passenger?.remaining_units === 'number' && Number.isFinite(cat.passenger.remaining_units)
+          ? cat.passenger.remaining_units
+          : calculateRemainingUnits(cat?.passenger?.applied_units, cat?.passenger?.announced_units),
+        rate: typeof cat?.passenger?.depletion_rate === 'number' && Number.isFinite(cat.passenger.depletion_rate)
+          ? cat.passenger.depletion_rate
+          : calculateDepletionRate(cat?.passenger?.applied_units, cat?.passenger?.announced_units),
       },
       commercial: {
-        announced: cat?.commercial?.announced_units ?? 0,
-        applied: cat?.commercial?.applied_units ?? 0,
-        remaining: cat?.commercial?.remaining_units ?? 0,
-        rate: cat?.commercial?.depletion_rate ?? 0,
+        announced: parseSubsidyNumber(cat?.commercial?.announced_units, { defaultKrw: 0 }),
+        applied: parseSubsidyNumber(cat?.commercial?.applied_units, { defaultKrw: 0 }),
+        remaining: typeof cat?.commercial?.remaining_units === 'number' && Number.isFinite(cat.commercial.remaining_units)
+          ? cat.commercial.remaining_units
+          : calculateRemainingUnits(cat?.commercial?.applied_units, cat?.commercial?.announced_units),
+        rate: typeof cat?.commercial?.depletion_rate === 'number' && Number.isFinite(cat.commercial.depletion_rate)
+          ? cat.commercial.depletion_rate
+          : calculateDepletionRate(cat?.commercial?.applied_units, cat?.commercial?.announced_units),
       },
       bus: {
-        announced: cat?.bus?.announced_units ?? 0,
-        applied: cat?.bus?.applied_units ?? 0,
-        remaining: cat?.bus?.remaining_units ?? 0,
-        rate: cat?.bus?.depletion_rate ?? 0,
+        announced: parseSubsidyNumber(cat?.bus?.announced_units, { defaultKrw: 0 }),
+        applied: parseSubsidyNumber(cat?.bus?.applied_units, { defaultKrw: 0 }),
+        remaining: typeof cat?.bus?.remaining_units === 'number' && Number.isFinite(cat.bus.remaining_units)
+          ? cat.bus.remaining_units
+          : calculateRemainingUnits(cat?.bus?.applied_units, cat?.bus?.announced_units),
+        rate: typeof cat?.bus?.depletion_rate === 'number' && Number.isFinite(cat.bus.depletion_rate)
+          ? cat.bus.depletion_rate
+          : calculateDepletionRate(cat?.bus?.applied_units, cat?.bus?.announced_units),
       },
     },
   };
@@ -645,7 +1256,8 @@ export function formatBillionKrw(billion: number): string {
 
 export function formatDepletionRate(rate: number): string {
   if (!Number.isFinite(rate)) return '0.0%';
-  return `${rate.toFixed(1)}%`;
+  const safeRate = Math.max(0, rate);
+  return `${safeRate.toFixed(1)}%`;
 }
 
 export function getDepletionBadgeStyle(rate: number): {
@@ -654,15 +1266,16 @@ export function getDepletionBadgeStyle(rate: number): {
   badgeClass: string;
   labelKo: string;
 } {
-  if (rate >= 100.0) {
+  const safeRate = Number.isFinite(rate) ? rate : 0.0;
+  if (safeRate >= 100.0) {
     return {
       severity: 'DEPLETED',
       colorHex: '#6B7280',
-      badgeClass: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
+      badgeClass: 'bg-slate-800 text-slate-200 border-slate-600',
       labelKo: '마감 (접수 종료)',
     };
   }
-  if (rate >= 95.0) {
+  if (safeRate >= 95.0) {
     return {
       severity: 'CRITICAL',
       colorHex: '#EF4444',
@@ -670,7 +1283,7 @@ export function getDepletionBadgeStyle(rate: number): {
       labelKo: '위험 (잔여 극소)',
     };
   }
-  if (rate >= 80.0) {
+  if (safeRate >= 80.0) {
     return {
       severity: 'WARNING',
       colorHex: '#F97316',
@@ -678,7 +1291,7 @@ export function getDepletionBadgeStyle(rate: number): {
       labelKo: '경고 (마감 임박)',
     };
   }
-  if (rate >= 60.0) {
+  if (safeRate >= 60.0) {
     return {
       severity: 'CAUTION',
       colorHex: '#F59E0B',

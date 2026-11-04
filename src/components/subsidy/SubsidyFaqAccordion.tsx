@@ -122,7 +122,7 @@ const FaqItemRow = memo(function FaqItemRow({
           </span>
           <span
             aria-hidden="true"
-            className={`text-slate-400 text-xs shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-amber-400' : ''}`}
+            className={`text-slate-300 text-xs shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-amber-400' : ''}`}
           >
             ▼
           </span>

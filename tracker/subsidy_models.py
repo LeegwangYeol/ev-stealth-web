@@ -1093,9 +1093,23 @@ class SubsidyPayload:
 
     @classmethod
     def from_json(cls, json_str_or_bytes: Union[str, bytes]) -> SubsidyPayload:
-        """Parse SubsidyPayload directly from a JSON string or bytes."""
+        """Parse SubsidyPayload directly from a JSON string or bytes with robust decoding."""
         import json
-        data = json.loads(json_str_or_bytes)
+        if isinstance(json_str_or_bytes, (bytes, bytearray)):
+            try:
+                raw_str = json_str_or_bytes.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                try:
+                    raw_str = json_str_or_bytes.decode("cp949")
+                except UnicodeDecodeError:
+                    raw_str = json_str_or_bytes.decode("utf-8", errors="replace")
+        else:
+            raw_str = str(json_str_or_bytes).lstrip("\ufeff")
+
+        try:
+            data = json.loads(raw_str)
+        except Exception as exc:
+            raise ValueError(f"Failed to parse SubsidyPayload JSON: {exc}") from exc
         return cls.from_dict(data)
 
     @classmethod

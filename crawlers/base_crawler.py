@@ -201,6 +201,8 @@ class BaseCrawler(abc.ABC):
             if not isinstance(detail, dict):
                 logger.warning(f"parse_post_detail returned non-dict ({type(detail)}) for {eff_url}")
                 return None
+            if detail.get("is_deleted") or detail.get("is_restricted"):
+                return None
             return detail
         except Exception as e:
             logger.warning(

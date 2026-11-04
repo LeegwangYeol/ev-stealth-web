@@ -22,6 +22,7 @@ from tracker.atomic_writer import (
     FileLock,
     atomic_write_json,
     atomic_write_json_multiple,
+    cleanup_stale_lock_files,
     is_corrupted_or_quarantined_filename,
     quarantine_corrupted_file,
 )
@@ -46,6 +47,26 @@ from tracker.subsidy_models import (
 )
 
 logger = logging.getLogger("subsidy_tracker")
+
+_CURRENT_DIR = Path(__file__).resolve().parent
+
+
+def _find_repo_root() -> Path:
+    """Locate canonical repository root from module file location and active working directory."""
+    candidates = [
+        _CURRENT_DIR,
+        _CURRENT_DIR.parent,
+        _CURRENT_DIR.parent.parent,
+        Path.cwd(),
+        Path.cwd().parent,
+    ]
+    for c in candidates:
+        if (c / "data").is_dir() and (c / "ev-stealth-web").is_dir():
+            return c
+    for c in candidates:
+        if (c / "data").is_dir() or (c / "ev-stealth-web" / "src" / "data").is_dir():
+            return c
+    return _CURRENT_DIR.parent
 
 # Maximum bounded response read size (10MB) to prevent memory exhaustion
 MAX_RESPONSE_BYTES: int = 10 * 1024 * 1024
@@ -870,7 +891,7 @@ class SubsidyTracker:
 
         try:
             logger.info("Loading cached snapshot from %s", target_path)
-            with open(target_path, "r", encoding="utf-8") as f:
+            with open(target_path, "r", encoding="utf-8-sig") as f:
                 cached_dict = json.load(f)
 
             if not isinstance(cached_dict, dict):
@@ -1015,6 +1036,12 @@ class SubsidyTracker:
         )
 
         if not dry_run:
+            repo_root = _find_repo_root()
+            root_data_dir = repo_root / "data"
+            web_src_data = repo_root / "ev-stealth-web" / "src" / "data"
+            web_pub_data = repo_root / "ev-stealth-web" / "public" / "data"
+            root_pub_data = repo_root / "public" / "data"
+
             cwd = Path.cwd()
             destinations: List[Path] = []
 
@@ -1024,8 +1051,12 @@ class SubsidyTracker:
                 primary = Path(self.cache_fallback_path)
             elif (cwd / "src" / "data").exists():
                 primary = cwd / "src" / "data" / "ev_subsidy_data.json"
-            else:
+            elif (cwd / "data").exists():
                 primary = cwd / "data" / "ev_subsidy_data.json"
+            elif root_data_dir.exists():
+                primary = root_data_dir / "ev_subsidy_data.json"
+            else:
+                primary = web_src_data / "ev_subsidy_data.json"
 
             destinations.append(primary)
 
@@ -1041,24 +1072,19 @@ class SubsidyTracker:
                     web_dir = Path(web_dir_env)
                     destinations.append(web_dir / "ev_subsidy_data.json")
                     destinations.append(web_dir / "subsidy_depletion_data.json")
-                elif (cwd / "src" / "data").exists():
-                    destinations.append(cwd / "src" / "data" / "ev_subsidy_data.json")
-                    destinations.append(cwd / "src" / "data" / "subsidy_depletion_data.json")
-                    if (cwd.parent / "data").exists():
-                        destinations.append(cwd.parent / "data" / "ev_subsidy_data.json")
-                        destinations.append(cwd.parent / "data" / "subsidy_depletion_data.json")
-                    if (cwd / "public" / "data").exists():
-                        destinations.append(cwd / "public" / "data" / "ev_subsidy_data.json")
-                        destinations.append(cwd / "public" / "data" / "subsidy_depletion_data.json")
                 else:
-                    destinations.append(cwd / "ev-stealth-web" / "src" / "data" / "ev_subsidy_data.json")
-                    destinations.append(cwd / "ev-stealth-web" / "src" / "data" / "subsidy_depletion_data.json")
-                    if (cwd / "ev-stealth-web" / "public" / "data").exists():
-                        destinations.append(cwd / "ev-stealth-web" / "public" / "data" / "ev_subsidy_data.json")
-                        destinations.append(cwd / "ev-stealth-web" / "public" / "data" / "subsidy_depletion_data.json")
-                    if (cwd / "public" / "data").exists():
-                        destinations.append(cwd / "public" / "data" / "ev_subsidy_data.json")
-                        destinations.append(cwd / "public" / "data" / "subsidy_depletion_data.json")
+                    destinations.append(web_src_data / "ev_subsidy_data.json")
+                    destinations.append(web_src_data / "subsidy_depletion_data.json")
+                    if web_pub_data.exists():
+                        destinations.append(web_pub_data / "ev_subsidy_data.json")
+                        destinations.append(web_pub_data / "subsidy_depletion_data.json")
+
+                if root_data_dir.exists():
+                    destinations.append(root_data_dir / "ev_subsidy_data.json")
+                    destinations.append(root_data_dir / "subsidy_depletion_data.json")
+                if root_pub_data.exists():
+                    destinations.append(root_pub_data / "ev_subsidy_data.json")
+                    destinations.append(root_pub_data / "subsidy_depletion_data.json")
 
             # Deduplicate destinations preserving order
             unique_destinations: List[Path] = []
@@ -1069,7 +1095,10 @@ class SubsidyTracker:
                     seen_paths.add(resolved_key)
                     unique_destinations.append(dst)
 
-            self.save_payload(payload, unique_destinations)
+            sync_lock = primary.parent / ".subsidy_sync.lock"
+            cleanup_stale_lock_files(primary.parent, max_age_seconds=3600.0)
+            with FileLock(sync_lock):
+                self.save_payload(payload, unique_destinations)
 
         if sync_defects:
             try:
@@ -1336,18 +1365,28 @@ def export_models_subsidy_matrix(target_dirs: Optional[List[Union[str, Path]]] =
     """Atomically export comprehensive 2026 EV models subsidy matrix (>=15 models) to target directories."""
     matrix_data = build_comprehensive_models_matrix()
     if target_dirs is None:
+        repo_root = _find_repo_root()
         cwd = Path.cwd()
         candidates = [
+            repo_root / "data",
+            repo_root / "ev-stealth-web" / "src" / "data",
+            repo_root / "ev-stealth-web" / "public" / "data",
+            repo_root / "public" / "data",
             cwd / "data",
             cwd / "ev-stealth-web" / "src" / "data",
-            cwd / "ev-stealth-web" / "public" / "data",
             cwd / "src" / "data",
-            cwd / "public" / "data",
             cwd.parent / "data",
         ]
-        target_dirs = [c for c in candidates if c.exists()]
+        seen_dirs = set()
+        target_dirs = []
+        for c in candidates:
+            if c.exists():
+                r_key = str(c.resolve())
+                if r_key not in seen_dirs:
+                    seen_dirs.add(r_key)
+                    target_dirs.append(c)
         if not target_dirs:
-            target_dirs = [cwd / "data"]
+            target_dirs = [repo_root / "data"]
 
     written_paths: List[Path] = []
     for d in target_dirs:

@@ -41,7 +41,7 @@ export interface OfficialRecallCampaign {
   consumer_emergency_guide: string;
   service_center_contact: string;
   official_link: string;
-  status: 'ACTIVE' | 'RESOLVED';
+  status: 'ACTIVE' | 'RESOLVED' | string;
 }
 
 export interface BatterySafetyProfile {
@@ -72,10 +72,12 @@ export interface VinPrefixMapping {
 export interface RecallDatabaseMetadata {
   version: string;
   updated_at: string;
+  last_updated?: string;
   total_campaigns: number;
   total_affected_vehicles_kdm: number;
   active_fire_campaigns: number;
   ota_remedy_rate_pct: number;
+  data_sources?: string[];
 }
 
 export interface RecallDatabase {
@@ -94,6 +96,7 @@ export interface VinCheckResult {
   decodedModel?: string;
   decodedYear?: number;
   decodedCountry?: string;
+  decodedWmi?: string;
   batteryProfile?: BatterySafetyProfile;
   recalls: OfficialRecallCampaign[];
   activeCampaignsCount: number;
@@ -120,4 +123,17 @@ export interface RecallKPIs {
   otaRemedyRate?: number;
   fireRiskBrandCount?: number;
   totalBatteryProfiles?: number;
+  resolvedCampaigns?: number;
+  campaignResolutionRatePct?: number;
 }
+
+export interface ManufacturerRecallSummary {
+  manufacturer: string;
+  totalCampaigns: number;
+  activeCampaigns: number;
+  fireHazards: number;
+  lossOfPower: number;
+  affectedUnits: number;
+  completionRatePct: number;
+}
+

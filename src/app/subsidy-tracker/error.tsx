@@ -40,7 +40,7 @@ export default function SubsidyTrackerError({ error, reset }: SubsidyErrorProps)
             저장된 기준 데이터로 안전하게 다시 로드할 수 있습니다.
           </p>
           {error?.digest && (
-            <p className="text-xs text-slate-400 font-mono pt-1">
+            <p className="text-xs text-slate-300 font-mono pt-1">
               오류 참조 코드: <span className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">{error.digest}</span>
             </p>
           )}
@@ -61,7 +61,7 @@ export default function SubsidyTrackerError({ error, reset }: SubsidyErrorProps)
             aria-label="보조금 추적기 다시 시도"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
           >
-            <span>🔄</span> 다시 시도
+            <span aria-hidden="true">🔄</span> 다시 시도
           </button>
           <Link
             href="/"
@@ -69,19 +69,31 @@ export default function SubsidyTrackerError({ error, reset }: SubsidyErrorProps)
             aria-label="메인 홈으로 이동"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium border border-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
           >
-            <span>🏠</span> 홈으로 이동
+            <span aria-hidden="true">🏠</span> 홈으로 이동
           </Link>
         </div>
 
-        <div className="pt-4 border-t border-slate-800/80 text-xs text-slate-400 flex flex-wrap justify-center gap-4">
-          <Link href="/depreciation-calculator" prefetch={true} className="hover:text-amber-300 transition">
-            📉 감가 계산기
+        <div className="pt-4 border-t border-slate-800/80 text-xs text-slate-300 flex flex-wrap justify-center gap-4">
+          <Link
+            href="/depreciation-calculator"
+            prefetch={true}
+            className="hover:text-amber-300 transition inline-flex items-center gap-1 px-1.5 py-0.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+          >
+            <span aria-hidden="true">📉</span> 감가 계산기
           </Link>
-          <Link href="/reliability-analytics" prefetch={false} className="hover:text-blue-300 transition">
-            📊 결함 분석 포털
+          <Link
+            href="/reliability-analytics"
+            prefetch={false}
+            className="hover:text-blue-300 transition inline-flex items-center gap-1 px-1.5 py-0.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+          >
+            <span aria-hidden="true">📊</span> 결함 분석 포털
           </Link>
-          <Link href="/recall-portal" prefetch={false} className="hover:text-rose-300 transition">
-            🚨 리콜 포털
+          <Link
+            href="/recall-portal"
+            prefetch={false}
+            className="hover:text-rose-300 transition inline-flex items-center gap-1 px-1.5 py-0.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+          >
+            <span aria-hidden="true">🚨</span> 리콜 포털
           </Link>
         </div>
       </div>

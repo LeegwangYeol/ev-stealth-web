@@ -4,9 +4,18 @@ export default function BydLoading() {
       role="status"
       aria-live="polite"
       aria-label="BYD 연식별 구매 가이드 로딩 중"
-      className="space-y-8 py-6 max-w-4xl mx-auto animate-pulse motion-reduce:animate-none"
+      className="space-y-8 py-6 sm:py-10 max-w-4xl mx-auto animate-pulse motion-reduce:animate-none"
     >
       <span className="sr-only">BYD 연식별 구매 가이드를 불러오는 중입니다...</span>
+
+      {/* Nav & Breadcrumb Skeleton */}
+      <div className="space-y-3 mb-6">
+        <div className="flex justify-between items-center">
+          <div className="h-5 bg-slate-200 rounded-lg w-48" />
+          <div className="h-7 bg-slate-100 rounded-lg w-28" />
+        </div>
+        <div className="h-12 bg-slate-100 rounded-2xl border border-slate-200" />
+      </div>
 
       {/* Header Skeleton */}
       <div className="space-y-3">

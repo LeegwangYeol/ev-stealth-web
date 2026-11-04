@@ -26,7 +26,7 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-WEB_ROOT = REPO_ROOT if (REPO_ROOT / "package.json").is_file() else (REPO_ROOT / "ev-stealth-web")
+WEB_ROOT = (REPO_ROOT / "ev-stealth-web") if (REPO_ROOT / "ev-stealth-web" / "package.json").is_file() else REPO_ROOT
 
 
 class TestCycle9PerformanceRemediations(unittest.TestCase):

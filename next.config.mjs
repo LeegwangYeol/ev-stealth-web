@@ -1,19 +1,39 @@
 /** @type {import('next').NextConfig} */
+const isProd = process.env.NODE_ENV === 'production';
+
+// Dynamic Content Security Policy supporting local development and hardened production
+const cspDirectives = [
+  "default-src 'self'",
+  `script-src 'self' 'unsafe-inline'${isProd ? '' : " 'unsafe-eval'"}`,
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net",
+  `connect-src 'self'${isProd ? '' : ' ws: wss:'}`,
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  ...(isProd ? ['upgrade-insecure-requests'] : []),
+].join('; ');
+
 const nextConfig = {
   reactStrictMode: true,
   productionBrowserSourceMaps: false,
   poweredByHeader: false,
   compress: true,
+  swcMinify: true,
+  generateEtags: true,
   images: {
     formats: ['image/avif', 'image/webp'],
+    minimumCacheTTL: 86400,
   },
   compiler: {
-    removeConsole:
-      process.env.NODE_ENV === 'production'
-        ? {
-            exclude: ['error', 'warn'],
-          }
-        : false,
+    removeConsole: isProd
+      ? {
+          exclude: ['error', 'warn'],
+        }
+      : false,
   },
   async headers() {
     return [
@@ -63,8 +83,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value:
-              "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;",
+            value: cspDirectives,
           },
         ],
       },

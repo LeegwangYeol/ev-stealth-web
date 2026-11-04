@@ -140,6 +140,39 @@ class TestReliabilityAnalyticsA11yAudit(unittest.TestCase):
         self.assertIn('role="list"', self.client_source)
         self.assertIn('<li', self.client_source)
 
+    def test_accessible_legends_and_svg_descriptions(self):
+        """6. Chart accessibility: semantic <ul> legends, dynamic SVG desc, and aria-hidden decorative icons."""
+        # Semantic accessible legends
+        self.assertIn('aria-label="히트맵 판정 범례"', self.client_source)
+        self.assertIn('id="dsi-legend-title"', self.client_source)
+        self.assertIn('aria-labelledby="dsi-legend-title"', self.client_source)
+        self.assertIn('aria-label="결함 부문별 산업 점유율 범례"', self.client_source)
+
+        # Dynamic SVG desc and aria-hidden grid marks
+        self.assertIn('desc id="brand-dsi-svg-desc"', self.client_source)
+        self.assertIn('{brandSvgDesc}', self.client_source)
+        self.assertIn('<g aria-hidden="true">', self.client_source)
+
+        # Decorative emoji icons marked aria-hidden
+        self.assertIn('<span aria-hidden="true">🛡️</span>', self.client_source)
+        self.assertIn('<span aria-hidden="true">📈</span>', self.client_source)
+        self.assertIn('<span aria-hidden="true">💡</span>', self.client_source)
+        self.assertIn('<span aria-hidden="true">💣</span>', self.client_source)
+
+    def test_performance_indexing_and_edge_case_fallbacks(self):
+        """7. Performance precomputed indexing & defensive fallback handling."""
+        # Precomputed indexes
+        self.assertIn('_searchIndex', self.client_source)
+        self.assertIn('_categoryMatch', self.client_source)
+        self.assertIn('_verdicts', self.client_source)
+
+        # Defensive handling of brand.models and empty fallbacks
+        self.assertIn('Array.isArray(brand?.models) ? brand.models.length : 0', self.client_source)
+        self.assertIn('등록된 연식별 결함 데이터가 없습니다.', self.client_source)
+        self.assertIn('브랜드별 DSI 결함 통계 데이터가 없습니다.', self.client_source)
+        self.assertIn('부문별 결함 비중 데이터가 없습니다.', self.client_source)
+        self.assertIn('등록된 보증 외 수리비 매트릭스 데이터가 없습니다.', self.client_source)
+
 
 if __name__ == "__main__":
     unittest.main()

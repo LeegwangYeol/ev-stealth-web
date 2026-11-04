@@ -474,10 +474,15 @@ class DomainTokenizer:
                 )
 
         # Ingest external slang dictionary if available
-        dict_path = slang_dict_path or os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "slang_dict.json"
-        )
-        if os.path.exists(dict_path):
+        dict_candidates = [
+            slang_dict_path,
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "slang_dict.json"),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "slang_dict.json"),
+            os.path.join(os.getcwd(), "data", "slang_dict.json"),
+            os.path.join(os.getcwd(), "..", "data", "slang_dict.json"),
+        ]
+        dict_path = next((p for p in dict_candidates if p and os.path.exists(p)), None)
+        if dict_path:
             try:
                 with open(dict_path, "r", encoding="utf-8") as f:
                     slang_data = json.load(f)

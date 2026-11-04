@@ -36,7 +36,7 @@ export default function HyundaiKiaGuideError({ error, reset }: ErrorProps) {
             아래 &apos;다시 시도&apos; 버튼을 눌러 다시 로드해 주세요.
           </p>
           {error?.digest && (
-            <p className="text-xs text-slate-500 font-mono pt-1">
+            <p className="text-xs text-slate-600 font-mono pt-1">
               오류 참조 코드: <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">{error.digest}</span>
             </p>
           )}
@@ -57,7 +57,7 @@ export default function HyundaiKiaGuideError({ error, reset }: ErrorProps) {
             aria-label="현대/기아 구매 가이드 다시 시도"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
-            <span>🔄</span> 다시 시도
+            <span aria-hidden="true">🔄</span> 다시 시도
           </button>
           <Link
             href="/"
@@ -65,7 +65,7 @@ export default function HyundaiKiaGuideError({ error, reset }: ErrorProps) {
             aria-label="메인 홈으로 이동"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
           >
-            <span>🏠</span> 홈으로 이동
+            <span aria-hidden="true">🏠</span> 홈으로 이동
           </Link>
         </div>
       </div>

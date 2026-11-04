@@ -13,6 +13,7 @@ from crawlers.dcinside import (
     DcInsideCrawler,
     _normalize_iso_timestamp,
     extract_container_content,
+    is_deleted_or_restricted,
 )
 
 __all__ = [
@@ -23,4 +24,5 @@ __all__ = [
     "DcInsideCrawler",
     "_normalize_iso_timestamp",
     "extract_container_content",
+    "is_deleted_or_restricted",
 ]

@@ -118,6 +118,75 @@ def extract_container_content(html_str: str, tag_name: str, class_name: str) -> 
     return html_str[start_idx:]
 
 
+def is_deleted_or_restricted(html_content: Optional[str]) -> Tuple[bool, str]:
+    """
+    Check if DCInside HTML indicates the post is deleted, non-existent,
+    restricted, member-only, or blocked by anti-scraping / WAF.
+    Returns (True, reason) if inaccessible, else (False, "").
+    """
+    if not html_content or not isinstance(html_content, str) or not html_content.strip():
+        return True, "empty_content"
+
+    # 1. Cloudflare / Bot challenge / WAF blocking
+    if "<title>Just a moment...</title>" in html_content or "cf-browser-verification" in html_content or "__cf_chl_" in html_content:
+        return True, "cloudflare_challenge"
+    if re.search(r"비정상적인\s*접근입니다", html_content):
+        return True, "abnormal_access_blocked"
+    if re.search(r"접근이\s*차단되었습니다", html_content):
+        return True, "ip_blocked"
+    if re.search(r"자동\s*방지\s*문자", html_content) or re.search(r"보안\s*문자를\s*입력", html_content):
+        return True, "captcha_challenge"
+
+    # 2. Check if page has actual substantial article body:
+    # If a page contains a large write_div (> 50 chars), only alert(...) can indicate deletion
+    has_large_body = False
+    write_div_match = re.search(r'class=["\']write_div["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
+    if write_div_match and len(clean_html_text(write_div_match.group(1))) > 50:
+        has_large_body = True
+
+    # Deleted or Non-existent posts
+    deleted_patterns = [
+        r"alert\s*\(\s*['\"][^'\"]*삭제된\s*게시물",
+        r"alert\s*\(\s*['\"][^'\"]*삭제된\s*글",
+        r"alert\s*\(\s*['\"][^'\"]*존재하지\s*않는\s*게시물",
+        r"alert\s*\(\s*['\"][^'\"]*삭제되었거나\s*존재하지\s*않는",
+        r"alert\s*\(\s*['\"][^'\"]*해당\s*게시물이\s*(?:없|삭제)",
+        r"alert\s*\(\s*['\"][^'\"]*게시글이\s*삭제",
+        r"삭제된\s*게시물입니다",
+        r"존재하지\s*않는\s*게시물입니다",
+        r"삭제되었거나\s*없는\s*게시물입니다",
+        r"해당\s*게시물이\s*없습니다",
+        r"요청하신\s*게시물을\s*찾을\s*수\s*없습니다",
+        r"관리자에\s*의해\s*삭제된\s*게시글",
+        r"작성자에\s*의해\s*삭제된\s*게시글",
+    ]
+    for pat in deleted_patterns:
+        if has_large_body and not pat.startswith("alert"):
+            continue
+        if re.search(pat, html_content, re.IGNORECASE):
+            return True, "deleted_post"
+
+    # 3. Secret / Restricted / Member-only posts
+    restricted_patterns = [
+        r"alert\s*\(\s*['\"][^'\"]*비밀글입니다",
+        r"alert\s*\(\s*['\"][^'\"]*접근\s*권한",
+        r"alert\s*\(\s*['\"][^'\"]*로그인\s*[이후]?\s*(?:필요|이용|하십시오|하세요)",
+        r"alert\s*\(\s*['\"][^'\"]*성인\s*인증",
+        r"로그인이\s*필요한\s*서비스입니다",
+        r"로그인\s*후\s*이용\s*(?:가능|바랍니다|하십시오)",
+        r"접근\s*권한이\s*없습니다",
+        r"성인\s*인증이\s*필요한\s*게시물입니다",
+        r"해당\s*갤러리는\s*접근이\s*제한되었습니다",
+    ]
+    for pat in restricted_patterns:
+        if has_large_body and not pat.startswith("alert"):
+            continue
+        if re.search(pat, html_content, re.IGNORECASE):
+            return True, "restricted_post"
+
+    return False, ""
+
+
 def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
     """Normalize timestamp into ISO-8601 string with UTC timezone."""
     if not raw_date_str or not isinstance(raw_date_str, str):
@@ -237,6 +306,10 @@ class DCInsideCrawler(BaseCrawler):
     def __init__(self, client: Optional[SafeHttpClient] = None):
         super().__init__(client=client)
 
+    def is_deleted_or_restricted(self, html_content: Optional[str]) -> Tuple[bool, str]:
+        """Proxy check for deleted, restricted, or blocked pages."""
+        return is_deleted_or_restricted(html_content)
+
     def ensure_warm_up(self, base_url: Optional[str] = None, force: bool = False):
         """Warm up session cookies on DCInside base URL if not already done."""
         if isinstance(base_url, bool):
@@ -303,6 +376,12 @@ class DCInsideCrawler(BaseCrawler):
         Resilient against attribute order, single/double quotes, and malformed tags.
         """
         if not html_content or not isinstance(html_content, str):
+            return []
+
+        # Check for Cloudflare challenge or bot block on list page
+        is_blocked, reason = is_deleted_or_restricted(html_content)
+        if is_blocked and reason in ("cloudflare_challenge", "abnormal_access_blocked", "ip_blocked", "captcha_challenge"):
+            logger.warning(f"DCInside list page blocked by anti-scraping: {reason}")
             return []
 
         items: List[Dict[str, Any]] = []
@@ -538,15 +617,17 @@ class DCInsideCrawler(BaseCrawler):
         try:
             if not self.client:
                 return []
-            status, text, _ = self.client.post(
+            resp = self.client.post(
                 ajax_url,
                 data=form_data,
                 headers=headers,
                 referer=post_url,
                 timeout=timeout,
             )
-            if status == 200 and text:
-                return self.parse_comment_json(text)
+            if resp and isinstance(resp, (tuple, list)) and len(resp) >= 2:
+                status, text = resp[0], resp[1]
+                if status == 200 and text:
+                    return self.parse_comment_json(text)
         except Exception as e:
             logger.warning(f"Failed to fetch DC AJAX comments ({gallery_id}/{post_id}): {e}")
 
@@ -671,6 +752,26 @@ class DCInsideCrawler(BaseCrawler):
                 "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "author": "",
                 "gallery_id": eff_gallery_id,
+                "is_deleted": True,
+                "status": "empty_content",
+            }
+
+        # Check for deleted / secret / restricted / Cloudflare challenge page
+        is_blocked, block_reason = is_deleted_or_restricted(html_content)
+        if is_blocked:
+            return {
+                "platform": "dcinside",
+                "post_id": eff_post_id,
+                "url": post_url or "",
+                "title": "",
+                "content": "",
+                "comments": [],
+                "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "author": "",
+                "gallery_id": eff_gallery_id,
+                "is_deleted": block_reason == "deleted_post",
+                "is_restricted": block_reason in ("restricted_post", "cloudflare_challenge", "abnormal_access_blocked", "ip_blocked", "captcha_challenge"),
+                "status": block_reason,
             }
 
         # 2. Title - resilient against attribute order, tag structures, and multi-class declarations
@@ -917,14 +1018,25 @@ class DCInsideCrawler(BaseCrawler):
             logger.warning(f"Failed to fetch DCInside post: {eff_url} (status: {status})")
             return None
 
+        # Check for deleted / restricted / Cloudflare challenge page
+        is_blocked, block_reason = is_deleted_or_restricted(text)
+        if is_blocked:
+            logger.warning(f"DCInside post {eff_url} is unavailable ({block_reason})")
+            return None
+
         try:
-            return self.parse_post_detail(
+            detail = self.parse_post_detail(
                 text,
                 eff_url,
                 gallery_id=effective_gallery_id,
                 post_id=effective_post_id or "",
                 **kwargs,
             )
+            if not isinstance(detail, dict):
+                return None
+            if detail.get("is_deleted") or detail.get("is_restricted"):
+                return None
+            return detail
         except Exception as e:
             logger.warning(f"Error parsing DCInside post detail ({eff_url}) on corrupt HTML: {e}")
             return None
@@ -971,6 +1083,9 @@ class DCInsideCrawler(BaseCrawler):
                 logger.info(f"No more items in DCInside [{gallery_id}] page {page}")
                 break
 
+            consecutive_failures = 0
+            MAX_CONSECUTIVE_FAILURES = 5
+
             for item in items:
                 pid = item.get("post_id", "")
                 if pid and pid in seen_pids:
@@ -981,8 +1096,17 @@ class DCInsideCrawler(BaseCrawler):
                 post = self.fetch_post(item.get("url", ""), gallery_id=gallery_id, post_id=pid)
                 if post:
                     results.append(post)
+                    consecutive_failures = 0
                     if limit and len(results) >= limit:
                         return results
+                else:
+                    consecutive_failures += 1
+                    if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                        logger.warning(
+                            f"Encountered {consecutive_failures} consecutive fetch failures on DC [{gallery_id}]. "
+                            f"Halting page loop to prevent rate-limit bans."
+                        )
+                        break
 
         return results
 
@@ -1028,6 +1152,9 @@ class DCInsideCrawler(BaseCrawler):
                 logger.info(f"No items found for DC [{gallery_id}] keyword '{keyword}' page {page}")
                 break
 
+            consecutive_failures = 0
+            MAX_CONSECUTIVE_FAILURES = 5
+
             for item in items:
                 pid = item.get("post_id", "")
                 if pid and pid in seen_pids:
@@ -1038,8 +1165,17 @@ class DCInsideCrawler(BaseCrawler):
                 post = self.fetch_post(item.get("url", ""), gallery_id=gallery_id, post_id=pid)
                 if post:
                     results.append(post)
+                    consecutive_failures = 0
                     if limit and len(results) >= limit:
                         return results
+                else:
+                    consecutive_failures += 1
+                    if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                        logger.warning(
+                            f"Encountered {consecutive_failures} consecutive fetch failures on DC [{gallery_id}]. "
+                            f"Halting page loop to prevent rate-limit bans."
+                        )
+                        break
 
         return results
 

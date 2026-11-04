@@ -40,7 +40,7 @@ export default function ReliabilityAnalyticsError({ error, reset }: ReliabilityE
             아래 &apos;다시 시도&apos; 버튼을 눌러 안전하게 재로딩해 주세요.
           </p>
           {error?.digest && (
-            <p className="text-xs text-slate-500 font-mono pt-1">
+            <p className="text-xs text-slate-600 font-mono pt-1">
               오류 참조 코드: <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">{error.digest}</span>
             </p>
           )}
@@ -61,7 +61,7 @@ export default function ReliabilityAnalyticsError({ error, reset }: ReliabilityE
             aria-label="결함 분석 포털 다시 시도"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
-            <span>🔄</span> 다시 시도
+            <span aria-hidden="true">🔄</span> 다시 시도
           </button>
           <Link
             href="/"
@@ -69,19 +69,31 @@ export default function ReliabilityAnalyticsError({ error, reset }: ReliabilityE
             aria-label="메인 홈으로 이동"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
           >
-            <span>🏠</span> 홈으로 이동
+            <span aria-hidden="true">🏠</span> 홈으로 이동
           </Link>
         </div>
 
-        <div className="pt-4 border-t border-slate-100 text-xs text-slate-500 flex flex-wrap justify-center gap-4">
-          <Link href="/recall-portal" prefetch={false} className="hover:text-rose-600 transition">
-            🚨 공식 리콜 포털
+        <div className="pt-4 border-t border-slate-100 text-xs text-slate-600 flex flex-wrap justify-center gap-4">
+          <Link
+            href="/recall-portal"
+            prefetch={false}
+            className="hover:text-rose-600 transition inline-flex items-center gap-1 px-1.5 py-0.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+          >
+            <span aria-hidden="true">🚨</span> 공식 리콜 포털
           </Link>
-          <Link href="/subsidy-tracker" prefetch={true} className="hover:text-amber-600 transition">
-            ⚡ 보조금 추적기
+          <Link
+            href="/subsidy-tracker"
+            prefetch={true}
+            className="hover:text-amber-600 transition inline-flex items-center gap-1 px-1.5 py-0.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+          >
+            <span aria-hidden="true">⚡</span> 보조금 추적기
           </Link>
-          <Link href="/depreciation-calculator" prefetch={true} className="hover:text-emerald-600 transition">
-            📉 감가 계산기
+          <Link
+            href="/depreciation-calculator"
+            prefetch={true}
+            className="hover:text-emerald-600 transition inline-flex items-center gap-1 px-1.5 py-0.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          >
+            <span aria-hidden="true">📉</span> 감가 계산기
           </Link>
         </div>
       </div>

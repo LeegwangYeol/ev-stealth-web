@@ -352,6 +352,31 @@ class ScraperPipeline:
         self.dc_crawler = dc_crawler or DCInsideCrawler(client=self.client)
         self.defect_filter = defect_filter or DefectFilter()
 
+    def close(self) -> None:
+        """Release shared HTTP client and crawler session resources."""
+        if hasattr(self.bobae_crawler, "close"):
+            try:
+                self.bobae_crawler.close()
+            except Exception:
+                pass
+        if hasattr(self.dc_crawler, "close"):
+            try:
+                self.dc_crawler.close()
+            except Exception:
+                pass
+        if hasattr(self.client, "close"):
+            try:
+                self.client.close()
+            except Exception:
+                pass
+
+    def __enter__(self) -> "ScraperPipeline":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
+        self.close()
+        return False
+
     def harvest_bobaedream(self, limit: int) -> List[Dict[str, Any]]:
         """Harvest recent EV discussions from BobaeDream boards."""
         posts: List[Dict[str, Any]] = []
@@ -657,17 +682,17 @@ def main(argv: Optional[List[str]] = None) -> int:
             if dest_p.is_dir():
                 output_dest = str(dest_p / "daily_reports.json")
 
-        pipeline = ScraperPipeline()
-        summary = pipeline.run(
-            sources=args.sources,
-            limit=args.limit,
-            output_path=output_dest,
-            sync_web=args.sync_web,
-            dry_run=args.dry_run,
-            verbose=args.verbose,
-            web_dir=args.web_dir,
-            target_date=args.target_date,
-        )
+        with ScraperPipeline() as pipeline:
+            summary = pipeline.run(
+                sources=args.sources,
+                limit=args.limit,
+                output_path=output_dest,
+                sync_web=args.sync_web,
+                dry_run=args.dry_run,
+                verbose=args.verbose,
+                web_dir=args.web_dir,
+                target_date=args.target_date,
+            )
         if summary.get("total_scraped", 0) == 0:
             logger.warning("Scraping completed with 0 posts harvested across sources (network outage or empty boards). Exiting gracefully.")
             return 0

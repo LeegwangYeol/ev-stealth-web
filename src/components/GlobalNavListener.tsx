@@ -45,9 +45,14 @@ export const GlobalNavListener = memo(function GlobalNavListener() {
     const handleClick = (e: MouseEvent) => {
       const drawer = document.getElementById('mobile-nav-drawer');
       if (drawer && drawer.hasAttribute('open')) {
-        const target = e.target as HTMLElement | null;
-        if (target && (!target.closest || !target.closest('#mobile-nav-drawer') || target.closest('#mobile-nav-drawer a'))) {
-          drawer.removeAttribute('open');
+        const rawTarget = e.target as Node | null;
+        const targetElement = (rawTarget instanceof Element ? rawTarget : rawTarget?.parentElement) as HTMLElement | null;
+        if (targetElement) {
+          const isInsideDrawer = Boolean(targetElement.closest('#mobile-nav-drawer'));
+          const isDrawerLink = Boolean(targetElement.closest('#mobile-nav-drawer a'));
+          if (!isInsideDrawer || isDrawerLink) {
+            drawer.removeAttribute('open');
+          }
         }
       }
     };

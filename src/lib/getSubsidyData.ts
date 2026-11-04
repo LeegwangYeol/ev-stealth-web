@@ -7,6 +7,49 @@ import {
   SubsidyCalculatorOptions,
   AlertSeverity,
 } from '../types/subsidy';
+import {
+  calculateDepletionRate,
+  calculateDeliveryRate,
+  calculateRemainingUnits,
+  parseSubsidyNumber,
+  parseModelSubsidy,
+  parseCategoryMetrics,
+  safeCompareNumbers,
+  compareRegions,
+  sortRegions,
+  rankRegionsByDepletion,
+  compareModels,
+  sortModels,
+  type DepletionRateOptions,
+  type ParseSubsidyNumberOptions,
+  type ParsedModelSubsidy,
+  type ParsedCategoryMetrics,
+  type RegionSortOption,
+  type ModelSortOption,
+  type RankedRegionEntry,
+} from './subsidyCalculations';
+
+export {
+  calculateDepletionRate,
+  calculateDeliveryRate,
+  calculateRemainingUnits,
+  parseSubsidyNumber,
+  parseModelSubsidy,
+  parseCategoryMetrics,
+  safeCompareNumbers,
+  compareRegions,
+  sortRegions,
+  rankRegionsByDepletion,
+  compareModels,
+  sortModels,
+  type DepletionRateOptions,
+  type ParseSubsidyNumberOptions,
+  type ParsedModelSubsidy,
+  type ParsedCategoryMetrics,
+  type RegionSortOption,
+  type ModelSortOption,
+  type RankedRegionEntry,
+};
 
 // Robust typed fallback in case raw JSON is missing or malformed
 const fallbackDataset: EVSubsidyDataset = {
@@ -66,7 +109,7 @@ const fallbackDataset: EVSubsidyDataset = {
       label_ko: '마감 (접수 종료)',
       severity: 'DEPLETED',
       color_hex: '#6B7280',
-      badge_class: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
+      badge_class: 'bg-slate-800 text-slate-200 border-slate-600',
       recommended_action: '2026년 공고 예산이 전액 소진되었습니다. 취소분 대기 접수 또는 차년도 사업을 준비하세요.',
     },
   },
@@ -216,6 +259,7 @@ export const REGION_ALIAS_MAP: Record<string, string> = {
 
 /**
  * Finds a specific region by region_id, iso_code, Korean name, or colloquial alias.
+ * Guards against null elements and missing string properties.
  */
 export function getRegionById(regionId: string): RegionEntry | undefined {
   if (!regionId || typeof regionId !== 'string') return undefined;
@@ -223,29 +267,31 @@ export function getRegionById(regionId: string): RegionEntry | undefined {
   const normalized = regionId.trim().toLowerCase();
   if (!normalized) return undefined;
 
+  const validRegions = regions.filter((r): r is RegionEntry => Boolean(r && typeof r === 'object'));
+
   // 1. Direct alias resolution
   const rawAlias = Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, normalized)
     ? REGION_ALIAS_MAP[normalized]
     : Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, regionId.trim())
     ? REGION_ALIAS_MAP[regionId.trim()]
     : undefined;
-  const aliasedId = typeof rawAlias === 'string' ? rawAlias : undefined;
+  const aliasedId = typeof rawAlias === 'string' ? rawAlias.toLowerCase() : undefined;
   if (aliasedId) {
-    const matched = regions.find(
+    const matched = validRegions.find(
       (r) =>
-        r.region_id.toLowerCase() === aliasedId.toLowerCase() ||
-        r.iso_code.toLowerCase() === aliasedId.toLowerCase()
+        (typeof r.region_id === 'string' && r.region_id.toLowerCase() === aliasedId) ||
+        (typeof r.iso_code === 'string' && r.iso_code.toLowerCase() === aliasedId)
     );
     if (matched) return matched;
   }
 
   // 2. Direct exact match on ID, ISO code, or localized names
-  const exact = regions.find(
+  const exact = validRegions.find(
     (r) =>
-      r.region_id.toLowerCase() === normalized ||
-      r.iso_code.toLowerCase() === normalized ||
-      r.name_ko.toLowerCase() === normalized ||
-      r.name_en.toLowerCase() === normalized
+      (typeof r.region_id === 'string' && r.region_id.toLowerCase() === normalized) ||
+      (typeof r.iso_code === 'string' && r.iso_code.toLowerCase() === normalized) ||
+      (typeof r.name_ko === 'string' && r.name_ko.toLowerCase() === normalized) ||
+      (typeof r.name_en === 'string' && r.name_en.toLowerCase() === normalized)
   );
   if (exact) return exact;
 
@@ -255,17 +301,18 @@ export function getRegionById(regionId: string): RegionEntry | undefined {
     const rawStrippedAlias = Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, stripped)
       ? REGION_ALIAS_MAP[stripped]
       : undefined;
-    const strippedAliasedId = typeof rawStrippedAlias === 'string' ? rawStrippedAlias : undefined;
+    const strippedAliasedId = typeof rawStrippedAlias === 'string' ? rawStrippedAlias.toLowerCase() : undefined;
     if (strippedAliasedId) {
-      const matched = regions.find(
+      const matched = validRegions.find(
         (r) =>
-          r.region_id.toLowerCase() === strippedAliasedId.toLowerCase() ||
-          r.iso_code.toLowerCase() === strippedAliasedId.toLowerCase()
+          (typeof r.region_id === 'string' && r.region_id.toLowerCase() === strippedAliasedId) ||
+          (typeof r.iso_code === 'string' && r.iso_code.toLowerCase() === strippedAliasedId)
       );
       if (matched) return matched;
     }
 
-    return regions.find((r) => {
+    return validRegions.find((r) => {
+      if (!r.name_ko || typeof r.name_ko !== 'string') return false;
       const rStripped = r.name_ko.toLowerCase().replace(/(특별시|광역시|특별자치시|특별자치도|도)$/, '');
       return (
         rStripped === stripped ||
@@ -288,6 +335,7 @@ export function getAllModels(): PopularModelEntry[] {
 
 /**
  * Finds a vehicle model by model_id or Korean name, supporting whitespace- and hyphen-normalized queries.
+ * Guards against null elements and missing string properties.
  */
 export function getModelById(modelId: string): PopularModelEntry | undefined {
   if (!modelId || typeof modelId !== 'string') return undefined;
@@ -295,12 +343,14 @@ export function getModelById(modelId: string): PopularModelEntry | undefined {
   const normalized = modelId.trim().toLowerCase();
   if (!normalized) return undefined;
 
+  const validModels = models.filter((m): m is PopularModelEntry => Boolean(m && typeof m === 'object'));
+
   // 1. Exact or substring match on raw string
-  const directMatch = models.find(
+  const directMatch = validModels.find(
     (m) =>
-      m.model_id.toLowerCase() === normalized ||
-      m.name_ko.toLowerCase() === normalized ||
-      m.name_ko.toLowerCase().includes(normalized)
+      (typeof m.model_id === 'string' && m.model_id.toLowerCase() === normalized) ||
+      (typeof m.name_ko === 'string' && m.name_ko.toLowerCase() === normalized) ||
+      (typeof m.name_ko === 'string' && m.name_ko.toLowerCase().includes(normalized))
   );
   if (directMatch) return directMatch;
 
@@ -308,10 +358,10 @@ export function getModelById(modelId: string): PopularModelEntry | undefined {
   const cleanQuery = normalized.replace(/[\s\-_]+/g, '');
   if (!cleanQuery) return undefined;
 
-  return models.find((m) => {
-    const cleanId = m.model_id.toLowerCase().replace(/[\s\-_]+/g, '');
-    const cleanKo = m.name_ko.toLowerCase().replace(/[\s\-_]+/g, '');
-    return cleanId.includes(cleanQuery) || cleanKo.includes(cleanQuery);
+  return validModels.find((m) => {
+    const cleanId = (typeof m.model_id === 'string' ? m.model_id : '').toLowerCase().replace(/[\s\-_]+/g, '');
+    const cleanKo = (typeof m.name_ko === 'string' ? m.name_ko : '').toLowerCase().replace(/[\s\-_]+/g, '');
+    return (cleanId && cleanId.includes(cleanQuery)) || (cleanKo && cleanKo.includes(cleanQuery));
   });
 }
 
@@ -341,7 +391,7 @@ export function getPriceSubsidyRatio(msrpKrw: number): number {
 export function calculateNetSubsidy(
   modelId: string,
   regionId: string,
-  customMsrp?: number,
+  customMsrp?: number | string | null,
   options?: SubsidyCalculatorOptions
 ): SubsidyCalculationResult {
   const models = getAllModels();
@@ -417,16 +467,17 @@ export function calculateNetSubsidy(
   const passengerCategory = region.categories?.passenger ?? defaultRegion.categories.passenger;
 
   // 3. Resolve MSRP and price cap ratio
-  const safeModelPrice =
-    Number.isFinite(model?.base_price_krw) && model.base_price_krw > 0
-      ? Math.min(10_000_000_000, model.base_price_krw)
-      : 54_100_000;
+  const safeModelPrice = parseSubsidyNumber(model?.base_price_krw, {
+    defaultKrw: 54_100_000,
+    maxKrw: 10_000_000_000,
+  });
 
   let activeMsrp: number;
   if (customMsrp === Infinity) {
     activeMsrp = 10_000_000_000;
-  } else if (customMsrp !== undefined && customMsrp !== null && Number.isFinite(customMsrp) && customMsrp > 0) {
-    activeMsrp = Math.min(10_000_000_000, customMsrp);
+  } else if (customMsrp !== undefined && customMsrp !== null) {
+    const parsed = parseSubsidyNumber(customMsrp, { maxKrw: 10_000_000_000 });
+    activeMsrp = parsed > 0 ? parsed : safeModelPrice;
   } else {
     activeMsrp = safeModelPrice;
   }
@@ -441,14 +492,15 @@ export function calculateNetSubsidy(
   }
 
   // 4. Calculate National Subsidy
-  const validNationalSubsidy = Number.isFinite(model.national_subsidy_krw)
-    ? model.national_subsidy_krw
-    : 0;
+  const validNationalSubsidy = parseSubsidyNumber(model.national_subsidy_krw, { defaultKrw: 0 });
   let nationalSubsidyKrw = 0;
   if (ratio > 0) {
-    if (customMsrp && customMsrp > 0 && Number.isFinite(customMsrp)) {
+    const parsedCustom = customMsrp !== undefined && customMsrp !== null ? parseSubsidyNumber(customMsrp) : 0;
+    if (parsedCustom > 0) {
       // Re-evaluate model un-scaled baseline
-      const baseRatio = model.price_subsidy_ratio > 0 ? model.price_subsidy_ratio : 1.0;
+      const baseRatio = Number.isFinite(model.price_subsidy_ratio) && model.price_subsidy_ratio > 0
+        ? model.price_subsidy_ratio
+        : 1.0;
       const unscaledNational = Math.round(validNationalSubsidy / baseRatio);
       nationalSubsidyKrw = Math.min(6_500_000, Math.round(unscaledNational * ratio));
     } else {
@@ -479,9 +531,7 @@ export function calculateNetSubsidy(
 
   // 6. Calculate Local Municipal Matching Subsidy
   // Formula: S_local = S_local_max * (S_nat / 6,500,000)
-  const maxLocal = Number.isFinite(passengerCategory?.max_local_subsidy_krw)
-    ? passengerCategory.max_local_subsidy_krw
-    : 0;
+  const maxLocal = parseSubsidyNumber(passengerCategory?.max_local_subsidy_krw, { defaultKrw: 0 });
   let localSubsidyKrw = 0;
   if (nationalSubsidyKrw > 0 && maxLocal > 0) {
     const calculated = Math.round(maxLocal * (nationalSubsidyKrw / 6_500_000));
@@ -495,14 +545,16 @@ export function calculateNetSubsidy(
   const netPurchasePriceKrw = Number.isFinite(rawNetPrice) ? Math.max(0, rawNetPrice) : 0;
 
   // 8. Depletion Risk & Warning Analysis
-  const depletionRate = Number.isFinite(passengerCategory?.depletion_rate)
+  const pAnnounced = parseSubsidyNumber(passengerCategory?.announced_units, { defaultKrw: 0 });
+  const pApplied = parseSubsidyNumber(passengerCategory?.applied_units, { defaultKrw: 0 });
+  const depletionRate = typeof passengerCategory?.depletion_rate === 'number' && Number.isFinite(passengerCategory.depletion_rate)
     ? passengerCategory.depletion_rate
-    : 0;
+    : calculateDepletionRate(pApplied, pAnnounced);
   const isHighDepletionRisk = depletionRate >= 80.0;
-  const depletionStatus: AlertSeverity = passengerCategory?.status || 'HEALTHY';
-  const remainingUnits = Number.isFinite(passengerCategory?.remaining_units)
+  const depletionStatus: AlertSeverity = passengerCategory?.status || (depletionRate >= 100 ? 'DEPLETED' : depletionRate >= 95 ? 'CRITICAL' : depletionRate >= 80 ? 'WARNING' : depletionRate >= 60 ? 'CAUTION' : 'HEALTHY');
+  const remainingUnits = typeof passengerCategory?.remaining_units === 'number' && Number.isFinite(passengerCategory.remaining_units)
     ? passengerCategory.remaining_units
-    : 0;
+    : calculateRemainingUnits(pApplied, pAnnounced);
 
   let warningNotice: string | undefined;
   if (depletionRate >= 95.0) {
@@ -563,11 +615,15 @@ export function getCategoryDepletion(
   }
 
   const category = region?.categories?.[categoryKey];
-  const announced = typeof category?.announced_units === 'number' && Number.isFinite(category.announced_units) ? category.announced_units : 0;
-  const applied = typeof category?.applied_units === 'number' && Number.isFinite(category.applied_units) ? category.applied_units : 0;
-  const remaining = typeof category?.remaining_units === 'number' && Number.isFinite(category.remaining_units) ? category.remaining_units : 0;
-  const rate = typeof category?.depletion_rate === 'number' && Number.isFinite(category.depletion_rate) ? category.depletion_rate : 0;
-  const status: AlertSeverity = category?.status || 'HEALTHY';
+  const announced = parseSubsidyNumber(category?.announced_units, { defaultKrw: 0 });
+  const applied = parseSubsidyNumber(category?.applied_units, { defaultKrw: 0 });
+  const remaining = typeof category?.remaining_units === 'number' && Number.isFinite(category.remaining_units) && category.remaining_units >= 0
+    ? category.remaining_units
+    : calculateRemainingUnits(applied, announced);
+  const rate = typeof category?.depletion_rate === 'number' && Number.isFinite(category.depletion_rate)
+    ? category.depletion_rate
+    : calculateDepletionRate(applied, announced);
+  const status: AlertSeverity = category?.status || (rate >= 100.0 ? 'DEPLETED' : rate >= 95.0 ? 'CRITICAL' : rate >= 80.0 ? 'WARNING' : rate >= 60.0 ? 'CAUTION' : 'HEALTHY');
 
   return {
     announcedUnits: announced,

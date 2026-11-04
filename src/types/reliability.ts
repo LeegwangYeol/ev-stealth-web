@@ -97,4 +97,24 @@ export interface ReliabilityKPIs {
   trackedModelsCount: number;
   industryAvgDsi: number;
   topDefectCategory: string;
+  totalRecordsAnalyzed?: number;
+  brandsCount?: number;
+  modelsCount?: number;
+  avgIndustryDsi?: number;
 }
+
+export interface CategoryComplaintItem {
+  category: string;
+  count: number;
+  percentage: number;
+}
+
+export interface CategoryComplaintInputEntry {
+  category?: string | DefectCategoryKey;
+  category_key?: string;
+  code?: string;
+  defect_category?: string;
+  count?: number | unknown;
+  percentage?: number | unknown;
+}
+

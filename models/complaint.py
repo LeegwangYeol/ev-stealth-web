@@ -28,6 +28,64 @@ VALID_BRANDS: List[str] = ["Hyundai", "Kia", "Tesla", "BYD", "Other"]
 
 VALID_SEVERITY_LEVELS: List[str] = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
 
+# Comprehensive category alias mapping for resilient normalization
+CATEGORY_ALIASES: Dict[str, str] = {
+    # BATTERY_CHARGING
+    "BATTERY": "BATTERY_CHARGING",
+    "CHARGING": "BATTERY_CHARGING",
+    "BATTERY_CHARGING": "BATTERY_CHARGING",
+    "배터리": "BATTERY_CHARGING",
+    "충전": "BATTERY_CHARGING",
+    "배터리/충전": "BATTERY_CHARGING",
+    "배터리 충전": "BATTERY_CHARGING",
+    "BMS": "BATTERY_CHARGING",
+    "ICCU": "BATTERY_CHARGING",
+    # DRIVING_POWERTRAIN
+    "DRIVING": "DRIVING_POWERTRAIN",
+    "POWERTRAIN": "DRIVING_POWERTRAIN",
+    "DRIVING_POWERTRAIN": "DRIVING_POWERTRAIN",
+    "주행": "DRIVING_POWERTRAIN",
+    "모터": "DRIVING_POWERTRAIN",
+    "등판": "DRIVING_POWERTRAIN",
+    "주행/모터/등판": "DRIVING_POWERTRAIN",
+    "주행 모터 등판": "DRIVING_POWERTRAIN",
+    "제동": "DRIVING_POWERTRAIN",
+    "조향": "DRIVING_POWERTRAIN",
+    # BUILD_QUALITY
+    "BUILD": "BUILD_QUALITY",
+    "QUALITY": "BUILD_QUALITY",
+    "BUILD_QUALITY": "BUILD_QUALITY",
+    "단차": "BUILD_QUALITY",
+    "누수": "BUILD_QUALITY",
+    "마감": "BUILD_QUALITY",
+    "단차/누수/마감": "BUILD_QUALITY",
+    "단차 누수 마감": "BUILD_QUALITY",
+    "조립": "BUILD_QUALITY",
+    "외장": "BUILD_QUALITY",
+    # SOFTWARE_ELECTRONICS
+    "SOFTWARE": "SOFTWARE_ELECTRONICS",
+    "ELECTRONICS": "SOFTWARE_ELECTRONICS",
+    "SOFTWARE_ELECTRONICS": "SOFTWARE_ELECTRONICS",
+    "OTA": "SOFTWARE_ELECTRONICS",
+    "소프트웨어": "SOFTWARE_ELECTRONICS",
+    "전장": "SOFTWARE_ELECTRONICS",
+    "먹통": "SOFTWARE_ELECTRONICS",
+    "OTA/소프트웨어/먹통": "SOFTWARE_ELECTRONICS",
+    "인포테인먼트": "SOFTWARE_ELECTRONICS",
+    # SERVICE_REPAIR_COST
+    "SERVICE": "SERVICE_REPAIR_COST",
+    "REPAIR": "SERVICE_REPAIR_COST",
+    "COST": "SERVICE_REPAIR_COST",
+    "SERVICE_REPAIR_COST": "SERVICE_REPAIR_COST",
+    "AS": "SERVICE_REPAIR_COST",
+    "A/S": "SERVICE_REPAIR_COST",
+    "수리": "SERVICE_REPAIR_COST",
+    "수리비": "SERVICE_REPAIR_COST",
+    "서비스센터": "SERVICE_REPAIR_COST",
+    "AS/수리비": "SERVICE_REPAIR_COST",
+    "AS 수리비": "SERVICE_REPAIR_COST",
+}
+
 
 def validate_severity(sev: Any) -> bool:
     """Validate whether severity level is one of canonical levels CRITICAL, HIGH, MEDIUM, LOW."""
@@ -75,7 +133,7 @@ def validate_category(category: Any) -> bool:
 
 
 def normalize_category(category: Any, default: str = "BUILD_QUALITY") -> str:
-    """Normalize category string (case-insensitive English or Korean) to canonical uppercase English."""
+    """Normalize category string (case-insensitive English, Korean, or aliases) to canonical uppercase English."""
     if not category:
         return default
     s = str(category).strip()
@@ -85,6 +143,10 @@ def normalize_category(category: Any, default: str = "BUILD_QUALITY") -> str:
     for k, v in DEFECT_CATEGORY_KO_MAP.items():
         if s == v or s_upper == v.upper():
             return k
+    if s_upper in CATEGORY_ALIASES:
+        return CATEGORY_ALIASES[s_upper]
+    if s in CATEGORY_ALIASES:
+        return CATEGORY_ALIASES[s]
     return default
 
 
@@ -137,6 +199,20 @@ def _safe_clamp(val: Any, min_val: float = -1.0, max_val: float = 1.0, default: 
     return f
 
 
+# Pre-compiled date parsing regular expressions for high-throughput batch evaluation
+_RE_DATE_KR_4: re.Pattern[str] = re.compile(r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?")
+_RE_DATE_KR_2: re.Pattern[str] = re.compile(r"(?:^|[^\d])(\d{2})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?")
+_RE_DATE_TS: re.Pattern[str] = re.compile(
+    r"(\d{4})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})(?:[\sT]+\d{1,2}:\d{1,2}(?::\d{1,2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?(?:[^\d]|$)"
+)
+_RE_DATE_COMPACT_8: re.Pattern[str] = re.compile(
+    r"(?:^|[^\d])((?:19|20)\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?:\d{4,6})?(?:$|[^\d])"
+)
+_RE_DATE_2: re.Pattern[str] = re.compile(r"(?:^|[^\d])(\d{2})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})")
+_RE_DATE_COMPACT_6: re.Pattern[str] = re.compile(r"^(\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$")
+_RE_DATE_MD: re.Pattern[str] = re.compile(r"^(0[1-9]|1[0-2])[./\-](0[1-9]|[12]\d|3[01])$")
+
+
 def parse_date_str(created_at: Any) -> str:
     """Extract YYYY-MM-DD from created_at or default safely to today (UTC).
 
@@ -181,21 +257,21 @@ def parse_date_str(created_at: Any) -> str:
         except (ValueError, OverflowError, OSError):
             pass
 
-    s = str(created_at).strip()
+    s = str(created_at).strip()[:128]
     if not s:
         return today_iso
 
     current_year = datetime.now(timezone.utc).year
 
     # 1a. Handle 4-digit Korean explicit date format e.g. "2026년 10월 27일" or "2026년 9월 8일"
-    match_kr = re.search(r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?", s)
+    match_kr = _RE_DATE_KR_4.search(s)
     if match_kr:
         v = _validate_date(int(match_kr.group(1)), int(match_kr.group(2)), int(match_kr.group(3)))
         if v:
             return v
 
     # 1b. Handle 2-digit Korean explicit date format e.g. "26년 10월 27일" or "26년 9월 8일"
-    match_kr_2 = re.search(r"(?:^|[^\d])(\d{2})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?", s)
+    match_kr_2 = _RE_DATE_KR_2.search(s)
     if match_kr_2:
         yy = int(match_kr_2.group(1))
         y = 2000 + yy if yy < 70 else 1900 + yy
@@ -204,27 +280,21 @@ def parse_date_str(created_at: Any) -> str:
             return v
 
     # 2. Handle timestamps with space, sub-second microseconds, or standard ISO formats
-    match_ts = re.search(
-        r"(\d{4})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})(?:[\sT]+\d{1,2}:\d{1,2}(?::\d{1,2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?(?:[^\d]|$)",
-        s,
-    )
+    match_ts = _RE_DATE_TS.search(s)
     if match_ts:
         v = _validate_date(int(match_ts.group(1)), int(match_ts.group(2)), int(match_ts.group(3)))
         if v:
             return v
 
     # 3. Handle 8-digit compact dates e.g. "20261028" or "20261028190123"
-    match_compact = re.search(
-        r"(?:^|[^\d])((?:19|20)\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?:\d{4,6})?(?:$|[^\d])",
-        s,
-    )
+    match_compact = _RE_DATE_COMPACT_8.search(s)
     if match_compact:
         v = _validate_date(int(match_compact.group(1)), int(match_compact.group(2)), int(match_compact.group(3)))
         if v:
             return v
 
     # 4. Handle Korean 2-digit year patterns e.g. "26.10.25" or "26-10-25"
-    match_2 = re.search(r"(?:^|[^\d])(\d{2})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})", s)
+    match_2 = _RE_DATE_2.search(s)
     if match_2:
         yy = int(match_2.group(1))
         y = 2000 + yy if yy < 70 else 1900 + yy
@@ -233,7 +303,7 @@ def parse_date_str(created_at: Any) -> str:
             return v
 
     # 5. Handle 6-digit compact dates e.g. "261028" (YYMMDD)
-    match_compact_6 = re.search(r"^(\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$", s)
+    match_compact_6 = _RE_DATE_COMPACT_6.search(s)
     if match_compact_6:
         yy = int(match_compact_6.group(1))
         y = 2000 + yy if yy < 70 else 1900 + yy
@@ -242,7 +312,7 @@ def parse_date_str(created_at: Any) -> str:
             return v
 
     # 6. Handle month-day only format e.g. "10.28" or "10-28" (DCInside current-year posts)
-    match_md = re.search(r"^(0[1-9]|1[0-2])[./\-](0[1-9]|[12]\d|3[01])$", s)
+    match_md = _RE_DATE_MD.search(s)
     if match_md:
         v = _validate_date(current_year, int(match_md.group(1)), int(match_md.group(2)))
         if v:
@@ -329,13 +399,13 @@ class RawPost:
         }
 
     def __getitem__(self, key: str) -> Any:
-        if isinstance(key, str) and hasattr(self, key) and not key.startswith("_"):
-            val = getattr(self, key)
-            if not callable(val):
-                return val
-        d = self.to_dict()
-        if key in d:
-            return d[key]
+        if isinstance(key, str):
+            if hasattr(self, key) and not key.startswith("_"):
+                val = getattr(self, key)
+                if not callable(val):
+                    return val
+            if key in ("platform", "post_id", "url", "title", "content", "comments", "created_at", "author", "id", "source"):
+                return self.to_dict()[key]
         raise KeyError(key) from None
 
     def __contains__(self, key: Any) -> bool:
@@ -343,7 +413,7 @@ class RawPost:
             val = getattr(self, key)
             if not callable(val):
                 return True
-        return key in self.to_dict()
+        return key in ("platform", "post_id", "url", "title", "content", "comments", "created_at", "author", "id", "source")
 
     def get(self, key: str, default: Any = None) -> Any:
         try:
@@ -416,17 +486,12 @@ class DSIBreakdown:
         }
 
     def __getitem__(self, key: str) -> float:
-        d = self.to_dict()
-        if key in d:
-            return d[key]
+        if key in ("safety", "functional", "economic", "social", "convenience"):
+            return _safe_round(getattr(self, key, 0.0), 2)
         raise KeyError(key) from None
 
     def __contains__(self, key: Any) -> bool:
-        if isinstance(key, str) and hasattr(self, key) and not key.startswith("_"):
-            val = getattr(self, key)
-            if not callable(val):
-                return True
-        return key in self.to_dict()
+        return key in ("safety", "functional", "economic", "social", "convenience")
 
     def get(self, key: str, default: Any = None) -> Any:
         try:
@@ -523,6 +588,10 @@ class ComplaintRecord:
             for k, v in DEFECT_CATEGORY_KO_MAP.items():
                 if cat == v or cat_upper == v.upper():
                     return v
+            if cat_upper in CATEGORY_ALIASES:
+                return DEFECT_CATEGORY_KO_MAP[CATEGORY_ALIASES[cat_upper]]
+            if cat in CATEGORY_ALIASES:
+                return DEFECT_CATEGORY_KO_MAP[CATEGORY_ALIASES[cat]]
         return "기타 결함"
 
     @property
@@ -797,21 +866,11 @@ class ComplaintRecord:
         # 8. defect_category (support category or Korean category alias)
         defect_cat = _get_str("defect_category", "category")
         if defect_cat:
-            cat_upper = defect_cat.upper()
-            if cat_upper in DEFECT_CATEGORY_KO_MAP:
-                defect_cat = cat_upper
-            else:
-                for k, v in DEFECT_CATEGORY_KO_MAP.items():
-                    if defect_cat == v or cat_upper == v.upper():
-                        defect_cat = k
-                        break
+            defect_cat = normalize_category(defect_cat, default=defect_cat)
         else:
             cat_ko = _get_str("defect_category_ko")
             if cat_ko:
-                for k, v in DEFECT_CATEGORY_KO_MAP.items():
-                    if v == cat_ko or k == cat_ko.upper():
-                        defect_cat = k
-                        break
+                defect_cat = normalize_category(cat_ko, default="BUILD_QUALITY")
 
         # 9. summary
         summary = _get_str("summary")
@@ -895,20 +954,66 @@ class ComplaintRecord:
         )
 
     def __getitem__(self, key: str) -> Any:
-        if isinstance(key, str) and hasattr(self, key) and not key.startswith("_"):
-            val = getattr(self, key)
-            if not callable(val):
-                return val
+        if isinstance(key, str):
+            if key == "platform":
+                return self.source
+            elif key == "post_url":
+                return self.url
+            elif key == "post_title":
+                return self.title
+            elif key == "date":
+                return self.date_str
+            elif key == "target_vehicle":
+                return f"{self.vehicle_brand} {self.vehicle_model}".strip()
+            elif key == "defect_category_ko":
+                return self.defect_category_ko
+            elif key in ("raw_quote", "verbatim_quote"):
+                return self.verbatim_quote
+            elif key in ("slang_tags", "slang_terms_detected"):
+                return list(self.slang_terms_detected or [])
+            elif key in ("sentiment_score", "negativity_score"):
+                return _safe_round(_safe_clamp(self.negativity_score, 0.0, 1.0, 0.0), 4)
+            elif key == "sentiment_polarity":
+                return _safe_round(_safe_clamp(self.sentiment_polarity, -1.0, 1.0, 0.0), 4)
+            elif key == "sentiment_tier":
+                return self.sentiment_tier
+            elif key in ("severity", "severity_tier"):
+                return self.severity_tier
+            elif key == "severity_index":
+                return _safe_round(self.severity_index, 2)
+            elif key == "confidence_score":
+                return _safe_round(self.confidence_score, 4)
+            elif key == "is_authentic_defect":
+                return self.is_authentic_defect
+            elif key == "dsi_breakdown":
+                return self.dsi_breakdown.to_dict() if self.dsi_breakdown else None
+            elif hasattr(self, key) and not key.startswith("_"):
+                val = getattr(self, key)
+                if not callable(val):
+                    return val
         d = self.to_admin_report_dict()
         if key in d:
             return d[key]
         raise KeyError(key) from None
 
     def __contains__(self, key: Any) -> bool:
-        if isinstance(key, str) and hasattr(self, key) and not key.startswith("_"):
-            val = getattr(self, key)
-            if not callable(val):
+        if isinstance(key, str):
+            if key in (
+                "id", "source", "platform", "url", "post_url", "title", "post_title",
+                "author", "date", "created_at", "vehicle_brand", "vehicle_model",
+                "target_vehicle", "defect_category", "defect_category_ko", "summary",
+                "verbatim_quote", "raw_quote", "slang_tags", "slang_terms_detected",
+                "sentiment_score", "sentiment_polarity", "negativity_score",
+                "sentiment_tier", "severity", "severity_tier", "severity_index",
+                "is_authentic_defect", "confidence_score", "filter_reason"
+            ):
                 return True
+            if key == "dsi_breakdown":
+                return self.dsi_breakdown is not None
+            if hasattr(self, key) and not key.startswith("_"):
+                val = getattr(self, key)
+                if not callable(val):
+                    return True
         return key in self.to_admin_report_dict()
 
     def get(self, key: str, default: Any = None) -> Any:
@@ -950,13 +1055,15 @@ class DailyReportStatistics:
         }
 
     def __getitem__(self, key: str) -> Any:
-        if isinstance(key, str) and hasattr(self, key) and not key.startswith("_"):
-            val = getattr(self, key)
-            if not callable(val):
-                return val
-        d = self.to_dict()
-        if key in d:
-            return d[key]
+        if isinstance(key, str):
+            if key == "avg_negativity_score":
+                return _safe_round(self.avg_negativity_score, 2)
+            if key in ("total_scraped", "total_filtered_defects", "critical_defect_count"):
+                return getattr(self, key)
+            if hasattr(self, key) and not key.startswith("_"):
+                val = getattr(self, key)
+                if not callable(val):
+                    return val
         raise KeyError(key) from None
 
     def __contains__(self, key: Any) -> bool:
@@ -964,7 +1071,7 @@ class DailyReportStatistics:
             val = getattr(self, key)
             if not callable(val):
                 return True
-        return key in self.to_dict()
+        return key in ("total_scraped", "total_filtered_defects", "avg_negativity_score", "critical_defect_count")
 
     def get(self, key: str, default: Any = None) -> Any:
         try:
@@ -1031,9 +1138,6 @@ class DailyReportPayload:
             val = getattr(self, key)
             if not callable(val):
                 return val
-        d = self.to_dict()
-        if key in d:
-            return d[key]
         raise KeyError(key)
 
     def __contains__(self, key: Any) -> bool:
@@ -1041,7 +1145,10 @@ class DailyReportPayload:
             val = getattr(self, key)
             if not callable(val):
                 return True
-        return key in self.to_dict()
+        return key in (
+            "generated_at", "pipeline_version", "statistics", "reports",
+            "total_complaints_today", "top_defect_categories"
+        )
 
     def get(self, key: str, default: Any = None) -> Any:
         return self.to_dict().get(key, default)

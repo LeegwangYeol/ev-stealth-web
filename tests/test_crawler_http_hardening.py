@@ -540,6 +540,120 @@ class TestHttpAdvancedErrorRecoveryAndBaseCrawlerLifecycle(unittest.TestCase):
         self.assertEqual(text, "ok after 408")
         self.assertEqual(mock_opener.open.call_count, 2)
 
+    def test_user_agent_rotation_and_cookie_quarantine_on_retry(self):
+        """On 429/403 retry, User-Agent is rotated and session cookies are cleared."""
+        jar = http.cookiejar.CookieJar()
+        c = http.cookiejar.Cookie(
+            version=0, name="blocked_token", value="bad_cookie_123", port=None, port_specified=False,
+            domain="example.com", domain_specified=True, domain_initial_dot=False,
+            path="/", path_specified=True, secure=False, expires=None, discard=False,
+            comment=None, comment_url=None, rest={}, rfc2109=False,
+        )
+        jar.set_cookie(c)
+
+        mock_opener = unittest.mock.MagicMock()
+        err_429 = urllib.error.HTTPError("https://example.com", 429, "Too Many Requests", hdrs={}, fp=io.BytesIO(b""))
+        resp_mock = unittest.mock.MagicMock()
+        resp_mock.getcode.return_value = 200
+        resp_mock.headers = {}
+        resp_mock.read.side_effect = [b"<html>Success after UA rotation</html>", b""]
+
+        mock_opener.open.side_effect = [err_429, resp_mock]
+        client = SafeHttpClient(max_retries=2, rotate_user_agent=True, enable_jitter=False, opener=mock_opener, cookie_jar=jar)
+        status, text, _ = client.get("https://example.com/test-rotate")
+        self.assertEqual(status, 200)
+        self.assertIn("Success after UA rotation", text)
+        self.assertEqual(mock_opener.open.call_count, 2)
+        # Cookies cleared on 429
+        self.assertEqual(len(client.cookie_jar), 0)
+
+    def test_clean_html_text_bytes_and_unicode_resilience(self):
+        """clean_html_text safely handles raw bytes and unicode non-breaking/ideographic spaces."""
+        raw_bytes = "<div>테스트 본문입니다.&nbsp;&amp;lt;b&amp;gt;강조&amp;lt;/b&amp;gt;\xa0\u3000\u200b</div>".encode("utf-8")
+        cleaned = clean_html_text(raw_bytes)
+        self.assertIn("테스트 본문입니다.", cleaned)
+        self.assertIn("강조", cleaned)
+        self.assertNotIn("\xa0", cleaned)
+        self.assertNotIn("\u200b", cleaned)
+        self.assertNotIn("\u3000", cleaned)
+
+    def test_bobaedream_container_masking_resilience(self):
+        """BobaeDream extract_container_content does not truncate on dummy closing tags inside comments or scripts."""
+        html = (
+            '<div class="bodyCont">'
+            '<p>첫번째 문단 내용입니다.</p>'
+            '<!-- </div> 내부 주석 닫는 태그 -->'
+            '<p>두번째 중요 결함 문단입니다.</p>'
+            '<script>var dummy = "</div>";</script>'
+            '<p>세번째 최종 결함 문단입니다.</p>'
+            '</div>'
+            '<div class="footer">하단 푸터</div>'
+        )
+        extracted = bd_extract(html, "div", "bodyCont")
+        self.assertIn("첫번째 문단 내용입니다.", extracted)
+        self.assertIn("두번째 중요 결함 문단입니다.", extracted)
+        self.assertIn("세번째 최종 결함 문단입니다.", extracted)
+        self.assertNotIn("하단 푸터", extracted)
+
+    def test_dcinside_is_deleted_or_restricted_detection(self):
+        """DCInside is_deleted_or_restricted accurately detects Cloudflare, deleted, and blocked pages."""
+        from crawlers.dcinside import is_deleted_or_restricted as dc_check
+
+        # 1. Cloudflare challenge
+        is_cf, reason_cf = dc_check("<html><head><title>Just a moment...</title></head></html>")
+        self.assertTrue(is_cf)
+        self.assertEqual(reason_cf, "cloudflare_challenge")
+
+        # 2. Deleted post alert
+        is_del, reason_del = dc_check("<script>alert('삭제된 게시물입니다.'); history.back();</script>")
+        self.assertTrue(is_del)
+        self.assertEqual(reason_del, "deleted_post")
+
+        # 3. Secret / Restricted post
+        is_res, reason_res = dc_check("<script>alert('비밀글입니다.');</script>")
+        self.assertTrue(is_res)
+        self.assertEqual(reason_res, "restricted_post")
+
+        # 4. Valid normal post
+        is_normal, _ = dc_check("<html><div class='write_div'>정상 게시글 본문입니다. EV 배터리 문제 발생.</div></html>")
+        self.assertFalse(is_normal)
+
+    def test_dcinside_fetch_post_deleted_returns_none(self):
+        """DCInside fetch_post returns None on deleted posts instead of returning blank records."""
+        crawler = DCInsideCrawler()
+        crawler.client = unittest.mock.MagicMock()
+        crawler.client.get.return_value = (200, "<script>alert('삭제된 게시물입니다.');</script>", b"")
+        post = crawler.fetch_post("https://gall.dcinside.com/board/view/?id=car_new1&no=7777")
+        self.assertIsNone(post)
+
+    def test_bobaedream_lsp_referer_compliance(self):
+        """BobaeDreamCrawler fetch_post handles positional referer as second argument."""
+        crawler = BobaeDreamCrawler()
+        crawler.client = unittest.mock.MagicMock()
+        crawler.client.get.return_value = (
+            200,
+            "<html><strong class='title'>제목</strong><div class='bodyCont'>정상 본문</div></html>",
+            b"",
+        )
+        post = crawler.fetch_post("https://www.bobaedream.co.kr/view?code=national&No=123", "https://custom-referer.com")
+        self.assertIsNotNone(post)
+        self.assertEqual(crawler.client.get.call_args[1]["referer"], "https://custom-referer.com")
+
+    def test_safe_http_client_compatibility_modules(self):
+        """crawlers.safe_http_client and utils.safe_http_client export SafeHttpClient identically."""
+        from crawlers.safe_http_client import SafeHttpClient as CrawlerSafeHttp
+        from utils.safe_http_client import SafeHttpClient as UtilsSafeHttp
+        self.assertIs(SafeHttpClient, CrawlerSafeHttp)
+        self.assertIs(SafeHttpClient, UtilsSafeHttp)
+
+    def test_scraper_pipeline_context_manager_close(self):
+        """ScraperPipeline cleanly enters and exits context manager without leaking sessions."""
+        from run_scraper import ScraperPipeline
+        with ScraperPipeline() as pipeline:
+            self.assertIsNotNone(pipeline.client)
+            self.assertIsNotNone(pipeline.bobae_crawler)
+            self.assertIsNotNone(pipeline.dc_crawler)
+
 
 if __name__ == "__main__":
     unittest.main()

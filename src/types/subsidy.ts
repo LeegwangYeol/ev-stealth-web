@@ -53,6 +53,7 @@ export interface MunicipalityMetrics {
 export interface RegionEntry {
   region_id: string;
   iso_code: string;
+  code?: string;
   name_ko: string;
   name_en: string;
   tier: 'special_city' | 'metropolitan_city' | 'special_self_governing_city' | 'province' | 'special_self_governing_province' | string;
@@ -66,7 +67,7 @@ export interface RegionEntry {
     bus: CategoryMetrics;
   };
   municipalities?: MunicipalityMetrics[];
-  notes: string;
+  notes?: string;
   last_updated?: string;
 }
 
@@ -74,6 +75,7 @@ export interface PopularModelEntry {
   model_id: string;
   name_ko: string;
   manufacturer: string;
+  manufacturer_ko?: string;
   battery_type: string;
   battery_capacity_kwh: number;
   rated_range_km: number;
@@ -109,6 +111,8 @@ export interface EVSubsidyDataset {
     nationwide_depletion_rate: number;
     total_budget_billion_krw: number;
     disbursed_budget_billion_krw: number;
+    total_budget_krw?: number;
+    disbursed_budget_krw?: number;
     category_totals: {
       passenger: CategoryMetrics;
       commercial: CategoryMetrics;
@@ -157,7 +161,7 @@ export interface SubsidyCalculationResult {
 }
 
 export interface SubsidyCalculatorOptions {
-  customMsrp?: number;
+  customMsrp?: number | string;
   isYouthFirstTimeBuyer?: boolean; // +20% national subsidy
   isSmallBusinessOrTaxi?: boolean; // +30% national subsidy
   isMultiChildFamily?: boolean; // +10% national subsidy

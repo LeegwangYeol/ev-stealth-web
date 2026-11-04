@@ -52,10 +52,10 @@ export default function NotFound() {
           <Link
             href="/subsidy-tracker"
             prefetch={true}
-            className="group p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-amber-50/60 hover:border-amber-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+            className="group p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-amber-50/60 hover:border-amber-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
           >
             <div className="flex items-center gap-2 font-bold text-slate-900 group-hover:text-amber-800 text-base">
-              <span className="text-xl">⚡</span>
+              <span className="text-xl" aria-hidden="true">⚡</span>
               <span>보조금 소진율 추적기</span>
             </div>
             <p className="text-xs text-slate-600 mt-1 leading-relaxed">
@@ -66,10 +66,10 @@ export default function NotFound() {
           <Link
             href="/reliability-analytics"
             prefetch={false}
-            className="group p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-blue-50/60 hover:border-blue-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="group p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-blue-50/60 hover:border-blue-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
             <div className="flex items-center gap-2 font-bold text-slate-900 group-hover:text-blue-800 text-base">
-              <span className="text-xl">📊</span>
+              <span className="text-xl" aria-hidden="true">📊</span>
               <span>결함 분석 포털 (DSI)</span>
             </div>
             <p className="text-xs text-slate-600 mt-1 leading-relaxed">
@@ -80,10 +80,10 @@ export default function NotFound() {
           <Link
             href="/depreciation-calculator"
             prefetch={true}
-            className="group p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-emerald-50/60 hover:border-emerald-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+            className="group p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-emerald-50/60 hover:border-emerald-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
           >
             <div className="flex items-center gap-2 font-bold text-slate-900 group-hover:text-emerald-800 text-base">
-              <span className="text-xl">📉</span>
+              <span className="text-xl" aria-hidden="true">📉</span>
               <span>감가 계산기</span>
             </div>
             <p className="text-xs text-slate-600 mt-1 leading-relaxed">
@@ -94,10 +94,10 @@ export default function NotFound() {
           <Link
             href="/recall-portal"
             prefetch={false}
-            className="group p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-rose-50/60 hover:border-rose-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+            className="group p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-rose-50/60 hover:border-rose-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2"
           >
             <div className="flex items-center gap-2 font-bold text-slate-900 group-hover:text-rose-800 text-base">
-              <span className="text-xl">🚨</span>
+              <span className="text-xl" aria-hidden="true">🚨</span>
               <span>공식 리콜 &amp; 화재 포털</span>
             </div>
             <p className="text-xs text-slate-600 mt-1 leading-relaxed">
@@ -108,10 +108,10 @@ export default function NotFound() {
           <Link
             href="/pdi-checklist"
             prefetch={false}
-            className="group p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-cyan-50/60 hover:border-cyan-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+            className="group p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-cyan-50/60 hover:border-cyan-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2"
           >
             <div className="flex items-center gap-2 font-bold text-slate-900 group-hover:text-cyan-800 text-base">
-              <span className="text-xl">✅</span>
+              <span className="text-xl" aria-hidden="true">✅</span>
               <span>신차 검수 PDI 체크리스트</span>
             </div>
             <p className="text-xs text-slate-600 mt-1 leading-relaxed">
@@ -122,10 +122,10 @@ export default function NotFound() {
           <Link
             href="/"
             prefetch={false}
-            className="group p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-indigo-50/60 hover:border-indigo-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            className="group p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-indigo-50/60 hover:border-indigo-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
           >
             <div className="flex items-center gap-2 font-bold text-slate-900 group-hover:text-indigo-800 text-base">
-              <span className="text-xl">🏠</span>
+              <span className="text-xl" aria-hidden="true">🏠</span>
               <span>홈으로 이동</span>
             </div>
             <p className="text-xs text-slate-600 mt-1 leading-relaxed">

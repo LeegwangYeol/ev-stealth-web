@@ -70,7 +70,7 @@ export default function RecallPortalPage() {
           <div role="status" aria-live="polite" className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-8">
             <div className="text-center space-y-3">
               <div className="text-3xl animate-pulse motion-reduce:animate-none" aria-hidden="true">⚡</div>
-              <div className="text-sm font-semibold text-slate-400">
+              <div className="text-sm font-semibold text-slate-300">
                 전기차 리콜 & 배터리 데이터베이스 로딩 중...
               </div>
             </div>

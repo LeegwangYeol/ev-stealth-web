@@ -38,8 +38,16 @@ p, th, td, label, button, a {
 
 @layer base {
   :focus-visible {
-    outline: 2px solid #3b82f6;
+    outline: 2px solid #2563eb;
     outline-offset: 2px;
+  }
+
+  /* Accessible focus indicators for dark backgrounds and high contrast environments */
+  .dark :focus-visible,
+  [data-theme="dark"] :focus-visible,
+  .bg-slate-900 :focus-visible,
+  .bg-slate-950 :focus-visible {
+    outline-color: #60a5fa;
   }
 
   header a[href="/"]:focus-visible,
@@ -51,3 +59,23 @@ p, th, td, label, button, a {
     border-radius: 0.5rem;
   }
 }
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  main {
+    min-height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+}
+

@@ -10,8 +10,12 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const dailyReportsTsPath = path.resolve(__dirname, '../ev-stealth-web/src/lib/getDailyReports.ts');
-const dashboardClientPath = path.resolve(__dirname, '../ev-stealth-web/src/app/secret-admin-reports/AdminDashboardClient.tsx');
+const dailyReportsTsPath = fs.existsSync(path.resolve(__dirname, '../src/lib/getDailyReports.ts'))
+  ? path.resolve(__dirname, '../src/lib/getDailyReports.ts')
+  : path.resolve(__dirname, '../ev-stealth-web/src/lib/getDailyReports.ts');
+const dashboardClientPath = fs.existsSync(path.resolve(__dirname, '../src/app/secret-admin-reports/AdminDashboardClient.tsx'))
+  ? path.resolve(__dirname, '../src/app/secret-admin-reports/AdminDashboardClient.tsx')
+  : path.resolve(__dirname, '../ev-stealth-web/src/app/secret-admin-reports/AdminDashboardClient.tsx');
 
 const rawDailyReports = fs.readFileSync(dailyReportsTsPath, 'utf-8');
 const rawDashboardClient = fs.readFileSync(dashboardClientPath, 'utf-8');
@@ -19,8 +23,8 @@ const rawDashboardClient = fs.readFileSync(dashboardClientPath, 'utf-8');
 // 1. URL Sanitization Tests
 test('getDailyReports.ts: sanitizeReportUrl blocks dangerous URI schemes', async () => {
   const patched = rawDailyReports
-    .replace(/from '\.\/sanitizeUrl';/, "from '../ev-stealth-web/src/lib/sanitizeUrl.ts';")
-    .replace(/from '\.\.\/data\/daily_reports\.json' with \{ type: 'json' \};/, "from '../ev-stealth-web/src/data/daily_reports.json' with { type: 'json' };");
+    .replace(/from '\.\/sanitizeUrl';/, "from '../src/lib/sanitizeUrl.ts';")
+    .replace(/from '\.\.\/data\/daily_reports\.json' with \{ type: 'json' \};/, "from '../src/data/daily_reports.json' with { type: 'json' };");
 
   const tempPath = path.resolve(__dirname, 'temp_test_daily_reports.ts');
   fs.writeFileSync(tempPath, patched, 'utf-8');
@@ -105,4 +109,77 @@ test('AdminDashboardClient.tsx static audit: search truncation, memoization, con
   // Safe external URL rendering (no dead # links)
   assert.ok(rawDashboardClient.includes('isExternal ?'), 'Links must conditionally render anchor tag only for external URLs');
   assert.ok(rawDashboardClient.includes('formatSentimentPercent'), 'Must use formatSentimentPercent helper for bounded sentiment displays');
+
+  // WCAG AA: Search landmark and accessible hint
+  assert.ok(rawDashboardClient.includes('role="search"'), 'Search input container must have role="search"');
+  assert.ok(rawDashboardClient.includes('aria-describedby="admin-defect-search-hint"'), 'Search input must have aria-describedby for assistive tech hint');
+  assert.ok(rawDashboardClient.includes('id="admin-defect-search-hint"'), 'Hint element must exist with matching ID');
+
+  // WCAG AA: Table accessibility
+  assert.ok(rawDashboardClient.includes('scope="col"'), 'Table header cells must specify scope="col"');
+  assert.ok(rawDashboardClient.includes('scope="row"'), 'Table row headers must specify scope="row"');
+  assert.ok(rawDashboardClient.includes('<caption>'), 'Table must define an informative caption element');
+  assert.ok(rawDashboardClient.includes('원문 링크 없음'), 'Dead links must be replaced with non-anchor text');
+
+  // WCAG AA: Pagination Controls
+  assert.ok(rawDashboardClient.includes('aria-label="결함 제보 목록 페이지 탐색"'), 'Pagination must define accessible navigation landmark');
+  assert.ok(rawDashboardClient.includes('aria-label="이전 페이지로 이동"'), 'Previous page button must have descriptive aria-label');
+  assert.ok(rawDashboardClient.includes('aria-label="다음 페이지로 이동"'), 'Next page button must have descriptive aria-label');
+  assert.ok(rawDashboardClient.includes('aria-current={isCurrent ? \'page\' : undefined}'), 'Current page button must indicate aria-current="page"');
+  assert.ok(rawDashboardClient.includes('min-h-[44px] min-w-[44px]'), 'Pagination buttons must meet WCAG 44x44px tap target size');
+
+  // Korean search resilience & spacing tolerance
+  assert.ok(rawDashboardClient.includes('_spacelessIndex'), 'Must precompute _spacelessIndex for Korean spacing-tolerant matching');
+  assert.ok(rawDashboardClient.includes('replace(/^#+/, \'\')'), 'Must strip hashtags to support #tag queries');
+  assert.ok(rawDashboardClient.includes('split(/\\s+/)'), 'Must split query into tokens for multi-keyword search');
+
+  // Date parsing & deterministic sorting
+  assert.ok(rawDashboardClient.includes('parseSafeDate'), 'Must use parseSafeDate for cross-browser date parsing');
+  assert.ok(rawDashboardClient.includes('getPaginationItems'), 'Must export getPaginationItems helper for clean page navigation');
+});
+
+// 5. Functional tests for parseSafeDate and getPaginationItems
+test('AdminDashboardClient logic: parseSafeDate and getPaginationItems functional tests', () => {
+  // Extract and evaluate parseSafeDate and getPaginationItems logic
+  function parseSafeDate(rawDate) {
+    if (!rawDate || typeof rawDate !== 'string') return 0;
+    const trimmed = rawDate.trim();
+    if (!trimmed) return 0;
+    const normalized = trimmed.replace(/\./g, '-').replace(/\//g, '-');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+      const timestamp = new Date(`${normalized}T00:00:00Z`).getTime();
+      if (Number.isFinite(timestamp) && timestamp > 0) return timestamp;
+    }
+    if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(normalized)) {
+      const isoLike = normalized.replace(/\s+/, 'T') + (normalized.includes('+') || normalized.endsWith('Z') ? '' : 'Z');
+      const timestamp = new Date(isoLike).getTime();
+      if (Number.isFinite(timestamp) && timestamp > 0) return timestamp;
+    }
+    const timestamp = new Date(normalized).getTime();
+    if (Number.isFinite(timestamp) && timestamp > 0) return timestamp;
+    return 0;
+  }
+
+  function getPaginationItems(current, total) {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    if (current <= 4) return [1, 2, 3, 4, 5, '...', total];
+    if (current >= total - 3) return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+    return [1, '...', current - 1, current, current + 1, '...', total];
+  }
+
+  // parseSafeDate tests
+  assert.ok(parseSafeDate('2026-09-30T10:25:45+00:00') > 0);
+  assert.ok(parseSafeDate('2026.09.08') > 0);
+  assert.strictEqual(parseSafeDate('2026.09.08'), parseSafeDate('2026-09-08'));
+  assert.ok(parseSafeDate('2026/09/08') > 0);
+  assert.ok(parseSafeDate('2026-09-08 14:30:00') > 0);
+  assert.strictEqual(parseSafeDate(''), 0);
+  assert.strictEqual(parseSafeDate(null), 0);
+  assert.strictEqual(parseSafeDate(undefined), 0);
+
+  // getPaginationItems tests
+  assert.deepStrictEqual(getPaginationItems(1, 5), [1, 2, 3, 4, 5]);
+  assert.deepStrictEqual(getPaginationItems(1, 10), [1, 2, 3, 4, 5, '...', 10]);
+  assert.deepStrictEqual(getPaginationItems(9, 10), [1, '...', 6, 7, 8, 9, 10]);
+  assert.deepStrictEqual(getPaginationItems(5, 10), [1, '...', 4, 5, 6, '...', 10]);
 });

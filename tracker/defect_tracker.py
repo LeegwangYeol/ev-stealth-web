@@ -58,11 +58,43 @@ def _to_record_dict(obj: Any) -> Dict[str, Any]:
         return {k: getattr(obj, k) for k in dir(obj) if not k.startswith("_")}
 
 
+_CURRENT_DIR = Path(__file__).resolve().parent
+
+
+def _find_repo_root() -> Path:
+    """Locate canonical repository root from module file location and active working directory."""
+    candidates = [
+        _CURRENT_DIR,
+        _CURRENT_DIR.parent,
+        _CURRENT_DIR.parent.parent,
+        Path.cwd(),
+        Path.cwd().parent,
+    ]
+    for c in candidates:
+        if (c / "data").is_dir() and (c / "ev-stealth-web").is_dir():
+            return c
+    for c in candidates:
+        if (c / "data").is_dir() or (c / "ev-stealth-web" / "src" / "data").is_dir():
+            return c
+    return _CURRENT_DIR.parent
+
+
 def _is_project_data_dir(path: Path, cwd: Path) -> bool:
     """Check if the path points to the real project data directory."""
     try:
         resolved = path.resolve()
-        for cand in [cwd / "data", cwd.parent / "data"]:
+        repo_root = _find_repo_root()
+        candidate_dirs = [
+            repo_root / "data",
+            repo_root / "ev-stealth-web" / "src" / "data",
+            repo_root / "ev-stealth-web" / "public" / "data",
+            repo_root / "public" / "data",
+            cwd / "data",
+            cwd.parent / "data",
+            cwd / "ev-stealth-web" / "src" / "data",
+            cwd / "src" / "data",
+        ]
+        for cand in candidate_dirs:
             if cand.exists() and resolved == cand.resolve():
                 return True
     except Exception:
@@ -110,24 +142,29 @@ class DefectTracker:
         **kwargs: Any,
     ) -> None:
         self.reports_file: Optional[Path] = Path(reports_file) if reports_file else None
+        repo_root = _find_repo_root()
         cwd = Path.cwd()
         if root_data_dir:
             self.root_data_dir = Path(root_data_dir)
+        elif (repo_root / "data").exists():
+            self.root_data_dir = repo_root / "data"
         elif (cwd / "data").exists():
             self.root_data_dir = cwd / "data"
         elif (cwd.parent / "data").exists():
             self.root_data_dir = cwd.parent / "data"
         else:
-            self.root_data_dir = cwd / "data"
+            self.root_data_dir = repo_root / "data"
 
         if web_data_dir:
             self.web_data_dir = Path(web_data_dir)
+        elif (repo_root / "ev-stealth-web" / "src" / "data").exists():
+            self.web_data_dir = repo_root / "ev-stealth-web" / "src" / "data"
         elif (cwd / "src" / "data").exists():
             self.web_data_dir = cwd / "src" / "data"
         elif (cwd / "ev-stealth-web" / "src" / "data").exists():
             self.web_data_dir = cwd / "ev-stealth-web" / "src" / "data"
         else:
-            self.web_data_dir = cwd / "ev-stealth-web" / "src" / "data"
+            self.web_data_dir = repo_root / "ev-stealth-web" / "src" / "data"
 
         if public_data_dir:
             self.public_data_dir: Optional[Path] = Path(public_data_dir)
@@ -137,6 +174,10 @@ class DefectTracker:
             self.public_data_dir = Path(web_data_dir).parent.parent / "public" / "data"
         elif root_data_dir is not None and not _is_project_data_dir(self.root_data_dir, cwd):
             self.public_data_dir = None
+        elif (repo_root / "ev-stealth-web" / "public" / "data").exists():
+            self.public_data_dir = repo_root / "ev-stealth-web" / "public" / "data"
+        elif (repo_root / "public" / "data").exists():
+            self.public_data_dir = repo_root / "public" / "data"
         elif (cwd / "ev-stealth-web" / "public" / "data").exists():
             self.public_data_dir = cwd / "ev-stealth-web" / "public" / "data"
         elif (cwd / "public" / "data").exists():
@@ -190,7 +231,7 @@ class DefectTracker:
         try:
             if not p.is_file() or p.stat().st_size == 0:
                 return False
-            with open(p, "r", encoding="utf-8") as f:
+            with open(p, "r", encoding="utf-8-sig") as f:
                 data = json.load(f)
             if not isinstance(data, dict):
                 return False
@@ -234,8 +275,14 @@ class DefectTracker:
             pass
         return candidates[0]
 
-    def load_full_report_data(self, file_path: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
+    def load_full_report_data(
+        self,
+        file_path: Optional[Union[str, Path]] = None,
+        quarantine_corrupted: bool = True,
+    ) -> Dict[str, Any]:
         """Load complete defect report dataset including statistics and metadata."""
+        from tracker.atomic_writer import quarantine_corrupted_file
+
         target = Path(file_path) if file_path else self.resolve_primary_reports_path()
         if not target or not target.exists():
             logger.warning("No defect report file found to load.")
@@ -243,13 +290,17 @@ class DefectTracker:
 
         if not self.validate_report_file(target):
             logger.error("Target defect report file %s failed schema validation.", target)
+            if quarantine_corrupted:
+                quarantine_corrupted_file(target)
             return {"reports": [], "statistics": {}}
 
         try:
-            with open(target, "r", encoding="utf-8") as f:
+            with open(target, "r", encoding="utf-8-sig") as f:
                 return json.load(f)
         except Exception as exc:
             logger.error("Failed to read defect report %s: %s", target, exc)
+            if quarantine_corrupted:
+                quarantine_corrupted_file(target)
             return {"reports": [], "statistics": {}}
 
     def invalidate_cache(self) -> None:
@@ -635,6 +686,7 @@ class DefectTracker:
         """
         from tracker.atomic_writer import (
             FileLock,
+            cleanup_stale_lock_files,
             is_corrupted_or_quarantined_filename,
             quarantine_corrupted_file,
         )
@@ -658,6 +710,7 @@ class DefectTracker:
 
         written_paths: List[str] = []
         sync_lock_path = root_path.parent / ".sync_defect_reports.lock"
+        cleanup_stale_lock_files(root_path.parent, max_age_seconds=3600.0)
 
         with FileLock(sync_lock_path):
             if run_crawler and self.pipeline:

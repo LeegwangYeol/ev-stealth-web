@@ -72,7 +72,7 @@ export default function ReliabilityAnalyticsPage() {
           >
             <div className="space-y-4">
               <div
-                className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"
+                className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent motion-reduce:animate-none"
                 aria-hidden="true"
               />
               <p className="text-sm font-medium text-slate-300">

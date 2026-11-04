@@ -32,7 +32,9 @@ import * as dailyReports from '../src/lib/getDailyReports';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..');
-const WEB_ROOT = path.resolve(REPO_ROOT, 'ev-stealth-web');
+const WEB_ROOT = fs.existsSync(path.resolve(REPO_ROOT, 'ev-stealth-web'))
+  ? path.resolve(REPO_ROOT, 'ev-stealth-web')
+  : REPO_ROOT;
 
 interface BenchmarkMetric {
   name: string;

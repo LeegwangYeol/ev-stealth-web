@@ -4,38 +4,40 @@ import JsonLd from "@/components/JsonLd";
 
 export const dynamic = 'force-static';
 
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://ev-stealth-web.vercel.app").replace(/\/+$/, "");
+
 const homeJsonLd = {
   "@context": "https://schema.org",
   "@type": "WebPage",
   "name": "글로벌 EV 중고차 연식별 피하기 가이드",
   "description":
     "특정 모델과 연식별(Model Year) 고질병, 배터리 결함, 실시간 전국 보조금 소진율 및 감가방어율을 완벽 분석하는 글로벌 전기차 데이터 허브.",
-  "url": "https://ev-stealth-web.vercel.app",
+  "url": SITE_URL,
   "isPartOf": {
     "@type": "WebSite",
     "name": "Global EV Hub",
-    "url": "https://ev-stealth-web.vercel.app",
+    "url": SITE_URL,
   },
   "about": [
     {
       "@type": "Thing",
       "name": "전국 지자체별 전기차 실시간 보조금 소진율 추적기",
-      "url": "https://ev-stealth-web.vercel.app/subsidy-tracker",
+      "url": `${SITE_URL}/subsidy-tracker`,
     },
     {
       "@type": "Thing",
       "name": "전기차 감가방어율 & 배터리 수명 계산기",
-      "url": "https://ev-stealth-web.vercel.app/depreciation-calculator",
+      "url": `${SITE_URL}/depreciation-calculator`,
     },
     {
       "@type": "Thing",
       "name": "전기차 결함 통계 및 DSI 내구성 분석 대시보드",
-      "url": "https://ev-stealth-web.vercel.app/reliability-analytics",
+      "url": `${SITE_URL}/reliability-analytics`,
     },
     {
       "@type": "Thing",
       "name": "공식 전기차 리콜 & 배터리 화재 안전 포털",
-      "url": "https://ev-stealth-web.vercel.app/recall-portal",
+      "url": `${SITE_URL}/recall-portal`,
     },
   ],
 };
@@ -65,12 +67,35 @@ export const metadata: Metadata = {
     type: "website",
     locale: "ko_KR",
     siteName: "Global EV Hub",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "글로벌 EV 중고차 연식별 피하기 가이드",
+        type: "image/png",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "글로벌 EV 중고차 연식별 피하기 가이드 | Global EV Hub",
     description:
       "특정 모델과 연식별(Model Year) 고질병, 배터리 결함, 실시간 전국 보조금 소진율 및 감가방어율을 완벽 분석하는 글로벌 전기차 데이터 허브.",
+    site: "@GlobalEVHub",
+    creator: "@lolollol2379",
+    images: ["/og-image.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
   },
 };
 
@@ -90,6 +115,7 @@ export default function Home() {
       <section aria-label="서비스 주요 진입점 바로가기 그리드" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full max-w-6xl">
         <Link href="/subsidy-tracker"
           prefetch={true}
+          aria-label="전국 지자체별 전기차 실시간 보조금 소진율 추적기 바로가기"
           className="group block p-6 bg-gradient-to-br from-amber-950 via-slate-900 to-yellow-950 text-white border border-amber-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-amber-400 transition-all duration-300 md:col-span-2 lg:col-span-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -117,6 +143,7 @@ export default function Home() {
 
         <Link href="/depreciation-calculator"
           prefetch={true}
+          aria-label="전기차 감가방어율 및 배터리 수명 계산기 바로가기"
           className="group block p-6 bg-gradient-to-br from-emerald-950 via-slate-900 to-teal-950 text-white border border-emerald-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-emerald-400 transition-all duration-300 md:col-span-2 lg:col-span-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -143,6 +170,7 @@ export default function Home() {
 
         <Link href="/reliability-analytics"
           prefetch={false}
+          aria-label="전기차 결함 통계 및 내구성(DSI) 분석 대시보드 바로가기"
           className="group block p-6 bg-gradient-to-br from-indigo-900 via-slate-900 to-blue-950 text-white border border-indigo-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-indigo-400 transition-all duration-300 md:col-span-2 lg:col-span-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -163,6 +191,7 @@ export default function Home() {
 
         <Link href="/recall-portal"
           prefetch={false}
+          aria-label="공식 전기차 리콜 및 배터리 화재 안전 포털 바로가기"
           className="group block p-6 bg-gradient-to-br from-rose-950 via-slate-900 to-amber-950 text-white border border-rose-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-rose-400 transition-all duration-300 md:col-span-2 lg:col-span-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -183,6 +212,7 @@ export default function Home() {
 
         <Link href="/2026-latest"
           prefetch={false}
+          aria-label="2026년식 국내 신차 최신 결함 분석 바로가기"
           className="group block p-6 bg-blue-50 border border-blue-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
           <h2 className="text-2xl font-bold mb-3 text-blue-700 group-hover:text-blue-800">
             <span aria-hidden="true">🔥 </span>2026년식 국내 신차 최신 결함 분석 <span aria-hidden="true">&rarr;</span>
@@ -194,6 +224,7 @@ export default function Home() {
 
         <Link href="/pdi-checklist"
           prefetch={false}
+          aria-label="신차 인수(PDI) 체크리스트 바로가기"
           className="group block p-6 bg-green-50 border border-green-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
           <h2 className="text-2xl font-bold mb-3 text-green-800 group-hover:text-green-900">
             <span aria-hidden="true">✅ </span>신차 인수(PDI) 체크리스트 <span aria-hidden="true">&rarr;</span>
@@ -205,6 +236,7 @@ export default function Home() {
 
         <Link href="/hyundai-kia"
           prefetch={false}
+          aria-label="현대/기아 연식별 피하기 가이드 바로가기"
           className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
           <h2 className="text-2xl font-bold mb-3 group-hover:text-blue-700">
             현대/기아 연식별 <span aria-hidden="true">&rarr;</span>
@@ -216,6 +248,7 @@ export default function Home() {
 
         <Link href="/tesla"
           prefetch={false}
+          aria-label="테슬라 연식별 피하기 가이드 바로가기"
           className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
           <h2 className="text-2xl font-bold mb-3 group-hover:text-blue-700">
             테슬라 연식별 <span aria-hidden="true">&rarr;</span>
@@ -227,6 +260,7 @@ export default function Home() {
 
         <Link href="/byd"
           prefetch={false}
+          aria-label="BYD 연식별 피하기 가이드 바로가기"
           className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
           <h2 className="text-2xl font-bold mb-3 group-hover:text-blue-700">
             BYD 연식별 <span aria-hidden="true">&rarr;</span>
@@ -238,6 +272,7 @@ export default function Home() {
 
         <Link href="/global-brands"
           prefetch={false}
+          aria-label="폭스바겐/벤츠/폴스타 글로벌 브랜드 연식별 피하기 가이드 바로가기"
           className="group block p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
           <h2 className="text-2xl font-bold mb-3 group-hover:text-blue-700">
             폭스바겐/벤츠/폴스타 <span aria-hidden="true">&rarr;</span>

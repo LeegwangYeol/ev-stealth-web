@@ -6,7 +6,41 @@
 - **Working Directory**: `/Users/a7890/src/my-e-car/ev-stealth-web`
 - **Integrity Mode**: Benchmark / Infinite Evolution (zero stubs, zero lint errors/warnings, 100% test pass rate, empirical verification)
 
-## Current Execution Status: SPAM FILTER DEEP AUDIT & HARDENING COMPLETED (Cycle 25: 2026-11-04)
+## Current Execution Status: RELIABILITY CALCULATIONS & TRENDS DEEP AUDIT COMPLETED (Cycle 25: 2026-11-04)
+- **Components**:
+  - `ev-stealth-web/src/lib/reliabilityCalculations.ts`
+  - `ev-stealth-web/src/lib/getReliabilityData.ts`
+- **Audit Scope & Key Remediations**:
+  1. **Reliability Score Normalization Bounds (0 to 100)**:
+     - Implemented `normalizeReliabilityScore(rawScore: unknown, fallback: number = 0): number` with strict boundary clamping `Math.max(0, Math.min(100, val))`.
+     - Coerced negative scores (-10 -> 0), overflowing scores (120 -> 100), and non-finite inputs (NaN, Infinity, -Infinity, null, undefined) safely to fallback.
+     - Hardened `getDsiSeverityLevel` to clamp `safeDsi` to `boundedDsi = Math.min(100, safeDsi)` while maintaining backward-compatible contract strings.
+     - Enforced `normalizeReliabilityScore` across `getReliabilityTrendsData()`, brand `overall_dsi`, model `avg_dsi`, and year evaluation `dsi_score`.
+  2. **Category Complaint Counts Aggregation Bugs**:
+     - Implemented `aggregateCategoryComplaintCounts` and `getAggregatedCategoryList`.
+     - Solved duplicate categories bug: case-insensitively trimmed keys (e.g. `'battery_charging'` and `'BATTERY_CHARGING'`) and properly accumulated counts into single normalized entries without dropping counts or producing duplicate keys.
+     - Defensively handled undefined, null, negative, or NaN counts, coercing them safely to 0.
+     - Resolved division by zero in percentage calculation when total complaint count is 0 (evaluating to 0.0% instead of NaN%).
+     - Sanitized brand `category_distribution` on data load.
+  3. **Trend Direction Calculation Edge Cases**:
+     - Implemented `calculateTrendDirection(current, previous, thresholdPct)`.
+     - Handled `previous === 0` division by zero:
+       - `current > 0 && previous === 0` -> `direction: 'UP'`, `percentageChange: 100`, `+100.0%` (finite growth, not `Infinity`).
+       - `current === 0 && previous === 0` -> `direction: 'STABLE'`, `percentageChange: 0`, `0.0%` (not `NaN`).
+       - `current < 0 && previous === 0` -> `direction: 'DOWN'`, `percentageChange: -100`, `-100.0%` (finite change, not `-Infinity`).
+     - Handled non-finite inputs (NaN, Infinity, null, undefined) safely.
+     - Handled minor fluctuations below thresholdPct (default 0.1%) as `STABLE`.
+  4. **Model ID Substring Matching Edge Case**:
+     - Fixed `getModelReliabilityById` where empty string `id: ""` or `name: ""` caused `normalized.includes(mIdNorm)` to evaluate to `true` for all queries, incorrectly returning the empty model.
+  5. **Dynamic Reliability KPIs**:
+     - Implemented `calculateReliabilityKPIs(data)` computing total posts, brand count, model count, normalized industry DSI, and determining top defect category.
+- **Verification**:
+  - `tests/test_reliability_calculations_audit.py`: 5/5 PASS (1.03s).
+  - `ev-stealth-web/tests/test_reliability_calculations_audit.py`: 5/5 PASS (1.00s).
+  - `tests/test_cycle24_hardening.py -k test_19_triple_mirror_test_tree_and_backend_parity`: PASS.
+  - `cd ev-stealth-web && npx tsc --noEmit`: 0 errors.
+
+## Execution Status: SPAM FILTER DEEP AUDIT & HARDENING COMPLETED (Cycle 25: 2026-11-04)
 - **Component**: `filters/spam_filter.py` and `ev-stealth-web/filters/spam_filter.py`
 - **Audit Scope**:
   1. Regex patterns for promotional ads, commercial spam, dealer links, affiliate codes, scam promotions.
@@ -1161,3 +1195,32 @@
      - Full filter test suites (`test_filters.py`, `test_adversarial_matcher_filter_merger.py`, `test_cycle23_hardening.py`, `test_vehicle_matcher_slang_audit.py`): 80/80 passed.
      - 100% bitwise mirror parity maintained across `crawlers/`, `filters/`, `models/`, `tracker/`, `utils/`, and `tests/`.
 
+
+## EV Subsidy Data & Calculations Audit & Hardening (Cycle 26)
+- **Status**: Completed & 100% Passing (2026-11-05).
+- **Inspected Files**:
+  - `ev-stealth-web/src/types/subsidy.ts`
+  - `ev-stealth-web/src/lib/subsidyCalculations.ts`
+  - `ev-stealth-web/src/lib/getSubsidyData.ts`
+  - `tests/test_subsidy_calculations_audit.py` (and mirror `ev-stealth-web/tests/test_subsidy_calculations_audit.py`)
+- **Key Enhancements & Remediations**:
+  1. **Division by Zero & Edge Cases in Depletion/Delivery Rates**:
+     - Hardened `calculateDepletionRate` and `calculateDeliveryRate` to strictly handle `totalQuota <= 0`, negative values, null/undefined, and non-finite numbers (`NaN`, `Infinity`), returning guaranteed `0.0`.
+     - Hardened `calculateRemainingUnits` to clamp remaining units at `0` (preventing negative remaining units when over-subscribed).
+     - Added boundary protections against `0 / 0` in all category and regional rate derivations.
+  2. **NaN and Infinity Safe Sorting & Deterministic Ranking**:
+     - Standard JS numerical subtraction comparator (`(b - a)`) evaluates to `NaN` when `NaN` or `Infinity - Infinity` is involved, corrupting sort stability.
+     - Implemented `safeCompareNumbers(a, b, direction)`: deterministic comparator that pushes `NaN` safely to the end while ordering `Infinity` as highest in descending comparisons without returning `NaN`.
+     - Implemented `compareRegions`, `sortRegions`, `rankRegionsByDepletion`: deterministic NaN-safe sorting across 5 criteria (`DEPLETION_DESC`, `DEPLETION_ASC`, `REMAINING_ASC`, `LOCAL_SUBSIDY_DESC`, `NAME_ASC`) and standard 1-based competition ranking.
+     - Implemented `compareModels` and `sortModels`: deterministic NaN-safe sorting across 5 criteria.
+  3. **Robust Subsidy Number Parsing & Korean Denominations**:
+     - Implemented `parseSubsidyNumber(input, options)`: parses raw strings with commas, currency symbols, and Korean denominations (`만원`, `만 원`, `만`, `억원`, `억 원`, `억`, `천만원`, `천원`), handling compound representations (e.g., `"1억 2,000만 원"`, `"5,500만원"`, `"650만원"`).
+     - Implemented `parseModelSubsidy` and `parseCategoryMetrics`: defensive parsers falling back gracefully to statutory defaults when encountering missing/corrupted properties or non-string IDs.
+     - Hardened `getRegionByIdFromList` and `getModelByIdFromList` to verify `typeof field === 'string'` before invoking string methods, preventing unhandled `TypeError` exceptions.
+     - Updated `calculateNetSubsidy` and `calculateNetSubsidyPure` to accept string or number `customMsrp`.
+  4. **Verification & Build Validation**:
+     - Pre-flight build verified: `cd ev-stealth-web && npm run build` compiled 18/18 static pages successfully with 0 errors.
+     - TypeScript typecheck & ESLint verified: `npm run typecheck` and `npm run lint` passed with 0 errors/warnings.
+     - Added comprehensive test suite `tests/test_subsidy_calculations_audit.py` (13 tests, 100% passing).
+     - Bitwise SHA-256 parity maintained between root `tests/test_subsidy_calculations_audit.py` and `ev-stealth-web/tests/test_subsidy_calculations_audit.py` (`3d235bfafffcbf90199fbe18ce3571879e9012bbd31284d3bdbe563326161501`).
+     - Subsidy test suite regression check: 125/125 tests passed in 19.5s.

@@ -149,6 +149,34 @@ NEGATIVE_LEXICON: Dict[str, float] = {
     "죽을 뻔": -0.98,
 }
 
+# Pre-compiled regular expressions for tokenization, boundary matching and ReDoS avoidance
+RE_CLAUSE_SPLIT: re.Pattern[str] = re.compile(r"[,;.\n]+")
+RE_TOKENS: re.Pattern[str] = re.compile(r"[\w가-힣]+")
+RE_HANGUL: re.Pattern[str] = re.compile(r"[가-힣]")
+RE_AS_KEYWORD: re.Pattern[str] = re.compile(r"(?:\b|[^a-zA-Z])(?:as|a/s)(?:\b|[^a-zA-Z])", re.IGNORECASE)
+
+# Pre-sorted immutable collections for zero-overhead inner loop evaluation
+_SORTED_COMPOUND_RULES: Dict[str, Tuple[str, ...]] = {
+    cat: tuple(sorted(phrases, key=len, reverse=True))
+    for cat, phrases in COMPOUND_DEFECT_RULES.items()
+}
+_SORTED_NEGATIVE_WORDS: Tuple[str, ...] = tuple(sorted(NEGATIVE_LEXICON.keys(), key=len, reverse=True))
+_SORTED_POSITIVE_WORDS: Tuple[str, ...] = tuple(sorted(POSITIVE_LEXICON.keys(), key=len, reverse=True))
+
+_BASE_DEFECT_WORDS: Tuple[str, ...] = (
+    "단차", "잡소리", "소음", "누수", "고장", "결함", "불량", "하자", "이음",
+    "찌걱찌걱", "흔들림", "떨림", "문제", "이상", "에러"
+)
+_ALL_DEFECT_TERMS_LIST: List[str] = list(_BASE_DEFECT_WORDS)
+for _entry in RAW_SLANG_ENTRIES:
+    if _entry.term not in _ALL_DEFECT_TERMS_LIST:
+        _ALL_DEFECT_TERMS_LIST.append(_entry.term)
+
+_SINGLE_PART_DEFECT_TERMS: Tuple[str, ...] = tuple(t for t in _ALL_DEFECT_TERMS_LIST if " " not in t)
+_MULTI_PART_DEFECT_TERMS: Tuple[Tuple[Tuple[str, ...], str], ...] = tuple(
+    (tuple(t.split()), t) for t in _ALL_DEFECT_TERMS_LIST if " " in t
+)
+
 
 class DefectClassifier:
     """4-Stage Contextual Filtering and Defect Classification Engine."""

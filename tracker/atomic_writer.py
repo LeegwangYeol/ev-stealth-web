@@ -41,8 +41,50 @@ import uuid
 logger = logging.getLogger(__name__)
 
 
+def is_pid_alive(pid: int) -> bool:
+    """Check if process with given PID is currently running."""
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+
+
+def read_lock_metadata(lock_path: Union[str, Path]) -> Tuple[Optional[int], Optional[float]]:
+    """Read PID and timestamp metadata from lock file if present."""
+    try:
+        lp = str(lock_path)
+        if not os.path.isfile(lp) or os.path.getsize(lp) == 0:
+            return None, None
+        with open(lp, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read(1024)
+        pid = None
+        ts = None
+        for line in content.splitlines():
+            line = line.strip()
+            if line.startswith("pid="):
+                try:
+                    pid = int(line.split("=", 1)[1])
+                except ValueError:
+                    pass
+            elif line.startswith("time="):
+                try:
+                    ts = float(line.split("=", 1)[1])
+                except ValueError:
+                    pass
+        return pid, ts
+    except OSError:
+        return None, None
+
+
 class FileLock:
-    """Re-entrant cross-process and thread-safe advisory file lock with timeout and backoff."""
+    """Re-entrant cross-process and thread-safe advisory file lock with timeout, stale lock breaking, and backoff."""
 
     _local = threading.local()
     _process_locks: Dict[str, threading.RLock] = {}
@@ -53,17 +95,27 @@ class FileLock:
         lock_path: Union[str, Path],
         timeout: float = 10.0,
         poll_interval: float = 0.02,
+        stale_timeout: float = 300.0,
+        fail_on_timeout: bool = False,
     ) -> None:
         if not lock_path or not str(lock_path).strip():
             raise ValueError("lock_path cannot be empty")
         self.lock_path = str(Path(lock_path).resolve())
         self.timeout = timeout
         self.poll_interval = poll_interval
+        self.stale_timeout = stale_timeout
+        self.fail_on_timeout = fail_on_timeout
         self.fd: Optional[int] = None
+        self.acquired: bool = False
         with self._meta_lock:
             if self.lock_path not in self._process_locks:
                 self._process_locks[self.lock_path] = threading.RLock()
             self._thread_lock = self._process_locks[self.lock_path]
+
+    @property
+    def is_locked(self) -> bool:
+        """Return True if this lock is currently held by this thread."""
+        return self.acquired and self.fd is not None
 
     def __enter__(self) -> FileLock:
         self._thread_lock.acquire()
@@ -76,6 +128,7 @@ class FileLock:
             if depth > 0:
                 self._local.depths[self.lock_path] = depth + 1
                 self.fd = self._local.fds.get(self.lock_path)
+                self.acquired = True
                 return self
 
             os.makedirs(os.path.dirname(self.lock_path), exist_ok=True)
@@ -102,16 +155,62 @@ class FileLock:
                             os.close(self.fd)
                             self.fd = os.open(self.lock_path, flags, 0o644)
                             continue
+                        self.acquired = True
+                        try:
+                            os.ftruncate(self.fd, 0)
+                            os.lseek(self.fd, 0, os.SEEK_SET)
+                            meta_bytes = f"pid={os.getpid()}\ntime={time.time()}\n".encode("utf-8")
+                            os.write(self.fd, meta_bytes)
+                        except OSError:
+                            pass
                         break
                     except (BlockingIOError, OSError) as exc:
                         if exc.errno not in (errno.EACCES, errno.EAGAIN, errno.EWOULDBLOCK):
                             raise
+
+                        # Check for stale lock from dead PID or expired timeout
+                        holder_pid, holder_ts = read_lock_metadata(self.lock_path)
+                        now = time.time()
+                        is_dead_holder = holder_pid is not None and not is_pid_alive(holder_pid)
+                        is_expired_holder = (
+                            holder_ts is not None and (now - holder_ts) > self.stale_timeout
+                        )
+                        try:
+                            mtime_age = now - os.path.getmtime(self.lock_path)
+                        except OSError:
+                            mtime_age = 0.0
+
+                        if is_dead_holder or (is_expired_holder and mtime_age > self.stale_timeout):
+                            logger.warning(
+                                "Breaking stale lock on %s (holder pid=%s alive=%s, age=%.1fs > %.1fs)",
+                                self.lock_path,
+                                holder_pid,
+                                not is_dead_holder,
+                                mtime_age,
+                                self.stale_timeout,
+                            )
+                            try:
+                                os.close(self.fd)
+                            except OSError:
+                                pass
+                            try:
+                                os.unlink(self.lock_path)
+                            except OSError:
+                                pass
+                            self.fd = os.open(self.lock_path, flags, 0o644)
+                            continue
+
                         if (time.monotonic() - start_time) >= self.timeout:
+                            if self.fail_on_timeout:
+                                raise TimeoutError(
+                                    f"Timeout ({self.timeout:.1f}s) acquiring lock on {self.lock_path}"
+                                )
                             logger.warning(
                                 "Timeout (%.1fs) acquiring lock on %s. Proceeding defensively.",
                                 self.timeout,
                                 self.lock_path,
                             )
+                            self.acquired = False
                             break
                         time.sleep(self.poll_interval)
             elif msvcrt is not None:
@@ -120,29 +219,55 @@ class FileLock:
                     try:
                         os.lseek(self.fd, 0, os.SEEK_SET)
                         msvcrt.locking(self.fd, msvcrt.LK_NBLCK, 1)
+                        self.acquired = True
+                        try:
+                            os.ftruncate(self.fd, 0)
+                            os.lseek(self.fd, 0, os.SEEK_SET)
+                            meta_bytes = f"pid={os.getpid()}\ntime={time.time()}\n".encode("utf-8")
+                            os.write(self.fd, meta_bytes)
+                        except OSError:
+                            pass
                         break
                     except (BlockingIOError, OSError) as exc:
                         if exc.errno not in (errno.EACCES, getattr(errno, "EDEADLK", 36), getattr(errno, "EAGAIN", 11)):
                             raise
+                        holder_pid, holder_ts = read_lock_metadata(self.lock_path)
+                        if holder_pid is not None and not is_pid_alive(holder_pid):
+                            logger.warning("Breaking stale Windows lock on %s (pid %s dead)", self.lock_path, holder_pid)
+                            try:
+                                os.close(self.fd)
+                                os.unlink(self.lock_path)
+                            except OSError:
+                                pass
+                            self.fd = os.open(self.lock_path, flags, 0o644)
+                            continue
                         if (time.monotonic() - start_time) >= self.timeout:
+                            if self.fail_on_timeout:
+                                raise TimeoutError(
+                                    f"Timeout ({self.timeout:.1f}s) acquiring Windows lock on {self.lock_path}"
+                                )
                             logger.warning(
                                 "Timeout (%.1fs) acquiring Windows lock on %s. Proceeding defensively.",
                                 self.timeout,
                                 self.lock_path,
                             )
+                            self.acquired = False
                             break
                         time.sleep(self.poll_interval)
+            else:
+                self.acquired = True
 
             self._local.depths[self.lock_path] = 1
             self._local.fds[self.lock_path] = self.fd
             return self
-        except Exception:
+        except BaseException:
             if self.fd is not None:
                 try:
                     os.close(self.fd)
                 except OSError:
                     pass
                 self.fd = None
+            self.acquired = False
             self._thread_lock.release()
             raise
 
@@ -157,6 +282,11 @@ class FileLock:
 
             fd_to_close = getattr(self._local, "fds", {}).pop(self.lock_path, self.fd)
             if fd_to_close is not None:
+                if self.acquired:
+                    try:
+                        os.ftruncate(fd_to_close, 0)
+                    except OSError:
+                        pass
                 if fcntl is not None:
                     try:
                         fcntl.flock(fd_to_close, fcntl.LOCK_UN)
@@ -173,6 +303,7 @@ class FileLock:
                 except OSError:
                     pass
             self.fd = None
+            self.acquired = False
         finally:
             self._thread_lock.release()
 
@@ -205,6 +336,71 @@ def cleanup_stale_temp_files(
                         cleaned += 1
                 except OSError:
                     pass
+    except OSError:
+        pass
+    return cleaned
+
+
+def cleanup_stale_lock_files(
+    directory: Union[str, Path],
+    prefix: Union[str, tuple[str, ...], list[str]] = (".ev_atomic_", ".sync_", ".subsidy_"),
+    suffix: str = ".lock",
+    max_age_seconds: float = 3600.0,
+) -> int:
+    """Defensively clean up orphaned advisory lock files older than max_age_seconds if unheld."""
+    d = Path(directory)
+    if not d.is_dir():
+        return 0
+    cleaned = 0
+    now = time.time()
+    prefixes = (prefix,) if isinstance(prefix, str) else tuple(prefix)
+    try:
+        for entry in d.iterdir():
+            if not entry.is_file():
+                continue
+            if not entry.name.endswith(suffix):
+                continue
+            if not any(entry.name.startswith(p) for p in prefixes):
+                continue
+            try:
+                st = entry.stat()
+                age = now - st.st_mtime
+                if age <= max_age_seconds:
+                    continue
+
+                # Check if file has an active holder
+                holder_pid, holder_ts = read_lock_metadata(entry)
+                if holder_pid and is_pid_alive(holder_pid) and age < (max_age_seconds * 2):
+                    continue
+
+                # Test non-blocking flock to guarantee no active process holds it
+                if fcntl is not None:
+                    test_fd = None
+                    try:
+                        test_fd = os.open(str(entry), os.O_RDWR)
+                        try:
+                            fcntl.flock(test_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                            entry.unlink(missing_ok=True)
+                            cleaned += 1
+                        except (BlockingIOError, OSError):
+                            pass
+                    except OSError:
+                        pass
+                    finally:
+                        if test_fd is not None:
+                            try:
+                                fcntl.flock(test_fd, fcntl.LOCK_UN)
+                            except OSError:
+                                pass
+                            try:
+                                os.close(test_fd)
+                            except OSError:
+                                pass
+                else:
+                    entry.unlink(missing_ok=True)
+                    cleaned += 1
+            except OSError:
+                pass
     except OSError:
         pass
     return cleaned
@@ -473,6 +669,8 @@ def atomic_write_json(
     with FileLock(lock_file):
         try:
             cleanup_stale_temp_files(dest_dir, prefix=temp_prefix, max_age_seconds=3600.0)
+            cleanup_stale_lock_files(dest_dir, max_age_seconds=3600.0)
+            cleanup_stale_lock_files(tempfile.gettempdir(), max_age_seconds=3600.0)
 
             # Create temp file in the same directory to ensure atomic os.replace across filesystem boundaries
             with tempfile.NamedTemporaryFile(

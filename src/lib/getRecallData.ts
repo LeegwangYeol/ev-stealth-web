@@ -62,6 +62,93 @@ export const WMI_MAP: Record<string, { brand: string; country: string }> = {
   WP0: { brand: '포르쉐', country: '독일' },
 };
 
+// Canonical manufacturer mapping resolving synonyms, casing, and localized brand names
+export const CANONICAL_MANUFACTURER_MAP: Record<string, string> = {
+  hyundai: '현대자동차',
+  '현대': '현대자동차',
+  '현대차': '현대자동차',
+  '현대자동차': '현대자동차',
+  hmc: '현대자동차',
+
+  kia: '기아',
+  '기아': '기아',
+  '기아자동차': '기아',
+
+  genesis: '제네시스',
+  '제네시스': '제네시스',
+
+  tesla: '테슬라',
+  '테슬라': '테슬라',
+
+  mercedes: '메르세데스-벤츠',
+  benz: '메르세데스-벤츠',
+  'mercedes-benz': '메르세데스-벤츠',
+  'mercedes benz': '메르세데스-벤츠',
+  '메르세데스': '메르세데스-벤츠',
+  '메르세데스-벤츠': '메르세데스-벤츠',
+  '메르세데스벤츠': '메르세데스-벤츠',
+  '벤츠': '메르세데스-벤츠',
+
+  bmw: 'BMW',
+  'bmw i': 'BMW',
+  bmwi: 'BMW',
+
+  byd: 'BYD',
+  '비야디': 'BYD',
+
+  chevrolet: '쉐보레',
+  chevy: '쉐보레',
+  gm: '쉐보레',
+  '쉐보레': '쉐보레',
+  '한국지엠': '쉐보레',
+
+  polestar: '폴스타',
+  '폴스타': '폴스타',
+
+  porsche: '포르쉐',
+  '포르쉐': '포르쉐',
+
+  audi: '아우디',
+  '아우디': '아우디',
+
+  volkswagen: '폭스바겐',
+  vw: '폭스바겐',
+  '폭스바겐': '폭스바겐',
+
+  volvo: '볼보',
+  '볼보': '볼보',
+
+  kgm: 'KG모빌리티',
+  'kg mobility': 'KG모빌리티',
+  'kg모빌리티': 'KG모빌리티',
+  ssangyong: 'KG모빌리티',
+  '쌍용': 'KG모빌리티',
+  '쌍용자동차': 'KG모빌리티',
+};
+
+/**
+ * Normalizes manufacturer / brand string to canonical form, handling casing,
+ * leading/trailing whitespace, punctuation, and English/Korean aliases.
+ */
+export function normalizeManufacturer(brand?: string | null): string {
+  if (!brand || typeof brand !== 'string') return '';
+  const cleaned = brand.trim();
+  if (!cleaned) return '';
+
+  const key = cleaned.toLowerCase().replace(/[\s\-_/()]+/g, '');
+  if (CANONICAL_MANUFACTURER_MAP[key]) {
+    return CANONICAL_MANUFACTURER_MAP[key];
+  }
+
+  const keyWithSpaces = cleaned.toLowerCase().replace(/\s+/g, ' ');
+  if (CANONICAL_MANUFACTURER_MAP[keyWithSpaces]) {
+    return CANONICAL_MANUFACTURER_MAP[keyWithSpaces];
+  }
+
+  return cleaned;
+}
+
+
 /**
  * Main safe loader for the EV Recall Database with defensive defaults.
  */
@@ -236,34 +323,266 @@ export function isModelMatchForCampaign(queryModel: string, campaignTargetModel:
 }
 
 /**
+ * Safely parses recall date strings across multiple government format conventions:
+ * - "YYYY.MM.DD" (MOLIT format)
+ * - "YYYY-MM-DD" (ISO / NHTSA format)
+ * - "YYYY/MM/DD"
+ * - "YYYYMMDD"
+ * - ISO date strings e.g. "2024-03-18T00:00:00Z"
+ *
+ * Enforces strict date validation and safeguards against invalid strings (NaN)
+ * and future dates beyond permissible vehicle timeline bounds (1990 - 2040).
+ */
+export function parseRecallDate(dateStr?: string | null): Date | null {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const clean = dateStr.trim();
+  if (!clean || clean.toLowerCase() === 'null' || clean.toLowerCase() === 'undefined') return null;
+
+  // 1. Try standard regex pattern for YYYY.MM.DD, YYYY-MM-DD, YYYY/MM/DD
+  const delimiterMatch = clean.match(/^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/);
+  if (delimiterMatch) {
+    const year = parseInt(delimiterMatch[1], 10);
+    const month = parseInt(delimiterMatch[2], 10);
+    const day = parseInt(delimiterMatch[3], 10);
+
+    if (year < 1990 || year > 2040 || month < 1 || month > 12 || day < 1 || day > 31) {
+      return null;
+    }
+
+    const d = new Date(Date.UTC(year, month - 1, day));
+    if (isNaN(d.getTime())) return null;
+    return d;
+  }
+
+  // 2. Try YYYYMMDD compact format
+  const compactMatch = clean.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (compactMatch) {
+    const year = parseInt(compactMatch[1], 10);
+    const month = parseInt(compactMatch[2], 10);
+    const day = parseInt(compactMatch[3], 10);
+
+    if (year < 1990 || year > 2040 || month < 1 || month > 12 || day < 1 || day > 31) {
+      return null;
+    }
+
+    const d = new Date(Date.UTC(year, month - 1, day));
+    if (isNaN(d.getTime())) return null;
+    return d;
+  }
+
+  // 3. Fallback to standard Date.parse
+  const timestamp = Date.parse(clean);
+  if (isNaN(timestamp)) return null;
+
+  const parsed = new Date(timestamp);
+  const fullYear = parsed.getUTCFullYear();
+  if (fullYear < 1990 || fullYear > 2040) return null;
+
+  return parsed;
+}
+
+/**
+ * Extracts a verified 4-digit recall or model year from a variety of inputs:
+ * number, date string, range string, or campaign object.
+ * Returns undefined for invalid strings, NaN, Infinity, negative values, or future dates (> 2040).
+ */
+export function extractRecallYear(
+  input?: string | number | OfficialRecallCampaign | Record<string, unknown> | null
+): number | undefined {
+  if (input === undefined || input === null) return undefined;
+
+  // Case A: number input
+  if (typeof input === 'number') {
+    if (!Number.isFinite(input) || input < 1990 || input > 2040) {
+      return undefined;
+    }
+    return Math.floor(input);
+  }
+
+  // Case B: string input
+  if (typeof input === 'string') {
+    const clean = input.trim();
+    if (!clean) return undefined;
+
+    // Check parsed date first
+    const parsedDate = parseRecallDate(clean);
+    if (parsedDate) {
+      return parsedDate.getUTCFullYear();
+    }
+
+    // Check for 4-digit year matches (take the most recent valid year if a range)
+    const matches = Array.from(clean.matchAll(/\b(19\d\d|20\d\d)\b/g));
+    if (matches.length > 0) {
+      const validYears = matches
+        .map((m) => parseInt(m[1], 10))
+        .filter((y) => y >= 1990 && y <= 2040);
+      if (validYears.length > 0) {
+        return Math.max(...validYears);
+      }
+    }
+    return undefined;
+  }
+
+  // Case C: OfficialRecallCampaign or record object
+  if (typeof input === 'object') {
+    const obj = input as Record<string, unknown>;
+
+    // 1. Try explicit date fields if present
+    if (typeof obj.recall_date === 'string') {
+      const yr = extractRecallYear(obj.recall_date);
+      if (yr) return yr;
+    }
+    if (typeof obj.date === 'string') {
+      const yr = extractRecallYear(obj.date);
+      if (yr) return yr;
+    }
+
+    // 2. Try campaign_no (e.g. "MOLIT-2024-0318")
+    if (typeof obj.campaign_no === 'string') {
+      const yr = extractRecallYear(obj.campaign_no);
+      if (yr) return yr;
+    }
+
+    // 3. Try production_date_range (e.g. "2021.03.08 ~ 2024.03.04")
+    if (typeof obj.production_date_range === 'string') {
+      const yr = extractRecallYear(obj.production_date_range);
+      if (yr) return yr;
+    }
+
+    // 4. Try target_model_years (e.g. "2021 ~ 2024")
+    if (typeof obj.target_model_years === 'string') {
+      const yr = extractRecallYear(obj.target_model_years);
+      if (yr) return yr;
+    }
+
+    // 5. Try id (e.g. "RC-2024-HYUNDAI-ICCU")
+    if (typeof obj.id === 'string') {
+      const yr = extractRecallYear(obj.id);
+      if (yr) return yr;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Sorts an array of recall campaigns by date (descending newest first by default).
+ * Deterministically handles invalid date strings, future dates, and unparseable records
+ * without mutating the source array and without producing NaN sort instabilities.
+ */
+export function sortRecallsByDate(
+  recalls: OfficialRecallCampaign[],
+  order: 'desc' | 'asc' = 'desc'
+): OfficialRecallCampaign[] {
+  if (!Array.isArray(recalls) || recalls.length === 0) {
+    return [];
+  }
+
+  const getSortTimestamp = (c: OfficialRecallCampaign): number => {
+    if (!c || typeof c !== 'object') return -1;
+
+    // 1. Explicit date / recall_date
+    const rawDate = (c as unknown as Record<string, unknown>).recall_date || (c as unknown as Record<string, unknown>).date;
+    if (typeof rawDate === 'string') {
+      const parsed = parseRecallDate(rawDate);
+      if (parsed) return parsed.getTime();
+    }
+
+    // 2. MOLIT-YYYY-MMDD in campaign_no
+    if (typeof c.campaign_no === 'string') {
+      const molitMatch = c.campaign_no.match(/MOLIT-(\d{4})-(\d{2})(\d{2})/i);
+      if (molitMatch) {
+        const d = parseRecallDate(`${molitMatch[1]}-${molitMatch[2]}-${molitMatch[3]}`);
+        if (d) return d.getTime();
+      }
+      const genericDateMatch = c.campaign_no.match(/(\d{4})[.\-](\d{2})[.\-](\d{2})/);
+      if (genericDateMatch) {
+        const d = parseRecallDate(`${genericDateMatch[1]}-${genericDateMatch[2]}-${genericDateMatch[3]}`);
+        if (d) return d.getTime();
+      }
+    }
+
+    // 3. End date of production_date_range (e.g. "2021.03.08 ~ 2024.03.04")
+    if (typeof c.production_date_range === 'string') {
+      const rangeParts = c.production_date_range.split('~');
+      const endDateStr = (rangeParts[1] || rangeParts[0]).trim();
+      const parsed = parseRecallDate(endDateStr);
+      if (parsed) return parsed.getTime();
+    }
+
+    // 4. Target model year or ID year
+    const yr = extractRecallYear(c);
+    if (yr) {
+      return new Date(Date.UTC(yr, 0, 1)).getTime();
+    }
+
+    return -1;
+  };
+
+  return [...recalls].sort((a, b) => {
+    const timeA = getSortTimestamp(a);
+    const timeB = getSortTimestamp(b);
+
+    if (timeA === timeB) return 0;
+
+    // Items with invalid/missing date sort to the bottom
+    if (timeA === -1) return 1;
+    if (timeB === -1) return -1;
+
+    return order === 'asc' ? timeA - timeB : timeB - timeA;
+  });
+}
+
+/**
  * Checks whether a given model year falls within a campaign's target_model_years string.
+ * Safely guards against NaN, non-finite values, negative numbers, and future date anomalies.
  */
 export function isYearMatchForCampaign(year?: number, targetModelYears?: string): boolean {
-  if (!year || !targetModelYears) return true;
+  if (year === undefined || year === null) return true;
+  if (typeof year !== 'number' || !Number.isFinite(year) || year <= 0) return false;
+  if (!targetModelYears || typeof targetModelYears !== 'string' || !targetModelYears.trim()) return true;
 
   // Split disjoint segments separated by comma or semicolon
-  const segments = targetModelYears.split(/[,;]/).map((s) => s.trim());
+  const segments = targetModelYears.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+  if (segments.length === 0) return true;
+
   let hasValidSegment = false;
 
   for (const segment of segments) {
-    const match = segment.match(/(\d{4})\s*(?:~|-)\s*(\d{4})/);
-    if (match) {
+    // 1. Closed range: "2021 ~ 2024" or "2021-2024"
+    const rangeMatch = segment.match(/(\d{4})\s*(?:~|-)\s*(\d{4})/);
+    if (rangeMatch) {
       hasValidSegment = true;
-      const start = parseInt(match[1], 10);
-      const end = parseInt(match[2], 10);
-      if (year >= Math.min(start, end) && year <= Math.max(start, end)) return true;
-    } else {
-      const singleYearMatch = segment.match(/(\d{4})/);
-      if (singleYearMatch) {
-        hasValidSegment = true;
-        if (parseInt(singleYearMatch[1], 10) === year) {
-          return true;
-        }
+      const start = parseInt(rangeMatch[1], 10);
+      const end = parseInt(rangeMatch[2], 10);
+      const minYear = Math.min(start, end);
+      const maxYear = Math.max(start, end);
+      if (year >= minYear && year <= maxYear) return true;
+      continue;
+    }
+
+    // 2. Open-ended future range: "2022 ~" or "2022 ~ 현재" or "2022년 이후"
+    const openRangeMatch = segment.match(/(\d{4})\s*(?:~|-)\s*(?:현재|present|\+|$)/i);
+    if (openRangeMatch) {
+      hasValidSegment = true;
+      const start = parseInt(openRangeMatch[1], 10);
+      if (year >= start && year <= 2040) return true;
+      continue;
+    }
+
+    // 3. Single year match: "2022"
+    const singleYearMatch = segment.match(/(\d{4})/);
+    if (singleYearMatch) {
+      hasValidSegment = true;
+      if (parseInt(singleYearMatch[1], 10) === year) {
+        return true;
       }
     }
   }
+
   return !hasValidSegment;
 }
+
 
 /**
  * Decodes 17-digit VIN and cross-references government recall campaigns and battery safety profiles.
@@ -326,12 +645,24 @@ export function decodeVinAndCheckRecalls(rawVin: string, customDb?: RecallDataba
 
   // 4. Match Recall Campaigns
   const matchingRecalls = (db.recalls || []).filter((campaign) => {
+    const decodedBrandLower = (decodedBrand || '').toLowerCase();
+    const decodedCanonical = decodedBrand ? normalizeManufacturer(decodedBrand) : '';
+    const campCanonical = campaign.brand ? normalizeManufacturer(campaign.brand) : '';
+    const campBrandLower = (campaign.brand || '').toLowerCase();
+    const campTargetLower = (campaign.target_model || '').toLowerCase();
+
     const brandMatches =
-      decodedBrand &&
-      (campaign.brand.toLowerCase().includes(decodedBrand.toLowerCase()) ||
-        decodedBrand.toLowerCase().includes(campaign.brand.toLowerCase()) ||
+      Boolean(decodedBrand) &&
+      (decodedCanonical === campCanonical ||
+        campBrandLower === decodedBrandLower ||
+        campBrandLower.includes(decodedBrandLower) ||
+        decodedBrandLower.includes(campBrandLower) ||
+        (campCanonical && campCanonical.toLowerCase().includes(decodedCanonical.toLowerCase())) ||
+        (decodedCanonical && decodedCanonical.toLowerCase().includes(campCanonical.toLowerCase())) ||
+        (decodedCanonical === '제네시스' && campCanonical === '현대자동차') ||
         (decodedBrand === '제네시스' && campaign.brand === '현대자동차') ||
-        campaign.target_model.toLowerCase().includes(decodedBrand.toLowerCase()));
+        campTargetLower.includes(decodedBrandLower) ||
+        (decodedCanonical && campTargetLower.includes(decodedCanonical.toLowerCase())));
 
     if (!brandMatches) return false;
 
@@ -368,7 +699,7 @@ export function decodeVinAndCheckRecalls(rawVin: string, customDb?: RecallDataba
     decodedYear,
     decodedCountry,
     batteryProfile: matchedBatteryProfile,
-    recalls: matchingRecalls,
+    recalls: sortRecallsByDate(matchingRecalls, 'desc'),
     activeCampaignsCount: matchingRecalls.filter((r) => r.status === 'ACTIVE').length,
     hasFireRisk,
     hasPowerLoss,
@@ -412,30 +743,46 @@ export function checkRecallsByModel(
 
   const cleanBrand = brand.trim();
   const cleanModel = modelName.trim();
+  const canonicalBrand = normalizeManufacturer(cleanBrand);
   const brandLower = cleanBrand.toLowerCase();
+  const canonicalBrandLower = canonicalBrand.toLowerCase();
   const modelLower = cleanModel.toLowerCase();
 
   const db = customDb || getRecallDatabase();
 
   const matchedBatteryProfile = (db.battery_profiles || []).find((bp) => {
     if (!bp?.brand || !bp?.model_name) return false;
+    const bpCanonical = normalizeManufacturer(bp.brand);
     const bpBrandLower = bp.brand.toLowerCase();
     const bpModelLower = bp.model_name.toLowerCase();
-    const brandMatch = bpBrandLower.includes(brandLower) || brandLower.includes(bpBrandLower);
+    const brandMatch =
+      bpCanonical === canonicalBrand ||
+      bpBrandLower === brandLower ||
+      bpBrandLower.includes(brandLower) ||
+      brandLower.includes(bpBrandLower) ||
+      (bpCanonical && bpCanonical.toLowerCase().includes(canonicalBrandLower)) ||
+      (canonicalBrandLower && canonicalBrandLower.includes(bpCanonical.toLowerCase()));
     const modelMatch = bpModelLower.includes(modelLower) || modelLower.includes(bpModelLower);
     return brandMatch && modelMatch;
   });
 
   const matchingRecalls = (db.recalls || []).filter((campaign) => {
     if (!campaign?.brand || !campaign?.target_model) return false;
+    const campCanonical = normalizeManufacturer(campaign.brand);
     const campBrandLower = campaign.brand.toLowerCase();
     const campTargetLower = campaign.target_model.toLowerCase();
 
     const brandMatches =
+      campCanonical === canonicalBrand ||
+      campBrandLower === brandLower ||
       campBrandLower.includes(brandLower) ||
       brandLower.includes(campBrandLower) ||
+      (campCanonical && campCanonical.toLowerCase().includes(canonicalBrandLower)) ||
+      (canonicalBrandLower && canonicalBrandLower.includes(campCanonical.toLowerCase())) ||
+      (canonicalBrand === '제네시스' && campCanonical === '현대자동차') ||
       (cleanBrand === '제네시스' && campaign.brand === '현대자동차') ||
-      campTargetLower.includes(brandLower);
+      campTargetLower.includes(brandLower) ||
+      (canonicalBrandLower && campTargetLower.includes(canonicalBrandLower));
 
     if (!brandMatches) return false;
 
@@ -443,7 +790,7 @@ export function checkRecallsByModel(
       return false;
     }
 
-    if (year && !isYearMatchForCampaign(year, campaign.target_model_years)) {
+    if (year !== undefined && !isYearMatchForCampaign(year, campaign.target_model_years)) {
       return false;
     }
 
@@ -471,13 +818,16 @@ export function checkRecallsByModel(
     decodedModel: cleanModel,
     decodedYear: year,
     decodedCountry:
+      canonicalBrand === '현대자동차' ||
+      canonicalBrand === '기아' ||
+      canonicalBrand === '제네시스' ||
       matchedBatteryProfile?.brand === '현대자동차' ||
       matchedBatteryProfile?.brand === '기아' ||
       matchedBatteryProfile?.brand === '제네시스'
         ? '대한민국'
         : undefined,
     batteryProfile: matchedBatteryProfile,
-    recalls: matchingRecalls,
+    recalls: sortRecallsByDate(matchingRecalls, 'desc'),
     activeCampaignsCount: matchingRecalls.filter((r) => r.status === 'ACTIVE').length,
     hasFireRisk,
     hasPowerLoss,
@@ -487,40 +837,55 @@ export function checkRecallsByModel(
 }
 
 /**
- * Returns distinct list of brands available in recall campaigns and battery profiles.
+ * Returns distinct list of brands available in recall campaigns and battery profiles,
+ * deduplicated via canonical manufacturer normalization.
  */
 export function getDistinctBrands(customDb?: RecallDatabase): string[] {
   const db = customDb || getRecallDatabase();
   const brands = new Set<string>();
   (db.battery_profiles || []).forEach((p) => {
-    if (p?.brand) brands.add(p.brand);
+    if (p?.brand) brands.add(normalizeManufacturer(p.brand));
   });
   (db.recalls || []).forEach((r) => {
-    if (r?.brand) brands.add(r.brand);
+    if (r?.brand) brands.add(normalizeManufacturer(r.brand));
   });
   return Array.from(brands);
 }
 
 /**
  * Returns list of vehicle models for a selected brand.
- * Unions models from db.recalls (target_model), battery_profiles, vin_prefixes, and custom db.vehicles.
+ * Supports manufacturer aliases, casing discrepancies, and localized names.
  */
 export function getModelsForBrand(brand: string, customDb?: RecallDatabase): string[] {
   if (!brand || typeof brand !== 'string' || !brand.trim()) {
     return [];
   }
   const cleanBrand = brand.trim().toLowerCase();
+  const canonicalBrand = normalizeManufacturer(brand);
   const db = customDb || getRecallDatabase();
   const models = new Set<string>();
 
+  const isBrandMatch = (itemBrand?: string) => {
+    if (!itemBrand || typeof itemBrand !== 'string') return false;
+    const itemClean = itemBrand.trim().toLowerCase();
+    if (itemClean === cleanBrand) return true;
+    const itemCanonical = normalizeManufacturer(itemBrand);
+    return (
+      itemCanonical === canonicalBrand ||
+      itemCanonical.toLowerCase() === cleanBrand ||
+      itemClean.includes(cleanBrand) ||
+      cleanBrand.includes(itemClean)
+    );
+  };
+
   (db.battery_profiles || [])
-    .filter((bp) => bp?.brand && typeof bp.brand === 'string' && bp.brand.toLowerCase() === cleanBrand)
+    .filter((bp) => isBrandMatch(bp?.brand))
     .forEach((bp) => {
       if (bp?.model_name) models.add(bp.model_name);
     });
 
   (db.vin_prefixes || [])
-    .filter((vp) => vp?.brand && typeof vp.brand === 'string' && vp.brand.toLowerCase() === cleanBrand)
+    .filter((vp) => isBrandMatch(vp?.brand))
     .forEach((vp) => {
       if (vp?.model_name) models.add(vp.model_name);
     });
@@ -529,7 +894,7 @@ export function getModelsForBrand(brand: string, customDb?: RecallDatabase): str
   const customVehicles = (db as unknown as Record<string, unknown>)?.vehicles;
   if (Array.isArray(customVehicles)) {
     (customVehicles as Array<{ brand?: string; model_name?: string; model?: string }>)
-      .filter((v) => v?.brand && typeof v.brand === 'string' && v.brand.toLowerCase() === cleanBrand)
+      .filter((v) => isBrandMatch(v?.brand))
       .forEach((v) => {
         if (v?.model_name) models.add(v.model_name);
         else if (v?.model) models.add(v.model);
@@ -538,7 +903,7 @@ export function getModelsForBrand(brand: string, customDb?: RecallDatabase): str
 
   // Include models explicitly tracked in recall campaigns for this brand
   (db.recalls || [])
-    .filter((r) => r?.brand && typeof r.brand === 'string' && r.brand.toLowerCase() === cleanBrand)
+    .filter((r) => isBrandMatch(r?.brand))
     .forEach((r) => {
       if (r?.target_model) {
         r.target_model.split(',').forEach((tm) => {
@@ -552,7 +917,126 @@ export function getModelsForBrand(brand: string, customDb?: RecallDatabase): str
 }
 
 /**
+ * Computes recall completion rate (percentage 0.0% - 100.0%) with strict safeguards
+ * against division by zero, NaN, Infinity, negative values, and over-100% overflow.
+ */
+export function calculateRecallCompletionRate(
+  completedUnits: number,
+  totalUnits: number
+): number {
+  if (
+    typeof completedUnits !== 'number' ||
+    typeof totalUnits !== 'number' ||
+    !Number.isFinite(completedUnits) ||
+    !Number.isFinite(totalUnits) ||
+    totalUnits <= 0 ||
+    completedUnits <= 0
+  ) {
+    return 0;
+  }
+
+  const rawRate = (completedUnits / totalUnits) * 100;
+  if (!Number.isFinite(rawRate) || rawRate <= 0) return 0;
+  if (rawRate >= 100) return 100;
+
+  return Math.round(rawRate * 10) / 10;
+}
+
+/**
+ * Computes recall campaign resolution rate (percentage of campaigns marked RESOLVED)
+ * with division by zero safeguards.
+ */
+export function calculateCampaignResolutionRate(
+  resolvedCampaigns: number,
+  totalCampaigns: number
+): number {
+  if (
+    typeof resolvedCampaigns !== 'number' ||
+    typeof totalCampaigns !== 'number' ||
+    !Number.isFinite(resolvedCampaigns) ||
+    !Number.isFinite(totalCampaigns) ||
+    totalCampaigns <= 0 ||
+    resolvedCampaigns <= 0
+  ) {
+    return 0;
+  }
+
+  const rawRate = (resolvedCampaigns / totalCampaigns) * 100;
+  if (!Number.isFinite(rawRate) || rawRate <= 0) return 0;
+  if (rawRate >= 100) return 100;
+
+  return Math.round(rawRate * 10) / 10;
+}
+
+export interface ManufacturerRecallSummary {
+  manufacturer: string;
+  totalCampaigns: number;
+  activeCampaigns: number;
+  resolvedCampaigns: number;
+  fireHazards: number;
+  lossOfPower: number;
+  affectedUnits: number;
+  completionRatePct: number;
+}
+
+/**
+ * Aggregates recall campaigns by canonical manufacturer, resolving casing and naming discrepancies.
+ * Pure aggregation function with zero dependencies.
+ */
+export function aggregateRecallsByManufacturer(
+  recalls?: OfficialRecallCampaign[]
+): Record<string, ManufacturerRecallSummary> {
+  const safeRecalls = Array.isArray(recalls) ? recalls : [];
+  const result: Record<string, ManufacturerRecallSummary> = {};
+
+  for (const campaign of safeRecalls) {
+    if (!campaign || typeof campaign !== 'object') continue;
+    const manufacturer = normalizeManufacturer(campaign.brand || '기타/미확인 브랜드');
+
+    if (!result[manufacturer]) {
+      result[manufacturer] = {
+        manufacturer,
+        totalCampaigns: 0,
+        activeCampaigns: 0,
+        resolvedCampaigns: 0,
+        fireHazards: 0,
+        lossOfPower: 0,
+        affectedUnits: 0,
+        completionRatePct: 0,
+      };
+    }
+
+    const group = result[manufacturer];
+    group.totalCampaigns++;
+    if (campaign.status === 'ACTIVE') {
+      group.activeCampaigns++;
+    } else if (campaign.status === 'RESOLVED') {
+      group.resolvedCampaigns++;
+    }
+
+    if (campaign.risk_level === 'FIRE_HAZARD') group.fireHazards++;
+    if (campaign.risk_level === 'LOSS_OF_POWER') group.lossOfPower++;
+
+    if (Number.isFinite(campaign.affected_kdm_units) && campaign.affected_kdm_units > 0) {
+      group.affectedUnits += campaign.affected_kdm_units;
+    }
+  }
+
+  // Calculate resolution/completion rates with division-by-zero safeguard
+  for (const key of Object.keys(result)) {
+    const summary = result[key];
+    summary.completionRatePct = calculateCampaignResolutionRate(
+      summary.resolvedCampaigns,
+      summary.totalCampaigns
+    );
+  }
+
+  return result;
+}
+
+/**
  * Pure calculation of key recall and battery safety metrics from a RecallDatabase.
+ * Employs strict division-by-zero guards and canonical manufacturer normalization.
  */
 export function calculateRecallKPIs(customDb?: RecallDatabase): {
   totalCampaigns: number;
@@ -566,13 +1050,21 @@ export function calculateRecallKPIs(customDb?: RecallDatabase): {
   brandDistribution: Record<string, number>;
   riskLevelDistribution: Record<RecallRiskLevel, number>;
   remedyTypeDistribution: Record<RemedyMethod, number>;
+  resolvedCampaigns?: number;
+  campaignResolutionRatePct?: number;
+  totalAffectedVehicles?: number;
+  activeFireHazards?: number;
+  otaRemedyRate?: number;
+  fireRiskBrandCount?: number;
+  totalBatteryProfiles?: number;
 } {
   const db = customDb || getRecallDatabase();
-  const recalls = db.recalls || [];
-  const batteryProfiles = db.battery_profiles || [];
+  const recalls = Array.isArray(db.recalls) ? db.recalls : [];
+  const batteryProfiles = Array.isArray(db.battery_profiles) ? db.battery_profiles : [];
 
   const totalCampaigns = recalls.length;
   let activeCampaigns = 0;
+  let resolvedCampaigns = 0;
   let totalAffectedVehicles = 0;
   let fireHazards = 0;
   let lossOfPower = 0;
@@ -593,17 +1085,27 @@ export function calculateRecallKPIs(customDb?: RecallDatabase): {
     INSPECTION_ONLY: 0,
   };
 
+  const fireRiskBrands = new Set<string>();
+
   for (const campaign of recalls) {
+    if (!campaign || typeof campaign !== 'object') continue;
+
     if (campaign.status === 'ACTIVE') activeCampaigns++;
+    else if (campaign.status === 'RESOLVED') resolvedCampaigns++;
+
     if (Number.isFinite(campaign.affected_kdm_units) && campaign.affected_kdm_units > 0) {
       totalAffectedVehicles += campaign.affected_kdm_units;
     }
-    if (campaign.risk_level === 'FIRE_HAZARD') fireHazards++;
+    if (campaign.risk_level === 'FIRE_HAZARD') {
+      fireHazards++;
+      if (campaign.brand) fireRiskBrands.add(normalizeManufacturer(campaign.brand));
+    }
     if (campaign.risk_level === 'LOSS_OF_POWER') lossOfPower++;
     if (campaign.remedy_type === 'OTA_WIRELESS') otaRemedies++;
 
     if (campaign.brand) {
-      brandDistribution[campaign.brand] = (brandDistribution[campaign.brand] || 0) + 1;
+      const canonical = normalizeManufacturer(campaign.brand);
+      brandDistribution[canonical] = (brandDistribution[canonical] || 0) + 1;
     }
 
     if (campaign.risk_level && campaign.risk_level in riskLevelDistribution) {
@@ -615,25 +1117,39 @@ export function calculateRecallKPIs(customDb?: RecallDatabase): {
     }
   }
 
-  const otaRemedyRatePct = totalCampaigns > 0
-    ? Math.round((otaRemedies / totalCampaigns) * 1000) / 10
-    : 0;
+  const otaRemedyRatePct =
+    totalCampaigns > 0 && Number.isFinite(totalCampaigns)
+      ? Math.min(100, Math.max(0, Math.round((otaRemedies / totalCampaigns) * 1000) / 10))
+      : 0;
+
+  const campaignResolutionRatePct = calculateCampaignResolutionRate(
+    resolvedCampaigns,
+    totalCampaigns
+  );
 
   const criticalMonitoringBatteryCount = batteryProfiles.filter(
-    (bp) => bp.fire_incident_status === 'CRITICAL_MONITORING'
+    (bp) => bp && bp.fire_incident_status === 'CRITICAL_MONITORING'
   ).length;
 
   return {
     totalCampaigns,
     activeCampaigns,
+    resolvedCampaigns,
     totalAffectedVehiclesKdm: totalAffectedVehicles,
     fireHazardCampaigns: fireHazards,
     lossOfPowerCampaigns: lossOfPower,
     otaRemedyCampaigns: otaRemedies,
     otaRemedyRatePct,
+    campaignResolutionRatePct,
     criticalMonitoringBatteryCount,
     brandDistribution,
     riskLevelDistribution,
     remedyTypeDistribution,
+    totalAffectedVehicles,
+    activeFireHazards: fireHazards,
+    otaRemedyRate: otaRemedyRatePct,
+    fireRiskBrandCount: fireRiskBrands.size,
+    totalBatteryProfiles: batteryProfiles.length,
   };
 }
+

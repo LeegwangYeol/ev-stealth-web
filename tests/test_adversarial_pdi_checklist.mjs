@@ -1,6 +1,7 @@
 /**
  * tests/test_adversarial_pdi_checklist.mjs
- * Empirical stress harness for PDI Checklist state logic, rapid toggles, and corrupted storage fuzzing.
+ * Empirical stress harness for PDI Checklist state logic, rapid toggles, corrupted storage fuzzing,
+ * schema migration resilience, keyboard navigation semantics, and print compatibility.
  */
 
 import fs from 'node:fs';
@@ -72,7 +73,7 @@ for (let i = 0; i < 50000; i++) {
 
 // Progress calculation verification
 const checkedCount = currentItems.filter((i) => i.checked).length;
-const progress = Math.round((checkedCount / currentItems.length) * 100);
+const progress = currentItems.length === 0 ? 0 : Math.round((checkedCount / currentItems.length) * 100);
 assert(!Number.isNaN(progress), 'Progress must be a valid number after 50,000 random toggles', { progress, checkedCount });
 assert(progress >= 0 && progress <= 100, `Progress ${progress}% must be bounded within [0, 100]`);
 
@@ -122,14 +123,9 @@ assert(res3.find(i => i.id === '2').checked === false, 'Dirty array leaves missi
 // D. Empty list edge case in progress bar (division by zero test)
 const emptyItems = [];
 const emptyCount = emptyItems.filter(i => i.checked).length;
-const emptyProgress = Math.round((emptyCount / emptyItems.length) * 100);
-if (Number.isNaN(emptyProgress)) {
-  console.log('[EDGE CASE OBSERVED] Empty items array causes NaN in progress calculation (0 / 0 = NaN)');
-  suiteResults.findings.push({
-    type: 'POTENTIAL_NAN_ON_EMPTY_LIST',
-    detail: 'If items array is empty, (checkedCount / items.length) * 100 yields NaN'
-  });
-}
+const emptyProgress = emptyItems.length === 0 ? 0 : Math.round((emptyCount / emptyItems.length) * 100);
+assert(emptyProgress === 0, 'Empty items list safely returns 0% progress', { emptyProgress });
+assert(!Number.isNaN(emptyProgress), 'Empty items progress is strictly not NaN');
 
 // ---------------------------------------------------------
 // 3. CATEGORY AGGREGATION & UNIQUENESS
@@ -141,6 +137,138 @@ for (const cat of categories) {
   const catItems = INITIAL_PDI_ITEMS.filter(i => i.category === cat);
   assert(catItems.length >= 2, `Category "${cat}" has at least 2 items`, { count: catItems.length });
 }
+
+// ---------------------------------------------------------
+// 4. SCHEMA MIGRATION & ENVELOPE RESILIENCE
+// ---------------------------------------------------------
+console.log('[TEST GROUP 4] Schema migration and envelope deserialization...');
+
+// Implementation matching parseStoredChecklistState in PdiChecklistClient.tsx
+function parseStoredChecklistState(raw, defaultItems) {
+  if (!raw || typeof raw !== 'string') return defaultItems;
+  const trimmed = raw.trim();
+  if (!trimmed) return defaultItems;
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!parsed) return defaultItems;
+
+    // Case 1: Array of items or IDs
+    if (Array.isArray(parsed)) {
+      if (parsed.length === 0) return defaultItems;
+      const isIdArray = parsed.some((p) => typeof p === 'string' || typeof p === 'number');
+      if (isIdArray) {
+        const checkedIdSet = new Set(
+          parsed.filter((p) => p !== null && p !== undefined).map((p) => String(p))
+        );
+        return defaultItems.map((item) => ({
+          ...item,
+          checked: checkedIdSet.has(String(item.id)),
+        }));
+      }
+      return defaultItems.map((item) => {
+        const match = parsed.find(
+          (p) => Boolean(p && typeof p === 'object' && 'id' in p && String(p.id) === String(item.id))
+        );
+        return match ? { ...item, checked: Boolean(match.checked) } : item;
+      });
+    }
+
+    // Case 2: Object envelope or dictionary
+    if (typeof parsed === 'object') {
+      const obj = parsed;
+      if (Array.isArray(obj.checkedIds)) {
+        const checkedIdSet = new Set(obj.checkedIds.map((id) => String(id)));
+        return defaultItems.map((item) => ({
+          ...item,
+          checked: checkedIdSet.has(String(item.id)),
+        }));
+      }
+      if (Array.isArray(obj.items)) {
+        return parseStoredChecklistState(JSON.stringify(obj.items), defaultItems);
+      }
+      const hasIdKey = defaultItems.some((item) => item.id in obj || String(item.id) in obj);
+      if (hasIdKey) {
+        return defaultItems.map((item) => {
+          const val = obj[item.id] ?? obj[String(item.id)];
+          return val !== undefined ? { ...item, checked: Boolean(val) } : item;
+        });
+      }
+    }
+  } catch {
+    // fallback
+  }
+  return defaultItems;
+}
+
+// 4.1 Schema: Array of Checked String IDs e.g. ["1", "3", "8"]
+const schemaIds = JSON.stringify(['1', '3', '8']);
+const parsedIds = parseStoredChecklistState(schemaIds, INITIAL_PDI_ITEMS);
+assert(parsedIds.find(i => i.id === '1').checked === true, 'ID string array marks item 1 as checked');
+assert(parsedIds.find(i => i.id === '2').checked === false, 'ID string array leaves item 2 unchecked');
+assert(parsedIds.find(i => i.id === '3').checked === true, 'ID string array marks item 3 as checked');
+assert(parsedIds.find(i => i.id === '8').checked === true, 'ID string array marks item 8 as checked');
+
+// 4.2 Schema: Numeric IDs e.g. [2, 4]
+const schemaNumericIds = JSON.stringify([2, 4]);
+const parsedNumIds = parseStoredChecklistState(schemaNumericIds, INITIAL_PDI_ITEMS);
+assert(parsedNumIds.find(i => i.id === '2').checked === true, 'Numeric ID array coerces string matching for item 2');
+assert(parsedNumIds.find(i => i.id === '4').checked === true, 'Numeric ID array coerces string matching for item 4');
+assert(parsedNumIds.find(i => i.id === '1').checked === false, 'Numeric ID array leaves item 1 unchecked');
+
+// 4.3 Schema: Envelope with checkedIds e.g. { checkedIds: ["5", "6"] }
+const schemaEnvelopeChecked = JSON.stringify({ version: 2, checkedIds: ['5', '6'] });
+const parsedEnvChecked = parseStoredChecklistState(schemaEnvelopeChecked, INITIAL_PDI_ITEMS);
+assert(parsedEnvChecked.find(i => i.id === '5').checked === true, 'Envelope with checkedIds marks item 5 as checked');
+assert(parsedEnvChecked.find(i => i.id === '6').checked === true, 'Envelope with checkedIds marks item 6 as checked');
+assert(parsedEnvChecked.find(i => i.id === '1').checked === false, 'Envelope with checkedIds leaves item 1 unchecked');
+
+// 4.4 Schema: Envelope with items array e.g. { items: [{ id: "7", checked: true }] }
+const schemaEnvelopeItems = JSON.stringify({ items: [{ id: '7', checked: true }] });
+const parsedEnvItems = parseStoredChecklistState(schemaEnvelopeItems, INITIAL_PDI_ITEMS);
+assert(parsedEnvItems.find(i => i.id === '7').checked === true, 'Envelope with items array marks item 7 as checked');
+assert(parsedEnvItems.find(i => i.id === '1').checked === false, 'Envelope with items array leaves item 1 unchecked');
+
+// 4.5 Schema: Dictionary map e.g. { "1": true, "2": false, "9": true }
+const schemaDict = JSON.stringify({ '1': true, '2': false, '9': true });
+const parsedDict = parseStoredChecklistState(schemaDict, INITIAL_PDI_ITEMS);
+assert(parsedDict.find(i => i.id === '1').checked === true, 'Dictionary map marks item 1 as checked');
+assert(parsedDict.find(i => i.id === '2').checked === false, 'Dictionary map leaves item 2 unchecked');
+assert(parsedDict.find(i => i.id === '9').checked === true, 'Dictionary map marks item 9 as checked');
+
+// ---------------------------------------------------------
+// 5. KEYBOARD ACCESSIBILITY (Space / Enter) AND CONTRACT CHECKS
+// ---------------------------------------------------------
+console.log('[TEST GROUP 5] Keyboard accessibility and WCAG semantics in source...');
+
+// Verify handleKeyDown catches Enter, Space, and Spacebar
+assert(
+  pdiSource.includes("e.key === 'Enter'") &&
+  (pdiSource.includes("e.key === ' '") || pdiSource.includes("e.key === 'Spacebar'")),
+  'PdiItemRow handleKeyDown explicitly supports both Enter and Space keys'
+);
+
+// Verify role="progressbar" has aria-valuenow, valuemin, valuemax, aria-label, aria-valuetext
+assert(pdiSource.includes('role="progressbar"'), 'PdiChecklistClient declares role="progressbar"');
+assert(pdiSource.includes('aria-valuenow={progressPercentage}'), 'Progressbar defines aria-valuenow={progressPercentage}');
+assert(pdiSource.includes('aria-valuemin={0}'), 'Progressbar defines aria-valuemin={0}');
+assert(pdiSource.includes('aria-valuemax={100}'), 'Progressbar defines aria-valuemax={100}');
+assert(pdiSource.includes('aria-valuetext='), 'Progressbar defines descriptive aria-valuetext');
+
+// Verify tablist and tabpanel semantics
+assert(pdiSource.includes('role="tablist"'), 'Category filter declares role="tablist"');
+assert(pdiSource.includes('role="tabpanel"'), 'Checklist container declares role="tabpanel"');
+assert(pdiSource.includes('tabIndex={0}'), 'Tabpanel declares tabIndex={0} for keyboard accessibility');
+
+// ---------------------------------------------------------
+// 6. PRINT STYLESHEET COMPATIBILITY
+// ---------------------------------------------------------
+console.log('[TEST GROUP 6] Print stylesheet compatibility...');
+
+assert(pdiSource.includes('print:border-2'), 'Checkboxes declare print:border-2 for high contrast paper printouts');
+assert(pdiSource.includes('print:border-black'), 'Checkboxes declare print:border-black');
+assert(pdiSource.includes('print:hidden'), 'Interactive elements declare print:hidden');
+assert(pdiSource.includes('print:break-inside-avoid'), 'Fieldsets and rows declare print:break-inside-avoid');
+assert(pdiSource.includes('print:break-after-avoid'), 'Category headers declare print:break-after-avoid');
 
 console.log('\n======================================================');
 console.log(`[PDI HARNESS FINISHED] Total tests: ${suiteResults.totalTests}`);

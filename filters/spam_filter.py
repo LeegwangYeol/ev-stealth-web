@@ -72,6 +72,15 @@ NEWS_REGEXES: List[re.Pattern[str]] = [
     re.compile(pat, re.IGNORECASE) for pat in NEWS_PATTERNS
 ]
 
+# Pre-compiled journalistic wire agency and reporter markers (cached for high throughput)
+JOURNALISTIC_WIRE_REGEXES: Tuple[re.Pattern[str], ...] = (
+    re.compile(r"\[(?:속보|단독|기사)\]"),
+    re.compile(r"기자\b"),
+    re.compile(r"에 따르면"),
+    re.compile(r"(?:밝혔다|전했다|보도했다|배포했다)\b"),
+    re.compile(r"연합뉴스|뉴시스|뉴스1"),
+)
+
 # Pre-compiled inquiry patterns
 INQUIRY_REGEXES: List[re.Pattern[str]] = [
     re.compile(r"(?:나요|가요)\s*[\?？]"),
@@ -171,6 +180,7 @@ SCAM_PROMO_REGEXES: List[re.Pattern[str]] = [
 HARD_ILLICIT_REGEXES: List[re.Pattern[str]] = (
     AFFILIATE_REGEXES + CONTACT_SPAM_REGEXES + SCAM_PROMO_REGEXES
 )
+HARD_ILLICIT_REGEX_SET: Set[re.Pattern[str]] = set(HARD_ILLICIT_REGEXES)
 
 # Combined commercial spam regexes
 COMMERCIAL_SPAM_REGEXES: List[re.Pattern[str]] = (
@@ -334,6 +344,7 @@ class SpamFilter:
         self.financial_terms = list(stock_terms or FINANCIAL_SPECULATION_TERMS)
         self.commercial_spam_terms = list(commercial_spam_terms or COMMERCIAL_SPAM_KEYWORDS)
         self.commercial_spam_regexes = list(commercial_spam_regexes or COMMERCIAL_SPAM_REGEXES)
+        self.hard_illicit_regex_set = set(HARD_ILLICIT_REGEXES)
         self.political_terms = list(political_terms or POLITICAL_TERMS)
         self.ownership_anchors = list(ownership_anchors or OWNERSHIP_ANCHORS)
 
@@ -406,7 +417,7 @@ class SpamFilter:
             m = pattern.search(text_str) or (pattern.search(url_str) if url_str else None)
             if m:
                 matched_expr = m.group(0)
-                is_hard_illicit = any(
+                is_hard_illicit = (pattern in self.hard_illicit_regex_set) or any(
                     regex.search(text_str) or (regex.search(url_str) if url_str else None)
                     for regex in HARD_ILLICIT_REGEXES
                 )
@@ -433,15 +444,7 @@ class SpamFilter:
                 # Protect owner reports that mention reporting/filing to government agencies
                 # unless strong journalistic wire markers appear
                 if pattern.pattern in (r"국토부", r"국토교통부", r"산업부"):
-                    has_journalistic_wire = any(
-                        p.search(text_str) for p in (
-                            re.compile(r"\[(?:속보|단독|기사)\]"),
-                            re.compile(r"기자\b"),
-                            re.compile(r"에 따르면"),
-                            re.compile(r"(?:밝혔다|전했다|보도했다|배포했다)\b"),
-                            re.compile(r"연합뉴스|뉴시스|뉴스1"),
-                        )
-                    )
+                    has_journalistic_wire = any(p.search(text_str) for p in JOURNALISTIC_WIRE_REGEXES)
                     if not has_journalistic_wire and (has_ownership_anchor or "신고" in text_str or "접수" in text_str or "민원" in text_str):
                         continue
 

@@ -24,7 +24,159 @@ export const INITIAL_PDI_ITEMS: ChecklistItem[] = [
   { id: '9', category: '주행 및 하체', task: '에어컨 및 히터 최대 가동 시 이음(백색가루/소음) 확인', warning: 'BYD 돌핀 백색가루, 테슬라 히트펌프 불량', checked: false },
 ];
 
-const STORAGE_KEY = 'ev_pdi_checklist_state_v1';
+export const STORAGE_KEY = 'ev_pdi_checklist_state_v1';
+export const LEGACY_STORAGE_KEYS = ['ev_pdi_checklist_state', 'ev_pdi_checklist', 'pdi_checklist_state'] as const;
+
+/**
+ * Robust parser & schema migration helper:
+ * Supports:
+ * - Current schema: ChecklistItem[] (array of items with id & checked)
+ * - Checked ID array schema: string[] | number[] (e.g. ['1', '3', '8'])
+ * - Envelope schema: { items?: unknown[], checkedIds?: unknown[] }
+ * - Dictionary schema: { [id: string]: boolean }
+ *
+ * Guarantees prototype pollution safety, dirty array isolation, and fallback integrity.
+ */
+export function parseStoredChecklistState(
+  raw: unknown,
+  defaultItems: ChecklistItem[]
+): ChecklistItem[] {
+  if (!raw || typeof raw !== 'string') return defaultItems;
+  const trimmed = raw.trim();
+  if (!trimmed) return defaultItems;
+
+  try {
+    const parsed = safeJsonParse<unknown>(trimmed, null);
+    if (!parsed) return defaultItems;
+
+    // Case 1: Array of items or primitive IDs
+    if (Array.isArray(parsed)) {
+      if (parsed.length === 0) return defaultItems;
+
+      // Check if elements are primitive IDs (e.g. ['1', '3'] or [1, 3])
+      const isIdArray = parsed.some((p) => typeof p === 'string' || typeof p === 'number');
+      if (isIdArray) {
+        const checkedIdSet = new Set(
+          parsed
+            .filter((p) => p !== null && p !== undefined)
+            .map((p) => String(p))
+        );
+        return defaultItems.map((item) => ({
+          ...item,
+          checked: checkedIdSet.has(String(item.id)),
+        }));
+      }
+
+      // Array of objects (e.g. [{ id: '1', checked: true }])
+      return defaultItems.map((item) => {
+        const match = parsed.find(
+          (p: unknown): p is Partial<ChecklistItem> =>
+            Boolean(p && typeof p === 'object' && 'id' in p && String((p as { id: unknown }).id) === String(item.id))
+        );
+        return match ? { ...item, checked: Boolean(match.checked) } : item;
+      });
+    }
+
+    // Case 2: Object envelope or dictionary
+    if (typeof parsed === 'object') {
+      const obj = parsed as Record<string, unknown>;
+
+      // Envelope with checkedIds array: { checkedIds: ['1', '3'] }
+      if (Array.isArray(obj.checkedIds)) {
+        const checkedIdSet = new Set(obj.checkedIds.map((id) => String(id)));
+        return defaultItems.map((item) => ({
+          ...item,
+          checked: checkedIdSet.has(String(item.id)),
+        }));
+      }
+
+      // Envelope with items array: { items: [...] }
+      if (Array.isArray(obj.items)) {
+        return parseStoredChecklistState(JSON.stringify(obj.items), defaultItems);
+      }
+
+      // Dictionary/map of id to boolean: { '1': true, '2': false }
+      const hasIdKey = defaultItems.some((item) => item.id in obj || String(item.id) in obj);
+      if (hasIdKey) {
+        return defaultItems.map((item) => {
+          const val = obj[item.id] ?? obj[String(item.id)];
+          return val !== undefined ? { ...item, checked: Boolean(val) } : item;
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[PDI Checklist] Corrupted storage recovery triggered:', e);
+  }
+
+  return defaultItems;
+}
+
+/**
+ * Safely loads state from localStorage, automatically migrating legacy keys if found.
+ */
+export function loadChecklistFromStorage(defaultItems: ChecklistItem[]): ChecklistItem[] {
+  if (typeof window === 'undefined') return defaultItems;
+  try {
+    if (!window.localStorage) return defaultItems;
+
+    // 1. Check primary key
+    const primary = window.localStorage.getItem(STORAGE_KEY);
+    if (primary) {
+      return parseStoredChecklistState(primary, defaultItems);
+    }
+
+    // 2. Fall back to legacy keys and auto-migrate
+    for (const legacyKey of LEGACY_STORAGE_KEYS) {
+      const legacyVal = window.localStorage.getItem(legacyKey);
+      if (legacyVal) {
+        const migrated = parseStoredChecklistState(legacyVal, defaultItems);
+        try {
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+          window.localStorage.removeItem(legacyKey);
+        } catch {
+          // Ignore write failure in restricted environments
+        }
+        return migrated;
+      }
+    }
+  } catch (e) {
+    console.warn('[PDI Checklist] Failed to load checklist from localStorage:', e);
+  }
+  return defaultItems;
+}
+
+/**
+ * Safely writes checklist state to localStorage with QuotaExceeded protection.
+ */
+export function saveChecklistToStorage(items: ChecklistItem[]): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    if (!window.localStorage) return false;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    return true;
+  } catch (e) {
+    console.warn('[PDI Checklist] Failed to save checklist to localStorage:', e);
+    return false;
+  }
+}
+
+/**
+ * Clears current checklist state from localStorage and cleans up any legacy keys.
+ */
+export function clearChecklistFromStorage(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    if (!window.localStorage) return false;
+    window.localStorage.removeItem(STORAGE_KEY);
+    for (const legacyKey of LEGACY_STORAGE_KEYS) {
+      window.localStorage.removeItem(legacyKey);
+    }
+    return true;
+  } catch (e) {
+    console.warn('[PDI Checklist] Failed to clear checklist localStorage:', e);
+    return false;
+  }
+}
 
 export interface PdiItemRowProps {
   item: ChecklistItem;
@@ -32,8 +184,9 @@ export interface PdiItemRowProps {
 }
 
 export const PdiItemRow = memo(function PdiItemRow({ item, onToggle }: PdiItemRowProps) {
+  // WCAG AA Keyboard Navigation: Space and Enter both toggle checklist items
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
       e.preventDefault();
       onToggle(item.id);
     }
@@ -52,14 +205,21 @@ export const PdiItemRow = memo(function PdiItemRow({ item, onToggle }: PdiItemRo
         aria-describedby={item.warning ? `pdi-warning-${item.id}` : undefined}
         onChange={() => onToggle(item.id)}
         onKeyDown={handleKeyDown}
-        className="mt-1 w-6 h-6 text-blue-600 bg-gray-100 border-slate-400 hover:border-slate-500 rounded focus:ring-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500 print:accent-blue-600 cursor-pointer"
+        className="mt-1 w-6 h-6 text-blue-600 bg-gray-100 border-slate-400 hover:border-slate-500 rounded focus:ring-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500 print:accent-blue-600 print:border-2 print:border-black print:rounded-none print:w-5 print:h-5 print:bg-white cursor-pointer"
       />
       <span className="ml-4 flex-1">
-        <span className={`block text-lg font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-slate-900'} print:text-base print:text-black`}>
+        <span
+          id={`pdi-task-text-${item.id}`}
+          className={`block text-lg font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-slate-900'} print:text-base print:text-black`}
+        >
           {item.task}
         </span>
         {item.warning && (
-          <span id={`pdi-warning-${item.id}`} className={`block mt-1 text-sm font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-red-800'} print:text-xs print:text-red-800`}>
+          <span
+            id={`pdi-warning-${item.id}`}
+            role="note"
+            className={`block mt-1 text-sm font-medium ${item.checked ? 'text-slate-600 line-through' : 'text-red-800'} print:text-xs print:text-red-800 print:font-semibold`}
+          >
             <span aria-hidden="true">⚠️ </span>주의: {item.warning}
           </span>
         )}
@@ -72,44 +232,26 @@ export default function PdiChecklistClient() {
   const [items, setItems] = useState<ChecklistItem[]>(INITIAL_PDI_ITEMS);
   const [mounted, setMounted] = useState(false);
 
-  // Safe client mounting check: hydrate from localStorage after mount
+  // Safe client mounting check: hydrate from localStorage after mount with schema migration
   useEffect(() => {
     setMounted(true);
-    try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          const parsed = safeJsonParse<ChecklistItem[]>(saved, []);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setItems((current) =>
-              current.map((item) => {
-                const match = parsed.find((p: unknown): p is ChecklistItem => Boolean(p && typeof p === 'object' && 'id' in p && (p as { id: unknown }).id === item.id));
-                return match ? { ...item, checked: Boolean(match.checked) } : item;
-              })
-            );
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to load PDI checklist from localStorage:', e);
-    }
+    const loaded = loadChecklistFromStorage(INITIAL_PDI_ITEMS);
+    setItems(loaded);
   }, []);
 
-  // Cross-tab synchronization via storage event
+  // Cross-tab synchronization via storage event (handles updates and resets)
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY && e.newValue) {
+      if (e.key === STORAGE_KEY) {
+        if (!e.newValue) {
+          // Another tab cleared or reset storage -> synchronize to initial defaults
+          setItems(INITIAL_PDI_ITEMS);
+          return;
+        }
         try {
-          const parsed = safeJsonParse<ChecklistItem[]>(e.newValue, []);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setItems((current) =>
-              current.map((item) => {
-                const match = parsed.find((p: unknown): p is ChecklistItem => Boolean(p && typeof p === 'object' && 'id' in p && (p as { id: unknown }).id === item.id));
-                return match ? { ...item, checked: Boolean(match.checked) } : item;
-              })
-            );
-          }
+          const updated = parseStoredChecklistState(e.newValue, INITIAL_PDI_ITEMS);
+          setItems(updated);
         } catch {
           // Ignore concurrent write issues
         }
@@ -122,13 +264,7 @@ export default function PdiChecklistClient() {
   // Save changes to localStorage after mounted
   useEffect(() => {
     if (!mounted) return;
-    try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-      }
-    } catch (e) {
-      console.warn('Failed to save PDI checklist to localStorage:', e);
-    }
+    saveChecklistToStorage(items);
   }, [items, mounted]);
 
   const toggleCheck = useCallback((id: string) => {
@@ -142,13 +278,7 @@ export default function PdiChecklistClient() {
   const resetChecklist = useCallback(() => {
     if (typeof window !== 'undefined' && window.confirm('체크리스트 상태를 초기화하시겠습니까?')) {
       setItems(INITIAL_PDI_ITEMS);
-      try {
-        if (window.localStorage) {
-          localStorage.removeItem(STORAGE_KEY);
-        }
-      } catch (e) {
-        console.warn('Failed to clear PDI checklist localStorage:', e);
-      }
+      clearChecklistFromStorage();
     }
   }, []);
 
@@ -229,14 +359,14 @@ export default function PdiChecklistClient() {
   }, [items, categories]);
 
   return (
-    <div className="max-w-4xl mx-auto py-10 space-y-8">
-      <header className="border-b pb-6">
+    <div className="max-w-4xl mx-auto py-6 sm:py-10 space-y-8 print:py-0 print:space-y-4 print:max-w-none">
+      <header className="border-b pb-6 print:pb-3 print:border-black print:mb-2">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-2">
+            <h1 className="text-2xl sm:text-4xl font-extrabold text-slate-900 mb-2 print:text-xl print:mb-1 print:text-black">
               전기차 신차 인수(PDI) 체크리스트 ✅
             </h1>
-            <p className="text-base sm:text-lg text-gray-600">
+            <p className="text-base sm:text-lg text-gray-600 print:text-xs print:text-gray-700">
               호갱 당하지 않는 방법! 탁송 차량을 인수증에 서명하기 전에 반드시 아래 결함 항목들을 체크하세요.
             </p>
           </div>
@@ -286,9 +416,11 @@ export default function PdiChecklistClient() {
           <span>{mounted ? '로컬 저장소 동기화 활성화됨 (새로고침 시 체크 상태 유지)' : '초기화 중...'}</span>
         </div>
         {/* Screen Reader Dynamic Progression Announcement */}
-        <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-          신차 검수 진행률 {progress}%, 총 {totalItems}개 중 {checkedCount}개 완료
-        </div>
+        {mounted && (
+          <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+            신차 검수 진행률 {progress}%, 총 {totalItems}개 중 {checkedCount}개 완료
+          </div>
+        )}
       </header>
 
       <div className="sticky top-0 bg-white/90 backdrop-blur-md p-4 rounded-xl border border-gray-200 shadow-sm z-10 space-y-3 print:hidden">
@@ -302,7 +434,7 @@ export default function PdiChecklistClient() {
           aria-valuemin={0}
           aria-valuemax={100}
           aria-label="신차 출고 전 점검(PDI) 진행률"
-          aria-valuetext={`${progressPercentage}% 검수 완료`}
+          aria-valuetext={`${progressPercentage}% 검수 완료 (총 ${items.length}개 중 ${checkedCount}개 확인)`}
           className="w-full bg-slate-200 border border-slate-300 rounded-full h-3 overflow-hidden"
         >
           <div
@@ -387,7 +519,10 @@ export default function PdiChecklistClient() {
               className={`${isCategoryActive ? 'block' : 'hidden print:block'} bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:border-gray-300 print:shadow-none print:break-inside-avoid`}
             >
               <legend className="sr-only">{category} 신차 출고 전 점검(PDI) 항목</legend>
-              <h2 id={`pdi-cat-${category}`} className="bg-slate-50 print:bg-slate-100 border-b border-gray-200 p-4 text-xl font-bold text-slate-800">
+              <h2
+                id={`pdi-cat-${category}`}
+                className="bg-slate-50 print:bg-slate-100 border-b border-gray-200 p-4 text-xl font-bold text-slate-800 print:text-black print:text-sm print:py-2 print:px-3 print:border-black print:break-after-avoid"
+              >
                 {category}
               </h2>
               <div className="divide-y divide-gray-100">

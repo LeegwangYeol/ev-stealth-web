@@ -80,7 +80,7 @@ export default function SubsidyTrackerPage() {
               <div className="text-base font-bold text-amber-400">
                 전국 지자체별 보조금 소진율 데이터 로딩 중...
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-300">
                 환경부 및 17개 시도 실시간 쿼터 집계 분석 중입니다.
               </p>
             </div>

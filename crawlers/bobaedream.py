@@ -39,19 +39,33 @@ TARGET_BOARDS = {
 }
 
 
+RE_HTML_COMMENTS = re.compile(r"<!--.*?-->", re.DOTALL)
+RE_SCRIPT_STYLE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
+
+
 def extract_container_content(html_str: str, tag_name: str, class_name: str) -> str:
     """
     Extract the inner content of an HTML container by tracking balanced tag depth.
-    Resilient against nested tags of the same name, self-closing tags, and unclosed child tags.
+    Resilient against nested tags of the same name, self-closing tags, unclosed child tags,
+    and dummy closing tags inside HTML comments or scripts.
     Supports double quotes, single quotes, and unquoted class names.
     """
     if not html_str or not isinstance(html_str, str):
         return ""
+
+    # Mask comments and scripts with equal-length whitespace so dummy tags inside them
+    # do not prematurely decrement depth counters, while preserving exact character offsets.
+    def _repl(m: re.Match[str]) -> str:
+        return " " * len(m.group(0))
+
+    masked = RE_HTML_COMMENTS.sub(_repl, html_str)
+    masked = RE_SCRIPT_STYLE.sub(_repl, masked)
+
     pattern = re.compile(
         rf"<{tag_name}\b[^>]*class\s*=\s*(?:[\"'][^\"']*\b{re.escape(class_name)}\b[^\"']*[\"']|{re.escape(class_name)}(?=[\s>]))[^>]*>",
         re.IGNORECASE,
     )
-    match = pattern.search(html_str)
+    match = pattern.search(masked)
     if not match:
         return ""
 
@@ -59,7 +73,7 @@ def extract_container_content(html_str: str, tag_name: str, class_name: str) -> 
     depth = 1
     tag_re = re.compile(rf"<(/?)({re.escape(tag_name)})\b([^>]*)>", re.IGNORECASE)
 
-    for m in tag_re.finditer(html_str[start_idx:]):
+    for m in tag_re.finditer(masked[start_idx:]):
         is_closing = bool(m.group(1))
         tag_attrs = m.group(3)
         if is_closing:
@@ -640,14 +654,16 @@ class BobaeDreamCrawler(BaseCrawler):
         try:
             if not self.client:
                 return []
-            status, text, _ = self.client.get(
+            resp = self.client.get(
                 ajax_url,
                 referer=referer,
                 headers={"X-Requested-With": "XMLHttpRequest"},
                 timeout=timeout,
             )
-            if status == 200 and text:
-                return self.parse_comments_html(text)
+            if resp and isinstance(resp, (tuple, list)) and len(resp) >= 2:
+                status, text = resp[0], resp[1]
+                if status == 200 and text:
+                    return self.parse_comments_html(text)
         except Exception as e:
             logger.warning(f"Failed to fetch AJAX comments from {ajax_url}: {e}")
         return []
@@ -820,6 +836,11 @@ class BobaeDreamCrawler(BaseCrawler):
             logger.warning(f"Invalid BobaeDream post_url provided: {post_url!r}")
             return None
 
+        # LSP compliance: if board_code is passed a URL (as in base crawler fetch_post(url, referer)), handle gracefully
+        if isinstance(board_code, str) and (board_code.startswith("http://") or board_code.startswith("https://")):
+            referer = board_code
+            board_code = "national"
+
         # Defensively normalize relative URLs and HTML entities (&amp; -> &)
         eff_url = html.unescape(post_url.strip())
         if eff_url.startswith("//"):
@@ -922,6 +943,9 @@ class BobaeDreamCrawler(BaseCrawler):
                 break
             visited_nos.update(page_nos)
 
+            consecutive_failures = 0
+            MAX_CONSECUTIVE_FAILURES = 5
+
             for item in items:
                 post = self.fetch_post(
                     item.get("url", ""),
@@ -931,8 +955,17 @@ class BobaeDreamCrawler(BaseCrawler):
                 )
                 if post:
                     results.append(post)
+                    consecutive_failures = 0
                     if limit and len(results) >= limit:
                         return results
+                else:
+                    consecutive_failures += 1
+                    if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                        logger.warning(
+                            f"Encountered {consecutive_failures} consecutive fetch failures on BobaeDream [{board_code}]. "
+                            f"Halting page loop to prevent rate-limit bans."
+                        )
+                        break
 
         return results
 
@@ -994,6 +1027,9 @@ class BobaeDreamCrawler(BaseCrawler):
                 break
             visited_nos.update(page_nos)
 
+            consecutive_failures = 0
+            MAX_CONSECUTIVE_FAILURES = 5
+
             for item in items:
                 post = self.fetch_post(
                     item.get("url", ""),
@@ -1003,8 +1039,17 @@ class BobaeDreamCrawler(BaseCrawler):
                 )
                 if post:
                     results.append(post)
+                    consecutive_failures = 0
                     if limit and len(results) >= limit:
                         return results
+                else:
+                    consecutive_failures += 1
+                    if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                        logger.warning(
+                            f"Encountered {consecutive_failures} consecutive fetch failures on BobaeDream [{board_code}]. "
+                            f"Halting page loop to prevent rate-limit bans."
+                        )
+                        break
 
         return results
 

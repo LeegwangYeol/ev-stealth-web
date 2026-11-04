@@ -17,6 +17,7 @@ import {
   getDistinctBrands,
   getModelsForBrand,
   DEFAULT_RECALL_METADATA,
+  sortRecallsByDate,
 } from '@/lib/recallCalculations';
 import { sanitizeSafeUrl, isExternalUrl } from '@/lib/sanitizeUrl';
 
@@ -81,6 +82,19 @@ const EMPTY_BATTERY_PROFILES: BatterySafetyProfile[] = Object.freeze([]) as unkn
 const EMPTY_RECALLS: OfficialRecallCampaign[] = Object.freeze([]) as unknown as OfficialRecallCampaign[];
 const EMPTY_VIN_PREFIXES: VinPrefixMapping[] = Object.freeze([]) as unknown as VinPrefixMapping[];
 
+// Progressive virtualization page sizes
+const PAGE_SIZE_BATTERIES = 12;
+const PAGE_SIZE_RECALLS = 10;
+
+/**
+ * Normalizes search text by removing whitespace, hyphens, and common punctuation
+ * for robust, resilient matching with special characters.
+ */
+function normalizeSearchText(text?: string | null): string {
+  if (!text || typeof text !== 'string') return '';
+  return text.toLowerCase().replace(/[\s\-_\/()+[\],.*&]/g, '');
+}
+
 function resolveBrand(inputBrand: string, availableBrands: string[]): string | undefined {
   if (!inputBrand || typeof inputBrand !== 'string' || !Array.isArray(availableBrands)) {
     return undefined;
@@ -138,24 +152,32 @@ function resolveModelAndBrand(
       ])
     ).filter(Boolean);
 
-    // Collect all candidate items with their brand and model
+    // Collect all candidate items with their brand and model defensively
     const candidates: Array<{ brand: string; model: string }> = [];
-    (initialDatabase?.battery_profiles || []).forEach((p) =>
-      candidates.push({ brand: p.brand, model: p.model_name })
-    );
-    (initialDatabase?.vin_prefixes || []).forEach((vp) =>
-      candidates.push({ brand: vp.brand, model: vp.model_name })
-    );
+    (initialDatabase?.battery_profiles || []).forEach((p) => {
+      if (p?.brand && p?.model_name) {
+        candidates.push({ brand: p.brand, model: p.model_name });
+      }
+    });
+    (initialDatabase?.vin_prefixes || []).forEach((vp) => {
+      if (vp?.brand && vp?.model_name) {
+        candidates.push({ brand: vp.brand, model: vp.model_name });
+      }
+    });
     (initialDatabase?.recalls || []).forEach((r) => {
-      (r.target_model || '').split(',').forEach((mStr) => {
-        candidates.push({ brand: r.brand, model: mStr.trim() });
-      });
+      if (r?.brand && r?.target_model) {
+        r.target_model.split(',').forEach((mStr) => {
+          const clean = mStr.trim();
+          if (clean) candidates.push({ brand: r.brand, model: clean });
+        });
+      }
     });
 
     // 1. Exact match on model variant
     let matchedCandidate: { brand: string; model: string } | undefined;
     for (const v of variants) {
       matchedCandidate = candidates.find((c) => {
+        if (!c?.model || typeof c.model !== 'string') return false;
         const cLower = c.model.toLowerCase();
         const brandMatch = !resolvedBrand || c.brand === resolvedBrand;
         return brandMatch && cLower === v;
@@ -167,6 +189,7 @@ function resolveModelAndBrand(
     if (!matchedCandidate) {
       for (const v of variants) {
         matchedCandidate = candidates.find((c) => {
+          if (!c?.model || typeof c.model !== 'string') return false;
           const cLower = c.model.toLowerCase();
           const brandMatch = !resolvedBrand || c.brand === resolvedBrand;
           return brandMatch && (cLower.startsWith(v) || v.startsWith(cLower));
@@ -179,6 +202,7 @@ function resolveModelAndBrand(
     if (!matchedCandidate) {
       for (const v of variants) {
         matchedCandidate = candidates.find((c) => {
+          if (!c?.model || typeof c.model !== 'string') return false;
           const cLower = c.model.toLowerCase();
           const brandMatch = !resolvedBrand || c.brand === resolvedBrand;
           return brandMatch && (cLower.includes(v) || v.includes(cLower));
@@ -206,6 +230,7 @@ function resolveModelAndBrand(
     const brandModels = getModelsForBrand(resolvedBrand, initialDatabase);
     const matchedBrandModel = brandModels.find(
       (m) => {
+        if (!m || typeof m !== 'string') return false;
         const mLower = m.toLowerCase();
         return (
           mLower === targetModelLower ||
@@ -312,6 +337,19 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
   const [recallSearch, setRecallSearch] = useState<string>('');
   const [selectedRiskFilter, setSelectedRiskFilter] = useState<string>('ALL');
   const [selectedRemedyFilter, setSelectedRemedyFilter] = useState<string>('ALL');
+
+  // Progressive virtualization visible counts (60fps DOM chunking)
+  const [visibleBatteryCount, setVisibleBatteryCount] = useState<number>(PAGE_SIZE_BATTERIES);
+  const [visibleRecallCount, setVisibleRecallCount] = useState<number>(PAGE_SIZE_RECALLS);
+
+  // Reset pagination window when search or filters change
+  useEffect(() => {
+    setVisibleBatteryCount(PAGE_SIZE_BATTERIES);
+  }, [batterySearch, selectedSupplierFilter, selectedFireStatusFilter]);
+
+  useEffect(() => {
+    setVisibleRecallCount(PAGE_SIZE_RECALLS);
+  }, [recallSearch, selectedRiskFilter, selectedRemedyFilter]);
 
   // Expanded recall card IDs for accordion view
   const [expandedRecallIds, setExpandedRecallIds] = useState<Set<string>>(new Set());
@@ -476,7 +514,21 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
   // Handle Mode B lookup
   const handleModelSubmit = useCallback((e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!selectedBrand || !selectedModel) return;
+    if (!selectedBrand || !selectedModel) {
+      setCheckResult({
+        valid: false,
+        query: `${selectedBrand || ''} ${selectedModel || ''} ${selectedYear || ''}`.trim(),
+        mode: 'MODEL',
+        validationError: '제조사와 모델을 모두 선택해 주십시오.',
+        recalls: [],
+        activeCampaignsCount: 0,
+        hasFireRisk: false,
+        hasPowerLoss: false,
+        overallRiskGrade: 'SAFE',
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
 
     const yr = typeof selectedYear === 'number' ? selectedYear : undefined;
     const result = checkRecallsByModel(selectedBrand, selectedModel, yr, initialDatabase);
@@ -493,20 +545,38 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     });
   }, []);
 
-  // Filtered Battery Safety Profiles (deferred search)
+  // Filtered Battery Safety Profiles (deferred search with multi-token & special char resilience)
   const filteredBatteryProfiles = useMemo(() => {
-    const q = deferredBatterySearch.trim().toLowerCase();
+    const rawQ = deferredBatterySearch.trim().toLowerCase();
+    const normQ = normalizeSearchText(rawQ);
+    const tokens = rawQ.split(/\s+/).filter(Boolean);
+
     return batteryProfiles.filter((profile) => {
-      const matchesSearch =
-        q === '' ||
-        profile.model_name.toLowerCase().includes(q) ||
-        profile.brand.toLowerCase().includes(q) ||
-        profile.cell_supplier.toLowerCase().includes(q) ||
-        profile.cell_chemistry.toLowerCase().includes(q);
+      if (!profile) return false;
+      const model = profile.model_name || '';
+      const brand = profile.brand || '';
+      const supplier = profile.cell_supplier || '';
+      const chem = profile.cell_chemistry || '';
+
+      let matchesSearch = true;
+      if (rawQ) {
+        const combinedRaw = `${brand} ${model} ${supplier} ${chem}`.toLowerCase();
+        const combinedNorm = normalizeSearchText(combinedRaw);
+
+        const rawMatch = combinedRaw.includes(rawQ);
+        const normMatch = normQ ? combinedNorm.includes(normQ) : false;
+        const tokenMatch =
+          tokens.length > 0 &&
+          tokens.every(
+            (tok) => combinedRaw.includes(tok) || combinedNorm.includes(normalizeSearchText(tok))
+          );
+
+        matchesSearch = rawMatch || normMatch || tokenMatch;
+      }
 
       const matchesSupplier =
         selectedSupplierFilter === 'ALL' ||
-        profile.cell_supplier.toLowerCase().includes(selectedSupplierFilter.toLowerCase());
+        supplier.toLowerCase().includes(selectedSupplierFilter.toLowerCase());
 
       const matchesStatus =
         selectedFireStatusFilter === 'ALL' || profile.fire_incident_status === selectedFireStatusFilter;
@@ -515,23 +585,53 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     });
   }, [batteryProfiles, deferredBatterySearch, selectedSupplierFilter, selectedFireStatusFilter]);
 
-  // Filtered Recalls (deferred search)
+  const displayedBatteryProfiles = useMemo(
+    () => filteredBatteryProfiles.slice(0, visibleBatteryCount),
+    [filteredBatteryProfiles, visibleBatteryCount]
+  );
+
+  // Filtered Recalls (deferred search with multi-token & special char resilience)
   const filteredRecalls = useMemo(() => {
-    const q = deferredRecallSearch.trim().toLowerCase();
-    return recalls.filter((r) => {
-      const matchesSearch =
-        q === '' ||
-        r.campaign_no.toLowerCase().includes(q) ||
-        r.defect_title.toLowerCase().includes(q) ||
-        r.target_model.toLowerCase().includes(q) ||
-        r.brand.toLowerCase().includes(q);
+    const rawQ = deferredRecallSearch.trim().toLowerCase();
+    const normQ = normalizeSearchText(rawQ);
+    const tokens = rawQ.split(/\s+/).filter(Boolean);
+
+    const filtered = recalls.filter((r) => {
+      if (!r) return false;
+      const campNo = r.campaign_no || '';
+      const title = r.defect_title || '';
+      const model = r.target_model || '';
+      const brand = r.brand || '';
+      const detail = r.defect_detail || '';
+
+      let matchesSearch = true;
+      if (rawQ) {
+        const combinedRaw = `${campNo} ${brand} ${model} ${title} ${detail}`.toLowerCase();
+        const combinedNorm = normalizeSearchText(combinedRaw);
+
+        const rawMatch = combinedRaw.includes(rawQ);
+        const normMatch = normQ ? combinedNorm.includes(normQ) : false;
+        const tokenMatch =
+          tokens.length > 0 &&
+          tokens.every(
+            (tok) => combinedRaw.includes(tok) || combinedNorm.includes(normalizeSearchText(tok))
+          );
+
+        matchesSearch = rawMatch || normMatch || tokenMatch;
+      }
 
       const matchesRisk = selectedRiskFilter === 'ALL' || r.risk_level === selectedRiskFilter;
       const matchesRemedy = selectedRemedyFilter === 'ALL' || r.remedy_type === selectedRemedyFilter;
 
       return matchesSearch && matchesRisk && matchesRemedy;
     });
+    return sortRecallsByDate(filtered, 'desc');
   }, [recalls, deferredRecallSearch, selectedRiskFilter, selectedRemedyFilter]);
+
+  const displayedRecalls = useMemo(
+    () => filteredRecalls.slice(0, visibleRecallCount),
+    [filteredRecalls, visibleRecallCount]
+  );
 
   // Active VIN error state for accessible form feedback
   const vinError = vinTouched && vinInput.length > 0 && !vinValidation.valid ? vinValidation.error : '';
@@ -579,7 +679,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-900/60 text-red-200 border border-red-700/50 animate-pulse motion-reduce:animate-none">
                   🚨 대한민국 국토교통부 및 미국 도로교통안전국(NHTSA) 공시 연동
                 </span>
-                <span className="text-xs text-slate-400">기준: 2026 최신 개정판</span>
+                <span className="text-xs text-slate-300">기준: 2026 최신 개정판</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2.5">
                 <span>전기차 공식 리콜 및 배터리 화재 안전 포털</span>
@@ -616,36 +716,36 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
           {/* Key Safety Metrics Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
             <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm">
-              <span className="text-xs text-slate-400 font-medium">분석 리콜 캠페인</span>
+              <span className="text-xs text-slate-300 font-medium">분석 리콜 캠페인</span>
               <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
                 {metadata?.total_campaigns ?? 0}
-                <span className="text-xs font-normal text-slate-400 ml-1">건 (정부 공시)</span>
+                <span className="text-xs font-normal text-slate-300 ml-1">건 (정부 공시)</span>
               </div>
             </div>
 
             <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm">
-              <span className="text-xs text-slate-400 font-medium">국내 출시(KDM) 대상 차량</span>
+              <span className="text-xs text-slate-300 font-medium">국내 출시(KDM) 대상 차량</span>
               <div className="text-xl sm:text-2xl font-black text-amber-400 mt-0.5">
                 {Number.isFinite(metadata?.total_affected_vehicles_kdm)
                   ? metadata.total_affected_vehicles_kdm.toLocaleString()
                   : '0'}
-                <span className="text-xs font-normal text-slate-400 ml-1">대</span>
+                <span className="text-xs font-normal text-slate-300 ml-1">대</span>
               </div>
             </div>
 
             <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm">
-              <span className="text-xs text-slate-400 font-medium">긴급 화재 특별주의보</span>
+              <span className="text-xs text-slate-300 font-medium">긴급 화재 특별주의보</span>
               <div className="text-xl sm:text-2xl font-black text-red-400 mt-0.5">
                 {metadata?.active_fire_campaigns ?? 0}
-                <span className="text-xs font-normal text-slate-400 ml-1">개 차종</span>
+                <span className="text-xs font-normal text-slate-300 ml-1">개 차종</span>
               </div>
             </div>
 
             <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm">
-              <span className="text-xs text-slate-400 font-medium">OTA 무선 조치 지원율</span>
+              <span className="text-xs text-slate-300 font-medium">OTA 무선 조치 지원율</span>
               <div className="text-xl sm:text-2xl font-black text-emerald-400 mt-0.5">
                 {Number.isFinite(metadata?.ota_remedy_rate_pct) ? metadata.ota_remedy_rate_pct : 0}
-                <span className="text-xs font-normal text-slate-400 ml-1">% (방문 불필요)</span>
+                <span className="text-xs font-normal text-slate-300 ml-1">% (방문 불필요)</span>
               </div>
             </div>
           </div>
@@ -662,7 +762,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               </svg>
               <span>차량 결함 및 리콜 즉시 판정기</span>
             </h2>
-            <p className="text-sm text-slate-400 mt-1">
+            <p className="text-sm text-slate-300 mt-1">
               차량등록증의 차대번호 17자리를 입력하거나 제조사·차종을 선택하면 매칭 리콜과 배터리 정보를 즉시 분석합니다.
             </p>
           </div>
@@ -684,7 +784,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               className={`py-3 px-5 min-h-[44px] text-sm font-semibold border-b-2 transition flex items-center justify-center sm:justify-start gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                 activeCheckerMode === 'VIN'
                   ? 'border-blue-500 text-blue-400 bg-blue-950/20'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
+                  : 'border-transparent text-slate-300 hover:text-slate-200'
               }`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -707,7 +807,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               className={`py-3 px-5 min-h-[44px] text-sm font-semibold border-b-2 transition flex items-center justify-center sm:justify-start gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                 activeCheckerMode === 'MODEL'
                   ? 'border-blue-500 text-blue-400 bg-blue-950/20'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
+                  : 'border-transparent text-slate-300 hover:text-slate-200'
               }`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -743,7 +843,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       }`}
                     />
                     <p id="vin-format-hint" className="sr-only">영문 대문자와 숫자로 구성된 17자리 차량 식별 번호 (I, O, Q 제외)</p>
-                    <div className="absolute right-3 top-3.5 text-xs font-mono text-slate-400">
+                    <div className="absolute right-3 top-3.5 text-xs font-mono text-slate-300">
                       {vinInput.replace(/[\s-]/g, '').length}/17
                     </div>
                   </div>
@@ -782,6 +882,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
                   <button
                     type="button"
+                    aria-label="차대번호 입력 초기화"
                     onClick={() => {
                       if (vinDebounceTimerRef.current) {
                         clearTimeout(vinDebounceTimerRef.current);
@@ -800,25 +901,25 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               {/* 1-Click Sample VIN Quick Selector Buttons */}
               <div className="mt-6 pt-6 border-t border-slate-800/80">
                 <div className="flex flex-wrap items-center justify-between gap-1 mb-3">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
                     💡 차대번호가 기억나지 않으시나요? 예시 차대번호 1초 선택:
                   </span>
-                  <span className="text-[11px] text-slate-400">실제 KDM 출고 규격</span>
+                  <span className="text-[11px] text-slate-300">실제 KDM 출고 규격</span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
                   {vinPrefixes.slice(0, 6).map((item) => (
                     <button
                       key={item.prefix}
                       type="button"
-                      aria-label={`${item.brand} ${item.model_name} 샘플 차대번호(${item.sample_full_vin}) 자동 입력`}
+                      aria-label={`${item.brand || '제조사'} ${item.model_name || '차종'} 샘플 차대번호(${item.sample_full_vin}) 자동 입력`}
                       onClick={() => handleSelectSampleVin(item.sample_full_vin)}
                       className="p-2.5 rounded-lg bg-slate-900 hover:bg-blue-900/40 border border-slate-800 hover:border-blue-700 text-left transition group focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 min-h-[44px]"
                     >
                       <div className="text-xs font-bold text-white group-hover:text-blue-300 truncate">
-                        {item.model_name}
+                        {item.model_name || '차종 미상'}
                       </div>
                       <div className="text-[10px] text-slate-300 truncate mt-0.5">
-                        {item.brand}
+                        {item.brand || '제조사 미상'}
                       </div>
                       <div className="text-[10px] font-mono text-blue-300 truncate mt-1">
                         {item.prefix}...
@@ -853,11 +954,15 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       }}
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                     >
-                      {availableBrands.map((b) => (
-                        <option key={b} value={b}>
-                          {b}
-                        </option>
-                      ))}
+                      {availableBrands.length === 0 ? (
+                        <option value="">등록된 제조사 없음</option>
+                      ) : (
+                        availableBrands.map((b) => (
+                          <option key={b} value={b}>
+                            {b}
+                          </option>
+                        ))
+                      )}
                     </select>
                   </div>
 
@@ -873,11 +978,15 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       onChange={(e) => setSelectedModel(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                     >
-                      {availableModels.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
+                      {availableModels.length === 0 ? (
+                        <option value="">등록된 모델 없음</option>
+                      ) : (
+                        availableModels.map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))
+                      )}
                     </select>
                   </div>
 
@@ -935,30 +1044,44 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   <div className="space-y-2 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-red-950 text-red-200 border border-red-700">
-                        차대번호(VIN) 유효성 검증 실패
+                        {checkResult.mode === 'MODEL' ? '차종 선택 검증 안내' : '차대번호(VIN) 유효성 검증 실패'}
                       </span>
                       <span className="text-xs text-slate-300">
-                        입력값: <span className="font-mono text-amber-300 font-bold">{checkResult.query || '(공백)'}</span>
+                        입력값: <span className="font-mono text-amber-300 font-bold">{checkResult.query || '(선택 없음)'}</span>
                       </span>
                     </div>
 
                     <h2 id="search-result-heading" className="text-xl sm:text-2xl font-black text-white">
-                      차대번호 표준 규격(ISO 3779) 불일치 안내
+                      {checkResult.mode === 'MODEL'
+                        ? '차종 선택 정보 확인 안내'
+                        : '차대번호 표준 규격(ISO 3779) 불일치 안내'}
                     </h2>
 
                     <p className="text-sm text-red-200 leading-relaxed font-medium">
-                      {checkResult.validationError || '입력하신 차대번호가 국제 표준 17자리 형식과 일치하지 않습니다.'}
+                      {checkResult.validationError ||
+                        (checkResult.mode === 'MODEL'
+                          ? '제조사 및 모델명을 올바르게 선택해 주십시오.'
+                          : '입력하신 차대번호가 국제 표준 17자리 형식과 일치하지 않습니다.')}
                     </p>
 
                     <div className="pt-2 text-xs text-slate-300 space-y-1 bg-black/40 p-4 rounded-xl border border-red-800/60">
                       <p className="font-semibold text-amber-300 flex items-center gap-1.5">
-                        <span aria-hidden="true">💡</span> 올바른 차대번호 확인 및 입력 요령:
+                        <span aria-hidden="true">💡</span>{' '}
+                        {checkResult.mode === 'MODEL' ? '차종 선택 요령:' : '올바른 차대번호 확인 및 입력 요령:'}
                       </p>
-                      <ul className="list-disc list-inside space-y-1 text-slate-300 pt-1">
-                        <li>자동차등록증(차량등록증) 5번 항목 [차대번호] 17자리를 확인해 주십시오.</li>
-                        <li>차량 운전석 전면 유리창 하단 또는 운전석 B필러 도어 스티커에서도 확인 가능합니다.</li>
-                        <li>국제 규격상 숫자 1, 0과의 혼동을 막기 위해 <strong>I(아이), O(오), Q(큐)</strong>는 사용되지 않습니다.</li>
-                      </ul>
+                      {checkResult.mode === 'MODEL' ? (
+                        <ul className="list-disc list-inside space-y-1 text-slate-300 pt-1">
+                          <li>위 드롭다운에서 조회하실 <strong>제조사</strong>(예: 현대자동차, 기아, 테슬라 등)를 먼저 선택하십시오.</li>
+                          <li>이후 해당 제조사의 <strong>상세 모델</strong>(예: 아이오닉 5, EV6 등)을 선택해 주십시오.</li>
+                          <li>필요한 경우 특정 생산 연식을 지정하여 정밀 진단할 수 있습니다.</li>
+                        </ul>
+                      ) : (
+                        <ul className="list-disc list-inside space-y-1 text-slate-300 pt-1">
+                          <li>자동차등록증(차량등록증) 5번 항목 [차대번호] 17자리를 확인해 주십시오.</li>
+                          <li>차량 운전석 전면 유리창 하단 또는 운전석 B필러 도어 스티커에서도 확인 가능합니다.</li>
+                          <li>국제 규격상 숫자 1, 0과의 혼동을 막기 위해 <strong>I(아이), O(오), Q(큐)</strong>는 사용되지 않습니다.</li>
+                        </ul>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1072,15 +1195,15 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                       <div className="bg-slate-900/90 rounded-xl p-4 border border-slate-800 space-y-2">
                         <div className="flex justify-between">
-                          <span className="text-slate-400">배터리 셀 제조사:</span>
+                          <span className="text-slate-300">배터리 셀 제조사:</span>
                           <span className="font-bold text-white">{checkResult.batteryProfile.cell_supplier}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-slate-400">배터리 셀 화학(Chemistry):</span>
+                          <span className="text-slate-300">배터리 셀 화학(Chemistry):</span>
                           <span className="font-medium text-slate-200">{checkResult.batteryProfile.cell_chemistry}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-slate-400">적용 생산 기간:</span>
+                          <span className="text-slate-300">적용 생산 기간:</span>
                           <span className="font-mono text-slate-300">{checkResult.batteryProfile.years}</span>
                         </div>
                         <div className="pt-2 border-t border-slate-800/80 text-xs text-slate-300">
@@ -1146,7 +1269,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                         </p>
                       </div>
                       <div className="pt-2 flex flex-wrap items-center justify-center gap-3 text-xs">
-                        <span className="text-slate-400">
+                        <span className="text-slate-300">
                           * 정기적인 무선 소프트웨어(OTA) 업데이트 및 제조사 공식 서비스센터 정기점검을 권장합니다.
                         </span>
                         <a
@@ -1169,19 +1292,19 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       return (
                         <div
                           key={campaign.id}
-                          className="bg-slate-950 border border-slate-800 rounded-2xl p-6 shadow-md hover:border-slate-700 transition space-y-4"
+                          className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition space-y-3"
                         >
                           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                            <div className="space-y-1">
-                              <div className="flex flex-wrap items-center gap-2">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2 mb-1">
                                 <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
-                                  {campaign.campaign_no}
+                                  {campaign.campaign_no || '미부여'}
                                 </span>
-                                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                                  {campaign.agency_ko}
+                                <span className="text-xs font-semibold text-slate-300">
+                                  {campaign.brand || '해당 제조사'} • {campaign.target_model || '해당 차종'} ({campaign.target_model_years || '전체 연식'})
                                 </span>
                                 <span
-                                  className={`text-xs font-bold px-2 py-0.5 rounded ${
+                                  className={`text-[11px] font-bold px-2 py-0.5 rounded ${
                                     campaign.risk_level === 'FIRE_HAZARD'
                                       ? 'bg-red-950 text-red-300 border border-red-800'
                                       : campaign.risk_level === 'LOSS_OF_POWER'
@@ -1189,25 +1312,13 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                                       : 'bg-slate-800 text-slate-300'
                                   }`}
                                 >
-                                  {campaign.risk_level_ko}
+                                  {campaign.risk_level_ko || '안전 리콜'}
                                 </span>
-                                <span className="text-xs font-medium px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60">
-                                  {campaign.remedy_type_ko}
-                                </span>
-                              </div>
-
-                              <h4 className="text-base sm:text-lg font-bold text-white pt-1">
-                                {campaign.defect_title}
-                              </h4>
-                              <div className="text-xs text-slate-400">
-                                대상: <strong className="text-slate-200">{campaign.target_model}</strong> (
-                                {campaign.target_model_years}) | 대상 대수: 약{' '}
-                                <span className="text-amber-400 font-semibold">
-                                  {Number.isFinite(campaign?.affected_kdm_units)
-                                    ? campaign.affected_kdm_units.toLocaleString()
-                                    : '0'}대
+                                <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                                  {campaign.remedy_type_ko || '무상 수리'}
                                 </span>
                               </div>
+                              <h4 className="text-base font-bold text-white">{campaign.defect_title}</h4>
                             </div>
 
                             <button
@@ -1215,14 +1326,12 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                               onClick={() => toggleRecallExpansion(campaign.id)}
                               aria-expanded={isExpanded}
                               aria-controls={"campaign-search-detail-" + campaign.id}
-                              aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '대처요령 및 상세 펼치기'}`}
-                              className="self-start px-3 py-1.5 min-h-[44px] rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                              aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '대처요령 및 상세'}`}
+                              className="self-start px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                             >
                               <span>{isExpanded ? '상세 접기' : '대처요령 및 상세'}</span>
                               <svg
-                                className={`w-3.5 h-3.5 transform transition-transform ${
-                                  isExpanded ? 'rotate-180' : ''
-                                }`}
+                                className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                                 fill="none"
                                 stroke="currentColor"
                                 viewBox="0 0 24 24"
@@ -1233,59 +1342,44 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                             </button>
                           </div>
 
-                          {/* Defect overview */}
-                          <p className="text-sm text-slate-300 leading-relaxed bg-slate-900/60 rounded-xl p-3.5 border border-slate-800/70">
-                            <strong className="text-slate-200">결함 원인: </strong>
-                            {campaign.defect_detail}
+                          <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
+                            {campaign.defect_detail || '공식 결함 정보 공시 대조 중입니다.'}
                           </p>
 
-                          {/* Expandable full remedy and consumer emergency guide */}
-                          {isExpanded && (
-                            <div id={"campaign-search-detail-" + campaign.id} className="space-y-3 pt-2 border-t border-slate-800">
-                              <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-4 text-xs text-slate-200 space-y-1">
-                                <div className="font-bold text-blue-300 flex items-center gap-1.5">
-                                  <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  </svg>
-                                  제조사 공식 무상 시정 조치 방법
-                                </div>
-                                <p className="leading-relaxed">{campaign.remedy_action}</p>
+                          <div
+                            id={"campaign-search-detail-" + campaign.id}
+                            hidden={!isExpanded}
+                            className="space-y-3 pt-2 border-t border-slate-800"
+                          >
+                            <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-4 text-xs text-slate-200 space-y-1">
+                              <div className="font-bold text-blue-300 flex items-center gap-1.5">
+                                <span aria-hidden="true">🛠️</span> 시정 조치(리콜 수리) 내용:
                               </div>
-
-                              <div className="bg-red-950/30 border border-red-800/50 rounded-xl p-4 text-xs text-slate-200 space-y-1">
-                                <div className="font-bold text-red-300 flex items-center gap-1.5">
-                                  <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                  </svg>
-                                  🚨 차주 긴급 대처 행동 요령
-                                </div>
-                                <p className="leading-relaxed">{campaign.consumer_emergency_guide}</p>
-                              </div>
-
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-400 pt-2 gap-2">
-                                <div>
-                                  <span className="font-semibold text-slate-300">고객센터 접수: </span>
-                                  <span className="text-white font-mono">{campaign.service_center_contact}</span>
-                                </div>
-                                {(() => {
-                                  const safeLink = sanitizeSafeUrl(campaign.official_link);
-                                  const isExternal = isExternalUrl(safeLink);
-                                  return isExternal ? (
-                                    <a
-                                      href={safeLink}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 min-h-[44px] px-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                                    >
-                                      공식 제조사 리콜 공지 확인 &rarr;
-                                      <span className="sr-only"> (새 창에서 열림)</span>
-                                    </a>
-                                  ) : null;
-                                })()}
-                              </div>
+                              <p className="text-slate-300">{campaign.remedy_action || '제조사 공식 서비스센터 방문 무상 점검 및 시정 조치'}</p>
                             </div>
-                          )}
+
+                            <div className="bg-red-950/30 border border-red-900/50 rounded-xl p-4 text-xs text-slate-200 space-y-1">
+                              <div className="font-bold text-red-300 flex items-center gap-1.5">
+                                <span aria-hidden="true">🚨</span> 차주 긴급 대처 행동요령:
+                              </div>
+                              <p className="text-slate-300">{campaign.consumer_emergency_guide || '이상 징후 발생 시 즉시 안전한 장소에 정차 후 긴급 출동 요청'}</p>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-300 pt-1 gap-2">
+                              <span>고객센터: <strong className="text-white">{campaign.service_center_contact || '제조사 고객센터'}</strong></span>
+                              {campaign.official_link && (
+                                <a
+                                  href={campaign.official_link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                                >
+                                  공식 웹사이트 바로가기 &rarr;
+                                  <span className="sr-only"> (새 창에서 열림)</span>
+                                </a>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       );
                     })
@@ -1307,7 +1401,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 <span
                   aria-live="polite"
                   aria-atomic="true"
-                  className="text-xs text-slate-400"
+                  className="text-xs text-slate-300"
                 >
                   {batterySearch.trim() !== '' || selectedSupplierFilter !== 'ALL' || selectedFireStatusFilter !== 'ALL'
                     ? `검색 결과: ${filteredBatteryProfiles.length}개 차종 (전체 ${batteryProfiles.length}개)`
@@ -1317,7 +1411,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               <h2 id="battery-directory-heading" className="text-xl sm:text-2xl font-bold text-white">
                 🔋 전기차 배터리 제조사 및 지하주차장 안전 가이드
               </h2>
-              <p className="text-sm text-slate-400 mt-0.5">
+              <p className="text-sm text-slate-300 mt-0.5">
                 국내 판매 주요 전기차의 실제 탑재 배터리 셀 제조사(파라시스, LG, SK, 삼성, CATL, BYD) 및 화재 모니터링 상태를 검색하십시오.
               </p>
             </div>
@@ -1339,13 +1433,14 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
           {/* Filter Chips: Suppliers & Status */}
           <div role="group" aria-label="배터리 셀 제조사 필터" className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-800">
-            <span className="text-xs font-semibold text-slate-400 mr-2">제조사 필터:</span>
+            <span className="text-xs font-semibold text-slate-300 mr-2">제조사 필터:</span>
             {supplierFilters.map((s) => (
               <button
                 key={s.key}
                 type="button"
                 onClick={() => setSelectedSupplierFilter(s.key)}
                 aria-pressed={selectedSupplierFilter === s.key}
+                aria-label={s.key === 'ALL' ? '배터리 셀 제조사 전체 보기' : `배터리 셀 제조사 ${s.label} 필터`}
                 className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                   selectedSupplierFilter === s.key
                     ? 'bg-blue-600 text-white font-bold'
@@ -1358,13 +1453,14 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
           </div>
 
           <div role="group" aria-label="화재 리스크 상태별 필터" className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-slate-400 mr-2">화재 리스크 상태:</span>
+            <span className="text-xs font-semibold text-slate-300 mr-2">화재 리스크 상태:</span>
             {FIRE_STATUS_FILTERS.map((f) => (
               <button
                 key={f.key}
                 type="button"
                 onClick={() => setSelectedFireStatusFilter(f.key)}
                 aria-pressed={selectedFireStatusFilter === f.key}
+                aria-label={f.key === 'ALL' ? '화재 리스크 상태 전체 보기' : `화재 리스크 ${f.label} 필터`}
                 className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                   selectedFireStatusFilter === f.key
                     ? 'bg-blue-600 text-white font-bold'
@@ -1379,17 +1475,22 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
           {/* Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
             {filteredBatteryProfiles.length === 0 ? (
-              <div className="col-span-full bg-slate-950/80 border border-slate-800 rounded-2xl p-8 text-center text-slate-400">
+              <div className="col-span-full bg-slate-950/80 border border-slate-800 rounded-2xl p-8 text-center text-slate-300">
                 <span className="text-3xl block mb-2" aria-hidden="true">🔋</span>
                 <p className="text-base font-semibold text-slate-200">
-                  조건에 일치하는 배터리 제조사 정보가 없습니다
+                  {batteryProfiles.length === 0
+                    ? '데이터베이스에 등록된 배터리 제원 정보가 없습니다'
+                    : '조건에 일치하는 배터리 제조사 정보가 없습니다'}
                 </p>
-                <p className="text-xs text-slate-400 mt-1">
-                  검색어 또는 배터리 공급사/모니터링 필터를 변경해 보세요.
+                <p className="text-xs text-slate-300 mt-1">
+                  {batteryProfiles.length === 0
+                    ? '공식 제원 데이터베이스 동기화 상태를 확인해 주십시오.'
+                    : '검색어 또는 배터리 공급사/모니터링 필터를 변경해 보세요.'}
                 </p>
                 {(batterySearch.trim() !== '' || selectedSupplierFilter !== 'ALL' || selectedFireStatusFilter !== 'ALL') && (
                   <button
                     type="button"
+                    aria-label="배터리 필터 및 검색 초기화"
                     onClick={() => {
                       setBatterySearch('');
                       setSelectedSupplierFilter('ALL');
@@ -1402,9 +1503,31 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 )}
               </div>
             ) : (
-              filteredBatteryProfiles.map((p) => (
-                <BatterySafetyCard key={p.model_id} profile={p} />
-              ))
+              <>
+                {displayedBatteryProfiles.map((p) => (
+                  <BatterySafetyCard key={p.model_id} profile={p} />
+                ))}
+                {filteredBatteryProfiles.length > visibleBatteryCount && (
+                  <div className="col-span-full pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setVisibleBatteryCount((prev) => prev + PAGE_SIZE_BATTERIES)}
+                      aria-label={`배터리 차종 더보기 (현재 ${displayedBatteryProfiles.length}개 / 전체 ${filteredBatteryProfiles.length}개)`}
+                      className="px-5 py-2.5 min-h-[44px] rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-blue-300 border border-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    >
+                      더보기 (+{Math.min(PAGE_SIZE_BATTERIES, filteredBatteryProfiles.length - visibleBatteryCount)}개)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVisibleBatteryCount(filteredBatteryProfiles.length)}
+                      aria-label={`배터리 차종 전체 ${filteredBatteryProfiles.length}개 펼쳐보기`}
+                      className="px-4 py-2.5 min-h-[44px] rounded-xl text-xs font-medium text-slate-300 hover:text-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    >
+                      전체 보기 ({filteredBatteryProfiles.length}개 차종)
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </section>
@@ -1420,7 +1543,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 <span
                   aria-live="polite"
                   aria-atomic="true"
-                  className="text-xs text-slate-400"
+                  className="text-xs text-slate-300"
                 >
                   {recallSearch.trim() !== '' || selectedRiskFilter !== 'ALL' || selectedRemedyFilter !== 'ALL'
                     ? `검색 결과: ${filteredRecalls.length}건 (전체 ${recalls.length}건)`
@@ -1430,7 +1553,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               <h2 id="all-recalls-heading" className="text-xl sm:text-2xl font-bold text-white">
                 📋 전체 전기차 리콜 캠페인 카탈로그
               </h2>
-              <p className="text-sm text-slate-400 mt-0.5">
+              <p className="text-sm text-slate-300 mt-0.5">
                 현대, 기아, 테슬라, 벤츠, BMW, BYD, 쉐보레, 폴스타, 포르쉐 등 주요 브랜드의 결함 내역을 탐색하십시오.
               </p>
             </div>
@@ -1452,13 +1575,14 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
           {/* Filter Chips: Risk & Remedy */}
           <div role="group" aria-label="리콜 위험 등급별 필터" className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-800">
-            <span className="text-xs font-semibold text-slate-400 mr-2">위험 등급:</span>
+            <span className="text-xs font-semibold text-slate-300 mr-2">위험 등급:</span>
             {RISK_LEVEL_FILTERS.map((rf) => (
               <button
                 key={rf.key}
                 type="button"
                 onClick={() => setSelectedRiskFilter(rf.key)}
                 aria-pressed={selectedRiskFilter === rf.key}
+                aria-label={rf.key === 'ALL' ? '위험 등급 전체 보기' : `위험 등급 ${rf.label} 필터`}
                 className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                   selectedRiskFilter === rf.key
                     ? 'bg-blue-600 text-white font-bold'
@@ -1471,13 +1595,14 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
           </div>
 
           <div role="group" aria-label="시정 조치 유형별 필터" className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-slate-400 mr-2">조치 유형:</span>
+            <span className="text-xs font-semibold text-slate-300 mr-2">조치 유형:</span>
             {REMEDY_METHOD_FILTERS.map((rm) => (
               <button
                 key={rm.key}
                 type="button"
                 onClick={() => setSelectedRemedyFilter(rm.key)}
                 aria-pressed={selectedRemedyFilter === rm.key}
+                aria-label={rm.key === 'ALL' ? '조치 유형 전체 보기' : `조치 유형 ${rm.label} 필터`}
                 className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                   selectedRemedyFilter === rm.key
                     ? 'bg-blue-600 text-white font-bold'
@@ -1492,17 +1617,22 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
           {/* List of Recalls */}
           <div className="space-y-3 pt-2">
             {filteredRecalls.length === 0 ? (
-              <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-8 text-center text-slate-400">
+              <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-8 text-center text-slate-300">
                 <span className="text-3xl block mb-2" aria-hidden="true">📋</span>
                 <p className="text-base font-semibold text-slate-200">
-                  일치하는 공시 리콜 및 무상수리 내역이 없습니다
+                  {recalls.length === 0
+                    ? '데이터베이스에 등록된 리콜 캠페인 정보가 없습니다'
+                    : '일치하는 공시 리콜 및 무상수리 내역이 없습니다'}
                 </p>
-                <p className="text-xs text-slate-400 mt-1">
-                  검색 키워드 또는 위험도/조치 유형 필터를 재설정해 보세요.
+                <p className="text-xs text-slate-300 mt-1">
+                  {recalls.length === 0
+                    ? '국토교통부 및 자동차안전연구원 공시 데이터 연동 상태를 확인해 주십시오.'
+                    : '검색 키워드 또는 위험도/조치 유형 필터를 재설정해 보세요.'}
                 </p>
                 {(recallSearch.trim() !== '' || selectedRiskFilter !== 'ALL' || selectedRemedyFilter !== 'ALL') && (
                   <button
                     type="button"
+                    aria-label="리콜 필터 및 검색 초기화"
                     onClick={() => {
                       setRecallSearch('');
                       setSelectedRiskFilter('ALL');
@@ -1515,14 +1645,122 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 )}
               </div>
             ) : (
-              filteredRecalls.map((campaign) => (
-                <RecallCard
-                  key={campaign.id}
-                  campaign={campaign}
-                  isExpanded={expandedRecallIds.has(campaign.id)}
-                  toggleRecallExpansion={toggleRecallExpansion}
-                />
-              ))
+              <>
+                {displayedRecalls.map((campaign) => {
+                  const isExpanded = expandedRecallIds.has(campaign.id);
+                  return (
+                    <div
+                      key={campaign.id}
+                      className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition space-y-3"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
+                              {campaign.campaign_no || '미부여'}
+                            </span>
+                            <span className="text-xs font-semibold text-slate-300">
+                              {campaign.brand || '해당 제조사'} • {campaign.target_model || '해당 차종'} ({campaign.target_model_years || '전체 연식'})
+                            </span>
+                            <span
+                              className={`text-[11px] font-bold px-2 py-0.5 rounded ${
+                                campaign.risk_level === 'FIRE_HAZARD'
+                                  ? 'bg-red-950 text-red-300 border border-red-800'
+                                  : campaign.risk_level === 'LOSS_OF_POWER'
+                                  ? 'bg-orange-950 text-orange-300 border border-orange-800'
+                                  : 'bg-slate-800 text-slate-300'
+                              }`}
+                            >
+                              {campaign.risk_level_ko || '안전 리콜'}
+                            </span>
+                            <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                              {campaign.remedy_type_ko || '무상 수리'}
+                            </span>
+                          </div>
+                          <h3 className="text-base font-bold text-white">{campaign.defect_title || '공식 리콜 캠페인'}</h3>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => toggleRecallExpansion(campaign.id)}
+                          aria-expanded={isExpanded}
+                          aria-controls={"campaign-list-detail-" + campaign.id}
+                          aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '닫기' : '상세 및 행동요령'}`}
+                          className="self-start text-xs text-blue-400 hover:text-blue-300 font-medium px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center rounded bg-slate-800/80 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                        >
+                          {isExpanded ? '닫기 ▲' : '상세 및 행동요령 ▼'}
+                        </button>
+                      </div>
+
+                      <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
+                        {campaign.defect_detail || '공식 결함 정보 공시 대조 중입니다.'}
+                      </p>
+
+                      <div
+                        id={"campaign-list-detail-" + campaign.id}
+                        hidden={!isExpanded}
+                        className="space-y-3 pt-3 border-t border-slate-800 text-xs"
+                      >
+                        <div>
+                          <span className="font-semibold text-slate-200">생산 기간: </span>
+                          <span className="font-mono text-slate-300">{campaign.production_date_range || '공식 공시 참조'}</span>
+                          <span className="ml-3 font-semibold text-slate-200">대상 대수: </span>
+                          <span className="text-amber-400 font-semibold">
+                            {Number.isFinite(campaign?.affected_kdm_units)
+                              ? campaign.affected_kdm_units.toLocaleString()
+                              : '0'}대
+                          </span>
+                        </div>
+
+                        <div className="bg-slate-950 rounded-lg p-3 border border-slate-800/80 space-y-1">
+                          <span className="font-bold text-blue-300">무상 수리 내용: </span>
+                          <p className="text-slate-300">{campaign.remedy_action || '제조사 공식 서비스센터 방문 무상 점검 및 시정 조치'}</p>
+                        </div>
+
+                        <div className="bg-red-950/30 rounded-lg p-3 border border-red-900/50 space-y-1">
+                          <span className="font-bold text-red-300">🚨 차주 긴급 대처 행동요령: </span>
+                          <p className="text-slate-300">{campaign.consumer_emergency_guide || '이상 징후 발생 시 즉시 안전한 장소에 정차 후 긴급 출동 요청'}</p>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between text-slate-300 pt-1 gap-2">
+                          <span>고객센터: <strong className="text-white">{campaign.service_center_contact || '제조사 고객센터'}</strong></span>
+                          {campaign.official_link && (
+                            <a
+                              href={campaign.official_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 min-h-[44px] px-2 rounded-lg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                            >
+                              공식 웹사이트 바로가기 &rarr;
+                              <span className="sr-only"> (새 창에서 열림)</span>
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {filteredRecalls.length > visibleRecallCount && (
+                  <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setVisibleRecallCount((prev) => prev + PAGE_SIZE_RECALLS)}
+                      aria-label={`리콜 캠페인 더보기 (현재 ${displayedRecalls.length}건 / 전체 ${filteredRecalls.length}건)`}
+                      className="px-5 py-2.5 min-h-[44px] rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-blue-300 border border-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    >
+                      더보기 (+{Math.min(PAGE_SIZE_RECALLS, filteredRecalls.length - visibleRecallCount)}건)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVisibleRecallCount(filteredRecalls.length)}
+                      aria-label={`리콜 캠페인 전체 ${filteredRecalls.length}건 펼쳐보기`}
+                      className="px-4 py-2.5 min-h-[44px] rounded-xl text-xs font-medium text-slate-300 hover:text-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    >
+                      전체 보기 ({filteredRecalls.length}건 리콜)
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </section>
@@ -1535,13 +1773,27 @@ export interface RecallCardProps {
   campaign: OfficialRecallCampaign;
   isExpanded: boolean;
   toggleRecallExpansion: (id: string) => void;
+  panelIdPrefix?: string;
 }
 
 export const RecallCard = React.memo(function RecallCard({
   campaign,
   isExpanded,
   toggleRecallExpansion,
+  panelIdPrefix = 'campaign-detail-',
 }: RecallCardProps) {
+  const panelId = `${panelIdPrefix}${campaign.id}`;
+  const targetModel = campaign.target_model || '해당 차종';
+  const brand = campaign.brand || '해당 제조사';
+  const years = campaign.target_model_years || '전체 연식';
+  const defectTitle = campaign.defect_title || '공식 리콜 캠페인';
+  const defectDetail = campaign.defect_detail || '공식 결함 정보 공시 대조 중입니다.';
+  const remedyAction = campaign.remedy_action || '제조사 공식 서비스센터 방문 무상 점검 및 시정 조치';
+  const emergencyGuide = campaign.consumer_emergency_guide || '이상 징후 발생 시 즉시 안전한 장소에 정차 후 긴급 출동 요청';
+  const contact = campaign.service_center_contact || '제조사 고객센터';
+  const safeLink = sanitizeSafeUrl(campaign.official_link);
+  const isExternal = isExternalUrl(safeLink);
+
   return (
     <div
       className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition space-y-3"
@@ -1550,10 +1802,10 @@ export const RecallCard = React.memo(function RecallCard({
         <div>
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
-              {campaign.campaign_no}
+              {campaign.campaign_no || '미부여'}
             </span>
-            <span className="text-xs font-semibold text-slate-400">
-              {campaign.brand} • {campaign.target_model} ({campaign.target_model_years})
+            <span className="text-xs font-semibold text-slate-300">
+              {brand} • {targetModel} ({years})
             </span>
             <span
               className={`text-[11px] font-bold px-2 py-0.5 rounded ${
@@ -1564,20 +1816,20 @@ export const RecallCard = React.memo(function RecallCard({
                   : 'bg-slate-800 text-slate-300'
               }`}
             >
-              {campaign.risk_level_ko}
+              {campaign.risk_level_ko || '안전 리콜'}
             </span>
             <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-              {campaign.remedy_type_ko}
+              {campaign.remedy_type_ko || '무상 수리'}
             </span>
           </div>
-          <h3 className="text-base font-bold text-white">{campaign.defect_title}</h3>
+          <h3 className="text-base font-bold text-white">{defectTitle}</h3>
         </div>
 
         <button
           type="button"
           onClick={() => toggleRecallExpansion(campaign.id)}
           aria-expanded={isExpanded}
-          aria-controls={"campaign-list-detail-" + campaign.id}
+          aria-controls={panelId}
           aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '상세 및 행동요령 펼치기'}`}
           className="self-start text-xs text-blue-400 hover:text-blue-300 font-medium px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center rounded bg-slate-800/80 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
         >
@@ -1586,52 +1838,46 @@ export const RecallCard = React.memo(function RecallCard({
       </div>
 
       <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
-        {campaign.defect_detail}
+        {defectDetail}
       </p>
 
-      {isExpanded && (
-        <div id={"campaign-list-detail-" + campaign.id} className="space-y-3 pt-3 border-t border-slate-800 text-xs">
-          <div>
-            <span className="font-semibold text-slate-200">생산 기간: </span>
-            <span className="font-mono text-slate-300">{campaign.production_date_range}</span>
-            <span className="ml-3 font-semibold text-slate-200">대상 대수: </span>
-            <span className="text-amber-400 font-semibold">
-              {Number.isFinite(campaign?.affected_kdm_units)
-                ? campaign.affected_kdm_units.toLocaleString()
-                : '0'}대
-            </span>
-          </div>
-
-          <div className="bg-slate-950 rounded-lg p-3 border border-slate-800/80 space-y-1">
-            <span className="font-bold text-blue-300">무상 수리 내용: </span>
-            <p className="text-slate-300">{campaign.remedy_action}</p>
-          </div>
-
-          <div className="bg-red-950/30 rounded-lg p-3 border border-red-900/50 space-y-1">
-            <span className="font-bold text-red-300">🚨 차주 긴급 대처 행동요령: </span>
-            <p className="text-slate-300">{campaign.consumer_emergency_guide}</p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between text-slate-400 pt-1 gap-2">
-            <span>고객센터: <strong className="text-white">{campaign.service_center_contact}</strong></span>
-            {(() => {
-              const safeLink = sanitizeSafeUrl(campaign.official_link);
-              const isExternal = isExternalUrl(safeLink);
-              return isExternal ? (
-                <a
-                  href={safeLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 min-h-[44px] px-2 rounded-lg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                >
-                  공식 웹사이트 바로가기 &rarr;
-                  <span className="sr-only"> (새 창에서 열림)</span>
-                </a>
-              ) : null;
-            })()}
-          </div>
+      <div id={panelId} hidden={!isExpanded} className="space-y-3 pt-3 border-t border-slate-800 text-xs">
+        <div>
+          <span className="font-semibold text-slate-200">생산 기간: </span>
+          <span className="font-mono text-slate-300">{campaign.production_date_range || '공식 공시 참조'}</span>
+          <span className="ml-3 font-semibold text-slate-200">대상 대수: </span>
+          <span className="text-amber-400 font-semibold">
+            {Number.isFinite(campaign?.affected_kdm_units)
+              ? campaign.affected_kdm_units.toLocaleString()
+              : '0'}대
+          </span>
         </div>
-      )}
+
+        <div className="bg-slate-950 rounded-lg p-3 border border-slate-800/80 space-y-1">
+          <span className="font-bold text-blue-300">무상 수리 내용: </span>
+          <p className="text-slate-300">{remedyAction}</p>
+        </div>
+
+        <div className="bg-red-950/30 rounded-lg p-3 border border-red-900/50 space-y-1">
+          <span className="font-bold text-red-300">🚨 차주 긴급 대처 행동요령: </span>
+          <p className="text-slate-300">{emergencyGuide}</p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between text-slate-300 pt-1 gap-2">
+          <span>고객센터: <strong className="text-white">{contact}</strong></span>
+          {isExternal ? (
+            <a
+              href={safeLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 min-h-[44px] px-2 rounded-lg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+            >
+              공식 웹사이트 바로가기 &rarr;
+              <span className="sr-only"> (새 창에서 열림)</span>
+            </a>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 });
@@ -1644,6 +1890,16 @@ export const BatterySafetyCard = React.memo(function BatterySafetyCard({
   profile: p,
 }: BatterySafetyCardProps) {
   const isCritical = p.fire_incident_status === 'CRITICAL_MONITORING';
+  const modelName = p.model_name || '차종 미상';
+  const brandName = p.brand || '제조사 미상';
+  const years = p.years || '전체 연식';
+  const cellSupplier = p.cell_supplier || '정보 없음';
+  const cellChemistry = p.cell_chemistry || '정보 없음';
+  const statusKo = p.fire_incident_status_ko || '모니터링 대상';
+  const socLimit = typeof p.recommended_soc_limit === 'number' ? p.recommended_soc_limit : 100;
+  const advisory = p.underground_parking_advisory || '아파트 관리사무소 화재 예방 수칙 준수 권장';
+  const bmsFeatures = p.bms_safety_features || 'BMS 안전 제어 시스템 탑재';
+
   return (
     <div
       key={p.model_id}
@@ -1656,9 +1912,9 @@ export const BatterySafetyCard = React.memo(function BatterySafetyCard({
       <div className="space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <span className="text-xs text-slate-400 font-medium">{p.brand}</span>
-            <h3 className="text-base font-bold text-white">{p.model_name}</h3>
-            <span className="text-[11px] font-mono text-slate-400">{p.years}</span>
+            <span className="text-xs text-slate-300 font-medium">{brandName}</span>
+            <h3 className="text-base font-bold text-white">{modelName}</h3>
+            <span className="text-[11px] font-mono text-slate-300">{years}</span>
           </div>
           <span
             className={`text-[11px] font-bold px-2 py-0.5 rounded border flex-shrink-0 ${
@@ -1669,33 +1925,33 @@ export const BatterySafetyCard = React.memo(function BatterySafetyCard({
                 : 'bg-emerald-950 text-emerald-200 border-emerald-700'
             }`}
           >
-            {p.fire_incident_status_ko}
+            {statusKo}
           </span>
         </div>
 
         <div className="bg-black/30 rounded-xl p-3 border border-white/5 space-y-1.5 text-xs">
           <div className="flex justify-between">
-            <span className="text-slate-400">셀 제조사:</span>
-            <span className="font-bold text-white">{p.cell_supplier}</span>
+            <span className="text-slate-300">셀 제조사:</span>
+            <span className="font-bold text-white">{cellSupplier}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-400">셀 화학:</span>
-            <span className="text-slate-300">{p.cell_chemistry}</span>
+            <span className="text-slate-300">셀 화학:</span>
+            <span className="text-slate-300">{cellChemistry}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-400">완충 권장 한도:</span>
-            <span className="font-bold text-blue-300">{p.recommended_soc_limit}%</span>
+            <span className="text-slate-300">완충 권장 한도:</span>
+            <span className="font-bold text-blue-300">{socLimit}%</span>
           </div>
         </div>
 
         <div className="text-xs text-slate-300 pt-1 leading-relaxed">
           <strong className="text-amber-300">지하주차 가이드: </strong>
-          {p.underground_parking_advisory}
+          {advisory}
         </div>
       </div>
 
-      <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400 truncate">
-        🛡️ {p.bms_safety_features}
+      <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-300 truncate">
+        🛡️ {bmsFeatures}
       </div>
     </div>
   );

@@ -30,6 +30,9 @@ BRAND_OTHER = "Other"
 
 VALID_BRANDS = [BRAND_HYUNDAI, BRAND_KIA, BRAND_TESLA, BRAND_BYD, BRAND_OTHER]
 
+MAX_MATCHER_TITLE_LEN = 1_000
+MAX_MATCHER_CONTENT_LEN = 30_000
+
 # Comprehensive Hangul particle and ending lookahead
 PARTICLE_LOOKAHEAD = (
     r"(?=[은는이가을를의에과와도만로랑처조마나한께보부까]|으로|보다|부터|까지|처럼|조차|마저|한테|"
@@ -285,8 +288,8 @@ def extract_vehicle_info(title: str, content: str = "") -> Tuple[str, str]:
     Returns:
         (vehicle_brand, vehicle_model)
     """
-    title_str = str(title or "").strip()
-    content_str = str(content or "").strip()
+    title_str = str(title or "").strip()[:MAX_MATCHER_TITLE_LEN]
+    content_str = str(content or "").strip()[:MAX_MATCHER_CONTENT_LEN]
 
     # 1. Search in title first for high-confidence model match
     if title_str:

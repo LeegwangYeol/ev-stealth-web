@@ -141,7 +141,7 @@ def validate_defect_reports_file(file_path: Union[str, Path]) -> bool:
     try:
         if not p.is_file() or p.stat().st_size == 0:
             return False
-        with open(p, "r", encoding="utf-8") as f:
+        with open(p, "r", encoding="utf-8-sig") as f:
             data = json.load(f)
         if not isinstance(data, dict):
             return False
@@ -173,6 +173,7 @@ def sync_defect_reports(
     """
     from tracker.atomic_writer import (
         FileLock,
+        cleanup_stale_lock_files,
         is_corrupted_or_quarantined_filename,
         quarantine_corrupted_file,
     )
@@ -245,6 +246,7 @@ def sync_defect_reports(
             deduped_public.append(p)
 
     sync_lock_path = root_reports_path.parent / ".sync_defect_reports.lock"
+    cleanup_stale_lock_files(root_reports_path.parent, max_age_seconds=3600.0)
     written_paths: List[str] = []
 
     with FileLock(sync_lock_path):
@@ -268,7 +270,7 @@ def sync_defect_reports(
 
         def _candidate_score(cand_path: Path) -> Tuple[int, int, float]:
             try:
-                with open(cand_path, "r", encoding="utf-8") as f:
+                with open(cand_path, "r", encoding="utf-8-sig") as f:
                     d = json.load(f)
                 r_list = d.get("reports", []) if isinstance(d, dict) else []
                 num_reports = len(r_list)
@@ -653,9 +655,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                     seen_paths.add(resolved_str)
                     unique_destinations.append(dst)
 
-            from tracker.atomic_writer import FileLock
+            from tracker.atomic_writer import FileLock, cleanup_stale_lock_files
 
             subsidy_lock_path = args.output.parent / ".subsidy_sync.lock"
+            cleanup_stale_lock_files(args.output.parent, max_age_seconds=3600.0)
             with FileLock(subsidy_lock_path):
                 logger.info("Saving subsidy datasets to %d target path(s)...", len(unique_destinations))
                 written_paths = tracker.save_payload(payload, unique_destinations)

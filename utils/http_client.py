@@ -111,12 +111,18 @@ def encode_euc_kr_query(param: Union[str, Dict[str, Any], None]) -> str:
     return "&".join(pairs)
 
 
-def clean_html_text(raw_html: str) -> str:
+def clean_html_text(raw_html: Union[str, bytes, Any]) -> str:
     """
     Strip HTML tags, scripts, styles, decode HTML entities, and normalize whitespace.
-    Resilient against malformed, unclosed, or corrupt DOM snippets.
+    Resilient against malformed, unclosed, or corrupt DOM snippets, bytes, and special unicode.
     """
-    if not raw_html or not isinstance(raw_html, str):
+    if raw_html is None:
+        return ""
+    if isinstance(raw_html, bytes):
+        raw_html = robust_decode(raw_html)
+    elif not isinstance(raw_html, str):
+        return ""
+    if not raw_html:
         return ""
 
     # Remove null bytes and carriage controls
@@ -129,8 +135,19 @@ def clean_html_text(raw_html: str) -> str:
     cleaned = re.sub(r"<(br|p|/p|div|/div|li|/li|h\d|/h\d|tr|/tr|dt|/dt|dd|/dd)[^>]*>", "\n", cleaned, flags=re.IGNORECASE)
     # Remove remaining HTML tags
     cleaned = re.sub(r"<[^>]+>", " ", cleaned)
+    # Handle unclosed tag brackets at end of string
+    cleaned = re.sub(r"<[a-zA-Z/][^<]*$", " ", cleaned)
     # Decode HTML entities (&amp;, &lt;, etc.)
     cleaned = html.unescape(cleaned)
+    if "&" in cleaned:
+        cleaned = html.unescape(cleaned)
+    # Normalize special unicode spaces
+    cleaned = (
+        cleaned.replace("\xa0", " ")
+        .replace("\u200b", "")
+        .replace("\ufeff", "")
+        .replace("\u3000", " ")
+    )
     # Collapse multiple whitespace characters on each line and drop blank lines
     lines = [re.sub(r"[ \t]+", " ", line).strip() for line in cleaned.splitlines()]
     return "\n".join([line for line in lines if line])
@@ -275,7 +292,10 @@ class SafeHttpClient:
         except Exception:
             pass
 
-        if not self.enable_jitter or self.max_delay <= 0:
+        min_d = max(0.0, float(min(self.min_delay, self.max_delay)))
+        max_d = max(0.0, float(max(self.min_delay, self.max_delay)))
+
+        if not self.enable_jitter or max_d <= 0:
             self.last_request_time = time.time()
             self.request_count += 1
             return
@@ -289,7 +309,7 @@ class SafeHttpClient:
             logger.info(f"Rate protection cooldown after {self.request_count} requests. Sleeping {extra_cooldown:.2f}s...")
             time.sleep(extra_cooldown)
 
-        target_delay = random.uniform(self.min_delay, self.max_delay)
+        target_delay = random.uniform(min_d, max_d)
         if elapsed < target_delay:
             sleep_duration = target_delay - elapsed
             time.sleep(sleep_duration)
@@ -382,7 +402,11 @@ class SafeHttpClient:
         except (ValueError, TypeError):
             req_timeout = 15.0
 
-        for attempt in range(1, self.max_retries + 1):
+        eff_retries = max(1, int(self.max_retries)) if self.max_retries is not None else 3
+
+        for attempt in range(1, eff_retries + 1):
+            if attempt > 1 and self.rotate_user_agent and not self.user_agent:
+                req_headers["User-Agent"] = self.get_random_user_agent()
             try:
                 req = urllib.request.Request(
                     norm_url,
@@ -404,13 +428,13 @@ class SafeHttpClient:
                             chunk = resp.read()
                         except http.client.IncompleteRead as ire:
                             logger.warning(
-                                f"IncompleteRead on {norm_url} (Attempt {attempt}/{self.max_retries}): "
+                                f"IncompleteRead on {norm_url} (Attempt {attempt}/{eff_retries}): "
                                 f"{len(ire.partial)} partial bytes received before disconnect."
                             )
                             if ire.partial:
                                 chunks.append(ire.partial)
                                 bytes_read += len(ire.partial)
-                            if attempt < self.max_retries:
+                            if attempt < eff_retries:
                                 raise  # Let outer retry loop attempt a clean request
                             # On last attempt, break to salvage already-read bytes
                             break
@@ -446,14 +470,16 @@ class SafeHttpClient:
 
             except urllib.error.HTTPError as he:
                 logger.warning(
-                    f"HTTPError {he.code} ({he.reason}) on {norm_url} (Attempt {attempt}/{self.max_retries})"
+                    f"HTTPError {he.code} ({he.reason}) on {norm_url} (Attempt {attempt}/{eff_retries})"
                 )
                 try:
                     # Retry on rate limiting or server errors
                     if (
                         he.code in [408, 429, 403, 500, 502, 503, 504, 520, 521, 522, 523, 524]
-                        and attempt < self.max_retries
+                        and attempt < eff_retries
                     ):
+                        if he.code in (403, 429):
+                            self.clear_cookies()
                         retry_after = self._parse_retry_after(he) if he.code == 429 else None
                         backoff = self._calc_backoff(attempt, retry_after=retry_after)
                         logger.info(f"Backing off for {backoff:.2f}s before retry (status {he.code})...")
@@ -531,33 +557,35 @@ class SafeHttpClient:
 
                 if is_timeout:
                     logger.warning(
-                        f"Request timeout on {norm_url} (Attempt {attempt}/{self.max_retries}): {ex}"
+                        f"Request timeout on {norm_url} (Attempt {attempt}/{eff_retries}): {ex}"
                     )
                 elif is_ssl:
                     logger.warning(
-                        f"SSL error on {norm_url} (Attempt {attempt}/{self.max_retries}): {ex}"
+                        f"SSL error on {norm_url} (Attempt {attempt}/{eff_retries}): {ex}"
                     )
                 elif is_disconnect:
                     logger.warning(
-                        f"Remote disconnected on {norm_url} (Attempt {attempt}/{self.max_retries}): {ex}"
+                        f"Remote disconnected on {norm_url} (Attempt {attempt}/{eff_retries}): {ex}"
                     )
                 elif is_incomplete_read:
                     logger.warning(
-                        f"Incomplete read on {norm_url} (Attempt {attempt}/{self.max_retries}): {ex}"
+                        f"Incomplete read on {norm_url} (Attempt {attempt}/{eff_retries}): {ex}"
                     )
                 else:
                     logger.warning(
-                        f"Network error on {norm_url} (Attempt {attempt}/{self.max_retries}): {ex}"
+                        f"Network error on {norm_url} (Attempt {attempt}/{eff_retries}): {ex}"
                     )
 
-                if attempt < self.max_retries:
+                if attempt < eff_retries:
+                    if is_disconnect:
+                        self.clear_cookies()
                     backoff = self._calc_backoff(attempt)
                     logger.info(f"Backing off for {backoff:.2f}s before retry...")
                     time.sleep(backoff)
                 else:
                     break
 
-        logger.error(f"Failed to fetch {norm_url} after {self.max_retries} attempts.")
+        logger.error(f"Failed to fetch {norm_url} after {eff_retries} attempts.")
         return 0, "", b""
 
     def _parse_retry_after(self, he: urllib.error.HTTPError) -> Optional[float]:

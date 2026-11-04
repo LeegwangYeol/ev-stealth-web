@@ -13,9 +13,10 @@ export interface SubsidyBadgeProps {
  * Pure Helper: Badge styling with opaque solid backgrounds for compliant WCAG AA contrast (> 7:1)
  */
 export const getBadgeStyle = (status?: AlertSeverity | string | null): string => {
-  switch (status) {
+  const normalized = (status || '').toUpperCase();
+  switch (normalized) {
     case 'HEALTHY':
-    case 'available':
+    case 'AVAILABLE':
       return 'bg-emerald-950 text-emerald-300 border-emerald-500/50';
     case 'CAUTION':
       return 'bg-amber-950 text-amber-300 border-amber-500/50';
@@ -34,9 +35,10 @@ export const getBadgeStyle = (status?: AlertSeverity | string | null): string =>
  * Pure Helper: Status badge labels with accessible visual indicator
  */
 export const getStatusLabel = (status?: AlertSeverity | string | null): string => {
-  switch (status) {
+  const normalized = (status || '').toUpperCase();
+  switch (normalized) {
     case 'HEALTHY':
-    case 'available':
+    case 'AVAILABLE':
       return '🟢 안정';
     case 'CAUTION':
       return '🟡 주의';

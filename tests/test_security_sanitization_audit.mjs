@@ -198,6 +198,11 @@ test('Blocks HTML decimal entity schemes (&#106;&#97;..., javascript&#58;)', () 
 test('Blocks HTML hex entity schemes (jav&#x61;script:, javascript&#x3a;)', () => {
   assert.strictEqual(sanitizeSafeUrl('jav&#x61;script:alert(1)'), '#');
   assert.strictEqual(sanitizeSafeUrl('javascript&#x3a;alert(1)'), '#');
+  assert.strictEqual(sanitizeSafeUrl('javascript&#x3aalert(1)'), '#');
+  assert.strictEqual(sanitizeSafeUrl('javascript&#x3a(1)'), '#');
+  assert.strictEqual(extractAndNormalizeScheme('javascript&#x3a(1)'), 'javascript');
+  assert.strictEqual(extractAndNormalizeScheme('javascript&#x3a;alert(1)'), 'javascript');
+  assert.strictEqual(extractAndNormalizeScheme('jav%26%23x61%3bscript:alert(1)'), 'javascript');
   assert.strictEqual(sanitizeSafeUrl('d&#97;ta:text/html,x'), '#');
   assert.strictEqual(sanitizeSafeUrl('d&#97;ta&colon;text/html,x'), '#');
 });

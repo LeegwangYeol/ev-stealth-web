@@ -31,9 +31,15 @@ export const SubsidyProgressBar = memo(function SubsidyProgressBar({
   const displayAnnounced = Number.isFinite(announcedUnits) && announcedUnits > 0 ? announcedUnits : 0;
   const safeAnnounced = displayAnnounced > 0 ? displayAnnounced : 1;
   const safeDelivered = Number.isFinite(deliveredUnits) ? Math.max(0, deliveredUnits) : 0;
-  const safeDepletion = Number.isFinite(depletionRate) ? Math.max(0, depletionRate) : 0;
-  const safeRemaining = Number.isFinite(remainingUnits) ? Math.max(0, remainingUnits) : 0;
   const safeApplied = Number.isFinite(appliedUnits) ? Math.max(0, appliedUnits) : 0;
+  const safeDepletion = Number.isFinite(depletionRate)
+    ? Math.max(0, depletionRate)
+    : displayAnnounced > 0
+    ? (safeApplied / safeAnnounced) * 100
+    : 0;
+  const safeRemaining = Number.isFinite(remainingUnits)
+    ? Math.max(0, remainingUnits)
+    : Math.max(0, displayAnnounced - safeApplied);
 
   const rawDeliveredPct = displayAnnounced > 0 ? Math.round((safeDelivered / safeAnnounced) * 100) : 0;
   const deliveredPct = Number.isFinite(rawDeliveredPct) ? Math.min(100, Math.max(0, rawDeliveredPct)) : 0;
@@ -102,7 +108,7 @@ export const SubsidyProgressBar = memo(function SubsidyProgressBar({
             심사중 {pendingCount.toLocaleString()}대
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-slate-400 inline-block border border-slate-500" aria-hidden="true" />
+            <span className="w-2 h-2 rounded-full bg-slate-300 inline-block border border-slate-500" aria-hidden="true" />
             잔여 {safeRemaining.toLocaleString()}대
           </span>
         </div>

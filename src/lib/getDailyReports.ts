@@ -65,19 +65,142 @@ export interface DailyReportData {
 }
 
 export const CATEGORY_MAP: Record<string, { code: DefectCategoryCode; ko: string }> = {
+  // Canonical 5-Pillar Taxonomy
   BATTERY_CHARGING: { code: 'BATTERY_CHARGING', ko: '배터리/충전' },
   DRIVING_POWERTRAIN: { code: 'DRIVING_POWERTRAIN', ko: '주행/모터/등판' },
   BUILD_QUALITY: { code: 'BUILD_QUALITY', ko: '단차/누수/마감' },
   SOFTWARE_ELECTRONICS: { code: 'SOFTWARE_ELECTRONICS', ko: 'OTA/소프트웨어' },
   SERVICE_REPAIR_COST: { code: 'SERVICE_REPAIR_COST', ko: 'AS/수리비' },
+
+  // Lowercase Canonical Variants
+  battery_charging: { code: 'BATTERY_CHARGING', ko: '배터리/충전' },
+  driving_powertrain: { code: 'DRIVING_POWERTRAIN', ko: '주행/모터/등판' },
+  build_quality: { code: 'BUILD_QUALITY', ko: '단차/누수/마감' },
+  software_electronics: { code: 'SOFTWARE_ELECTRONICS', ko: 'OTA/소프트웨어' },
+  service_repair_cost: { code: 'SERVICE_REPAIR_COST', ko: 'AS/수리비' },
+
+  // Korean Category Labels & Synonyms
+  '배터리/충전': { code: 'BATTERY_CHARGING', ko: '배터리/충전' },
+  '배터리': { code: 'BATTERY_CHARGING', ko: '배터리/충전' },
+  '충전': { code: 'BATTERY_CHARGING', ko: '배터리/충전' },
+  '화재': { code: 'BATTERY_CHARGING', ko: '배터리/충전' },
+
+  '주행/모터/등판': { code: 'DRIVING_POWERTRAIN', ko: '주행/모터/등판' },
+  '주행': { code: 'DRIVING_POWERTRAIN', ko: '주행/모터/등판' },
+  '모터': { code: 'DRIVING_POWERTRAIN', ko: '주행/모터/등판' },
+  '등판': { code: 'DRIVING_POWERTRAIN', ko: '주행/모터/등판' },
+  '제동': { code: 'DRIVING_POWERTRAIN', ko: '주행/모터/등판' },
+  '조향': { code: 'DRIVING_POWERTRAIN', ko: '주행/모터/등판' },
+  '브레이크': { code: 'DRIVING_POWERTRAIN', ko: '주행/모터/등판' },
+
+  '단차/누수/마감': { code: 'BUILD_QUALITY', ko: '단차/누수/마감' },
+  '단차': { code: 'BUILD_QUALITY', ko: '단차/누수/마감' },
+  '누수': { code: 'BUILD_QUALITY', ko: '단차/누수/마감' },
+  '마감': { code: 'BUILD_QUALITY', ko: '단차/누수/마감' },
+  '풍절음': { code: 'BUILD_QUALITY', ko: '단차/누수/마감' },
+  '잡소리': { code: 'BUILD_QUALITY', ko: '단차/누수/마감' },
+
+  'OTA/소프트웨어': { code: 'SOFTWARE_ELECTRONICS', ko: 'OTA/소프트웨어' },
+  'OTA/소프트웨어/먹통': { code: 'SOFTWARE_ELECTRONICS', ko: 'OTA/소프트웨어' },
+  '소프트웨어': { code: 'SOFTWARE_ELECTRONICS', ko: 'OTA/소프트웨어' },
+  '전장': { code: 'SOFTWARE_ELECTRONICS', ko: 'OTA/소프트웨어' },
+  '전자장비': { code: 'SOFTWARE_ELECTRONICS', ko: 'OTA/소프트웨어' },
+  '먹통': { code: 'SOFTWARE_ELECTRONICS', ko: 'OTA/소프트웨어' },
+  '블랙아웃': { code: 'SOFTWARE_ELECTRONICS', ko: 'OTA/소프트웨어' },
+
+  'AS/수리비': { code: 'SERVICE_REPAIR_COST', ko: 'AS/수리비' },
+  '수리비': { code: 'SERVICE_REPAIR_COST', ko: 'AS/수리비' },
+  'AS': { code: 'SERVICE_REPAIR_COST', ko: 'AS/수리비' },
+  'as': { code: 'SERVICE_REPAIR_COST', ko: 'AS/수리비' },
+  '정비': { code: 'SERVICE_REPAIR_COST', ko: 'AS/수리비' },
+  '서비스': { code: 'SERVICE_REPAIR_COST', ko: 'AS/수리비' },
+  '감가': { code: 'SERVICE_REPAIR_COST', ko: 'AS/수리비' },
+
+  // Crawler Keywords & Aliases
   parking: { code: 'DRIVING_POWERTRAIN', ko: '주행/모터/등판' },
   charging: { code: 'BATTERY_CHARGING', ko: '배터리/충전' },
+  battery: { code: 'BATTERY_CHARGING', ko: '배터리/충전' },
+  iccu: { code: 'BATTERY_CHARGING', ko: '배터리/충전' },
+  bms: { code: 'BATTERY_CHARGING', ko: '배터리/충전' },
+  fire: { code: 'BATTERY_CHARGING', ko: '배터리/충전' },
+  safety: { code: 'BATTERY_CHARGING', ko: '배터리/충전' },
+
+  driving: { code: 'DRIVING_POWERTRAIN', ko: '주행/모터/등판' },
+  powertrain: { code: 'DRIVING_POWERTRAIN', ko: '주행/모터/등판' },
+  motor: { code: 'DRIVING_POWERTRAIN', ko: '주행/모터/등판' },
+  brake: { code: 'DRIVING_POWERTRAIN', ko: '주행/모터/등판' },
+  steering: { code: 'DRIVING_POWERTRAIN', ko: '주행/모터/등판' },
+  fishtail: { code: 'DRIVING_POWERTRAIN', ko: '주행/모터/등판' },
   rain_driving: { code: 'DRIVING_POWERTRAIN', ko: '주행/모터/등판' },
   hill_climbing: { code: 'DRIVING_POWERTRAIN', ko: '주행/모터/등판' },
-  maintenance: { code: 'SERVICE_REPAIR_COST', ko: 'AS/수리비' },
-  safety: { code: 'BATTERY_CHARGING', ko: '배터리/충전' },
+
+  build: { code: 'BUILD_QUALITY', ko: '단차/누수/마감' },
+  quality: { code: 'BUILD_QUALITY', ko: '단차/누수/마감' },
+  assembly: { code: 'BUILD_QUALITY', ko: '단차/누수/마감' },
+  leak: { code: 'BUILD_QUALITY', ko: '단차/누수/마감' },
+  water_leak: { code: 'BUILD_QUALITY', ko: '단차/누수/마감' },
+  noise: { code: 'BUILD_QUALITY', ko: '단차/누수/마감' },
+  gap: { code: 'BUILD_QUALITY', ko: '단차/누수/마감' },
+
   software: { code: 'SOFTWARE_ELECTRONICS', ko: 'OTA/소프트웨어' },
+  electronics: { code: 'SOFTWARE_ELECTRONICS', ko: 'OTA/소프트웨어' },
+  ota: { code: 'SOFTWARE_ELECTRONICS', ko: 'OTA/소프트웨어' },
+  infotainment: { code: 'SOFTWARE_ELECTRONICS', ko: 'OTA/소프트웨어' },
+  blackout: { code: 'SOFTWARE_ELECTRONICS', ko: 'OTA/소프트웨어' },
+  display: { code: 'SOFTWARE_ELECTRONICS', ko: 'OTA/소프트웨어' },
+
+  maintenance: { code: 'SERVICE_REPAIR_COST', ko: 'AS/수리비' },
+  service: { code: 'SERVICE_REPAIR_COST', ko: 'AS/수리비' },
+  repair: { code: 'SERVICE_REPAIR_COST', ko: 'AS/수리비' },
+  cost: { code: 'SERVICE_REPAIR_COST', ko: 'AS/수리비' },
+  depreciation: { code: 'SERVICE_REPAIR_COST', ko: 'AS/수리비' },
 };
+
+/**
+ * Resolves defect category safely from category code, alias, or Korean label.
+ */
+export function resolveCategory(
+  rawCategory?: unknown,
+  rawCategoryKo?: unknown
+): { code: DefectCategoryCode; ko: string } {
+  const cat = sanitizeText(rawCategory || '').trim();
+  const catKo = sanitizeText(rawCategoryKo || '').trim();
+
+  // 1. Direct match in CATEGORY_MAP
+  if (cat && Object.prototype.hasOwnProperty.call(CATEGORY_MAP, cat)) {
+    return CATEGORY_MAP[cat];
+  }
+
+  // 2. Case-insensitive lookup (uppercase then lowercase)
+  const upper = cat.toUpperCase();
+  if (upper && Object.prototype.hasOwnProperty.call(CATEGORY_MAP, upper)) {
+    return CATEGORY_MAP[upper];
+  }
+  const lower = cat.toLowerCase();
+  if (lower && Object.prototype.hasOwnProperty.call(CATEGORY_MAP, lower)) {
+    return CATEGORY_MAP[lower];
+  }
+
+  // 3. Korean label lookup
+  if (catKo && Object.prototype.hasOwnProperty.call(CATEGORY_MAP, catKo)) {
+    return CATEGORY_MAP[catKo];
+  }
+  const koUpper = catKo.toUpperCase();
+  if (koUpper && Object.prototype.hasOwnProperty.call(CATEGORY_MAP, koUpper)) {
+    return CATEGORY_MAP[koUpper];
+  }
+
+  // 4. Default fallback when both empty (preserves default BATTERY_CHARGING / 배터리/충전 contract)
+  if (!cat && !catKo) {
+    return CATEGORY_MAP['BATTERY_CHARGING'];
+  }
+
+  // 5. Unrecognized custom category: preserve sanitized code, fallback label
+  return {
+    code: cat || 'BUILD_QUALITY',
+    ko: catKo || '기타 결함',
+  };
+}
 
 /**
  * Safely sanitizes external URLs to prevent javascript:, data:, vbscript: or other XSS injections.
@@ -121,16 +244,16 @@ export function getSafeSentimentScore(rawScore?: unknown, fallback = 0.85): numb
  * Normalizes any raw item from external JSON to DefectReportItem with safe defaults.
  */
 export function normalizeReport(raw: Record<string, unknown>, index: number): DefectReportItem {
-  if (!raw || typeof raw !== 'object') raw = {};
-  const rawCat = sanitizeText(raw.defect_category || raw.category || 'BATTERY_CHARGING');
-  const catInfo = (Object.prototype.hasOwnProperty.call(CATEGORY_MAP, rawCat) && CATEGORY_MAP[rawCat]) || {
-    code: rawCat,
-    ko: sanitizeText(raw.defect_category_ko || raw.category_ko || '기타 결함'),
-  };
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) raw = {};
 
-  const rawSeverity = sanitizeText(raw.severity || raw.severity_tier || 'WARNING').toUpperCase();
+  const catInfo = resolveCategory(
+    raw.defect_category || raw.category || raw.defect_category_key,
+    raw.defect_category_ko || raw.category_ko
+  );
+
+  const rawSeverity = sanitizeText(raw.severity || raw.severity_tier || '').toUpperCase();
   let severity: SeverityLevel = 'WARNING';
-  if (rawSeverity.includes('CRITICAL')) {
+  if (rawSeverity === 'CRITICAL' || rawSeverity.includes('CRITICAL')) {
     severity = 'CRITICAL';
   } else if (rawSeverity === 'HIGH') {
     severity = 'HIGH';
@@ -138,12 +261,18 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
     severity = 'MEDIUM';
   } else if (rawSeverity === 'LOW') {
     severity = 'LOW';
-  } else if (rawSeverity.includes('CAUTION') || rawSeverity.includes('CONVENIENCE')) {
+  } else if (rawSeverity === 'CAUTION' || rawSeverity.includes('CAUTION') || rawSeverity.includes('CONVENIENCE')) {
     severity = 'CAUTION';
-  } else if (rawSeverity.includes('WARN') || rawSeverity.includes('FUNCTIONAL')) {
+  } else if (rawSeverity === 'WARNING' || rawSeverity.includes('WARN') || rawSeverity.includes('FUNCTIONAL')) {
     severity = 'WARNING';
-  } else if (rawSeverity.includes('INFO')) {
+  } else if (rawSeverity === 'INFO' || rawSeverity.includes('INFO')) {
     severity = 'INFO';
+  } else if (typeof raw.severity_index === 'number' && Number.isFinite(raw.severity_index)) {
+    const idx = raw.severity_index;
+    if (idx >= 8.0) severity = 'CRITICAL';
+    else if (idx >= 6.0) severity = 'HIGH';
+    else if (idx >= 4.0) severity = 'MEDIUM';
+    else severity = 'LOW';
   }
 
   const rawScore = Number.isFinite(raw.sentiment_score)
@@ -153,12 +282,12 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
 
   const rawSlang = Array.isArray(raw.slang_tags)
     ? raw.slang_tags
-    : (Array.isArray(raw.slang_terms) ? raw.slang_terms : []);
+    : (Array.isArray(raw.slang_terms) ? raw.slang_terms : (Array.isArray(raw.slang_terms_detected) ? raw.slang_terms_detected : []));
   const slangTags = rawSlang
     .map((s: unknown) => sanitizeText(s))
     .filter((s): s is string => Boolean(s && s.length > 0));
 
-  const rawDsi = raw.dsi_breakdown && typeof raw.dsi_breakdown === 'object'
+  const rawDsi = raw.dsi_breakdown && typeof raw.dsi_breakdown === 'object' && !Array.isArray(raw.dsi_breakdown)
     ? (raw.dsi_breakdown as Record<string, unknown>)
     : null;
   const dsiBreakdown: DefectReportItem['dsi_breakdown'] = rawDsi
@@ -171,12 +300,23 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
       }
     : undefined;
 
+  let safeDate = sanitizeText(raw.date || raw.post_date || '');
+  if (!safeDate && raw.created_at) {
+    const split = String(raw.created_at).split('T')[0];
+    if (split && split.length >= 8) {
+      safeDate = sanitizeText(split);
+    }
+  }
+  if (!safeDate) {
+    safeDate = new Date().toISOString().split('T')[0];
+  }
+
   return {
-    id: sanitizeText(raw.id || `report_${index + 1}`),
+    id: sanitizeText(raw.id || raw.post_id || `report_${index + 1}`),
     source: sanitizeText(raw.source || raw.platform || 'bobaedream').toLowerCase(),
     url: sanitizeReportUrl(raw.url || raw.post_url || '#'),
     title: sanitizeText(raw.title || raw.post_title || '전기차 결함 제보'),
-    date: sanitizeText(raw.date || raw.post_date || new Date().toISOString().split('T')[0]),
+    date: safeDate,
     created_at: raw.created_at ? sanitizeText(raw.created_at) : undefined,
     vehicle_model: sanitizeText(raw.vehicle_model || raw.target_vehicle || '미상 모델'),
     vehicle_brand: raw.vehicle_brand ? sanitizeText(raw.vehicle_brand) : undefined,
@@ -204,7 +344,7 @@ export function calculateKPIs(
   existingStats?: Partial<ReportStatistics>
 ): ReportStatistics {
   const safeReports = Array.isArray(reports)
-    ? reports.filter((r): r is DefectReportItem => Boolean(r && typeof r === 'object'))
+    ? reports.filter((r): r is DefectReportItem => Boolean(r && typeof r === 'object' && !Array.isArray(r)))
     : [];
   const totalFiltered = safeReports.length;
   const criticalCount = safeReports.filter(
@@ -261,7 +401,9 @@ export function calculateKPIs(
   const totalScraped = existingStats?.total_scraped ?? (totalFiltered * 7);
 
   return {
-    total_scraped: totalScraped,
+    total_scraped: typeof totalScraped === 'number' && Number.isFinite(totalScraped)
+      ? Math.max(0, totalScraped)
+      : (totalFiltered * 7),
     total_filtered_defects: totalFiltered,
     avg_negativity_score: typeof existingStats?.avg_negativity_score === 'number' && Number.isFinite(existingStats.avg_negativity_score)
       ? getSafeSentimentScore(existingStats.avg_negativity_score, avgScore)
@@ -302,10 +444,132 @@ export function getFallbackReportData(): DailyReportData {
 }
 
 /**
+ * High-fidelity canonical mock reports covering all 5 taxonomy pillars.
+ * Used for offline test suites, visual previews, or when data files are completely missing.
+ */
+export const FALLBACK_MOCK_REPORTS: DefectReportItem[] = [
+  {
+    id: 'mock_bat_001',
+    source: 'dcinside',
+    url: 'https://gall.dcinside.com/mgallery/board/view/?id=car_new1&no=1284920',
+    title: '전기차 ICCU 터져서 고속도로에서 멈춤',
+    date: '2026-09-08',
+    vehicle_model: '아이오닉5',
+    vehicle_brand: '현대',
+    defect_category: 'BATTERY_CHARGING',
+    defect_category_ko: '배터리/충전',
+    summary: '주행 중 갑작스러운 경고등 점등과 함께 ICCU 고장으로 차량 동력 상실 및 갓길 긴급 견인',
+    verbatim_quote: '고속도로에서 100km로 달리는데 갑자기 퍽 소리 나더니 배터리 경고등 뜨고 악셀 먹통됨',
+    slang_tags: ['ICCU폭탄', '벽돌차', '황천길'],
+    sentiment_score: 0.96,
+    severity: 'CRITICAL',
+    is_authentic_defect: true,
+  },
+  {
+    id: 'mock_drv_002',
+    source: 'bobaedream',
+    url: 'https://www.bobaedream.co.kr/view?code=national&No=2291045',
+    title: '기아 EV3 빗길 주행하다가 뒤 털려서 가드레일 박을 뻔했습니다',
+    date: '2026-09-08',
+    vehicle_model: 'EV3',
+    vehicle_brand: '기아',
+    defect_category: 'DRIVING_POWERTRAIN',
+    defect_category_ko: '주행/모터/등판',
+    summary: '우천 고속 주행 시 리어 토션빔 접지력 상실 및 회생제동 개입으로 인한 피쉬테일 현상 발생',
+    verbatim_quote: '비 오는 날 고속도로 이음새 밟고 회생제동 살짝 걸리는 순간 뒤쪽이 좌우로 사정없이 털리면서 피쉬테일 옴',
+    slang_tags: ['피쉬테일', '토션빔털림', '회생제동슬립'],
+    sentiment_score: 0.94,
+    severity: 'CRITICAL',
+    is_authentic_defect: true,
+  },
+  {
+    id: 'mock_bld_003',
+    source: 'bobaedream',
+    url: 'https://www.bobaedream.co.kr/view?code=national&No=2290881',
+    title: '출고 3일된 EV6 트렁크 누수로 스페어 공간 한강 됐습니다',
+    date: '2026-09-08',
+    vehicle_model: 'EV6',
+    vehicle_brand: '기아',
+    defect_category: 'BUILD_QUALITY',
+    defect_category_ko: '단차/누수/마감',
+    summary: '트렁크 테일게이트 웨더스트립 조립 불량으로 인한 우천 시 트렁크 하부 침수',
+    verbatim_quote: '차 받은 지 3일 만에 폭우 내렸는데 오늘 트렁크 바닥 열어보니까 물이 찰랑찰랑 한강이네요',
+    slang_tags: ['누수차', '수족관에디션', '단차지옥'],
+    sentiment_score: 0.91,
+    severity: 'WARNING',
+    is_authentic_defect: true,
+  },
+  {
+    id: 'mock_sft_004',
+    source: 'dcinside',
+    url: 'https://gall.dcinside.com/mgallery/board/view/?id=car_new1&no=1284550',
+    title: '테슬라 모델Y OTA 최신 업데이트 받고 계기판 블랙아웃 벽돌됨',
+    date: '2026-09-08',
+    vehicle_model: '모델 Y',
+    vehicle_brand: '테슬라',
+    defect_category: 'SOFTWARE_ELECTRONICS',
+    defect_category_ko: 'OTA/소프트웨어',
+    summary: '차량 펌웨어 OTA 배포 설치 중 MCU 통신 오류로 인한 센터 디스플레이 완전 암전 및 운행 불가',
+    verbatim_quote: '새벽에 와이파이 잡고 업데이트 눌렀는데 아침에 출근하려고 차 타니까 중앙 스크린 꺼져있고 리셋 눌러도 깜깜무소식',
+    slang_tags: ['OTA벽돌', '블랙아웃', '어부바행'],
+    sentiment_score: 0.95,
+    severity: 'CRITICAL',
+    is_authentic_defect: true,
+  },
+  {
+    id: 'mock_svc_005',
+    source: 'bobaedream',
+    url: 'https://www.bobaedream.co.kr/view?code=national&No=2290412',
+    title: '방지턱 하부 스쳤는데 배터리팩 긁혔다고 전손 3800만원 요구합니다',
+    date: '2026-09-07',
+    vehicle_model: '아이오닉6',
+    vehicle_brand: '현대',
+    defect_category: 'SERVICE_REPAIR_COST',
+    defect_category_ko: 'AS/수리비',
+    summary: '배터리 하부 케이스 미세 스크래치로 인한 서비스센터의 안전 규정상 배터리 전량 교체 및 3800만원 청구',
+    verbatim_quote: '지하주차장 방지턱 살짝 긁혀서 소리 났길래 점검받으러 갔더니 하부 배터리 케이스 스크래치 났다고 배터리 통교체 3800만원 부름',
+    slang_tags: ['수리비폭탄', '전손각', '통교체갑질'],
+    sentiment_score: 0.98,
+    severity: 'CRITICAL',
+    is_authentic_defect: true,
+  },
+];
+
+/**
+ * Returns consistent, populated fallback mock Daily EV Defect Reports data when files are missing
+ * and realistic mock data is explicitly required.
+ */
+export function getFallbackMockReportData(): DailyReportData {
+  const reports = FALLBACK_MOCK_REPORTS.map((r, idx) => normalizeReport(r as unknown as Record<string, unknown>, idx));
+  const statistics = calculateKPIs(reports);
+  const catCountMap = new Map<string, number>();
+  for (const r of reports) {
+    const cat = r.defect_category || 'BUILD_QUALITY';
+    catCountMap.set(cat, (catCountMap.get(cat) || 0) + 1);
+  }
+  const topDefectCategories = Array.from(catCountMap.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([category, count]) => ({
+      category,
+      count,
+      ratio: Number((count / reports.length).toFixed(3)),
+    }));
+
+  return {
+    generated_at: new Date().toISOString(),
+    pipeline_version: '1.0.0-mock',
+    statistics,
+    total_complaints_today: reports.length,
+    top_defect_categories: topDefectCategories,
+    reports,
+  };
+}
+
+/**
  * Main type-safe loader for Daily EV Defect Reports.
  * Provides safe fallback in case the data is empty or corrupted.
  */
-export function getDailyReports(): DailyReportData {
+export function getDailyReports(options?: { useMockOnEmpty?: boolean }): DailyReportData {
   try {
     const rawData = rawReportData as unknown as {
       generated_at?: string;
@@ -320,8 +584,12 @@ export function getDailyReports(): DailyReportData {
       reports?: Record<string, unknown>[];
     } | null | undefined;
 
-    if (!rawData || typeof rawData !== 'object') {
-      return getFallbackReportData();
+    if (!rawData || typeof rawData !== 'object' || (Array.isArray(rawData) && rawData.length === 0)) {
+      return options?.useMockOnEmpty ? getFallbackMockReportData() : getFallbackReportData();
+    }
+
+    if (!Array.isArray(rawData) && Object.keys(rawData).length === 0) {
+      return options?.useMockOnEmpty ? getFallbackMockReportData() : getFallbackReportData();
     }
 
     const rawReports = Array.isArray(rawData)
@@ -329,22 +597,47 @@ export function getDailyReports(): DailyReportData {
       : (Array.isArray(rawData?.reports) ? rawData.reports : []);
 
     const reports: DefectReportItem[] = rawReports
-      .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+      .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object' && !Array.isArray(item)))
       .map((item: Record<string, unknown>, idx: number) =>
         normalizeReport(item, idx)
       );
 
-    const statistics = calculateKPIs(reports, rawData?.statistics);
+    if (reports.length === 0 && options?.useMockOnEmpty) {
+      return getFallbackMockReportData();
+    }
 
-    const safeTopCategories = Array.isArray(rawData?.top_defect_categories)
+    const rawStats = rawData?.statistics && typeof rawData.statistics === 'object' && !Array.isArray(rawData.statistics)
+      ? rawData.statistics
+      : undefined;
+    const statistics = calculateKPIs(reports, rawStats);
+
+    let safeTopCategories = Array.isArray(rawData?.top_defect_categories)
       ? rawData.top_defect_categories
-          .filter((cat): cat is { category: string; count: number; ratio: number } => Boolean(cat && typeof cat === 'object'))
-          .map((cat) => ({
-            category: sanitizeText(cat.category || 'UNKNOWN'),
-            count: typeof cat.count === 'number' && Number.isFinite(cat.count) ? Math.max(0, cat.count) : 0,
-            ratio: typeof cat.ratio === 'number' && Number.isFinite(cat.ratio) ? Math.min(1, Math.max(0, cat.ratio)) : 0,
-          }))
+          .filter((cat): cat is { category: string; count: number; ratio: number } => Boolean(cat && typeof cat === 'object' && !Array.isArray(cat)))
+          .map((cat) => {
+            const resolved = resolveCategory(cat.category);
+            return {
+              category: resolved.code,
+              count: typeof cat.count === 'number' && Number.isFinite(cat.count) ? Math.max(0, cat.count) : 0,
+              ratio: typeof cat.ratio === 'number' && Number.isFinite(cat.ratio) ? Math.min(1, Math.max(0, cat.ratio)) : 0,
+            };
+          })
       : [];
+
+    if (safeTopCategories.length === 0 && reports.length > 0) {
+      const catCountMap = new Map<string, number>();
+      for (const r of reports) {
+        const cat = r.defect_category || 'BUILD_QUALITY';
+        catCountMap.set(cat, (catCountMap.get(cat) || 0) + 1);
+      }
+      safeTopCategories = Array.from(catCountMap.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([category, count]) => ({
+          category,
+          count,
+          ratio: Number((count / reports.length).toFixed(3)),
+        }));
+    }
 
     return {
       generated_at: typeof rawData?.generated_at === 'string' && rawData.generated_at.trim()
@@ -362,6 +655,6 @@ export function getDailyReports(): DailyReportData {
     };
   } catch (error) {
     console.error('Failed to load daily reports, using safe fallback:', error);
-    return getFallbackReportData();
+    return options?.useMockOnEmpty ? getFallbackMockReportData() : getFallbackReportData();
   }
 }

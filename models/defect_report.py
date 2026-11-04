@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from models.complaint import (
     CANONICAL_CATEGORIES,
+    CATEGORY_ALIASES,
     DEFECT_CATEGORY_KO_MAP,
     VALID_BRANDS,
     VALID_SEVERITY_LEVELS,
@@ -89,6 +90,7 @@ __all__ = [
     "DailyReportPayload",
     "RawPost",
     "CANONICAL_CATEGORIES",
+    "CATEGORY_ALIASES",
     "DEFECT_CATEGORY_KO_MAP",
     "VALID_BRANDS",
     "VALID_SEVERITY_LEVELS",

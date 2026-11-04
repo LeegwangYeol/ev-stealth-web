@@ -5,7 +5,7 @@ import React, { useState, useEffect, useMemo, memo } from 'react';
 export interface ClientTimestampProps {
   isoString?: string | null;
   timestamp?: string | null;
-  format?: string;
+  format?: 'date' | 'time' | 'datetime' | string;
   className?: string;
   fallback?: string;
   locale?: string;
@@ -44,11 +44,13 @@ function areTimestampPropsEqual(
  * An isolated, memoized client component that formats an ISO timestamp string into `ko-KR` locale
  * safely after mounting (`useEffect`), returning an accessible `<time>` element with `dateTime`
  * attribute and fallback unformatted text before mounting.
- * This eliminates the need for parent components to hold a root `mounted` state.
+ * This eliminates the need for parent components to hold a root `mounted` state and completely
+ * prevents server-client hydration mismatches.
  */
 function ClientTimestampBase({
   isoString,
   timestamp,
+  format,
   className,
   fallback = '방금 전',
   locale = 'ko-KR',
@@ -57,10 +59,17 @@ function ClientTimestampBase({
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
+    let isCurrent = true;
+    if (isCurrent) {
+      setMounted(true);
+    }
+    return () => {
+      isCurrent = false;
+    };
   }, []);
 
-  const effectiveIso = isoString || timestamp;
+  const effectiveIso = (isoString || timestamp || '').trim();
+
   const fallbackText = useMemo(() => {
     if (!effectiveIso) return fallback;
     return effectiveIso.includes('T')
@@ -68,28 +77,41 @@ function ClientTimestampBase({
       : effectiveIso;
   }, [effectiveIso, fallback]);
 
-  const formattedText = useMemo(() => {
-    if (!mounted || !effectiveIso) {
-      return fallbackText;
+  const { formattedText, validIso } = useMemo(() => {
+    if (!effectiveIso) {
+      return { formattedText: fallback, validIso: undefined };
     }
     try {
       const date = new Date(effectiveIso);
       if (!isNaN(date.getTime())) {
-        return date.toLocaleString(locale, options);
+        const iso = date.toISOString();
+        if (!mounted) {
+          return { formattedText: fallbackText, validIso: iso };
+        }
+        if (format === 'date') {
+          return { formattedText: date.toLocaleDateString(locale, options), validIso: iso };
+        }
+        if (format === 'time') {
+          return { formattedText: date.toLocaleTimeString(locale, options), validIso: iso };
+        }
+        return { formattedText: date.toLocaleString(locale, options), validIso: iso };
       }
     } catch {
-      return fallbackText;
+      return { formattedText: fallbackText, validIso: undefined };
     }
-    return fallbackText;
-  }, [mounted, effectiveIso, locale, options, fallbackText]);
+    return { formattedText: fallbackText, validIso: undefined };
+  }, [mounted, effectiveIso, locale, options, format, fallback, fallbackText]);
+
+  const displayText = mounted ? formattedText : fallbackText;
 
   return (
     <time
-      dateTime={effectiveIso || undefined}
+      dateTime={validIso || (effectiveIso || undefined)}
+      title={displayText}
       className={className}
       suppressHydrationWarning
     >
-      {mounted ? formattedText : fallbackText}
+      {displayText}
     </time>
   );
 }
@@ -97,3 +119,4 @@ function ClientTimestampBase({
 export const ClientTimestamp = memo(ClientTimestampBase, areTimestampPropsEqual);
 
 export default ClientTimestamp;
+

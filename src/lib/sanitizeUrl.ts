@@ -29,7 +29,7 @@ const FORBIDDEN_SCHEMES = new Set([
  */
 export function decodeHtmlEntities(str: string): string {
   return str
-    .replace(/&#x([0-9a-fA-F]+);/gi, (_, hex) => {
+    .replace(/&#x([0-9a-fA-F]+);?/gi, (_, hex) => {
       try {
         const code = parseInt(hex, 16);
         return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : '';
@@ -59,6 +59,7 @@ export function decodeHtmlEntities(str: string): string {
 
 /**
  * Iteratively decodes percent-encoded sequences up to 3 passes to uncover double/triple encoding bypasses.
+ * Fallback decodes individual ASCII %XX sequences if a malformed byte throws URIError.
  */
 export function safeDecodePercent(str: string): string {
   let prev = str;
@@ -68,7 +69,17 @@ export function safeDecodePercent(str: string): string {
       if (decoded === prev) break;
       prev = decoded;
     } catch {
-      break;
+      // Decode individual %XX tokens if full decodeURIComponent threw (e.g. malformed trailing byte)
+      try {
+        const partialDecoded = prev.replace(/%([0-9a-fA-F]{2})/g, (match, hex) => {
+          const byte = parseInt(hex, 16);
+          return byte < 128 ? String.fromCharCode(byte) : match;
+        });
+        if (partialDecoded === prev) break;
+        prev = partialDecoded;
+      } catch {
+        break;
+      }
     }
   }
   return prev;
@@ -76,10 +87,13 @@ export function safeDecodePercent(str: string): string {
 
 /**
  * Normalizes and extracts the URI scheme if one is present, uncovering obfuscated or encoded schemes.
+ * Uses a two-pass decode in case percent decoding reveals newly formed HTML entities.
  */
 export function extractAndNormalizeScheme(raw: string): string {
-  const decodedHtml = decodeHtmlEntities(raw);
-  const decoded = safeDecodePercent(decodedHtml);
+  let decoded = safeDecodePercent(decodeHtmlEntities(raw));
+  // Second pass: uncover nested entity sequences like %26colon; or %26%23x3a%3b
+  decoded = safeDecodePercent(decodeHtmlEntities(decoded));
+
   const stripped = decoded
     .replace(/\\0|\\x00|\\u0000/gi, '')
     .replace(/[\s\x00-\x1f\x7f\u200B-\u200D\uFEFF\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '')
@@ -94,8 +108,8 @@ export function extractAndNormalizeScheme(raw: string): string {
  * Checks if a candidate URL is a malicious open redirect vector (protocol-relative, backslash, or encoded slashes).
  */
 export function isOpenRedirect(raw: string): boolean {
-  const decodedHtml = decodeHtmlEntities(raw);
-  const decoded = safeDecodePercent(decodedHtml);
+  let decoded = safeDecodePercent(decodeHtmlEntities(raw));
+  decoded = safeDecodePercent(decodeHtmlEntities(decoded));
   const trimmedDecoded = decoded.trim();
   const trimmedRaw = raw.trim();
 

@@ -1520,7 +1520,9 @@ SYMPTOM_PREDICATES: List[str] = [
 ]
 
 
-_SORTED_SLANG_ENTRIES = sorted(RAW_SLANG_ENTRIES, key=lambda x: len(x.term), reverse=True)
+_SORTED_SLANG_ENTRIES: Tuple[SlangEntry, ...] = tuple(
+    sorted(RAW_SLANG_ENTRIES, key=lambda x: len(x.term), reverse=True)
+)
 
 
 def find_matching_slang(text: str) -> List[SlangEntry]:
