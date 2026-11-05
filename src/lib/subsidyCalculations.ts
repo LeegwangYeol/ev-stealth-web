@@ -6,7 +6,7 @@
  * to remain lean without bundling redundant static data payloads.
  */
 
-import {
+import type {
   AlertSeverity,
   AlertThresholdConfig,
   CategoryMetrics,
@@ -16,7 +16,7 @@ import {
   SubsidyCalculationResult,
   SubsidyCalculatorOptions,
   MunicipalityMetrics,
-} from '../types/subsidy';
+} from '../types/subsidy.ts';
 
 export type {
   AlertSeverity,

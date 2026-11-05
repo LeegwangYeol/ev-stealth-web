@@ -19,8 +19,8 @@
  */
 
 import { performance } from 'node:perf_hooks';
-import * as subsidy from '../src/lib/getSubsidyData';
-import * as depreciation from '../src/lib/getDepreciationData';
+import * as subsidy from '../src/lib/getSubsidyData.ts';
+import * as depreciation from '../src/lib/getDepreciationData.ts';
 
 interface LatencyStats {
   minUs: number;

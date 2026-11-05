@@ -35,11 +35,11 @@ const patchedRecallSrc = originalRecallSrc
     jsonImport
   )
   .replace(
-    /import\s*\{\s*sanitizeSafeUrl\s*\}\s*from\s*['"]\.\/sanitizeUrl['"];?/,
+    /import\s*\{\s*sanitizeSafeUrl\s*\}\s*from\s*['"]\.\/sanitizeUrl(?:\.ts)?['"];?/,
     sanitizeImport
   )
   .replace(
-    /from\s*['"]@\/types\/recall['"];?/g,
+    /from\s*['"](?:@\/types\/recall|\.\.\/types\/recall(?:\.ts)?)['"];?/g,
     typesImport
   );
 const tempRecallFixture = path.resolve(__dirname, 'temp_recall_extreme_fixture.ts');

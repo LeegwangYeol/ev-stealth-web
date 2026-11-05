@@ -10,9 +10,9 @@
  * 3. Depreciation & Electrochemical Engine (getDepreciationData.ts)
  */
 
-import * as recall from '../src/lib/getRecallData';
-import * as subsidy from '../src/lib/getSubsidyData';
-import * as depreciation from '../src/lib/getDepreciationData';
+import * as recall from '../src/lib/getRecallData.ts';
+import * as subsidy from '../src/lib/getSubsidyData.ts';
+import * as depreciation from '../src/lib/getDepreciationData.ts';
 
 interface TestStats {
   total: number;
@@ -229,13 +229,14 @@ assert(recall.isModelMatchForCampaign('EV9', 'EV6') === false, 'EV9 != EV6');
 console.log('\n--- [PART 2: Subsidy Calculator & Tracker Boundary Testing] ---');
 
 // 2.1 Price Cap Ratio Boundaries
-assert(subsidy.getPriceSubsidyRatio(0) === 1.0, 'MSRP 0 KRW -> 1.0 (100% eligibility)');
+assert(subsidy.getPriceSubsidyRatio(0) === 0.0, 'MSRP 0 KRW -> 0.0 (non-positive fallback)');
 assert(subsidy.getPriceSubsidyRatio(54_999_999) === 1.0, 'MSRP 54,999,999 KRW -> 1.0');
-assert(subsidy.getPriceSubsidyRatio(55_000_000) === 0.5, 'MSRP 55,000,000 KRW -> 0.5 (50% boundary)');
+assert(subsidy.getPriceSubsidyRatio(55_000_000) === 1.0, 'MSRP 55,000,000 KRW -> 1.0 (exact 100% boundary)');
 assert(subsidy.getPriceSubsidyRatio(84_999_999) === 0.5, 'MSRP 84,999,999 KRW -> 0.5');
-assert(subsidy.getPriceSubsidyRatio(85_000_000) === 0.0, 'MSRP 85,000,000 KRW -> 0.0 (0% luxury exclusion)');
+assert(subsidy.getPriceSubsidyRatio(85_000_000) === 0.5, 'MSRP 85,000,000 KRW -> 0.5 (exact 50% boundary)');
+assert(subsidy.getPriceSubsidyRatio(85_000_001) === 0.0, 'MSRP 85,000,001 KRW -> 0.0 (0% luxury exclusion)');
 assert(subsidy.getPriceSubsidyRatio(100_000_000) === 0.0, 'MSRP 100M KRW -> 0.0');
-assert(subsidy.getPriceSubsidyRatio(-1_000_000) === 1.0, 'Negative MSRP defaults safely to 1.0 without crash');
+assert(subsidy.getPriceSubsidyRatio(-1_000_000) === 0.0, 'Negative MSRP defaults safely to 0.0 without crash');
 
 // 2.2 Boundary MSRPs in calculateNetSubsidy
 const testMsrps = [

@@ -1,5 +1,5 @@
 import rawReportData from '../data/daily_reports.json' with { type: 'json' };
-import { sanitizeSafeUrl, sanitizeText } from './sanitizeUrl';
+import { sanitizeSafeUrl, sanitizeText } from './sanitizeUrl.ts';
 
 export type DefectCategoryCode =
   | 'BATTERY_CHARGING'

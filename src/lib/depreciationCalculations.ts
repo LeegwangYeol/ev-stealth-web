@@ -907,9 +907,19 @@ export function calculateDepreciation(
   const deltaMileage = mileageKm - expectedMileage;
   let mileageAdjustment = 0;
   if (deltaMileage > 0) {
-    mileageAdjustment =
+    const rawPenalty =
       (deltaMileage / 10000) *
       adjustmentFactors.mileage_sensitivity.penalty_per_10000km_excess;
+    const maxDiscountCap =
+      adjustmentFactors.mileage_sensitivity.max_mileage_discount_cap ?? -0.15;
+    if (mileageKm >= 500000) {
+      mileageAdjustment = rawPenalty;
+    } else if (mileageKm > 300000) {
+      const progress = (mileageKm - 300000) / 200000;
+      mileageAdjustment = maxDiscountCap * (1 - progress) + rawPenalty * progress;
+    } else {
+      mileageAdjustment = Math.max(maxDiscountCap, rawPenalty);
+    }
   } else {
     const bonusRate = adjustmentFactors.mileage_sensitivity.bonus_per_10000km_deficit;
     mileageAdjustment = Math.min(0.06, (Math.abs(deltaMileage) / 10000) * bonusRate);

@@ -1,12 +1,12 @@
 import rawData from '../data/ev_subsidy_data.json' with { type: 'json' };
-import {
+import type {
   EVSubsidyDataset,
   PopularModelEntry,
   RegionEntry,
   SubsidyCalculationResult,
   SubsidyCalculatorOptions,
   AlertSeverity,
-} from '../types/subsidy';
+} from '../types/subsidy.ts';
 import {
   calculateDepletionRate,
   calculateDeliveryRate,
@@ -27,7 +27,7 @@ import {
   type RegionSortOption,
   type ModelSortOption,
   type RankedRegionEntry,
-} from './subsidyCalculations';
+} from './subsidyCalculations.ts';
 
 export {
   calculateDepletionRate,

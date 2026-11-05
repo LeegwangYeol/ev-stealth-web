@@ -9,12 +9,12 @@
  * 4. Component logic & helper stress-testing
  */
 
-import * as subsidy from '../src/lib/getSubsidyData';
-import * as recall from '../src/lib/getRecallData';
-import * as depreciation from '../src/lib/getDepreciationData';
-import * as reliability from '../src/lib/getReliabilityData';
-import type { EVSubsidyDataset, RegionEntry, PopularModelEntry } from '../src/types/subsidy';
-import type { RecallDatabase } from '../src/lib/getRecallData';
+import * as subsidy from '../src/lib/getSubsidyData.ts';
+import * as recall from '../src/lib/getRecallData.ts';
+import * as depreciation from '../src/lib/getDepreciationData.ts';
+import * as reliability from '../src/lib/getReliabilityData.ts';
+import type { EVSubsidyDataset, RegionEntry, PopularModelEntry } from '../src/types/subsidy.ts';
+import type { RecallDatabase } from '../src/lib/getRecallData.ts';
 
 interface TestReport {
   total: number;

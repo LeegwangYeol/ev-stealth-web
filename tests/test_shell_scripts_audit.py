@@ -30,6 +30,9 @@ def _find_repo_root() -> Path:
         Path.cwd().parent,
     ]
     for c in candidates:
+        if (c / "ev-stealth-web").is_dir() and (c / "data").is_dir() and (c / "run_tracker.py").exists():
+            return c
+    for c in candidates:
         if (c / "run_tracker.py").exists() and (c / "data").exists():
             return c
     return Path(__file__).resolve().parent.parent

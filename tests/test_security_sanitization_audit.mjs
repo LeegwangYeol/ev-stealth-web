@@ -532,7 +532,7 @@ test('getDailyReports correctly loads and sanitizes raw report items', async () 
   const sourcePath = path.resolve(__dirname, '../src/lib/getDailyReports.ts');
   const rawSource = fs.readFileSync(sourcePath, 'utf-8');
   const patched = rawSource
-    .replace(/from '\.\/sanitizeUrl';/, "from '../src/lib/sanitizeUrl.ts';")
+    .replace(/from '\.\/sanitizeUrl(?:\.ts)?';/, "from '../src/lib/sanitizeUrl.ts';")
     .replace(/from '\.\.\/data\/daily_reports\.json' with \{ type: 'json' \};/, "from '../src/data/daily_reports.json' with { type: 'json' };");
   
   const tempPath = path.resolve(__dirname, 'temp_security_daily_fixture.ts');

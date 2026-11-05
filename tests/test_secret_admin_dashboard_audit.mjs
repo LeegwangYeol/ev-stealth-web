@@ -23,7 +23,7 @@ const rawDashboardClient = fs.readFileSync(dashboardClientPath, 'utf-8');
 // 1. URL Sanitization Tests
 test('getDailyReports.ts: sanitizeReportUrl blocks dangerous URI schemes', async () => {
   const patched = rawDailyReports
-    .replace(/from '\.\/sanitizeUrl';/, "from '../src/lib/sanitizeUrl.ts';")
+    .replace(/from '\.\/sanitizeUrl(?:\.ts)?';/, "from '../src/lib/sanitizeUrl.ts';")
     .replace(/from '\.\.\/data\/daily_reports\.json' with \{ type: 'json' \};/, "from '../src/data/daily_reports.json' with { type: 'json' };");
 
   const tempPath = path.resolve(__dirname, 'temp_test_daily_reports.ts');

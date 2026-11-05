@@ -15,7 +15,7 @@ export type {
   ReliabilityTrendsDatabase,
   EnrichedModelItem,
   ReliabilityKPIs,
-} from '@/types/reliability';
+} from '../types/reliability.ts';
 
 import type {
   DefectCategoryKey,
@@ -26,7 +26,7 @@ import type {
   ReliabilityTrendsDatabase,
   EnrichedModelItem,
   ReliabilityKPIs,
-} from '@/types/reliability';
+} from '../types/reliability.ts';
 
 export type TrendDirection = 'UP' | 'DOWN' | 'STABLE';
 

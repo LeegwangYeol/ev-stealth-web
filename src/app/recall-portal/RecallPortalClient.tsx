@@ -1287,102 +1287,15 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       </div>
                     </div>
                   ) : (
-                    checkResult.recalls.map((campaign) => {
-                      const isExpanded = expandedRecallIds.has(campaign.id);
-                      return (
-                        <div
-                          key={campaign.id}
-                          className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition space-y-3"
-                        >
-                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                            <div>
-                              <div className="flex flex-wrap items-center gap-2 mb-1">
-                                <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
-                                  {campaign.campaign_no || '미부여'}
-                                </span>
-                                <span className="text-xs font-semibold text-slate-300">
-                                  {campaign.brand || '해당 제조사'} • {campaign.target_model || '해당 차종'} ({campaign.target_model_years || '전체 연식'})
-                                </span>
-                                <span
-                                  className={`text-[11px] font-bold px-2 py-0.5 rounded ${
-                                    campaign.risk_level === 'FIRE_HAZARD'
-                                      ? 'bg-red-950 text-red-300 border border-red-800'
-                                      : campaign.risk_level === 'LOSS_OF_POWER'
-                                      ? 'bg-orange-950 text-orange-300 border border-orange-800'
-                                      : 'bg-slate-800 text-slate-300'
-                                  }`}
-                                >
-                                  {campaign.risk_level_ko || '안전 리콜'}
-                                </span>
-                                <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                                  {campaign.remedy_type_ko || '무상 수리'}
-                                </span>
-                              </div>
-                              <h4 className="text-base font-bold text-white">{campaign.defect_title}</h4>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() => toggleRecallExpansion(campaign.id)}
-                              aria-expanded={isExpanded}
-                              aria-controls={"campaign-search-detail-" + campaign.id}
-                              aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '대처요령 및 상세'}`}
-                              className="self-start px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                            >
-                              <span>{isExpanded ? '상세 접기' : '대처요령 및 상세'}</span>
-                              <svg
-                                className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                                aria-hidden="true"
-                              >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </button>
-                          </div>
-
-                          <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
-                            {campaign.defect_detail || '공식 결함 정보 공시 대조 중입니다.'}
-                          </p>
-
-                          <div
-                            id={"campaign-search-detail-" + campaign.id}
-                            hidden={!isExpanded}
-                            className="space-y-3 pt-2 border-t border-slate-800"
-                          >
-                            <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-4 text-xs text-slate-200 space-y-1">
-                              <div className="font-bold text-blue-300 flex items-center gap-1.5">
-                                <span aria-hidden="true">🛠️</span> 시정 조치(리콜 수리) 내용:
-                              </div>
-                              <p className="text-slate-300">{campaign.remedy_action || '제조사 공식 서비스센터 방문 무상 점검 및 시정 조치'}</p>
-                            </div>
-
-                            <div className="bg-red-950/30 border border-red-900/50 rounded-xl p-4 text-xs text-slate-200 space-y-1">
-                              <div className="font-bold text-red-300 flex items-center gap-1.5">
-                                <span aria-hidden="true">🚨</span> 차주 긴급 대처 행동요령:
-                              </div>
-                              <p className="text-slate-300">{campaign.consumer_emergency_guide || '이상 징후 발생 시 즉시 안전한 장소에 정차 후 긴급 출동 요청'}</p>
-                            </div>
-
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-300 pt-1 gap-2">
-                              <span>고객센터: <strong className="text-white">{campaign.service_center_contact || '제조사 고객센터'}</strong></span>
-                              {campaign.official_link && (
-                                <a
-                                  href={campaign.official_link}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                                >
-                                  공식 웹사이트 바로가기 &rarr;
-                                  <span className="sr-only"> (새 창에서 열림)</span>
-                                </a>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
+                    checkResult.recalls.map((campaign) => (
+                      <RecallCard
+                        key={campaign.id}
+                        campaign={campaign}
+                        isExpanded={expandedRecallIds.has(campaign.id)}
+                        toggleRecallExpansion={toggleRecallExpansion}
+                        panelIdPrefix="campaign-search-detail-"
+                      />
+                    ))
                   )}
                 </div>
               </>
@@ -1616,6 +1529,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
           {/* List of Recalls */}
           <div className="space-y-3 pt-2">
+            <h3 className="sr-only">국토교통부 공시 리콜 캠페인 목록</h3>
             {filteredRecalls.length === 0 ? (
               <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-8 text-center text-slate-300">
                 <span className="text-3xl block mb-2" aria-hidden="true">📋</span>
@@ -1646,100 +1560,15 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               </div>
             ) : (
               <>
-                {displayedRecalls.map((campaign) => {
-                  const isExpanded = expandedRecallIds.has(campaign.id);
-                  return (
-                    <div
-                      key={campaign.id}
-                      className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition space-y-3"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2 mb-1">
-                            <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
-                              {campaign.campaign_no || '미부여'}
-                            </span>
-                            <span className="text-xs font-semibold text-slate-300">
-                              {campaign.brand || '해당 제조사'} • {campaign.target_model || '해당 차종'} ({campaign.target_model_years || '전체 연식'})
-                            </span>
-                            <span
-                              className={`text-[11px] font-bold px-2 py-0.5 rounded ${
-                                campaign.risk_level === 'FIRE_HAZARD'
-                                  ? 'bg-red-950 text-red-300 border border-red-800'
-                                  : campaign.risk_level === 'LOSS_OF_POWER'
-                                  ? 'bg-orange-950 text-orange-300 border border-orange-800'
-                                  : 'bg-slate-800 text-slate-300'
-                              }`}
-                            >
-                              {campaign.risk_level_ko || '안전 리콜'}
-                            </span>
-                            <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                              {campaign.remedy_type_ko || '무상 수리'}
-                            </span>
-                          </div>
-                          <h3 className="text-base font-bold text-white">{campaign.defect_title || '공식 리콜 캠페인'}</h3>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => toggleRecallExpansion(campaign.id)}
-                          aria-expanded={isExpanded}
-                          aria-controls={"campaign-list-detail-" + campaign.id}
-                          aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '닫기' : '상세 및 행동요령'}`}
-                          className="self-start text-xs text-blue-400 hover:text-blue-300 font-medium px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center rounded bg-slate-800/80 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                        >
-                          {isExpanded ? '닫기 ▲' : '상세 및 행동요령 ▼'}
-                        </button>
-                      </div>
-
-                      <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
-                        {campaign.defect_detail || '공식 결함 정보 공시 대조 중입니다.'}
-                      </p>
-
-                      <div
-                        id={"campaign-list-detail-" + campaign.id}
-                        hidden={!isExpanded}
-                        className="space-y-3 pt-3 border-t border-slate-800 text-xs"
-                      >
-                        <div>
-                          <span className="font-semibold text-slate-200">생산 기간: </span>
-                          <span className="font-mono text-slate-300">{campaign.production_date_range || '공식 공시 참조'}</span>
-                          <span className="ml-3 font-semibold text-slate-200">대상 대수: </span>
-                          <span className="text-amber-400 font-semibold">
-                            {Number.isFinite(campaign?.affected_kdm_units)
-                              ? campaign.affected_kdm_units.toLocaleString()
-                              : '0'}대
-                          </span>
-                        </div>
-
-                        <div className="bg-slate-950 rounded-lg p-3 border border-slate-800/80 space-y-1">
-                          <span className="font-bold text-blue-300">무상 수리 내용: </span>
-                          <p className="text-slate-300">{campaign.remedy_action || '제조사 공식 서비스센터 방문 무상 점검 및 시정 조치'}</p>
-                        </div>
-
-                        <div className="bg-red-950/30 rounded-lg p-3 border border-red-900/50 space-y-1">
-                          <span className="font-bold text-red-300">🚨 차주 긴급 대처 행동요령: </span>
-                          <p className="text-slate-300">{campaign.consumer_emergency_guide || '이상 징후 발생 시 즉시 안전한 장소에 정차 후 긴급 출동 요청'}</p>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between text-slate-300 pt-1 gap-2">
-                          <span>고객센터: <strong className="text-white">{campaign.service_center_contact || '제조사 고객센터'}</strong></span>
-                          {campaign.official_link && (
-                            <a
-                              href={campaign.official_link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 min-h-[44px] px-2 rounded-lg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                            >
-                              공식 웹사이트 바로가기 &rarr;
-                              <span className="sr-only"> (새 창에서 열림)</span>
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                {displayedRecalls.map((campaign) => (
+                  <RecallCard
+                    key={campaign.id}
+                    campaign={campaign}
+                    isExpanded={expandedRecallIds.has(campaign.id)}
+                    toggleRecallExpansion={toggleRecallExpansion}
+                    panelIdPrefix="campaign-list-detail-"
+                  />
+                ))}
                 {filteredRecalls.length > visibleRecallCount && (
                   <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
                     <button
@@ -1768,119 +1597,6 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     </div>
   );
 }
-
-export interface RecallCardProps {
-  campaign: OfficialRecallCampaign;
-  isExpanded: boolean;
-  toggleRecallExpansion: (id: string) => void;
-  panelIdPrefix?: string;
-}
-
-export const RecallCard = React.memo(function RecallCard({
-  campaign,
-  isExpanded,
-  toggleRecallExpansion,
-  panelIdPrefix = 'campaign-detail-',
-}: RecallCardProps) {
-  const panelId = `${panelIdPrefix}${campaign.id}`;
-  const targetModel = campaign.target_model || '해당 차종';
-  const brand = campaign.brand || '해당 제조사';
-  const years = campaign.target_model_years || '전체 연식';
-  const defectTitle = campaign.defect_title || '공식 리콜 캠페인';
-  const defectDetail = campaign.defect_detail || '공식 결함 정보 공시 대조 중입니다.';
-  const remedyAction = campaign.remedy_action || '제조사 공식 서비스센터 방문 무상 점검 및 시정 조치';
-  const emergencyGuide = campaign.consumer_emergency_guide || '이상 징후 발생 시 즉시 안전한 장소에 정차 후 긴급 출동 요청';
-  const contact = campaign.service_center_contact || '제조사 고객센터';
-  const safeLink = sanitizeSafeUrl(campaign.official_link);
-  const isExternal = isExternalUrl(safeLink);
-
-  return (
-    <div
-      className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition space-y-3"
-    >
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2 mb-1">
-            <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
-              {campaign.campaign_no || '미부여'}
-            </span>
-            <span className="text-xs font-semibold text-slate-300">
-              {brand} • {targetModel} ({years})
-            </span>
-            <span
-              className={`text-[11px] font-bold px-2 py-0.5 rounded ${
-                campaign.risk_level === 'FIRE_HAZARD'
-                  ? 'bg-red-950 text-red-300 border border-red-800'
-                  : campaign.risk_level === 'LOSS_OF_POWER'
-                  ? 'bg-orange-950 text-orange-300 border border-orange-800'
-                  : 'bg-slate-800 text-slate-300'
-              }`}
-            >
-              {campaign.risk_level_ko || '안전 리콜'}
-            </span>
-            <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-              {campaign.remedy_type_ko || '무상 수리'}
-            </span>
-          </div>
-          <h3 className="text-base font-bold text-white">{defectTitle}</h3>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => toggleRecallExpansion(campaign.id)}
-          aria-expanded={isExpanded}
-          aria-controls={panelId}
-          aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '상세 및 행동요령 펼치기'}`}
-          className="self-start text-xs text-blue-400 hover:text-blue-300 font-medium px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center rounded bg-slate-800/80 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-        >
-          {isExpanded ? '닫기 ▲' : '상세 및 행동요령 ▼'}
-        </button>
-      </div>
-
-      <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
-        {defectDetail}
-      </p>
-
-      <div id={panelId} hidden={!isExpanded} className="space-y-3 pt-3 border-t border-slate-800 text-xs">
-        <div>
-          <span className="font-semibold text-slate-200">생산 기간: </span>
-          <span className="font-mono text-slate-300">{campaign.production_date_range || '공식 공시 참조'}</span>
-          <span className="ml-3 font-semibold text-slate-200">대상 대수: </span>
-          <span className="text-amber-400 font-semibold">
-            {Number.isFinite(campaign?.affected_kdm_units)
-              ? campaign.affected_kdm_units.toLocaleString()
-              : '0'}대
-          </span>
-        </div>
-
-        <div className="bg-slate-950 rounded-lg p-3 border border-slate-800/80 space-y-1">
-          <span className="font-bold text-blue-300">무상 수리 내용: </span>
-          <p className="text-slate-300">{remedyAction}</p>
-        </div>
-
-        <div className="bg-red-950/30 rounded-lg p-3 border border-red-900/50 space-y-1">
-          <span className="font-bold text-red-300">🚨 차주 긴급 대처 행동요령: </span>
-          <p className="text-slate-300">{emergencyGuide}</p>
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between text-slate-300 pt-1 gap-2">
-          <span>고객센터: <strong className="text-white">{contact}</strong></span>
-          {isExternal ? (
-            <a
-              href={safeLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 min-h-[44px] px-2 rounded-lg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-            >
-              공식 웹사이트 바로가기 &rarr;
-              <span className="sr-only"> (새 창에서 열림)</span>
-            </a>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-});
 
 export interface BatterySafetyCardProps {
   profile: BatterySafetyProfile;
@@ -1953,6 +1669,170 @@ export const BatterySafetyCard = React.memo(function BatterySafetyCard({
       <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-300 truncate">
         🛡️ {bmsFeatures}
       </div>
+    </div>
+  );
+});
+
+export interface RecallCardProps {
+  campaign: OfficialRecallCampaign;
+  isExpanded: boolean;
+  toggleRecallExpansion: (id: string) => void;
+  panelIdPrefix?: string;
+}
+
+export const RecallCard = React.memo(function RecallCard({
+  campaign,
+  isExpanded,
+  toggleRecallExpansion,
+  panelIdPrefix = 'campaign-detail-',
+}: RecallCardProps) {
+  const targetModel = campaign.target_model || '해당 차종';
+  const brand = campaign.brand || '해당 제조사';
+  const years = campaign.target_model_years || '전체 연식';
+  const defectDetail = campaign.defect_detail || '공식 결함 정보 공시 대조 중입니다.';
+  const remedyAction = campaign.remedy_action || '제조사 공식 서비스센터 방문 무상 점검 및 시정 조치';
+  const emergencyGuide = campaign.consumer_emergency_guide || '이상 징후 발생 시 즉시 안전한 장소에 정차 후 긴급 출동 요청';
+  const contact = campaign.service_center_contact || '제조사 고객센터';
+  const safeLink = sanitizeSafeUrl(campaign.official_link);
+  const isExternal = isExternalUrl(safeLink);
+
+  return (
+    <div
+      className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition space-y-3"
+    >
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
+              {campaign.campaign_no || '미부여'}
+            </span>
+            <span className="text-xs font-semibold text-slate-300">
+              {brand} • {targetModel} ({years})
+            </span>
+            <span
+              className={`text-[11px] font-bold px-2 py-0.5 rounded ${
+                campaign.risk_level === 'FIRE_HAZARD'
+                  ? 'bg-red-950 text-red-300 border border-red-800'
+                  : campaign.risk_level === 'LOSS_OF_POWER'
+                  ? 'bg-orange-950 text-orange-300 border border-orange-800'
+                  : 'bg-slate-800 text-slate-300'
+              }`}
+            >
+              {campaign.risk_level_ko || '안전 리콜'}
+            </span>
+            <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+              {campaign.remedy_type_ko || '무상 수리'}
+            </span>
+          </div>
+          <h4 className="text-base font-bold text-white">{campaign.defect_title}</h4>
+        </div>
+
+        {panelIdPrefix === 'campaign-search-detail-' ? (
+          <button
+            type="button"
+            onClick={() => toggleRecallExpansion(campaign.id)}
+            aria-expanded={isExpanded}
+            aria-controls={"campaign-search-detail-" + campaign.id}
+            aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '상세 및 행동요령 펼치기'}`}
+            className="self-start text-xs text-blue-400 hover:text-blue-300 font-medium px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center rounded bg-slate-800/80 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+          >
+            {isExpanded ? '닫기 ▲' : '상세 및 행동요령 ▼'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => toggleRecallExpansion(campaign.id)}
+            aria-expanded={isExpanded}
+            aria-controls={"campaign-list-detail-" + campaign.id}
+            aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '상세 및 행동요령 펼치기'}`}
+            className="self-start text-xs text-blue-400 hover:text-blue-300 font-medium px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center rounded bg-slate-800/80 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+          >
+            {isExpanded ? '닫기 ▲' : '상세 및 행동요령 ▼'}
+          </button>
+        )}
+      </div>
+
+      <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
+        {defectDetail}
+      </p>
+
+      {panelIdPrefix === 'campaign-search-detail-' ? (
+        <div id={"campaign-search-detail-" + campaign.id} hidden={!isExpanded} className="space-y-3 pt-3 border-t border-slate-800 text-xs">
+          <div>
+            <span className="font-semibold text-slate-200">생산 기간: </span>
+            <span className="font-mono text-slate-300">{campaign.production_date_range || '공식 공시 참조'}</span>
+            <span className="ml-3 font-semibold text-slate-200">대상 대수: </span>
+            <span className="text-amber-400 font-semibold">
+              {Number.isFinite(campaign?.affected_kdm_units)
+                ? campaign.affected_kdm_units.toLocaleString()
+                : '0'}대
+            </span>
+          </div>
+
+          <div className="bg-slate-950 rounded-lg p-3 border border-slate-800/80 space-y-1">
+            <span className="font-bold text-blue-300">무상 수리 내용: </span>
+            <p className="text-slate-300">{remedyAction}</p>
+          </div>
+
+          <div className="bg-red-950/30 rounded-lg p-3 border border-red-900/50 space-y-1">
+            <span className="font-bold text-red-300">🚨 차주 긴급 대처 행동요령: </span>
+            <p className="text-slate-300">{emergencyGuide}</p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between text-slate-300 pt-1 gap-2">
+            <span>고객센터: <strong className="text-white">{contact}</strong></span>
+            {isExternal ? (
+              <a
+                href={safeLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 min-h-[44px] px-2 rounded-lg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              >
+                공식 웹사이트 바로가기 &rarr;
+                <span className="sr-only"> (새 창에서 열림)</span>
+              </a>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <div id={"campaign-list-detail-" + campaign.id} hidden={!isExpanded} className="space-y-3 pt-3 border-t border-slate-800 text-xs">
+          <div>
+            <span className="font-semibold text-slate-200">생산 기간: </span>
+            <span className="font-mono text-slate-300">{campaign.production_date_range || '공식 공시 참조'}</span>
+            <span className="ml-3 font-semibold text-slate-200">대상 대수: </span>
+            <span className="text-amber-400 font-semibold">
+              {Number.isFinite(campaign?.affected_kdm_units)
+                ? campaign.affected_kdm_units.toLocaleString()
+                : '0'}대
+            </span>
+          </div>
+
+          <div className="bg-slate-950 rounded-lg p-3 border border-slate-800/80 space-y-1">
+            <span className="font-bold text-blue-300">무상 수리 내용: </span>
+            <p className="text-slate-300">{remedyAction}</p>
+          </div>
+
+          <div className="bg-red-950/30 rounded-lg p-3 border border-red-900/50 space-y-1">
+            <span className="font-bold text-red-300">🚨 차주 긴급 대처 행동요령: </span>
+            <p className="text-slate-300">{emergencyGuide}</p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between text-slate-300 pt-1 gap-2">
+            <span>고객센터: <strong className="text-white">{contact}</strong></span>
+            {isExternal ? (
+              <a
+                href={safeLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 min-h-[44px] px-2 rounded-lg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              >
+                공식 웹사이트 바로가기 &rarr;
+                <span className="sr-only"> (새 창에서 열림)</span>
+              </a>
+            ) : null}
+          </div>
+        </div>
+      )}
     </div>
   );
 });

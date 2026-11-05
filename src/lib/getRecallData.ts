@@ -1,5 +1,5 @@
 import rawRecallData from '../data/ev_recall_database.json' with { type: 'json' };
-import { sanitizeSafeUrl } from './sanitizeUrl';
+import { sanitizeSafeUrl } from './sanitizeUrl.ts';
 
 import type {
   RecallRiskLevel,
@@ -11,7 +11,7 @@ import type {
   RecallDatabaseMetadata,
   RecallDatabase,
   VinCheckResult,
-} from '@/types/recall';
+} from '../types/recall.ts';
 
 export type {
   RecallRiskLevel,

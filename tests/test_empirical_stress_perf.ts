@@ -23,11 +23,11 @@ import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 
 // Load domain modules
-import * as subsidy from '../src/lib/getSubsidyData';
-import * as recall from '../src/lib/getRecallData';
-import * as depreciation from '../src/lib/getDepreciationData';
-import * as reliability from '../src/lib/getReliabilityData';
-import * as dailyReports from '../src/lib/getDailyReports';
+import * as subsidy from '../src/lib/getSubsidyData.ts';
+import * as recall from '../src/lib/getRecallData.ts';
+import * as depreciation from '../src/lib/getDepreciationData.ts';
+import * as reliability from '../src/lib/getReliabilityData.ts';
+import * as dailyReports from '../src/lib/getDailyReports.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

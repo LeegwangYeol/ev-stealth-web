@@ -1079,12 +1079,12 @@ class SubsidyTracker:
                         destinations.append(web_pub_data / "ev_subsidy_data.json")
                         destinations.append(web_pub_data / "subsidy_depletion_data.json")
 
-                if root_data_dir.exists():
-                    destinations.append(root_data_dir / "ev_subsidy_data.json")
-                    destinations.append(root_data_dir / "subsidy_depletion_data.json")
-                if root_pub_data.exists():
-                    destinations.append(root_pub_data / "ev_subsidy_data.json")
-                    destinations.append(root_pub_data / "subsidy_depletion_data.json")
+                    if root_data_dir.exists():
+                        destinations.append(root_data_dir / "ev_subsidy_data.json")
+                        destinations.append(root_data_dir / "subsidy_depletion_data.json")
+                    if root_pub_data.exists():
+                        destinations.append(root_pub_data / "ev_subsidy_data.json")
+                        destinations.append(root_pub_data / "subsidy_depletion_data.json")
 
             # Deduplicate destinations preserving order
             unique_destinations: List[Path] = []

@@ -28,11 +28,11 @@ const patchedSource = originalSource
     jsonImport
   )
   .replace(
-    /import\s*\{\s*sanitizeSafeUrl\s*\}\s*from\s*['"]\.\/sanitizeUrl['"];?/,
+    /import\s*\{\s*sanitizeSafeUrl\s*\}\s*from\s*['"]\.\/sanitizeUrl(?:\.ts)?['"];?/,
     sanitizeImport
   )
   .replace(
-    /from\s*['"]@\/types\/recall['"];?/g,
+    /from\s*['"](?:@\/types\/recall|\.\.\/types\/recall(?:\.ts)?)['"];?/g,
     typesImport
   );
 

@@ -214,6 +214,7 @@ export interface DepreciationDatabase {
       base_km_per_year: number;
       penalty_per_10000km_excess: number;
       bonus_per_10000km_deficit: number;
+      max_mileage_discount_cap?: number;
     };
   };
   chemistries: Record<BatteryChemistryType, BatteryChemistryProfile>;
@@ -917,7 +918,16 @@ export function calculateDepreciation(input: DepreciationCalculationInput): Depr
   const deltaMileage = mileageKm - expectedMileage;
   let mileageAdjustment = 0;
   if (deltaMileage > 0) {
-    mileageAdjustment = (deltaMileage / 10000) * DATABASE.adjustment_factors.mileage_sensitivity.penalty_per_10000km_excess;
+    const rawPenalty = (deltaMileage / 10000) * DATABASE.adjustment_factors.mileage_sensitivity.penalty_per_10000km_excess;
+    const maxDiscountCap = DATABASE.adjustment_factors.mileage_sensitivity.max_mileage_discount_cap ?? -0.15;
+    if (mileageKm >= 500000) {
+      mileageAdjustment = rawPenalty;
+    } else if (mileageKm > 300000) {
+      const progress = (mileageKm - 300000) / 200000;
+      mileageAdjustment = maxDiscountCap * (1 - progress) + rawPenalty * progress;
+    } else {
+      mileageAdjustment = Math.max(maxDiscountCap, rawPenalty);
+    }
   } else {
     const bonusRate = DATABASE.adjustment_factors.mileage_sensitivity.bonus_per_10000km_deficit;
     mileageAdjustment = Math.min(0.06, (Math.abs(deltaMileage) / 10000) * bonusRate);

@@ -636,9 +636,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                     web_dir = Path(args.web_dir)
                     destinations.append(web_dir / "ev_subsidy_data.json")
                     destinations.append(web_dir / "subsidy_depletion_data.json")
-                    destinations.append(DEFAULT_PRIMARY_OUTPUT)
-                    destinations.append(MIRROR_PRIMARY_OUTPUT)
-                    destinations.extend(EXTERNAL_SYNC_TARGETS)
+                    if is_default_or_repo_target:
+                        destinations.append(DEFAULT_PRIMARY_OUTPUT)
+                        destinations.append(MIRROR_PRIMARY_OUTPUT)
+                        destinations.extend(EXTERNAL_SYNC_TARGETS)
                 else:
                     destinations.append(DEFAULT_WEB_OUTPUT)
                     destinations.append(MIRROR_WEB_OUTPUT)
