@@ -1038,8 +1038,12 @@ class SubsidyTracker:
         if not dry_run:
             repo_root = _find_repo_root()
             root_data_dir = repo_root / "data"
-            web_src_data = repo_root / "ev-stealth-web" / "src" / "data"
-            web_pub_data = repo_root / "ev-stealth-web" / "public" / "data"
+            if (repo_root / "ev-stealth-web").is_dir():
+                web_src_data = repo_root / "ev-stealth-web" / "src" / "data"
+                web_pub_data = repo_root / "ev-stealth-web" / "public" / "data"
+            else:
+                web_src_data = repo_root / "src" / "data"
+                web_pub_data = repo_root / "public" / "data"
             root_pub_data = repo_root / "public" / "data"
 
             cwd = Path.cwd()
