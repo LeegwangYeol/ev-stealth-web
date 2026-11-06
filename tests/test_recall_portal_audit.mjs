@@ -70,6 +70,62 @@ assert.ok(
   'error.tsx must use text-slate-600 for AA-compliant contrast on white background'
 );
 
+// 1.5 Accordion expansion keyboard accessibility (Escape to close and focus return)
+assert.ok(
+  recallPortalClientCode.includes("e.key === 'Escape' && isExpanded"),
+  'RecallCard must handle Escape key press to close expansion details'
+);
+assert.ok(
+  recallPortalClientCode.includes('toggleButtonRef.current?.focus()'),
+  'RecallCard must return focus to the expand/collapse button on Escape'
+);
+assert.ok(
+  recallPortalClientCode.includes('role="region"'),
+  'Expanded details panel must use role="region" for landmark identification'
+);
+assert.ok(
+  recallPortalClientCode.includes('aria-labelledby={`${panelIdPrefix}title-${campaign.id}`}'),
+  'Expanded details panel must be labelled by campaign defect title'
+);
+
+// 1.6 Search inputs & landmark roles
+assert.ok(
+  recallPortalClientCode.includes('role="search" aria-label="배터리 제조사 및 모델 검색"'),
+  'Battery search container must define a search landmark'
+);
+assert.ok(
+  recallPortalClientCode.includes('role="search" aria-label="전기차 리콜 캠페인 검색"'),
+  'Recall catalog search container must define a search landmark'
+);
+assert.ok(
+  recallPortalClientCode.includes('type="search"'),
+  'Search inputs must use type="search"'
+);
+
+// 1.7 Live updates & status announcements
+assert.ok(
+  recallPortalClientCode.includes('role="status" aria-live="polite" className="mt-2 text-xs text-emerald-400'),
+  'Valid VIN feedback must announce live status via role="status" and aria-live="polite"'
+);
+assert.ok(
+  recallPortalClientCode.includes('tabIndex={-1}'),
+  'search-result-section must allow programmatic focus via tabIndex={-1}'
+);
+
+// 1.8 High-contrast badges & status chips (WCAG AA/AAA compliant)
+assert.ok(
+  recallPortalClientCode.includes('text-rose-200 border-red-700'),
+  'Critical fire badges must use high-contrast text-rose-200 on dark background'
+);
+assert.ok(
+  recallPortalClientCode.includes('text-amber-200 border-amber-700'),
+  'Resolved badges must use high-contrast text-amber-200 on dark background'
+);
+assert.ok(
+  recallPortalClientCode.includes('text-emerald-200 border-emerald-700'),
+  'Safe verification badges must use high-contrast text-emerald-200 on dark background'
+);
+
 console.log('✅ WCAG AA Accessibility tests passed!');
 
 // ---------------------------------------------------------------------------

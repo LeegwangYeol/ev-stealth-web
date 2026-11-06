@@ -173,7 +173,7 @@ const HeatmapRow = React.memo(function HeatmapRow({
         scope="row"
         className="p-3 font-bold text-slate-900 sticky left-0 bg-white group-hover:bg-slate-50/80 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] text-left"
       >
-        <div className="truncate max-w-[130px] sm:max-w-none">{model.name}</div>
+        <div className="truncate max-w-[130px] sm:max-w-none" title={model.name}>{model.name}</div>
       </th>
       <td className="p-3 text-slate-700 text-xs whitespace-nowrap">
         {model.brand_name_ko}
@@ -184,7 +184,7 @@ const HeatmapRow = React.memo(function HeatmapRow({
           return (
             <td key={yr} className="p-2 text-center">
               <div
-                className="w-8 h-8 mx-auto rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] text-slate-700 font-mono font-medium"
+                className="w-11 h-11 min-w-[44px] min-h-[44px] mx-auto rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] text-slate-700 font-mono font-medium"
                 title="해당 연식 데이터 없음"
                 aria-label="데이터 없음"
               >
@@ -233,7 +233,7 @@ const HeatmapRow = React.memo(function HeatmapRow({
               aria-expanded={isCellSelected}
               aria-haspopup="dialog"
               aria-label={`${model.name} ${evalData.year}년식 ${evalData.verdict} DSI ${safeDsi}점 (${localizedVerdict}), 주요 결함: ${primaryDefect}${isCellSelected ? ' (현재 선택됨)' : ''}`}
-              className={`w-9 h-9 min-w-[36px] min-h-[36px] mx-auto rounded-lg font-bold text-xs flex items-center justify-center shadow-sm cursor-pointer transition transform hover:scale-110 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${cellColor} ${
+              className={`w-11 h-11 min-w-[44px] min-h-[44px] mx-auto rounded-lg font-bold text-xs flex items-center justify-center shadow-sm cursor-pointer transition transform hover:scale-110 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${cellColor} ${
                 isCellSelected ? 'ring-2 ring-blue-500 ring-offset-2 scale-105' : ''
               }`}
               title={`${model.name} (${evalData.year}): ${evalData.verdict} - DSI ${safeDsi}`}
@@ -937,7 +937,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   </li>
                   <li className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded-full bg-slate-200 border border-slate-300 inline-block" aria-hidden="true" />
-                    <span className="text-slate-600 font-medium">미출시</span>
+                    <span className="text-slate-700 font-medium">미출시</span>
                   </li>
                 </ul>
               </div>
@@ -984,6 +984,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           model={model}
                           evalMap={modelEvalMaps.get(model.id)}
                           heatmapYears={heatmapYears}
+                          selectedCellKey={hoveredCell ? `${model.name}-${hoveredCell.year}` : null}
                           onCellClick={handleCellClick}
                         />
                       ))
@@ -995,6 +996,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               {/* Heatmap Detail Card (if selected) */}
               {hoveredCell && (
                 <div
+                  role="region"
+                  aria-label={`${hoveredCell.brandName} ${hoveredCell.modelName} ${hoveredCell.year}년식 세부 결함 분석`}
                   aria-live="polite"
                   className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-700 shadow-xl animate-fade-in motion-reduce:animate-none flex flex-col sm:flex-row justify-between gap-4"
                 >
@@ -1029,7 +1032,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     <Link
                       href={`/recall-portal?model=${encodeURIComponent(hoveredCell.modelName)}`}
                       prefetch={false}
-                      className="px-3 py-1.5 min-h-[36px] bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 inline-flex items-center gap-1"
+                      className="px-3 py-1.5 min-h-[44px] bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 inline-flex items-center gap-1"
                     >
                       <span>공식 리콜 조회</span>
                       <span aria-hidden="true">&rarr;</span>
@@ -1037,7 +1040,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     <button
                       type="button"
                       onClick={handleCloseCell}
-                      className="px-3 py-1.5 min-h-[36px] bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      aria-label="결함 세부정보 닫기 (Esc)"
+                      className="px-3 py-1.5 min-h-[44px] bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                     >
                       닫기
                     </button>
@@ -1050,7 +1054,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           {/* TAB 2: BRAND DSI RANKING COMPARATIVE CHART */}
           {activeChartTab === 'brand_ranking' && (
             <div className="space-y-6">
-              <div className="text-xs text-slate-600 leading-relaxed">
+              <div className="text-xs text-slate-700 leading-relaxed">
                 9대 브랜드의 전체 제보와 심각도를 종합 산출한 Defect Severity Index (DSI) 랭킹입니다. 점수가 낮을수록 내구성이 우수하고 결함 발생 빈도가 적음을 나타냅니다.
               </div>
 
@@ -1248,7 +1252,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           {/* TAB 3: CATEGORY DISTRIBUTION CHART */}
           {activeChartTab === 'category_share' && (
             <div className="space-y-6">
-              <div className="text-xs text-slate-600 leading-relaxed">
+              <div className="text-xs text-slate-700 leading-relaxed">
                 전기차 차주들이 가장 많이 겪는 결함 유형의 산업 전체 점유율과 예상 수리비 분석치입니다.
               </div>
 
@@ -1341,7 +1345,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       {/* 3. MULTI-FILTER TOOLBAR */}
       <section aria-label="결함 통계 검색 및 다중 필터 제어판" className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="relative flex-1">
+          <div role="search" className="relative flex-1">
             <label htmlFor="reliability-search-input" className="sr-only">차종, 브랜드, 결함 증상 검색</label>
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-600">
               <svg className="w-5 h-5" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -1353,10 +1357,33 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape' && searchQuery) {
+                  e.preventDefault();
+                  setSearchQuery('');
+                }
+              }}
+              aria-describedby="reliability-search-hint"
               aria-label="차종, 브랜드, 결함 증상 검색"
               placeholder="차종명, 브랜드, 결함 증상(ICCU, 배터리, 옥토밸브, 백색가루 등) 검색..."
-              className="w-full pl-10 pr-4 py-2.5 min-h-[44px] bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition placeholder-slate-500"
+              className="w-full pl-10 pr-10 py-2.5 min-h-[44px] bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition placeholder-slate-500"
             />
+            <span id="reliability-search-hint" className="sr-only">
+              검색어를 입력하면 실시간으로 차종 목록이 필터링됩니다. ESC 키를 누르면 검색어가 초기화됩니다.
+            </span>
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 pr-3 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-700 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+                title="검색어 지우기"
+                aria-label="검색어 지우기"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -1392,8 +1419,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
         </div>
 
         {/* Brand Selector Buttons */}
-        <div className="space-y-2">
-          <div className="text-xs font-semibold text-slate-600 uppercase tracking-wider">제조사 브랜드</div>
+        <div role="group" aria-labelledby="brand-filter-heading" className="space-y-2">
+          <div id="brand-filter-heading" className="text-xs font-semibold text-slate-700 uppercase tracking-wider">제조사 브랜드</div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -1429,8 +1456,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
         {/* Quick Filter Row: Verdict & Year */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
           {/* Verdict Filter */}
-          <div className="space-y-1.5">
-            <div className="text-xs font-semibold text-slate-600">판정 가이드 (Verdict)</div>
+          <div role="group" aria-labelledby="verdict-filter-heading" className="space-y-1.5">
+            <div id="verdict-filter-heading" className="text-xs font-semibold text-slate-700">판정 가이드 (Verdict)</div>
             <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
@@ -1439,7 +1466,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 className={`px-2.5 py-1 min-h-[44px] inline-flex items-center text-xs font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedVerdict === 'ALL'
                     ? 'bg-slate-800 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
                 전체
@@ -1450,8 +1477,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 aria-pressed={selectedVerdict === 'AVOID'}
                 className={`px-2.5 py-1 min-h-[44px] inline-flex items-center text-xs font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedVerdict === 'AVOID'
-                    ? 'bg-rose-600 text-white'
-                    : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+                    ? 'bg-rose-700 text-white shadow-sm'
+                    : 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
                 }`}
               >
                 <span aria-hidden="true" className="mr-1">🚫</span> 구매 회피 (AVOID)
@@ -1463,7 +1490,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 className={`px-2.5 py-1 min-h-[44px] inline-flex items-center text-xs font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedVerdict === 'CAUTION'
                     ? 'bg-amber-500 text-slate-950 font-extrabold shadow-sm'
-                    : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
+                    : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'
                 }`}
               >
                 <span aria-hidden="true" className="mr-1">⚠️</span> 주의 요망 (CAUTION)
@@ -1474,7 +1501,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 aria-pressed={selectedVerdict === 'BUY_SAFE'}
                 className={`px-2.5 py-1 min-h-[44px] inline-flex items-center text-xs font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedVerdict === 'BUY_SAFE'
-                    ? 'bg-emerald-600 text-white'
+                    ? 'bg-emerald-700 text-white shadow-sm'
                     : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
                 }`}
               >
@@ -1484,8 +1511,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           </div>
 
           {/* Year Range Filter */}
-          <div className="space-y-1.5">
-            <div className="text-xs font-semibold text-slate-600">연식 대역</div>
+          <div role="group" aria-labelledby="year-filter-heading" className="space-y-1.5">
+            <div id="year-filter-heading" className="text-xs font-semibold text-slate-700">연식 대역</div>
             <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
@@ -1494,7 +1521,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 className={`px-2.5 py-1 min-h-[44px] inline-flex items-center text-xs font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedYearRange === 'ALL'
                     ? 'bg-slate-800 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
                 전체 연식
@@ -1505,7 +1532,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 aria-pressed={selectedYearRange === 'EARLY'}
                 className={`px-2.5 py-1 min-h-[44px] inline-flex items-center text-xs font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedYearRange === 'EARLY'
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-blue-600 text-white shadow-sm'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
@@ -1517,7 +1544,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 aria-pressed={selectedYearRange === 'MID'}
                 className={`px-2.5 py-1 min-h-[44px] inline-flex items-center text-xs font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedYearRange === 'MID'
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-blue-600 text-white shadow-sm'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
@@ -1529,7 +1556,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 aria-pressed={selectedYearRange === 'LATE'}
                 className={`px-2.5 py-1 min-h-[44px] inline-flex items-center text-xs font-medium rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selectedYearRange === 'LATE'
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-blue-600 text-white shadow-sm'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
@@ -1544,11 +1571,11 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       <section aria-labelledby="model-reliability-heading" className="space-y-4">
         <h2 id="model-reliability-heading" className="text-2xl font-bold text-slate-900 mb-6">차종별 신뢰성 상세 분석</h2>
         <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold text-slate-600" aria-live="polite">
+          <div className="text-sm font-semibold text-slate-700" aria-live="polite" aria-atomic="true">
             총 <strong className="text-slate-900">{sortedModels.length}</strong>개 차종 표시 중
           </div>
           {hasActiveFilter && (
-            <div className="text-xs text-blue-600 font-medium">
+            <div className="text-xs text-blue-700 font-semibold">
               필터 적용됨
             </div>
           )}
@@ -1560,7 +1587,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             <h3 className="text-lg font-bold text-slate-800">
               {allModels.length === 0 ? '등록된 차종 신뢰성 데이터가 없습니다' : '일치하는 차종 데이터가 없습니다'}
             </h3>
-            <p className="text-sm text-slate-600 max-w-md mx-auto">
+            <p className="text-sm text-slate-700 max-w-md mx-auto">
               {allModels.length === 0
                 ? '현재 분석 가능한 전기차 결함 데이터가 없습니다.'
                 : '검색어나 필터 조건을 변경해 보세요. 다양한 연식과 브랜드를 종합적으로 제공합니다.'}
@@ -1594,7 +1621,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           <h2 id="repair-cost-heading" className="text-2xl font-bold text-slate-900 tracking-tight">
             보증 만료 후 폭탄 수리비 및 핵심 부품별 교체 비용 매트릭스
           </h2>
-          <p className="text-sm text-slate-600 leading-relaxed">
+          <p className="text-sm text-slate-700 leading-relaxed">
             전기차는 일반 내연기관 차량과 달리 핵심 전동화 부품(배터리, ICCU, 모터/인버터)의 무상 보증(8년/16만 km 등)이 종료되거나 하부 긁힘으로 보증이 거부될 경우 천문학적인 수리비가 청구됩니다. 실제 서비스센터 견적 기준 데이터입니다.
           </p>
         </div>
@@ -1608,7 +1635,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           <table className="w-full min-w-[700px] text-left text-xs sm:text-sm border-collapse" aria-label="보증 만료 후 폭탄 수리비 및 핵심 부품별 교체 비용 매트릭스">
             <caption className="p-4 text-left font-bold text-slate-900 text-sm sm:text-base border-b border-slate-100 bg-slate-50/50">
               보증 만료 후 폭탄 수리비 및 핵심 부품별 교체 비용 매트릭스
-              <span className="block text-xs font-normal text-slate-600 mt-1">
+              <span className="block text-xs font-normal text-slate-700 mt-1">
                 주요 전동화 부품별 표준 보증 기간, 고위험 취약 모델 및 센터 공식 견적 비교
               </span>
             </caption>

@@ -6,29 +6,54 @@ import BrandComparisonNav, { OtherBrandsCrossNav } from '@/components/BrandCompa
 export const dynamic = 'force-static';
 export const revalidate = false;
 
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://ev-stealth-web.vercel.app').replace(/\/+$/, '');
+
 const bydJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "Article",
-  "headline": "BYD 전기차 연식별 결함 및 구매 가이드",
-  "description": "BYD 돌핀, 시라이언 7, 씰, 아토 3 연식별(2021~2026) 에어컨 백색가루, 하체 부식, 조향장치 결함 및 구매 가이드",
-  "url": "https://ev-stealth-web.vercel.app/byd",
-  "inLanguage": "ko-KR",
-  "datePublished": "2026-01-01T00:00:00+09:00",
-  "dateModified": "2026-11-01T00:00:00+09:00",
-  "author": {
-    "@type": "Organization",
-    "name": "Global EV Hub",
-    "url": "https://ev-stealth-web.vercel.app",
-  },
-  "publisher": {
-    "@type": "Organization",
-    "name": "Global EV Hub",
-    "logo": {
-      "@type": "ImageObject",
-      "url": "https://ev-stealth-web.vercel.app/favicon.ico",
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Article',
+      '@id': `${SITE_URL}/byd#article`,
+      headline: 'BYD 전기차 연식별 결함 및 구매 가이드',
+      description: 'BYD 돌핀, 시라이언 7, 씰, 아토 3 연식별(2021~2026) 에어컨 백색가루, 하체 부식, 조향장치 결함 및 구매 가이드',
+      url: `${SITE_URL}/byd`,
+      inLanguage: 'ko-KR',
+      datePublished: '2026-01-01T00:00:00+09:00',
+      dateModified: '2026-11-01T00:00:00+09:00',
+      author: {
+        '@type': 'Organization',
+        name: 'Global EV Hub',
+        url: SITE_URL,
+      },
+      publisher: {
+        '@type': 'Organization',
+        name: 'Global EV Hub',
+        logo: {
+          '@type': 'ImageObject',
+          url: `${SITE_URL}/favicon.ico`,
+        },
+      },
+      mainEntityOfPage: `${SITE_URL}/byd`,
     },
-  },
-  "mainEntityOfPage": "https://ev-stealth-web.vercel.app/byd",
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${SITE_URL}/byd#breadcrumb`,
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: '홈',
+          item: SITE_URL,
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: 'BYD 구매 가이드',
+          item: `${SITE_URL}/byd`,
+        },
+      ],
+    },
+  ],
 };
 
 export const metadata: Metadata = {
@@ -57,11 +82,23 @@ export const metadata: Metadata = {
     type: 'article',
     publishedTime: '2026-01-01T00:00:00+09:00',
     modifiedTime: '2026-11-01T00:00:00+09:00',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'BYD 전기차 연식별 결함 및 구매 가이드',
+        type: 'image/png',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'BYD 전기차 연식별 결함 및 구매 가이드 | Global EV Hub',
     description: 'BYD 돌핀, 시라이언 7, 씰, 아토 3 연식별(2021~2026) 에어컨 백색가루, 하체 부식, 조향장치 결함 및 구매 가이드',
+    site: '@GlobalEVHub',
+    creator: '@lolollol2379',
+    images: ['/og-image.png'],
   },
 };
 
@@ -79,7 +116,7 @@ export default function BydPage() {
           돌핀 (Dolphin)
         </h2>
         
-        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="돌핀 주의 연식 가이드">
+        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="BYD 돌핀 주의 연식 가이드">
           <h3 className="text-lg sm:text-xl font-bold text-amber-900">
             <span aria-hidden="true">⚠️ </span>2021~2023년식: 주의 요망 (CAUTION)
           </h3>
@@ -89,7 +126,7 @@ export default function BydPage() {
           </ul>
         </div>
 
-        <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-xl" role="region" aria-label="돌핀 안전 구매 가이드">
+        <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-xl" role="region" aria-label="BYD 돌핀 안전 구매 가이드">
           <h3 className="text-lg sm:text-xl font-bold text-green-900">
             <span aria-hidden="true">✅ </span>2024~2025년식: 안심 추천 (BUY SAFE)
           </h3>
@@ -104,7 +141,7 @@ export default function BydPage() {
           시라이언 07 (Sealion 07)
         </h2>
         
-        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="시라이언 07 주의 연식 가이드">
+        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="BYD 시라이언 07 주의 연식 가이드">
           <h3 className="text-lg sm:text-xl font-bold text-amber-900">
             <span aria-hidden="true">⚠️ </span>2024년식: 주의 요망 (CAUTION)
           </h3>
@@ -114,7 +151,7 @@ export default function BydPage() {
           </ul>
         </div>
 
-        <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-xl" role="region" aria-label="시라이언 07 안전 구매 가이드">
+        <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-xl" role="region" aria-label="BYD 시라이언 07 안전 구매 가이드">
           <h3 className="text-lg sm:text-xl font-bold text-green-900">
             <span aria-hidden="true">✅ </span>2025년식: 안심 추천 (BUY SAFE)
           </h3>
@@ -128,7 +165,7 @@ export default function BydPage() {
         <h2 id="heading-byd-seal" className="text-2xl sm:text-3xl font-bold text-slate-800">
           씰 (Seal)
         </h2>
-        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="씰 주의 연식 가이드">
+        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="BYD 씰 주의 연식 가이드">
           <h3 className="text-lg sm:text-xl font-bold text-amber-900">
             <span aria-hidden="true">⚠️ </span>2022~2023년식: 주의 요망 (CAUTION)
           </h3>
@@ -136,7 +173,7 @@ export default function BydPage() {
             <li>LFP 배터리 겨울철 셧다운(25%에서 갑자기 0%로 추락) 및 하체 나사 부식 발생.</li>
           </ul>
         </div>
-        <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-xl" role="region" aria-label="씰 안전 구매 가이드">
+        <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-xl" role="region" aria-label="BYD 씰 안전 구매 가이드">
           <h3 className="text-lg sm:text-xl font-bold text-green-900">
             <span aria-hidden="true">✅ </span>2024년식: 안심 추천 (BUY SAFE)
           </h3>
@@ -151,7 +188,7 @@ export default function BydPage() {
         <h2 id="heading-byd-atto3" className="text-2xl sm:text-3xl font-bold text-slate-800">
           아토 3 (Atto 3)
         </h2>
-        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="아토 3 주의 연식 가이드">
+        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="BYD 아토 3 주의 연식 가이드">
           <h3 className="text-lg sm:text-xl font-bold text-amber-900">
             <span aria-hidden="true">⚠️ </span>2022~2024년식: 주의 요망 (CAUTION)
           </h3>
@@ -159,7 +196,7 @@ export default function BydPage() {
             <li>초기형 에어컨 곰팡이 냄새 고질병 및 앞바퀴 털림 증상. 24년식에 일부 개선되었으나 여전히 앞 서스펜션 세팅이 너무 무릅니다.</li>
           </ul>
         </div>
-        <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-xl" role="region" aria-label="아토 3 안전 구매 가이드">
+        <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-xl" role="region" aria-label="BYD 아토 3 안전 구매 가이드">
           <h3 className="text-lg sm:text-xl font-bold text-green-900">
             <span aria-hidden="true">✅ </span>2025년식: 안심 추천 (BUY SAFE - 개선형)
           </h3>

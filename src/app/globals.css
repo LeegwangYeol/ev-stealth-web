@@ -7,6 +7,10 @@
   --foreground: #0f172a;
 }
 
+html {
+  overflow-x: clip;
+}
+
 body {
   color: var(--foreground);
   background: var(--background);
@@ -15,6 +19,7 @@ body {
   font-optical-sizing: auto;
   word-break: keep-all;
   overflow-wrap: break-word;
+  overflow-x: clip;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;

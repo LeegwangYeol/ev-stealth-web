@@ -13,7 +13,7 @@ const SiteFooter = memo(function SiteFooter() {
           href="https://www.ev.or.kr"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-slate-200 hover:text-white underline underline-offset-2 inline-flex items-center gap-1 min-h-[32px] px-1.5 py-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 transition-colors"
+          className="text-slate-200 hover:text-white underline underline-offset-2 inline-flex items-center gap-1 min-h-[44px] px-2 py-1.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 transition-colors"
           aria-label="환경부 및 한국환경공단(KECO) 무공해차 통합누리집 (새 창에서 열림)"
         >
           <span>환경부 무공해차 통합누리집 (KECO)</span>
@@ -41,7 +41,7 @@ const SiteFooter = memo(function SiteFooter() {
           href="https://www.car.go.kr"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-slate-200 hover:text-white underline underline-offset-2 inline-flex items-center gap-1 min-h-[32px] px-1.5 py-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 transition-colors"
+          className="text-slate-200 hover:text-white underline underline-offset-2 inline-flex items-center gap-1 min-h-[44px] px-2 py-1.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 transition-colors"
           aria-label="국토교통부(MOLIT) 자동차리콜센터 (새 창에서 열림)"
         >
           <span>국토교통부 자동차리콜센터 (MOLIT)</span>
@@ -69,7 +69,7 @@ const SiteFooter = memo(function SiteFooter() {
           href="https://www.nhtsa.gov"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-slate-200 hover:text-white underline underline-offset-2 inline-flex items-center gap-1 min-h-[32px] px-1.5 py-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 transition-colors"
+          className="text-slate-200 hover:text-white underline underline-offset-2 inline-flex items-center gap-1 min-h-[44px] px-2 py-1.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 transition-colors"
           aria-label="미국 도로교통안전국(NHTSA) 공식 리콜 및 안전 데이터 (새 창에서 열림)"
         >
           <span>미국 도로교통안전국 (NHTSA)</span>
@@ -101,7 +101,7 @@ const SiteFooter = memo(function SiteFooter() {
         <span aria-hidden="true">·</span>
         <a
           href="#main-content"
-          className="text-slate-300 hover:text-white underline underline-offset-2 rounded px-1.5 py-0.5 min-h-[24px] inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 transition-colors"
+          className="text-slate-300 hover:text-white underline underline-offset-2 rounded px-2 py-1.5 min-h-[44px] inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 transition-colors"
           aria-label="본문 맨 위로 바로가기"
         >
           <span aria-hidden="true">↑</span>

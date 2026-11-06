@@ -195,7 +195,7 @@ export const PdiItemRow = memo(function PdiItemRow({ item, onToggle }: PdiItemRo
   return (
     <label
       htmlFor={`pdi-task-${item.id}`}
-      className="flex items-start p-4 hover:bg-slate-50 cursor-pointer transition-colors rounded-xl focus-within:ring-2 focus-within:ring-blue-500 print:py-2 print:hover:bg-transparent print:break-inside-avoid"
+      className="flex items-start min-h-[48px] p-4 hover:bg-slate-50 cursor-pointer transition-colors rounded-xl focus-within:ring-2 focus-within:ring-blue-500 print:py-2 print:hover:bg-transparent print:break-inside-avoid"
     >
       <input
         id={`pdi-task-${item.id}`}

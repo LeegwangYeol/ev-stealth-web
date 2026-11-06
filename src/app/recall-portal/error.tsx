@@ -59,7 +59,7 @@ export default function RecallPortalError({ error, reset }: RecallErrorProps) {
               }
             }}
             aria-label="리콜 포털 다시 시도"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 min-h-[44px] rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">🔄</span> 다시 시도
           </button>
@@ -67,7 +67,7 @@ export default function RecallPortalError({ error, reset }: RecallErrorProps) {
             href="/"
             prefetch={false}
             aria-label="메인 홈으로 이동"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 min-h-[44px] rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">🏠</span> 홈으로 이동
           </Link>
@@ -77,21 +77,21 @@ export default function RecallPortalError({ error, reset }: RecallErrorProps) {
           <Link
             href="/reliability-analytics"
             prefetch={false}
-            className="hover:text-blue-600 transition inline-flex items-center gap-1 px-1.5 py-0.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="hover:text-blue-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <span aria-hidden="true">📊</span> 결함 분석 포털
           </Link>
           <Link
             href="/subsidy-tracker"
             prefetch={true}
-            className="hover:text-amber-600 transition inline-flex items-center gap-1 px-1.5 py-0.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+            className="hover:text-amber-800 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
           >
             <span aria-hidden="true">⚡</span> 보조금 추적기
           </Link>
           <Link
             href="/pdi-checklist"
             prefetch={false}
-            className="hover:text-cyan-600 transition inline-flex items-center gap-1 px-1.5 py-0.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+            className="hover:text-cyan-800 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
           >
             <span aria-hidden="true">✅</span> PDI 체크리스트
           </Link>

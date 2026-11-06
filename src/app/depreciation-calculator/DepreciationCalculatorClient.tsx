@@ -1119,7 +1119,7 @@ export default function DepreciationCalculatorClient({
 
             <div className="relative">
               <label htmlFor="customPriceInputField" className="sr-only">
-                차량 구매 가격 직접 입력
+                차량 구매 가격 직접 입력 (원 단위)
               </label>
               <input
                 id="customPriceInputField"
@@ -1824,9 +1824,11 @@ export default function DepreciationCalculatorClient({
             <div className="font-bold">
               {clawbackResult.isExempt
                 ? '보조금 환수 면제 대상 (0원 납부)'
-                : `보조금 환수 대상 고지 — 회수요율 ${(clawbackResult.effectiveClawbackRate * 100).toFixed(0)}% 적용`}
+                : `보조금 환수 대상 고지: 예상 환수액 ${clawbackResult.totalClawbackKrw.toLocaleString()}원 (회수요율 ${(clawbackResult.effectiveClawbackRate * 100).toFixed(0)}% 적용)`}
             </div>
-            <p className="text-slate-600 leading-relaxed">{clawbackResult.explanation}</p>
+            <p className={`leading-relaxed ${clawbackResult.isExempt ? 'text-emerald-900' : 'text-amber-950'}`}>
+              {clawbackResult.explanation}
+            </p>
           </div>
         </div>
 
@@ -1870,7 +1872,7 @@ export default function DepreciationCalculatorClient({
               aria-valuemax={36}
               aria-valuetext={`${heldMonths}개월 운행`}
             />
-            <div className="flex justify-between text-[11px] text-slate-600">
+            <div className="flex justify-between text-[11px] text-slate-700">
               <span>0개월</span>
               <span>12개월(1년)</span>
               <span>24개월(의무만료)</span>
@@ -1889,20 +1891,19 @@ export default function DepreciationCalculatorClient({
               >
                 보유 기간({holdingYears}년)과 동기화
               </button>
-              <span className="text-slate-600 font-medium">구간: {clawbackResult.tierLabel}</span>
+              <span className="text-slate-700 font-medium">구간: {clawbackResult.tierLabel}</span>
             </div>
           </div>
 
           {/* Control 2: Transfer Type Selector */}
           <fieldset className="space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <legend className="sr-only">이전 / 매매 유형 선택</legend>
-            <span className="text-xs font-bold text-slate-700 block" aria-hidden="true">이전 / 매매 유형 선택</span>
+            <legend className="text-xs font-bold text-slate-700 block mb-1">이전 / 매매 유형 선택</legend>
             <div className="space-y-1.5">
               {TRANSFER_OPTIONS.map((item) => (
                 <label
                   key={item.id}
                   htmlFor={`transfer-type-radio-${item.id}`}
-                  className={`flex items-start gap-2 p-2 min-h-[44px] rounded-lg border cursor-pointer text-xs transition ${
+                  className={`flex items-start gap-2 p-2 min-h-[44px] rounded-lg border cursor-pointer text-xs transition has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500 ${
                     transferType === item.id
                       ? 'bg-blue-50 border-blue-500 text-blue-950 font-semibold'
                       : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
@@ -2112,7 +2113,7 @@ export default function DepreciationCalculatorClient({
                 setIceDisplacementCc(Number.isFinite(val) && val > 0 ? val : 1998);
               }}
               className="w-full sm:w-auto px-3 py-2 min-h-[44px] rounded-lg border border-slate-300 font-medium bg-white text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              aria-label="비교 대상 내연기관 배기량 선택"
+              aria-label="비교 내연기관 배기량 선택"
             >
               <option value={1598}>1,600cc 준중형 가솔린 (아반떼급)</option>
               <option value={1998}>2,000cc 중형 가솔린 (쏘나타/K5급)</option>
@@ -2232,12 +2233,17 @@ export default function DepreciationCalculatorClient({
         </div>
 
         {/* Net Resale Balance Callout */}
-        <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+        >
           <div className="space-y-1">
             <span className="font-bold text-slate-800 flex items-center gap-1.5">
               <span>💡</span> {holdingYears}년 종합 경제성 최종 판정:
             </span>
-            <p className="text-slate-600">
+            <p className="text-slate-700">
               신차 구입가 대비 감가 손실 차액에 {holdingYears}개년 누적 운행비 절감액을 합산한 최종 실질 비용 평가입니다.
             </p>
           </div>

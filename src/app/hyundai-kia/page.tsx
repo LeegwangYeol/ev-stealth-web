@@ -6,29 +6,54 @@ import BrandComparisonNav, { OtherBrandsCrossNav } from '@/components/BrandCompa
 export const dynamic = 'force-static';
 export const revalidate = false;
 
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://ev-stealth-web.vercel.app').replace(/\/+$/, '');
+
 const hyundaiKiaJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "Article",
-  "headline": "현대/기아 전기차 연식별 결함 및 구매 가이드",
-  "description": "아이오닉5, EV6, EV9 등 현대/기아 전기차 연식별(2021~2026) ICCU 결함, 고질병 분석 및 피해야 할 연식 가이드",
-  "url": "https://ev-stealth-web.vercel.app/hyundai-kia",
-  "inLanguage": "ko-KR",
-  "datePublished": "2026-01-01T00:00:00+09:00",
-  "dateModified": "2026-11-01T00:00:00+09:00",
-  "author": {
-    "@type": "Organization",
-    "name": "Global EV Hub",
-    "url": "https://ev-stealth-web.vercel.app",
-  },
-  "publisher": {
-    "@type": "Organization",
-    "name": "Global EV Hub",
-    "logo": {
-      "@type": "ImageObject",
-      "url": "https://ev-stealth-web.vercel.app/favicon.ico",
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Article',
+      '@id': `${SITE_URL}/hyundai-kia#article`,
+      headline: '현대/기아 전기차 연식별 결함 및 구매 가이드',
+      description: '아이오닉5, EV6, EV9 등 현대/기아 전기차 연식별(2021~2026) ICCU 결함, 고질병 분석 및 피해야 할 연식 가이드',
+      url: `${SITE_URL}/hyundai-kia`,
+      inLanguage: 'ko-KR',
+      datePublished: '2026-01-01T00:00:00+09:00',
+      dateModified: '2026-11-01T00:00:00+09:00',
+      author: {
+        '@type': 'Organization',
+        name: 'Global EV Hub',
+        url: SITE_URL,
+      },
+      publisher: {
+        '@type': 'Organization',
+        name: 'Global EV Hub',
+        logo: {
+          '@type': 'ImageObject',
+          url: `${SITE_URL}/favicon.ico`,
+        },
+      },
+      mainEntityOfPage: `${SITE_URL}/hyundai-kia`,
     },
-  },
-  "mainEntityOfPage": "https://ev-stealth-web.vercel.app/hyundai-kia",
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${SITE_URL}/hyundai-kia#breadcrumb`,
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: '홈',
+          item: SITE_URL,
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: '현대/기아 구매 가이드',
+          item: `${SITE_URL}/hyundai-kia`,
+        },
+      ],
+    },
+  ],
 };
 
 export const metadata: Metadata = {
@@ -57,11 +82,23 @@ export const metadata: Metadata = {
     type: 'article',
     publishedTime: '2026-01-01T00:00:00+09:00',
     modifiedTime: '2026-11-01T00:00:00+09:00',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: '현대/기아 전기차 연식별 결함 및 구매 가이드',
+        type: 'image/png',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: '현대/기아 전기차 연식별 결함 및 구매 가이드 | Global EV Hub',
     description: '아이오닉5, EV6, EV9 등 현대/기아 전기차 연식별(2021~2026) ICCU 결함, 고질병 분석 및 피해야 할 연식 가이드',
+    site: '@GlobalEVHub',
+    creator: '@lolollol2379',
+    images: ['/og-image.png'],
   },
 };
 
@@ -80,7 +117,7 @@ export default function HyundaiKiaPage() {
           아이오닉 5 (Ioniq 5)
         </h2>
         
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl" role="region" aria-label="아이오닉 5 구매 회피 연식 경고">
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl" role="region" aria-label="현대 아이오닉 5 구매 회피 연식 경고">
           <h3 className="text-lg sm:text-xl font-bold text-red-900">
             <span aria-hidden="true">🚫 </span>2021~2022년식: 구매 회피 (AVOID - 절대 피할 것)
           </h3>
@@ -91,7 +128,7 @@ export default function HyundaiKiaPage() {
           </ul>
         </div>
 
-        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="아이오닉 5 주의 연식 가이드">
+        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="현대 아이오닉 5 주의 연식 가이드">
           <h3 className="text-lg sm:text-xl font-bold text-amber-900">
             <span aria-hidden="true">⚠️ </span>2023~2024년식: 주의 요망 (CAUTION)
           </h3>
@@ -101,7 +138,7 @@ export default function HyundaiKiaPage() {
           </ul>
         </div>
 
-        <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-xl" role="region" aria-label="아이오닉 5 안전 구매 가이드">
+        <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-xl" role="region" aria-label="현대 아이오닉 5 안전 구매 가이드">
           <h3 className="text-lg sm:text-xl font-bold text-green-900">
             <span aria-hidden="true">✅ </span>2025년식 (페이스리프트): 안심 추천 (BUY SAFE)
           </h3>
@@ -135,7 +172,7 @@ export default function HyundaiKiaPage() {
           </ul>
         </div>
 
-        <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-xl" role="region" aria-label="EV6 안전 구매 가이드">
+        <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-xl" role="region" aria-label="기아 EV6 안전 구매 가이드">
           <h3 className="text-lg sm:text-xl font-bold text-green-900">
             <span aria-hidden="true">✅ </span>2025년식 (페이스리프트): 안심 추천 (BUY SAFE)
           </h3>

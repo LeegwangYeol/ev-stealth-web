@@ -1,3 +1,4 @@
+import React, { memo } from 'react';
 import Link from 'next/link';
 
 export type BrandPageKey = 'hyundai-kia' | 'tesla' | 'byd' | 'global-brands' | '2026-latest';
@@ -24,7 +25,10 @@ interface BrandComparisonNavProps {
   pageTitle: string;
 }
 
-export default function BrandComparisonNav({ currentBrand, pageTitle }: BrandComparisonNavProps) {
+export const BrandComparisonNav = memo(function BrandComparisonNav({
+  currentBrand,
+  pageTitle,
+}: BrandComparisonNavProps) {
   return (
     <div className="space-y-4 mb-6">
       {/* Top Breadcrumb & Back Nav */}
@@ -104,9 +108,15 @@ export default function BrandComparisonNav({ currentBrand, pageTitle }: BrandCom
       </nav>
     </div>
   );
-}
+});
 
-export function OtherBrandsCrossNav({ currentBrand }: { currentBrand: BrandPageKey }) {
+export default BrandComparisonNav;
+
+export const OtherBrandsCrossNav = memo(function OtherBrandsCrossNav({
+  currentBrand,
+}: {
+  currentBrand: BrandPageKey;
+}) {
   const otherBrands = BRAND_PAGES.filter((b) => b.key !== currentBrand);
 
   return (
@@ -146,4 +156,4 @@ export function OtherBrandsCrossNav({ currentBrand }: { currentBrand: BrandPageK
       </div>
     </nav>
   );
-}
+});

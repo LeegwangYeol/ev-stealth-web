@@ -701,7 +701,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 setSearchQuery('');
                 setSupplementaryOnly(false);
               }}
-              className="text-amber-400 hover:text-amber-300 underline font-medium rounded px-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              className="text-amber-400 hover:text-amber-300 underline font-medium rounded px-2.5 py-1.5 min-h-[44px] inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
               전체 필터 초기화
             </button>
@@ -845,10 +845,8 @@ const RegionCard = React.memo(function RegionCard({
   };
 
   const announcedUnits = Number.isFinite(cat?.announced_units) ? Math.max(0, cat.announced_units) : 0;
-  const safeAnnounced = Math.max(1, announcedUnits);
   const safeDelivered = Number.isFinite(cat?.delivered_units) ? cat.delivered_units : 0;
   const safeApplied = Number.isFinite(cat?.applied_units) ? cat.applied_units : 0;
-  const pendingUnits = Math.max(0, safeApplied - safeDelivered);
   const safeDepletion = Number.isFinite(cat?.depletion_rate)
     ? cat.depletion_rate
     : announcedUnits > 0
@@ -857,8 +855,6 @@ const RegionCard = React.memo(function RegionCard({
   const safeRemaining = Number.isFinite(cat?.remaining_units)
     ? cat.remaining_units
     : Math.max(0, announcedUnits - safeApplied);
-  void safeAnnounced;
-  void pendingUnits;
 
   const regionName = region?.name_ko || '해당 지역';
   const regionId = region?.region_id || '';
@@ -974,7 +970,7 @@ const RegionCard = React.memo(function RegionCard({
 
                 return (
                   <div
-                    key={muni.name_ko}
+                    key={muni.muni_id || `${region.region_id}-${muni.name_ko}`}
                     className="p-2 rounded bg-slate-950 border border-slate-800 flex items-center justify-between text-[11px]"
                   >
                     <div>
@@ -1045,6 +1041,26 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
     isMultiChildFamily: false,
     isOldDieselScrappage: false,
   });
+
+  const handleToggleYouthBuyer = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.checked;
+    setCalcOptions((prev) => ({ ...prev, isYouthFirstTimeBuyer: val }));
+  }, []);
+
+  const handleToggleSmallBusiness = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.checked;
+    setCalcOptions((prev) => ({ ...prev, isSmallBusinessOrTaxi: val }));
+  }, []);
+
+  const handleToggleMultiChild = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.checked;
+    setCalcOptions((prev) => ({ ...prev, isMultiChildFamily: val }));
+  }, []);
+
+  const handleToggleOldDiesel = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.checked;
+    setCalcOptions((prev) => ({ ...prev, isOldDieselScrappage: val }));
+  }, []);
 
   const activeModel = useMemo(() => {
     const q = (selectedModelId || '').trim().toLowerCase();
@@ -1191,6 +1207,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             </label>
             <select
               id="region-select"
+              aria-label="거주 지자체 (시·도) 선택"
               value={activeRegionForCalc?.region_id || selectedRegionId}
               onChange={(e) => onSelectRegionId(e.target.value)}
               aria-describedby="region-residency-note"
@@ -1214,6 +1231,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                 <input
                   id="custom-msrp-toggle-checkbox"
                   type="checkbox"
+                  aria-label="옵션 포함 출고가 직접 입력 (커스텀 MSRP)"
                   checked={isCustomMsrp}
                   onChange={(e) => {
                     setIsCustomMsrp(e.target.checked);
@@ -1246,7 +1264,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                     placeholder="원 단위 출고가 입력 (예: 54,900,000)"
                     className="w-full py-2.5 px-3.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 pr-12"
                   />
-                  <span className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-300 text-xs font-semibold">
+                  <span aria-hidden="true" className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-300 text-xs font-semibold">
                     원
                   </span>
                 </div>
@@ -1290,8 +1308,9 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                 <input
                   id="grant-youth-buyer-checkbox"
                   type="checkbox"
+                  aria-label="청년 생애 최초 구매 (+20% 국비)"
                   checked={calcOptions.isYouthFirstTimeBuyer}
-                  onChange={(e) => setCalcOptions((prev) => ({ ...prev, isYouthFirstTimeBuyer: e.target.checked }))}
+                  onChange={handleToggleYouthBuyer}
                   className="w-5 h-5 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 />
                 <span>청년 생애 최초 구매 (+20% 국비)</span>
@@ -1301,8 +1320,9 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                 <input
                   id="grant-small-business-checkbox"
                   type="checkbox"
+                  aria-label="소상공인 / 영업용 택시 (+30% 국비)"
                   checked={calcOptions.isSmallBusinessOrTaxi}
-                  onChange={(e) => setCalcOptions((prev) => ({ ...prev, isSmallBusinessOrTaxi: e.target.checked }))}
+                  onChange={handleToggleSmallBusiness}
                   className="w-5 h-5 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 />
                 <span>소상공인 / 영업용 택시 (+30% 국비)</span>
@@ -1312,8 +1332,9 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                 <input
                   id="grant-multi-child-checkbox"
                   type="checkbox"
+                  aria-label="다자녀 가구 (+10% 국비)"
                   checked={calcOptions.isMultiChildFamily}
-                  onChange={(e) => setCalcOptions((prev) => ({ ...prev, isMultiChildFamily: e.target.checked }))}
+                  onChange={handleToggleMultiChild}
                   className="w-5 h-5 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 />
                 <span>다자녀 가구 (+10% 국비)</span>
@@ -1323,8 +1344,9 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                 <input
                   id="grant-diesel-scrappage-checkbox"
                   type="checkbox"
+                  aria-label="노후 경유차 조기폐차 (+100만 원)"
                   checked={calcOptions.isOldDieselScrappage}
-                  onChange={(e) => setCalcOptions((prev) => ({ ...prev, isOldDieselScrappage: e.target.checked }))}
+                  onChange={handleToggleOldDiesel}
                   className="w-5 h-5 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 />
                 <span>노후 경유차 조기폐차 (+100만 원)</span>
@@ -1337,8 +1359,6 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
         <div
           role="region"
           aria-labelledby="calc-summary-heading"
-          aria-live="polite"
-          aria-atomic="true"
           className="lg:col-span-5 bg-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-7 space-y-6 shadow-2xl sticky top-24"
         >
           <div>
@@ -1404,7 +1424,12 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
           </div>
 
           {/* Net Out-of-pocket Purchase Price */}
-          <div className="bg-gradient-to-r from-emerald-950 to-slate-900 border border-emerald-500/40 rounded-2xl p-5 text-center space-y-1">
+          <div
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="bg-gradient-to-r from-emerald-950 to-slate-900 border border-emerald-500/40 rounded-2xl p-5 text-center space-y-1"
+          >
             <span className="text-xs text-emerald-300 font-semibold uppercase tracking-wider">
               최종 실구매 체감가 (소비자 부담액)
             </span>

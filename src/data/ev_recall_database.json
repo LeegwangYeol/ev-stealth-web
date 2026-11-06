@@ -3,9 +3,9 @@
     "version": "1.0.0",
     "updated_at": "2026-09-16T00:00:00Z",
     "total_campaigns": 12,
-    "total_affected_vehicles_kdm": 384500,
+    "total_affected_vehicles_kdm": 310826,
     "active_fire_campaigns": 3,
-    "ota_remedy_rate_pct": 28.5
+    "ota_remedy_rate_pct": 25.0
   },
   "vin_prefixes": [
     {

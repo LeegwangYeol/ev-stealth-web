@@ -997,7 +997,7 @@ class TestReliabilityDashboardClientA11y(unittest.TestCase):
         replaces low-contrast text-slate-300 with compliant text-slate-600.
         """
         empty_cell_match = re.search(
-            r'<div\b[^>]*w-8\s+h-8[^>]*bg-slate-100[^>]*>[\s\S]*?-[\s\S]*?</div>',
+            r'<div\b[^>]*(?:w-8\s+h-8|w-11\s+h-11)[^>]*bg-slate-100[^>]*>[\s\S]*?-[\s\S]*?</div>',
             self.source,
         )
         self.assertIsNotNone(empty_cell_match, "Could not find empty cell div in ReliabilityDashboardClient.tsx")
@@ -1348,6 +1348,11 @@ class TestSubsidyTrackerClientA11y(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.source = read_component_source("subsidy-tracker/SubsidyTrackerClient.tsx")
+        try:
+            pb_source = read_component_source("components/subsidy/SubsidyProgressBar.tsx")
+            cls.source += "\n" + pb_source
+        except Exception:
+            pass
 
     def test_subsidy_tracker_municipality_toggle_aria_expanded_and_controls(self):
         """

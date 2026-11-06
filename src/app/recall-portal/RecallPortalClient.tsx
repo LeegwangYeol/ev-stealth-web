@@ -1717,7 +1717,7 @@ export const BatterySafetyCard = React.memo(function BatterySafetyCard({
         </div>
       </div>
 
-      <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-300 truncate">
+      <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-300 break-words leading-relaxed">
         🛡️ {bmsFeatures}
       </div>
     </div>
@@ -1737,6 +1737,20 @@ export const RecallCard = React.memo(function RecallCard({
   toggleRecallExpansion,
   panelIdPrefix = 'campaign-detail-',
 }: RecallCardProps) {
+  const toggleButtonRef = useRef<HTMLButtonElement>(null);
+
+  const handleCardKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === 'Escape' && isExpanded) {
+        e.stopPropagation();
+        e.preventDefault();
+        toggleRecallExpansion(campaign.id);
+        toggleButtonRef.current?.focus();
+      }
+    },
+    [campaign.id, isExpanded, toggleRecallExpansion]
+  );
+
   const targetModel = campaign.target_model || '해당 차종';
   const brand = campaign.brand || '해당 제조사';
   const years = campaign.target_model_years || '전체 연식';
@@ -1749,54 +1763,59 @@ export const RecallCard = React.memo(function RecallCard({
 
   return (
     <div
+      onKeyDown={handleCardKeyDown}
       className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition space-y-3"
     >
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2 mb-1">
-            <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
+            <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-blue-950 text-blue-200 border border-blue-700">
               {campaign.campaign_no || '미부여'}
             </span>
             <span className="text-xs font-semibold text-slate-300">
               {brand} • {targetModel} ({years})
             </span>
             <span
-              className={`text-[11px] font-bold px-2 py-0.5 rounded ${
+              className={`text-[11px] font-bold px-2 py-0.5 rounded border ${
                 campaign.risk_level === 'FIRE_HAZARD'
-                  ? 'bg-red-950 text-red-300 border border-red-800'
+                  ? 'bg-red-950 text-rose-200 border-red-700'
                   : campaign.risk_level === 'LOSS_OF_POWER'
-                  ? 'bg-orange-950 text-orange-300 border border-orange-800'
-                  : 'bg-slate-800 text-slate-300'
+                  ? 'bg-orange-950 text-amber-200 border-orange-700'
+                  : 'bg-slate-800 text-slate-200 border-slate-700'
               }`}
             >
               {campaign.risk_level_ko || '안전 리콜'}
             </span>
-            <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+            <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-slate-700">
               {campaign.remedy_type_ko || '무상 수리'}
             </span>
           </div>
-          <h4 className="text-base font-bold text-white">{campaign.defect_title}</h4>
+          <h4 id={`${panelIdPrefix}title-${campaign.id}`} className="text-base font-bold text-white">
+            {campaign.defect_title}
+          </h4>
         </div>
 
         {panelIdPrefix === 'campaign-search-detail-' ? (
           <button
+            ref={toggleButtonRef}
             type="button"
             onClick={() => toggleRecallExpansion(campaign.id)}
             aria-expanded={isExpanded}
             aria-controls={"campaign-search-detail-" + campaign.id}
             aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '상세 및 행동요령 펼치기'}`}
-            className="self-start text-xs text-blue-400 hover:text-blue-300 font-medium px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center rounded bg-slate-800/80 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+            className="self-start text-xs text-blue-300 hover:text-blue-200 font-semibold px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center rounded bg-slate-800 border border-slate-700 hover:bg-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
           >
             {isExpanded ? '닫기 ▲' : '상세 및 행동요령 ▼'}
           </button>
         ) : (
           <button
+            ref={toggleButtonRef}
             type="button"
             onClick={() => toggleRecallExpansion(campaign.id)}
             aria-expanded={isExpanded}
             aria-controls={"campaign-list-detail-" + campaign.id}
             aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '상세 및 행동요령 펼치기'}`}
-            className="self-start text-xs text-blue-400 hover:text-blue-300 font-medium px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center rounded bg-slate-800/80 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+            className="self-start text-xs text-blue-300 hover:text-blue-200 font-semibold px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center rounded bg-slate-800 border border-slate-700 hover:bg-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
           >
             {isExpanded ? '닫기 ▲' : '상세 및 행동요령 ▼'}
           </button>
@@ -1808,12 +1827,18 @@ export const RecallCard = React.memo(function RecallCard({
       </p>
 
       {panelIdPrefix === 'campaign-search-detail-' ? (
-        <div id={"campaign-search-detail-" + campaign.id} hidden={!isExpanded} className="space-y-3 pt-3 border-t border-slate-800 text-xs">
+        <div
+          id={"campaign-search-detail-" + campaign.id}
+          role="region"
+          aria-labelledby={`${panelIdPrefix}title-${campaign.id}`}
+          hidden={!isExpanded}
+          className="space-y-3 pt-3 border-t border-slate-800 text-xs"
+        >
           <div>
             <span className="font-semibold text-slate-200">생산 기간: </span>
             <span className="font-mono text-slate-300">{campaign.production_date_range || '공식 공시 참조'}</span>
             <span className="ml-3 font-semibold text-slate-200">대상 대수: </span>
-            <span className="text-amber-400 font-semibold">
+            <span className="text-amber-300 font-semibold">
               {Number.isFinite(campaign?.affected_kdm_units)
                 ? campaign.affected_kdm_units.toLocaleString()
                 : '0'}대
@@ -1846,12 +1871,18 @@ export const RecallCard = React.memo(function RecallCard({
           </div>
         </div>
       ) : (
-        <div id={"campaign-list-detail-" + campaign.id} hidden={!isExpanded} className="space-y-3 pt-3 border-t border-slate-800 text-xs">
+        <div
+          id={"campaign-list-detail-" + campaign.id}
+          role="region"
+          aria-labelledby={`${panelIdPrefix}title-${campaign.id}`}
+          hidden={!isExpanded}
+          className="space-y-3 pt-3 border-t border-slate-800 text-xs"
+        >
           <div>
             <span className="font-semibold text-slate-200">생산 기간: </span>
             <span className="font-mono text-slate-300">{campaign.production_date_range || '공식 공시 참조'}</span>
             <span className="ml-3 font-semibold text-slate-200">대상 대수: </span>
-            <span className="text-amber-400 font-semibold">
+            <span className="text-amber-300 font-semibold">
               {Number.isFinite(campaign?.affected_kdm_units)
                 ? campaign.affected_kdm_units.toLocaleString()
                 : '0'}대

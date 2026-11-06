@@ -7,9 +7,19 @@
  */
 
 /**
+ * Strictly allowed URI schemes for the application.
+ */
+export const ALLOWED_SCHEMES = new Set([
+  'http',
+  'https',
+  'mailto',
+  'tel',
+]);
+
+/**
  * Forbidden URI pseudoprotocols and schemes that must NEVER be executed.
  */
-const FORBIDDEN_SCHEMES = new Set([
+export const FORBIDDEN_SCHEMES = new Set([
   'javascript',
   'data',
   'vbscript',
@@ -21,6 +31,33 @@ const FORBIDDEN_SCHEMES = new Set([
   'android-app',
   'ios-app',
   'ms-appx',
+  'ws',
+  'wss',
+  'ftp',
+  'ftps',
+  'tftp',
+  'gopher',
+  'dict',
+  'ldap',
+  'ldaps',
+  'ssh',
+  'sftp',
+  'telnet',
+  'vnc',
+  'rdp',
+  'jar',
+  'filesystem',
+  'chrome',
+  'chrome-extension',
+  'moz-extension',
+  'edge',
+  'livescript',
+  'mocha',
+  'view-source',
+  'content',
+  'facetime',
+  'skype',
+  'sms',
 ]);
 
 /**
@@ -58,12 +95,12 @@ export function decodeHtmlEntities(str: string): string {
 }
 
 /**
- * Iteratively decodes percent-encoded sequences up to 3 passes to uncover double/triple encoding bypasses.
+ * Iteratively decodes percent-encoded sequences up to 5 passes to uncover multi-layer encoding bypasses.
  * Fallback decodes individual ASCII %XX sequences if a malformed byte throws URIError.
  */
 export function safeDecodePercent(str: string): string {
   let prev = str;
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 5; i++) {
     try {
       const decoded = decodeURIComponent(prev);
       if (decoded === prev) break;
@@ -96,12 +133,31 @@ export function extractAndNormalizeScheme(raw: string): string {
 
   const stripped = decoded
     .replace(/\\0|\\x00|\\u0000/gi, '')
-    .replace(/[\s\x00-\x1f\x7f\u200B-\u200D\uFEFF\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '')
+    .replace(/[\s\x00-\x1f\x7f\u00ad\u200b-\u200d\ufeff\u200e\u200f\u202a-\u202e\u2060\u2066-\u2069]/gi, '')
     .toLowerCase();
 
   const colonIndex = stripped.indexOf(':');
   if (colonIndex === -1) return '';
-  return stripped.slice(0, colonIndex);
+
+  const slashIndex = stripped.indexOf('/');
+  const qmarkIndex = stripped.indexOf('?');
+  const hashIndex = stripped.indexOf('#');
+
+  // If a slash, question mark, or hash occurs before the colon, the colon is part of the path/query/hash, not a scheme
+  if (
+    (slashIndex !== -1 && slashIndex < colonIndex) ||
+    (qmarkIndex !== -1 && qmarkIndex < colonIndex) ||
+    (hashIndex !== -1 && hashIndex < colonIndex)
+  ) {
+    return '';
+  }
+
+  const scheme = stripped.slice(0, colonIndex);
+  // Scheme must be a valid RFC 3986 identifier starting with a letter
+  if (!/^[a-z][a-z0-9+.-]*$/.test(scheme)) {
+    return '';
+  }
+  return scheme;
 }
 
 /**
@@ -126,7 +182,10 @@ export function isOpenRedirect(raw: string): boolean {
     return true;
   }
   // Encoded slash/backslash following a single slash (e.g. /%5cevil.com, /%2fevil.com)
-  if (/^\/(?:%2f|%5c)/i.test(trimmedRaw)) {
+  if (
+    /^\/(?:%2f|%5c)/i.test(trimmedRaw) ||
+    /^\/(?:%2f|%5c)/i.test(trimmedDecoded)
+  ) {
     return true;
   }
   return false;
@@ -151,10 +210,12 @@ export function sanitizeSafeUrl(url?: unknown): string {
     return '#';
   }
 
-  // Extract scheme and check against forbidden schemes
+  // Extract scheme and check against allowed and forbidden schemes
   const normalizedScheme = extractAndNormalizeScheme(trimmed);
-  if (normalizedScheme && FORBIDDEN_SCHEMES.has(normalizedScheme)) {
-    return '#';
+  if (normalizedScheme) {
+    if (FORBIDDEN_SCHEMES.has(normalizedScheme) || !ALLOWED_SCHEMES.has(normalizedScheme)) {
+      return '#';
+    }
   }
 
   // Block protocol-relative URLs and backslash redirects
@@ -167,8 +228,8 @@ export function sanitizeSafeUrl(url?: unknown): string {
     return trimmed;
   }
 
-  // Safe internal relative routes (must start with / and not followed by / or \ or encoded slashes)
-  if (/^\/(?![/\\])/.test(trimmed) && !/[\s<>"']/.test(trimmed) && !/^\/(?:%2f|%5c)/i.test(trimmed)) {
+  // Safe internal relative routes (must start with / and not followed by / or \ or encoded slashes, no backslashes anywhere in path)
+  if (/^\/(?![/\\])/.test(trimmed) && !/[\s<>"'\\]/.test(trimmed) && !/^\/(?:%2f|%5c)/i.test(trimmed)) {
     return trimmed;
   }
 
@@ -183,7 +244,7 @@ export function sanitizeSafeUrl(url?: unknown): string {
   }
 
   // Absolute web URLs: must be http or https with valid hostname
-  if (/^https?:\/\//i.test(trimmed) && !/[\s<>"']/.test(trimmed)) {
+  if (/^https?:\/\//i.test(trimmed) && !/[\s<>"'\\]/.test(trimmed)) {
     try {
       const parsed = new URL(trimmed);
       if (

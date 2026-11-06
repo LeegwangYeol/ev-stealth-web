@@ -6,29 +6,54 @@ import BrandComparisonNav, { OtherBrandsCrossNav } from '@/components/BrandCompa
 export const dynamic = 'force-static';
 export const revalidate = false;
 
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://ev-stealth-web.vercel.app').replace(/\/+$/, '');
+
 const latest2026JsonLd = {
-  "@context": "https://schema.org",
-  "@type": "Article",
-  "headline": "2026년식 KDM(국내 내수용) EV 초기 품질 리포트",
-  "description": "올해 출고된 2026년식 최신 전기차(아이오닉5, EV3, 아이오닉9, 모델Y, 시라이언7)의 한국 차주 실제 평가와 초기 결함 분석",
-  "url": "https://ev-stealth-web.vercel.app/2026-latest",
-  "inLanguage": "ko-KR",
-  "datePublished": "2026-01-01T00:00:00+09:00",
-  "dateModified": "2026-11-01T00:00:00+09:00",
-  "author": {
-    "@type": "Organization",
-    "name": "Global EV Hub",
-    "url": "https://ev-stealth-web.vercel.app",
-  },
-  "publisher": {
-    "@type": "Organization",
-    "name": "Global EV Hub",
-    "logo": {
-      "@type": "ImageObject",
-      "url": "https://ev-stealth-web.vercel.app/favicon.ico",
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Article',
+      '@id': `${SITE_URL}/2026-latest#article`,
+      headline: '2026년식 KDM(국내 내수용) EV 초기 품질 리포트',
+      description: '올해 출고된 2026년식 최신 전기차(아이오닉5, EV3, 아이오닉9, 모델Y, 시라이언7)의 한국 차주 실제 평가와 초기 결함 분석',
+      url: `${SITE_URL}/2026-latest`,
+      inLanguage: 'ko-KR',
+      datePublished: '2026-01-01T00:00:00+09:00',
+      dateModified: '2026-11-01T00:00:00+09:00',
+      author: {
+        '@type': 'Organization',
+        name: 'Global EV Hub',
+        url: SITE_URL,
+      },
+      publisher: {
+        '@type': 'Organization',
+        name: 'Global EV Hub',
+        logo: {
+          '@type': 'ImageObject',
+          url: `${SITE_URL}/favicon.ico`,
+        },
+      },
+      mainEntityOfPage: `${SITE_URL}/2026-latest`,
     },
-  },
-  "mainEntityOfPage": "https://ev-stealth-web.vercel.app/2026-latest",
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${SITE_URL}/2026-latest#breadcrumb`,
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: '홈',
+          item: SITE_URL,
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: '2026 최신 결함',
+          item: `${SITE_URL}/2026-latest`,
+        },
+      ],
+    },
+  ],
 };
 
 export const metadata: Metadata = {
@@ -56,11 +81,23 @@ export const metadata: Metadata = {
     type: 'article',
     publishedTime: '2026-01-01T00:00:00+09:00',
     modifiedTime: '2026-11-01T00:00:00+09:00',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: '2026년식 KDM EV 초기 품질 리포트',
+        type: 'image/png',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: '2026년식 KDM EV 초기 품질 리포트 | Global EV Hub',
     description: '올해 출고된 2026년식 최신 전기차(아이오닉5, EV3, 아이오닉9, 모델Y, 시라이언7)의 한국 차주 실제 평가와 초기 결함을 100% 원문 출처와 함께 분석했습니다.',
+    site: '@GlobalEVHub',
+    creator: '@lolollol2379',
+    images: ['/og-image.png'],
   },
 };
 

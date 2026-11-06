@@ -170,7 +170,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
               aria-expanded={isExpanded}
               aria-controls={'muni-details-' + regionId}
               aria-label={`${regionName} 세부 시·군·구 ${munis.length}개 현황 ${isExpanded ? '접기' : '보기'}`}
-              className="px-2.5 py-1.5 min-h-[44px] sm:min-h-[36px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium border border-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              className="px-2.5 py-1.5 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium border border-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
               {isExpanded ? '접기 ▲' : `${munis.length}개 시·군 ▼`}
             </button>
@@ -185,7 +185,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
             type="button"
             onClick={() => onSelectForCalc(regionId)}
             aria-label={`${regionName} 보조금으로 계산기 설정`}
-            className="px-3 py-1.5 min-h-[44px] sm:min-h-[36px] inline-flex items-center justify-center text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+            className="px-3 py-1.5 min-h-[44px] inline-flex items-center justify-center text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
           >
             계산 ⚡
           </button>
@@ -253,7 +253,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
                         : 0;
 
                       return (
-                        <tr key={muni.name_ko} className="hover:bg-slate-900/50">
+                        <tr key={muni.muni_id || `${regionId}-${muni.name_ko}`} className="hover:bg-slate-900/50">
                           <th scope="row" className="p-2 font-medium text-slate-200">
                             {muni.name_ko}
                           </th>
@@ -337,7 +337,7 @@ export const SubsidyTableView = memo(function SubsidyTableView({
                 type="button"
                 onClick={handleSortName}
                 aria-label={`지역명 ${sortOption === 'NAME_ASC' ? '내림차순 정렬 전환' : '오름차순 정렬 전환'}`}
-                className="min-h-[44px] sm:min-h-[36px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5"
+                className="min-h-[44px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5"
               >
                 <span>지역명</span>
                 <span aria-hidden="true" className="text-slate-300 text-xs">
@@ -360,7 +360,7 @@ export const SubsidyTableView = memo(function SubsidyTableView({
                 type="button"
                 onClick={handleSortRemaining}
                 aria-label={`잔여 대수 ${sortOption === 'REMAINING_ASC' ? '내림차순 정렬 전환' : '오름차순 정렬 전환'}`}
-                className="min-h-[44px] sm:min-h-[36px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5 ml-auto"
+                className="min-h-[44px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5 ml-auto"
               >
                 <span>잔여 대수</span>
                 <span aria-hidden="true" className="text-slate-300 text-xs">
@@ -377,7 +377,7 @@ export const SubsidyTableView = memo(function SubsidyTableView({
                 type="button"
                 onClick={handleToggleDepletionSort}
                 aria-label={`소진율 ${sortOption === 'DEPLETION_DESC' ? '오름차순 정렬 전환' : '내림차순 정렬 전환'}`}
-                className="min-h-[44px] sm:min-h-[36px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5"
+                className="min-h-[44px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5"
               >
                 <span>소진율</span>
                 <span aria-hidden="true" className="text-slate-300 text-xs">
@@ -394,7 +394,7 @@ export const SubsidyTableView = memo(function SubsidyTableView({
                 type="button"
                 onClick={handleSortLocalSubsidy}
                 aria-label={`지방비 지원금 ${sortOption === 'LOCAL_SUBSIDY_DESC' ? '기본 정렬로 전환' : '내림차순 정렬 전환'}`}
-                className="min-h-[44px] sm:min-h-[36px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5 ml-auto"
+                className="min-h-[44px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5 ml-auto"
               >
                 <span>지방비 최대</span>
                 <span aria-hidden="true" className="text-slate-300 text-xs">

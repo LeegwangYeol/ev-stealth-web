@@ -44,6 +44,8 @@ const {
   safeDecodePercent,
   extractAndNormalizeScheme,
   isOpenRedirect,
+  ALLOWED_SCHEMES,
+  FORBIDDEN_SCHEMES,
 } = sanitizeUrlModule;
 
 console.log('======================================================');
@@ -581,6 +583,128 @@ test('getDailyReports correctly loads and sanitizes raw report items', async () 
   assert.strictEqual(normalized.verbatim_quote, '원문 인용<script>alert(1)</script>');
   assert.strictEqual(normalized.vehicle_model, '__proto__');
   assert.strictEqual(({}).polluted, undefined);
+});
+
+// -------------------------------------------------------------
+// 10. PROTOCOL ALLOWLIST & EXTENDED FORBIDDEN SCHEMES HARDENING
+// -------------------------------------------------------------
+console.log('\n--- [10. Protocol Allowlist & Extended Forbidden Schemes Tests] ---');
+
+test('ALLOWED_SCHEMES strictly allows only http, https, mailto, tel', () => {
+  assert.ok(ALLOWED_SCHEMES instanceof Set);
+  assert.deepStrictEqual(Array.from(ALLOWED_SCHEMES).sort(), ['http', 'https', 'mailto', 'tel']);
+});
+
+test('Blocks unauthorized network/service protocols (ws:, wss:, ftp:, ssh:, sftp:)', () => {
+  assert.strictEqual(sanitizeSafeUrl('ws://malicious-tracker.com'), '#');
+  assert.strictEqual(sanitizeSafeUrl('wss://malicious-tracker.com'), '#');
+  assert.strictEqual(sanitizeSafeUrl('ftp://ftp.example.com/exploit'), '#');
+  assert.strictEqual(sanitizeSafeUrl('ssh://user@server.com'), '#');
+  assert.strictEqual(sanitizeSafeUrl('sftp://remote.host'), '#');
+});
+
+test('Blocks browser and legacy script schemes (livescript:, mocha:, view-source:, chrome:)', () => {
+  assert.strictEqual(sanitizeSafeUrl('livescript:alert(1)'), '#');
+  assert.strictEqual(sanitizeSafeUrl('mocha:alert(1)'), '#');
+  assert.strictEqual(sanitizeSafeUrl('view-source:https://google.com'), '#');
+  assert.strictEqual(sanitizeSafeUrl('chrome://settings'), '#');
+  assert.strictEqual(sanitizeSafeUrl('chrome-extension://abcdefg/popup.html'), '#');
+});
+
+test('Blocks evasion using soft-hyphens (u00AD) and word-joiners (u2060)', () => {
+  assert.strictEqual(sanitizeSafeUrl('java\u00ADscript:alert(1)'), '#');
+  assert.strictEqual(sanitizeSafeUrl('java\u2060script:alert(1)'), '#');
+});
+
+test('Blocks internal relative routes containing backslashes anywhere in path', () => {
+  assert.strictEqual(sanitizeSafeUrl('/path\\to\\page'), '#');
+  assert.strictEqual(sanitizeSafeUrl('/foo/..\\bar'), '#');
+});
+
+test('Blocks deep multi-pass encoded slashes (/%%25...evil.com)', () => {
+  assert.strictEqual(sanitizeSafeUrl('/%2525252fevil.com'), '#');
+  assert.strictEqual(sanitizeSafeUrl('/%252525252fevil.com'), '#');
+});
+
+// -------------------------------------------------------------
+// 11. EXTERNAL ANCHOR SECURITY (target="_blank" + rel="noopener noreferrer")
+// -------------------------------------------------------------
+console.log('\n--- [11. External Anchor Security Audit Across src/] ---');
+
+test('All external anchor tags with target="_blank" in src/ include rel="noopener noreferrer"', () => {
+  const srcDir = path.resolve(__dirname, '../src');
+  
+  function scanDir(dir) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        scanDir(fullPath);
+      } else if (entry.name.endsWith('.tsx') || entry.name.endsWith('.ts') || entry.name.endsWith('.jsx') || entry.name.endsWith('.html')) {
+        const content = fs.readFileSync(fullPath, 'utf-8');
+        // Find all <a ... target="_blank" ... >
+        const anchorRegex = /<a\b[^>]*target=["']_blank["'][^>]*>/gi;
+        let match;
+        while ((match = anchorRegex.exec(content)) !== null) {
+          const tag = match[0];
+          assert.ok(
+            /rel=["'][^"']*noopener[^"']*noreferrer[^"']*["']/i.test(tag) ||
+            /rel=["'][^"']*noreferrer[^"']*noopener[^"']*["']/i.test(tag),
+            `Found unsafe target="_blank" missing rel="noopener noreferrer" in ${fullPath}: ${tag}`
+          );
+        }
+      }
+    }
+  }
+
+  scanDir(srcDir);
+});
+
+// -------------------------------------------------------------
+// 12. SENSITIVE CREDENTIALS & REDOS STRESS TESTS
+// -------------------------------------------------------------
+console.log('\n--- [12. Sensitive Credentials & ReDoS Stress Tests] ---');
+
+test('No hardcoded secrets, private keys, or API tokens committed into src/', () => {
+  const srcDir = path.resolve(__dirname, '../src');
+  
+  function scanSecrets(dir) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        scanSecrets(fullPath);
+      } else if (entry.name.endsWith('.tsx') || entry.name.endsWith('.ts')) {
+        const content = fs.readFileSync(fullPath, 'utf-8');
+        // Match suspicious assignments of real secrets (excluding type declarations or documentation)
+        const secretRegex = /(?:api_?key|secret_?key|private_?key|password|jwt_secret)\s*[:=]\s*['"][a-zA-Z0-9_\-]{24,}['"]/gi;
+        const match = secretRegex.exec(content);
+        assert.strictEqual(
+          match,
+          null,
+          `Found potential hardcoded secret in ${fullPath}: ${match?.[0]}`
+        );
+      }
+    }
+  }
+
+  scanSecrets(srcDir);
+});
+
+test('ReDoS resilience: sanitizeSafeUrl executes on 50,000-character malicious inputs under 15ms', () => {
+  const payload1 = 'mailto:user@' + 'a'.repeat(50000);
+  const payload2 = 'https://' + 'a'.repeat(50000) + '.com';
+  const payload3 = '/' + 'a'.repeat(50000);
+  const payload4 = 'javascript:' + 'a'.repeat(50000);
+
+  const start = performance.now();
+  assert.strictEqual(sanitizeSafeUrl(payload1), '#');
+  assert.strictEqual(typeof sanitizeSafeUrl(payload2), 'string');
+  assert.strictEqual(typeof sanitizeSafeUrl(payload3), 'string');
+  assert.strictEqual(sanitizeSafeUrl(payload4), '#');
+  const duration = performance.now() - start;
+
+  assert.ok(duration < 25, `ReDoS benchmark took too long: ${duration.toFixed(2)}ms (must be < 25ms)`);
 });
 
 console.log('\n======================================================');

@@ -6,29 +6,54 @@ import BrandComparisonNav, { OtherBrandsCrossNav } from '@/components/BrandCompa
 export const dynamic = 'force-static';
 export const revalidate = false;
 
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://ev-stealth-web.vercel.app').replace(/\/+$/, '');
+
 const teslaJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "Article",
-  "headline": "테슬라 연식별 결함 및 구매 가이드",
-  "description": "테슬라 모델 3, 모델 Y 연식별(2017~2026) 히터 파괴, 컨트롤 암, 옥토밸브 히트펌프 결함 분석 및 중고차 구매 가이드",
-  "url": "https://ev-stealth-web.vercel.app/tesla",
-  "inLanguage": "ko-KR",
-  "datePublished": "2026-01-01T00:00:00+09:00",
-  "dateModified": "2026-11-01T00:00:00+09:00",
-  "author": {
-    "@type": "Organization",
-    "name": "Global EV Hub",
-    "url": "https://ev-stealth-web.vercel.app",
-  },
-  "publisher": {
-    "@type": "Organization",
-    "name": "Global EV Hub",
-    "logo": {
-      "@type": "ImageObject",
-      "url": "https://ev-stealth-web.vercel.app/favicon.ico",
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Article',
+      '@id': `${SITE_URL}/tesla#article`,
+      headline: '테슬라 연식별 결함 및 구매 가이드',
+      description: '테슬라 모델 3, 모델 Y 연식별(2017~2026) 히터 파괴, 컨트롤 암, 옥토밸브 히트펌프 결함 분석 및 중고차 구매 가이드',
+      url: `${SITE_URL}/tesla`,
+      inLanguage: 'ko-KR',
+      datePublished: '2026-01-01T00:00:00+09:00',
+      dateModified: '2026-11-01T00:00:00+09:00',
+      author: {
+        '@type': 'Organization',
+        name: 'Global EV Hub',
+        url: SITE_URL,
+      },
+      publisher: {
+        '@type': 'Organization',
+        name: 'Global EV Hub',
+        logo: {
+          '@type': 'ImageObject',
+          url: `${SITE_URL}/favicon.ico`,
+        },
+      },
+      mainEntityOfPage: `${SITE_URL}/tesla`,
     },
-  },
-  "mainEntityOfPage": "https://ev-stealth-web.vercel.app/tesla",
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${SITE_URL}/tesla#breadcrumb`,
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: '홈',
+          item: SITE_URL,
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: '테슬라 구매 가이드',
+          item: `${SITE_URL}/tesla`,
+        },
+      ],
+    },
+  ],
 };
 
 export const metadata: Metadata = {
@@ -57,11 +82,23 @@ export const metadata: Metadata = {
     type: 'article',
     publishedTime: '2026-01-01T00:00:00+09:00',
     modifiedTime: '2026-11-01T00:00:00+09:00',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: '테슬라 연식별 결함 및 구매 가이드',
+        type: 'image/png',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: '테슬라 연식별 결함 및 구매 가이드 | Global EV Hub',
     description: '테슬라 모델 3, 모델 Y 연식별(2017~2026) 히터 파괴, 컨트롤 암, 옥토밸브 히트펌프 결함 분석 및 중고차 구매 가이드',
+    site: '@GlobalEVHub',
+    creator: '@lolollol2379',
+    images: ['/og-image.png'],
   },
 };
 
