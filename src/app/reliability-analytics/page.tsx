@@ -6,20 +6,65 @@ import JsonLd from '@/components/JsonLd';
 
 export const dynamic = 'force-static';
 
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://ev-stealth-web.vercel.app').replace(/\/+$/, '');
+
 const reliabilityJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "WebApplication",
-  "name": "전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI)",
-  "url": "https://ev-stealth-web.vercel.app/reliability-analytics",
-  "applicationCategory": "AnalyticsApplication",
-  "operatingSystem": "All",
-  "description":
-    "현대, 기아, 테슬라, BYD, 벤츠, BMW 등 9대 브랜드 22개 차종 89개 연식별 결함 심각도 지수(DSI), 고질병 통계, 중고차 구매 시 절대 피해야 할 연식 가이드 및 보증 외 수리비 매트릭스를 제공합니다.",
-  "provider": {
-    "@type": "Organization",
-    "name": "Global EV Hub",
-    "url": "https://ev-stealth-web.vercel.app",
-  },
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebApplication',
+      '@id': `${SITE_URL}/reliability-analytics#app`,
+      name: '전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI)',
+      url: `${SITE_URL}/reliability-analytics`,
+      applicationCategory: 'AnalyticsApplication',
+      operatingSystem: 'All',
+      description:
+        '현대, 기아, 테슬라, BYD, 벤츠, BMW 등 9대 브랜드 22개 차종 89개 연식별 결함 심각도 지수(DSI), 고질병 통계, 중고차 구매 시 절대 피해야 할 연식 가이드 및 보증 외 수리비 매트릭스를 제공합니다.',
+      provider: {
+        '@type': 'Organization',
+        name: 'Global EV Hub',
+        url: SITE_URL,
+      },
+    },
+    {
+      '@type': 'Dataset',
+      '@id': `${SITE_URL}/reliability-analytics#dataset`,
+      name: '글로벌 전기차 모델·연식별 결함 심각도 지수(DSI) 빅데이터',
+      description:
+        '9대 글로벌 완성차 제조사 22개 차종 89개 연식의 실제 차주 제보 1,280건 및 리콜 데이터 기반 결함 심각도 지수(DSI) 및 연식 리스크 매트릭스 데이터셋.',
+      url: `${SITE_URL}/reliability-analytics`,
+      isAccessibleForFree: true,
+      creator: {
+        '@type': 'Organization',
+        name: 'Global EV Hub Research Team',
+        url: SITE_URL,
+      },
+      publisher: {
+        '@type': 'Organization',
+        name: 'Global EV Hub',
+        url: SITE_URL,
+      },
+      temporalCoverage: '2021/2026',
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${SITE_URL}/reliability-analytics#breadcrumb`,
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: '홈',
+          item: SITE_URL,
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: '결함·신뢰성 통계',
+          item: `${SITE_URL}/reliability-analytics`,
+        },
+      ],
+    },
+  ],
 };
 
 export const metadata: Metadata = {
@@ -48,12 +93,24 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'ko_KR',
     siteName: 'Global EV Hub',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: '전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI)',
+        type: 'image/png',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: '전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI) | Global EV Hub',
     description:
       '9대 제조사 22개 모델 89개 연식의 실제 차주 제보 1,280건 심층 분석. 결함 심각도 지수(DSI), 연식별 위험 히트맵, 보증 외 수리비 매트릭스.',
+    site: '@GlobalEVHub',
+    creator: '@lolollol2379',
+    images: ['/og-image.png'],
   },
 };
 

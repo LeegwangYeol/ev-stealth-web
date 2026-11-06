@@ -29,26 +29,37 @@ export default function BrandComparisonNav({ currentBrand, pageTitle }: BrandCom
     <div className="space-y-4 mb-6">
       {/* Top Breadcrumb & Back Nav */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
-        <nav aria-label="브레드크럼 위치 경로" className="flex items-center gap-1.5 text-slate-600">
-          <Link
-            href="/"
-            prefetch={false}
-            className="hover:text-blue-600 transition flex items-center gap-1 font-medium text-slate-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded py-1 px-1.5 min-h-[36px]"
-          >
-            <span aria-hidden="true">🏠</span> 홈
-          </Link>
-          <span aria-hidden="true" className="text-slate-600">/</span>
-          <span className="text-slate-600 hidden sm:inline">브랜드별 가이드</span>
-          <span aria-hidden="true" className="text-slate-300 hidden sm:inline">/</span>
-          <span className="text-slate-900 font-semibold truncate max-w-[200px] sm:max-w-none" aria-current="page">
-            {pageTitle}
-          </span>
+        <nav aria-label="브레드크럼 위치 경로" className="text-xs sm:text-sm">
+          <ol className="flex flex-wrap items-center gap-1.5 text-slate-600">
+            <li className="inline-flex items-center">
+              <Link
+                href="/"
+                prefetch={false}
+                aria-label="메인 홈으로 이동"
+                className="hover:text-blue-700 transition flex items-center gap-1 font-medium text-slate-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 rounded py-1 px-1.5 min-h-[44px]"
+              >
+                <span aria-hidden="true">🏠</span> 홈
+              </Link>
+            </li>
+            <li className="inline-flex items-center gap-1.5 text-slate-400" aria-hidden="true">
+              <span>/</span>
+            </li>
+            <li className="hidden sm:inline-flex items-center gap-1.5">
+              <span className="text-slate-600">브랜드별 가이드</span>
+              <span aria-hidden="true" className="text-slate-400">/</span>
+            </li>
+            <li className="inline-flex items-center">
+              <span className="text-slate-900 font-semibold truncate max-w-[200px] sm:max-w-none" aria-current="page">
+                {pageTitle}
+              </span>
+            </li>
+          </ol>
         </nav>
 
         <Link
           href="/"
           prefetch={false}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs font-semibold transition border border-slate-200/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 min-h-[36px]"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs font-semibold transition border border-slate-200/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 min-h-[44px]"
           aria-label="메인 홈 전체 서비스 목록으로 돌아가기"
         >
           <span aria-hidden="true">&larr;</span> 전체 가이드 홈
@@ -68,6 +79,7 @@ export default function BrandComparisonNav({ currentBrand, pageTitle }: BrandCom
               href={brand.href}
               prefetch={false}
               aria-current={isActive ? 'page' : undefined}
+              aria-label={`${brand.label} 연식별 가이드${isActive ? ' (현재 선택됨)' : ''}`}
               className={`flex-1 min-w-[96px] sm:min-w-0 min-h-[44px] px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-1.5 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
                 isActive
                   ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-700/20'
@@ -78,10 +90,11 @@ export default function BrandComparisonNav({ currentBrand, pageTitle }: BrandCom
               <span className="whitespace-nowrap">{brand.shortLabel}</span>
               {brand.badge && (
                 <span
-                  className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded-full ${
-                    isActive ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-700'
+                  className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
+                    isActive ? 'bg-white text-blue-700 shadow-xs' : 'bg-rose-100 text-rose-800'
                   }`}
                 >
+                  <span className="sr-only">특징: </span>
                   {brand.badge}
                 </span>
               )}
@@ -97,11 +110,14 @@ export function OtherBrandsCrossNav({ currentBrand }: { currentBrand: BrandPageK
   const otherBrands = BRAND_PAGES.filter((b) => b.key !== currentBrand);
 
   return (
-    <div className="pt-8 border-t border-slate-200 space-y-4">
+    <nav
+      aria-label="다른 제조사 연식별 가이드 비교"
+      className="pt-8 border-t border-slate-200 space-y-4"
+    >
       <div className="space-y-1">
-        <h3 className="text-xl font-bold text-slate-900">
+        <h2 className="text-xl font-bold text-slate-900">
           다른 제조사 연식별 가이드 비교하기
-        </h3>
+        </h2>
         <p className="text-xs sm:text-sm text-slate-600">
           관심 있는 다른 제조사의 연식별 고질병과 감가·리콜 정보를 즉시 비교하세요.
         </p>
@@ -113,20 +129,21 @@ export function OtherBrandsCrossNav({ currentBrand }: { currentBrand: BrandPageK
             key={brand.key}
             href={brand.href}
             prefetch={false}
-            className="group p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-md transition flex flex-col justify-between gap-2 min-h-[72px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            aria-label={`${brand.label} 연식별 결함 가이드 보기`}
+            className="group p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-md transition flex flex-col justify-between gap-2 min-h-[72px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
           >
             <div className="flex items-center gap-2">
               <span className="text-2xl" aria-hidden="true">{brand.icon}</span>
-              <span className="font-bold text-sm text-slate-900 group-hover:text-blue-600 transition">
+              <span className="font-bold text-sm text-slate-900 group-hover:text-blue-700 transition">
                 {brand.label}
               </span>
             </div>
-            <span className="text-xs text-blue-600 font-semibold group-hover:underline inline-flex items-center gap-1">
+            <span className="text-xs text-blue-700 font-semibold group-hover:underline inline-flex items-center gap-1">
               가이드 보기 <span aria-hidden="true">&rarr;</span>
             </span>
           </Link>
         ))}
       </div>
-    </div>
+    </nav>
   );
 }

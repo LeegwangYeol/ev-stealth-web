@@ -21,6 +21,7 @@ export default function robots(): MetadataRoute.Robots {
         allow: '/',
         disallow: [
           '/secret-admin-reports',
+          '/secret-admin-reports/',
           '/api/',
         ],
       },

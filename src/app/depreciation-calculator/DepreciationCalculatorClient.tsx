@@ -227,6 +227,7 @@ const ModelGridCard = memo(function ModelGridCard({
     <button
       type="button"
       aria-pressed={isSelected}
+      aria-label={`${model.brand_name_ko} ${model.model_name}, ${model.segment}, 배터리 ${model.battery_specs?.chemistry ?? 'NCM'}, 잔존가치 방어 Tier ${model.resale_defense_tier}, 실구매가 ${(model.net_purchase_price_krw / 10000).toLocaleString()}만 원`}
       onClick={() => onSelect(model)}
       className={`text-left p-3.5 rounded-xl border transition relative flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
         isSelected
@@ -236,7 +237,7 @@ const ModelGridCard = memo(function ModelGridCard({
     >
       <div>
         <div className="flex items-center justify-between gap-1 mb-1">
-          <span className="text-xs font-semibold text-slate-600">
+          <span className="text-xs font-semibold text-slate-700">
             {model.brand_name_ko} ({model.brand_name_en})
           </span>
           {getDefenseTierBadge(model.resale_defense_tier)}
@@ -245,7 +246,7 @@ const ModelGridCard = memo(function ModelGridCard({
         <div className="text-sm font-bold text-slate-900 line-clamp-1">
           {model.model_name}
         </div>
-        <div className="text-xs text-slate-600 mb-2">{model.segment}</div>
+        <div className="text-xs text-slate-700 mb-2">{model.segment}</div>
 
         <div className="flex flex-wrap items-center gap-1.5 mb-2">
           {getChemistryBadge(model.battery_specs?.chemistry ?? 'NCM_811')}
@@ -266,13 +267,13 @@ const ModelGridCard = memo(function ModelGridCard({
 
       <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
         <div>
-          <span className="text-slate-600">출고가:</span>{' '}
-          <span className="font-semibold text-slate-700">
+          <span className="text-slate-700">출고가:</span>{' '}
+          <span className="font-semibold text-slate-800">
             {((model.msrp_krw_baseline ?? 55_000_000) / 10000).toLocaleString()}만 원
           </span>
         </div>
         <div>
-          <span className="text-slate-600">실구매:</span>{' '}
+          <span className="text-slate-700">실구매:</span>{' '}
           <span className="font-bold text-blue-700">
             {(model.net_purchase_price_krw / 10000).toLocaleString()}만 원
           </span>
@@ -810,7 +811,7 @@ export default function DepreciationCalculatorClient({
 
           {/* Search box */}
           <div className="relative w-full sm:w-64">
-            <label htmlFor="vehicle-search-input" className="sr-only">전기차 모델 검색창</label>
+            <label htmlFor="vehicle-search-input" className="sr-only">전기차 모델 검색</label>
             <input
               id="vehicle-search-input"
               type="text"
@@ -818,7 +819,7 @@ export default function DepreciationCalculatorClient({
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="모델명, 제조사, 배터리 검색..."
               className="w-full px-3.5 py-2 pl-9 min-h-[44px] rounded-xl border border-slate-300 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:border-blue-500 bg-slate-50 placeholder-slate-500"
-              aria-label="전기차 모델 검색창"
+              aria-label="전기차 모델 검색"
             />
             <span className="absolute left-3 top-3 text-slate-600 text-sm" aria-hidden="true">🔍</span>
           </div>
@@ -872,7 +873,7 @@ export default function DepreciationCalculatorClient({
                     setSearchQuery('');
                     setSelectedBrand('all');
                   }}
-                  className="mt-3 px-3.5 py-1.5 text-xs font-semibold text-blue-700 bg-white hover:bg-blue-50 rounded-lg transition border border-slate-300 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="mt-3 px-3.5 py-1.5 min-h-[44px] inline-flex items-center justify-center text-xs font-semibold text-blue-700 bg-white hover:bg-blue-50 rounded-lg transition border border-slate-300 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
                   검색어 및 제조사 필터 초기화
                 </button>
@@ -914,7 +915,7 @@ export default function DepreciationCalculatorClient({
                 checked={winterSeason}
                 onChange={(e) => setWinterSeason(e.target.checked)}
                 className="w-5 h-5 rounded text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                aria-label="혹한기 저온 감가 및 열화 패널티 반영 여부"
+                aria-label="❄️ 혹한기(-5℃) 저온 패널티 반영 여부"
               />
               <span>❄️ 혹한기(-5℃) 저온 패널티 반영</span>
             </label>
@@ -1249,7 +1250,7 @@ export default function DepreciationCalculatorClient({
           } border border-slate-200 rounded-xl p-3 sm:p-4`}>
             <div className="text-xs font-bold text-slate-700">전기차 전체 평균 대비</div>
             <div className={`text-lg sm:text-2xl font-black mt-1 break-keep ${
-              evDiff >= 0 ? 'text-emerald-700' : 'text-rose-600'
+              evDiff >= 0 ? 'text-emerald-700' : 'text-rose-700'
             }`}>
               {evDiff >= 0 ? '+' : ''}
               {evDiff.toFixed(1)}%
@@ -1269,7 +1270,7 @@ export default function DepreciationCalculatorClient({
           } border border-slate-200 rounded-xl p-3 sm:p-4`}>
             <div className="text-xs font-bold text-slate-700">동급 내연기관(가솔린) 대비</div>
             <div className={`text-lg sm:text-2xl font-black mt-1 break-keep ${
-              iceDiff >= 0 ? 'text-amber-800' : 'text-rose-600'
+              iceDiff >= 0 ? 'text-amber-800' : 'text-rose-700'
             }`}>
               {iceDiff >= 0 ? '+' : ''}
               {iceDiff.toFixed(1)}%
@@ -1314,6 +1315,8 @@ export default function DepreciationCalculatorClient({
           >
             <svg
               viewBox="0 0 700 280"
+              width="700"
+              height="280"
               className="w-full min-w-[550px] h-64 select-none"
               role="img"
               aria-labelledby="dep-chart-title dep-chart-desc"
@@ -1340,7 +1343,7 @@ export default function DepreciationCalculatorClient({
                       x="50"
                       y={y + 4}
                       textAnchor="end"
-                      fill="#94a3b8"
+                      fill="#cbd5e1"
                       fontSize="11"
                     >
                       {chartViewMode === 'price' ? `${priceVal}만` : `${pct}%`}
@@ -1440,7 +1443,7 @@ export default function DepreciationCalculatorClient({
                       width={barWidth}
                       height={Math.max(2, 230 - yIce)}
                       rx="4"
-                      fill="#64748b"
+                      fill="#94a3b8"
                       className="transition-all duration-300 hover:opacity-90"
                     >
                       <title>{`${pt.year}년차 동급 내연기관(가솔린): ${chartViewMode === 'price' ? `${Math.round(pt.iceBenchmarkPrice / 10000)}만원` : `${pt.iceBenchmarkPct.toFixed(0)}%`}`}</title>
@@ -1611,7 +1614,7 @@ export default function DepreciationCalculatorClient({
               aria-valuetext={`${batteryHealth.sohPct.toFixed(1)}%`}
               className="relative w-44 h-44 mx-auto flex items-center justify-center"
             >
-              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
+              <svg className="w-full h-full transform -rotate-90" width="100" height="100" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
                 <title>배터리 잔존 성능(SoH) 원형 게이지</title>
                 {/* Track Circle */}
                 <circle

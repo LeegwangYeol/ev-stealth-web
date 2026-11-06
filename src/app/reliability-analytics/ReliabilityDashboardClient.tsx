@@ -148,6 +148,7 @@ interface HeatmapRowProps {
   model: EnrichedModelItem;
   evalMap?: Map<number, YearEvaluation>;
   heatmapYears: number[];
+  selectedCellKey?: string | null;
   onCellClick: (cell: {
     modelName: string;
     brandName: string;
@@ -163,6 +164,7 @@ const HeatmapRow = React.memo(function HeatmapRow({
   model,
   evalMap,
   heatmapYears,
+  selectedCellKey,
   onCellClick,
 }: HeatmapRowProps) {
   return (
@@ -173,7 +175,7 @@ const HeatmapRow = React.memo(function HeatmapRow({
       >
         <div className="truncate max-w-[130px] sm:max-w-none">{model.name}</div>
       </th>
-      <td className="p-3 text-slate-600 text-xs whitespace-nowrap">
+      <td className="p-3 text-slate-700 text-xs whitespace-nowrap">
         {model.brand_name_ko}
       </td>
       {heatmapYears.map((yr) => {
@@ -182,7 +184,7 @@ const HeatmapRow = React.memo(function HeatmapRow({
           return (
             <td key={yr} className="p-2 text-center">
               <div
-                className="w-8 h-8 mx-auto rounded-lg bg-slate-100 flex items-center justify-center text-[10px] text-slate-600 font-mono font-medium"
+                className="w-8 h-8 mx-auto rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] text-slate-700 font-mono font-medium"
                 title="해당 연식 데이터 없음"
                 aria-label="데이터 없음"
               >
@@ -211,6 +213,8 @@ const HeatmapRow = React.memo(function HeatmapRow({
             ? '주의 요망 (CAUTION)'
             : '안심 추천 (BUY SAFE)';
 
+        const isCellSelected = selectedCellKey === `${model.name}-${evalData.year}`;
+
         return (
           <td key={yr} className="p-2 text-center">
             <button
@@ -226,8 +230,12 @@ const HeatmapRow = React.memo(function HeatmapRow({
                   quote: rawQuote,
                 })
               }
-              aria-label={`${model.name} ${evalData.year}년식 ${evalData.verdict} DSI ${safeDsi}점 (${localizedVerdict}), 주요 결함: ${primaryDefect}`}
-              className={`w-9 h-9 min-w-[36px] min-h-[36px] mx-auto rounded-lg font-bold text-xs flex items-center justify-center shadow-sm cursor-pointer transition transform hover:scale-110 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${cellColor}`}
+              aria-expanded={isCellSelected}
+              aria-haspopup="dialog"
+              aria-label={`${model.name} ${evalData.year}년식 ${evalData.verdict} DSI ${safeDsi}점 (${localizedVerdict}), 주요 결함: ${primaryDefect}${isCellSelected ? ' (현재 선택됨)' : ''}`}
+              className={`w-9 h-9 min-w-[36px] min-h-[36px] mx-auto rounded-lg font-bold text-xs flex items-center justify-center shadow-sm cursor-pointer transition transform hover:scale-110 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${cellColor} ${
+                isCellSelected ? 'ring-2 ring-blue-500 ring-offset-2 scale-105' : ''
+              }`}
               title={`${model.name} (${evalData.year}): ${evalData.verdict} - DSI ${safeDsi}`}
             >
               {safeDsi}
@@ -280,18 +288,18 @@ const BrandRankingItem = React.memo(function BrandRankingItem({
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-4 mb-2">
         <div className="flex items-center gap-2">
-          <span className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center" aria-hidden="true">
+          <span className="w-6 h-6 rounded-full bg-slate-200 text-slate-800 text-xs font-bold flex items-center justify-center" aria-hidden="true">
             {idx + 1}
           </span>
           <span className="font-bold text-slate-900 text-sm sm:text-base">
             {brand?.name_ko || ''} {brand?.name_en ? `(${brand.name_en})` : ''}
           </span>
-          <span className="text-xs text-slate-600 font-normal">
+          <span className="text-xs text-slate-700 font-normal">
             {brand?.country || ''} · {modelCount}개 모델
           </span>
         </div>
         <div className="flex items-center gap-3 text-xs sm:text-sm">
-          <span className="text-slate-600">
+          <span className="text-slate-700">
             치명 결함율: <strong className="text-rose-700">{criticalRate}%</strong>
           </span>
           <span className="font-black text-slate-900 text-sm sm:text-base">
@@ -377,7 +385,7 @@ const RepairCostMatrixRow = React.memo(function RepairCostMatrixRow({ item }: Re
         className="p-4 font-bold text-slate-900 align-top text-left sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]"
       >
         <div>{item.component_name || '부품명 미지정'}</div>
-        <div className="text-[11px] text-slate-600 font-normal mt-1">
+        <div className="text-[11px] text-slate-700 font-normal mt-1">
           {item.affected_systems || '-'}
         </div>
       </th>
@@ -390,7 +398,7 @@ const RepairCostMatrixRow = React.memo(function RepairCostMatrixRow({ item }: Re
       <td className="p-4 align-top">
         <div className="flex flex-wrap gap-1">
           {highRiskModels.length === 0 ? (
-            <span className="text-slate-600 text-xs">전 차종 공통</span>
+            <span className="text-slate-700 text-xs">전 차종 공통</span>
           ) : (
             highRiskModels.map((m) => (
               <span
@@ -802,7 +810,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             <div className="text-2xl sm:text-3xl font-black text-white mt-1">
               {(Number.isFinite(metadata?.total_records_analyzed) ? metadata.total_records_analyzed : 0).toLocaleString()}건
             </div>
-            <div id="kpi-records-desc" className="text-xs text-blue-400 mt-1 font-medium">
+            <div id="kpi-records-desc" className="text-xs text-blue-300 mt-1 font-medium">
               {brands.length}개 브랜드 · {metadata.models_count || allModels.length}개 모델 조사
             </div>
           </div>
@@ -830,7 +838,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             className="bg-slate-800/80 backdrop-blur rounded-2xl p-4 sm:p-5 border border-slate-700"
           >
             <div id="kpi-avoid-heading" className="text-xs sm:text-sm text-slate-300 font-medium">구매 회피 (AVOID) 연식</div>
-            <div className="text-2xl sm:text-3xl font-black text-rose-400 mt-1">
+            <div className="text-2xl sm:text-3xl font-black text-rose-300 mt-1">
               {avoidPercentage}%
             </div>
             <div id="kpi-avoid-desc" className="text-xs text-rose-300 mt-1 font-medium">
@@ -863,7 +871,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               <span aria-hidden="true">📈</span>
               <span>데이터 시각화 차트 센터</span>
             </h2>
-            <p className="text-sm text-slate-600 mt-1">
+            <p className="text-sm text-slate-700 mt-1">
               연식별 위험 매트릭스, 9대 브랜드 결함 랭킹, 부문별 비중을 실시간으로 확인하세요.
             </p>
           </div>
@@ -885,8 +893,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   onClick={() => setActiveChartTab(tab.id)}
                   className={`px-3.5 py-1.5 min-h-[44px] inline-flex items-center justify-center text-xs sm:text-sm font-semibold rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                     isSelected
-                      ? 'bg-white text-indigo-600 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
+                      ? 'bg-white text-indigo-700 shadow-sm'
+                      : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
                   {tab.label}
@@ -1086,6 +1094,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 >
                   <svg
                     viewBox={`0 0 680 ${brandSvgHeight}`}
+                    width="680"
+                    height={brandSvgHeight}
                     className="w-full min-w-[560px] h-auto select-none"
                     role="img"
                     aria-labelledby="brand-dsi-svg-title brand-dsi-svg-desc"
@@ -1334,7 +1344,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           <div className="relative flex-1">
             <label htmlFor="reliability-search-input" className="sr-only">차종, 브랜드, 결함 증상 검색</label>
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-600">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <svg className="w-5 h-5" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>

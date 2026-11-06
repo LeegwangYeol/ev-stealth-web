@@ -183,3 +183,10 @@ export interface SubsidyStatistics {
   warningRegionsCount: number;
 }
 
+/**
+ * Domain & Tracker Interoperability Aliases
+ */
+export type SubsidyPayload = EVSubsidyDataset;
+export type SubsidyRegion = RegionEntry;
+
+

@@ -19,10 +19,13 @@ const SiteFooter = memo(function SiteFooter() {
           <span>환경부 무공해차 통합누리집 (KECO)</span>
           <svg
             className="w-3.5 h-3.5 text-slate-300 shrink-0"
+            width="14"
+            height="14"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
             aria-hidden="true"
+            focusable="false"
           >
             <path
               strokeLinecap="round"
@@ -44,10 +47,13 @@ const SiteFooter = memo(function SiteFooter() {
           <span>국토교통부 자동차리콜센터 (MOLIT)</span>
           <svg
             className="w-3.5 h-3.5 text-slate-300 shrink-0"
+            width="14"
+            height="14"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
             aria-hidden="true"
+            focusable="false"
           >
             <path
               strokeLinecap="round"
@@ -69,10 +75,13 @@ const SiteFooter = memo(function SiteFooter() {
           <span>미국 도로교통안전국 (NHTSA)</span>
           <svg
             className="w-3.5 h-3.5 text-slate-300 shrink-0"
+            width="14"
+            height="14"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
             aria-hidden="true"
+            focusable="false"
           >
             <path
               strokeLinecap="round"
@@ -87,8 +96,17 @@ const SiteFooter = memo(function SiteFooter() {
       <p className="text-[11px] text-slate-300 max-w-xl mx-auto leading-relaxed">
         본 서비스의 보조금 및 결함 정보는 공공 데이터와 실차주 제보를 기반으로 분석된 참고용 정보이며, 실제 지급 여부는 관할 지자체 공고에 따릅니다.
       </p>
-      <div className="pt-1 text-slate-300 text-[11px]">
-        © 2026 EV Critical Issues &amp; Safety Intelligence Hub. All rights reserved.
+      <div className="pt-1 flex flex-wrap justify-center items-center gap-2 text-slate-300 text-[11px]">
+        <span>© 2026 EV Critical Issues &amp; Safety Intelligence Hub. All rights reserved.</span>
+        <span aria-hidden="true">·</span>
+        <a
+          href="#main-content"
+          className="text-slate-300 hover:text-white underline underline-offset-2 rounded px-1.5 py-0.5 min-h-[24px] inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 transition-colors"
+          aria-label="본문 맨 위로 바로가기"
+        >
+          <span aria-hidden="true">↑</span>
+          <span>본문 맨 위로</span>
+        </a>
       </div>
     </footer>
   );

@@ -7,7 +7,9 @@ const geistSans = localFont({
   variable: "--font-geist-sans",
   weight: "100 900",
   display: "swap",
+  preload: true,
   fallback: [
+    "Pretendard Variable",
     "Pretendard",
     "-apple-system",
     "BlinkMacSystemFont",
@@ -53,6 +55,14 @@ const globalJsonLd = {
       "alternateName": ["글로벌 EV 허브", "전기차 결함 및 리콜 정보 포털"],
       "description": "글로벌 전기차 결함, 리콜 정보, 실시간 보조금 소진율 및 감가방어율 종합 분석 포털",
       "inLanguage": "ko-KR",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": `${SITE_URL}/recall-portal?search={search_term_string}`,
+        },
+        "query-input": "required name=search_term_string",
+      },
     },
     {
       "@type": "Organization",
@@ -169,34 +179,34 @@ export default function RootLayout({
 
             {/* Desktop Navigation Bar */}
             <nav aria-label="데스크톱 내비게이션" data-testid="desktop-nav" className="hidden md:flex flex-wrap items-center justify-end gap-x-2 lg:gap-x-3 gap-y-1 text-xs lg:text-sm font-medium">
-              <Link href="/subsidy-tracker" prefetch={true} className="text-amber-400 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
+              <Link href="/subsidy-tracker" prefetch={true} aria-label="보조금 실시간 소진율 (전국 지자체 추적기)" className="text-amber-400 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
                 <span aria-hidden="true">⚡</span> 보조금 실시간 소진율
               </Link>
-              <Link href="/depreciation-calculator" prefetch={true} className="text-emerald-400 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
+              <Link href="/depreciation-calculator" prefetch={true} aria-label="감가·배터리 계산기 (잔존가치 및 열화 시뮬레이션)" className="text-emerald-400 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
                 <span aria-hidden="true">📉</span> 감가·배터리 계산기
               </Link>
-              <Link href="/reliability-analytics" prefetch={false} className="text-blue-300 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
+              <Link href="/reliability-analytics" prefetch={false} aria-label="결함·신뢰성 통계 (DSI 내구성 지수 분석)" className="text-blue-300 hover:text-white font-semibold transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
                 <span aria-hidden="true">📊</span> 결함·신뢰성 통계
               </Link>
-              <Link href="/recall-portal" prefetch={false} className="text-slate-200 hover:text-white font-medium transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
+              <Link href="/recall-portal" prefetch={false} aria-label="공식 리콜 포털 (국토부·NHTSA 공인 연동)" className="text-slate-200 hover:text-white font-medium transition flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
                 <span aria-hidden="true">🚨</span> 공식 리콜 포털
               </Link>
-              <Link href="/2026-latest" prefetch={false} className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
+              <Link href="/2026-latest" prefetch={false} aria-label="2026 최신 결함 분석" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
                 2026 최신 결함
               </Link>
               <Link href="/pdi-checklist" prefetch={false} aria-label="신차 출고 전 점검(PDI) 체크리스트" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
                 PDI 체크리스트
               </Link>
-              <Link href="/hyundai-kia" prefetch={false} className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
+              <Link href="/hyundai-kia" prefetch={false} aria-label="현대/기아 연식별 피하기 가이드" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
                 현대/기아
               </Link>
-              <Link href="/tesla" prefetch={false} className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
+              <Link href="/tesla" prefetch={false} aria-label="테슬라 연식별 피하기 가이드" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
                 테슬라
               </Link>
-              <Link href="/byd" prefetch={false} className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
+              <Link href="/byd" prefetch={false} aria-label="BYD 연식별 피하기 가이드" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
                 BYD
               </Link>
-              <Link href="/global-brands" prefetch={false} className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
+              <Link href="/global-brands" prefetch={false} aria-label="기타 글로벌 브랜드 연식별 피하기 가이드" className="text-slate-200 hover:text-white font-medium transition px-2 py-1 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
                 기타 글로벌
               </Link>
             </nav>
@@ -207,10 +217,10 @@ export default function RootLayout({
                 aria-label="모바일 내비게이션 메뉴 토글"
                 className="list-none flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-sm font-medium cursor-pointer border border-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 select-none"
               >
-                <svg className="w-5 h-5 block group-open:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg className="w-5 h-5 block group-open:hidden" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
-                <svg className="w-5 h-5 hidden group-open:block" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg className="w-5 h-5 hidden group-open:block" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
                 <span className="group-open:hidden">메뉴 열기</span>
@@ -230,6 +240,7 @@ export default function RootLayout({
                 <Link
                   href="/subsidy-tracker"
                   prefetch={true}
+                  aria-label="전국 보조금 소진율 추적기 실시간 확인"
                   className="px-3 py-2 min-h-[44px] rounded-lg bg-amber-950/60 border border-amber-500/50 text-amber-300 hover:text-white font-semibold transition flex items-center justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <span className="flex items-center gap-2">
@@ -240,6 +251,7 @@ export default function RootLayout({
                 <Link
                   href="/depreciation-calculator"
                   prefetch={true}
+                  aria-label="감가·배터리 계산기 (잔존가치 및 열화 시뮬레이션)"
                   className="px-3 py-2 min-h-[44px] rounded-lg bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 hover:text-white font-semibold transition flex items-center justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <span className="flex items-center gap-2">
@@ -250,6 +262,7 @@ export default function RootLayout({
                 <Link
                   href="/reliability-analytics"
                   prefetch={false}
+                  aria-label="신뢰성 통계 및 결함(DSI) 분석 대시보드"
                   className="px-3 py-2 min-h-[44px] rounded-lg hover:bg-slate-800 text-blue-300 hover:text-white font-semibold transition flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <span aria-hidden="true">📊</span> 신뢰성 통계
@@ -257,6 +270,7 @@ export default function RootLayout({
                 <Link
                   href="/recall-portal"
                   prefetch={false}
+                  aria-label="공식 전기차 리콜 포털 (국토부·NHTSA 공인)"
                   className="px-3 py-2 min-h-[44px] rounded-lg hover:bg-slate-800 text-slate-200 hover:text-white font-medium transition flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <span aria-hidden="true">🚨</span> 리콜 포털
@@ -264,6 +278,7 @@ export default function RootLayout({
                 <Link
                   href="/2026-latest"
                   prefetch={false}
+                  aria-label="2026 최신 결함 분석 리포트"
                   className="px-3 py-2 min-h-[44px] rounded-lg hover:bg-slate-800 text-slate-200 hover:text-white font-medium transition flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <span aria-hidden="true">🔥</span> 2026 최신 결함
@@ -276,19 +291,19 @@ export default function RootLayout({
                 >
                   <span aria-hidden="true">✅</span> PDI 체크리스트
                 </Link>
-                <div className="h-px border-t border-slate-800 my-1" />
+                <div className="h-px border-t border-slate-800 my-1" role="separator" aria-hidden="true" />
                 <div className="text-[11px] font-semibold text-slate-300 px-2 py-0.5">제조사별 피하기 가이드</div>
                 <div className="grid grid-cols-2 gap-1.5">
-                  <Link href="/hyundai-kia" prefetch={false} className="px-2.5 py-2 min-h-[44px] flex items-center rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                  <Link href="/hyundai-kia" prefetch={false} aria-label="현대/기아 연식별 피하기 가이드" className="px-2.5 py-2 min-h-[44px] flex items-center rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
                     현대/기아
                   </Link>
-                  <Link href="/tesla" prefetch={false} className="px-2.5 py-2 min-h-[44px] flex items-center rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                  <Link href="/tesla" prefetch={false} aria-label="테슬라 연식별 피하기 가이드" className="px-2.5 py-2 min-h-[44px] flex items-center rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
                     테슬라
                   </Link>
-                  <Link href="/byd" prefetch={false} className="px-2.5 py-2 min-h-[44px] flex items-center rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                  <Link href="/byd" prefetch={false} aria-label="BYD 연식별 피하기 가이드" className="px-2.5 py-2 min-h-[44px] flex items-center rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
                     BYD
                   </Link>
-                  <Link href="/global-brands" prefetch={false} className="px-2.5 py-2 min-h-[44px] flex items-center rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                  <Link href="/global-brands" prefetch={false} aria-label="기타 글로벌 브랜드 연식별 피하기 가이드" className="px-2.5 py-2 min-h-[44px] flex items-center rounded hover:bg-slate-800 text-slate-300 hover:text-white text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
                     기타 글로벌
                   </Link>
                 </div>

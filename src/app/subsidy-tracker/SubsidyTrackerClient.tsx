@@ -20,18 +20,18 @@ import SubsidyProgressBar from '@/components/subsidy/SubsidyProgressBar';
 
 // Pure Helper: Badge styling with opaque solid backgrounds for compliant WCAG AA contrast (> 7:1)
 export const getBadgeStyle = (status?: AlertSeverity | string | null): string => {
-  const normalized = (status || '').toLowerCase();
+  const normalized = (status || '').toUpperCase();
   switch (normalized) {
-    case 'healthy':
-    case 'available':
+    case 'HEALTHY':
+    case 'AVAILABLE':
       return 'bg-emerald-950 text-emerald-300 border-emerald-500/50';
-    case 'caution':
+    case 'CAUTION':
       return 'bg-amber-950 text-amber-300 border-amber-500/50';
-    case 'warning':
+    case 'WARNING':
       return 'bg-orange-950 text-orange-300 border-orange-500/50';
-    case 'critical':
+    case 'CRITICAL':
       return 'bg-rose-950 text-rose-300 border-rose-500/50 animate-pulse motion-reduce:animate-none';
-    case 'depleted':
+    case 'DEPLETED':
       return 'bg-slate-900 text-slate-200 border-slate-500';
     default:
       return 'bg-emerald-950 text-emerald-300 border-emerald-500/50';
@@ -40,18 +40,18 @@ export const getBadgeStyle = (status?: AlertSeverity | string | null): string =>
 
 // Pure Helper: Status badge labels with accessible visual indicator
 export const getStatusLabel = (status?: AlertSeverity | string | null): string => {
-  const normalized = (status || '').toLowerCase();
+  const normalized = (status || '').toUpperCase();
   switch (normalized) {
-    case 'healthy':
-    case 'available':
+    case 'HEALTHY':
+    case 'AVAILABLE':
       return '🟢 안정';
-    case 'caution':
+    case 'CAUTION':
       return '🟡 주의';
-    case 'warning':
+    case 'WARNING':
       return '🟠 경고';
-    case 'critical':
+    case 'CRITICAL':
       return '🔴 마감임박';
-    case 'depleted':
+    case 'DEPLETED':
       return '🔒 소진';
     default:
       return '🟢 안정';
@@ -61,7 +61,11 @@ export const getStatusLabel = (status?: AlertSeverity | string | null): string =
 const SubsidyTableView = dynamic(() => import('@/components/subsidy/SubsidyTableView'), {
   ssr: true,
   loading: () => (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-300 animate-pulse motion-reduce:animate-none">
+    <div
+      role="status"
+      aria-live="polite"
+      className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-300 animate-pulse motion-reduce:animate-none"
+    >
       <div className="text-sm font-semibold text-slate-300">표 형식 데이터를 불러오는 중...</div>
     </div>
   ),
@@ -489,9 +493,11 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             aria-label="보조금 긴급 소진 주의보"
             className="mt-6 bg-rose-950 border border-rose-500/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm"
           >
-            <div role="alert" className="flex flex-wrap items-center gap-2 text-rose-200">
-              <span className="text-base" aria-hidden="true">🚨</span>
-              <strong className="text-rose-100 font-semibold">마감 임박 특보 (소진율 95% 초과):</strong>
+            <div className="flex flex-wrap items-center gap-2 text-rose-200">
+              <div role="alert" className="flex items-center gap-1.5">
+                <span className="text-base" aria-hidden="true">🚨</span>
+                <strong className="text-rose-100 font-semibold">마감 임박 특보 (소진율 95% 초과):</strong>
+              </div>
               <div className="flex flex-wrap gap-1.5 ml-1">
                 {criticalRegions.map((crit) => (
                   <button
@@ -613,7 +619,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             <label htmlFor="region-search-input" className="sr-only">
               지자체 검색
             </label>
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-300 text-sm">
+            <div aria-hidden="true" className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-300 text-sm">
               🔍
             </div>
             <input
@@ -632,7 +638,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 aria-label="검색어 지우기"
                 className="absolute inset-y-0 right-0 pr-3 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-300 hover:text-white text-sm rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
               >
-                ✕
+                <span aria-hidden="true">✕</span>
               </button>
             )}
           </div>
@@ -682,8 +688,8 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
 
         {/* Active Filter Clear indicator with role="status" and aria-live */}
         {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || searchQuery || supplementaryOnly) && (
-          <div role="status" className="flex items-center justify-between text-xs text-slate-300 pt-2 border-t border-slate-800" aria-live="polite">
-            <span>
+          <div className="flex items-center justify-between text-xs text-slate-300 pt-2 border-t border-slate-800">
+            <span role="status" aria-live="polite">
               필터 적용 중: 총 <strong>{filteredRegions.length}</strong>개 지역 표시 중
             </span>
             <button
@@ -879,14 +885,7 @@ const RegionCard = React.memo(function RegionCard({
         </div>
 
         {/* Dual-layer Progress Bar via memoized SubsidyProgressBar */}
-        <div
-          role="progressbar"
-          aria-valuenow={Math.round(safeDepletion)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuetext={`소진율 ${safeDepletion.toFixed(1)}%`}
-          aria-label={`${region.name_ko} 보조금 소진율`}
-        >
+        <div>
           <SubsidyProgressBar
             depletionRate={safeDepletion}
             deliveredUnits={safeDelivered}
@@ -959,7 +958,7 @@ const RegionCard = React.memo(function RegionCard({
               tabIndex={0}
               role="region"
               aria-label={`${region.name_ko} 세부 시·군·구 보조금 현황 목록`}
-              className="mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
+              className={`${!isExpanded ? 'hidden' : ''} mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg`}
             >
               {munis.map((muni) => {
                 const muniAnnounced = Number.isFinite(muni.announced_units) ? Math.max(0, muni.announced_units) : 0;

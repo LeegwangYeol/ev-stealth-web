@@ -11,6 +11,8 @@ body {
   color: var(--foreground);
   background: var(--background);
   font-family: var(--font-geist-sans), "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  font-synthesis: none;
+  font-optical-sizing: auto;
   word-break: keep-all;
   overflow-wrap: break-word;
   -webkit-font-smoothing: antialiased;

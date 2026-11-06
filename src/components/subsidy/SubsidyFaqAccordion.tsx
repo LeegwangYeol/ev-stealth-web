@@ -134,7 +134,7 @@ const FaqItemRow = memo(function FaqItemRow({
         role="region"
         aria-labelledby={`faq-btn-${item.id}`}
         hidden={!isOpen}
-        className="px-4 sm:px-5 pb-4 pt-1 border-t border-slate-800/60 bg-slate-950/40"
+        className={`${!isOpen ? 'hidden' : ''} px-4 sm:px-5 pb-4 pt-1 border-t border-slate-800/60 bg-slate-950/40`}
       >
         {item.answer}
       </div>

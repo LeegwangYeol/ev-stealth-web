@@ -133,6 +133,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
             >
               <div
                 style={{ width: `${Math.min(100, Math.max(0, depletionRate))}%` }}
+                aria-hidden="true"
                 className={`h-full ${
                   depletionRate >= 95
                     ? 'bg-rose-500'
@@ -193,7 +194,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
 
       {/* Sub-Municipalities Expandable Detail Row (Kept in DOM with hidden={!isExpanded} to fulfill W3C ARIA aria-controls contract) */}
       {hasMunis && (
-        <tr hidden={!isExpanded}>
+        <tr hidden={!isExpanded} className={!isExpanded ? 'hidden' : ''}>
           <td colSpan={10} className="p-0 bg-slate-900/90 border-b border-slate-800">
             <div
               id={'muni-details-' + regionId}

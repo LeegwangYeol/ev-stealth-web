@@ -201,6 +201,7 @@ export const PdiItemRow = memo(function PdiItemRow({ item, onToggle }: PdiItemRo
         id={`pdi-task-${item.id}`}
         type="checkbox"
         checked={item.checked}
+        aria-checked={item.checked}
         aria-label={item.task}
         aria-describedby={item.warning ? `pdi-warning-${item.id}` : undefined}
         onChange={() => onToggle(item.id)}
@@ -283,6 +284,15 @@ export default function PdiChecklistClient() {
   }, []);
 
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  // Collapsed categories state for accordion disclosure (empty = all open by default)
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+
+  const toggleCategoryCollapse = useCallback((cat: string) => {
+    setCollapsedCategories((prev) => ({
+      ...prev,
+      [cat]: !prev[cat],
+    }));
+  }, []);
 
   const isAllChecked = useMemo(() => items.length > 0 && items.every((i) => i.checked), [items]);
 
@@ -377,7 +387,7 @@ export default function PdiChecklistClient() {
                 type="button"
                 className="px-3.5 py-2 min-h-[44px] text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg className="w-4 h-4" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-4 0v5H8v-5m6-3h2m-6 0h.01" />
                 </svg>
                 인쇄 / PDF 저장
@@ -460,6 +470,7 @@ export default function PdiChecklistClient() {
                 type="button"
                 role="tab"
                 aria-selected={isSelected}
+                aria-expanded={isSelected}
                 aria-controls="pdi-checklist-tabpanel"
                 tabIndex={isSelected ? 0 : -1}
                 onKeyDown={(e) => handleTabKeyDown(e, 0)}
@@ -486,6 +497,7 @@ export default function PdiChecklistClient() {
                 type="button"
                 role="tab"
                 aria-selected={isSelected}
+                aria-expanded={isSelected}
                 aria-controls="pdi-checklist-tabpanel"
                 tabIndex={isSelected ? 0 : -1}
                 onKeyDown={(e) => handleTabKeyDown(e, tabIndex)}
@@ -510,8 +522,10 @@ export default function PdiChecklistClient() {
         tabIndex={0}
         className="space-y-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
       >
-        {categories.map((category) => {
+        {categories.map((category, idx) => {
           const isCategoryActive = selectedCategory === 'ALL' || selectedCategory === category;
+          const isCollapsed = Boolean(collapsedCategories[category]);
+          const contentId = `pdi-category-items-${idx}`;
           return (
             <fieldset
               key={category}
@@ -521,11 +535,37 @@ export default function PdiChecklistClient() {
               <legend className="sr-only">{category} 신차 출고 전 점검(PDI) 항목</legend>
               <h2
                 id={`pdi-cat-${category}`}
-                className="bg-slate-50 print:bg-slate-100 border-b border-gray-200 p-4 text-xl font-bold text-slate-800 print:text-black print:text-sm print:py-2 print:px-3 print:border-black print:break-after-avoid"
+                className="bg-slate-50 print:bg-slate-100 border-b border-gray-200 text-xl font-bold text-slate-800 print:text-black print:text-sm print:border-black print:break-after-avoid"
               >
-                {category}
+                <button
+                  type="button"
+                  onClick={() => toggleCategoryCollapse(category)}
+                  aria-expanded={!isCollapsed}
+                  aria-controls={contentId}
+                  aria-label={`${category} 점검 항목 ${!isCollapsed ? '접기' : '펼치기'}`}
+                  className="w-full p-4 flex items-center justify-between text-left text-slate-800 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-t-2xl transition print:p-2 print:hover:text-black"
+                >
+                  <span>{category}</span>
+                  <span className="flex items-center gap-2 text-xs font-normal text-slate-600 print:hidden">
+                    <span>({categoryStats[category]?.checked || 0}/{categoryStats[category]?.total || 0} 완료)</span>
+                    <svg
+                      className={`w-5 h-5 transform transition-transform duration-200 ${!isCollapsed ? 'rotate-180' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </span>
+                </button>
               </h2>
-              <div className="divide-y divide-gray-100">
+              <div
+                id={contentId}
+                role="region"
+                aria-labelledby={`pdi-cat-${category}`}
+                className={`divide-y divide-gray-100 ${isCollapsed ? 'hidden print:block' : 'block'}`}
+              >
                 {(itemsByCategory.get(category) || []).map((item) => (
                   <PdiItemRow key={item.id} item={item} onToggle={toggleCheck} />
                 ))}
