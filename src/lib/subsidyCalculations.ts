@@ -728,7 +728,15 @@ export function safeCompareNumbers(
   return !isFiniteA ? 1 : -1;
 }
 
-export type RegionSortOption = 'DEPLETION_DESC' | 'DEPLETION_ASC' | 'REMAINING_ASC' | 'LOCAL_SUBSIDY_DESC' | 'NAME_ASC';
+export type RegionSortOption =
+  | 'DEPLETION_DESC'
+  | 'DEPLETION_ASC'
+  | 'REMAINING_ASC'
+  | 'REMAINING_DESC'
+  | 'LOCAL_SUBSIDY_DESC'
+  | 'LOCAL_SUBSIDY_ASC'
+  | 'NAME_ASC'
+  | 'NAME_DESC';
 
 /**
  * Deterministic, NaN-safe region comparator.
@@ -778,14 +786,34 @@ export function compareRegions(
       cmp = safeCompareNumbers(remA, remB, 'asc');
       break;
     }
+    case 'REMAINING_DESC': {
+      const remA = typeof catA?.remaining_units === 'number' && !Number.isNaN(catA.remaining_units)
+        ? catA.remaining_units
+        : calculateRemainingUnits(catA?.applied_units, catA?.announced_units);
+      const remB = typeof catB?.remaining_units === 'number' && !Number.isNaN(catB.remaining_units)
+        ? catB.remaining_units
+        : calculateRemainingUnits(catB?.applied_units, catB?.announced_units);
+      cmp = safeCompareNumbers(remA, remB, 'desc');
+      break;
+    }
     case 'LOCAL_SUBSIDY_DESC': {
       const subA = parseSubsidyNumber(catA?.max_local_subsidy_krw, { defaultKrw: 0 });
       const subB = parseSubsidyNumber(catB?.max_local_subsidy_krw, { defaultKrw: 0 });
       cmp = safeCompareNumbers(subA, subB, 'desc');
       break;
     }
+    case 'LOCAL_SUBSIDY_ASC': {
+      const subA = parseSubsidyNumber(catA?.max_local_subsidy_krw, { defaultKrw: 0 });
+      const subB = parseSubsidyNumber(catB?.max_local_subsidy_krw, { defaultKrw: 0 });
+      cmp = safeCompareNumbers(subA, subB, 'asc');
+      break;
+    }
     case 'NAME_ASC': {
       cmp = (a.name_ko || '').localeCompare(b.name_ko || '', 'ko');
+      break;
+    }
+    case 'NAME_DESC': {
+      cmp = (b.name_ko || '').localeCompare(a.name_ko || '', 'ko');
       break;
     }
     default:

@@ -51,6 +51,38 @@ const depreciationJsonLd = {
       temporalCoverage: '2021/2026',
     },
     {
+      '@type': 'ItemList',
+      '@id': `${SITE_URL}/depreciation-calculator#itemlist`,
+      name: '전기차 감가율 및 배터리 잔존가치 시뮬레이션 주요 차종',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: '현대 아이오닉 5 (E-GMP 800V 초급속 충전 및 5개년 감가방어율)',
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: '기아 EV6 (고성능 전기 크로스오버 및 배터리 잔여수명 SoH)',
+        },
+        {
+          '@type': 'ListItem',
+          position: 3,
+          name: '테슬라 모델 3 / 모델 Y (글로벌 베스트셀러 감가 방어율 및 LFP 열화도)',
+        },
+        {
+          '@type': 'ListItem',
+          position: 4,
+          name: '기아 EV9 (대형 3열 패밀리 전기 SUV 감가 및 TCO 총소유비용)',
+        },
+        {
+          '@type': 'ListItem',
+          position: 5,
+          name: '현대 포터2 EV / 기아 봉고3 EV (영업용 화물 충방전 사이클 수명)',
+        },
+      ],
+    },
+    {
       '@type': 'FAQPage',
       '@id': `${SITE_URL}/depreciation-calculator#faq`,
       mainEntity: [

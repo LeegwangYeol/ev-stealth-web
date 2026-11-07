@@ -12,6 +12,14 @@ const config: Config = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        // WCAG AA & AAA compliant accessible tokens
+        a11y: {
+          focus: "#2563eb",
+          "focus-dark": "#60a5fa",
+          "high-contrast": "#0f172a",
+          muted: "#475569",
+          subtle: "#334155",
+        },
       },
       fontFamily: {
         sans: [

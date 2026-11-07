@@ -36,6 +36,61 @@ const hyundaiKiaJsonLd = {
       mainEntityOfPage: `${SITE_URL}/hyundai-kia`,
     },
     {
+      '@type': 'ItemList',
+      '@id': `${SITE_URL}/hyundai-kia#itemlist`,
+      name: '현대/기아 전기차 주요 차종별 연식 결함 가이드',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: '현대 아이오닉 5 (2021~2022 초기형 ICCU 결함 회피 및 2025 페이스리프트 추천)',
+          url: `${SITE_URL}/hyundai-kia#heading-ioniq5`,
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: '기아 EV6 (2021~2023 12V 방전 및 통합충전모듈 리콜)',
+          url: `${SITE_URL}/hyundai-kia#heading-ev6`,
+        },
+        {
+          '@type': 'ListItem',
+          position: 3,
+          name: '기아 EV9 (초기 시동 꺼짐 소프트웨어 리콜 및 고용량 배터리팩 안전성)',
+          url: `${SITE_URL}/hyundai-kia#heading-ev9`,
+        },
+      ],
+    },
+    {
+      '@type': 'FAQPage',
+      '@id': `${SITE_URL}/hyundai-kia#faq`,
+      mainEntity: [
+        {
+          '@type': 'Question',
+          name: '아이오닉 5 및 EV6의 ICCU(통합충전제어장치) 결함 증상은 무엇인가요?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: '완속 충전 직후 또는 고속 주행 중 차량 뒤편에서 펑 소리와 함께 전원공급장치 점검 경고등이 점등되며 수 분 내 차량 속도가 제한되고 시동이 꺼지는 현상입니다. 내부 파워소자 과전류 파손이 원인입니다.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: '중고 아이오닉5/EV6 구매 시 ICCU 개선품 장착 여부를 확인하는 방법은?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: '블루핸즈나 오토큐 또는 자동차리콜센터(car.go.kr)에서 차대번호(VIN)로 국토교통부 리콜 및 무상수리 이력(개선형 ICCU 부품 교체 여부)을 반드시 확인한 후 구매해야 합니다.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: '현대/기아 전기차 중 가장 안전하게 추천할 수 있는 연식은?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: '2024년식 하반기 이후 페이스리프트 모델(더 뉴 아이오닉5, 더 뉴 EV6) 및 2025~2026년식은 2세대 개선형 ICCU와 84kWh 대용량 배터리가 장착되어 내구성과 고질병 위험이 획기적으로 개선되었습니다.',
+          },
+        },
+      ],
+    },
+    {
       '@type': 'BreadcrumbList',
       '@id': `${SITE_URL}/hyundai-kia#breadcrumb`,
       itemListElement: [
@@ -107,9 +162,151 @@ export default function HyundaiKiaPage() {
     <article className="space-y-8 py-6 sm:py-10 max-w-4xl mx-auto">
       <JsonLd data={hyundaiKiaJsonLd} />
       <BrandComparisonNav currentBrand="hyundai-kia" pageTitle="현대/기아 구매 가이드" />
-      <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold border-b pb-4 text-slate-900 tracking-tight">
-        현대/기아 연식별 구매 가이드 (피해야 할 연식)
-      </h1>
+
+      <header className="border-b pb-4 space-y-2">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
+          현대/기아 연식별 구매 가이드 (피해야 할 연식)
+        </h1>
+        <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
+          현대 아이오닉 5, 기아 EV6, EV9의 E-GMP 800V ICCU(통합충전제어장치) 파손, 후륜 구동축 스플라인 파손 및 12V 방전 고질병을 분석하고 연식별 안전 구매 기준을 제시합니다.
+        </p>
+      </header>
+
+      {/* 현대/기아 연식별 판정 요약 표 (WCAG AA Compliance: table headers, caption, overflow container) */}
+      <section aria-labelledby="heading-hyundai-kia-summary" className="space-y-3">
+        <h2 id="heading-hyundai-kia-summary" className="text-xl sm:text-2xl font-bold text-slate-900">
+          현대·기아 주요 차종 연식별 판정 요약 표
+        </h2>
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <table className="w-full min-w-[640px] text-left border-collapse text-xs sm:text-sm" aria-label="현대 기아 주요 모델별 주의 및 추천 연식 요약 표">
+            <caption className="sr-only">현대 아이오닉 5, 기아 EV6, EV9 연식별 회피 연식, 주의 연식, 추천 연식, 주요 고질병 및 리콜 출처 요약 표</caption>
+            <thead className="bg-slate-900 text-slate-100 uppercase text-[11px] sm:text-xs tracking-wider">
+              <tr>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">차종/모델</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">회피 연식 (AVOID)</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">주의 연식 (CAUTION)</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">추천 연식 (BUY SAFE)</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">핵심 결함 및 리스크</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100 text-center">공식 리콜</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <th scope="row" className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  아이오닉 5 (Ioniq 5)
+                </th>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-900">
+                    2021~2022년식
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-900">
+                    2023~2024년식
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-900">
+                    2025년식 (PE)
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  800V ICCU 내부 퓨즈 단선(고속도로 동력 상실), 후방 와이퍼 미적용
+                </td>
+                <td className="py-3 px-4 text-center whitespace-nowrap">
+                  <a
+                    href="https://www.car.go.kr"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="국토교통부 자동차리콜센터 아이오닉 5 ICCU 리콜 공지 (새 창에서 열림)"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                  >
+                    <span>리콜 조회</span>
+                    <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                  </a>
+                </td>
+              </tr>
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <th scope="row" className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  기아 EV6 (Kia EV6)
+                </th>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-900">
+                    2022년식
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-900">
+                    2023~2024년식
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-900">
+                    2025년식 (PE)
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  충전구 핀 고착, 후륜 구동축 스플라인 파손(24V-057), 오디오 앰프 고장
+                </td>
+                <td className="py-3 px-4 text-center whitespace-nowrap">
+                  <a
+                    href="https://www.nhtsa.gov/recalls?nhtsaId=24V057000"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="미국 NHTSA 기아 EV6 구동축 파손 리콜(24V-057) 정보 (새 창에서 열림)"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                  >
+                    <span>NHTSA</span>
+                    <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                  </a>
+                </td>
+              </tr>
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <th scope="row" className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  기아 EV9 (Kia EV9)
+                </th>
+                <td className="py-3 px-4 text-slate-400">
+                  -
+                </td>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-900">
+                    2023~2024년식
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-900">
+                    2025~2026년식
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  지문인식/무선충전 암전류 12V 방전 및 대용량 ICCU 완속 충전 오류
+                </td>
+                <td className="py-3 px-4 text-center whitespace-nowrap">
+                  <a
+                    href="https://www.car.go.kr"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="국토교통부 자동차리콜센터 기아 EV9 리콜 및 무상수리 정보 (새 창에서 열림)"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                  >
+                    <span>리콜 조회</span>
+                    <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                  </a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
       
       {/* Ioniq 5 Guide */}
       <section className="space-y-4" aria-labelledby="heading-ioniq5">

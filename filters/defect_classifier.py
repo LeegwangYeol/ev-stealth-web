@@ -177,6 +177,41 @@ _MULTI_PART_DEFECT_TERMS: Tuple[Tuple[Tuple[str, ...], str], ...] = tuple(
     (tuple(t.split()), t) for t in _ALL_DEFECT_TERMS_LIST if " " in t
 )
 
+MAX_TEXT_LENGTH: int = 50_000
+
+# Pre-normalized and lowercased slang entry pairs for fast case-insensitive evaluation
+_SLANG_TERM_LOWER_PAIRS: Tuple[Tuple[SlangEntry, str, str], ...] = tuple(
+    (entry, unicodedata.normalize("NFC", entry.term), unicodedata.normalize("NFC", entry.term).lower())
+    for entry in RAW_SLANG_ENTRIES
+)
+
+
+def sanitize_text(val: Any, max_len: int = MAX_TEXT_LENGTH) -> str:
+    """Safely coerces input to str, strips null bytes & control chars, normalizes NFC, and caps length."""
+    if val is None or val is False:
+        return ""
+    if isinstance(val, (bytes, bytearray)):
+        try:
+            val_str = val.decode("utf-8", errors="replace")
+        except Exception:
+            val_str = str(val)
+    elif isinstance(val, str):
+        val_str = val
+    else:
+        try:
+            val_str = str(val)
+        except Exception:
+            return ""
+
+    if "\x00" in val_str:
+        val_str = val_str.replace("\x00", "")
+
+    val_str = val_str.strip()
+    if len(val_str) > max_len:
+        val_str = val_str[:max_len]
+
+    return unicodedata.normalize("NFC", val_str)
+
 
 class DefectClassifier:
     """4-Stage Contextual Filtering and Defect Classification Engine."""
@@ -205,12 +240,12 @@ class DefectClassifier:
         Returns:
             (is_authentic_owner, reason)
         """
-        text_str = unicodedata.normalize("NFC", str(text or "")).strip()
+        text_str = sanitize_text(text)
         if not text_str or len(text_str) <= 1:
             return False, "Missing first-person ownership anchor: empty or single-character text"
 
         # Foreign language post without Korean text
-        if not re.search(r"[가-힣]", text_str):
+        if not RE_HANGUL.search(text_str):
             return False, "Missing first-person ownership anchor: foreign language post without verified ownership experience"
 
         operational_anchors = [
@@ -257,7 +292,7 @@ class DefectClassifier:
 
         Returns analysis dict with polarity, negation status, sarcasm status.
         """
-        text_str = str(text or "").strip()
+        text_str = sanitize_text(text)
         if not text_str:
             return {
                 "polarity": 0.0,
@@ -266,14 +301,19 @@ class DefectClassifier:
                 "matched_terms": [],
             }
 
-        # Split into sentences or clauses
-        clauses = re.split(r"[,;.\n]+", text_str)
+        # Split into sentences or clauses using pre-compiled regex
+        clauses = RE_CLAUSE_SPLIT.split(text_str)
+        if len(clauses) > 100:
+            clauses = clauses[:100]
+
         is_sarcastic = self._detect_sarcasm(text_str)
 
-        tokens = re.findall(r"[\w가-힣]+", text_str)
+        tokens = RE_TOKENS.findall(text_str)
+        if len(tokens) > 500:
+            tokens = tokens[:500]
 
         # Check for global praise / negated defects (e.g. "단차 전혀 없고 잡소리도 1도 안 납니다")
-        negated_defects = self._detect_negated_defects(tokens)
+        negated_defects = self._detect_negated_defects(tokens, text_str=text_str)
 
         # Polarity calculation with concessive handling
         polarity, matches = self._calculate_polarity(clauses, is_sarcastic, negated_defects)
@@ -287,7 +327,9 @@ class DefectClassifier:
 
     def _detect_sarcasm(self, text: Any) -> bool:
         """Detect sarcastic praise: defect noun + superlative praise + laughing markers."""
-        text_str = str(text or "")
+        text_str = sanitize_text(text)
+        if not text_str:
+            return False
         has_defect_word = any(
             w in text_str for w in ["단차", "누수", "워터파크", "불쇼", "화재", "먹통", "벽돌", "고장", "짱개차", "짱깨차"]
         )
@@ -352,48 +394,51 @@ class DefectClassifier:
 
         return False
 
-    def _detect_negated_defects(self, tokens: List[str]) -> List[str]:
+    def _detect_negated_defects(self, tokens: List[str], text_str: Optional[str] = None) -> List[str]:
         """Check if defect terms are negated by following negators."""
-        negated: List[str] = []
-        base_defect_words = [
-            "단차", "잡소리", "소음", "누수", "고장", "결함", "불량", "하자", "이음",
-            "찌걱찌걱", "흔들림", "떨림", "문제", "이상", "에러"
-        ]
-        all_defect_terms: List[str] = list(base_defect_words)
-        for entry in RAW_SLANG_ENTRIES:
-            if entry.term not in all_defect_terms:
-                all_defect_terms.append(entry.term)
+        if not tokens:
+            return []
 
+        if len(tokens) > 500:
+            tokens = tokens[:500]
+
+        if text_str is None:
+            text_str = " ".join(tokens)
+
+        negated: List[str] = []
         affirmative_occurrences = (
             "돼서", "됐다", "됨", "터져서", "터짐", "났음", "났다", "생겨서", "생김", "심해서", "심함", "터져", "터졌"
         )
 
-        for dw in all_defect_terms:
-            parts = dw.split()
-            if len(parts) == 1:
-                for i, tok in enumerate(tokens):
-                    if dw in tok or tok.startswith(dw):
-                        if i + 1 < len(tokens) and any(tokens[i + 1].startswith(aff) for aff in affirmative_occurrences):
-                            continue
-                        window_end = min(len(tokens), i + 5)
-                        window = tokens[i:window_end]
-                        if self._is_negator_in_window(window):
-                            negated.append(dw)
-                            break
-            else:
-                m = len(parts)
-                for i in range(len(tokens) - m + 1):
-                    if (tokens[i] == parts[0] or parts[0] in tokens[i]) and all(
-                        tokens[i + k].startswith(parts[k]) or parts[k] in tokens[i + k]
-                        for k in range(1, m)
-                    ):
-                        if i + m < len(tokens) and any(tokens[i + m].startswith(aff) for aff in affirmative_occurrences):
-                            continue
-                        window_end = min(len(tokens), i + m + 4)
-                        window = tokens[i:window_end]
-                        if self._is_negator_in_window(window):
-                            negated.append(dw)
-                            break
+        for dw in _SINGLE_PART_DEFECT_TERMS:
+            if dw not in text_str:
+                continue
+            for i, tok in enumerate(tokens):
+                if dw in tok or tok.startswith(dw):
+                    if i + 1 < len(tokens) and any(tokens[i + 1].startswith(aff) for aff in affirmative_occurrences):
+                        continue
+                    window_end = min(len(tokens), i + 5)
+                    window = tokens[i:window_end]
+                    if self._is_negator_in_window(window):
+                        negated.append(dw)
+                        break
+
+        for parts, dw in _MULTI_PART_DEFECT_TERMS:
+            if parts[0] not in text_str:
+                continue
+            m = len(parts)
+            for i in range(len(tokens) - m + 1):
+                if (tokens[i] == parts[0] or parts[0] in tokens[i]) and all(
+                    tokens[i + k].startswith(parts[k]) or parts[k] in tokens[i + k]
+                    for k in range(1, m)
+                ):
+                    if i + m < len(tokens) and any(tokens[i + m].startswith(aff) for aff in affirmative_occurrences):
+                        continue
+                    window_end = min(len(tokens), i + m + 4)
+                    window = tokens[i:window_end]
+                    if self._is_negator_in_window(window):
+                        negated.append(dw)
+                        break
 
         return list(set(negated))
 
@@ -424,9 +469,10 @@ class DefectClassifier:
                     break
 
             clause_multiplier = 1.5 if is_post_concessive else 0.5
+            clause_lower = clause.lower()
 
-            for slang_entry in RAW_SLANG_ENTRIES:
-                if slang_entry.term in clause:
+            for slang_entry, slang_nfc, slang_lower in _SLANG_TERM_LOWER_PAIRS:
+                if slang_nfc in clause or slang_lower in clause_lower:
                     is_term_negated = any(dw in slang_entry.term or slang_entry.term in dw for dw in negated_defects)
                     if is_term_negated:
                         term_polarity = -slang_entry.default_polarity * 0.85
@@ -440,7 +486,7 @@ class DefectClassifier:
                     matched_terms.append(slang_entry.term)
 
             matched_clause_negs: List[str] = []
-            for neg_word in sorted(NEGATIVE_LEXICON.keys(), key=len, reverse=True):
+            for neg_word in _SORTED_NEGATIVE_WORDS:
                 if neg_word in clause and not any(neg_word in already for already in matched_clause_negs):
                     matched_clause_negs.append(neg_word)
                     base_val = NEGATIVE_LEXICON[neg_word]
@@ -455,7 +501,7 @@ class DefectClassifier:
                     matched_terms.append(neg_word)
 
             matched_clause_pos: List[str] = []
-            for pos_word in sorted(POSITIVE_LEXICON.keys(), key=len, reverse=True):
+            for pos_word in _SORTED_POSITIVE_WORDS:
                 if pos_word in clause and not any(pos_word in already for already in matched_clause_pos):
                     matched_clause_pos.append(pos_word)
                     base_val = POSITIVE_LEXICON[pos_word]
@@ -491,7 +537,10 @@ class DefectClassifier:
     # -----------------------------------------------------------------
     def classify_defect_category(self, text: Any, slang_matches: Optional[List[SlangEntry]] = None) -> str:
         """Assign one of the 5 canonical categories with high-precision compound rules and priority resolution."""
-        text_str = unicodedata.normalize("NFC", str(text or "")).strip()
+        text_str = sanitize_text(text)
+        if not text_str:
+            return "BUILD_QUALITY"
+
         slang_matches = slang_matches if slang_matches is not None else find_matching_slang(text_str)
         category_scores: Dict[str, float] = {cat: 0.0 for cat in CANONICAL_CATEGORIES}
 
@@ -499,9 +548,9 @@ class DefectClassifier:
         suppress_software_meoktong = False
         suppress_build_noise = False
 
-        # 1. High-precision compound defect rules
-        for cat, phrases in COMPOUND_DEFECT_RULES.items():
-            for phrase in sorted(phrases, key=len, reverse=True):
+        # 1. High-precision compound defect rules using pre-sorted phrases
+        for cat, phrases in _SORTED_COMPOUND_RULES.items():
+            for phrase in phrases:
                 if phrase in text_lower:
                     category_scores[cat] += 12.0
                     if cat == "DRIVING_POWERTRAIN":
@@ -531,7 +580,7 @@ class DefectClassifier:
                 if kw in ("소음", "잡소리") and suppress_build_noise:
                     continue
                 if cat == "SERVICE_REPAIR_COST" and kw == "as":
-                    if re.search(r"(?:\b|[^a-zA-Z])(?:as|a/s)(?:\b|[^a-zA-Z])", text_lower):
+                    if RE_AS_KEYWORD.search(text_lower):
                         category_scores[cat] += 1.0
                 elif kw.lower() in text_lower:
                     category_scores[cat] += 1.0
@@ -568,7 +617,7 @@ class DefectClassifier:
         negated_defects: Optional[List[str]] = None,
     ) -> float:
         """Calculate statistical confidence score [0.0, 1.0] for defect classification and false-positive suppression."""
-        text_str = unicodedata.normalize("NFC", str(text or "")).strip()
+        text_str = sanitize_text(text)
         if not text_str or len(text_str) <= 1:
             return 0.0
 
@@ -623,7 +672,7 @@ class DefectClassifier:
         slang_matches: Optional[List[SlangEntry]] = None,
     ) -> Tuple[float, DSIBreakdown]:
         """Calculate 5-Dimensional Defect Severity Index (DSI 0.0 ~ 10.0)."""
-        text_str = str(text or "")
+        text_str = sanitize_text(text)
         slang_matches = slang_matches if slang_matches is not None else find_matching_slang(text_str)
 
         s_safety = max([e.safety_impact for e in slang_matches] + [0.0])
@@ -702,24 +751,32 @@ class DefectClassifier:
             # Arbitrary non-string object (e.g. int, float, list)
             post = RawPost(title="", content=str(post or ""))
 
-        title_str = str(post.title or "")
-        content_str = str(post.content or "")
+        title_str = sanitize_text(post.title, max_len=10_000)
+        content_str = sanitize_text(post.content, max_len=50_000)
         combined_text = f"{title_str}\n{content_str}".strip()
 
         # Handle comments: protect against string splitting into individual characters
         raw_comments = post.comments
         if isinstance(raw_comments, str):
-            safe_comments = [raw_comments] if raw_comments.strip() else []
+            c_clean = sanitize_text(raw_comments, max_len=10_000)
+            safe_comments = [c_clean] if c_clean else []
         elif isinstance(raw_comments, (list, tuple, set)):
-            safe_comments = [str(c) for c in raw_comments if c is not None and str(c).strip()]
+            safe_comments = [
+                sanitize_text(c, max_len=10_000)
+                for c in raw_comments
+                if c is not None and str(c).strip()
+            ]
         else:
             safe_comments = []
 
         comments_text = " ".join(safe_comments)
         full_text = f"{combined_text} {comments_text}".strip()
+        if len(full_text) > MAX_TEXT_LENGTH:
+            full_text = full_text[:MAX_TEXT_LENGTH]
 
-        # Extract vehicle brand and model
-        brand, model = extract_vehicle_info(title_str, content_str)
+        # Extract vehicle brand and model (bounded input for ReDoS / latency defense)
+        vm_content = content_str[:10_000] if len(content_str) > 10_000 else content_str
+        brand, model = extract_vehicle_info(title_str, vm_content)
 
         # Matched slang entries
         slang_matches = find_matching_slang(full_text)
@@ -825,6 +882,8 @@ class DefectClassifier:
 
     def classify(self, post_or_text: Any) -> ComplaintRecord:
         """Alias for process_post allowing direct text, dict, or RawPost with bulletproof type safety."""
+        if post_or_text is None:
+            return self.process_post(RawPost())
         if isinstance(post_or_text, str):
             raw = RawPost(title="", content=post_or_text)
             return self.process_post(raw)
@@ -837,10 +896,10 @@ class DefectClassifier:
 
     def _extract_verbatim_quote(self, post: RawPost) -> str:
         """Extract the most emotional and colloquial verbatim quote from the post."""
-        content = str(post.content or "").strip()
+        content = sanitize_text(post.content)
         if len(content) >= 15:
             return content
-        title = str(post.title or "").strip()
+        title = sanitize_text(post.title)
         combined = f"{title} {content}".strip()
         return combined
 

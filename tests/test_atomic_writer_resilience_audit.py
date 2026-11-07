@@ -25,6 +25,7 @@ from tracker.atomic_writer import (
     _json_default,
     atomic_write_json,
     atomic_write_json_multiple,
+    cleanup_stale_lock_files,
     cleanup_stale_temp_files,
     get_lock_path,
     quarantine_corrupted_file,
@@ -335,6 +336,109 @@ class TestAtomicWriterDurabilityAndResilience(unittest.TestCase):
         self.assertFalse(f1.exists())
         self.assertFalse(f2.exists())
         self.assertFalse(f3.exists())
+
+    def test_19_file_lock_inode_verification_st_nlink_zero(self) -> None:
+        """FileLock detects unlinked descriptor (st_nlink == 0) and re-opens the file."""
+        lock_path = self.test_dir / "unlinked_race.lock"
+        lock = FileLock(lock_path, timeout=0.5)
+
+        real_fstat = os.fstat
+        call_count = 0
+
+        def mock_fstat(fd: int) -> Any:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return mock.MagicMock(st_nlink=0, st_ino=1234, st_dev=56)
+            return real_fstat(fd)
+
+        with mock.patch("os.fstat", side_effect=mock_fstat):
+            with lock:
+                self.assertTrue(lock.acquired)
+        self.assertGreater(call_count, 1)
+
+    def test_20_file_lock_stale_lock_threshold_guard(self) -> None:
+        """FileLock does NOT break a lock if dead_holder age is within stale_timeout."""
+        lock_path = self.test_dir / "recent_lock.lock"
+        # Write metadata pointing to a dead PID, but with fresh timestamp (0.1s ago)
+        dead_pid = 9999999
+        recent_time = time.time()
+        lock_path.write_text(f"pid={dead_pid}\ntime={recent_time}\n", encoding="utf-8")
+
+        # Mock fcntl.flock to simulate lock contention (EAGAIN)
+        with mock.patch("fcntl.flock", side_effect=OSError(errno.EAGAIN, "Resource temporarily unavailable")):
+            lock = FileLock(lock_path, timeout=0.06, poll_interval=0.02, stale_timeout=300.0, fail_on_timeout=False)
+            with lock:
+                # Must not acquire because lock is held by competing process and age <= stale_timeout
+                self.assertFalse(lock.acquired)
+            # Lock file must NOT be unlinked
+            self.assertTrue(lock_path.exists())
+
+    def test_21_quarantine_corrupted_file_avoids_overwriting_existing_destination(self) -> None:
+        """quarantine_corrupted_file avoids overwriting pre-existing files at quarantine destination."""
+        bad_file = self.test_dir / "bad_data.json"
+        bad_file.write_text("{ broken 1", encoding="utf-8")
+
+        # Create a pre-existing file at the expected quarantine path with custom suffix
+        existing_quarantine = self.test_dir / "bad_data.corrupted"
+        existing_quarantine.write_text("existing valuable backup", encoding="utf-8")
+
+        quarantined = quarantine_corrupted_file(bad_file, suffix=".corrupted")
+        self.assertIsNotNone(quarantined)
+        # Original bad file is gone
+        self.assertFalse(bad_file.exists())
+        # The pre-existing file was NOT overwritten
+        self.assertEqual(existing_quarantine.read_text(encoding="utf-8"), "existing valuable backup")
+        # Quarantined file has disambiguated name
+        self.assertTrue(quarantined.exists())
+        self.assertNotEqual(str(quarantined), str(existing_quarantine))
+        self.assertTrue("bad_data.corrupted_1" in quarantined.name or "_1" in quarantined.name)
+
+    def test_22_cleanup_stale_lock_files_preserves_alive_pid_beyond_double_max_age(self) -> None:
+        """cleanup_stale_lock_files never deletes a lock if holder PID is alive, even after 2x max_age."""
+        lock_path = self.test_dir / ".ev_atomic_long_running.lock"
+        # Write our own PID (guaranteed alive) with old time
+        very_old_time = time.time() - 10000.0
+        lock_path.write_text(f"pid={os.getpid()}\ntime={very_old_time}\n", encoding="utf-8")
+        os.utime(lock_path, (very_old_time, very_old_time))
+
+        cleaned = cleanup_stale_lock_files(self.test_dir, max_age_seconds=3600.0)
+        self.assertEqual(cleaned, 0)
+        self.assertTrue(lock_path.exists())
+
+    def test_23_transient_replace_retry(self) -> None:
+        """atomic_write_json retries when os.replace raises transient EACCES."""
+        target = self.test_dir / "windows_replace_test.json"
+        call_count = 0
+        orig_replace = os.replace
+
+        def transient_replace(src: str, dst: str) -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise OSError(errno.EACCES, "Access is denied (locked by scanner)")
+            orig_replace(src, dst)
+
+        with mock.patch("os.replace", side_effect=transient_replace):
+            written = atomic_write_json({"win": "ok"}, target)
+
+        self.assertTrue(written.exists())
+        self.assertEqual(call_count, 2)
+
+    def test_24_windows_msvcrt_cleanup_stale_lock_files(self) -> None:
+        """cleanup_stale_lock_files uses msvcrt.locking when fcntl is None."""
+        lock_path = self.test_dir / ".ev_atomic_win.lock"
+        old_time = time.time() - 7200.0
+        lock_path.write_text("", encoding="utf-8")
+        os.utime(lock_path, (old_time, old_time))
+
+        mock_msvcrt = mock.MagicMock()
+        with mock.patch("tracker.atomic_writer.fcntl", None):
+            with mock.patch("tracker.atomic_writer.msvcrt", mock_msvcrt):
+                cleaned = cleanup_stale_lock_files(self.test_dir, max_age_seconds=3600.0)
+
+        self.assertEqual(cleaned, 1)
+        self.assertTrue(mock_msvcrt.locking.called)
 
 
 if __name__ == "__main__":

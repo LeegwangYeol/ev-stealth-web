@@ -189,14 +189,31 @@ class TestSeoMetadataSitemapRobots(unittest.TestCase):
             # Must have openGraph
             self.assertIn("openGraph:", content, f"{page_file} must declare openGraph in metadata")
             self.assertIn(f"url: '{canonical_path}'", content.replace('"', "'"), f"{page_file} openGraph.url must be '{canonical_path}'")
+            self.assertIn("/og-image.png", content, f"{page_file} must define openGraph and Twitter images")
 
             # Must have twitter card
             self.assertIn("twitter:", content, f"{page_file} must declare twitter in metadata")
             self.assertIn("summary_large_image", content, f"{page_file} twitter card must be summary_large_image")
+            self.assertIn("@GlobalEVHub", content, f"{page_file} must specify Twitter handle @GlobalEVHub")
 
             # Must render JsonLd
             self.assertIn("JsonLd", content, f"{page_file} must render JsonLd structured data")
             self.assertIn("schema.org", content, f"{page_file} JsonLd must reference schema.org")
+
+            # Must include ItemList, FAQPage, and BreadcrumbList schemas for rich SERP indexing
+            self.assertIn("ItemList", content, f"{page_file} structured data must include ItemList")
+            self.assertIn("FAQPage", content, f"{page_file} structured data must include FAQPage")
+            self.assertIn("BreadcrumbList", content, f"{page_file} structured data must include BreadcrumbList")
+
+    def test_viewport_configuration(self) -> None:
+        """layout.tsx must configure a compliant viewport with pinch-to-zoom accessibility and colorScheme."""
+        layout_file = APP_DIR / "layout.tsx"
+        content = layout_file.read_text(encoding="utf-8")
+        self.assertIn("export const viewport: Viewport", content)
+        self.assertIn('width: "device-width"', content)
+        self.assertIn("initialScale: 1", content)
+        self.assertIn("maximumScale: 5", content)
+        self.assertIn('colorScheme: "dark light"', content)
 
     def test_private_routes_indexing_guard(self) -> None:
         """Private routes (secret-admin-reports, not-found) must strictly declare robots noindex/nofollow."""

@@ -1,0 +1,546 @@
+{
+  "vampire drain": {
+    "term": "vampire drain",
+    "category": "battery_powertrain",
+    "definition": "Parasitic high-voltage battery depletion that occurs while an electric vehicle is parked and inactive, driven by onboard computers, telematics, background cooling/heating systems, and surveillance modes like Sentry Mode.",
+    "severity_weight": 3.2,
+    "example_quote": "Left my Model Y at airport long-term parking for 10 days with Sentry Mode turned on; vampire drain ate 28% of the battery and I almost couldn't make it home.",
+    "source_context": "Ubiquitous across Reddit r/teslamotors, r/Rivian, and Tesla Motors Club. Often a point of severe owner friction during long airport parking stays or cold weather vacations."
+  },
+  "phantom braking": {
+    "term": "phantom braking",
+    "category": "adas_safety",
+    "definition": "Sudden, unprompted, and violent automatic emergency braking triggered when an ADAS system (such as Tesla Autopilot/FSD or Rivian Highway Assist) erroneously classifies shadows, highway overpasses, culverts, or oncoming trucks as collision obstacles.",
+    "severity_weight": 4.8,
+    "example_quote": "Autopilot slammed on the brakes from 75 mph down to 45 mph on an empty interstate bridge because of a sun shadow; my kids spilled their drinks and the semi behind nearly rear-ended us.",
+    "source_context": "Central focus of NHTSA investigations, class-action lawsuits, and endless discussions on r/teslamotors, r/electricvehicles, and Rivian Forums."
+  },
+  "turtle mode": {
+    "term": "turtle mode",
+    "category": "battery_powertrain",
+    "definition": "An emergency low-power limp-home vehicle operating state indicated by a turtle icon on the digital cluster, automatically triggered when high-voltage battery state of charge (SoC) drops below ~0-2% or when internal battery cell temperatures reach extreme limits.",
+    "severity_weight": 4.2,
+    "example_quote": "The dashboard popped up the glowing yellow turtle icon 2 miles from the charger; maximum speed dropped to 25 mph with zero acceleration and AC cut off completely.",
+    "source_context": "Standard terminology across Nissan Leaf, Hyundai E-GMP, Tesla, and Rivian communities when pushing range boundaries to absolute zero."
+  },
+  "bricked": {
+    "term": "bricked",
+    "category": "hardware_failure",
+    "definition": "A catastrophic state of complete operational failure where an EV becomes totally dead, unresponsive, incapable of shifting into gear, or charging, typically caused by dead 12V/16V auxiliary batteries, high-voltage contactor isolation faults, or corrupt OTA firmware flashes.",
+    "severity_weight": 5.0,
+    "example_quote": "Woke up this morning and the Lucid Air is completely bricked in the driveway; doors won't unlock, key fob does nothing, and mobile service says the high-voltage battery contactor tripped.",
+    "source_context": "Pervasive across r/lucidmotors, r/Rivian, r/Cybertruck, and Fisker Ocean subreddits where early production firmware bugs immobilized brand-new vehicles."
+  },
+  "within spec": {
+    "term": "within spec",
+    "category": "build_quality_service",
+    "definition": "A deeply cynical catchphrase used by EV owners to mock automaker service advisors (predominantly Tesla) who dismiss obvious manufacturing defects, wide body panel gaps, crooked trim, paint peeling, or cabin rattles as meeting factory production tolerances.",
+    "severity_weight": 3.5,
+    "example_quote": "Brought my brand-new Model 3 in because the rear tailgate gap was so wide you could slide your finger through, and the service advisor told me straight-faced it was completely within spec.",
+    "source_context": "The single most iconic community meme across Tesla Motors Club, Reddit r/RealTesla, and YouTube EV commentary (e.g., Rich Rebuilds, Munro Live)."
+  },
+  "panel gap lottery": {
+    "term": "panel gap lottery",
+    "category": "build_quality_service",
+    "definition": "The unpredictable gamble EV buyers face upon taking factory delivery, where exterior panel alignment, bumper seams, and headlight flushes vary wildly between individual chassis coming off the same assembly line.",
+    "severity_weight": 3.0,
+    "example_quote": "Taking delivery tomorrow of the Cybertruck and bringing a printed 50-point checklist; pray for me that I don't lose the panel gap lottery like the guys on Reddit.",
+    "source_context": "Prevalent in Tesla delivery checklists, early Rivian R1T deliveries, and Lucid Air forums during initial ramp-up phases."
+  },
+  "gigacast write-off": {
+    "term": "gigacast write-off",
+    "category": "service_repair_economics",
+    "definition": "The economic total loss declaration by auto insurance companies following low-speed rear or front collisions because single-piece structural megacastings (gigacastings) cannot be bent back, welded, or sectioned by traditional body shops without replacing the entire chassis.",
+    "severity_weight": 4.9,
+    "example_quote": "A parking lot fender bender cracked the rear megacasting mount; Tesla collision center gave a ,000 estimate and State Farm instantly wrote off the 6-month-old car as a total loss.",
+    "source_context": "Frequently reported on r/TeslaModelY, insurance loss auction tracking sites (Copart, IAAI), and automotive repair teardowns."
+  },
+  "chargegate": {
+    "term": "chargegate",
+    "category": "charging_infrastructure",
+    "definition": "Controversy or user outrage sparked when an automaker unexpectedly nerfs or throttles DC fast-charging rates via software update or hardware design limitations (e.g., bZ4X winter charging limits, Nissan Leaf temperature throttling).",
+    "severity_weight": 3.8,
+    "example_quote": "Toyota advertised 150 kW DC fast charging on the bZ4X, but cold weather chargegate means you're stuck at 22 kW after two consecutive fast-charge sessions in a day.",
+    "source_context": "Coined during Toyota bZ4X winter tests and various Tesla battery management software rollbacks after fire safety investigations."
+  },
+  "rapidgate": {
+    "term": "rapidgate",
+    "category": "charging_infrastructure",
+    "definition": "Severe thermal throttling of consecutive DC fast charging sessions in EVs lacking active liquid battery cooling (most famously the 40kWh Nissan Leaf), where the battery pack overheats and restricts charging speeds to sub-20 kW levels.",
+    "severity_weight": 4.0,
+    "example_quote": "Doing a 400-mile road trip in the Leaf was pure hell; by the third quick-charge stop, rapidgate kicked in and it took 2.5 hours just to reach 70%.",
+    "source_context": "Originating with Bjørn Nyland's viral 2018 YouTube road tests of the Nissan Leaf 40kWh, subsequently adopted across the global EV lexicon."
+  },
+  "subscription ransom": {
+    "term": "subscription ransom",
+    "category": "software_paywall",
+    "definition": "The practice where automakers install physical functional hardware at the factory but hold access hostage behind monthly or annual recurring software subscription fees (e.g. heated seats, performance boosts, rear-wheel steering).",
+    "severity_weight": 4.3,
+    "example_quote": "The heated seat elements are physically installed inside my car seats right now, but BMW wants an /month subscription ransom just to flip the software switch.",
+    "source_context": "Spawned after BMW's 2022 ConnectedDrive heated seat backlash, Mercedes Acceleration Increase (,200/yr), and Rivian Connect+ subscription tiers."
+  },
+  "paywall on wheels": {
+    "term": "paywall on wheels",
+    "category": "software_paywall",
+    "definition": "Derisive term characterizing modern software-defined connected vehicles where standard automotive capabilities, telematics, horsepower, and infotainment are locked behind pay-per-feature microtransactions.",
+    "severity_weight": 4.1,
+    "example_quote": "Modern EVs are turning into paywalls on wheels:  a month for Spotify streaming,  a month for ADAS highway driving, and  a month to unlock 50 horsepower.",
+    "source_context": "Popularized across tech and automotive communities (The Verge, Ars Technica, Reddit r/cars, r/electricvehicles)."
+  },
+  "service desert": {
+    "term": "service desert",
+    "category": "service_repair_economics",
+    "definition": "A vast geographical region lacking any company-owned service centers or certified third-party repair facilities for direct-to-consumer EV brands (Rivian, Lucid, Tesla), forcing owners to wait months or pay for 300+ mile flatbed tows.",
+    "severity_weight": 4.5,
+    "example_quote": "Living in Montana with an R1T means you're stranded in a service desert; the nearest Rivian service center is in Salt Lake City, 500 miles away.",
+    "source_context": "Persistent complaint on Rivian Forums and Lucid Owners Club among owners residing outside major coastal metropolitan hubs."
+  },
+  "ICEing": {
+    "term": "ICEing",
+    "category": "charging_infrastructure",
+    "definition": "The hostile or thoughtless act of an internal combustion engine (ICE) vehicle parking in a designated electric vehicle charging stall, physically blocking EV drivers from plugging in.",
+    "severity_weight": 3.7,
+    "example_quote": "Pulled into the Buc-ee's Supercharger with 4% battery remaining only to find all 8 stalls completely ICE'd by lifted diesel pickup trucks.",
+    "source_context": "Common friction point documented across r/electricvehicles, PlugShare check-ins, and viral TikTok / YouTube dashcam videos."
+  },
+  "guess-o-meter": {
+    "term": "guess-o-meter",
+    "category": "battery_powertrain",
+    "definition": "Derisive community nickname for the onboard digital instrument cluster range estimator (GOM) that provides wild, unrealistic range estimates based on short-term previous driving habits rather than real upcoming terrain, headwind, and temperature.",
+    "severity_weight": 2.8,
+    "example_quote": "The Guess-O-Meter promised 240 miles of range when I started in the morning, but 60 miles of winter highway driving later it had plunged to 90 miles.",
+    "source_context": "Coined by early Nissan Leaf and Chevy Bolt owners, now universally used across all EV brands (Hyundai Ioniq, Ford Mach-E, Rivian)."
+  },
+  "cold gate": {
+    "term": "cold gate",
+    "category": "charging_infrastructure",
+    "definition": "Severe throttling of DC fast-charging intake power caused by a cold high-voltage battery pack in vehicles that lack active navigation-linked thermal preconditioning or when the driver forgets to trigger it.",
+    "severity_weight": 3.9,
+    "example_quote": "Plugged my EV6 into an Electrify America 350 kW dispenser in 20°F weather without preconditioning, and cold gate capped the intake speed at a painful 38 kW.",
+    "source_context": "Documented extensively during sub-zero testing by Out of Spec Reviews, Bjørn Nyland, and northern US/Canadian EV forums."
+  },
+  "range anxiety": {
+    "term": "range anxiety",
+    "category": "community_culture_slang",
+    "definition": "The acute psychological dread experienced by EV drivers fearing that battery charge will deplete before reaching a viable charging station or ultimate destination.",
+    "severity_weight": 3.0,
+    "example_quote": "Every time the battery icon turns orange below 15% in rural Wyoming, the range anxiety hits hard and I find myself turning off the cabin heater just in case.",
+    "source_context": "Historically the primary barrier to EV adoption; ubiquitous in consumer research, media articles, and automotive forums."
+  },
+  "charger anxiety": {
+    "term": "charger anxiety",
+    "category": "charging_infrastructure",
+    "definition": "The modern evolution of range anxiety: the dread that even upon reaching a designated public fast charging location, stations will be non-functional, derated, software-locked, or overcrowded.",
+    "severity_weight": 4.1,
+    "example_quote": "I don't have range anxiety anymore because my battery has 300 miles of juice; I have charger anxiety because Electrify America chargers are broken half the time.",
+    "source_context": "Predominant theme in post-2022 US non-Tesla EV road trip reports across Reddit and EV industry surveys (J.D. Power EVX)."
+  },
+  "12V death spiral": {
+    "term": "12V death spiral",
+    "category": "hardware_failure",
+    "definition": "A cascading hardware breakdown where a depleted or dying low-voltage auxiliary battery fails to power the vehicle's onboard computers, meaning high-voltage contactors cannot close and the car completely locks out its owner.",
+    "severity_weight": 4.7,
+    "example_quote": "Car was completely dead in the garage; couldn't pop the hood, doors were sealed, and it turned out the 12V death spiral triggered because the DC-DC converter fell asleep.",
+    "source_context": "Frequent headache on Hyundai Ioniq 5 (ICCU issue), Rivian R1T (early 12V dual battery setup), and Tesla Model 3/Y before the 16V lithium transition."
+  },
+  "CCS roulette": {
+    "term": "CCS roulette",
+    "category": "charging_infrastructure",
+    "definition": "The stressful gamble of attempting to road-trip non-Tesla EVs across public CCS1 networks (Electrify America, EVgo), never knowing if a dispenser will authenticate, deliver full speed, or throw a red ring of death.",
+    "severity_weight": 4.2,
+    "example_quote": "Road tripping an Ioniq 5 across the Midwest is pure CCS roulette: stall 1 has a broken screen, stall 2 is capped at 32 kW, and stall 3 throws a credit card reader error.",
+    "source_context": "Widely discussed reason behind the mass migration of Ford, GM, Rivian, and Hyundai to Tesla's NACS connector."
+  },
+  "cable tug of war": {
+    "term": "cable tug of war",
+    "category": "charging_infrastructure",
+    "definition": "The awkward physical struggle occurring when non-Tesla EVs with rear-passenger or front-driver side charge ports attempt to plug into short Tesla Supercharger V2/V3 cables, often requiring diagonal parking across stall lines.",
+    "severity_weight": 3.3,
+    "example_quote": "Saw a Rivian R1T fighting a massive cable tug of war at the V3 Supercharger, parking at a 45-degree angle across two spots just to reach the port.",
+    "source_context": "Pervasive across Supercharger expansion discussions following Tesla opening its network to third-party automakers."
+  },
+  "stall hogging": {
+    "term": "stall hogging",
+    "category": "charging_infrastructure",
+    "definition": "The inconsiderate practice of leaving an EV parked and plugged into a high-demand fast charging station for hours after the battery is completely full or charging has ended.",
+    "severity_weight": 3.6,
+    "example_quote": "There was a 4-car queue at the Baker Supercharger in 105-degree desert heat, but a Model X was stall hogging for 90 minutes while the owner was shopping.",
+    "source_context": "Direct impetus for high idle fees instituted by Tesla (.00/min) and Electrify America."
+  },
+  "idle fees": {
+    "term": "idle fees",
+    "category": "charging_infrastructure",
+    "definition": "Prorated monetary penalty charges automatically billed to an EV owner's payment account when their vehicle remains plugged into a busy fast-charging stall after charging has finished.",
+    "severity_weight": 3.1,
+    "example_quote": "Forgot to move my car while having dinner at the mall and came back to a  idle fee on my Tesla credit card receipt.",
+    "source_context": "Documented in billing support pages and forum shock posts across Tesla, Electrify America, and EVgo user bases."
+  },
+  "80% rule": {
+    "term": "80% rule",
+    "category": "charging_infrastructure",
+    "definition": "The universal EV etiquette and operational guideline advising drivers to unplug from fast chargers at 80% SoC because the charging curve steeply tapers, taking as long to go from 80-100% as 10-80%.",
+    "severity_weight": 2.5,
+    "example_quote": "Follow the 80% rule on road trips: unplugging at 80% saves you 40 minutes and frees up the pedestal for the stranded family waiting behind you.",
+    "source_context": "Key educational tenet on r/electricvehicles, Out of Spec road trip guides, and State of Charge charging analyses."
+  },
+  "preconditioning": {
+    "term": "preconditioning",
+    "category": "battery_powertrain",
+    "definition": "The thermal management process where an EV battery pack is heated or cooled to an optimal electrochemical temperature (~30°C to 35°C) prior to arrival at a DC fast charger to enable maximum intake power.",
+    "severity_weight": 2.2,
+    "example_quote": "Make sure you set the Supercharger as your in-car navigation destination 30 minutes in advance so battery preconditioning kicks in and you get the full 250 kW burst.",
+    "source_context": "Standard feature discussion across Tesla, Hyundai/Kia E-GMP firmware updates, Rivian, and BMW i-series forums."
+  },
+  "charging curve": {
+    "term": "charging curve",
+    "category": "charging_infrastructure",
+    "definition": "The profile showing an electric vehicle's charging power (kW) plotted against its battery state of charge (SoC), illustrating peak speeds and thermal tapering characteristics.",
+    "severity_weight": 2.4,
+    "example_quote": "The Porsche Taycan has the flattest charging curve in the industry, holding over 200 kW past 60% while most competitors taper to double digits by then.",
+    "source_context": "Fundamental technical metric evaluated by InsideEVs, Kyle Conner (Out of Spec), and automotive engineering teardowns."
+  },
+  "granny charger": {
+    "term": "granny charger",
+    "category": "charging_infrastructure",
+    "definition": "Slang for a standard Level 1 portable mobile charging cable (120V / 10-12A) plugged into a standard wall socket, which adds a painfully slow 2 to 4 miles of range per hour.",
+    "severity_weight": 2.0,
+    "example_quote": "Rented a remote cabin with no Level 2 outlet; had to plug into the 120V porch outlet with the granny charger for 36 straight hours just to get 60 miles back.",
+    "source_context": "Popular UK, Australian, and US EV community slang for the emergency charging brick that comes in the trunk."
+  },
+  "destination charger": {
+    "term": "destination charger",
+    "category": "charging_infrastructure",
+    "definition": "A slower Level 2 AC charger (typically 7 kW to 11.5 kW / 32A to 48A) installed at hotels, resorts, national park lodges, or ski slopes meant for multi-hour or overnight charging.",
+    "severity_weight": 1.8,
+    "example_quote": "Booked a ski hotel specifically because they advertised four destination chargers in the garage, allowing me to start each morning with 100% warm battery.",
+    "source_context": "Formalized by Tesla's Destination Charging program and widely adopted across general hospitality industry branding."
+  },
+  "one-pedal driving": {
+    "term": "one-pedal driving",
+    "category": "battery_powertrain",
+    "definition": "A vehicle control configuration where lifting off the accelerator pedal generates strong regenerative braking that smoothly brings the vehicle to a full stop without the driver having to touch the friction brake pedal.",
+    "severity_weight": 1.5,
+    "example_quote": "Once your muscle memory adapts to true one-pedal driving, driving a traditional gas car where you constantly have to ride the friction brake feels archaic.",
+    "source_context": "Pioneered by BMW i3, popularized by Tesla, Chevy Bolt, and Nissan e-Pedal; heavily debated in Porsche and VW forums favoring coasting."
+  },
+  "regen paddle": {
+    "term": "regen paddle",
+    "category": "battery_powertrain",
+    "definition": "Steering wheel-mounted paddle shifters adapted in electric vehicles to increase, decrease, or hold regenerative braking levels on the fly without navigating touchscreen menus.",
+    "severity_weight": 1.6,
+    "example_quote": "Holding down the left regen paddle on the Hyundai Ioniq 5 allows you to modulate braking down to a dead stop when descending steep mountain grades.",
+    "source_context": "Standard feature on Hyundai/Kia E-GMP platforms, Chevy Bolt, and Mercedes EQ steering columns."
+  },
+  "blended braking": {
+    "term": "blended braking",
+    "category": "adas_safety",
+    "definition": "An electronic brake-by-wire algorithm that coordinates motor regenerative braking and mechanical friction brake calipers seamlessly via a single brake pedal press, frequently criticized when pedal calibration feels artificial or grabby.",
+    "severity_weight": 2.7,
+    "example_quote": "The blended braking on early Mach-E models was so poorly tuned that the handoff between regen and hydraulic calipers felt jerky and unpredictable during panic stops.",
+    "source_context": "Core engineering distinction between Porsche/Audi/Ford (blended braking philosophy) versus Tesla/Rivian (distinct decoupled one-pedal regen)."
+  },
+  "depreciation cliff": {
+    "term": "depreciation cliff",
+    "category": "service_repair_economics",
+    "definition": "The dramatic, precipitous decline in secondary market valuation suffered by luxury and emerging EVs within 1 to 3 years of purchase, exacerbated by OEM price wars, rapid tech obsolescence, and battery warranty anxiety.",
+    "severity_weight": 4.4,
+    "example_quote": "Bought a Lucid Air Grand Touring for k two years ago; took it to Carvana and got offered k. The EV depreciation cliff is an absolute slaughterhouse.",
+    "source_context": "Massive talking point on r/lucidmotors, r/Taycan, and automotive finance channels as luxury EV lease returns flood used car lots."
+  },
+  "battery degradation tax": {
+    "term": "battery degradation tax",
+    "category": "battery_powertrain",
+    "definition": "The inescapable loss of residual vehicle value and operational utility as an EV battery pack permanently loses 10-25% of its original kilowatt-hour capacity over 4 to 8 years of intensive fast-charging and thermal cycling.",
+    "severity_weight": 4.0,
+    "example_quote": "My 2018 Model 3 has dropped from 310 miles to 245 miles of real-world highway range; that is the hidden battery degradation tax you pay for 120,000 miles of Supercharging.",
+    "source_context": "Discussed extensively on battery health telemetry apps (Recurrent Auto, TeslaFi) and long-term EV ownership retrospectives."
+  },
+  "battery lottery": {
+    "term": "battery lottery",
+    "category": "battery_powertrain",
+    "definition": "The consumer uncertainty of receiving different battery cell chemistries, pack suppliers (e.g. CATL LFP, LG Energy Solution, Panasonic), or degradation characteristics in identically badged vehicle trims depending on factory batch allocation.",
+    "severity_weight": 2.9,
+    "example_quote": "Model Y Standard Range buyers were playing the battery lottery in 2023—some got Austin 4680 structural packs while others received Fremont 2170 packs with faster charging curves.",
+    "source_context": "Common subject of factory VIN decoding and pack label inspections on Tesla Motors Club and Reddit."
+  },
+  "LFP winter slump": {
+    "term": "LFP winter slump",
+    "category": "battery_powertrain",
+    "definition": "The severe degradation in cold-temperature charging speed and usable energy discharge inherent to Lithium Iron Phosphate (LFP) battery chemistry compared to nickel-rich (NMC/NCA) alternatives.",
+    "severity_weight": 3.7,
+    "example_quote": "When temperatures dip below freezing, the LFP winter slump is brutal: regeneration is completely disabled and fast charging crawls at 15 kW until the pack heats up.",
+    "source_context": "Widespread complaint among owners of Tesla Model 3 RWD, BYD Dolphin/Seal, and entry-level EVs in northern climates."
+  },
+  "100% SoC ritual": {
+    "term": "100% SoC ritual",
+    "category": "battery_powertrain",
+    "definition": "The manufacturer-mandated practice of regularly charging an LFP battery pack to 100% state of charge to allow the Battery Management System (BMS) to calibrate its voltage curve against the flat LFP discharge profile.",
+    "severity_weight": 2.1,
+    "example_quote": "If you don't do the weekly 100% SoC ritual on your LFP battery, the BMS calibration drifts and the car might shut down unexpectedly while displaying 8% remaining.",
+    "source_context": "Standard instruction in Tesla and MG owner manuals for LFP chemistry vehicles."
+  },
+  "thermal runaway paranoia": {
+    "term": "thermal runaway paranoia",
+    "category": "adas_safety",
+    "definition": "Intense anxiety or phobia regarding the possibility of an uncontrollable lithium-ion battery fire occurring in home garages or underground parking structures, often fueled by sensational media coverage and parking garage bans.",
+    "severity_weight": 3.6,
+    "example_quote": "My HOA voted to ban electric vehicles from the underground garage due to thermal runaway paranoia after seeing news clips of burning battery packs.",
+    "source_context": "Prominent issue in South Korea (Cheongna apartment fire), German underground car park restrictions, and international condo association debates."
+  },
+  "Musked": {
+    "term": "Musked",
+    "category": "community_culture_slang",
+    "definition": "Feeling betrayed, financially penalized, or misled as an EV consumer due to abrupt corporate price cuts that wipe out trade-in value, unfulfilled timelines for autonomous features (FSD), or removed physical amenities.",
+    "severity_weight": 3.9,
+    "example_quote": "Paid ,000 for a Model Y in December 2022 only for Tesla to slash prices by ,000 three weeks later in January; I got completely Musked.",
+    "source_context": "Ubiquitous slang in automotive finance discussions, r/RealTesla, and YouTube EV commentary."
+  },
+  "Tesla fanboy": {
+    "term": "Tesla fanboy",
+    "category": "community_culture_slang",
+    "definition": "An uncritical, hyper-defensive partisan of Tesla and Elon Musk who automatically dismisses any documented hardware flaw, build defect, or corporate controversy as mainstream media propaganda or short-seller manipulation.",
+    "severity_weight": 2.6,
+    "example_quote": "Don't bother posting about your misaligned bumper on that subreddit; the Tesla fanboys will swarm your comments and insist your eyes are lying.",
+    "source_context": "Common trope across social media (X/Twitter, Reddit) distinguishing brand loyalists from objective automotive reviewers."
+  },
+  "FSD beta tester": {
+    "term": "FSD beta tester",
+    "category": "adas_safety",
+    "definition": "An owner who paid up to ,000 for Tesla's Full Self-Driving package, essentially paying the company for the privilege of acting as an unpaid safety test driver dealing with interventions, curb rashes, and disengagements.",
+    "severity_weight": 3.8,
+    "example_quote": "Paid k to be an unpaid FSD beta tester and my car still tried to turn into oncoming traffic twice during my morning commute.",
+    "source_context": "Widely referenced across tech journalism (Jalopnik, Electrek) and legal scrutiny surrounding Level 2 driver assistance marketing."
+  },
+  "steering wheel nag": {
+    "term": "steering wheel nag",
+    "category": "adas_safety",
+    "definition": "The persistent visual and acoustic alerting system employed by Level 2 driving assist software that demands drivers apply rotational torque to the steering wheel or look forward to prove attentiveness.",
+    "severity_weight": 3.1,
+    "example_quote": "The steering wheel nag was beeping every 12 seconds even though both my hands were resting on the rim, making Autopilot more stressful than just driving manually.",
+    "source_context": "Heavily debated on r/teslamotors following firmware updates that increased nag sensitivity under NHTSA recall pressure."
+  },
+  "defeat device": {
+    "term": "defeat device",
+    "category": "adas_safety",
+    "definition": "Dangerous aftermarket physical accessories (such as magnetic counterweights, weighted steering rings, or camera stickers) engineered to fool in-cabin driver monitoring cameras and torque sensors into believing a human driver is attentive.",
+    "severity_weight": 4.6,
+    "example_quote": "Amazon had to ban third-party defeat device weights because irresponsible owners were strapping them to their steering wheels and climbing into the backseat.",
+    "source_context": "Target of NHTSA regulatory cease-and-desist orders and widespread condemnation from automotive safety advocates."
+  },
+  "yoke life": {
+    "term": "yoke life",
+    "category": "build_quality_service",
+    "definition": "The contentious and awkward day-to-day experience of driving an EV equipped with an airplane-style rectangular steering yoke lacking a top rim, which complicates three-point turns, roundabouts, and parking.",
+    "severity_weight": 3.3,
+    "example_quote": "Living the yoke life means reaching for air every single time you navigate a tight European roundabout; I finally paid  to retrofit a round steering wheel.",
+    "source_context": "Debated heavily after Tesla Model S/X refresh and Lexus RZ introduced steering yoke options."
+  },
+  "stalkless": {
+    "term": "stalkless",
+    "category": "build_quality_service",
+    "definition": "The controversial minimalist vehicle cockpit architecture that removes physical mechanical indicator turn signal stalks and drive selector PRND levers, replacing them with capacitive steering wheel buttons and touchscreen gear swipe controls.",
+    "severity_weight": 3.5,
+    "example_quote": "Trying to signal an exit while your hands are turned upside down on a roundabout in a stalkless Model 3 Highland is a complete ergonomic disaster.",
+    "source_context": "Major criticism in automotive reviews (Top Gear, MotorTrend, Doug DeMuro) regarding Tesla's Highland Model 3 and Cybertruck interiors."
+  },
+  "iPad glued to the dash": {
+    "term": "iPad glued to the dash",
+    "category": "build_quality_service",
+    "definition": "A pejorative critique of modern EV interior design where traditional instrumentation, climate knobs, and physical buttons are eliminated in favor of a single protruding, floating touchscreen tablet.",
+    "severity_weight": 2.8,
+    "example_quote": "I hate that legacy carmakers followed Tesla into the cheap cost-cutting trap of sticking an iPad glued to the dash instead of giving us real climate control buttons.",
+    "source_context": "Common complaint across traditional car enthusiasts, Euro NCAP safety rating boards, and automotive design critiques."
+  },
+  "glass roof oven": {
+    "term": "glass roof oven",
+    "category": "build_quality_service",
+    "definition": "The intense cabin greenhouse heat buildup caused by all-glass panoramic roofs without physical retractable roller shades, which radiant-heats occupants' heads and forces the air conditioner to run at maximum blast.",
+    "severity_weight": 3.2,
+    "example_quote": "During Arizona summers, that panoramic ceiling turns the car into a glass roof oven; you literally cannot touch the glass without burning your palm.",
+    "source_context": "Drove massive aftermarket sales of clip-in mesh sunshades across Tesla, Rivian, Polestar, and Mach-E owner communities."
+  },
+  "frunk": {
+    "term": "frunk",
+    "category": "community_culture_slang",
+    "definition": "A portmanteau of front and trunk describing the secondary cargo luggage storage compartment located under the hood of an electric vehicle in the space freed by the elimination of a combustion engine block.",
+    "severity_weight": 1.2,
+    "example_quote": "I put all our takeout pizzas in the powered front frunk so the greasy food smell doesn't stink up the passenger cabin.",
+    "source_context": "Standard EV nomenclature officially adopted by Ford (Mega Power Frunk), Tesla, Rivian, and Lucid."
+  },
+  "frunk or treat": {
+    "term": "frunk or treat",
+    "category": "community_culture_slang",
+    "definition": "A community Halloween gathering where electric vehicle owners park together, decorate their front trunks with cobwebs and lights, and pass out candy to neighborhood children.",
+    "severity_weight": 1.0,
+    "example_quote": "Took the kids to the local EV club's annual Frunk or Treat; there were 30 Rivians and Teslas with haunted front trunks handing out glow sticks.",
+    "source_context": "Popular community family activity organized by regional Tesla and Rivian owner clubs each October."
+  },
+  "dog mode": {
+    "term": "dog mode",
+    "category": "community_culture_slang",
+    "definition": "An intelligent climate control setting that keeps the vehicle air conditioning or heat running while parked, displaying a prominent graphic message on the center display reassuring onlookers that the pet inside is safe and comfortable.",
+    "severity_weight": 1.3,
+    "example_quote": "Left my golden retriever in Dog Mode at 68°F while picking up groceries; the center screen displayed a huge dog badge saying my driver will be right back.",
+    "source_context": "Originated by Tesla in 2019 and since adopted or mimicked by Rivian (Pet Comfort) and other connected EV makers."
+  },
+  "camp mode": {
+    "term": "camp mode",
+    "category": "community_culture_slang",
+    "definition": "An overnight vehicle mode that maintains cabin climate, air ventilation, internal ambient lighting, and USB/120V outlet power indefinitely while suppressing security alarms and sleep mode, allowing occupants to sleep comfortably inside the vehicle.",
+    "severity_weight": 1.4,
+    "example_quote": "Folded down the rear seats, inflated an air mattress, and engaged Camp Mode in Yosemite; stayed 70°F warm all night while it was freezing outside.",
+    "source_context": "Prominent lifestyle feature highlighted in Rivian, Tesla, and Kia EV9 overland and camping communities."
+  },
+  "cabin overheat protection": {
+    "term": "cabin overheat protection",
+    "category": "battery_powertrain",
+    "definition": "A safety feature that automatically runs the blower fan or air conditioner when the interior cabin temperature of a parked EV exceeds 90°F to 105°F, frequently blamed for steady vampire battery drain in hot climates.",
+    "severity_weight": 2.7,
+    "example_quote": "Turned off Cabin Overheat Protection in Phoenix because it was chewing through 5% of my battery every afternoon keeping an empty car at 95°F.",
+    "source_context": "Frequent discussion in Tesla user manuals and southwestern US owner forums."
+  },
+  "whoosh mode": {
+    "term": "whoosh mode",
+    "category": "community_culture_slang",
+    "definition": "Colloquial term describing the sensation of instant, silent, neck-snapping maximum acceleration delivery from multi-motor EV drivetrains that produces dramatic forward thrust without engine roar or gear changes.",
+    "severity_weight": 1.5,
+    "example_quote": "Stepped on the pedal in whoosh mode and launched all four passengers into their headrests; the instant torque never fails to shock gas car drivers.",
+    "source_context": "Derived from community descriptions of Tesla Ludicrous/Plaid, Rivian Launch Mode, and Porsche Taycan Launch Control."
+  },
+  "EV grin": {
+    "term": "EV grin",
+    "category": "community_culture_slang",
+    "definition": "The spontaneous, uncontrollable smile that spreads across the face of a passenger or first-time EV driver when they experience the instant, uninterrupted torque of an electric motor launch.",
+    "severity_weight": 1.1,
+    "example_quote": "Gave my skeptical father-in-law a ride in the dual-motor; the second I floored it, he got the classic EV grin and admitted gas cars feel sluggish.",
+    "source_context": "Established community phrase used for over a decade in early Tesla Roadster, Model S, and general EV enthusiast circles."
+  },
+  "frunk popper": {
+    "term": "frunk popper",
+    "category": "hardware_failure",
+    "definition": "The smartphone app command button, key fob shortcut, or physical emergency mechanical release cable behind the tow hook cover used to unlatch the front trunk when electronic latches fail or 12V power dies.",
+    "severity_weight": 2.3,
+    "example_quote": "When the 12V battery died, I had to fish out the manual frunk popper wires behind the front bumper tow eye to jump-start the terminal.",
+    "source_context": "Essential emergency recovery procedure documented on Tesla, Rivian, and Lucid owner handbooks."
+  },
+  "OTA bricking": {
+    "term": "OTA bricking",
+    "category": "hardware_failure",
+    "definition": "The severe event where an automated over-the-air firmware update crashes mid-installation, fails cryptographic checksums, or corrupts primary ECU bootloaders, rendering the car dead and un-drivable in the owner's driveway.",
+    "severity_weight": 4.9,
+    "example_quote": "The truck started an overnight software update at 2 AM and suffered an OTA bricking; service had to tow it on dollies because the electronic parking brake was frozen shut.",
+    "source_context": "Infamous incidents documented with Rivian update 2023.42.01 (certificate error) and multiple early Lucid Air software release bugs."
+  },
+  "rolling brick": {
+    "term": "rolling brick",
+    "category": "hardware_failure",
+    "definition": "An electric vehicle that has suffered a complete shutdown of its high-voltage traction system, steering rack, or braking electronics, becoming an unsteerable, immobilized heavyweight on public roads.",
+    "severity_weight": 4.8,
+    "example_quote": "The main high-voltage contactor blew on the highway at 65 mph, leaving me in a 6,000-pound rolling brick with zero power steering and no throttle response.",
+    "source_context": "Descriptive slang used across NHTSA safety complaints, Rivian R1T drive unit failures, and Ford Mustang Mach-E HVJB recalls."
+  },
+  "gear guard paranoia": {
+    "term": "gear guard paranoia",
+    "category": "community_culture_slang",
+    "definition": "The obsessive habit of EV owners constantly reviewing dozens of security camera notification clips (Tesla Sentry Mode, Rivian Gear Guard) for harmless pedestrians, wind gusts, or parking lot bystanders.",
+    "severity_weight": 2.2,
+    "example_quote": "Suffering from Gear Guard paranoia: I woke up to 47 video alerts on my phone just because a moth was fluttering near the side mirror camera all night.",
+    "source_context": "Common comedic trope across r/Rivian and r/TeslaModel3 community forums."
+  },
+  "monroney markup": {
+    "term": "monroney markup",
+    "category": "service_repair_economics",
+    "definition": "Extortionate dealer markups, market adjustment stickers, or forced add-on fees slapped on top of official MSRP window stickers (Monroney labels) by franchised car dealerships on high-demand EVs.",
+    "severity_weight": 3.8,
+    "example_quote": "Went to buy a Ford F-150 Lightning and the dealership hit me with a ,000 Monroney markup plus a ,000 nitrogen tire package; that is why direct-sales EVs are winning.",
+    "source_context": "Widely publicized during 2021-2023 EV shortages across US franchise dealerships (Ford, Hyundai, GM)."
+  },
+  "direct-sales limbo": {
+    "term": "direct-sales limbo",
+    "category": "service_repair_economics",
+    "definition": "The convoluted bureaucratic process EV buyers must navigate in states where dealership lobby laws ban direct OEM sales (e.g. Texas, Michigan), requiring out-of-state invoicing, third-party carrier transport, and self-registration hurdles.",
+    "severity_weight": 3.4,
+    "example_quote": "Buying a Rivian in Texas forced me into direct-sales limbo: I had to wire money to Illinois, pay sales tax out of pocket, and wait 3 months for the state to send paper plates.",
+    "source_context": "Legal and logistical headache constantly discussed on Rivian, Tesla, and Lucid forums."
+  },
+  "aftermarket jailbreak": {
+    "term": "aftermarket jailbreak",
+    "category": "software_paywall",
+    "definition": "Third-party hardware bypass dongles or CAN bus intercept modules (e.g. Ingenext Boost 50, S3XY Buttons) installed to reverse-engineer and unlock factory software-restricted motor horsepower, heated seats, or track modes.",
+    "severity_weight": 3.5,
+    "example_quote": "Refused to pay Tesla ,000 for the Acceleration Boost, so I bought an aftermarket jailbreak module that unlocks the rear inverter horsepower for half the price.",
+    "source_context": "Prominent subculture in Tesla tuning communities, right-to-repair debates, and performance modder forums."
+  },
+  "phantom load": {
+    "term": "phantom load",
+    "category": "battery_powertrain",
+    "definition": "Unintended electrical drain on the high-voltage pack caused by third-party telemetry apps, aftermarket dashcams, or OBD2 dongles continuously polling the vehicle's API and preventing its onboard computers from entering deep sleep.",
+    "severity_weight": 2.9,
+    "example_quote": "Discovered that my third-party logging app was polling the vehicle API every 30 seconds, generating a constant phantom load that burned 4% of my battery every night.",
+    "source_context": "Frequently identified culprit on Tesla Motors Club and r/electricvehicles battery troubleshooting threads."
+  },
+  "lemon law buyback": {
+    "term": "lemon law buyback",
+    "category": "service_repair_economics",
+    "definition": "The statutory legal process where an automaker is forced by state consumer protection laws to repurchase a defective new EV after failing to fix chronic safety defects or keeping the car in service for over 30 days.",
+    "severity_weight": 4.7,
+    "example_quote": "After my Lucid Air spent 45 cumulative days at the service center for recurring drive unit shutdowns, I filed for a lemon law buyback and received a full refund check.",
+    "source_context": "Prominent across early adopter forums for Rivian R1T/R1S, Lucid Air, Fisker Ocean, and Tesla Cybertruck."
+  },
+  "hot stall": {
+    "term": "hot stall",
+    "category": "charging_infrastructure",
+    "definition": "A public DC fast-charging dispenser that is fully operational and reliably outputs its maximum advertised peak charging rate (e.g. genuine 350 kW / 800V) without power sharing or thermal throttling.",
+    "severity_weight": 1.7,
+    "example_quote": "Scored the lucky hot stall at Electrify America Baker; pulled an immediate 240 kW on my Ioniq 5 and was back on the highway in 18 minutes.",
+    "source_context": "Enthusiastic charging report shorthand on PlugShare check-ins and EV road-trip vlogs."
+  },
+  "cold stall": {
+    "term": "cold stall",
+    "category": "charging_infrastructure",
+    "definition": "A malfunctioning or crippled fast-charging pedestal that has suffered cooling loop failures, power cabinet module blowouts, or severe grid throttling, capping charge rates at a crawl (30-50 kW).",
+    "severity_weight": 3.9,
+    "example_quote": "Avoid dispenser #3 at the Barstow station—it is a broken cold stall derated to 36 kW and will double your charging time.",
+    "source_context": "Standard warning terminology left in PlugShare user notes and EV road-trip navigation tips."
+  },
+  "NACS transition": {
+    "term": "NACS transition",
+    "category": "charging_infrastructure",
+    "definition": "The industry-wide adoption of the North American Charging Standard (SAE J3400 / Tesla connector) by non-Tesla automakers, creating a transitional period of adapter shortages, charge-port location mismatches, and CCS obsolescence.",
+    "severity_weight": 3.1,
+    "example_quote": "The NACS transition has been messy: Ford owners waited 8 months for backordered adapters, and non-Tesla EVs are blocking two Supercharger stalls due to short cables.",
+    "source_context": "Massive automotive industry tectonic shift covering 2023-2025 across all major automotive outlets."
+  },
+  "range loss towing": {
+    "term": "range loss towing",
+    "category": "battery_powertrain",
+    "definition": "The severe and punishing 40% to 60% reduction in driving range experienced when hitching a camper, boat, or box trailer to an electric pickup truck or SUV due to extreme aerodynamic drag.",
+    "severity_weight": 4.1,
+    "example_quote": "Hooked up a 6,000-lb travel trailer to the Rivian R1T and suffered brutal range loss towing; our 310-mile range plummeted to 125 miles between charging stops.",
+    "source_context": "Extensively tested by Fast Lane Truck (TFLtruck), MotorTrend, and Out of Spec Reviews on F-150 Lightning, Cybertruck, and R1T."
+  },
+  "vampire load shedding": {
+    "term": "vampire load shedding",
+    "category": "battery_powertrain",
+    "definition": "The automatic self-preservation protocol in which an EV's firmware systematically disables auxiliary power-hungry features (Sentry Mode, Gear Guard, proximity unlock, cabin climate) when battery SoC drops below 20%.",
+    "severity_weight": 2.5,
+    "example_quote": "When battery dropped to 19%, vampire load shedding kicked in automatically, shutting off Sentry cameras and cellular remote wake to ensure the pack wouldn't hit zero.",
+    "source_context": "Standard software behavior engineered into Tesla, Rivian, and Lucid vehicle firmware."
+  },
+  "paper brakes": {
+    "term": "paper brakes",
+    "category": "build_quality_service",
+    "definition": "Derisive term describing mechanical friction brake rotors that severely rust, pit, or seize due to disuse because the vehicle relies almost exclusively on aggressive regenerative braking for deceleration.",
+    "severity_weight": 3.4,
+    "example_quote": "Never had to touch the brake pedal in two years of one-pedal driving, but my inspection failed because my rotors turned into rusted paper brakes that need full replacement.",
+    "source_context": "Common maintenance problem in humid/salted winter regions discussed on German TÜV reports and European EV forums."
+  },
+  "underbody total": {
+    "term": "underbody total",
+    "category": "service_repair_economics",
+    "definition": "When an insurance company declares an EV an immediate total loss write-off after routine road debris or high-centering causes minor cosmetic scrapes on the high-voltage battery pack skid plate, because the OEM refuses to certify module-level repairs.",
+    "severity_weight": 4.9,
+    "example_quote": "A 2mm scratch on the bottom aluminum battery casing caused an underbody total; the dealer quoted ,000 CAD for a new pack and the insurance company scrapped the whole car.",
+    "source_context": "Real-world phenomenon highlighted by Canadian Hyundai Ioniq 5 and Porsche Taycan owner lawsuits and investigative journalism."
+  }
+}

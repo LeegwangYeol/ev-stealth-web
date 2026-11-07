@@ -258,6 +258,15 @@ assert(pdiSource.includes('aria-valuetext='), 'Progressbar defines descriptive a
 assert(pdiSource.includes('role="tablist"'), 'Category filter declares role="tablist"');
 assert(pdiSource.includes('role="tabpanel"'), 'Checklist container declares role="tabpanel"');
 assert(pdiSource.includes('tabIndex={0}'), 'Tabpanel declares tabIndex={0} for keyboard accessibility');
+assert(pdiSource.includes('aria-expanded={isSelected}'), 'Category filter tabs declare aria-expanded={isSelected}');
+
+// Verify checkboxes declare aria-checked and native role
+assert(pdiSource.includes('type="checkbox"'), 'Checklist rows use native input type="checkbox"');
+assert(pdiSource.includes('aria-checked={item.checked}'), 'Checkboxes declare explicit aria-checked state');
+
+// Verify category accordions declare aria-expanded and aria-controls
+assert(pdiSource.includes('aria-expanded={!isCollapsed}'), 'Category accordions declare dynamic aria-expanded state');
+assert(pdiSource.includes('aria-controls={contentId}'), 'Category accordions link to content via aria-controls');
 
 // ---------------------------------------------------------
 // 6. PRINT STYLESHEET COMPATIBILITY
@@ -269,6 +278,59 @@ assert(pdiSource.includes('print:border-black'), 'Checkboxes declare print:borde
 assert(pdiSource.includes('print:hidden'), 'Interactive elements declare print:hidden');
 assert(pdiSource.includes('print:break-inside-avoid'), 'Fieldsets and rows declare print:break-inside-avoid');
 assert(pdiSource.includes('print:break-after-avoid'), 'Category headers declare print:break-after-avoid');
+
+// ---------------------------------------------------------
+// 7. WCAG 2.1 AA & STORAGE RESILIENCE HARNESS
+// ---------------------------------------------------------
+console.log('[TEST GROUP 7] WCAG 2.1 AA and LocalStorage Quota/Private browsing resilience...');
+
+// 7.1 Checkbox proper labeling with htmlId / htmlFor
+assert(pdiSource.includes('htmlFor={`pdi-task-${item.id}`}'), 'PdiItemRow binds label via htmlFor={pdi-task-${item.id}}');
+assert(pdiSource.includes('id={`pdi-task-${item.id}`}'), 'PdiItemRow input has matching id={pdi-task-${item.id}}');
+assert(pdiSource.includes('id={`pdi-task-text-${item.id}`}'), 'PdiItemRow text span has dedicated accessible text id');
+
+// 7.2 Progress bar WCAG 2.1 AA semantics
+assert(pdiSource.includes('role="progressbar"'), 'Progress bar declares role="progressbar"');
+assert(pdiSource.includes('aria-valuenow={progressPercentage}'), 'Progress bar declares aria-valuenow={progressPercentage}');
+assert(pdiSource.includes('aria-valuemin={0}'), 'Progress bar declares aria-valuemin={0}');
+assert(pdiSource.includes('aria-valuemax={100}'), 'Progress bar declares aria-valuemax={100}');
+assert(pdiSource.includes('aria-label="신차 출고 전 점검(PDI) 진행률"'), 'Progress bar declares descriptive aria-label');
+
+// 7.3 Filter tabs role="tablist" / role="tab" with keyboard arrow support
+assert(pdiSource.includes('role="tablist"'), 'Filter container declares role="tablist"');
+assert(pdiSource.includes('role="tab"'), 'Filter items declare role="tab"');
+assert(pdiSource.includes('handleTabKeyDown'), 'Filter tabs bind handleTabKeyDown callback');
+assert(pdiSource.includes("e.key === 'ArrowRight' || e.key === 'ArrowDown'"), 'handleTabKeyDown supports forward arrow navigation');
+assert(pdiSource.includes("e.key === 'ArrowLeft' || e.key === 'ArrowUp'"), 'handleTabKeyDown supports backward arrow navigation');
+assert(pdiSource.includes("e.key === 'Home'"), 'handleTabKeyDown supports Home key navigation');
+assert(pdiSource.includes("e.key === 'End'"), 'handleTabKeyDown supports End key navigation');
+
+// 7.4 Whitespace-free category section IDs (prevents broken space-separated aria-labelledby tokens)
+assert(pdiSource.includes('pdi-category-heading-${idx}'), 'Category heading IDs use whitespace-free indexed tokens');
+assert(!pdiSource.includes('id={`pdi-cat-${category}`}'), 'Category IDs do not embed raw category strings with spaces or parentheses');
+
+// 7.5 LocalStorage QuotaExceededError and private browsing resilience exports
+assert(pdiSource.includes('export function isQuotaExceededError'), 'Exports isQuotaExceededError helper');
+assert(pdiSource.includes('export function isLocalStorageAvailable'), 'Exports isLocalStorageAvailable helper');
+assert(pdiSource.includes('export function getStorageType'), 'Exports getStorageType helper');
+
+// 7.6 Simulate isQuotaExceededError logic directly
+function testQuotaCheck(err) {
+  if (!err || typeof err !== 'object') return false;
+  return (
+    err.name === 'QuotaExceededError' ||
+    err.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+    err.code === 22 ||
+    err.code === 1014 ||
+    err.number === -2147024882
+  );
+}
+
+assert(testQuotaCheck({ name: 'QuotaExceededError', code: 22 }) === true, 'WebKit QuotaExceededError detected');
+assert(testQuotaCheck({ name: 'NS_ERROR_DOM_QUOTA_REACHED', code: 1014 }) === true, 'Firefox QuotaExceededError detected');
+assert(testQuotaCheck({ code: 22 }) === true, 'Code 22 error detected');
+assert(testQuotaCheck(new Error('Generic failure')) === false, 'Generic error not flagged as quota error');
+assert(testQuotaCheck(null) === false, 'Null error gracefully returns false');
 
 console.log('\n======================================================');
 console.log(`[PDI HARNESS FINISHED] Total tests: ${suiteResults.totalTests}`);

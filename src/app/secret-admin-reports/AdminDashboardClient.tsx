@@ -8,7 +8,7 @@ import {
   type DailyReportData,
   type DefectReportItem,
 } from '@/lib/getDailyReports';
-import { isExternalUrl } from '@/lib/sanitizeUrl';
+import { isExternalUrl, safeJsonParse } from '@/lib/sanitizeUrl';
 import ClientTimestamp from '@/components/ClientTimestamp';
 
 export function formatSentimentPercent(score: unknown): number {
@@ -87,10 +87,11 @@ export interface AdminDailyReportData extends Omit<DailyReportData, 'reports'> {
 }
 
 interface AdminDashboardClientProps {
-  initialData: AdminDailyReportData;
+  initialData?: AdminDailyReportData | string | null;
 }
 
 type SortOption = 'critical' | 'recent' | 'negativity';
+type ViewMode = 'cards' | 'table';
 
 interface CategoryTab {
   code: string;
@@ -209,8 +210,8 @@ function getSourceBadge(source: string, url: string) {
   const isBobae = (source || '').toLowerCase().includes('bobae');
   const badgeText = isBobae ? '보배드림' : '디시인사이드';
   const badgeColor = isBobae
-    ? 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100'
-    : 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100';
+    ? 'bg-blue-50 text-blue-900 border-blue-200 hover:bg-blue-100'
+    : 'bg-indigo-50 text-indigo-900 border-indigo-200 hover:bg-indigo-100';
 
   const safeUrl = sanitizeReportUrl(url);
   const isExternal = safeUrl.startsWith('http://') || safeUrl.startsWith('https://');
@@ -232,6 +233,7 @@ function getSourceBadge(source: string, url: string) {
       target="_blank"
       rel="noopener noreferrer"
       title={`${badgeText} 원문 게시물 바로가기 (새 창에서 열림)`}
+      aria-label={`${badgeText} 원문 게시물 바로가기 (새 창에서 열림)`}
       className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${badgeColor}`}
     >
       <span>{badgeText}</span>
@@ -254,12 +256,15 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedSource, setSelectedSource] = useState('all');
   const [sortBy, setSortBy] = useState<SortOption>('critical');
+  const [viewMode, setViewMode] = useState<ViewMode>('cards');
+  const [pageSize, setPageSize] = useState<number>(10);
 
   // Accessible Modal Dialog State & Focus Management
   const [activeModalReport, setActiveModalReport] = useState<DefectReportWithTimestamp | null>(null);
   const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleOpenModal = useCallback((report: DefectReportWithTimestamp, triggerEl?: HTMLButtonElement) => {
     if (triggerEl) {
@@ -276,7 +281,24 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     }, 0);
   }, []);
 
-  // Trap focus inside modal & keyboard dismissibility (Escape key)
+  // Window-level Escape key listener to close modal from anywhere in the document
+  useEffect(() => {
+    if (!activeModalReport) return;
+
+    const handleWindowKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleCloseModal();
+      }
+    };
+
+    window.addEventListener('keydown', handleWindowKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleWindowKeyDown);
+    };
+  }, [activeModalReport, handleCloseModal]);
+
+  // Trap focus inside modal & keyboard dismissibility
   const handleModalKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -286,7 +308,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
     if (e.key === 'Tab' && modalRef.current) {
       const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
       );
       if (focusableElements.length === 0) return;
 
@@ -294,12 +316,12 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
       const lastElement = focusableElements[focusableElements.length - 1];
 
       if (e.shiftKey) {
-        if (document.activeElement === firstElement) {
+        if (document.activeElement === firstElement || !modalRef.current.contains(document.activeElement)) {
           e.preventDefault();
           lastElement.focus();
         }
       } else {
-        if (document.activeElement === lastElement) {
+        if (document.activeElement === lastElement || !modalRef.current.contains(document.activeElement)) {
           e.preventDefault();
           firstElement.focus();
         }
@@ -344,7 +366,16 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     }
   }, []);
 
-  const safeData = initialData || getFallbackReportData();
+  // Safe JSON parsing and fallback resolution for initialData
+  const safeData = useMemo(() => {
+    let parsed: unknown = initialData;
+    if (typeof initialData === 'string') {
+      parsed = safeJsonParse<AdminDailyReportData>(initialData, getFallbackReportData());
+    }
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as AdminDailyReportData)
+      : getFallbackReportData();
+  }, [initialData]);
 
   const reports = useMemo<DefectReportWithTimestamp[]>(() => {
     const rawList = Array.isArray(safeData?.reports) ? safeData.reports : [];
@@ -355,10 +386,40 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         const parsed = parseSafeDate(rawDate);
         const catCode = r.defect_category || 'BATTERY_CHARGING';
         const catKo = r.defect_category_ko || '기타 결함';
-        const rawSlang = Array.isArray(r.slang_tags) ? r.slang_tags : [];
-        const slangList = rawSlang
+
+        // Safe JSON parsing for slang tags if stringified
+        let rawSlang: unknown = r.slang_tags;
+        if (typeof rawSlang === 'string') {
+          const trimmed = rawSlang.trim();
+          if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+            rawSlang = safeJsonParse<string[]>(trimmed, []);
+          } else if (trimmed.length > 0) {
+            rawSlang = trimmed.split(',').map((s: string) => s.trim()).filter(Boolean);
+          } else {
+            rawSlang = [];
+          }
+        }
+        const slangList = (Array.isArray(rawSlang) ? rawSlang : [])
           .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
           .map((t) => t.trim());
+
+        // Safe JSON parsing for DSI breakdown if stringified
+        let rawDsi: unknown = r.dsi_breakdown;
+        if (typeof rawDsi === 'string') {
+          const trimmedDsi = rawDsi.trim();
+          if (trimmedDsi.startsWith('{') && trimmedDsi.endsWith('}')) {
+            rawDsi = safeJsonParse<DsiBreakdown>(trimmedDsi, {});
+          }
+        }
+        const safeDsi: DsiBreakdown | undefined = rawDsi && typeof rawDsi === 'object' && !Array.isArray(rawDsi)
+          ? {
+              safety: typeof (rawDsi as Record<string, unknown>).safety === 'number' && Number.isFinite((rawDsi as Record<string, unknown>).safety) ? (rawDsi as Record<string, unknown>).safety as number : 0,
+              functional: typeof (rawDsi as Record<string, unknown>).functional === 'number' && Number.isFinite((rawDsi as Record<string, unknown>).functional) ? (rawDsi as Record<string, unknown>).functional as number : 0,
+              economic: typeof (rawDsi as Record<string, unknown>).economic === 'number' && Number.isFinite((rawDsi as Record<string, unknown>).economic) ? (rawDsi as Record<string, unknown>).economic as number : 0,
+              social: typeof (rawDsi as Record<string, unknown>).social === 'number' && Number.isFinite((rawDsi as Record<string, unknown>).social) ? (rawDsi as Record<string, unknown>).social as number : 0,
+              convenience: typeof (rawDsi as Record<string, unknown>).convenience === 'number' && Number.isFinite((rawDsi as Record<string, unknown>).convenience) ? (rawDsi as Record<string, unknown>).convenience as number : 0,
+            }
+          : undefined;
 
         const searchTokens = [
           r.title || '',
@@ -383,7 +444,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           ...r,
           id: r.id ? String(r.id) : `report_${idx + 1}`,
           date: displayDate,
-          source: (r.source || 'bobaedream').toLowerCase(),
+          source: (r.source || '').toLowerCase() || 'bobaedream',
           url: sanitizeReportUrl(r.url),
           defect_category: catCode,
           defect_category_ko: catKo,
@@ -392,6 +453,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           summary: r.summary || '결함 상세 내용 요약',
           verbatim_quote: r.verbatim_quote || '원문 없음',
           slang_tags: slangList,
+          dsi_breakdown: safeDsi,
           sentiment_score: getSafeSentimentScore(r.sentiment_score, 0.85),
           severity: r.severity || 'WARNING',
           _timestamp: Number.isFinite(parsed) ? parsed : 0,
@@ -467,9 +529,21 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     return { categoryCounts: catCounts, sourceCounts: srcCounts };
   }, [reports]);
 
-  // Filtered and sorted reports with fast precomputed index
+  // Filtered and sorted reports with fast precomputed index and optimized tokenization
   const filteredReports = useMemo(() => {
     const rawQuery = deferredSearchQuery.trim().toLowerCase().slice(0, 200);
+
+    // Precompute query tokens ONCE outside the report loop for high-performance large list filtering
+    const queryTokens = rawQuery
+      ? rawQuery
+          .split(/\s+/)
+          .filter(Boolean)
+          .map((token) => {
+            const cleanToken = token.replace(/^#+/, '');
+            const spacelessToken = cleanToken.replace(/\s+/g, '');
+            return { token, cleanToken, spacelessToken };
+          })
+      : [];
 
     return reports
       .filter((report) => {
@@ -490,12 +564,8 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         }
 
         // Search query filter: Korean spacing-tolerant, multi-keyword, and hashtag resilient
-        if (rawQuery) {
-          const tokens = rawQuery.split(/\s+/).filter(Boolean);
-          const allTokensMatch = tokens.every((token) => {
-            const cleanToken = token.replace(/^#+/, '');
-            const spacelessToken = cleanToken.replace(/\s+/g, '');
-
+        if (queryTokens.length > 0) {
+          const allTokensMatch = queryTokens.every(({ token, cleanToken, spacelessToken }) => {
             // 1. Direct index match
             if (report._searchIndex.includes(token) || (cleanToken && report._searchIndex.includes(cleanToken))) {
               return true;
@@ -521,8 +591,8 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
       })
       .sort((a, b) => {
         if (sortBy === 'critical') {
-          const sevA = String(a.severity || '').toUpperCase();
-          const sevB = String(b.severity || '').toUpperCase();
+          const sevA = String(a.severity || '').trim().toUpperCase();
+          const sevB = String(b.severity || '').trim().toUpperCase();
           const weightA = Object.prototype.hasOwnProperty.call(SEVERITY_WEIGHT, sevA)
             ? SEVERITY_WEIGHT[sevA]
             : 0;
@@ -540,8 +610,8 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           if (b._timestamp !== a._timestamp) {
             return b._timestamp - a._timestamp;
           }
-          const sevA = String(a.severity || '').toUpperCase();
-          const sevB = String(b.severity || '').toUpperCase();
+          const sevA = String(a.severity || '').trim().toUpperCase();
+          const sevB = String(b.severity || '').trim().toUpperCase();
           const weightA = SEVERITY_WEIGHT[sevA] ?? 0;
           const weightB = SEVERITY_WEIGHT[sevB] ?? 0;
           if (weightB !== weightA) return weightB - weightA;
@@ -561,21 +631,20 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
   // Pagination State (WCAG AA Compliant Navigation)
   const [currentPage, setCurrentPage] = useState(1);
-  const PAGE_SIZE = 10;
-  const totalPages = Math.max(1, Math.ceil(filteredReports.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredReports.length / pageSize));
 
-  // Auto-reset to first page when filtering or sorting changes
+  // Auto-reset to first page when filtering, sorting, or page size changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedCategory, selectedSource, deferredSearchQuery, sortBy]);
+  }, [selectedCategory, selectedSource, deferredSearchQuery, sortBy, pageSize]);
 
   // Ensure current page bounds
   const validCurrentPage = Math.min(currentPage, totalPages);
 
   const paginatedReports = useMemo(() => {
-    const start = (validCurrentPage - 1) * PAGE_SIZE;
-    return filteredReports.slice(start, start + PAGE_SIZE);
-  }, [filteredReports, validCurrentPage, PAGE_SIZE]);
+    const start = (validCurrentPage - 1) * pageSize;
+    return filteredReports.slice(start, start + pageSize);
+  }, [filteredReports, validCurrentPage, pageSize]);
 
   const handleResetFilters = useCallback(() => {
     setSearchQuery('');
@@ -583,6 +652,12 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     setSelectedSource('all');
     setSortBy('critical');
     setCurrentPage(1);
+    searchInputRef.current?.focus();
+  }, []);
+
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery('');
+    searchInputRef.current?.focus();
   }, []);
 
   const handleTagClick = useCallback((tag: unknown) => {
@@ -632,12 +707,12 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 text-xs text-slate-300">
             <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
               <span className="block text-slate-300 font-mono">파이프라인 버전</span>
-              <span className="font-semibold text-slate-200">v{initialData?.pipeline_version || '1.0.0'}</span>
+              <span className="font-semibold text-slate-200">v{safeData?.pipeline_version || '1.0.0'}</span>
             </div>
             <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
               <span className="block text-slate-300 font-mono">최종 수집 시각</span>
               <ClientTimestamp
-                isoString={initialData?.generated_at}
+                isoString={safeData?.generated_at}
                 className="font-semibold text-slate-200"
               />
             </div>
@@ -674,7 +749,9 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           </div>
           <div className="mt-2 text-xs text-slate-800 flex items-center justify-between">
             <span>스크랩 대상: {statistics.total_scraped}건</span>
-            <span className="text-blue-700 font-semibold">유효율 {Math.round((statistics.total_filtered_defects / Math.max(statistics.total_scraped || 0, 1)) * 100)}%</span>
+            <span className="text-blue-700 font-semibold">
+              유효율 {Math.round((statistics.total_filtered_defects / Math.max(statistics.total_scraped || 0, 1)) * 100)}%
+            </span>
           </div>
         </div>
 
@@ -802,7 +879,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         {/* Search & Sort Row */}
         <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
           {/* Full-text search input with WCAG search landmark and accessible description */}
-          <div role="search" className="relative flex-1">
+          <div role="search" aria-label="전기차 결함 제보 및 은어 검색" className="relative flex-1">
             <label htmlFor="admin-defect-search-input" className="sr-only">전기차 결함 제보 및 은어 검색</label>
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-600">
               <svg className="w-4 h-4" width="16" height="16" focusable="false" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -816,7 +893,8 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             </div>
             <input
               id="admin-defect-search-input"
-              type="text"
+              ref={searchInputRef}
+              type="search"
               value={searchQuery}
               maxLength={200}
               onChange={(e) => setSearchQuery(e.target.value.slice(0, 200))}
@@ -829,7 +907,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               aria-describedby="admin-defect-search-hint"
               aria-label="전기차 결함 제보 및 은어 검색"
               placeholder="제목, 요약, 실차주 원문 코멘트, 차종, 은어(#ICCU폭탄 등) 실시간 검색..."
-              className="w-full pl-10 pr-10 py-2.5 min-h-[44px] text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition placeholder-slate-500"
+              className="w-full pl-10 pr-10 py-2.5 min-h-[44px] text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition placeholder-slate-600"
             />
             <span id="admin-defect-search-hint" className="sr-only">
               검색어를 입력하면 실시간으로 목록이 필터링됩니다. ESC 키를 누르면 입력한 검색어가 초기화됩니다.
@@ -837,7 +915,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             {searchQuery && (
               <button
                 type="button"
-                onClick={() => setSearchQuery('')}
+                onClick={handleClearSearch}
                 className="absolute inset-y-0 right-0 pr-3 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-700 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
                 title="검색어 지우기"
                 aria-label="검색어 지우기"
@@ -849,46 +927,105 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             )}
           </div>
 
-          {/* Sort Selector */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">정렬:</span>
-            <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs font-semibold">
-              <button
-                type="button"
-                aria-pressed={sortBy === 'critical'}
-                onClick={() => setSortBy('critical')}
-                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                  sortBy === 'critical'
-                    ? 'bg-white text-rose-700 font-semibold shadow-sm'
-                    : 'text-slate-700 hover:text-slate-900'
-                }`}
+          {/* Controls Row: Sort, View Mode, and Page Size */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Sort Selector */}
+            <div role="group" aria-label="결함 제보 정렬 기준" className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">정렬:</span>
+              <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs font-semibold">
+                <button
+                  type="button"
+                  aria-pressed={sortBy === 'critical'}
+                  onClick={() => setSortBy('critical')}
+                  className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    sortBy === 'critical'
+                      ? 'bg-white text-rose-700 font-semibold shadow-sm'
+                      : 'text-slate-700 hover:text-slate-900'
+                  }`}
+                >
+                  치명도순
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={sortBy === 'recent'}
+                  onClick={() => setSortBy('recent')}
+                  className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    sortBy === 'recent'
+                      ? 'bg-white text-blue-700 font-semibold shadow-sm'
+                      : 'text-slate-700 hover:text-slate-900'
+                  }`}
+                >
+                  최신수집순
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={sortBy === 'negativity'}
+                  onClick={() => setSortBy('negativity')}
+                  className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    sortBy === 'negativity'
+                      ? 'bg-white text-amber-800 shadow-sm'
+                      : 'text-slate-700 hover:text-slate-900'
+                  }`}
+                >
+                  부정점수순
+                </button>
+              </div>
+            </div>
+
+            {/* View Mode Toggle: Cards vs Table */}
+            <div role="group" aria-label="목록 표시 형식 선택" className="flex items-center gap-1">
+              <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs font-semibold">
+                <button
+                  type="button"
+                  aria-pressed={viewMode === 'cards'}
+                  onClick={() => setViewMode('cards')}
+                  title="카드 보기 형식으로 전환"
+                  aria-label="카드 보기 형식으로 전환"
+                  className={`px-2.5 py-1.5 min-h-[44px] inline-flex items-center gap-1 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    viewMode === 'cards'
+                      ? 'bg-white text-slate-900 shadow-sm font-bold'
+                      : 'text-slate-700 hover:text-slate-900'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" width="14" height="14" focusable="false" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                  </svg>
+                  <span>카드</span>
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={viewMode === 'table'}
+                  onClick={() => setViewMode('table')}
+                  title="데이터 테이블 보기 형식으로 전환"
+                  aria-label="데이터 테이블 보기 형식으로 전환"
+                  className={`px-2.5 py-1.5 min-h-[44px] inline-flex items-center gap-1 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    viewMode === 'table'
+                      ? 'bg-white text-slate-900 shadow-sm font-bold'
+                      : 'text-slate-700 hover:text-slate-900'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" width="14" height="14" focusable="false" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <span>테이블</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Page Size Selector */}
+            <div className="flex items-center gap-1 text-xs">
+              <label htmlFor="admin-page-size-select" className="sr-only">페이지당 표시 개수</label>
+              <select
+                id="admin-page-size-select"
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="min-h-[44px] px-2 py-1.5 bg-slate-100 text-slate-800 rounded-xl border border-slate-200 font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"
+                aria-label="페이지당 표시 제보 개수 선택"
               >
-                치명도순
-              </button>
-              <button
-                type="button"
-                aria-pressed={sortBy === 'recent'}
-                onClick={() => setSortBy('recent')}
-                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                  sortBy === 'recent'
-                    ? 'bg-white text-blue-700 font-semibold shadow-sm'
-                    : 'text-slate-700 hover:text-slate-900'
-                }`}
-              >
-                최신수집순
-              </button>
-              <button
-                type="button"
-                aria-pressed={sortBy === 'negativity'}
-                onClick={() => setSortBy('negativity')}
-                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                  sortBy === 'negativity'
-                    ? 'bg-white text-amber-800 shadow-sm'
-                    : 'text-slate-700 hover:text-slate-900'
-                }`}
-              >
-                부정점수순
-              </button>
+                <option value={10}>10개씩</option>
+                <option value={25}>25개씩</option>
+                <option value={50}>50개씩</option>
+              </select>
             </div>
           </div>
         </div>
@@ -930,7 +1067,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
         {/* Community Source Selector Badges */}
         <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
-          <div className="flex flex-wrap items-center gap-2">
+          <div role="group" aria-label="출처 플랫폼 필터" className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-slate-700">출처 플랫폼:</span>
             <div className="flex flex-wrap items-center gap-1.5">
               {SOURCE_OPTIONS.map((src) => {
@@ -975,6 +1112,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               <button
                 type="button"
                 onClick={handleResetFilters}
+                aria-label="모든 검색 및 카테고리 필터 초기화"
                 className="text-xs text-rose-600 hover:text-rose-700 font-semibold underline min-h-[44px] inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded px-1"
               >
                 <svg className="w-3 h-3" width="12" height="12" focusable="false" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1011,60 +1149,94 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             : `전체 수집된 결함 제보: 총 ${filteredReports.length}건`}
         </div>
 
-        {/* Screen Reader Accessible Summary Table for Defect Reports */}
-        <div className="sr-only">
-          <table aria-label="수집된 전기차 결함 제보 데이터 요약 표">
+        {/* Screen Reader Accessible Summary Table for Defect Reports (always present for screen readers) */}
+        <div className={viewMode === 'table' ? 'overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm' : 'sr-only'} tabIndex={viewMode === 'table' ? 0 : undefined} role={viewMode === 'table' ? 'region' : undefined} aria-label={viewMode === 'table' ? '결함 제보 요약 데이터 테이블' : undefined}>
+          <table aria-label="수집된 전기차 결함 제보 데이터 요약 표" className="w-full text-left text-xs text-slate-800 border-collapse">
             <caption>
-              카테고리: {CATEGORY_TABS.find((c) => c.code === selectedCategory)?.label || '전체'}, 총 {filteredReports.length}건 중 {validCurrentPage}페이지 ({(validCurrentPage - 1) * PAGE_SIZE + 1} - {Math.min(validCurrentPage * PAGE_SIZE, filteredReports.length)}건)
+              {filteredReports.length === 0
+                ? `카테고리: ${CATEGORY_TABS.find((c) => c.code === selectedCategory)?.label || '전체'}, 수집된 결함 제보 없음 (총 0건)`
+                : `카테고리: ${CATEGORY_TABS.find((c) => c.code === selectedCategory)?.label || '전체'}, 총 ${filteredReports.length}건 중 ${validCurrentPage}페이지 (${(validCurrentPage - 1) * pageSize + 1} - ${Math.min(validCurrentPage * pageSize, filteredReports.length)}건)`}
             </caption>
-            <thead>
+            <thead className="bg-slate-100 text-slate-900 font-bold border-b border-slate-200">
               <tr>
-                <th scope="col">번호</th>
-                <th scope="col">날짜</th>
-                <th scope="col">차종</th>
-                <th scope="col">분류</th>
-                <th scope="col">심각도</th>
-                <th scope="col">출처</th>
-                <th scope="col">제목</th>
-                <th scope="col">분석 요약</th>
-                <th scope="col">부정 감성</th>
+                <th scope="col" className="px-3 py-3">번호</th>
+                <th scope="col" className="px-3 py-3">날짜</th>
+                <th scope="col" className="px-3 py-3">차종</th>
+                <th scope="col" className="px-3 py-3">분류</th>
+                <th scope="col" className="px-3 py-3">심각도</th>
+                <th scope="col" className="px-3 py-3">출처</th>
+                <th scope="col" className="px-3 py-3">제목</th>
+                <th scope="col" className="px-3 py-3">분석 요약</th>
+                <th scope="col" className="px-3 py-3">부정 감성</th>
+                {viewMode === 'table' && <th scope="col" className="px-3 py-3 text-right">관리</th>}
               </tr>
             </thead>
-            <tbody>
-              {paginatedReports.map((report, idx) => {
-                const safeUrl = sanitizeReportUrl(report.url);
-                const isExt = isExternalUrl(safeUrl);
-                const overallIdx = (validCurrentPage - 1) * PAGE_SIZE + idx + 1;
-                return (
-                  <tr key={`sr-report-${report.id}`}>
-                    <th scope="row">제보 #{overallIdx}</th>
-                    <td>{report.date}</td>
-                    <td>{report.vehicle_model}</td>
-                    <td>{report.defect_category_ko}</td>
-                    <td>{report.severity}</td>
-                    <td>{report.source || 'N/A'}</td>
-                    <td>
-                      <span>{report.title}</span>
-                      {isExt ? (
-                        <a
-                          href={safeUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="sr-only focus:not-sr-only focus:inline-block focus:px-2 focus:py-0.5 focus:bg-blue-700 focus:text-white focus:rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ml-1"
-                          aria-label="게시글 원문 보기"
-                          title={`'${report.title}' 원문 게시물 바로가기 (새 창에서 열림)`}
-                        >
-                          (원문 링크)
-                        </a>
-                      ) : (
-                        <span className="sr-only text-slate-600 ml-1">(원문 링크 없음)</span>
+            <tbody className="divide-y divide-slate-100">
+              {paginatedReports.length === 0 ? (
+                <tr>
+                  <td colSpan={viewMode === 'table' ? 10 : 9} className="text-center py-8 text-slate-700 text-sm">
+                    일치하는 결함 제보 데이터가 없습니다. (원문 링크 없음)
+                  </td>
+                </tr>
+              ) : (
+                paginatedReports.map((report, idx) => {
+                  const safeUrl = sanitizeReportUrl(report.url);
+                  const isExt = isExternalUrl(safeUrl);
+                  const overallIdx = (validCurrentPage - 1) * pageSize + idx + 1;
+                  return (
+                    <tr key={`report-row-${report.id}`} className="hover:bg-slate-50 transition border-b border-slate-100">
+                      <th scope="row" className="px-3 py-3 font-semibold text-slate-900 whitespace-nowrap">
+                        제보 #{overallIdx}
+                      </th>
+                      <td className="px-3 py-3 text-slate-800 whitespace-nowrap font-mono text-xs">{report.date}</td>
+                      <td className="px-3 py-3 text-slate-900 font-semibold whitespace-nowrap">{report.vehicle_model}</td>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border ${getCategoryBadgeClass(report.defect_category)}`}>
+                          {report.defect_category_ko}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap">{getSeverityBadge(report.severity)}</td>
+                      <td className="px-3 py-3 whitespace-nowrap">{getSourceBadge(report.source || 'N/A', report.url)}</td>
+                      <td className="px-3 py-3 text-slate-900 font-medium max-w-xs truncate" title={report.title}>
+                        <span>{report.title}</span>
+                        {isExt ? (
+                          <a
+                            href={report.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="게시글 원문 보기"
+                            title="게시글 원문 보기 (새 창에서 열림)"
+                            className="focus:inline-block focus:px-2 focus:py-0.5 focus:bg-blue-700 focus:text-white focus:rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ml-1 text-blue-700 underline text-xs font-semibold"
+                          >
+                            (원문 링크)
+                          </a>
+                        ) : (
+                          <span className="text-slate-600 ml-1 text-xs">(원문 링크 없음)</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-slate-800 text-xs max-w-sm truncate" title={report.summary}>
+                        {report.summary}
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap font-mono font-bold text-rose-700 text-xs">
+                        {formatSentimentPercent(report.sentiment_score)}%
+                      </td>
+                      {viewMode === 'table' && (
+                        <td className="px-3 py-3 whitespace-nowrap text-right">
+                          <button
+                            type="button"
+                            aria-haspopup="dialog"
+                            aria-label={`제보 #${overallIdx} (${report.vehicle_model}) 결함 상세 분석 및 DSI 지표 모달 열기`}
+                            onClick={(e) => handleOpenModal(report, e.currentTarget)}
+                            className="px-2.5 py-1 min-h-[44px] inline-flex items-center gap-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                          >
+                            상세 분석
+                          </button>
+                        </td>
                       )}
-                    </td>
-                    <td>{report.summary}</td>
-                    <td>{formatSentimentPercent(report.sentiment_score)}%</td>
-                  </tr>
-                );
-              })}
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
@@ -1113,22 +1285,26 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         ) : (
           <section aria-labelledby="admin-defect-reports-list-heading" className="space-y-4">
             <h2 id="admin-defect-reports-list-heading" className="sr-only">수집된 결함 제보 상세 목록</h2>
-            {paginatedReports.map((report: DefectReportWithTimestamp) => (
-              <DefectReportCard
-                key={report.id}
-                report={report}
-                onTagClick={handleTagClick}
-                onOpenModal={handleOpenModal}
-              />
-            ))}
+            {viewMode === 'cards' && (
+              <div className="space-y-4">
+                {paginatedReports.map((report: DefectReportWithTimestamp) => (
+                  <DefectReportCard
+                    key={report.id}
+                    report={report}
+                    onTagClick={handleTagClick}
+                    onOpenModal={handleOpenModal}
+                  />
+                ))}
+              </div>
+            )}
 
             {/* Accessible Pagination Navigation Component */}
             <nav aria-label="결함 제보 목록 페이지 탐색" className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-slate-200">
               <div className="text-xs text-slate-700 font-medium" aria-live="polite">
                 전체 <strong className="text-slate-900 font-bold">{filteredReports.length}</strong>건 중{' '}
-                <span className="font-semibold text-slate-900">{Math.min((validCurrentPage - 1) * PAGE_SIZE + 1, filteredReports.length)}</span>
+                <span className="font-semibold text-slate-900">{Math.min((validCurrentPage - 1) * pageSize + 1, filteredReports.length)}</span>
                 -
-                <span className="font-semibold text-slate-900">{Math.min(validCurrentPage * PAGE_SIZE, filteredReports.length)}</span>건 표시
+                <span className="font-semibold text-slate-900">{Math.min(validCurrentPage * pageSize, filteredReports.length)}</span>건 표시
                 (페이지 <strong className="text-slate-900 font-bold">{validCurrentPage}</strong> / {totalPages})
               </div>
 
@@ -1232,7 +1408,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 type="button"
                 onClick={handleCloseModal}
                 aria-label="결함 상세 대화상자 닫기"
-                className="p-2 min-w-[44px] min-h-[44px] rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center justify-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="p-2 min-w-[44px] min-h-[44px] rounded-xl text-slate-700 hover:text-slate-900 hover:bg-slate-100 flex items-center justify-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <svg className="w-5 h-5" width="20" height="20" focusable="false" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -1266,30 +1442,30 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
                   <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                    <span className="block text-slate-600 text-[11px] font-medium">안전성</span>
+                    <span className="block text-slate-700 text-[11px] font-medium">안전성</span>
                     <span className="font-extrabold text-slate-900 text-sm">{activeModalReport.dsi_breakdown?.safety ?? 0}</span>
                   </div>
                   <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                    <span className="block text-slate-600 text-[11px] font-medium">기능성</span>
+                    <span className="block text-slate-700 text-[11px] font-medium">기능성</span>
                     <span className="font-extrabold text-slate-900 text-sm">{activeModalReport.dsi_breakdown?.functional ?? 0}</span>
                   </div>
                   <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                    <span className="block text-slate-600 text-[11px] font-medium">경제성</span>
+                    <span className="block text-slate-700 text-[11px] font-medium">경제성</span>
                     <span className="font-extrabold text-slate-900 text-sm">{activeModalReport.dsi_breakdown?.economic ?? 0}</span>
                   </div>
                   <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                    <span className="block text-slate-600 text-[11px] font-medium">사회성</span>
+                    <span className="block text-slate-700 text-[11px] font-medium">사회성</span>
                     <span className="font-extrabold text-slate-900 text-sm">{activeModalReport.dsi_breakdown?.social ?? 0}</span>
                   </div>
                   <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                    <span className="block text-slate-600 text-[11px] font-medium">편의성</span>
+                    <span className="block text-slate-700 text-[11px] font-medium">편의성</span>
                     <span className="font-extrabold text-slate-900 text-sm">{activeModalReport.dsi_breakdown?.convenience ?? 0}</span>
                   </div>
                 </div>
               </div>
 
               {/* Telemetry Details */}
-              <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 pt-2 border-t border-slate-100">
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-700 pt-2 border-t border-slate-100">
                 <div>
                   <span>작성자: </span>
                   <strong className="text-slate-800">{activeModalReport.author || '익명 제보자'}</strong>
@@ -1323,6 +1499,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                     href={safeModalUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    aria-label={`'${activeModalReport.title}' 원문 게시물 바로가기 (새 창에서 열림)`}
                     className="px-4 py-2 min-h-[44px] inline-flex items-center gap-1.5 rounded-xl text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   >
                     <span>원문 링크 바로가기</span>
@@ -1400,7 +1577,7 @@ const DefectReportCard = memo(function DefectReportCard({
           </button>
 
           {/* Community Source Badge with URL Link */}
-          {getSourceBadge(report.source, report.url)}
+          {getSourceBadge(report.source || 'N/A', report.url)}
 
           {/* Date */}
           <span className="text-xs text-slate-800 font-mono font-medium">{report.date}</span>
@@ -1488,4 +1665,3 @@ const DefectReportCard = memo(function DefectReportCard({
     </div>
   );
 });
-

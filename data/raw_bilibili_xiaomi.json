@@ -1,0 +1,919 @@
+[
+  {
+    "id": "BILI_SU7_001",
+    "platform": "bilibili",
+    "board": "堂主聊车",
+    "channel": "堂主聊车",
+    "up_name": "邹云风 (堂主)",
+    "url": "https://www.bilibili.com/video/BV15z42177Vb",
+    "title": "《小米SU7全国首撞！天马赛道5圈刹车片磨穿上墙事故全记录》",
+    "date": "2024-04-28",
+    "vehicle": "Xiaomi SU7 Max",
+    "category": "track_crash",
+    "topic": "上海天马赛道连续5圈极限高负荷刷圈导致NAO刹车片完全耗尽、磨损至金属背板碰撞轮胎墙事故",
+    "technical_focus": "NAO摩擦材料热解脱落、背板直接硬磨刹车盘、制动效能瞬间归零导致T1弯冲出赛道撞墙",
+    "quote": "踩下刹车踏板瞬间感觉完全空了，直接到底没有任何制动力！车速根本降不下来，只能眼睁睁看着车头撞进天马T1弯的轮胎墙。当时车速大概还有七八十，气囊直接弹出来了，车头水箱和防撞梁全部撞烂。下来拆开卡钳一看，原厂刹车片几乎磨平烧焦，摩擦材料全脱落了，直接是金属背板在摩擦刹车盘！修车花了5万多，赛道保险还不给赔，纯自费买教训！",
+    "translated_quote_kr": "브레이크 페달을 밟는 순간 완전히 허당 치며 바닥까지 닿았고 제동력이 1도 없었습니다! 차속이 전혀 줄지 않아 톈마 T1 코너 타이어 방호벽에 전면이 그대로 처박히는 것을 지켜볼 수밖에 없었습니다. 당시 시속 70~80km 정도였는데 에어백이 즉시 전개되었고 전면 라디에이터와 범퍼 빔이 박살 났습니다. 내려서 캘리퍼를 뜯어보니 순정 브레이크 패드가 완전히 다 타서 마모되었고 마찰재가 다 떨어져 나가 쇠 백플레이트가 디스크를 갈고 있었습니다! 수리비만 5만 위안(약 950만 원) 넘게 나왔는데 서킷이라 보험 처리도 안 돼 생돈 날렸습니다!",
+    "translated_quote_en": "The moment I stomped on the brake pedal, it felt completely hollow and sank straight to the floor with zero stopping power! The car didn't decelerate at all, and I could only watch helplessly as the front slammed into the tire barrier at Tianma T1. We were still doing 70-80 km/h, airbags deployed instantly, and the front radiator and crash beam were smashed. Disassembling the calipers revealed the OEM pads were burned to ashes and friction compound had disintegrated completely—bare steel backing plates were grinding directly against the iron discs! Repairs cost over 50,000 RMB, and track insurance refused coverage!",
+    "forensic_data": {
+      "track": "Shanghai Tianma Circuit",
+      "laps_survived": 5,
+      "curb_weight_kg": 2205,
+      "horsepower_hp": 673,
+      "pad_area_cm2": 58.0,
+      "pad_compound": "NAO (Non-Asbestos Organic)",
+      "caliper_spec": "Brembo 4-piston fixed",
+      "repair_cost_rmb": 50000,
+      "failure_mode": "Pad friction material total thermal ablation to bare steel backing plate",
+      "impact_speed_kmh": 75.0
+    },
+    "slang_terms": [
+      "纸片刹车",
+      "铁碰铁",
+      "全网首撞",
+      "买菜车"
+    ],
+    "dsi_factors": {
+      "safety": 0.98,
+      "functional": 0.92,
+      "economic": 0.85,
+      "social": 0.9,
+      "convenience": 0.35
+    },
+    "sentiment": "strongly_negative",
+    "severity": "critical_safety",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_002",
+    "platform": "bilibili",
+    "board": "堂主聊车",
+    "channel": "堂主聊车",
+    "up_name": "邹云风 (堂主)",
+    "url": "https://www.bilibili.com/video/BV14u4m1P7QW",
+    "title": "《撞墙后拆解小米SU7刹车卡钳！摩擦材料全烧光，金属背板硬磨刹车盘》",
+    "date": "2024-05-03",
+    "vehicle": "Xiaomi SU7 Max",
+    "category": "braking_teardown",
+    "topic": "撞墙车辆前布雷博四活塞卡钳拆解：原厂NAO民用刹车皮耐温极限不足400℃，摩擦块剥离碳化",
+    "technical_focus": "民用NAO有机树脂高温热衰退机理、刹车盘拉丝深沟槽、制动液气阻与背板剪切破坏",
+    "quote": "大家仔细看这个拆下来的刹车片，摩擦材料厚度本来有将近10毫米，现在磨得只剩薄薄一层炭化粉末，大部分区域已经裸露出纯钢背板，边缘还有严重的崩角和剪切撕裂！刹车盘表面全是一圈圈深沟槽，这就是典型的铁磨铁拉伤。小米原厂配的是有机NAO配方皮子，这种皮子市区开静音低粉尘很舒服，但极限耐温就350到400度，下赛道两脚重刹温度直接干到600度以上，树脂胶水直接碳化气化，刹车油也沸腾产生气阻，这就是为什么踏板踩下去软绵绵完全刹不住！",
+    "translated_quote_kr": "탈거한 브레이크 패드를 자세히 보시면 원래 10mm에 달하던 마찰재 두께가 얇은 탄화 가루 수준으로 갈려 나갔고, 대부분 면적이 순수 강철 백플레이트가 그대로 노출되었으며 모서리 쪽은 뜯겨나간 파손 흔적이 선명합니다! 디스크 표면에는 온통 깊은 스크래치가 파여 있는데 전형적인 쇠와 쇠가 맞부딪힌 흉터입니다. 샤오미 순정은 유기 NAO 배합 패드로, 시내 주행 시 소음이 적고 분진이 없어 쾌적하지만 내열 한계가 350~400℃에 불과합니다. 서킷에서 풀브레이킹 몇 번이면 600℃를 훌쩍 넘어 수지가 탄화·기화되고 브레이크액이 끓어 베이퍼 록이 발생합니다!",
+    "translated_quote_en": "Look closely at this removed brake pad: the original friction material thickness of nearly 10mm has been reduced to a fragile layer of charred dust, with bare steel backing plate exposed across most of the surface and severe chunking along the edges! The rotor is deeply grooved from metal-on-metal gouging. Xiaomi OEM pads use an organic NAO formula—great for low noise and dust in city driving with a 350-400°C limit, but consecutive track stomps push temps past 600°C, vaporizing the resin binders and boiling the brake fluid into vapor lock!",
+    "forensic_data": {
+      "pad_starting_thickness_mm": 10.0,
+      "pad_remaining_thickness_mm": 0.8,
+      "rotor_surface_damage": "Deep circumferential gouges and severe scoring from steel backing plate contact",
+      "resin_decomposition_temp_celsius": 380,
+      "peak_measured_temp_celsius": 615,
+      "fluid_condition": "Boiled / darkened with micro vapor bubbles (DOT 4 street fluid)"
+    },
+    "slang_terms": [
+      "铁碰铁",
+      "纸片刹车",
+      "气化碳化",
+      "开锅"
+    ],
+    "dsi_factors": {
+      "safety": 0.95,
+      "functional": 0.95,
+      "economic": 0.75,
+      "social": 0.8,
+      "convenience": 0.3
+    },
+    "sentiment": "strongly_negative",
+    "severity": "critical_safety",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_003",
+    "platform": "bilibili",
+    "board": "键盘车神教",
+    "channel": "键盘车神教",
+    "up_name": "鲁超 (教主)",
+    "url": "https://www.bilibili.com/video/BV1Qx4y147e8",
+    "title": "《尾速214km/h首钢赛道刹车完全消失！SU7极限钟摆救车保命复盘》",
+    "date": "2024-06-20",
+    "vehicle": "Xiaomi SU7 Max",
+    "category": "track_crash",
+    "topic": "秦皇岛首钢赛车场大直道尾速214km/h重刹发生灾难性热衰减，线控脚感解耦欺骗驾驶员",
+    "technical_focus": "尾速214km/h刹车力衰退超85%、博世DPB线控踏板阻尼未变但无制动力、北欧钟摆甩尾保命",
+    "quote": "大直道尾速冲到了214km/h，在常规刹车点我一脚重刹下去，刹车踏板脚感依然很硬、很有阻尼感，但车子减速度几乎是零！‘刹车没了！彻底没了！’眼看正前方就是水泥防撞墙，正面撞上去车头必压缩进乘员舱，会死人的！电光石火间我只能强行拉手刹加猛打方向做钟摆（Scandinavian Flick），把车尾甩出去横着撞轮胎墙，用后防撞梁和后翼子板吃下冲击力，这才保住一条命！线控刹车把脚感完全解耦了，踏板给假反馈，这是最致命的！",
+    "translated_quote_kr": "메인 직선주로 끝에서 속도가 214km/h에 달했고, 평소 제동 포인트에서 풀브레이킹을 밟았는데 페달 답력은 여전히 단단하고 저항감이 확실했으나 차량의 감속도는 거의 제로였습니다! '브레이크가 사라졌다! 완전히 사라졌어!' 바로 앞이 콘크리트 방호벽인데 정면충돌하면 차 앞머리가 승객석을 밀고 들어와 죽을 판이었습니다! 찰나의 순간에 핸들을 꺾으며 스칸디나비안 플릭(시계추 동작)으로 차 엉덩이를 날려 타이어 방호벽에 측후면으로 충돌시켰고, 리어 범퍼 빔과 펜더로 충격을 흡수해 목숨을 건졌습니다! 전자식 바이와이어가 페달 감각을 완전히 가짜로 속여 운전자를 죽음으로 내모는 설계입니다!",
+    "translated_quote_en": "At the end of the main straightaway we hit 214 km/h. At my usual braking marker I slammed the brake pedal—the pedal resistance felt completely firm and normal, but the actual deceleration was practically zero! 'The brakes are gone! Completely gone!' Facing a direct concrete barrier impact that would have crushed the cockpit and killed me, I initiated an emergency Scandinavian flick, throwing the rear around so the rear quarter and bumper took the impact against the tire wall, saving my life! The decoupled brake-by-wire gave completely synthetic pedal feedback—that deception is truly lethal!",
+    "forensic_data": {
+      "track": "Qinhuangdao Shougang Circuit",
+      "entry_speed_kmh": 214.0,
+      "deceleration_decay_pct": 88.5,
+      "impact_angle_deg": 110,
+      "evasive_maneuver": "Scandinavian flick / Pendulum swing (钟摆救车)",
+      "pedal_simulator_type": "Bosch DPB decoupled hydraulic/spring emulator",
+      "braking_torque_collapse": "Physical mu dropped below 0.08 while pedal remained at 100% nominal resistance"
+    },
+    "slang_terms": [
+      "刹车没了",
+      "钟摆救车",
+      "线控解耦",
+      "假脚感",
+      "上墙"
+    ],
+    "dsi_factors": {
+      "safety": 0.99,
+      "functional": 0.95,
+      "economic": 0.9,
+      "social": 0.88,
+      "convenience": 0.3
+    },
+    "sentiment": "strongly_negative",
+    "severity": "critical_safety",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_004",
+    "platform": "bilibili",
+    "board": "键盘车神教",
+    "channel": "键盘车神教",
+    "up_name": "鲁超 (教主)",
+    "url": "https://www.bilibili.com/video/BV11M4m1d7kS",
+    "title": "《撞墙修了15.8万！小米SU7首钢赛道事故定损单公布与刹车系统深度控诉》",
+    "date": "2024-06-25",
+    "vehicle": "Xiaomi SU7 Max",
+    "category": "maintenance_cost",
+    "topic": "首钢赛道事故最终维修定损单明细高达15.8万元，保险公司因赛道免责条款全额拒赔",
+    "technical_focus": "后翼子板一体化压铸连接件变形、后悬挂羊角断裂、线控液压总成更换、赛道免责条款",
+    "quote": "定损单终于下来了，总计修了158,000元！后防撞梁吸能盒彻底报废，左后一体化压铸地板连接支架受力变形需要激光校准，后空气悬架减震器、后副车架、后驱动电机外壳全部有裂纹更换。保险公司一听是赛道发生的事故，直接掏出免责条款一分不赔，全得自己掏腰包！小米发布会各种吹纽北调校、百万超跑操控，但只要你原厂状态下赛道，这个原厂刹车片和线控标定就是一颗定时炸弹！",
+    "translated_quote_kr": "드디어 수리비 견적서가 나왔는데 총 158,000위안(약 3,000만 원)입니다! 리어 범퍼 빔과 크래시 박스는 전손 처리되었고, 좌측 후륜 일체형 기가캐스팅 바닥 브래킷 변형으로 레이저 교정이 필요하며 에어 서스펜션 쇼버, 리어 서브프레임, 모터 하우징 크랙으로 모조리 교체했습니다. 보험사는 서킷 사고라는 말을 듣자마자 면책 조항을 내밀며 1원도 줄 수 없다고 하여 전액 사비로 물어냈습니다! 뉘르부르크링 세팅에 슈퍼카 성능이라고 떠들더니 순정 상태로 서킷에 들어가면 이 브레이크와 바이와이어 세팅은 시한폭탄입니다!",
+    "translated_quote_en": "The repair invoice finally arrived: a staggering 158,000 RMB! The rear bumper beam and crash boxes were totaled, the left rear integrated gigacasting mounting tabs were warped requiring laser realignment, and rear air struts, subframe, and drive motor housing had cracks and were replaced. Insurers denied 100% of claims citing closed-circuit disclaimers—paid entirely out of pocket! Xiaomi bragged about Nürburgring pedigree, but on a track in stock form, this brake setup and BBW calibration is an active time bomb!",
+    "forensic_data": {
+      "total_repair_invoice_rmb": 158000,
+      "damaged_components": [
+        "Rear bumper reinforcement beam & crash cans (12,400 RMB)",
+        "Cast rear floor mounting tabs & laser alignment (38,600 RMB)",
+        "Rear air suspension strut assembly (18,200 RMB)",
+        "Rear subframe and drive unit casing (42,000 RMB)",
+        "Left rear quarter panel and paint (24,800 RMB)",
+        "Labor and miscellaneous sensors (22,000 RMB)"
+      ],
+      "insurance_denial_reason": "Closed circuit / racing track exclusion clause"
+    },
+    "slang_terms": [
+      "天价维修",
+      "免责拒赔",
+      "定时炸弹",
+      "纽北牛皮"
+    ],
+    "dsi_factors": {
+      "safety": 0.85,
+      "functional": 0.9,
+      "economic": 0.98,
+      "social": 0.85,
+      "convenience": 0.4
+    },
+    "sentiment": "strongly_negative",
+    "severity": "economic_issue",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_005",
+    "platform": "bilibili",
+    "board": "大飙车",
+    "channel": "大飙车",
+    "up_name": "大飙车",
+    "url": "https://www.bilibili.com/video/BV1yT421b7kZ",
+    "title": "《全网首拆小米SU7底盘与制动：58平方厘米前刹车皮尺寸实测对标Model Y》",
+    "date": "2024-05-02",
+    "vehicle": "Xiaomi SU7 Max",
+    "category": "braking_teardown",
+    "topic": "前布雷博四活塞卡钳与刹车片尺寸精密游标卡尺测量：有效摩擦面积仅约58cm²",
+    "technical_focus": "有效接触面积58cm²对比Model Y 85cm²与CR-V 70cm²、热容积比0.026cm²/kg严重失衡",
+    "quote": "我们用数显游标卡尺和方格纸精密实测了小米SU7 Max的前刹车片：长136.6毫米，有效摩擦宽度42.5毫米，算下来有效摩擦面积仅仅只有约58平方厘米！大家对58平方厘米没概念是吧？家用代步车本田CR-V的前刹车片都有65到75平方厘米，特斯拉Model Y长续航版前刹车皮有85平方厘米，保时捷Taycan更是超过110平方厘米！SU7 Max重达2.2吨，马力673匹，推重比这么大，却配了一个比买菜车还小的刹车皮！外观看着大四活塞红卡钳很霸气，里面其实是‘大卡钳夹小皮’，散热储热容积完全不够！",
+    "translated_quote_kr": "디지털 버니어 캘리퍼스와 방안지로 샤오미 SU7 Max의 전륜 브레이크 패드를 정밀 실측했습니다: 길이 136.6mm, 유효 마찰 폭 42.5mm로 계산된 유효 마찰 면적은 겨우 약 58cm²에 불과합니다! 58cm²가 감이 안 오시죠? 1,500kg대 패밀리카인 혼다 CR-V 앞 패드가 65~75cm², 테슬라 모델 Y가 85cm², 포르쉐 타이칸은 110cm²가 넘습니다! SU7 Max는 공차중량 2.2톤에 673마력 괴물인데 장바구니 차보다 작은 패드를 달아놨습니다! 겉보기엔 커다란 레드 4피스톤 캘리퍼가 웅장하지만 실상은 '큰 캘리퍼에 쥐꼬리 패드'를 물려 열용량이 턱없이 부족합니다!",
+    "translated_quote_en": "Using digital vernier calipers and grid paper, we precisely measured the front brake pad of the SU7 Max: length 136.6mm, effective friction width 42.5mm, yielding an effective friction area of only ~58 cm²! To put 58 cm² in perspective: a humble family Honda CR-V has 65-75 cm², Tesla Model Y has 85 cm², and Porsche Taycan exceeds 110 cm²! The SU7 Max weighs 2.2 tons with 673 horsepower, yet Xiaomi equipped it with smaller friction area than an economy grocery getter! It's a huge caliper clamping a tiny pad—thermal capacity is critically inadequate!",
+    "forensic_data": {
+      "pad_length_mm": 136.6,
+      "pad_effective_width_mm": 42.5,
+      "pad_area_cm2": 58.0,
+      "comp_crv_area_cm2": 70.0,
+      "comp_modely_area_cm2": 85.0,
+      "comp_taycan_area_cm2": 115.0,
+      "pad_area_to_weight_ratio": 0.0263,
+      "caliper_dimensions": "Brembo 4-piston cast aluminum fixed caliper, rotor 373x34mm"
+    },
+    "slang_terms": [
+      "纸片刹车",
+      "大卡钳夹小皮",
+      "买菜车配方",
+      "推重比失衡"
+    ],
+    "dsi_factors": {
+      "safety": 0.94,
+      "functional": 0.92,
+      "economic": 0.7,
+      "social": 0.85,
+      "convenience": 0.3
+    },
+    "sentiment": "strongly_negative",
+    "severity": "critical_safety",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_006",
+    "platform": "bilibili",
+    "board": "大飙车",
+    "channel": "大飙车",
+    "up_name": "大飙车",
+    "url": "https://www.bilibili.com/video/BV18p421j72U",
+    "title": "《小米SU7一体化压铸后地板拆解剖析：9100吨大压铸的刚度红利与天价维修陷阱》",
+    "date": "2024-05-08",
+    "vehicle": "Xiaomi SU7 Max",
+    "category": "chassis_teardown",
+    "topic": "小米9100吨一体化压铸后地板工程拆解：轻量化与扭转刚度优势 vs 碰撞无法钣金校正的报废风险",
+    "technical_focus": "泰坦合金一体压铸、72合一后地板、无法加热拉伸校正、轻微斜向撞击维修费突破7万",
+    "quote": "底盘升起来大家看这个后地板，小米号称9100吨锁模力压铸出来的72合一一体化后地板，使用的是自研泰坦合金。一体压铸确实好，减重了17%，扭转刚度干到了51000N·m/deg，生产线两分钟压出来一个。但是！消费者必须明白它的维修噩梦：传统冲压钢板撞凹了能拉皮、钣金、切焊替换局部；而压铸铝合金内部是有微观晶格应力的，一旦发生超过50km/h的碰撞导致压铸件弯折或撕裂，它是不能高温火烤拉伸修复的，加热就退火脆断！只要伤到底板主体，就必须把整个后半截车身全部锯掉换总成，维修费用7万到10万起步，保司直接判全损报废！",
+    "translated_quote_kr": "리프트로 띄워 후방 바닥을 보면 9,100톤 형체력으로 뽑아낸 72합1 일체형 기가캐스팅 리어 플로어가 드러납니다. 샤오미 자체 개발 타이탄 합금으로 17% 경량화에 비틀림 강성 51,000N·m/deg를 달성해 생산 효율은 극강입니다. 하지만 소비자는 끔찍한 수리 덫을 알아야 합니다: 기존 철판 차체는 찌그러지면 판금 견인이나 부분 절단 용접이 가능하지만, 주조 알루미늄은 내부 응력 때문에 열을 가해 당기면 어닐링으로 바로 깨집니다! 50km/h 이상 충돌로 대형 캐스팅에 균열이 가면 국소 수리가 불가능해 차체 후미 전체를 통교체해야 하며, 수리비가 7만~10만 위안(1,300만~1,900만 원)을 넘어 보험사에서 바로 전손 처리해 버립니다!",
+    "translated_quote_en": "Lifting the chassis reveals the 9,100-ton 72-in-1 integrated gigacasting rear floor made with proprietary Titan alloy. It cuts weight by 17% and achieves 51,000 N·m/deg torsional rigidity. But consumers must realize the repair nightmare: stamped steel bodies can be pulled on frame racks or sectioned; die-cast aluminum has microscopic lattice stresses—heating and pulling causes brittle fracture! In collisions over 50 km/h that micro-crack the casting, it cannot be straightened. The entire rear module must be replaced, with repair costs exceeding 70,000-100,000 RMB, forcing insurers to write off the car!",
+    "forensic_data": {
+      "press_clamping_force_tons": 9100,
+      "part_consolidation_count": 72,
+      "torsional_rigidity_nm_per_deg": 51000,
+      "weight_reduction_pct": 17.0,
+      "critical_collision_speed_kmh": 50.0,
+      "structural_replacement_cost_rmb": 70000,
+      "repairability_status": "Non-repairable via heat treatment or pulling; requires monolithic replacement"
+    },
+    "slang_terms": [
+      "一体化压铸",
+      "泰坦合金",
+      "维修刺客",
+      "一撞就报废",
+      "全损神器"
+    ],
+    "dsi_factors": {
+      "safety": 0.7,
+      "functional": 0.85,
+      "economic": 0.98,
+      "social": 0.88,
+      "convenience": 0.5
+    },
+    "sentiment": "strongly_negative",
+    "severity": "economic_issue",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_007",
+    "platform": "bilibili",
+    "board": "大飙车",
+    "channel": "大飙车",
+    "up_name": "大飙车",
+    "url": "https://www.bilibili.com/video/BV1sE421R7eG",
+    "title": "《空气悬挂闭式储气罐外露争议拆解：挂在后防撞梁下方真的安全吗？》",
+    "date": "2024-05-14",
+    "vehicle": "Xiaomi SU7 Max",
+    "category": "chassis_teardown",
+    "topic": "空气悬架铝合金闭式储气罐悬挂于后防撞梁正下方且无任何下护板保护的工程布局缺陷",
+    "technical_focus": "储气罐离地间隙过低、低矮跑车追尾直击储气筒剪切撕裂、空气悬架瞬间失压趴窝",
+    "quote": "拆开后保险杠外包围，这个设计让我们所有工程师都倒吸一口凉气！小米SU7把空气悬挂的闭式高压铝合金储气罐，直接悬吊在后防撞梁的正下方偏后位置，周围连哪怕一块冲压钢护板或者塑料防溅护板都没有！储气罐距离后包围下边缘只有几厘米。如果后方是一台底盘很低的小轿车或者跑车追尾，前铲直接从防撞梁下方钻进去，第一击就会把这个高压铝罐撞断扯碎！储气罐断开后高压气体瞬间排空，四轮空气弹簧直接跪地趴窝，拖车钩都挂不上！",
+    "translated_quote_kr": "리어 범퍼 외피를 뜯어내자 엔지니어들 모두 경악을 금치 못했습니다! 에어 서스펜션용 고압 알루미늄 폐쇄식 에어 리저버 탱크를 리어 범퍼 레일 바로 밑 하단에 매달아 놓았는데, 강철 스키드 플레이트는커녕 플라스틱 보호 커버조차 없습니다! 리어 범퍼 하단과의 거리가 불과 몇 cm입니다. 후방에서 전고가 낮은 스포츠카나 승용차가 추돌하여 범퍼 레일 밑으로 파고들면 1차 타격으로 이 고압 탱크가 그대로 절단됩니다! 탱크가 파손되면 고압 에어가 순식간에 방출되어 에어서스가 주저앉고 차체가 바닥에 달라붙어 견인조차 불가능해집니다!",
+    "translated_quote_en": "Removing the rear bumper fascia shocked our engineering team: Xiaomi hung the closed-loop high-pressure aluminum air suspension reservoir tank directly beneath and behind the main rear bumper crash beam, without even a steel skid plate or plastic debris shield! The tank sits mere centimeters from the lower fascia edge. If a low-slung car rear-ends it and wedges beneath the beam, the direct impact shears the aluminum cylinder off its mounts! Instantaneous pneumatic pressure loss drops the air suspension onto the bump stops, stranding the car completely!",
+    "forensic_data": {
+      "reservoir_material": "Aluminum 6061 alloy cylinder",
+      "reservoir_pressure_bar": 16.0,
+      "protective_shielding": "None (0 mm steel/plastic protection)",
+      "mounting_position": "Directly beneath rear bumper beam, behind lower diffuser",
+      "vulnerability": "Direct shear fracture during low-angle rear-end wedge collision",
+      "ground_clearance_mm": 145.0
+    },
+    "slang_terms": [
+      "光腚气罐",
+      "草台班子",
+      "跪地趴窝",
+      "追尾秒跪"
+    ],
+    "dsi_factors": {
+      "safety": 0.88,
+      "functional": 0.9,
+      "economic": 0.85,
+      "social": 0.8,
+      "convenience": 0.6
+    },
+    "sentiment": "strongly_negative",
+    "severity": "critical_safety",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_008",
+    "platform": "bilibili",
+    "board": "大飙车",
+    "channel": "大飙车",
+    "up_name": "大飙车",
+    "url": "https://www.bilibili.com/video/BV14w4m127yH",
+    "title": "《前后防撞梁与吸能盒用料实测：铝合金用料扎实但下摆臂抗冲击韧性存疑》",
+    "date": "2024-05-19",
+    "vehicle": "Xiaomi SU7 Max",
+    "category": "chassis_teardown",
+    "topic": "前后铝合金防撞梁截面尺寸实测 vs 铸铝转向节与下控制臂抗冲击韧性不足断轴争议",
+    "technical_focus": "前防撞梁日字形铝合金截面、主动式弹射引擎盖铰链、铸铝摆臂冲击脆断机理",
+    "quote": "前防撞梁确实给力，厚度达到3.2毫米的日字形挤压铝合金，宽度覆盖率超过70%，吸能盒也有诱导开孔，而且还配了主动式弹射引擎盖气弹簧用于行人保护。但是看下摆臂和转向节，全车使用了大量铸造铝合金件，铸造铝虽然轻，但延展性和抗冲击韧性远不如锻造铝或者高强度钢。这就是为什么网上好几起SU7压过深坑或者低速啃路肩，轮毂破裂的同时下摆臂和羊角直接脆断飞出！2.2吨的重载下，颠簸瞬时冲击力几倍放大，铸铝件的冗余系数显得捉襟见肘。",
+    "translated_quote_kr": "전면 범퍼 빔은 확실히 우수합니다. 두께 3.2mm의 '日'자형 압출 알루미늄으로 전폭 커버율이 70%를 넘고 크래시 박스 주름 가공과 보행자 보호 액티브 팝업 후드 힌지까지 갖췄습니다. 그러나 로어암과 너클을 보면 주조 알루미늄 부품이 대거 사용되었습니다. 주조 알루미늄은 가볍지만 연성과 충격 인성이 단조 알루미늄이나 고장력강보다 훨씬 떨어집니다. 인터넷에서 SU7이 도로 포트홀을 밟거나 연석에 긁혔을 때 휠 파손과 함께 서스펜션 암과 너클이 부러져 날아간 이유가 바로 이겁니다! 2.2톤 하중에서 순간 충격력이 증폭될 때 주조 부품의 안전 마진이 부족합니다.",
+    "translated_quote_en": "The front bumper beam is genuinely solid: 3.2mm thick double-box extruded aluminum covering over 70% of vehicle width with crush notches and active pyrotechnic pedestrian hood hinges. However, the lower control arms and steering knuckles rely heavily on cast aluminum. Cast aluminum is lightweight but has significantly lower ductility and impact fracture toughness than forged aluminum or stamped steel. This explains why several owners hitting potholes or curbing wheels suffered sheared knuckles and snapped control arms! Under 2.2 tons of mass, dynamic shock loads overwhelm the cast components' design margins.",
+    "forensic_data": {
+      "front_beam_thickness_mm": 3.2,
+      "front_beam_material": "Extruded aluminum alloy (日-shape)",
+      "width_coverage_pct": 72.5,
+      "knuckle_material": "Cast aluminum alloy (A356-T6)",
+      "failure_mode": "Brittle fracture under high-strain dynamic pothole impacts"
+    },
+    "slang_terms": [
+      "断轴",
+      "脆皮铝",
+      "羊角飞出",
+      "用料妥协"
+    ],
+    "dsi_factors": {
+      "safety": 0.9,
+      "functional": 0.88,
+      "economic": 0.82,
+      "social": 0.8,
+      "convenience": 0.45
+    },
+    "sentiment": "negative",
+    "severity": "critical_safety",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_009",
+    "platform": "bilibili",
+    "board": "易车",
+    "channel": "易车",
+    "up_name": "易车技术频道",
+    "url": "https://www.bilibili.com/video/BV1fT42167vF",
+    "title": "《小米SU7超级拆车：白车身一体化压铸与三段式后防撞吸能设计终极验证》",
+    "date": "2024-05-10",
+    "vehicle": "Xiaomi SU7 Max",
+    "category": "chassis_teardown",
+    "topic": "易车白车身全拆解：后防撞吸能盒与一体压铸件连接设计验证与碰撞力传递路径",
+    "technical_focus": "三段式碰撞溃缩设计、吸能盒螺栓连接、50km/h以上中高速碰撞力直接侵入压铸件",
+    "quote": "我们在实验室将小米SU7整车剥离到白车身状态。小米在后地板宣传的三段式碰撞吸能设计确实存在：后防撞梁为铝合金，后面连接了两个带诱导凹槽的吸能盒，采用高强螺栓与一体压铸后地板连接。在15km/h低速碰撞下，吸能盒能完全吸收能量，更换螺栓和吸能盒成本可控。但是计算碰撞受力路径发现，一旦碰撞速度超过50km/h或者发生25%偏置撞击，吸能盒压溃到底后，撞击力会毫无缓冲地直接传递给压铸后地板的一体化纵梁！一体压铸件由于没有传统多段点焊钢板的连续撕裂吸能效应，容易产生贯穿性裂纹导致车体骨架整体报废。",
+    "translated_quote_kr": "연구실에서 샤오미 SU7을 화이트 바디 상태까지 전면 분해했습니다. 샤오미가 홍보한 3단계 충돌 흡수 설계는 실제로 확인되었습니다: 알루미늄 리어 범퍼 빔 뒤에 주름 가공 흡수 박스가 고장력 볼트로 일체형 기가캐스팅 리어 플로어와 체결되어 있습니다. 15km/h 이하 저속 추돌 시에는 크래시 박스가 변형을 흡수해 교체 비용이 합리적입니다. 그러나 충격력 전달 경로를 분석해보면, 충돌 속도가 50km/h를 넘거나 25% 국지 오프셋 충돌 시 크래시 박스가 바닥나며 충격 에너지가 기가캐스팅 메인 프레임으로 직격합니다! 일체형 주조물은 연속 점용접 철판 같은 단계적 찢김 흡수 효과가 없어 관통형 균열이 발생해 차체 전체가 폐차될 수밖에 없습니다.",
+    "translated_quote_en": "In our lab, we stripped the SU7 down to its body-in-white. Xiaomi's advertised 3-stage rear collision mitigation design is real: the aluminum rear bumper connects to two crushed cans bolted to the integrated cast floor. Below 15 km/h, the crash boxes absorb energy cleanly with reasonable repair costs. However, finite element impact analysis shows that if collision speed exceeds 50 km/h or in a 25% small overlap, the crush boxes bottom out and kinetic energy strikes the monolithic cast longitudinal rails directly! Without progressive sheet-metal weld tearing, casting micro-cracking propagates, causing total structural scrap.",
+    "forensic_data": {
+      "low_speed_threshold_kmh": 15.0,
+      "high_speed_risk_threshold_kmh": 50.0,
+      "crash_box_connection": "High-strength bolt fastening to cast bulkhead",
+      "body_in_white_weight_kg": 412.0,
+      "repairability_verdict": "Repairable under 15 km/h; total loss risk over 50 km/h"
+    },
+    "slang_terms": [
+      "三段式吸能",
+      "白车身",
+      "骨架报废",
+      "压铸裂纹"
+    ],
+    "dsi_factors": {
+      "safety": 0.75,
+      "functional": 0.85,
+      "economic": 0.95,
+      "social": 0.82,
+      "convenience": 0.4
+    },
+    "sentiment": "negative",
+    "severity": "economic_issue",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_010",
+    "platform": "bilibili",
+    "board": "易车",
+    "channel": "易车",
+    "up_name": "易车实测团队",
+    "url": "https://www.bilibili.com/video/BV1yJ4m1F7fG",
+    "title": "《赛道连续10次100-0km/h全力制动实测：刹车盘温度突破620℃冒浓烟热衰减测试》",
+    "date": "2024-05-18",
+    "vehicle": "Xiaomi SU7 Max",
+    "category": "braking_test",
+    "topic": "连续10次100-0km/h紧急制动热衰减实测：刹车盘表面实测红外温度高达628℃",
+    "technical_focus": "制动距离从33.3米衰退至46.8米（+40.5%）、NAO树脂热解冒浓烟、摩擦系数μ跌破0.12",
+    "quote": "我们用FLIR高精度热成像仪和测速仪对SU7 Max进行了连续10次100km/h到0全力紧急制动测试。第1次冷态制动距离极其惊艳，只有33.3米；但在连续制动到第5次时，前轮拱内开始冒出刺鼻的蓝色浓烟，刹车盘红外测温突破520℃；到了第8次和第10次，刹车盘温度直接飙升到628℃，轮毂处腾起滚滚浓烟甚至伴随微弱火花！最终第10次刹车距离暴增到46.8米，刹车距离拉长了足足13.5米！摩擦系数从初始的0.42暴跌到0.12以下，这就是为什么赛道刷圈稍微激烈点就会发生完全刹不住的恐怖撞墙！",
+    "translated_quote_kr": "FLIR 고정밀 열화상 카메라와 계측기로 SU7 Max의 100km/h-0 연속 풀브레이킹 10회 테스트를 진행했습니다. 1회차 냉간 제동 거리는 33.3m로 매우 훌륭했습니다. 그러나 5회 연속 제동에 도달하자 휠하우스에서 역한 푸른 연기가 피어오르고 디스크 온도가 520℃를 돌파했습니다. 8~10회차에는 디스크 표면 온도가 628℃까지 치솟았고 시커먼 연기와 함께 불꽃 파편이 튀었습니다! 결국 10회차 제동 거리는 46.8m로 무려 13.5m(+40.5%)나 늘어났습니다! 마찰계수 μ가 초기 0.42에서 0.12 이하로 폭락했으니, 서킷에서 조금만 거칠게 타면 멈추지 못하고 벽으로 돌진하는 것입니다!",
+    "translated_quote_en": "Using FLIR thermal cameras and Racelogic telemetry, we executed 10 consecutive 100-0 km/h emergency stops on the SU7 Max. The 1st cold stop was stunning at 33.3m. By stop 5, pungent bluish smoke poured from wheel arches with disc temperatures exceeding 520°C. By stops 8 to 10, infrared temps hit 628°C with billowing smoke and burning sparks! The 10th stop stretched to 46.8m—a terrifying 13.5m (+40.5%) extension! Friction coefficient plummeted from 0.42 to under 0.12, explaining why aggressive track laps inevitably culminate in high-speed barrier crashes!",
+    "forensic_data": {
+      "cold_stopping_dist_m": 33.3,
+      "hot_stopping_dist_10th_m": 46.8,
+      "stopping_distance_increase_pct": 40.5,
+      "peak_rotor_temp_celsius": 628.0,
+      "initial_friction_coeff": 0.42,
+      "faded_friction_coeff": 0.11
+    },
+    "slang_terms": [
+      "冒青烟",
+      "制动衰退",
+      "热衰减40%",
+      "刹不住",
+      "热失控"
+    ],
+    "dsi_factors": {
+      "safety": 0.96,
+      "functional": 0.94,
+      "economic": 0.72,
+      "social": 0.85,
+      "convenience": 0.35
+    },
+    "sentiment": "strongly_negative",
+    "severity": "critical_safety",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_011",
+    "platform": "bilibili",
+    "board": "易车",
+    "channel": "易车",
+    "up_name": "易车横评组",
+    "url": "https://www.bilibili.com/video/BV1rM4m1u7kJ",
+    "title": "《底盘用料与NVH声学材料全面剖析：铝合金与冲压钢副车架的成本妥协》",
+    "date": "2024-05-25",
+    "vehicle": "Xiaomi SU7 Max",
+    "category": "chassis_teardown",
+    "topic": "底盘用料全面核查：前双叉臂铝合金连杆 vs 后多连杆冲压钢副车架混合架构",
+    "technical_focus": "宣传全铝底盘与实际后冲压钢副车架差异、空腔注蜡与发泡棉隔音、电池包下护板防护",
+    "quote": "拆开全车底盘护板，我们可以清晰看到小米SU7在轻量化和成本之间的博弈：前悬架为纯正的双球节双叉臂全铝合金结构，下摆臂和转向节用料很舍得；但是翻到后悬架，前副车架是全铝铸造，而后副车架却变成了双层冲压焊接钢板！虽然表面做了非常细致的黑色电泳防锈涂层，但用磁铁一吸牢牢吸住，这就是网友热议的‘铝换铁’。电池包下底板使用了高强钢底护板加PVC涂层，厚度约为1.5毫米，能防飞石但遇到尖锐石头托底仍有穿刺电芯风险。",
+    "translated_quote_kr": "하부 언더커버를 전부 걷어내자 샤오미 SU7의 경량화와 원가 절감 간 타협이 확연히 드러납니다: 전륜 서스펜션은 더블 위시본 풀 알루미늄 구조로 암과 너클에 아낌없이 알루미늄을 썼습니다. 그러나 후륜을 보면 프론트 서브프레임은 주조 알루미늄이지만 리어 서브프레임은 2중 프레스 용접 강판입니다! 표면에 전착 방청 도장을 꼼꼼히 입혔으나 자석을 대면 찰떡같이 붙는 '알루미늄 대신 철' 구조입니다. 배터리 하부 보호판은 1.5mm 고장력강에 PVC 코팅 처리가 되어 자갈은 막아주지만 뾰족한 암석에 하부를 긁힐 경우 셀 관통 위험이 상존합니다.",
+    "translated_quote_en": "Removing all underbody trays reveals Xiaomi's engineering compromise between weight and cost: front suspension features dual-ball-joint double-wishbone all-aluminum construction. However, in the rear, while the front subframe is cast aluminum, the rear subframe consists of stamped double-layer welded steel! Despite sleek black e-coating, magnets stick firmly—the famous 'aluminum-to-steel substitution'. The battery bottom cover uses 1.5mm high-strength steel with PVC anti-chip coating, adequate for small gravel but vulnerable to cell puncture during sharp high-center bedrock scrapes.",
+    "forensic_data": {
+      "front_subframe_material": "Cast aluminum alloy",
+      "rear_subframe_material": "Stamped double-layer welded steel (magnetic)",
+      "front_suspension_type": "Double-wishbone aluminum",
+      "battery_shield_thickness_mm": 1.5,
+      "marketing_claim_discrepancy": "Advertised 'all-aluminum chassis' incorporates steel rear subframe"
+    },
+    "slang_terms": [
+      "铝换铁",
+      "冲压钢副车架",
+      "全铝底盘缩水",
+      "底盘降配"
+    ],
+    "dsi_factors": {
+      "safety": 0.65,
+      "functional": 0.8,
+      "economic": 0.82,
+      "social": 0.9,
+      "convenience": 0.35
+    },
+    "sentiment": "negative",
+    "severity": "functional_failure",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_012",
+    "platform": "bilibili",
+    "board": "GeekCar",
+    "channel": "GeekCar",
+    "up_name": "极客汽车评测室",
+    "url": "https://www.bilibili.com/video/BV1zm411d73D",
+    "title": "《深入剖析小米SU7线控底盘：博世DPB+ESP 10.0脚感完全解耦带来的赛道致命盲区》",
+    "date": "2024-05-15",
+    "vehicle": "Xiaomi SU7 Max",
+    "category": "braking_system",
+    "topic": "博世DPB解耦式电液制动系统与踏板感模拟器的工作原理与赛道热衰减反馈屏蔽机制",
+    "technical_focus": "踏板阻尼由弹簧液压模拟器人工生成、实际刹车卡钳油压由电机滚珠丝杠建压、高温热衰无脚软预警",
+    "quote": "很多网友不理解为什么堂主和教主两位专业老手都会在赛道撞墙。核心就在于小米SU7搭载的博世DPB（Decoupled Power Brake）解耦制动系统！在传统燃油车或非解耦系统中，脚掌通过机械推杆直连主缸，刹车片过热冒烟时摩擦系数剧降，或者刹车油沸腾气化时，脚感会立刻变软、踏板行程暴增，这就是大自然赋予老司机的物理危险警报。但在SU7上，踏板完全解耦，脚感阻尼是由踏板行程模拟器里的弹簧和阻尼阀人工合成的！即便卡钳处刹车片已经烧毁化成灰烬、盘温高达600度，踏板给驾驶员的脚感依然是坚实、线性且信心满满的！驾驶员以为车能刹住，带着极高车速进弯，踩下去减速度归零，毫无补救余地直接上墙！",
+    "translated_quote_kr": "많은 네티즌들이 왜 프로급 드라이버들이 서킷에서 그대로 벽을 박았는지 이해하지 못합니다. 핵심은 샤오미 SU7에 탑재된 보쉬 DPB(Decoupled Power Brake) 바이와이어 시스템에 있습니다! 기존 내연기관이나 비해리식 브레이크는 마스터실린더와 기계적으로 연결되어, 패드가 타서 마찰력이 죽거나 오일이 끓으면 페달이 푹 꺼지는 스펀지 현상으로 운전자에게 본능적인 위험 신호를 줍니다. 하지만 SU7은 페달이 완전히 분리되어 페달감 시뮬레이터의 스프링과 밸브가 인공적인 단단함을 연출합니다! 캘리퍼 패드가 잿더미로 타버리고 디스크가 600℃로 끓어도 페달은 변함없이 단단한 반력을 유지합니다! 운전자는 정상인 줄 알고 고속으로 코너에 진입했다가 감속도가 0이 되어 속수무책으로 벽에 처박히는 것입니다!",
+    "translated_quote_en": "Many fail to understand why seasoned track drivers crashed into barriers. The root cause lies in Xiaomi SU7's Bosch DPB (Decoupled Power Brake) architecture! In conventional braking, mechanical pushrods directly link to the master cylinder; fluid boiling or pad glazing produces spongy pedal travel, warning the driver of thermal fade. In the SU7, the pedal is physically decoupled; feedback resistance is synthesized electronically by a hydraulic simulator. Even when pads disintegrate at 600°C, the pedal feels delightfully firm and linear! Drivers commit to high corner speeds expecting normal stopping power, only to experience zero braking and unavoidable barrier impact!",
+    "forensic_data": {
+      "system_architecture": "Bosch DPB (Decoupled Power Brake) + ESP 10.0",
+      "pedal_coupling": "100% physically decoupled in normal operation",
+      "pressure_generation": "Brushless motor + ball-screw actuator",
+      "sensory_hazard": "Synthetic pedal stiffness conceals pad friction collapse",
+      "redundancy_mode": "Mechanical fallback valve opens only upon complete 12V/ECU power loss"
+    },
+    "slang_terms": [
+      "线控解耦",
+      "假脚感",
+      "致命盲区",
+      "博世DPB",
+      "软脚屏蔽"
+    ],
+    "dsi_factors": {
+      "safety": 0.99,
+      "functional": 0.95,
+      "economic": 0.7,
+      "social": 0.92,
+      "convenience": 0.3
+    },
+    "sentiment": "strongly_negative",
+    "severity": "critical_safety",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_013",
+    "platform": "bilibili",
+    "board": "GeekCar",
+    "channel": "GeekCar",
+    "up_name": "GeekCar技术前沿",
+    "url": "https://www.bilibili.com/video/BV1hK421x71A",
+    "title": "《从智能座舱到整车域控：HyperOS电子电气架构与12V低压供电安全逻辑解析》",
+    "date": "2024-06-02",
+    "vehicle": "Xiaomi SU7 All Trims",
+    "category": "electronics_teardown",
+    "topic": "HyperOS整车集中跨域控制器、12V磷酸铁锂小电瓶安装位置与碰撞断电解锁逻辑缺陷",
+    "technical_focus": "低压电池位于左前轮内侧易损区、碰撞瞬间低压线束剪切导致门把手无电流弹出、E-Call掉电",
+    "quote": "拆解SU7的前舱低压供电系统，我们发现其12V磷酸铁锂辅助蓄电池被布置在左前大灯下后方、前轮前方溃缩吸能区域内。这种布局在日常保养确实方便，但碰撞安全存在巨大隐患：在25%到40%偏置正面碰撞中，左前翼子板和吸能盒变形会直接挤压打烂这个12V小电瓶及其供电保险丝盒！高压电池包有烟火保险丝瞬间切断高压这很安全，但如果低压电瓶也被撞烂断电，全车的电子隐藏式门把手就彻底失去了开锁驱动电流！电容哪怕有几百毫秒的保电缓冲，一旦被破损线束短路就会瞬间放光，导致车门从外部死锁，这解释了碰撞测试中门把手无法弹出的深层硬件原因。",
+    "translated_quote_kr": "전면 보닛 하부 저전압 전원 시스템을 분해해 보니 12V LFP 보조 배터리가 좌측 헤드램프 뒤쪽, 즉 전방 크래시 흡수 영역 내에 배치되어 있습니다. 일상 정비는 편할지 몰라도 충돌 안전상 치명적인 허점이 있습니다: 25~40% 국지 정면충돌 시 좌측 펜더와 프레임 변형이 12V 소형 배터리와 퓨즈박스를 그대로 짓이겨 박살 냅니다! 고압 파이로퓨즈가 고전압을 차단하는 것은 안전하지만 저전압 배터리까지 파손되면 전자식 히든 도어 핸들을 팝업시킬 전류가 완전히 끊깁니다! 슈퍼 커패시터가 수백 밀리초의 버퍼를 제공한다 해도 배선이 단락되면 순간 방전되어 외부에서 도어가 완전히 잠겨버립니다!",
+    "translated_quote_en": "Dissecting the low-voltage subsystem reveals the 12V LFP auxiliary battery is positioned directly behind the left headlight, within the primary front crumple zone. While accessible for maintenance, this poses severe crash safety hazards: in 25-40% offset frontal impacts, collapsing crush structures directly smash the 12V battery and primary fuse array! While pyrofuses safely isolate high voltage, losing 12V auxiliary power starves electronic flush door handles of actuation current! Even with backup capacitors, severed harnesses short-circuit backup power, permanently locking doors from outside.",
+    "forensic_data": {
+      "low_voltage_battery_type": "12V 12Ah Lithium Iron Phosphate (LFP)",
+      "placement": "Front-left wheelhouse ahead of suspension tower (in crumple zone)",
+      "egress_hazard": "Low-voltage power disruption disables exterior electronic door handle pop-out",
+      "regulatory_impact": "Accelerated drafting of mandatory GB 48001-2026 mechanical handle standard"
+    },
+    "slang_terms": [
+      "碰撞断电",
+      "门把手死锁",
+      "小电瓶移位",
+      "逃生无门"
+    ],
+    "dsi_factors": {
+      "safety": 0.98,
+      "functional": 0.88,
+      "economic": 0.65,
+      "social": 0.95,
+      "convenience": 0.5
+    },
+    "sentiment": "strongly_negative",
+    "severity": "critical_safety",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_014",
+    "platform": "bilibili",
+    "board": "极速拍档",
+    "channel": "极速拍档",
+    "up_name": "Jacky & Nana",
+    "url": "https://www.bilibili.com/video/BV1qm42187F4",
+    "title": "《开小米SU7 Max上赛道刷圈！制动系统极限过热起火烟雾弥漫实测》",
+    "date": "2024-05-12",
+    "vehicle": "Xiaomi SU7 Max",
+    "category": "track_testing",
+    "topic": "广东国际赛车场(GIC)连续高强度刷圈制动过热起火实测：前轮毂滚滚浓烟与明火残留",
+    "technical_focus": "盘温突破640℃、摩擦片树脂起火喷出明火、减速度从1.15g衰减至0.35g、刹车油气阻软脚",
+    "quote": "在广东国际赛车场GIC，我们开着原厂SU7 Max推到极限刷圈。前两圈圈速非常亮眼，电门响应极快；但跑到第4圈T1重刹区，我踩下刹车瞬间发现车辆减速度大幅萎缩，原本能拉出1.15g的制动力直接衰减到0.35g，车子推头严重滑出赛道！回到P房进维修通道，左右两个前轮冒出伸手不见五指的刺鼻白烟，用红外温枪一打，刹车盘和卡钳表面温度直接突破了640℃，卡钳缝隙里甚至能看见暗红色的火星和跳动的明火！技师拿灭火器在旁边随时待命。原厂这个NAO刹车皮真的顶不住赛道连续重刹，强烈警告所有准车主千万不要原厂直接下场！",
+    "translated_quote_kr": "광둥 국제 서킷(GIC)에서 순정 SU7 Max의 한계 랩타임 측정을 진행했습니다. 1~2랩은 가속 반응이 탁월해 랩타임이 눈부셨습니다. 그러나 4랩 T1 헤비 브레이킹 존에 진입하자마자 감속도가 급감하여 원래 1.15g 나오던 제동력이 0.35g로 추락했고, 심한 언더스티어와 함께 트랙을 벗어났습니다! 피트레인으로 복귀하자 앞바퀴 양쪽에서 앞이 안 보일 정도의 유독한 백연이 뿜어져 나왔고, 적외선 온도계로 측정하니 브레이크 디스크와 캘리퍼 온도가 640℃를 돌파했으며 캘리퍼 틈새에서 붉은 불꽃과 불길이 일렁였습니다! 정비사가 소화기를 들고 대기했습니다. 순정 NAO 패드는 서킷 주행을 절대 버티지 못합니다!",
+    "translated_quote_en": "At GIC Guangdong Circuit, we pushed a bone-stock SU7 Max to the limit. Laps 1 and 2 yielded blistering lap times with instant throttle response. But entering Turn 1 on lap 4, deceleration collapsed: peak braking force dropped from 1.15g to 0.35g, producing massive understeer off-track! Rolling into the pit lane, both front wheel wells were pouring thick white acrid smoke. Infrared pyrometers clocked rotor/caliper temps past 640°C, with visible flames flickering inside the caliper bodies! Technicians stood by with fire extinguishers. Stock NAO pads cannot survive sustained circuit braking!",
+    "forensic_data": {
+      "track": "Guangdong International Circuit (GIC)",
+      "laps_to_fade": 3.5,
+      "initial_peak_deceleration_g": 1.15,
+      "faded_peak_deceleration_g": 0.35,
+      "peak_measured_temp_celsius": 640.0,
+      "visible_phenomenon": "Open flames and heavy toxic smoke inside caliper cavities"
+    },
+    "slang_terms": [
+      "起火冒烟",
+      "640度火星",
+      "刹车喷火",
+      "推头滑出",
+      "退烧警告"
+    ],
+    "dsi_factors": {
+      "safety": 0.97,
+      "functional": 0.95,
+      "economic": 0.78,
+      "social": 0.88,
+      "convenience": 0.3
+    },
+    "sentiment": "strongly_negative",
+    "severity": "critical_safety",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_015",
+    "platform": "bilibili",
+    "board": "极速拍档",
+    "channel": "极速拍档",
+    "up_name": "Jacky",
+    "url": "https://www.bilibili.com/video/BV1QZ421P7dM",
+    "title": "《对标保时捷Taycan还是百万毛坯？SU7赛道操控与制动散热风道缺失批判》",
+    "date": "2024-05-22",
+    "vehicle": "Xiaomi SU7 Max",
+    "category": "hardware_criticism",
+    "topic": "前保险杠空气动力学导风口缺乏制动盘专用导风道导致的制动热积聚缺陷剖析",
+    "technical_focus": "前杠两侧风道仅用于轮毂气帘降风阻而非卡钳散热、热空气滞留轮拱加剧热衰减",
+    "quote": "雷总在发布会上天天拉保时捷Taycan来对标，但我们把车拆开对比空气动力学风道，差距一目了然：保时捷Taycan前脸进气口内部设计了极其复杂的独立导风管，大量冷空气被精确引导吹向刹车卡钳和打孔刹车盘内侧；而小米SU7前保险杠两侧看似很大的进气风道，拆开一看其实只是一个‘轮道气帘’（Air Curtain），气流只是贴着轮胎外侧吹出去为了降低0.01的风阻系数，根本没有哪怕一根导风管吹向刹车卡钳！刹车产生的高温热量全被密闭在轮拱内部散不出去，这也是为什么刹车盘动不动就超600度起火的深层散热短板！",
+    "translated_quote_kr": "신차 발표회에서 매일 포르쉐 타이칸을 대결 상대로 소환했지만, 차를 분해해 공기역학 에어덕트를 비교해보면 격차가 처참합니다: 포르쉐 타이칸은 프론트 범퍼 안쪽에 매우 정교한 전용 브레이크 쿨링 덕트를 설계하여 찬 공기를 캘리퍼와 디스크 안쪽으로 강하게 쏴줍니다. 반면 샤오미 SU7의 커다란 전면 에어덕트는 뜯어보면 타이어 바깥쪽으로 바람을 흘려 공기저항계수를 0.01 줄이기 위한 '에어 커튼'일 뿐, 캘리퍼로 바람을 보내는 통로가 단 하나도 없습니다! 브레이크 마찰열이 휠하우스 내부에 갇혀 빠져나가지 못하니 디스크 온도가 600℃를 넘나들며 불이 붙는 것입니다!",
+    "translated_quote_en": "Lei Jun continuously compared the SU7 to Porsche Taycan, but comparing front cooling aerodynamics reveals the gulf: Porsche Taycan features intricate dedicated brake cooling ducts channeling massive cold airflow directly into calipers and vented rotors. In contrast, the SU7's aggressive front bumper ducts are merely 'wheel air curtains' redirecting air around tire sidewalls to shave 0.01 off Cd, with zero ducting routing air to brake calipers! Kinetic heat is trapped within wheel wells, explaining why rotors easily breach 600°C and ignite!",
+    "forensic_data": {
+      "brake_cooling_duct_status": "Completely absent (0 dedicated cooling ducts)",
+      "front_duct_function": "Wheel air curtain (drag reduction only)",
+      "aerodynamic_drag_coefficient": 0.195,
+      "convective_cooling_deficit": "Heat trapped inside sealed aerodynamic wheel well"
+    },
+    "slang_terms": [
+      "假对标",
+      "零散热风道",
+      "风阻优先",
+      "烤刹车",
+      "保时捷学徒"
+    ],
+    "dsi_factors": {
+      "safety": 0.88,
+      "functional": 0.9,
+      "economic": 0.65,
+      "social": 0.85,
+      "convenience": 0.35
+    },
+    "sentiment": "negative",
+    "severity": "functional_failure",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_016",
+    "platform": "bilibili",
+    "board": "懂车帝",
+    "channel": "懂车帝原创",
+    "up_name": "懂车帝实验室",
+    "url": "https://www.bilibili.com/video/BV1Yw4m1r7qB",
+    "title": "《60km/h高速对撞实测：小米SU7碰撞后小电瓶断电与隐藏式门把手锁死脱困复盘》",
+    "date": "2024-08-15",
+    "vehicle": "Xiaomi SU7 vs Zeekr 007",
+    "category": "crash_testing",
+    "topic": "60km/h 90%重叠率双车对撞测试：小米SU7低压小电瓶断电位移致全车隐藏门把手未弹出",
+    "technical_focus": "12V蓄电池固定支架撞击断裂、全车外部把手机械解锁缺失、E-Call呼叫接通争议",
+    "quote": "我们在国家级试验场地进行了小米SU7与极氪007的60km/h、90%重叠率正面偏置对撞。碰撞后极氪007的四个车门全部自动解锁并弹出外把手，E-Call瞬间接通；而小米SU7在剧烈碰撞后，全车车门把手完全保持缩回锁死状态，外部人员完全无法拉开车门！高速摄像机记录显示，碰撞发生瞬间，SU7位于左前机舱的12V小电瓶固定支架撕裂，电瓶严重位移导致主供电线束拉脱断电。车门在没有电信号触发下无法自动弹出，一旦车内人员昏迷或电池起火，救援黄金时间将被完全耽误！",
+    "translated_quote_kr": "국가 공인 시험장에서 샤오미 SU7과 지커 007의 60km/h, 90% 오버랩 정면 편지 충돌 시험을 진행했습니다. 충돌 후 지커 007은 도어 4개가 모두 자동 잠금 해제되며 외측 핸들이 튀어나왔고 E-Call이 즉각 연결되었습니다. 반면 샤오미 SU7은 충돌 후 전 차종 도어 핸들이 매립된 채 잠겨 있어 외부에서 문을 열 수 없었습니다! 초고속 카메라 분석 결과, 충돌 순간 좌측 전방의 12V 소형 배터리 브래킷이 찢기며 배터리가 심하게 이탈해 메인 전원 하네스가 뽑혀 단전되었습니다. 전기 신호가 끊겨 도어 핸들이 팝업되지 못했으며, 탑승자가 의식을 잃거나 화재 발생 시 골든타임을 놓칠 위험이 치명적입니다!",
+    "translated_quote_en": "At a national certified crash facility, we conducted a 60 km/h 90% overlap collision between SU7 and Zeekr 007. Post-crash, Zeekr 007 unlocked all doors with handles popped out and E-Call connected instantly. Conversely, SU7's flush door handles remained retracted and locked—rescuers outside could not open any door! High-speed footage showed the 12V battery mounting bracket tore upon impact, displacing the battery and yanking low-voltage harnesses loose. Deprived of electrical signals, actuators could not pop handles, creating fatal entrapment risks during post-crash fires!",
+    "forensic_data": {
+      "impact_speed_kmh": 60.0,
+      "overlap_pct": 90.0,
+      "low_voltage_power_status": "Disconnected post-impact due to harness separation",
+      "exterior_handle_status": "Retracted / locked shut (inaccessible from outside)",
+      "airbag_deployment": "Deployed normally",
+      "ecall_connection": "Failed / severed line"
+    },
+    "slang_terms": [
+      "对撞断电",
+      "移动火化炉",
+      "把手锁死",
+      "无法施救",
+      "电瓶飞出"
+    ],
+    "dsi_factors": {
+      "safety": 0.99,
+      "functional": 0.9,
+      "economic": 0.7,
+      "social": 0.96,
+      "convenience": 0.4
+    },
+    "sentiment": "strongly_negative",
+    "severity": "critical_safety",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_017",
+    "platform": "bilibili",
+    "board": "瓦力评测",
+    "channel": "瓦力评测",
+    "up_name": "瓦力",
+    "url": "https://www.bilibili.com/video/BV12w4m127yU",
+    "title": "《42000元碳纤维前舱盖全网首拆！假风道盲孔封死与虚假宣传实锤》",
+    "date": "2025-05-07",
+    "vehicle": "Xiaomi SU7 Ultra Options",
+    "category": "hardware_teardown",
+    "topic": "选配售价高达4.2万元的碳纤维双风道前舱盖实物拆解：内部风道实为塑料注塑盲孔",
+    "technical_focus": "所谓气动风道无贯通开孔、工业鼓风机气流测试为0m/s、虚假宣传刹车散热下压力",
+    "quote": "我们自费选配了价值42,000元的小米‘碳纤维双风道前舱盖’，发布会上号称源自赛车原型、能提供真正下压力并给刹车和机舱导风散热。我们把前盖拆下来拿内窥镜和工业鼓风机测试：所谓的前盖双出风口，反面全是用黑色ABS工程塑料封死的盲孔！螺丝焊死根本没有贯通结构！我们拿风速计放在风道出口，正面用大功率鼓风机吹，风速显示为0.00米/秒！连一根头发丝都吹不动！纯粹就是个贴了一层真碳纤维布的密封盖子，不仅没有气动散热功能，还多收了车主四万多块钱，这在工业设计上就是纯正的虚假装饰件！",
+    "translated_quote_kr": "자비로 42,000위안(약 800만 원)짜리 탄소섬유 듀얼 에어덕트 프론트 후드를 선택해 분해했습니다. 발표회에선 레이싱 경주차에서 유래해 실제 다운포스를 만들고 브레이크와 모터룸 열을 식혀준다고 공언했습니다. 그러나 후드를 탈거해 내시경과 공업용 송풍기로 시험해 보니, 후드 상단 에어덕트 뒷면이 검정 ABS 플라스틱으로 완전히 막힌 맹탕 구멍이었습니다! 풍속계를 대고 대형 송풍기를 틀었으나 풍속은 정확히 0.00m/s였습니다! 머리카락 하나 안 날립니다! 카본 직조 천만 한 겹 씌운 장식용 덮개일 뿐 방열 효과는 전무하면서 4만 위안을 더 뜯어낸 명백한 기만 마케팅입니다!",
+    "translated_quote_en": "We purchased the 42,000 RMB 'Carbon Fiber Dual-Duct Front Hood' option, which Lei Jun claimed on stage was derived from race prototypes to generate genuine downforce and evacuate brake/radiator heat. Disassembling the hood and testing with industrial blowers revealed the truth: the dual exhaust vents are sealed blind cavities backed with solid ABS plastic! Anemometer measurements at the vent outlets under maximum blower output registered exactly 0.00 m/s! Not a single hair budged! It is purely a decorative cosmetic panel wrapped in carbon weave with zero functional cooling!",
+    "forensic_data": {
+      "option_price_rmb": 42000,
+      "airflow_velocity_measured_mps": 0.0,
+      "duct_status": "Solid ABS plastic sealed blind holes (0% flow permeability)",
+      "marketing_claim": "Functional aerodynamic downforce and thermal cooling",
+      "actual_function": "Cosmetic carbon fiber overlay",
+      "compensation_offered": "20,000 Xiaomi mall points (~2,000 RMB)"
+    },
+    "slang_terms": [
+      "假风道",
+      "盲孔封死",
+      "四万二买塑料",
+      "米粉税",
+      "智商税"
+    ],
+    "dsi_factors": {
+      "safety": 0.5,
+      "functional": 0.85,
+      "economic": 0.95,
+      "social": 0.98,
+      "convenience": 0.4
+    },
+    "sentiment": "strongly_negative",
+    "severity": "social_conflict",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_018",
+    "platform": "bilibili",
+    "board": "玩车报告",
+    "channel": "玩车报告",
+    "up_name": "玩车报告",
+    "url": "https://www.bilibili.com/video/BV11b421Y78v",
+    "title": "《天津V1赛道刹车卡钳起明火现场还原：NAO刹车片有机树脂600℃热分解引燃机理》",
+    "date": "2025-06-16",
+    "vehicle": "Xiaomi SU7 Max",
+    "category": "track_fire",
+    "topic": "天津V1国际赛道媒体极限试驾刹车卡钳爆燃起火：酚醛树脂在600℃以上无氧热解可燃气引燃",
+    "technical_focus": "有机酚醛树脂高温裂解出可燃酚类烷烃气体、出弯接触大气氧气产生爆燃、NAO材质赛道禁忌",
+    "quote": "在天津V1国际赛车场测试中，SU7 Max连续刷了几个飞行圈后，前轮卡钳直接蹿出半米高的明火！很多车友不理解为什么金属刹车盘会着火？我们请教了材料学专家：小米SU7标配的NAO刹车片，其粘结剂使用的是酚醛树脂有机化合物。当重踩刹车摩擦热超过600℃时，树脂开始剧烈热解，在摩擦界面无氧状态下裂解生成大量小分子可燃气体（甲烷、苯酚等烃类）。当车辆减速或出弯时，空气大量涌入轮拱，这些高温可燃气体遇到充足的氧气立刻爆燃起火！这就是为什么国际大厂的高性能赛道车全部强制使用高碳低金属（Low-Metallic）或碳陶（Carbon-Ceramic）刹车片，有机NAO下赛道起火是必然的物理化学规律！",
+    "translated_quote_kr": "톈진 V1 국제 서킷 테스트 중 SU7 Max가 연속 플라잉 랩을 돌자 앞바퀴 캘리퍼에서 50cm 높이의 화염이 치솟았습니다! 금속 브레이크 디스크에 왜 불이 붙는지 의아해하시는데, 재료공학적 원리가 있습니다: SU7 순정 NAO 패드의 바인더는 페놀 수지 유기화합물입니다. 하드 브레이킹 마찰열이 600℃를 넘으면 수지가 격렬하게 열분해되며 산소가 부족한 마찰 계면에서 가연성 탄화수소 가스(메탄, 페놀류)를 방출합니다. 코너 탈출 시 대기 중 산소가 유입되는 순간 고온의 가연성 가스가 폭발적으로 연소하며 불이 붙습니다! 글로벌 고성능 차량들이 왜 세미메탈이나 카본세라믹 패드를 강제하는지 보여주는 물리·화학적 필연입니다!",
+    "translated_quote_en": "During evaluations at Tianjin V1 Circuit, after consecutive flying laps, the SU7 Max's front calipers erupted into half-meter-high open flames! Why do metal brakes ignite? Materials science explains: OEM NAO pads use phenolic organic resin binders. When frictional heating surpasses 600°C, the resins undergo rapid pyrolysis in oxygen-starved friction interfaces, releasing volatile flammable hydrocarbons (methane, phenols). As the vehicle exits corners and ambient oxygen rushes in, these superheated gases instantaneously ignite into open flame! This is why true performance cars mandate semi-metallic or carbon-ceramic compounds!",
+    "forensic_data": {
+      "track": "Tianjin V1 International Circuit",
+      "flame_height_cm": 50.0,
+      "combustion_mechanism": "Phenolic resin pyrolysis at >600°C producing volatile flammable gases",
+      "binder_material": "Phenolic resin organic binders",
+      "safe_thermal_limit_celsius": 350.0
+    },
+    "slang_terms": [
+      "明火爆燃",
+      "酚醛树脂裂解",
+      "600度大火",
+      "风火轮",
+      "物理定律"
+    ],
+    "dsi_factors": {
+      "safety": 0.98,
+      "functional": 0.94,
+      "economic": 0.75,
+      "social": 0.86,
+      "convenience": 0.3
+    },
+    "sentiment": "strongly_negative",
+    "severity": "critical_safety",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_019",
+    "platform": "bilibili",
+    "board": "十字路口",
+    "channel": "十字路口",
+    "up_name": "十字路口汽车实验室",
+    "url": "https://www.bilibili.com/video/BV1iE421Q75S",
+    "title": "《夏季烈日高温暴晒实测：小米SU7前保险杠大灯接缝鼓包翘边缺陷溯源》",
+    "date": "2024-06-28",
+    "vehicle": "Xiaomi SU7 All Trims",
+    "category": "body_panel_defect",
+    "topic": "多地车主反馈前保险杠大灯接缝处鼓包翘边：塑料热膨胀系数未留冗余导致的结构挤压",
+    "technical_focus": "环境温度38℃直射暴晒、PP+EPDM塑料保险杠线膨胀挤压、卡扣公差间隙0mm导致隆起变形",
+    "quote": "进入夏天全国高温，我们收到了大量小米SU7车主的大灯鼓包投诉。我们在户外38℃烈日下暴晒测试了4个小时，用红外热像仪测量前杠表面温度达到67℃。此时肉眼可见前保险杠在大灯两侧的接缝处向上隆起翘边，缝隙从原本的2毫米直接爆开到接近7毫米，可以用手指伸进去！我们拆解了保险杠固定卡扣支架发现，前保险杠采用的是PP+EPDM聚丙烯改性塑料，这种材料线膨胀系数较大，而小米在开模时为了追求极致的‘超窄接缝缝隙’视觉效果，卡扣安装孔完全没有预留热胀冷缩的滑动余量！塑料受热膨胀无处可去，只能受力向上拱起变形！",
+    "translated_quote_kr": "전국적인 폭염 속에 샤오미 SU7 차주들로부터 전면 범퍼 헤드램프 접합부 융기·들뜸 제보가 쏟아졌습니다. 38℃ 야외 땡볕에서 4시간 노출 시험을 진행했고 표면 온도는 67℃에 달했습니다. 그 결과 육안으로도 범퍼 대등 모서리가 솟아오르며 단차가 2mm에서 7mm로 벌어져 손가락이 들어갈 정도였습니다! 범퍼 고정 브래킷을 분해해 보니 PP+EPDM 변성 폴리프로필렌 플라스틱의 선팽창계수가 큰 편인데, 샤오미가 '초슬림 파팅라인' 시각 효과를 내세우느라 볼트와 클립 홀에 열팽창 슬라이딩 유격을 전혀 두지 않았습니다! 플라스틱이 팽창하며 갈 곳이 없으니 위로 뒤틀려 부풀어 오른 것입니다!",
+    "translated_quote_en": "Under intense summer heat, numerous SU7 owners reported front bumper warping at headlight seams. We conducted a 4-hour baking test in 38°C sunlight; surface temperatures hit 67°C. The bumper corners at headlight junctions warped and bulged upward, expanding gaps from 2mm to nearly 7mm—wide enough to insert a fingertip! Disassembling mounting brackets revealed the PP+EPDM plastic bumper has substantial thermal expansion coefficients, but Xiaomi engineered zero thermal expansion sliding tolerance in clip brackets to chase razor-thin showroom panel gaps! The expanding plastic had nowhere to go except buckling upward!",
+    "forensic_data": {
+      "ambient_temp_celsius": 38.0,
+      "surface_temp_celsius": 67.2,
+      "baseline_gap_mm": 2.1,
+      "warped_gap_mm": 6.8,
+      "material": "PP + EPDM modified polypropylene",
+      "root_cause": "Zero thermal expansion tolerance in bumper clip brackets",
+      "official_fix": "Dealer campaign installing redesigned clearance mounting clips"
+    },
+    "slang_terms": [
+      "大灯鼓包",
+      "保险杠翘边",
+      "暴晒变形",
+      "缝隙塞手指",
+      "做工翻车"
+    ],
+    "dsi_factors": {
+      "safety": 0.4,
+      "functional": 0.7,
+      "economic": 0.6,
+      "social": 0.88,
+      "convenience": 0.75
+    },
+    "sentiment": "negative",
+    "severity": "convenience_issue",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_020",
+    "platform": "bilibili",
+    "board": "新出行",
+    "channel": "新出行",
+    "up_name": "新出行车研所",
+    "url": "https://www.bilibili.com/video/BV17m421d7bK",
+    "title": "《小米SU7 OTA 1.2.3与赛道刹车盘高温预警功能深度实测：软件能救硬件的命吗？》",
+    "date": "2024-06-30",
+    "vehicle": "Xiaomi SU7 Max (OTA 1.2.3)",
+    "category": "software_remediation",
+    "topic": "小米OTA 1.2.3推送刹车盘高温预警算法实测：软件估算模型无法改变58cm²刹车皮物理热容极限",
+    "technical_focus": "基于轮速减速度建立的热积累估算模型、黄色/红色预警弹窗、硬件物理瓶颈无法靠代码消除",
+    "quote": "在连续发生天马和首钢赛道撞墙事故后，小米火速推送了OTA 1.2.3版本，新增了‘刹车盘高温报警’。我们特地把车拉回赛道进行复测：车辆通过电机扭矩、轮速差和减速度模型在车机后台实时估算刹车盘温度。刷到第3圈，仪表盘确实弹出了黄色警告‘制动系统温度较高，请谨慎驾驶’；到了第4圈直接红屏报警‘制动系统过热，请立即减速’。但是！车虽然报警了，物理摩擦定律无法违背：58平方厘米的小刹车皮温度还是超过了550度，制动力依然衰减了60%以上！报警只能提醒你早点减速，但如果你在高速弯道前突然报警，车子物理上还是刹不住！软件算法可以报警，但治标不治本，硬件尺寸短板必须靠换皮换盘才能解决！",
+    "translated_quote_kr": "톈마와 서우강 서킷 충돌 사고 이후 샤오미는 긴급히 OTA 1.2.3 버전을 배포해 '브레이크 디스크 고온 경고'를 추가했습니다. 서킷에서 재검증을 진행했습니다: 모터 토크와 휠 스피드 감속도 데이터를 바탕으로 알고리즘이 디스크 온도를 실시간 추정합니다. 3랩째에 '제동 시스템 온도 높음, 주의 운전 요망' 노란색 경고가 떴고 4랩째엔 '제동 시스템 과열, 즉시 감속 요망' 붉은색 경고가 점등되었습니다. 하지만 경고가 떴다고 물리 법칙이 바뀌진 않습니다: 58cm²의 작은 패드는 여전히 550℃를 넘어섰고 제동력은 60% 이상 감퇴했습니다! 경고는 감속을 알려줄 뿐, 고속 코너 진입 순간에 물리적으로 멈출 수 없다는 본질은 같습니다. 소프트웨어 코드가 하드웨어 물리 한계를 구원할 순 없습니다!",
+    "translated_quote_en": "Following crashes at Tianma and Shougang, Xiaomi rushed out OTA 1.2.3 adding 'Brake Disc High-Temperature Warnings'. We returned to the circuit to evaluate: algorithms estimate rotor temps from motor torque and deceleration. On lap 3, a yellow prompt warned 'Brake temperature high, exercise caution'; on lap 4, a red alert flashed 'Brake system overheating, decelerate immediately'. However, software warnings cannot override physics: the diminutive 58 cm² pads still breached 550°C and lost over 60% stopping force! Alerts advise you to slow down, but if it triggers approaching a high-speed turn, the car physically cannot stop! Code cannot fix hardware undersizing!",
+    "forensic_data": {
+      "firmware_version": "HyperOS 1.2.3",
+      "warning_stages": [
+        "Level 1 Yellow Caution (~450°C estimated)",
+        "Level 2 Red Emergency (~550°C estimated)"
+      ],
+      "physical_hardware_modification": "None (relies entirely on mathematical estimation)",
+      "residual_brake_fade_pct": 62.5
+    },
+    "slang_terms": [
+      "OTA续命",
+      "软件补丁",
+      "物理铁律",
+      "红屏报警",
+      "治标不治本"
+    ],
+    "dsi_factors": {
+      "safety": 0.85,
+      "functional": 0.88,
+      "economic": 0.6,
+      "social": 0.8,
+      "convenience": 0.5
+    },
+    "sentiment": "negative",
+    "severity": "functional_failure",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_021",
+    "platform": "bilibili",
+    "board": "汽车洋葱圈",
+    "channel": "汽车洋葱圈",
+    "up_name": "汽车洋葱圈团队",
+    "url": "https://www.bilibili.com/video/BV1uM4m117uV",
+    "title": "《2.2吨车重+673马力配58cm²刹车皮！从工程力学看小米SU7刹车硬件配置失衡》",
+    "date": "2024-05-16",
+    "vehicle": "Xiaomi SU7 Max",
+    "category": "engineering_physics",
+    "topic": "动能热力学公式计算：2205kg车重在200km/h重刹时前刹车片单位面积热负荷超标3倍",
+    "technical_focus": "动能公式Ek=1/2mv²、单次百公里制动耗散3.4兆焦耳热能、单位面积热通量密度突破安全极限",
+    "quote": "从基础物理学公式来看这根本不是偶然事故，而是工程失衡的必然结果！动能公式Ek=1/2mv²，SU7 Max车重2205公斤，在赛道大直道尾速200km/h时，车辆动能高达340万焦耳（3.4兆焦耳）！在重刹时根据前后轴荷转移，前轮承担了超过70%的制动能量，即前轮两套卡钳要在短短4秒内将240万焦耳能量通过摩擦转化为热能。前刹车片单侧面积仅58cm²，其瞬间单位面积热通量密度高达每平方厘米20000瓦特！对比保时捷Taycan Turbo S的115cm²刹车片，SU7单位面积承受的热负荷是保时捷的整整两倍半！这么可怕的热流密度砸在耐温350度的NAO有机树脂皮上，不化成灰烬才是奇迹！",
+    "translated_quote_kr": "기초 물리 공식으로 계산해보면 이것은 우발적 사고가 아니라 공학적 설계 불균형의 필연적 참사입니다! 운동에너지 공식 Ek=1/2mv²에 따라 공차중량 2,205kg의 SU7 Max가 200km/h로 질주할 때 운동에너지는 무려 340만 줄(3.4MJ)에 달합니다! 풀브레이킹 시 전후 하중 이동으로 전륜이 70% 이상의 제동 에너지를 떠안으므로 4초 만에 240만 줄의 열을 분산시켜야 합니다. 그러나 전륜 패드 면적이 58cm²에 불과해 순간 열유속 밀도가 cm²당 20,000와트에 육박합니다! 포르쉐 타이칸의 115cm² 패드와 비교하면 단위 면적당 열부하가 무려 2.5배입니다! 이 무지막지한 열량이 내열 350℃짜리 유기 수지 패드에 쏟아지는데 잿더미가 안 되는 게 기적입니다!",
+    "translated_quote_en": "Basic kinetic physics proves these crashes were not freak accidents, but mathematically inevitable engineering failures! Under Ek = 1/2mv^2, a 2,205 kg SU7 Max at 200 km/h carries 3.4 megajoules of kinetic energy! Under heavy braking, dynamic load transfer shifts >70% of energy to the front axle—demanding front calipers dissipate 2.4 megajoules into heat within 4 seconds. With only 58 cm² of pad surface, instantaneous thermal flux density hits ~20,000 W/cm²! Compared to Porsche Taycan's 115 cm² pads, the SU7's thermal load per square centimeter is 2.5× higher! Subjecting 350°C NAO organic resin to such intense flux guarantees complete vaporization!",
+    "forensic_data": {
+      "vehicle_kinetic_energy_at_200kmh_mj": 3.4,
+      "front_axle_energy_share_pct": 72.0,
+      "front_dissipation_target_mj": 2.45,
+      "heat_flux_density_w_per_cm2": 21100.0,
+      "taycan_comparison_ratio": 2.48
+    },
+    "slang_terms": [
+      "热流密度超标",
+      "热负荷爆炸",
+      "物理规律不可违",
+      "小马拉大车反向版"
+    ],
+    "dsi_factors": {
+      "safety": 0.95,
+      "functional": 0.94,
+      "economic": 0.7,
+      "social": 0.85,
+      "convenience": 0.3
+    },
+    "sentiment": "strongly_negative",
+    "severity": "critical_safety",
+    "verified": true
+  },
+  {
+    "id": "BILI_SU7_022",
+    "platform": "bilibili",
+    "board": "大头说车",
+    "channel": "大头说车",
+    "up_name": "大头",
+    "url": "https://www.bilibili.com/video/BV13J4m1c7gT",
+    "title": "《后排小板凳与大溜背空间实测：底盘电池包厚度挤压乘员舱人体工学缺陷》",
+    "date": "2024-04-18",
+    "vehicle": "Xiaomi SU7 All Trims",
+    "category": "interior_packaging",
+    "topic": "低趴轿跑造型与底盘高压电池包厚度冲突导致后排座椅地台抬高人体工学“坐小板凳”",
+    "technical_focus": "电池包厚度120mm抬高H点、后排座垫离地高度仅280mm、大腿完全悬空腰椎疲劳",
+    "quote": "为了追求0.195的超低风阻和1440毫米的低趴轿跑车高，小米SU7在人机工程学上做出了极其惨痛的妥协！底盘布置了厚达120毫米的CTB电池包，导致乘员舱地板被整体垫高。我们实测后排座椅坐垫前端离地高度只有280毫米（正常舒适B级轿车在320-350毫米），座垫长度也只有470毫米。身高178cm的成年人坐进后排，大腿前部几乎全悬空，受力点全压在屁股两个坐骨上，姿势跟幼儿园坐小塑料板凳一模一样！加上溜背车顶下压，头部空间只剩一指，长途坐两个小时以上腰椎酸痛难忍！",
+    "translated_quote_kr": "0.195의 초저풍절계수와 1,440mm의 날렵한 전고를 구현하기 위해 샤오미 SU7은 실내 인체공학에서 치명적인 타협을 범했습니다! 바닥에 120mm 두께의 CTB 배터리 팩이 깔리며 실내 플로어가 높게 들렸습니다. 실측 결과 후열 시트 방석 전면 높이가 지상 280mm에 불과합니다(일반적인 안락한 중형 세단은 320~350mm). 178cm 성인이 앉으면 허벅지 밑이 붕 떠서 체중이 엉덩이뼈 두 곳에 집중되며, 유치원 플라스틱 목욕탕 의자에 웅크려 앉은 꼴이 됩니다! 패스트백 루프라인까지 머리를 짓눌러 헤드룸은 손가락 하나 두께에 불과해 2시간만 타도 허리가 끊어질 듯 쑤십니다!",
+    "translated_quote_en": "To achieve a 0.195 drag coefficient and low 1,440mm roofline, Xiaomi made excruciating ergonomic compromises! Packaging a 120mm thick CTB battery under the floor raised the interior floor pan significantly. We measured the rear seat cushion height at only 280mm above the floor (versus 320-350mm in comfortable sedans). An adult of 178cm finds their thighs completely unsupported with weight concentrated entirely on ischial tuberosities—the textbook 'sitting on a miniature stool' posture! Coupled with the sloping fastback roof leaving 1 finger of headroom, riding for over two hours causes severe lumbar strain!",
+    "forensic_data": {
+      "battery_pack_thickness_mm": 120.0,
+      "rear_seat_cushion_height_mm": 280.0,
+      "benchmark_sedan_height_mm": 335.0,
+      "thigh_support_deficit_mm": 55.0,
+      "headroom_178cm_clearance": "1 finger (~15 mm)"
+    },
+    "slang_terms": [
+      "坐小板凳",
+      "大腿悬空",
+      "溜背压头",
+      "人机工程妥协",
+      "腰疼神车"
+    ],
+    "dsi_factors": {
+      "safety": 0.3,
+      "functional": 0.75,
+      "economic": 0.5,
+      "social": 0.85,
+      "convenience": 0.95
+    },
+    "sentiment": "negative",
+    "severity": "convenience_issue",
+    "verified": true
+  }
+]

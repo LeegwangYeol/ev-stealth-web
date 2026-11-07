@@ -1,0 +1,777 @@
+[
+  {
+    "id": "BLIND_WAR_001",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/전기차는-그럼-보증-끝나면-폭탄이네-CmAAG0mW",
+    "post_title": "전기차는 그럼 보증 끝나면 폭탄이네??",
+    "target_vehicle": "Hyundai EV General",
+    "category": "maintenance",
+    "defect_topic": "보증 만료 후 E-GMP ICCU 터짐 및 수백만원 수리비 폭탄 공포",
+    "raw_quote": "현대기아 iccu 고질병 엄청나던데 보증 끝나면 터질때마다 몇백만원 수리비 지출이네.. 수리해도 또 터지고 그런다는디... 무섭다 [NCSOFT: ㅇㅇ iccu 보증끝나고 터지면 폭탄임 근데 언제 어디서 왜터질지 모름; 리콜 받아도 터지는데 답이 있을지;] [한전MCS: 완속 충전 불가 문제 - 유상동력 상실 - 무상]",
+    "slang_terms": [
+      "ICCU폭탄",
+      "수리비폭탄",
+      "보증만료"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "consumer",
+      "author_badge": "이마트",
+      "view_count": 8520,
+      "upvote_count": 45,
+      "comment_count": 5,
+      "published_at": "2025-06-12"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_WAR_002",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/전기차는-보증기간이-지나면-p1J2PZxi",
+    "post_title": "전기차는 보증기간이 지나면",
+    "target_vehicle": "Kia EV General",
+    "category": "maintenance",
+    "defect_topic": "8년 보증 만료 후 고전압 배터리 팩 교체비 2,000만~3,000만원 차주 전액 부담 리스크",
+    "raw_quote": "배터리 교체는 본인이 감당해야 하지? 현기차 기준으로 2-3천만원정도 하는것 같은데 키로수나 연식된 중고 전기차는 내연보다 훨씬 불리하겠네? [한국항공우주연구원: 차값의 절반 이상이네 ㄷㄷㄷ] [스타벅스커피코리아: 3천이면 ..와우] [NEXON: 본인 부담 2천? 대충 시점은 40만쯤일텐데, 중고 내연차가 40만이면..]",
+    "slang_terms": [
+      "배터리교체비",
+      "2천만원",
+      "보증만료",
+      "감가폭탄"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "verified_employee",
+      "author_badge": "SK텔레콤",
+      "view_count": 14200,
+      "upvote_count": 89,
+      "comment_count": 5,
+      "published_at": "2025-08-20"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_WAR_003",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/중고전기차-보증기간-끝난거-사려는데-zy1rj8ed",
+    "post_title": "중고전기차 보증기간 끝난거 사려는데",
+    "target_vehicle": "Hyundai Ioniq Electric",
+    "category": "maintenance",
+    "defect_topic": "보증 만료 구형 전기차 구매 시 배터리 고장 수리비가 차량 잔존가액 초과",
+    "raw_quote": "천만원짜리 구형 아이오닉 지금 배터리 상태 좋다고 진단 받은 매물이긴 한데.. 배터리에 언젠가 문제 생기면 그냥 차 값을 한 번 더 내야되겠던데 나중에 존나 후회하게 될까? [스타벅스커피코리아: 1000만원짜리 사서 1000만원 버리기 4000짜리 중고 사서 3000에 팔고 1000만원 버리기] [NAVER: 감가, 장거리 충전 스트레스, 회생제동 호불호 고려해서 결정해]",
+    "slang_terms": [
+      "보증만료",
+      "배터리사망",
+      "차값한번더"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "verified_employee",
+      "author_badge": "한국문학번역원",
+      "view_count": 7340,
+      "upvote_count": 32,
+      "comment_count": 3,
+      "published_at": "2025-09-04"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_WAR_004",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/전기차-중고로-구입해도-배터리보증기간-인정해줘-yjnesuCQ",
+    "post_title": "전기차 중고로 구입해도 배터리보증기간 인정해줘?",
+    "target_vehicle": "Hyundai EV General",
+    "category": "maintenance",
+    "defect_topic": "중고차 이전 등록 시 배터리 평생보증 소멸 및 2차 구매자 보증 승계 제약",
+    "raw_quote": "8년보증이라면 1년된 전기차 중고로사면 7년보증가능? 첫차주가아니라 불가능? [도로교통공단: 기아였나...? 신차구매시 평생보증 (승계 안됨)] [한국전력공사: 제조사마다 다를골] [삼성화재: 케바케라고 들었어용]",
+    "slang_terms": [
+      "보증승계불가",
+      "평생보증소멸",
+      "배터리보증"
+    ],
+    "severity": "convenience_issue",
+    "platform_metadata": {
+      "author_type": "public_sector",
+      "author_badge": "공무원",
+      "view_count": 5120,
+      "upvote_count": 18,
+      "comment_count": 4,
+      "published_at": "2025-04-15"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_WAR_005",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/현대·기아-전기차-ICCU-결함-2026년에도-이어지는-결로의-공포-결국-구조적-설계-결함-e87ezkf5",
+    "post_title": "현대·기아 전기차 ICCU 결함, 2026년에도 이어지는 '결로'의 공포. 결국 구조적 설계 결함?",
+    "target_vehicle": "Hyundai Ioniq 5",
+    "category": "charging",
+    "defect_topic": "2026년형 E-GMP 차량에서도 지속되는 ICCU 전력모듈 내부 결로 쇼트 및 설계 결함",
+    "raw_quote": "유럽 기술 분석 리포트 인용: 현대·기아 전기차 ICCU 결함, 2026년에도 이어지는 결로의 공포. 결국 구조적 설계 결함인가? [크래프톤: 현기만 v2l 제공하는 것도 아니고, 현기 기술 문제 맞다. 고칠 수 있는데 비용 때문에 안 하는 거라면 결국 그것도 기술 문제 맞다. 자기네들 원가절감 설계 때문에 차주들만 고속도로에서 셧다운 공포 겪음] [한국수자원공사: 좀 이르다 싶었는데 결국 사단을 내는 군요]",
+    "slang_terms": [
+      "ICCU폭탄",
+      "결로쇼트",
+      "원가절감",
+      "주행중정지"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "tech_industry",
+      "author_badge": "파스토",
+      "view_count": 19800,
+      "upvote_count": 210,
+      "comment_count": 2,
+      "published_at": "2026-01-22"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_WAR_006",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/EQE-전기차-보증-CrXV7y6W",
+    "post_title": "EQE 전기차 보증",
+    "target_vehicle": "Mercedes-Benz EQE",
+    "category": "maintenance",
+    "defect_topic": "메르세데스-벤츠 EQE 조기 단종 후 부품 공급 단절 및 5년 보증 만료 후 고전압 수리 불가",
+    "raw_quote": "벤츠 전기차로 거의 마음을 정했습니다. 그런데 해당 라인업이 단종이 되어서 구매에 다시 고민이 많습니다. 보증기간을 최대한 연장해도 5년인데, 단종되면 소모품 지원이 될까 이런 생각이 드네요. 5년 이후에는 부품이 없어서 수리 문제로 골치를 썩지는 않을까 싶기도 하고... [한화정밀기계: 왜 단종하는지 생각해보시길] [GS리테일: 저라면 eq시리즈는 안살거같습니다...] [더클래스효성: 다른브랜드많은데왜... ㅋ]",
+    "slang_terms": [
+      "파라시스폭탄",
+      "조기단종",
+      "부품수급불가",
+      "감가폭탄"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "tech_industry",
+      "author_badge": "삼성디스플레이",
+      "view_count": 9400,
+      "upvote_count": 55,
+      "comment_count": 5,
+      "published_at": "2025-10-18"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_SOH_001",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/전기차-배터리-열화랑-관련해서-TQNVe32u",
+    "post_title": "전기차 배터리 열화랑 관련해서",
+    "target_vehicle": "Hyundai EV General",
+    "category": "charging",
+    "defect_topic": "장거리 주행 누적 시 배터리 SOH 열화 및 중고차 매각 시 잔존가치 폭락",
+    "raw_quote": "전기차 배터리도 열화율이 매우 적다지만... 그래도 장거리 타다보면 열화생겨서 분명 배터리 효율이 떨어질텐데 이부분은 전기차 중고 팔때 감가 요인으로 얼마나 반영될까..?? [삼정KPMG: 28 kwh 같이 적은 용량 가진 차들 아니면 별 상관 없을듯요]",
+    "slang_terms": [
+      "배터리열화",
+      "SOH하락",
+      "감가폭탄"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "verified_employee",
+      "author_badge": "DB아이엔씨",
+      "view_count": 4800,
+      "upvote_count": 22,
+      "comment_count": 1,
+      "published_at": "2025-07-03"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_SOH_002",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/전기차-10년-탈수있어-40num8fh",
+    "post_title": "전기차 10년 탈수있어?",
+    "target_vehicle": "Tesla Model S",
+    "category": "charging",
+    "defect_topic": "전기차 10년 노후화에 따른 전극 미세균열 및 덴드라이트 열폭주 위험성 증가",
+    "raw_quote": "배터리 그 열화가 몇년 이후론 잘 안된다곤 들었는데 노후화로 인해 열폭주 가능성이 늘어난다고 하던데 뭐가 맞아? [쥴릭파마코리아: 배터리 수명이 평균 10년~12년정도라곤 함 15만~25만 km] [한국철도공사: 그 말인 즉슨 차가 오래돼도 배터리 한번 교체하면 오래 탈수있다는말인가? 나 차알못] [약사: 미국에선 모s 10년탄사람들 많을걸?]",
+    "slang_terms": [
+      "배터리열화",
+      "열폭주위험",
+      "배터리수명한계"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "verified_employee",
+      "author_badge": "블라인드 인증유저",
+      "view_count": 6700,
+      "upvote_count": 31,
+      "comment_count": 3,
+      "published_at": "2025-11-14"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_SOH_003",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/전기차-10년이상-못탈까요-6ezfrc11",
+    "post_title": "전기차 10년이상 못탈까요?",
+    "target_vehicle": "Hyundai Ioniq 5",
+    "category": "charging",
+    "defect_topic": "현대차 현직 연구원이 직접 밝힌 배터리 1000사이클 한계 및 80% 이하 열화 임계치",
+    "raw_quote": "배터리 열화되어 80퍼정도로 줄어든다고해도 히터틀어도 300은 뽑아줄거같은데 뭔가 다들 전기차는 오래 못탈꺼라 하시네용 [현대자동차: 배터리 관리를 얼마나 잘하냐에 따라서 수명이 천차만별이고 풀충 500km 기준으로 1000사이클이면 50만km인데 이거 감안해서 표 보시면 될듯] [한화시스템: 화재 가능성도 있으니 80%만 넣고...] [신한대학교교직원: 10년 뒤에 새로운 배터리가 나오면 중고가 방어가 잘 안될 가능성이 있음]",
+    "slang_terms": [
+      "배터리사이클",
+      "80%열화",
+      "화재포비아",
+      "감가폭탄"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author_type": "oem_engineer",
+      "author_badge": "현대자동차",
+      "view_count": 12800,
+      "upvote_count": 74,
+      "comment_count": 4,
+      "published_at": "2025-12-05"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_SOH_004",
+    "platform": "blind",
+    "board_name": "블라인드 Tech Lounge",
+    "post_url": "https://www.teamblind.com/kr/post/전기차-배터리-용량-관련-질문-배터리나-자동차쪽-형들-답좀주세요-u0cM8GHV",
+    "post_title": "전기차 배터리 용량 관련 질문! 배터리나 자동차쪽 형들 답좀주세요!",
+    "target_vehicle": "Kia EV6",
+    "category": "charging",
+    "defect_topic": "삼성SDI 배터리 셀 엔지니어가 밝힌 총용량(Gross) vs 가용용량(Usable) 마진 및 SOH 산출 방식",
+    "raw_quote": "아이오닉5 보면 77.4kWh 이렇게 배터리 용량 써있는데 이게 SOC 0~100% 기준으로 말하는건지, 실제 사용범위 10(20)~80%를 기준으로 77.4kWh라는 건지 아는 형 답변좀 부탁해요!! [삼성SDI: 당연 1번 기준 (Gross 총용량). 상하단 버퍼 3~5%씩 잠가놓고 BMS에서 SOH 70% 떨어질 때까지 실질 가용용량을 야금야금 갉아먹는 로직임] [한화파워시스템: 1번 기준] [현대자동차: 전]",
+    "slang_terms": [
+      "Gross용량",
+      "Usable마진",
+      "BMS버퍼",
+      "SOH70%"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author_type": "battery_engineer",
+      "author_badge": "삼성SDI",
+      "view_count": 11500,
+      "upvote_count": 65,
+      "comment_count": 3,
+      "published_at": "2025-05-19"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_SOH_005",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/현대인증중고차-어이가-없다-grfnmdua",
+    "post_title": "현대인증중고차 어이가 없다.",
+    "target_vehicle": "Hyundai Kona EV",
+    "category": "maintenance",
+    "defect_topic": "출고 2달 만에 배터리 SOH 잔존용량 급락 공도 셧다운 및 인증중고차 보상 거부",
+    "raw_quote": "2025년 6월에 차량 구매했는데 7월 말에 배터리 이슈로 공도에서 차 퍼질뻔했다… 기사님 오셔서 봤는데 출고될때부터 교체한적 없는거 같고 배터리 잔존 용량이 10%는 될까 싶다고 하시더라. 배터리 교체하고 다녔는데 하나둘씩 잔고장이 보이기 시작해서... 현대인증중고차 전화했더니 대뜸 보상을 해줄수 없다고 하네? [현대자동차: 차는 독일제타라. 내말 명심하고] [AhnLab: 형이 중고차 살때 꼼꼼하게 하자를 확인하지 못한 책임이 큼]",
+    "slang_terms": [
+      "배터리사망",
+      "공도셧다운",
+      "인증중고차거부",
+      "호구인증"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "consumer",
+      "author_badge": "SK",
+      "view_count": 16400,
+      "upvote_count": 120,
+      "comment_count": 5,
+      "published_at": "2025-08-11"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_SUB_001",
+    "platform": "blind",
+    "board_name": "블라인드 Tech Lounge",
+    "post_url": "https://www.teamblind.com/kr/post/현대-배터리-구독제-2h33e7tb",
+    "post_title": "현대 배터리 구독제",
+    "target_vehicle": "Hyundai EV General",
+    "category": "maintenance",
+    "defect_topic": "OEM 배터리 BaaS 구독제 도입 및 카드/캐피탈/보험 강제 결합 수익화 모델 비판",
+    "raw_quote": "이거 성공하면 현대 계열사들 진짜 노날듯. 기본적으로 카드, 캐피탈, 보험 정도 카드는 구독제 현대카드하면 포인트 페이백이든 혜택 줄거고, 현대캐피탈 이용하면 이자 좀 낮춰주고 보험은 배터리 화재 관련 보험 만들어서 구독료에 포함시켜버리고, 구독제에 각종 컨텐츠들 연계하고... [현대캐피탈: ㅋㅋㅋㅋㅋㅋ] [현대캐피탈: 허허]",
+    "slang_terms": [
+      "배터리구독제",
+      "BaaS",
+      "캐피탈인질",
+      "구독형갑질"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "finance_insider",
+      "author_badge": "한국은행",
+      "view_count": 8900,
+      "upvote_count": 52,
+      "comment_count": 5,
+      "published_at": "2025-03-14"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_SUB_002",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/한국-테슬라-FSD-구독으로-전환-3v3yzygj",
+    "post_title": "한국 테슬라 FSD 구독으로 전환",
+    "target_vehicle": "Tesla Model 3",
+    "category": "maintenance",
+    "defect_topic": "FSD 일시불 900만원 대비 월 15만원 구독 강제 및 중고차 이전 시 라이선스 회수 횡포",
+    "raw_quote": "한국 테슬라 FSD 월 15만원 구독으로 전환. 일시불 구매가 900만원이니까 5년 풀로 쓰면 900만원 됨. [대한항공: 테슬라 졸라똑똑함 900만원은 부담되니 구독으로 거기다 소프트웨어라 돈도벌고 현기는 옵션질해서 차팔면 끝인데] [새회사: 그냥 내가 운전할게 비싸다..] [한국화학연구원: 구독제는 한달한달 바꿀수있음?]",
+    "slang_terms": [
+      "FSD구독",
+      "월15만원",
+      "소프트웨어갑질",
+      "라이선스소멸"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "verified_employee",
+      "author_badge": "새회사",
+      "view_count": 24100,
+      "upvote_count": 185,
+      "comment_count": 4,
+      "published_at": "2025-06-28"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_SUB_003",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/차에-관해서-관심없지만-j3TKu37s",
+    "post_title": "차에 관해서 관심없지만",
+    "target_vehicle": "BMW i4",
+    "category": "maintenance",
+    "defect_topic": "BOSCH 글로벌 전장 엔지니어가 폭로한 완성차 OEM 열선/후륜조향 FoD 구독형 BM 전면화 배경",
+    "raw_quote": "BMW 이쇄키들 뭐하는 짓임?? 통풍&열선 시트, 스티어링휠 열선, 블랙박스를 월간 구독형 옵션으로 변경하겠다고 함. [BOSCH: 테슬라가 망치고 있다는 결론 실화냐?? 벤츠도 이미 후륜 조향각을 더 푸는 옵션을 구독으로 팔고 있어. 벤츠랑 비엠이 저렇게 하는 이유를 파악하는게 중요하지. 저렇게 구독으로 돈 뽑아먹지 않으면 수익성 악화되서 망할 거 같으니까 하는 거야. 차 가격은 테슬라처럼 못올리겠으니까 ㅋㅋㅋ]",
+    "slang_terms": [
+      "엉뜨구독",
+      "후륜조향구독",
+      "FoD구독",
+      "옵션인질"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "tier1_supplier",
+      "author_badge": "BOSCH",
+      "view_count": 31200,
+      "upvote_count": 420,
+      "comment_count": 6,
+      "published_at": "2025-04-02"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_SUB_004",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/아우디-Q4-폭바-ID4는-사면-안됨-32zCHjPA",
+    "post_title": "아우디 Q4 폭바 ID4는 사면 안됨",
+    "target_vehicle": "Audi Q4 e-tron",
+    "category": "maintenance",
+    "defect_topic": "폭스바겐 MEB 플랫폼 OCU4 통신모듈 오프라인 락 및 한국 시장 OTA/커넥티드 서비스 방치",
+    "raw_quote": "전기차가 배터리 조차 어플로 확인 못함. 센터가면 무조건 1~3달 대기 대차도 안해줌. OTA도 안되고 커넥트도 안되고 오류나서 충전 중단돼도 안 알려줌. [전장 엔지니어: 안타깝지만 커넥티드 서비스는 기대하지 않는게 좋을거야. OCU4가 MEB플랫폼에서 아우디의 컨박스를 대체하는 모듈인데, 얘들이 국내 맵데이터 서버 설치 문제로 네비 스펙까지 빼버림. E2 아키텍쳐 가뜩이나 말 많아서 아예 접고 다음 단계로 넘어가는데 그냥 버려진 모델임]",
+    "slang_terms": [
+      "OTA먹통",
+      "커넥트먹통",
+      "MEB플랫폼참사",
+      "3달대기"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author_type": "consumer",
+      "author_badge": "대한유화",
+      "view_count": 22800,
+      "upvote_count": 310,
+      "comment_count": 5,
+      "published_at": "2025-09-17"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_BAT_001",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/전기차-수리비-폭탄이라는거-ofWD1zJM",
+    "post_title": "전기차 수리비 폭탄이라는거",
+    "target_vehicle": "Hyundai EV General",
+    "category": "maintenance",
+    "defect_topic": "경미한 하부 충격에도 배터리 팩 통교체 2,000만원 청구 및 보험 전손 분쟁",
+    "raw_quote": "전기차는 사고 아니면 내연처럼 잔고장이나 노후가 쉽게 안오려나? [한화솔루션: 배터리 충격만가도 사요나라 2천만원] [새회사: 걍 한방에 ㅈ됨. 고장나기보다 하체 긁혀서 통교체 견적 나오면 답 없음] [대우조선해양: 불나면 대박이지 얼마전 마트 주차장 화재사고 보면 장난없더라]",
+    "slang_terms": [
+      "수리비폭탄",
+      "사요나라2천만원",
+      "배터리통교체",
+      "하부충격"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "chemical_industry",
+      "author_badge": "한화솔루션",
+      "view_count": 18700,
+      "upvote_count": 140,
+      "comment_count": 5,
+      "published_at": "2025-08-30"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_BAT_002",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/전기차-전손처리-조건-어떻게-됨-t6Ww4d4X",
+    "post_title": "전기차 전손처리 조건 어떻게 됨?",
+    "target_vehicle": "Hyundai Ioniq 6",
+    "category": "maintenance",
+    "defect_topic": "아이오닉6 빗길 미끄러짐 후 배터리 케이스 찍힘 견적 6,300만원 초과 및 부품 공급 무기한 대기",
+    "raw_quote": "고속도로 빗길 커브길 진입하는데 갑자기 핸들 확 돌아가며 미끄러져서 가드레일 박았음. 6개월된 완전 새차... 1급 블루핸즈 입고시켰는데 배터리 커버에 심하게 찍힌 자국 있다고 함. 현대차 부품 없다고 완료 예정일이 최소 10월 말, 늦으면 기약 없다해서... 차량가액 6,300만원인데 전손처리 어떻게 해? [유니투스: 전손은 차량가액 만큼 견적 나와야 돼. 배터리 교환 등 싹 다 교환으로 해서 견적 최고로 넣어 달라해. 배터리 무조건 교환해야지 그냥 타다 불나면 어째] [현대자동차: 차체 패널도 있고 배터리 사이드 패널이랑 셀 사이 간극도 커서 저정도면 셀까지 문제될만한 충격은 없을것 같네요]",
+    "slang_terms": [
+      "빗길피쉬테일",
+      "배터리케이스찍힘",
+      "부품수급불가",
+      "강제전손"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "verified_owner",
+      "author_badge": "국립암센터",
+      "view_count": 27500,
+      "upvote_count": 195,
+      "comment_count": 4,
+      "published_at": "2025-07-25"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_BAT_003",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/전기차-배터리-수리비-앞으로-내릴까-ZGHY8GmO",
+    "post_title": "전기차 배터리 수리비 앞으로 내릴까",
+    "target_vehicle": "Kia EV6",
+    "category": "maintenance",
+    "defect_topic": "모듈 단위 부분수리 인프라 부재로 인한 배터리 고장 시 차 한 대 값 청구 관행",
+    "raw_quote": "배터리 고장나면 차 한대값 나오는거 ㅎㄷㄷ하네. 모듈 단위 수리 왜 안 해주는 거냐. [코오롱인더스트리: 그래서 배터리 보증 긴거아님까 보증 끝나면 사실상 폐차하라는 소리임]",
+    "slang_terms": [
+      "차한대값",
+      "배터리통교체",
+      "보증만료폐차"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "verified_employee",
+      "author_badge": "하나아이티엠",
+      "view_count": 8200,
+      "upvote_count": 41,
+      "comment_count": 1,
+      "published_at": "2025-10-02"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_BAT_004",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/전기차-수리비-무섭네-maj50j82",
+    "post_title": "전기차 수리비 무섭네",
+    "target_vehicle": "Hyundai Ioniq 5",
+    "category": "maintenance",
+    "defect_topic": "노면 충격에 가장 취약한 차량 하부에 2,000만원짜리 고전압 배터리가 배치된 구조적 모순",
+    "raw_quote": "내연기관이면 몇십이면 될 문제가 천만 단위; [신한대학교교직원: 차량이 가장 충격 많이 받는 부분이 하체인데 충격에 가장 취약한 메인 배터리가 하체에 있는 아이러니함.. 전기차 구조의 모순임...] [LG CNS: 폭발안하고 살아있는거에 감사해야지..] [새회사: 배터리 파손인데 불 안났으면 신이든 조상님이든 누군가 도와주셨는데?;;]",
+    "slang_terms": [
+      "하체배터리모순",
+      "수리비천만단위",
+      "폭발공포"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "retail_employee",
+      "author_badge": "이마트",
+      "view_count": 15300,
+      "upvote_count": 110,
+      "comment_count": 5,
+      "published_at": "2025-09-01"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_BAT_005",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/요즘-현기-부품없어-수리-안된다는거-레알-gWEcsZ85",
+    "post_title": "요즘 현기 부품없어 수리 안된다는거 레알?",
+    "target_vehicle": "Hyundai EV General",
+    "category": "maintenance",
+    "defect_topic": "현대자동차 현직 직원이 공식 인정한 고전압 전장 및 외장 부품 2~3달 대기 수리 대란",
+    "raw_quote": "현기 사는 이유가 수리비 싸고 빠른건데 몇달걸릴거면 살이유 없잔아!! 현기가 그걸 모를리가 없는데? 전기차 몰빵하고 부품 버린거야? [현대자동차: 해결하려고 노력하고 있습니다..... 대부분은 근시일내에 해결이 될거고요... 쉽지 않네요....] [한화비전: 범퍼/모듈 2달 대기중] [새회사: 현기 부품난 장난아님. 두달 넘어가는 차종들 꽤ㅋ]",
+    "slang_terms": [
+      "부품난",
+      "두달대기",
+      "하이테크지연",
+      "수리포기"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author_type": "oem_engineer",
+      "author_badge": "현대자동차",
+      "view_count": 21900,
+      "upvote_count": 180,
+      "comment_count": 4,
+      "published_at": "2025-08-14"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_BAT_006",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/전기차의-문제는-가격이야-cgEmaNPw",
+    "post_title": "전기차의 문제는 가격이야.",
+    "target_vehicle": "Kia EV9",
+    "category": "maintenance",
+    "defect_topic": "EV9 1억원 출고가 논란 및 현대차 연구원이 밝힌 삼원계 배터리 원가 종속성",
+    "raw_quote": "결정적으로 EV9, 최초의 전기 대형차로 국민 아빠차를 예상했으나 풀옵 1억.. 아빠 ㅂ신이야? 전기차 최고의 가치중 하나가 유류비 절감인데 연 3-4만 안 타면 저 갭 리쿱 안 됨. [현대자동차: 결국 문제는 주행거리인거지.... 차 가격 높은 이유는 배터리 때문이고 그 비싼 삼원계 배터리를 넣는 이유는 주행거리 때문이니까 그래도 배터리 가격은 꾸준히 우하향 하고 있으니까 몇년 뒤면 삼원계도 내려가지 않을까?] [삼성SDS: 구구절절 맞는말임 한마디로 상품성이 떨어짐]",
+    "slang_terms": [
+      "1억전기차",
+      "삼원계원가폭탄",
+      "리쿱불가",
+      "감가폭탄"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "oem_engineer",
+      "author_badge": "현대자동차",
+      "view_count": 32400,
+      "upvote_count": 290,
+      "comment_count": 5,
+      "published_at": "2025-05-12"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_TSL_001",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/테슬라는-사고나면-똥차되는구나-efxsuxq3",
+    "post_title": "테슬라는 사고나면 똥차되는구나...",
+    "target_vehicle": "Tesla Model Y",
+    "category": "maintenance",
+    "defect_topic": "기아 엔지니어가 분석한 테슬라 기가캐스팅 알루미늄 일체 주조 바디 판금 불가 및 배터리 셀 교환 불가 전손 사태",
+    "raw_quote": "테슬라 기가캐스팅은 한 번에 찍어내는 알루미늄 주조물이라 찌그러진 부분을 펼 수 없고, 펴는 순간 균열이 감. 프레임 자체가 곧 외관 패널이라 부분 수리 불가로 전손 사고차 분류됨. [기아: 테슬라 배터리 셀 교환이 불가능에 가까울정도다 말곤 없넼ㅋㅋㅋㅋ 현기 e-gmp는 셀 직렬 모인 모듈 교환작업이라도 가능하지 테슬라는 통짜 폼으로 굳혀놔서 모듈 분리도 안 됨] [크래프톤: 어 그 기가캐스팅 구조 현기도 따라할 예정 ^^]",
+    "slang_terms": [
+      "기가캐스팅",
+      "알루미늄균열",
+      "통짜배터리",
+      "전손똥차"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "oem_engineer",
+      "author_badge": "기아",
+      "view_count": 38500,
+      "upvote_count": 510,
+      "comment_count": 6,
+      "published_at": "2025-05-30"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_TSL_002",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/전기차를-안사는이유-aa070013",
+    "post_title": "전기차를 안사는이유",
+    "target_vehicle": "Tesla Model 3",
+    "category": "maintenance",
+    "defect_topic": "현대차 현직 엔지니어가 인정한 현기 ICCU 결함 vs 테슬라 BMS 보증만료 후 수리비 폭탄",
+    "raw_quote": "현기차는 iccu 테슬라는 bms 특히 현기차는 iccu문제로 전조증상없이 갑자기 길가다 시동이 꺼지는 경우가 많음 테슬라는 bms 문제로 보증기간끝나면 수리비폭탄 아직은 하이브리드가 최고시다 [현대자동차: 차잘알] [심텍: 차잘알 ㅋㅋㅋㅋ 심지어 테슬라는 자율주행 때문에 사는건데 한국은 안풀림ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ]",
+    "slang_terms": [
+      "ICCU시동꺼짐",
+      "BMS수리비폭탄",
+      "차잘알",
+      "오파제한"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "oem_engineer",
+      "author_badge": "현대자동차",
+      "view_count": 29400,
+      "upvote_count": 340,
+      "comment_count": 5,
+      "published_at": "2025-11-02"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_TSL_003",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/테슬라-중고차로-사는거-어때-f6wkxt4k",
+    "post_title": "테슬라 중고차로 사는거 어때?",
+    "target_vehicle": "Tesla Model 3",
+    "category": "maintenance",
+    "defect_topic": "테슬라 고전압 배터리 보증 연장 불가 및 구형 BMS 뻗음 현상 발생 시 2,500만원 교체비 전액 부담",
+    "raw_quote": "보통 외제차 보증 끝난거 사면 수리비로 큰일 난다 그러잖아 테슬라같은 전기차도 보증기간 끝나면 수리비 폭탄이야? [WEMADE: 일반 보증 4년. 연장 가능. 배터리 보증 8년 or 16만 키로 내외. 차종마다 차이 있음. 배터리는 연장 불가. 2021년 이전 차량 배터리 bms 뻗는 이슈 있음] [코오롱인더스트리: 전기차는 한번 고장나면 ㅈ되는것밖에 없긴해]",
+    "slang_terms": [
+      "BMS뻗음",
+      "배터리보증연장불가",
+      "수리비폭탄"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "tech_industry",
+      "author_badge": "WEMADE",
+      "view_count": 14700,
+      "upvote_count": 88,
+      "comment_count": 5,
+      "published_at": "2025-07-19"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_TSL_004",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/테슬라-모델3-타는데-cAfVb6Fp",
+    "post_title": "테슬라 모델3 타는데",
+    "target_vehicle": "Tesla Model 3",
+    "category": "maintenance",
+    "defect_topic": "테슬라 사설 수리 차단 정책으로 인한 공식 서비스센터 독점 공임 및 보험료 폭등",
+    "raw_quote": "모델3 너무 만족중이지만 수리비에 보험료에 유지비에.... 사고 한 번 나면 공식 센터에서만 부품 대주고 공임 부르는 게 값이라 카푸어 확정임. 사설 공업사 가도 툴박스 진단기 락 걸어놔서 건들지도 못함. [세무사: 모델3 유지비 만만치 않음]",
+    "slang_terms": [
+      "사설수리불가",
+      "툴박스락",
+      "보험료폭등",
+      "독점공임"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "verified_owner",
+      "author_badge": "크러스트유니버스피티이엘티디",
+      "view_count": 9800,
+      "upvote_count": 53,
+      "comment_count": 2,
+      "published_at": "2025-03-29"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_EMG_001",
+    "platform": "blind",
+    "board_name": "블라인드 Tech Lounge",
+    "post_url": "https://www.teamblind.com/kr/post/샤오미-su7-max-실제랑-기재된-스펙-비슷하면-Wx2O4XFE",
+    "post_title": "샤오미 su7 max 실제랑 기재된 스펙 비슷하면",
+    "target_vehicle": "샤오미 SU7 Max",
+    "category": "safety",
+    "defect_topic": "현대모비스 연구원이 폭로한 샤오미 카탈로그 스펙 외 내구성 부재 및 40km 주행 후 섀시 파손 실태",
+    "raw_quote": "샤오미 su7 max 동가격대 최강 아닌가? [현대모비스: 샤오미나 중국산 it기기의 특징이 카탈로그 스펙은 좋은데 그외에는 신경을 안씀. 디테일한면에서 경험부족인건지 원가절감인지 미흡한면이 있어. 그래서 기재된 스펙외 요소가 생각보다 후짐. 서킷 제동 내열성이나 로어암 강성 같은 건 양산 노하우 없으면 바로 털림] [스타트업: 40키로타고 퍼지는 검증안된 장난감]",
+    "slang_terms": [
+      "움직이는 보조배터리",
+      "카탈로그스펙사기",
+      "샤이칸",
+      "원가절감폭탄"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "tier1_supplier",
+      "author_badge": "현대모비스",
+      "view_count": 26300,
+      "upvote_count": 310,
+      "comment_count": 3,
+      "published_at": "2025-04-10"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_EMG_002",
+    "platform": "blind",
+    "board_name": "블라인드 Tech Lounge",
+    "post_url": "https://www.teamblind.com/kr/post/샤오미가-발표한-SU7-말인데-chzT8tkA",
+    "post_title": "샤오미가 발표한 SU7 말인데",
+    "target_vehicle": "샤오미 SU7",
+    "category": "safety",
+    "defect_topic": "현대차 연구원과 삼성전자 직원이 분석한 샤오미 다이캐스팅 공정 결함 및 트랙 브레이크 사고 논란",
+    "raw_quote": "발표영상 보면 다이캐스팅 자율주행 등등 자체적으로 했다 하는 게 여럿 되고 가격이 넘사로 나올 가능성이 큰데 기술력을 너무 과소평가하는 게 아닌가 싶네 [현대자동차: 맞습니다 조졌습니다 물량공세 자본공세는 못이깁니다 근데 서킷에서 브레이크 패드 다 녹아서 벽 박은 건 기본 섀시 냉각 설계 완전히 실패한 증거임] [현대모비스: 나도 관심있게 보고있는데 자사 전자제품과의 호환성은 좋아도 차량 본질적 내구성은 1~2년 타봐야 드러남]",
+    "slang_terms": [
+      "대륙의 폭탄",
+      "브레이크녹음",
+      "다이캐스팅결함",
+      "샤이칸"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "oem_engineer",
+      "author_badge": "현대자동차",
+      "view_count": 34100,
+      "upvote_count": 420,
+      "comment_count": 5,
+      "published_at": "2025-04-05"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_EMG_003",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/리비안-망하겠는데-tnPLzVh8",
+    "post_title": "리비안..  망하겠는데?",
+    "target_vehicle": "Rivian R1T",
+    "category": "maintenance",
+    "defect_topic": "메르세데스-벤츠 임직원이 지적한 리비안 전량 리콜 사태 및 스타트업 공급망 붕괴 시 수리 불가 리스크",
+    "raw_quote": "가뜩이나 인도량도 안 올라오는데 지금까지 판거 전량 리콜 시간외 -7%. 스타트업 전기차 샀다가 회사 휘청이면 리어 쿼터패널 판금도 안 되고 부품 1년 대기 타다 폐차해야 함. [컴투스: 도요타도 바퀴 빠진다고 최초 순수전기차 전량 환불하던데] [NH농협: 이게 주당 150불이 넘었었다는게 꿈만같다]",
+    "slang_terms": [
+      "전량리콜",
+      "부품수급불가",
+      "스타트업도산리스크",
+      "쿼터패널독점"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "oem_engineer",
+      "author_badge": "메르세데스벤츠",
+      "view_count": 17800,
+      "upvote_count": 145,
+      "comment_count": 4,
+      "published_at": "2025-02-18"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "BLIND_EMG_004",
+    "platform": "blind",
+    "board_name": "블라인드 자동차",
+    "post_url": "https://www.teamblind.com/kr/post/전기차-시승기-eqe-ix-타이칸-a6-메모용-cq8s8e21",
+    "post_title": "전기차 시승기 ( eqe, ix, 타이칸, a6) 메모용",
+    "target_vehicle": "Porsche Taycan",
+    "category": "maintenance",
+    "defect_topic": "포르쉐 타이칸 구형 1억원대 중고가 떡락 및 벤츠 EQE 화재 후 감가폭탄 실소유주 비교",
+    "raw_quote": "전기차는 중고차가 감가가 심하다보니 보증남은 중고로 구매하기로 마음먹었음. 시승1 eqe 세단 - 작년에 화재로인해 가격이 떡락했기에 중고가 5천이면 살정도. 시승2 페리 타이칸 4S - 구형 중고 1억까지 떨어져서 감가 미쳤음. [스타벅스커피코리아: 폴스타4 듀얼 풀옵으로 사세요] [공무원: 아우디는 전기차주제에 원격공조가 안된다던데..] [삼성전자: 폴스타4듀얼 퍼포를 타보면 놀라게 됨]",
+    "slang_terms": [
+      "감가폭탄",
+      "가격떡락",
+      "원격공조미지원",
+      "화재포비아"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "verified_owner",
+      "author_badge": "연세대학교의료원",
+      "view_count": 28900,
+      "upvote_count": 240,
+      "comment_count": 5,
+      "published_at": "2025-11-20"
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  }
+]

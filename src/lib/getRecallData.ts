@@ -639,7 +639,11 @@ export function decodeVinAndCheckRecalls(rawVin: string, customDb?: RecallDataba
     matchedBatteryProfile = (db.battery_profiles || []).find((bp) => {
       const pModel = bp.model_name.toLowerCase();
       const dModel = (decodedModel || '').toLowerCase();
-      return pModel.includes(dModel) || dModel.includes(pModel);
+      return (
+        pModel.includes(dModel) ||
+        dModel.includes(pModel) ||
+        isModelMatchForCampaign(decodedModel || '', bp.model_name)
+      );
     });
   }
 
@@ -762,7 +766,10 @@ export function checkRecallsByModel(
       brandLower.includes(bpBrandLower) ||
       (bpCanonical && bpCanonical.toLowerCase().includes(canonicalBrandLower)) ||
       (canonicalBrandLower && canonicalBrandLower.includes(bpCanonical.toLowerCase()));
-    const modelMatch = bpModelLower.includes(modelLower) || modelLower.includes(bpModelLower);
+    const modelMatch =
+      bpModelLower.includes(modelLower) ||
+      modelLower.includes(bpModelLower) ||
+      isModelMatchForCampaign(cleanModel, bp.model_name);
     return brandMatch && modelMatch;
   });
 

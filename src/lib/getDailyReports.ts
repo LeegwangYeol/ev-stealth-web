@@ -1,5 +1,5 @@
 import rawReportData from '../data/daily_reports.json' with { type: 'json' };
-import { sanitizeSafeUrl, sanitizeText } from './sanitizeUrl.ts';
+import { sanitizeSafeUrl, sanitizeText, safeJsonParse } from './sanitizeUrl.ts';
 
 export type DefectCategoryCode =
   | 'BATTERY_CHARGING'
@@ -280,15 +280,31 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
     : (Number.isFinite(raw.negativity_score) ? (raw.negativity_score as number) : 0.85);
   const score = getSafeSentimentScore(rawScore, 0.85);
 
-  const rawSlang = Array.isArray(raw.slang_tags)
-    ? raw.slang_tags
-    : (Array.isArray(raw.slang_terms) ? raw.slang_terms : (Array.isArray(raw.slang_terms_detected) ? raw.slang_terms_detected : []));
-  const slangTags = rawSlang
+  let rawSlang = raw.slang_tags || raw.slang_terms || raw.slang_terms_detected;
+  if (typeof rawSlang === 'string') {
+    const trimmedSlang = rawSlang.trim();
+    if (trimmedSlang.startsWith('[') && trimmedSlang.endsWith(']')) {
+      rawSlang = safeJsonParse<unknown[]>(trimmedSlang, []);
+    } else if (trimmedSlang.length > 0) {
+      rawSlang = trimmedSlang.split(',').map((s) => s.trim()).filter(Boolean);
+    } else {
+      rawSlang = [];
+    }
+  }
+  const slangList = Array.isArray(rawSlang) ? rawSlang : [];
+  const slangTags = slangList
     .map((s: unknown) => sanitizeText(s))
     .filter((s): s is string => Boolean(s && s.length > 0));
 
-  const rawDsi = raw.dsi_breakdown && typeof raw.dsi_breakdown === 'object' && !Array.isArray(raw.dsi_breakdown)
-    ? (raw.dsi_breakdown as Record<string, unknown>)
+  let rawDsiCandidate = raw.dsi_breakdown;
+  if (typeof rawDsiCandidate === 'string') {
+    const trimmedDsi = rawDsiCandidate.trim();
+    if (trimmedDsi.startsWith('{') && trimmedDsi.endsWith('}')) {
+      rawDsiCandidate = safeJsonParse<Record<string, unknown>>(trimmedDsi, {});
+    }
+  }
+  const rawDsi = rawDsiCandidate && typeof rawDsiCandidate === 'object' && !Array.isArray(rawDsiCandidate)
+    ? (rawDsiCandidate as Record<string, unknown>)
     : null;
   const dsiBreakdown: DefectReportItem['dsi_breakdown'] = rawDsi
     ? {
@@ -571,7 +587,12 @@ export function getFallbackMockReportData(): DailyReportData {
  */
 export function getDailyReports(options?: { useMockOnEmpty?: boolean }): DailyReportData {
   try {
-    const rawData = rawReportData as unknown as {
+    let parsedInput: unknown = rawReportData;
+    if (typeof parsedInput === 'string') {
+      parsedInput = safeJsonParse(parsedInput, null);
+    }
+
+    const rawData = parsedInput as unknown as {
       generated_at?: string;
       pipeline_version?: string;
       statistics?: Partial<ReportStatistics>;

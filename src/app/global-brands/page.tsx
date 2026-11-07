@@ -6,29 +6,115 @@ import BrandComparisonNav, { OtherBrandsCrossNav } from '@/components/BrandCompa
 export const dynamic = 'force-static';
 export const revalidate = false;
 
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://ev-stealth-web.vercel.app').replace(/\/+$/, '');
+
 const globalBrandsJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "Article",
-  "headline": "글로벌 EV 브랜드 연식별 결함 및 구매 가이드",
-  "description": "폭스바겐 ID.4, 쉐보레 볼트 EV, 폴스타 2, 벤츠 EQE/EQS 등 유럽/북미 전기차 연식별 결함 및 중고차 구매 가이드",
-  "url": "https://ev-stealth-web.vercel.app/global-brands",
-  "inLanguage": "ko-KR",
-  "datePublished": "2026-01-01T00:00:00+09:00",
-  "dateModified": "2026-11-01T00:00:00+09:00",
-  "author": {
-    "@type": "Organization",
-    "name": "Global EV Hub",
-    "url": "https://ev-stealth-web.vercel.app",
-  },
-  "publisher": {
-    "@type": "Organization",
-    "name": "Global EV Hub",
-    "logo": {
-      "@type": "ImageObject",
-      "url": "https://ev-stealth-web.vercel.app/favicon.ico",
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Article',
+      '@id': `${SITE_URL}/global-brands#article`,
+      headline: '글로벌 EV 브랜드 연식별 결함 및 구매 가이드',
+      description: '폭스바겐 ID.4, 쉐보레 볼트 EV, 폴스타 2, 벤츠 EQE/EQS 등 유럽/북미 전기차 연식별 결함 및 중고차 구매 가이드',
+      url: `${SITE_URL}/global-brands`,
+      inLanguage: 'ko-KR',
+      datePublished: '2026-01-01T00:00:00+09:00',
+      dateModified: '2026-11-01T00:00:00+09:00',
+      author: {
+        '@type': 'Organization',
+        name: 'Global EV Hub',
+        url: SITE_URL,
+      },
+      publisher: {
+        '@type': 'Organization',
+        name: 'Global EV Hub',
+        logo: {
+          '@type': 'ImageObject',
+          url: `${SITE_URL}/favicon.ico`,
+        },
+      },
+      mainEntityOfPage: `${SITE_URL}/global-brands`,
     },
-  },
-  "mainEntityOfPage": "https://ev-stealth-web.vercel.app/global-brands",
+    {
+      '@type': 'ItemList',
+      '@id': `${SITE_URL}/global-brands#itemlist`,
+      name: '글로벌 유럽·북미 전기차 모델별 결함 분석 리스트',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: '쉐보레 볼트 EV / EUV (LG 파우치셀 화재 리콜 및 신품 교체 여부)',
+          url: `${SITE_URL}/global-brands#heading-bolt-ev`,
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: '폭스바겐 ID.4 (주행 중 문 열림 터치센서 리콜 및 CO2 히트펌프)',
+          url: `${SITE_URL}/global-brands#heading-id4`,
+        },
+        {
+          '@type': 'ListItem',
+          position: 3,
+          name: '볼보 EX30 / 폴스타 2 (계기판 꺼짐 및 고전압 세라믹 히터)',
+          url: `${SITE_URL}/global-brands#heading-volvo-polestar`,
+        },
+        {
+          '@type': 'ListItem',
+          position: 4,
+          name: '메르세데스-벤츠 EQE / EQS (파라시스 배터리 화재 및 7,500만 원 교체비)',
+          url: `${SITE_URL}/global-brands#heading-benz-eqe`,
+        },
+      ],
+    },
+    {
+      '@type': 'FAQPage',
+      '@id': `${SITE_URL}/global-brands#faq`,
+      mainEntity: [
+        {
+          '@type': 'Question',
+          name: '중고 쉐보레 볼트 EV를 구매할 때 배터리 리콜 교체 완료 여부는 어떻게 확인하나요?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: '국토교통부 자동차리콜센터(car.go.kr) 또는 쉐보레 공식 서비스센터 전산에서 66kWh 신품 배터리 팩 교체 완료 및 잔여 8년/16만km 배터리 보증이 리셋되었는지 확인해야 합니다. 배터리가 교체되지 않은 2017~2022년식 매물은 화재 위험으로 구매를 피해야 합니다.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: '폭스바겐 ID.4의 주행 중 문 열림 결함은 어떻게 개선되었나요?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: '2021~2024년식 ID.4의 플러시 도어 핸들 침수 센서 오류로 인한 문 열림 리콜은 도어 핸들 방수 패킹 보강 및 제어 소프트웨어 업데이트로 조치되었습니다. 2025년식 이후는 개선형 도어 래치와 신형 APP550 구동 모터가 적용되었습니다.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: '메르세데스-벤츠 EQE/EQS 중고차 구매 시 배터리 보증 만료 위험은 어느 정도인가요?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: '벤츠 EQS/EQE의 고전압 배터리 팩 교체 비용은 약 6,000만~7,560만 원에 달하므로, 파라시스 배터리 대신 CATL 배터리가 탑재되었는지 확인하고 공식 보증 연장 상품(워런티 플러스) 가입 차량을 선별해야 합니다.',
+          },
+        },
+      ],
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${SITE_URL}/global-brands#breadcrumb`,
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: '홈',
+          item: SITE_URL,
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: '글로벌 브랜드 구매 가이드',
+          item: `${SITE_URL}/global-brands`,
+        },
+      ],
+    },
+  ],
 };
 
 export const metadata: Metadata = {
@@ -56,11 +142,23 @@ export const metadata: Metadata = {
     type: 'article',
     publishedTime: '2026-01-01T00:00:00+09:00',
     modifiedTime: '2026-11-01T00:00:00+09:00',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: '글로벌 EV 브랜드 연식별 결함 및 구매 가이드',
+        type: 'image/png',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: '글로벌 EV 브랜드 연식별 결함 및 구매 가이드 | Global EV Hub',
     description: '폭스바겐 ID.4, 쉐보레 볼트 EV, 폴스타 2, 벤츠 EQE/EQS 등 유럽/북미 전기차 연식별 결함 및 중고차 구매 가이드',
+    site: '@GlobalEVHub',
+    creator: '@lolollol2379',
+    images: ['/og-image.png'],
   },
 };
 

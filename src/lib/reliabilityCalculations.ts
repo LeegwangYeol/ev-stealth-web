@@ -452,7 +452,7 @@ export function getDsiSeverityLevel(dsi: number): {
       level: 'CRITICAL',
       label: '치명적 위험 (Critical)',
       colorClass: 'text-rose-700',
-      barBgClass: 'bg-rose-500',
+      barBgClass: 'bg-rose-600',
       textColor: 'text-rose-700',
     };
   }

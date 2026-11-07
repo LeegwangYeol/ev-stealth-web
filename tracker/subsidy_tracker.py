@@ -52,18 +52,34 @@ _CURRENT_DIR = Path(__file__).resolve().parent
 
 
 def _find_repo_root() -> Path:
-    """Locate canonical repository root from module file location and active working directory."""
+    """Locate canonical repository root from module file location, active working directory, and symlinks."""
     candidates = [
         _CURRENT_DIR,
         _CURRENT_DIR.parent,
         _CURRENT_DIR.parent.parent,
         Path.cwd(),
         Path.cwd().parent,
+        Path.cwd().parent.parent,
     ]
+    seen: Set[str] = set()
+    expanded_candidates: List[Path] = []
     for c in candidates:
+        try:
+            c_res = c.resolve()
+            for cand in (c, c_res):
+                cand_str = str(cand)
+                if cand_str not in seen:
+                    seen.add(cand_str)
+                    expanded_candidates.append(cand)
+        except (OSError, RuntimeError):
+            if str(c) not in seen:
+                seen.add(str(c))
+                expanded_candidates.append(c)
+
+    for c in expanded_candidates:
         if (c / "data").is_dir() and (c / "ev-stealth-web").is_dir():
             return c
-    for c in candidates:
+    for c in expanded_candidates:
         if (c / "data").is_dir() or (c / "ev-stealth-web" / "src" / "data").is_dir():
             return c
     return _CURRENT_DIR.parent
@@ -202,10 +218,12 @@ def calculate_depletion_rate(
             rate = min(100.0, rate)
         if max_rate is not None:
             try:
-                rate = min(float(max_rate), rate)
-            except (ValueError, TypeError):
+                mr = float(max_rate)
+                if not math.isnan(mr) and not math.isinf(mr) and mr >= 0.0:
+                    rate = min(mr, rate)
+            except (ValueError, TypeError, OverflowError):
                 pass
-        return rate
+        return max(0.0, rate)
     except (TypeError, ValueError, ZeroDivisionError, OverflowError):
         return 0.0
 
@@ -275,9 +293,18 @@ def calculate_delivery_rate(
     announced: Union[int, float, None] = None,
     quota: Union[int, float, None] = None,
     clamp_100: bool = False,
+    clamp: bool = False,
+    max_rate: Optional[float] = None,
 ) -> float:
     """Calculate EV delivery rate percentage against announced quota: (delivered / quota) * 100."""
-    return calculate_depletion_rate(applied=delivered, announced=announced, quota=quota, clamp_100=clamp_100)
+    return calculate_depletion_rate(
+        applied=delivered,
+        announced=announced,
+        quota=quota,
+        clamp_100=clamp_100,
+        clamp=clamp,
+        max_rate=max_rate,
+    )
 
 
 def calculate_pending_deliveries(
@@ -796,7 +823,20 @@ class SubsidyTracker:
                         raw_data = robust_decode(raw_bytes, declared_encoding=declared_encoding)
                         if raw_data.startswith("\ufeff"):
                             raw_data = raw_data.lstrip("\ufeff")
-                        return json.loads(raw_data)
+                        parsed = json.loads(raw_data)
+                        if not isinstance(parsed, dict):
+                            logger.warning(
+                                "Remote server returned non-dict JSON structure (%s). Attempt %d/%d",
+                                type(parsed).__name__,
+                                attempt,
+                                max_retries,
+                            )
+                            if attempt < max_retries:
+                                backoff = backoff_base * (2 ** (attempt - 1))
+                                time.sleep(backoff)
+                                continue
+                            return None
+                        return parsed
                     logger.warning(
                         "Remote server returned non-200 status: %d (attempt %d/%d)",
                         resp_status,
@@ -880,7 +920,12 @@ class SubsidyTracker:
         - Gracefully discards invalid payload in memory and returns None (triggering fresh baseline computation).
         """
         target_path = Path(cache_path) if cache_path else self.cache_fallback_path
-        if not target_path or not target_path.exists():
+        if not target_path:
+            return None
+        try:
+            if not target_path.exists() or not target_path.is_file():
+                return None
+        except OSError:
             return None
 
         if is_corrupted_or_quarantined_filename(target_path):
@@ -891,8 +936,15 @@ class SubsidyTracker:
 
         try:
             logger.info("Loading cached snapshot from %s", target_path)
-            with open(target_path, "r", encoding="utf-8-sig") as f:
-                cached_dict = json.load(f)
+            raw_bytes = target_path.read_bytes()
+            if not raw_bytes or not raw_bytes.strip():
+                raise ValueError(f"Cache file is empty (0 bytes): {target_path}")
+
+            raw_str = robust_decode(raw_bytes)
+            if raw_str.startswith("\ufeff"):
+                raw_str = raw_str.lstrip("\ufeff")
+
+            cached_dict = json.loads(raw_str)
 
             if not isinstance(cached_dict, dict):
                 raise ValueError(
@@ -985,12 +1037,17 @@ class SubsidyTracker:
 
         # Fallback to local cached file if available, otherwise built-in baseline
         payload = None
-        if self.cache_fallback_path and self.cache_fallback_path.exists():
-            payload = self.load_cached_payload(
-                cache_path=self.cache_fallback_path,
-                validate=should_validate,
-                quarantine=should_quarantine,
-            )
+        if self.cache_fallback_path:
+            try:
+                if self.cache_fallback_path.exists() and self.cache_fallback_path.is_file():
+                    payload = self.load_cached_payload(
+                        cache_path=self.cache_fallback_path,
+                        validate=should_validate,
+                        quarantine=should_quarantine,
+                    )
+            except OSError as err:
+                logger.warning("Cache fallback path inspection error: %s", err)
+                payload = None
 
         if payload is None:
             logger.info("Generating authoritative 2026 baseline dataset.")
@@ -1090,7 +1147,10 @@ class SubsidyTracker:
             unique_destinations: List[Path] = []
             seen_paths = set()
             for dst in destinations:
-                resolved_key = str(dst.resolve()) if dst.exists() else str(dst.absolute())
+                try:
+                    resolved_key = str(dst.resolve())
+                except (OSError, RuntimeError):
+                    resolved_key = str(dst.absolute())
                 if resolved_key not in seen_paths:
                     seen_paths.add(resolved_key)
                     unique_destinations.append(dst)
@@ -1124,7 +1184,10 @@ class SubsidyTracker:
         seen_paths = set()
         for dst in destination_paths:
             target = Path(dst)
-            resolved_key = str(target.resolve()) if target.exists() else str(target.absolute())
+            try:
+                resolved_key = str(target.resolve())
+            except (OSError, RuntimeError):
+                resolved_key = str(target.absolute())
             if resolved_key not in seen_paths:
                 seen_paths.add(resolved_key)
                 unique_destinations.append(target)

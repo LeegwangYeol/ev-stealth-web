@@ -36,6 +36,55 @@ const teslaJsonLd = {
       mainEntityOfPage: `${SITE_URL}/tesla`,
     },
     {
+      '@type': 'ItemList',
+      '@id': `${SITE_URL}/tesla#itemlist`,
+      name: '테슬라 모델별 연식 고질병 및 구매 가이드 리스트',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: '테슬라 모델 3 (2017~2020 초기형 PTC 히터 파괴 회피 및 2024 하이랜드 추천)',
+          url: `${SITE_URL}/tesla#heading-model3`,
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: '테슬라 모델 Y (2020~2022 초기형 옥토밸브 히트펌프 결함 및 2025 주니퍼 페이스리프트)',
+          url: `${SITE_URL}/tesla#heading-modely`,
+        },
+      ],
+    },
+    {
+      '@type': 'FAQPage',
+      '@id': `${SITE_URL}/tesla#faq`,
+      mainEntity: [
+        {
+          '@type': 'Question',
+          name: '테슬라 모델 3 2017~2020년식 초기형을 피해야 하는 이유는?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: '히트펌프가 없는 구형 저항식 PTC 히터로 인해 겨울철 전비가 40% 이상 급락하며, 프론트 상단 컨트롤 암 부싱 고무 찢어짐으로 인한 하체 삐걱거림 및 조향 유격 고질병이 빈번합니다.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: '테슬라 옥토밸브 히트펌프 결함 증상과 조치 여부는?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: '2021~2022년식 초기 히트펌프 모델에서 극저온 주행 시 3웨이/8웨이 냉각수 제어 밸브 고착으로 실내 난방이 먹통되는 리콜이 발생했습니다. 개선된 밸브 부품과 최신 펌웨어(OTA) 적용 여부를 확인해야 합니다.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: '테슬라 모델 3 하이랜드(Highland)의 핵심 변경점은?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: '2024년식 하이랜드는 전 좌석 360도 이중접합 차음 유리, 주파수 감응형 쇼크업소버 탑재로 승차감과 풍절음이 획기적으로 개선되었으며 통풍 시트와 후석 8인치 디스플레이가 적용되었습니다.',
+          },
+        },
+      ],
+    },
+    {
       '@type': 'BreadcrumbList',
       '@id': `${SITE_URL}/tesla#breadcrumb`,
       itemListElement: [
@@ -107,9 +156,115 @@ export default function TeslaPage() {
     <article className="space-y-8 py-6 sm:py-10 max-w-4xl mx-auto">
       <JsonLd data={teslaJsonLd} />
       <BrandComparisonNav currentBrand="tesla" pageTitle="테슬라 구매 가이드" />
-      <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold border-b pb-4 text-slate-900 tracking-tight">
-        테슬라 연식별 구매 가이드 (피해야 할 연식)
-      </h1>
+
+      <header className="border-b pb-4 space-y-2">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
+          테슬라 연식별 구매 가이드 (피해야 할 연식)
+        </h1>
+        <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
+          테슬라 모델 3 및 모델 Y의 초기형 PTC 히터 파손, 히트펌프(옥토밸브) 셧다운, 서스펜션 컨트롤 암 삐걱거림 결함 분석 및 중고차 구매 연식 가이드를 제공합니다.
+        </p>
+      </header>
+
+      {/* 테슬라 연식별 판정 요약 표 (WCAG AA Compliance: table headers, caption, overflow container) */}
+      <section aria-labelledby="heading-tesla-summary" className="space-y-3">
+        <h2 id="heading-tesla-summary" className="text-xl sm:text-2xl font-bold text-slate-900">
+          테슬라 주요 차종 연식별 판정 요약 표
+        </h2>
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <table className="w-full min-w-[640px] text-left border-collapse text-xs sm:text-sm" aria-label="테슬라 주요 모델별 주의 및 추천 연식 요약 표">
+            <caption className="sr-only">테슬라 모델 3 및 모델 Y 연식별 회피 연식, 주의 연식, 추천 연식, 주요 고질병 및 리콜 출처 요약 표</caption>
+            <thead className="bg-slate-900 text-slate-100 uppercase text-[11px] sm:text-xs tracking-wider">
+              <tr>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">차종/모델</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">회피 연식 (AVOID)</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">주의 연식 (CAUTION)</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">추천 연식 (BUY SAFE)</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">핵심 결함 및 리스크</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100 text-center">공식 리콜</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <th scope="row" className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  모델 3 (Model 3)
+                </th>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-900">
+                    2017~2020년식
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-900">
+                    2021~2023년식
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-900">
+                    2024년식 (하이랜드)
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  PTC 히터 단선, 서스펜션 컨트롤 암 침대 소음, 옥토밸브 동파
+                </td>
+                <td className="py-3 px-4 text-center whitespace-nowrap">
+                  <a
+                    href="https://www.nhtsa.gov/recalls?vin=5YJ3"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="미국 NHTSA 테슬라 모델 3 공식 리콜 내역 (새 창에서 열림)"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                  >
+                    <span>NHTSA</span>
+                    <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                  </a>
+                </td>
+              </tr>
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <th scope="row" className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  모델 Y (Model Y)
+                </th>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-900">
+                    2020~2021년식
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-900">
+                    2022~2023년식
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-900">
+                    2024~2025년식
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  1세대 옥토밸브 난방 셧다운, 초기형 하체 극악 승차감, RWD LFP 잔량 오차
+                </td>
+                <td className="py-3 px-4 text-center whitespace-nowrap">
+                  <a
+                    href="https://www.car.go.kr"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="국토교통부 자동차리콜센터 테슬라 모델 Y 리콜 정보 (새 창에서 열림)"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                  >
+                    <span>리콜 조회</span>
+                    <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                  </a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
       
       {/* Model 3 Guide */}
       <section className="space-y-4" aria-labelledby="heading-tesla-model3">

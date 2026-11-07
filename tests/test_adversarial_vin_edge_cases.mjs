@@ -161,7 +161,7 @@ for (const p of db.vin_prefixes) {
   assert(dec.decodedBrand === p.brand, `Brand for ${p.sample_full_vin} must be ${p.brand}`, { expected: p.brand, actual: dec.decodedBrand });
   assert(dec.decodedModel === p.model_name, `Model for ${p.sample_full_vin} must be ${p.model_name}`, { expected: p.model_name, actual: dec.decodedModel });
   assert(typeof dec.overallRiskGrade === 'string', 'Overall risk grade defined');
-  assert(dec.batteryProfile !== undefined || p.brand === '포르쉐', `Battery profile mapped for ${p.model_name}`);
+  assert(dec.batteryProfile !== undefined, `Battery profile mapped for ${p.model_name}`);
 }
 
 // C.1 Targeted verification for Tesla Model 3 (LRW3E7EK prefix) battery profile

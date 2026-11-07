@@ -1,11 +1,12 @@
 'use client';
 
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { RegionEntry, CategoryMetrics } from '@/types/subsidy';
+import type { RegionSortOption } from '@/lib/subsidyCalculations';
 import SubsidyBadge, { getStatusLabel } from './SubsidyBadge';
 
 export type CategoryType = 'passenger' | 'commercial' | 'bus';
-export type SortOption = 'DEPLETION_DESC' | 'DEPLETION_ASC' | 'REMAINING_ASC' | 'LOCAL_SUBSIDY_DESC' | 'NAME_ASC';
+export type SortOption = RegionSortOption;
 
 export interface SubsidyTableViewProps {
   regions: RegionEntry[];
@@ -23,9 +24,17 @@ function getSortAria(
 ): 'ascending' | 'descending' | 'none' {
   switch (col) {
     case 'NAME':
-      return sortOption === 'NAME_ASC' ? 'ascending' : 'none';
+      return sortOption === 'NAME_ASC'
+        ? 'ascending'
+        : sortOption === 'NAME_DESC'
+        ? 'descending'
+        : 'none';
     case 'REMAINING':
-      return sortOption === 'REMAINING_ASC' ? 'ascending' : 'none';
+      return sortOption === 'REMAINING_ASC'
+        ? 'ascending'
+        : sortOption === 'REMAINING_DESC'
+        ? 'descending'
+        : 'none';
     case 'DEPLETION':
       return sortOption === 'DEPLETION_DESC'
         ? 'descending'
@@ -33,7 +42,11 @@ function getSortAria(
         ? 'ascending'
         : 'none';
     case 'LOCAL_SUBSIDY':
-      return sortOption === 'LOCAL_SUBSIDY_DESC' ? 'descending' : 'none';
+      return sortOption === 'LOCAL_SUBSIDY_DESC'
+        ? 'descending'
+        : sortOption === 'LOCAL_SUBSIDY_ASC'
+        ? 'ascending'
+        : 'none';
     default:
       return 'none';
   }
@@ -65,22 +78,66 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
     max_local_subsidy_krw: 0,
     max_total_subsidy_krw: 0,
   };
-  const announced = Number.isFinite(cat.announced_units) ? Math.max(0, cat.announced_units) : 0;
-  const applied = Number.isFinite(cat.applied_units) ? Math.max(0, cat.applied_units) : 0;
-  const remaining = Number.isFinite(cat.remaining_units)
+  const announced = Number.isFinite(cat?.announced_units) ? Math.max(0, cat.announced_units) : 0;
+  const applied = Number.isFinite(cat?.applied_units) ? Math.max(0, cat.applied_units) : 0;
+  const remaining = Number.isFinite(cat?.remaining_units)
     ? Math.max(0, cat.remaining_units)
     : Math.max(0, announced - applied);
-  const depletionRate = Number.isFinite(cat.depletion_rate)
+  const depletionRate = Number.isFinite(cat?.depletion_rate)
     ? Math.max(0, cat.depletion_rate)
     : announced > 0
     ? (applied / announced) * 100
     : 0;
 
-  const munis = Array.isArray(region?.municipalities) ? region.municipalities : [];
+  const maxLocalSubsidy = Number.isFinite(cat?.max_local_subsidy_krw) ? Math.max(0, cat.max_local_subsidy_krw) : 0;
+  const maxTotalSubsidy = Number.isFinite(cat?.max_total_subsidy_krw) ? Math.max(0, cat.max_total_subsidy_krw) : 0;
+
+  const munis = useMemo(
+    () => (Array.isArray(region?.municipalities) ? region.municipalities : []),
+    [region?.municipalities]
+  );
   const hasMunis = munis.length > 0;
   const regionName = region?.name_ko || '해당 지역';
   const regionId = region?.region_id || '';
   const categoryLabel = selectedCategory === 'passenger' ? '전기승용' : selectedCategory === 'commercial' ? '전기화물' : '전기승합';
+  const isDepleted = (cat?.status || '').toUpperCase() === 'DEPLETED' || depletionRate >= 100;
+
+  // Memoized sub-municipalities list to prevent re-mapping
+  const renderedMunis = useMemo(() => {
+    return munis.map((muni) => {
+      const muniAnnounced = Number.isFinite(muni.announced_units) ? Math.max(0, muni.announced_units) : 0;
+      const muniApplied = Number.isFinite(muni.applied_units) ? Math.max(0, muni.applied_units) : 0;
+      const muniRemaining = Number.isFinite(muni.remaining_units)
+        ? Math.max(0, muni.remaining_units)
+        : Math.max(0, muniAnnounced - muniApplied);
+      const muniDepletion = Number.isFinite(muni.depletion_rate)
+        ? Math.max(0, muni.depletion_rate)
+        : muniAnnounced > 0
+        ? (muniApplied / muniAnnounced) * 100
+        : 0;
+      const muniLocalSubsidy = Number.isFinite(muni.local_subsidy_krw) ? Math.max(0, muni.local_subsidy_krw) : 0;
+
+      return (
+        <tr key={muni.muni_id || `${regionId}-${muni.name_ko}`} className="hover:bg-slate-900/50">
+          <th scope="row" className="p-2 font-medium text-slate-200">
+            {muni.name_ko}
+          </th>
+          <td className="p-2 text-right font-mono text-slate-300">
+            {((muniLocalSubsidy) / 10000).toLocaleString()}만 원
+          </td>
+          <td className="p-2 text-right font-mono font-bold text-emerald-400">
+            {muniRemaining.toLocaleString()}대
+          </td>
+          <td className="p-2 text-center font-mono text-amber-300 font-semibold">
+            {muniDepletion.toFixed(1)}%
+          </td>
+          <td className="p-2 text-center">
+            <SubsidyBadge status={muni.status || 'available'} />
+          </td>
+        </tr>
+      );
+    });
+  }, [munis, regionId]);
 
   return (
     <React.Fragment>
@@ -128,14 +185,16 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
               aria-valuemin={0}
               aria-valuemax={100}
               aria-label={`${regionName} ${categoryLabel} 소진율`}
-              aria-valuetext={`소진율 ${depletionRate.toFixed(1)}% (${getStatusLabel(cat.status || 'available')}), 잔여 ${remaining.toLocaleString()}대`}
-              className="w-24 bg-slate-900 rounded-full h-2 overflow-hidden flex border border-slate-500"
+              aria-valuetext={`소진율 ${depletionRate.toFixed(1)}% (${getStatusLabel(cat?.status || 'available')}), 잔여 ${remaining.toLocaleString()}대`}
+              className="w-24 bg-slate-900 rounded-full h-2 overflow-hidden flex border border-slate-600"
             >
               <div
                 style={{ width: `${Math.min(100, Math.max(0, depletionRate))}%` }}
                 aria-hidden="true"
                 className={`h-full ${
-                  depletionRate >= 95
+                  isDepleted
+                    ? 'bg-slate-500'
+                    : depletionRate >= 95
                     ? 'bg-rose-500'
                     : depletionRate >= 80
                     ? 'bg-orange-500'
@@ -150,15 +209,15 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
 
         {/* Subsidies */}
         <td className="p-3.5 text-right font-mono font-medium text-slate-200">
-          {((Number.isFinite(cat.max_local_subsidy_krw) ? Math.max(0, cat.max_local_subsidy_krw) : 0) / 10000).toLocaleString()}만 원
+          {((maxLocalSubsidy) / 10000).toLocaleString()}만 원
         </td>
         <td className="p-3.5 text-right font-mono font-bold text-amber-400">
-          {((Number.isFinite(cat.max_total_subsidy_krw) ? Math.max(0, cat.max_total_subsidy_krw) : 0) / 10000).toLocaleString()}만 원
+          {((maxTotalSubsidy) / 10000).toLocaleString()}만 원
         </td>
 
         {/* Alert Status */}
         <td className="p-3.5 text-center whitespace-nowrap">
-          <SubsidyBadge status={cat.status || 'available'} />
+          <SubsidyBadge status={cat?.status || 'available'} />
         </td>
 
         {/* Sub-Municipalities Collapsible Toggle */}
@@ -240,38 +299,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/80">
-                    {munis.map((muni) => {
-                      const muniAnnounced = Number.isFinite(muni.announced_units) ? Math.max(0, muni.announced_units) : 0;
-                      const muniApplied = Number.isFinite(muni.applied_units) ? Math.max(0, muni.applied_units) : 0;
-                      const muniRemaining = Number.isFinite(muni.remaining_units)
-                        ? Math.max(0, muni.remaining_units)
-                        : Math.max(0, muniAnnounced - muniApplied);
-                      const muniDepletion = Number.isFinite(muni.depletion_rate)
-                        ? Math.max(0, muni.depletion_rate)
-                        : muniAnnounced > 0
-                        ? (muniApplied / muniAnnounced) * 100
-                        : 0;
-
-                      return (
-                        <tr key={muni.muni_id || `${regionId}-${muni.name_ko}`} className="hover:bg-slate-900/50">
-                          <th scope="row" className="p-2 font-medium text-slate-200">
-                            {muni.name_ko}
-                          </th>
-                          <td className="p-2 text-right font-mono text-slate-300">
-                            {((Number.isFinite(muni.local_subsidy_krw) ? Math.max(0, muni.local_subsidy_krw) : 0) / 10000).toLocaleString()}만 원
-                          </td>
-                          <td className="p-2 text-right font-mono font-bold text-emerald-400">
-                            {muniRemaining.toLocaleString()}대
-                          </td>
-                          <td className="p-2 text-center font-mono text-amber-300 font-semibold">
-                            {muniDepletion.toFixed(1)}%
-                          </td>
-                          <td className="p-2 text-center">
-                            <SubsidyBadge status={muni.status || 'available'} />
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {renderedMunis}
                   </tbody>
                 </table>
               </div>
@@ -293,24 +321,34 @@ export const SubsidyTableView = memo(function SubsidyTableView({
   onSelectForCalc,
 }: SubsidyTableViewProps) {
   const handleSortName = useCallback(() => {
-    onSortChange(sortOption === 'NAME_ASC' ? 'DEPLETION_DESC' : 'NAME_ASC');
+    onSortChange(sortOption === 'NAME_ASC' ? 'NAME_DESC' : 'NAME_ASC');
   }, [sortOption, onSortChange]);
 
   const handleSortRemaining = useCallback(() => {
-    onSortChange(sortOption === 'REMAINING_ASC' ? 'DEPLETION_DESC' : 'REMAINING_ASC');
+    onSortChange(sortOption === 'REMAINING_ASC' ? 'REMAINING_DESC' : 'REMAINING_ASC');
   }, [sortOption, onSortChange]);
 
   const handleToggleDepletionSort = useCallback(() => {
-    if (sortOption === 'DEPLETION_DESC') {
-      onSortChange('DEPLETION_ASC');
-    } else {
-      onSortChange('DEPLETION_DESC');
-    }
+    onSortChange(sortOption === 'DEPLETION_DESC' ? 'DEPLETION_ASC' : 'DEPLETION_DESC');
   }, [sortOption, onSortChange]);
 
   const handleSortLocalSubsidy = useCallback(() => {
-    onSortChange(sortOption === 'LOCAL_SUBSIDY_DESC' ? 'DEPLETION_DESC' : 'LOCAL_SUBSIDY_DESC');
+    onSortChange(sortOption === 'LOCAL_SUBSIDY_DESC' ? 'LOCAL_SUBSIDY_ASC' : 'LOCAL_SUBSIDY_DESC');
   }, [sortOption, onSortChange]);
+
+  // Performance & Stability: Memoization of filtered/sorted rows to prevent unnecessary DOM mutations
+  const renderedRows = useMemo(() => {
+    return (regions || []).map((region) => (
+      <SubsidyTableRow
+        key={region.region_id}
+        region={region}
+        selectedCategory={selectedCategory}
+        isExpanded={Boolean(expandedRegions[region.region_id])}
+        onToggleExpand={onToggleExpand}
+        onSelectForCalc={onSelectForCalc}
+      />
+    ));
+  }, [regions, selectedCategory, expandedRegions, onToggleExpand, onSelectForCalc]);
 
   return (
     <div
@@ -336,12 +374,12 @@ export const SubsidyTableView = memo(function SubsidyTableView({
               <button
                 type="button"
                 onClick={handleSortName}
-                aria-label={`지역명 ${sortOption === 'NAME_ASC' ? '내림차순 정렬 전환' : '오름차순 정렬 전환'}`}
+                aria-label={`지역명 ${sortOption === 'NAME_ASC' ? '내림차순(ㅎ~ㄱ)으로 정렬' : '오름차순(ㄱ~ㅎ)으로 정렬'}`}
                 className="min-h-[44px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5"
               >
                 <span>지역명</span>
                 <span aria-hidden="true" className="text-slate-300 text-xs">
-                  {sortOption === 'NAME_ASC' ? '▲' : '↕'}
+                  {sortOption === 'NAME_ASC' ? '▲' : sortOption === 'NAME_DESC' ? '▼' : '↕'}
                 </span>
               </button>
             </th>
@@ -359,12 +397,12 @@ export const SubsidyTableView = memo(function SubsidyTableView({
               <button
                 type="button"
                 onClick={handleSortRemaining}
-                aria-label={`잔여 대수 ${sortOption === 'REMAINING_ASC' ? '내림차순 정렬 전환' : '오름차순 정렬 전환'}`}
+                aria-label={`잔여 대수 ${sortOption === 'REMAINING_ASC' ? '많은 순(내림차순)으로 정렬' : '적은 순(오름차순)으로 정렬'}`}
                 className="min-h-[44px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5 ml-auto"
               >
                 <span>잔여 대수</span>
                 <span aria-hidden="true" className="text-slate-300 text-xs">
-                  {sortOption === 'REMAINING_ASC' ? '▲' : '↕'}
+                  {sortOption === 'REMAINING_ASC' ? '▲' : sortOption === 'REMAINING_DESC' ? '▼' : '↕'}
                 </span>
               </button>
             </th>
@@ -376,7 +414,7 @@ export const SubsidyTableView = memo(function SubsidyTableView({
               <button
                 type="button"
                 onClick={handleToggleDepletionSort}
-                aria-label={`소진율 ${sortOption === 'DEPLETION_DESC' ? '오름차순 정렬 전환' : '내림차순 정렬 전환'}`}
+                aria-label={`소진율 ${sortOption === 'DEPLETION_DESC' ? '낮은 순(오름차순)으로 정렬' : '높은 순(내림차순)으로 정렬'}`}
                 className="min-h-[44px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5"
               >
                 <span>소진율</span>
@@ -393,12 +431,12 @@ export const SubsidyTableView = memo(function SubsidyTableView({
               <button
                 type="button"
                 onClick={handleSortLocalSubsidy}
-                aria-label={`지방비 지원금 ${sortOption === 'LOCAL_SUBSIDY_DESC' ? '기본 정렬로 전환' : '내림차순 정렬 전환'}`}
+                aria-label={`지방비 지원금 ${sortOption === 'LOCAL_SUBSIDY_DESC' ? '낮은 순(오름차순)으로 정렬' : '높은 순(내림차순)으로 정렬'}`}
                 className="min-h-[44px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5 ml-auto"
               >
                 <span>지방비 최대</span>
                 <span aria-hidden="true" className="text-slate-300 text-xs">
-                  {sortOption === 'LOCAL_SUBSIDY_DESC' ? '▼' : '↕'}
+                  {sortOption === 'LOCAL_SUBSIDY_DESC' ? '▼' : sortOption === 'LOCAL_SUBSIDY_ASC' ? '▲' : '↕'}
                 </span>
               </button>
             </th>
@@ -417,16 +455,7 @@ export const SubsidyTableView = memo(function SubsidyTableView({
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800">
-          {(regions || []).map((region) => (
-            <SubsidyTableRow
-              key={region.region_id}
-              region={region}
-              selectedCategory={selectedCategory}
-              isExpanded={!!expandedRegions[region.region_id]}
-              onToggleExpand={onToggleExpand}
-              onSelectForCalc={onSelectForCalc}
-            />
-          ))}
+          {renderedRows}
         </tbody>
       </table>
     </div>

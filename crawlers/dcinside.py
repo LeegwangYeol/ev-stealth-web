@@ -128,14 +128,23 @@ def is_deleted_or_restricted(html_content: Optional[str]) -> Tuple[bool, str]:
         return True, "empty_content"
 
     # 1. Cloudflare / Bot challenge / WAF blocking
-    if "<title>Just a moment...</title>" in html_content or "cf-browser-verification" in html_content or "__cf_chl_" in html_content:
+    if (
+        "<title>Just a moment...</title>" in html_content
+        or "cf-browser-verification" in html_content
+        or "__cf_chl_" in html_content
+        or "challenges.cloudflare.com" in html_content
+    ):
         return True, "cloudflare_challenge"
-    if re.search(r"비정상적인\s*접근입니다", html_content):
+    if re.search(r"(?:비정상적인|잘못된)\s*(?:접근|요청)입니다", html_content, re.IGNORECASE):
         return True, "abnormal_access_blocked"
-    if re.search(r"접근이\s*차단되었습니다", html_content):
+    if re.search(r"(?:접근이\s*차단되었습니다|(?:차단된|제한된)\s*(?:아이피|IP)|매니저가\s*차단)", html_content, re.IGNORECASE):
         return True, "ip_blocked"
-    if re.search(r"자동\s*방지\s*문자", html_content) or re.search(r"보안\s*문자를\s*입력", html_content):
+    if re.search(r"(?:자동\s*방지\s*문자|보안\s*문자를\s*입력|reCAPTCHA|hCaptcha)", html_content, re.IGNORECASE):
         return True, "captcha_challenge"
+    if re.search(r"<title>\s*(?:403\s+Forbidden|429\s+Too\s+Many\s+Requests|Access\s+Denied)\s*</title>", html_content, re.IGNORECASE):
+        return True, "access_denied"
+    if re.search(r"(?:서비스\s*점검\s*중|시스템\s*점검\s*중)", html_content, re.IGNORECASE):
+        return True, "service_maintenance"
 
     # 2. Check if page has actual substantial article body:
     # If a page contains a large write_div (> 50 chars), only alert(...) can indicate deletion
@@ -177,6 +186,9 @@ def is_deleted_or_restricted(html_content: Optional[str]) -> Tuple[bool, str]:
         r"접근\s*권한이\s*없습니다",
         r"성인\s*인증이\s*필요한\s*게시물입니다",
         r"해당\s*갤러리는\s*접근이\s*제한되었습니다",
+        r"폐쇄된\s*갤러리입니다",
+        r"존재하지\s*않는\s*갤러리입니다",
+        r"글쓰기(?:와\s*댓글)?이\s*제한된",
     ]
     for pat in restricted_patterns:
         if has_large_body and not pat.startswith("alert"):
@@ -985,7 +997,12 @@ class DCInsideCrawler(BaseCrawler):
             effective_gallery_id = "car_new1"
 
         if status != 200 or not text:
-            # Try fallback to mobile view URL
+            # If rate-limited (HTTP 429), gracefully degrade without hammering mobile endpoint
+            if status == 429:
+                logger.warning(f"Rate-limited (HTTP 429) fetching DCInside post: {eff_url}. Degrading gracefully.")
+                return None
+
+            # Try fallback to mobile view URL on desktop 404/empty or layout anomalies
             if effective_post_id:
                 # Canonical mobile route: m.dcinside.com/board/{gallery_id}/{post_id}
                 mobile_url = f"{DC_MOBILE_BASE_URL}/board/{effective_gallery_id}/{effective_post_id}"
@@ -1000,15 +1017,41 @@ class DCInsideCrawler(BaseCrawler):
                     )
                     if m_resp and isinstance(m_resp, (tuple, list)) and len(m_resp) >= 2:
                         m_status, m_text = m_resp[0], m_resp[1]
+                        if m_status == 429:
+                            logger.warning(f"Rate-limited (HTTP 429) on DCInside mobile fallback ({mobile_url}).")
+                            return None
                         if m_status == 200 and m_text:
+                            m_blocked, m_reason = is_deleted_or_restricted(m_text)
+                            if m_blocked:
+                                logger.warning(f"DCInside mobile post {mobile_url} is unavailable ({m_reason})")
+                                return None
                             try:
-                                return self.parse_post_detail(
+                                m_detail = self.parse_post_detail(
                                     m_text,
                                     eff_url,
                                     gallery_id=effective_gallery_id,
                                     post_id=effective_post_id,
                                     **kwargs,
                                 )
+                                if not isinstance(m_detail, dict):
+                                    return None
+                                if (
+                                    m_detail.get("is_deleted")
+                                    or m_detail.get("is_restricted")
+                                    or m_detail.get("status")
+                                    in (
+                                        "deleted_post",
+                                        "restricted_post",
+                                        "cloudflare_challenge",
+                                        "abnormal_access_blocked",
+                                        "ip_blocked",
+                                        "captcha_challenge",
+                                        "access_denied",
+                                        "service_maintenance",
+                                    )
+                                ):
+                                    return None
+                                return m_detail
                             except Exception as e:
                                 logger.warning(f"Error parsing DCInside mobile post detail ({eff_url}) on corrupt HTML: {e}")
                                 return None
@@ -1034,7 +1077,21 @@ class DCInsideCrawler(BaseCrawler):
             )
             if not isinstance(detail, dict):
                 return None
-            if detail.get("is_deleted") or detail.get("is_restricted"):
+            if (
+                detail.get("is_deleted")
+                or detail.get("is_restricted")
+                or detail.get("status")
+                in (
+                    "deleted_post",
+                    "restricted_post",
+                    "cloudflare_challenge",
+                    "abnormal_access_blocked",
+                    "ip_blocked",
+                    "captcha_challenge",
+                    "access_denied",
+                    "service_maintenance",
+                )
+            ):
                 return None
             return detail
         except Exception as e:
@@ -1078,6 +1135,12 @@ class DCInsideCrawler(BaseCrawler):
                 logger.warning(f"Failed to fetch list for DC [{gallery_id}] page {page} (status: {status})")
                 break
 
+            # Check if list page itself was blocked or restricted
+            is_blocked, block_reason = is_deleted_or_restricted(text)
+            if is_blocked:
+                logger.warning(f"DCInside list page unavailable ({block_reason}) on page {page}")
+                break
+
             items = self.parse_gallery_list(text, gallery_id)
             if not items:
                 logger.info(f"No more items in DCInside [{gallery_id}] page {page}")
@@ -1085,6 +1148,7 @@ class DCInsideCrawler(BaseCrawler):
 
             consecutive_failures = 0
             MAX_CONSECUTIVE_FAILURES = 5
+            halt_crawl = False
 
             for item in items:
                 pid = item.get("post_id", "")
@@ -1104,9 +1168,13 @@ class DCInsideCrawler(BaseCrawler):
                     if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
                         logger.warning(
                             f"Encountered {consecutive_failures} consecutive fetch failures on DC [{gallery_id}]. "
-                            f"Halting page loop to prevent rate-limit bans."
+                            f"Halting crawl to prevent rate-limit bans."
                         )
+                        halt_crawl = True
                         break
+
+            if halt_crawl:
+                break
 
         return results
 
@@ -1147,6 +1215,12 @@ class DCInsideCrawler(BaseCrawler):
                 logger.warning(f"Search request failed for DC [{gallery_id}] keyword '{keyword}' page {page} (status: {status})")
                 break
 
+            # Check if search page itself was blocked or restricted
+            is_blocked, block_reason = is_deleted_or_restricted(text)
+            if is_blocked:
+                logger.warning(f"DCInside search page unavailable ({block_reason}) on page {page}")
+                break
+
             items = self.parse_gallery_list(text, gallery_id)
             if not items:
                 logger.info(f"No items found for DC [{gallery_id}] keyword '{keyword}' page {page}")
@@ -1154,6 +1228,7 @@ class DCInsideCrawler(BaseCrawler):
 
             consecutive_failures = 0
             MAX_CONSECUTIVE_FAILURES = 5
+            halt_crawl = False
 
             for item in items:
                 pid = item.get("post_id", "")
@@ -1173,9 +1248,13 @@ class DCInsideCrawler(BaseCrawler):
                     if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
                         logger.warning(
                             f"Encountered {consecutive_failures} consecutive fetch failures on DC [{gallery_id}]. "
-                            f"Halting page loop to prevent rate-limit bans."
+                            f"Halting search crawl loop to prevent rate-limit bans."
                         )
+                        halt_crawl = True
                         break
+
+            if halt_crawl:
+                break
 
         return results
 

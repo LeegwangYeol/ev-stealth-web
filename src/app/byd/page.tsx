@@ -36,6 +36,61 @@ const bydJsonLd = {
       mainEntityOfPage: `${SITE_URL}/byd`,
     },
     {
+      '@type': 'ItemList',
+      '@id': `${SITE_URL}/byd#itemlist`,
+      name: 'BYD 전기차 주요 모델별 연식 결함 가이드 리스트',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: 'BYD 돌핀 (2021~2023 에어컨 백색가루 및 조향기판 결함 회피, 2024~2025 안심 추천)',
+          url: `${SITE_URL}/byd#heading-byd-dolphin`,
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: 'BYD 시라이언 07 (2024년식 12-in-1 모터 통짜 수리비 및 CTB 하부 찍힘 전손 위험)',
+          url: `${SITE_URL}/byd#heading-byd-sealion`,
+        },
+        {
+          '@type': 'ListItem',
+          position: 3,
+          name: 'BYD 씰 / 아토 3 (블레이드 LFP 배터리 특성 및 하체 부식 방지)',
+          url: `${SITE_URL}/byd`,
+        },
+      ],
+    },
+    {
+      '@type': 'FAQPage',
+      '@id': `${SITE_URL}/byd#faq`,
+      mainEntity: [
+        {
+          '@type': 'Question',
+          name: 'BYD 돌핀의 에어컨 백색 가루 결함의 정체와 해결 연식은?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: '에어컨 에바포레이터 코팅 불량으로 인체 호흡기에 유해한 수산화알루미늄(Al(OH)3) 분진이 분출된 현상으로, 2024년식 이후 생산분부터 개선된 표면 처리 코팅이 적용되어 해결되었습니다.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'BYD 시라이언 07의 CTB(Cell-to-Body) 배터리 구조상 주의할 점은?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: '배터리 팩이 차체 바닥 구조물과 완전 일체화되어 있어 과속방지턱이나 비포장도로에서 하부 긁힘·찌그러짐 발생 시 부분 수리가 불가하며 배터리 팩 전체(약 1,400만 원) 교체 판정이 나올 수 있습니다.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'BYD 블레이드 LFP 배터리의 장점과 겨울철 단점은?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: '관통 테스트에서도 발화하지 않는 뛰어난 열적 안정성과 약 900만 원대의 저렴한 교체비가 장점이나, 영하 5도 이하 혹한기에서는 화학적 특성상 급속 충전 속도가 크게 저하될 수 있습니다.',
+          },
+        },
+      ],
+    },
+    {
       '@type': 'BreadcrumbList',
       '@id': `${SITE_URL}/byd#breadcrumb`,
       itemListElement: [
@@ -107,9 +162,170 @@ export default function BydPage() {
     <article className="space-y-8 py-6 sm:py-10 max-w-4xl mx-auto">
       <JsonLd data={bydJsonLd} />
       <BrandComparisonNav currentBrand="byd" pageTitle="BYD 구매 가이드" />
-      <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold border-b pb-4 text-slate-900 tracking-tight">
-        BYD 연식별 구매 가이드 (피해야 할 연식)
-      </h1>
+
+      <header className="border-b pb-4 space-y-2">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
+          BYD 연식별 구매 가이드 (피해야 할 연식)
+        </h1>
+        <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
+          중국 1위 전기차 제조사 BYD의 돌핀, 시라이언 07, 씰, 아토 3 모델별 고질병(에어컨 백색가루, CTB 일체형 배터리 파손 수리비, 하체 부식 등)과 추천 연식을 완벽 분석했습니다.
+        </p>
+      </header>
+
+      {/* BYD 연식별 판정 요약 표 (WCAG AA Compliance: table headers, caption, overflow container) */}
+      <section aria-labelledby="heading-byd-summary" className="space-y-3">
+        <h2 id="heading-byd-summary" className="text-xl sm:text-2xl font-bold text-slate-900">
+          BYD 주요 차종 연식별 판정 요약 표
+        </h2>
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <table className="w-full min-w-[640px] text-left border-collapse text-xs sm:text-sm" aria-label="BYD 주요 모델별 주의 및 추천 연식 요약 표">
+            <caption className="sr-only">BYD 전기차 모델별 주의 연식, 추천 연식, 주요 결함 및 공식 리콜 출처 비교 요약 표</caption>
+            <thead className="bg-slate-900 text-slate-100 uppercase text-[11px] sm:text-xs tracking-wider">
+              <tr>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">차종/모델</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">주의 연식 (CAUTION)</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">추천 연식 (BUY SAFE)</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">핵심 결함 및 리스크</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100 text-center">공식 출처</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <th scope="row" className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  돌핀 (Dolphin)
+                </th>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-900">
+                    2021~2023년식
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-900">
+                    2024~2025년식
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  에어컨 백색가루(Al(OH)3) 실내 분출 및 조향장치(CEPS) 리콜
+                </td>
+                <td className="py-3 px-4 text-center whitespace-nowrap">
+                  <a
+                    href="https://www.car.go.kr"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="돌핀 국토교통부 자동차리콜센터 공식 정보 (새 창에서 열림)"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                  >
+                    <span>리콜 조회</span>
+                    <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                  </a>
+                </td>
+              </tr>
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <th scope="row" className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  시라이언 07 (Sealion 07)
+                </th>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-900">
+                    2024년식
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-900">
+                    2025년식
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  12-in-1 모터 통교체 수리비 및 CTB 하부 긁힘 배터리 파손 리스크
+                </td>
+                <td className="py-3 px-4 text-center whitespace-nowrap">
+                  <a
+                    href="https://www.car.go.kr"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="시라이언 07 국토교통부 자동차리콜센터 공식 정보 (새 창에서 열림)"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                  >
+                    <span>리콜 조회</span>
+                    <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                  </a>
+                </td>
+              </tr>
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <th scope="row" className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  씰 (Seal)
+                </th>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-900">
+                    2022~2023년식
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-900">
+                    2024년식
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  겨울철 LFP 배터리 셧다운(SoC 급락) 및 하체 볼트 조기 녹 발생
+                </td>
+                <td className="py-3 px-4 text-center whitespace-nowrap">
+                  <a
+                    href="https://www.car.go.kr"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="씰 국토교통부 자동차리콜센터 공식 정보 (새 창에서 열림)"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                  >
+                    <span>리콜 조회</span>
+                    <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                  </a>
+                </td>
+              </tr>
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <th scope="row" className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  아토 3 (Atto 3)
+                </th>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-900">
+                    2022~2024년식
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-900">
+                    2025년식
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  에어컨 에바포레이터 곰팡이 악취 및 지나치게 무른 앞 댐퍼 세팅
+                </td>
+                <td className="py-3 px-4 text-center whitespace-nowrap">
+                  <a
+                    href="https://www.car.go.kr"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="아토 3 국토교통부 자동차리콜센터 공식 정보 (새 창에서 열림)"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                  >
+                    <span>리콜 조회</span>
+                    <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                  </a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
       
       <section className="space-y-4" aria-labelledby="heading-byd-dolphin">
         <h2 id="heading-byd-dolphin" className="text-2xl sm:text-3xl font-bold text-slate-800">

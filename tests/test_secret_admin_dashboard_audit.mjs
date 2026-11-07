@@ -183,3 +183,46 @@ test('AdminDashboardClient logic: parseSafeDate and getPaginationItems functiona
   assert.deepStrictEqual(getPaginationItems(9, 10), [1, '...', 6, 7, 8, 9, 10]);
   assert.deepStrictEqual(getPaginationItems(5, 10), [1, '...', 4, 5, 6, '...', 10]);
 });
+
+// 6. WCAG AA Accessibility and Modal/Filter/Search Field Audit
+test('AdminDashboardClient.tsx accessibility audit: WCAG AA compliant table, modal, filter, search name', () => {
+  // Search Field Accessible Name & Refocusing
+  assert.ok(rawDashboardClient.includes('aria-label="전기차 결함 제보 및 은어 검색"'), 'Search input must have explicit accessible name');
+  assert.ok(rawDashboardClient.includes('searchInputRef.current?.focus()'), 'Search clear and reset handlers must return focus to search input');
+
+  // Filter Group Landmarks
+  assert.ok(rawDashboardClient.includes('aria-label="출처 플랫폼 필터"'), 'Source filters must be enclosed in accessible group');
+  assert.ok(rawDashboardClient.includes('aria-label="결함 제보 정렬 기준"'), 'Sort options must be enclosed in accessible group');
+  assert.ok(rawDashboardClient.includes('aria-label="결함 카테고리 탭"'), 'Category tablist must define accessible label');
+
+  // Modal Dialog Accessibility
+  assert.ok(rawDashboardClient.includes('aria-modal="true"'), 'Modal must declare aria-modal="true"');
+  assert.ok(rawDashboardClient.includes('handleWindowKeyDown'), 'Modal must have window-level Escape listener');
+  assert.ok(rawDashboardClient.includes('triggerButtonRef.current?.focus()'), 'Modal close must restore focus to opening button');
+  assert.ok(rawDashboardClient.includes('aria-label="결함 상세 대화상자 닫기"'), 'Modal close button must have clear accessible name');
+
+  // Table Accessibility & View Mode
+  assert.ok(rawDashboardClient.includes('aria-label="수집된 전기차 결함 제보 데이터 요약 표"'), 'Table must define accessible name');
+  assert.ok(rawDashboardClient.includes('aria-label="목록 표시 형식 선택"'), 'View mode toggle must define accessible group label');
+  assert.ok(rawDashboardClient.includes('게시글 원문 보기 (새 창에서 열림)'), 'Table link labels must specify context and open-in-new-window warning');
+
+  // Performance: Precomputed tokenization
+  assert.ok(rawDashboardClient.includes('queryTokens = rawQuery'), 'Must precompute query tokens once outside the loop');
+});
+
+// 7. Defensive Data, Safe JSON Parsing, and Empty State Audit
+test('getDailyReports.ts and page.tsx: Safe JSON parsing, empty reports handling', async () => {
+  const pageTsxPath = fs.existsSync(path.resolve(__dirname, '../src/app/secret-admin-reports/page.tsx'))
+    ? path.resolve(__dirname, '../src/app/secret-admin-reports/page.tsx')
+    : path.resolve(__dirname, '../ev-stealth-web/src/app/secret-admin-reports/page.tsx');
+  const rawPageTsx = fs.readFileSync(pageTsxPath, 'utf-8');
+
+  // page.tsx has defensive fallback handling
+  assert.ok(rawPageTsx.includes('getFallbackReportData'), 'page.tsx must import and use getFallbackReportData');
+  assert.ok(rawPageTsx.includes('safeData = data || getFallbackReportData()'), 'page.tsx must safely fallback if data is missing');
+
+  // Safe JSON parsing support in getDailyReports.ts
+  assert.ok(rawDailyReports.includes('safeJsonParse'), 'getDailyReports.ts must import and use safeJsonParse');
+  assert.ok(rawDailyReports.includes('parsedInput'), 'getDailyReports.ts must handle string inputs safely');
+});
+

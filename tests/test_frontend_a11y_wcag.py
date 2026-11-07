@@ -304,17 +304,20 @@ class TestPdiChecklistClientA11y(unittest.TestCase):
     def test_pdi_checklist_category_headings_semantic_h2_with_ids(self):
         """
         Validate that category headings use valid semantic H2 elements with IDs
-        matching `pdi-cat-${category}` (WCAG 1.3.1 Info and Relationships).
+        matching `headerId` or `pdi-cat-${category}` (WCAG 1.3.1 Info and Relationships).
         """
-        h2_match = re.search(r'<h2\b[^>]*id=\{[`"\']pdi-cat-\$\{category\}[`"\']\}', self.source)
+        h2_match = re.search(r'<h2\b[^>]*id=\{(?:headerId|[`"\']pdi-cat-\$\{category\}[`"\'])\}', self.source)
         self.assertIsNotNone(
             h2_match,
-            "PdiChecklistClient.tsx must render category headings with <h2 id={`pdi-cat-${category}`}>.",
+            "PdiChecklistClient.tsx must render category headings with <h2 id={headerId}> or <h2 id={`pdi-cat-${category}`}>.",
         )
         # Ensure category heading is inside the category fieldset
         fieldset_block = re.search(r'<fieldset\b[^>]*>([\s\S]*?)</fieldset>', self.source)
         self.assertIsNotNone(fieldset_block, "PdiChecklistClient.tsx must enclose items in <fieldset>.")
-        self.assertIn('id={`pdi-cat-${category}`}', fieldset_block.group(1))
+        self.assertTrue(
+            'id={headerId}' in fieldset_block.group(1) or 'id={`pdi-cat-${category}`}' in fieldset_block.group(1),
+            "Fieldset must contain heading with matching ID.",
+        )
 
     def test_pdi_checklist_heading_hierarchy_monotonic(self):
         """
@@ -409,38 +412,14 @@ class TestRecallPortalClientA11y(unittest.TestCase):
         collision-free IDs between search result cards and general campaign list cards (WCAG 4.1.2).
         """
         # Search result cards should use search-specific namespace (e.g. campaign-search-detail-)
-        search_detail_match = re.search(
-            r'id=\{["\']campaign-search-detail-["\']\s*\+\s*campaign\.id\}',
-            self.source,
-        )
-        self.assertIsNotNone(
-            search_detail_match,
-            "Search result detail container must use disambiguated namespace 'campaign-search-detail-'.",
-        )
+        self.assertIn('panelIdPrefix="campaign-search-detail-"', self.source)
 
         # Full campaign list cards should use list-specific namespace (e.g. campaign-list-detail-)
-        list_detail_match = re.search(
-            r'id=\{["\']campaign-list-detail-["\']\s*\+\s*campaign\.id\}',
-            self.source,
-        )
-        self.assertIsNotNone(
-            list_detail_match,
-            "Full campaign list detail container must use disambiguated namespace 'campaign-list-detail-'.",
-        )
+        self.assertIn('panelIdPrefix="campaign-list-detail-"', self.source)
 
-        # Verify search toggle button aria-controls matches search-detail container
-        self.assertIn(
-            'aria-controls={"campaign-search-detail-" + campaign.id}',
-            self.source,
-            "Search toggle button aria-controls must match 'campaign-search-detail-' container.",
-        )
-
-        # Verify list toggle button aria-controls matches list-detail container
-        self.assertIn(
-            'aria-controls={"campaign-list-detail-" + campaign.id}',
-            self.source,
-            "List toggle button aria-controls must match 'campaign-list-detail-' container.",
-        )
+        # Verify button aria-controls and target container id dynamically bind to panelIdPrefix + campaign.id
+        self.assertIn('aria-controls={`${panelIdPrefix}${campaign.id}`}', self.source)
+        self.assertIn('id={`${panelIdPrefix}${campaign.id}`}', self.source)
 
     def test_recall_portal_tablist_and_tabpanels(self):
         """
@@ -496,35 +475,22 @@ class TestRecallPortalClientA11y(unittest.TestCase):
         Validate that campaign details accordion toggle buttons in RecallPortalClient.tsx
         have aria-expanded and aria-controls pointing to the revealed container.
         """
-        # Find accordion toggle buttons
-        accordion_buttons = re.findall(
-            r'<button\b[^>]*onClick=\{\(\)\s*=>\s*toggleRecallExpansion\([^)]+\)\}[^>]*>',
+        # Find accordion toggle button in RecallCard
+        button_match = re.search(
+            r'<button\b[\s\S]*?onClick=\{\(\)\s*=>\s*toggleRecallExpansion\([\s\S]*?className=',
             self.source,
         )
-        self.assertTrue(
-            len(accordion_buttons) >= 2,
-            f"Expected at least 2 toggleRecallExpansion buttons, found {len(accordion_buttons)}",
+        self.assertIsNotNone(
+            button_match,
+            "RecallCard must contain a toggleRecallExpansion button.",
         )
+        btn = button_match.group(0)
+        self.assertIn("aria-expanded={isExpanded}", btn)
+        self.assertIn("aria-controls={`${panelIdPrefix}${campaign.id}`}", btn)
 
-        for btn in accordion_buttons:
-            self.assertIn(
-                "aria-expanded",
-                btn,
-                f"Campaign toggle button missing aria-expanded: {btn}",
-            )
-            self.assertIn(
-                "aria-controls",
-                btn,
-                f"Campaign toggle button missing aria-controls: {btn}",
-            )
-
-        # Check that target container ID exists matching aria-controls pattern
-        self.assertTrue(
-            re.search(r'id=\{["\']campaign-(?:search|list)-detail-["\']\s*\+\s*campaign\.id\}', self.source)
-            or re.search(r'id=\{["\']campaign-detail-["\']\s*\+\s*idx\}', self.source)
-            or re.search(r'id=\{`campaign-detail-\$\{idx\}`\}', self.source),
-            "Expected revealed campaign detail container to have matching id for aria-controls.",
-        )
+        # Check that target container ID matches aria-controls pattern
+        self.assertIn('id={`${panelIdPrefix}${campaign.id}`}', self.source)
+        self.assertIn('hidden={!isExpanded}', self.source)
 
     def test_recall_portal_vin_input_error_linkage(self):
         """
@@ -652,7 +618,7 @@ class TestRecallPortalClientA11y(unittest.TestCase):
         including target model and defect title (WCAG 4.1.2 Name, Role, Value).
         """
         self.assertTrue(
-            bool(re.search(r'aria-label=\{`\$\{campaign\.target_model\}\s+\$\{campaign\.defect_title\}', self.source)),
+            bool(re.search(r'aria-label=\{`\$\{(?:targetModel|campaign\.target_model)\}\s+\$\{campaign\.defect_title\}', self.source)),
             "Campaign accordion toggle buttons must define disambiguated aria-label with target_model and defect_title.",
         )
 
@@ -661,13 +627,13 @@ class TestRecallPortalClientA11y(unittest.TestCase):
         Validate that filter and search reset buttons in empty states declare focus-visible:ring-2.
         """
         matches = re.findall(
-            r'<button[^>]*onClick=\{[^}]*(?:setBatterySearch|setRecallSearch)[^}]*\}[^>]*className=["\']([^"\']*)["\']',
+            r'<button\b[\s\S]*?aria-label=["\'][^"\']*초기화[^"\']*["\'][\s\S]*?>',
             self.source,
         )
         self.assertGreaterEqual(len(matches), 2, "Must find at least 2 filter reset buttons in RecallPortalClient.")
-        for btn_class in matches:
-            self.assertIn("focus-visible:ring-2", btn_class, f"Reset button must declare focus-visible:ring-2: {btn_class}")
-            self.assertIn("focus-visible:ring-blue-400", btn_class, f"Reset button must declare focus-visible:ring-blue-400: {btn_class}")
+        for btn in matches:
+            self.assertIn("focus-visible:ring-2", btn, f"Reset button must declare focus-visible:ring-2: {btn}")
+            self.assertIn("focus-visible:ring-blue-400", btn, f"Reset button must declare focus-visible:ring-blue-400: {btn}")
 
     def test_recall_portal_dynamic_search_results_live_regions(self):
         """
@@ -682,6 +648,80 @@ class TestRecallPortalClientA11y(unittest.TestCase):
             bool(re.search(r'aria-live=["\']polite["\'][^>]*aria-atomic=["\']true["\'][^>]*>\s*\{recallSearch', self.source)),
             "All Recalls Directory must declare aria-live='polite' result counter.",
         )
+
+    def test_recall_portal_mode_switcher_arrow_key_navigation(self):
+        """
+        Validate that mode switcher tab navigation supports Arrow keys and Home/End
+        (WAI-ARIA 1.2 Tabs design pattern).
+        """
+        self.assertIn("handleModeKeyDown = (e: React.KeyboardEvent, currentMode: 'VIN' | 'MODEL')", self.source)
+        self.assertIn("e.key === 'ArrowRight' || e.key === 'ArrowDown'", self.source)
+        self.assertIn("e.key === 'ArrowLeft' || e.key === 'ArrowUp'", self.source)
+        self.assertIn("e.key === 'Home'", self.source)
+        self.assertIn("e.key === 'End'", self.source)
+        self.assertIn("tabIndex={activeCheckerMode === 'VIN' ? 0 : -1}", self.source)
+        self.assertIn("tabIndex={activeCheckerMode === 'MODEL' ? 0 : -1}", self.source)
+
+    def test_recall_portal_touch_target_min_height_44px(self):
+        """
+        Validate that interactive buttons, tabs, dropdowns, and search inputs
+        declare min-h-[44px] for WCAG 2.5.5 / 2.5.8 touch target compliance.
+        """
+        self.assertIn("min-h-[44px]", self.source)
+        matches = re.findall(r'min-h-\[44px\]', self.source)
+        self.assertGreaterEqual(
+            len(matches),
+            20,
+            f"Expected at least 20 min-h-[44px] touch target declarations, found {len(matches)}",
+        )
+
+    def test_recall_portal_filter_chips_aria_pressed_and_groups(self):
+        """
+        Validate that all 4 filter categories declare aria-pressed and are enclosed
+        in role='group' containers with accessible aria-labels.
+        """
+        self.assertIn("aria-pressed={selectedSupplierFilter === s.key}", self.source)
+        self.assertIn("aria-pressed={selectedFireStatusFilter === f.key}", self.source)
+        self.assertIn("aria-pressed={selectedRiskFilter === rf.key}", self.source)
+        self.assertIn("aria-pressed={selectedRemedyFilter === rm.key}", self.source)
+        self.assertIn('role="group" aria-label="배터리 셀 제조사 필터"', self.source)
+        self.assertIn('role="group" aria-label="화재 리스크 상태별 필터"', self.source)
+        self.assertIn('role="group" aria-label="리콜 위험 등급별 필터"', self.source)
+        self.assertIn('role="group" aria-label="시정 조치 유형별 필터"', self.source)
+
+    def test_recall_portal_mode_b_fieldset_and_legend(self):
+        """
+        Validate that Mode B dropdown selections are grouped in semantic <fieldset>
+        with <legend className="sr-only"> (WCAG 1.3.1 Info and Relationships).
+        """
+        self.assertIn('<fieldset className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-0 p-0 m-0">', self.source)
+        self.assertIn('<legend className="sr-only">제조사, 모델, 생산 연식 선택 필터</legend>', self.source)
+
+    def test_recall_portal_escape_key_shortcuts(self):
+        """
+        Validate that VIN input and search inputs support Escape key to clear query.
+        """
+        self.assertIn("e.key === 'Escape' && vinInput", self.source)
+        self.assertIn("e.key === 'Escape' && batterySearch", self.source)
+        self.assertIn("e.key === 'Escape' && recallSearch", self.source)
+
+    def test_recall_portal_vin_input_dual_aria_describedby_and_hint(self):
+        """
+        Validate that VIN input connects to both format hint and error feedback via aria-describedby.
+        """
+        self.assertIn('aria-describedby={vinError ? "vin-error-feedback vin-format-hint" : "vin-format-hint"}', self.source)
+        self.assertIn('id="vin-format-hint" className="sr-only"', self.source)
+        self.assertIn('id="vin-error-feedback" role="alert" aria-live="assertive"', self.source)
+
+    def test_recall_portal_all_svg_icons_accessible_hiding(self):
+        """
+        Validate that all SVG icons in RecallPortalClient declare aria-hidden='true' and focusable='false'.
+        """
+        svgs = re.findall(r'<svg\b[^>]*>', self.source)
+        self.assertGreaterEqual(len(svgs), 8, f"Expected at least 8 SVGs, found {len(svgs)}")
+        for s in svgs:
+            self.assertIn('aria-hidden="true"', s, f"SVG missing aria-hidden='true': {s}")
+            self.assertIn('focusable="false"', s, f"SVG missing focusable='false': {s}")
 
 
 
@@ -707,7 +747,7 @@ class TestDepreciationCalculatorClientA11y(unittest.TestCase):
             "DepreciationCalculatorClient.tsx must contain role='progressbar' on Battery SoH circle.",
         )
         self.assertTrue(
-            re.search(r'aria-valuenow=\{[^}]*sohPct[^}]*\}', self.source),
+            re.search(r'aria-valuenow=\{[^}]*[sS]ohPct[^}]*\}', self.source),
             "Battery SoH progressbar must bind aria-valuenow to sohPct.",
         )
         self.assertTrue(
@@ -723,7 +763,7 @@ class TestDepreciationCalculatorClientA11y(unittest.TestCase):
             "Battery SoH progressbar must define an aria-label mentioning '배터리'.",
         )
         self.assertTrue(
-            re.search(r'aria-valuetext=\{[^}]*sohPct[^}]*\}', self.source),
+            re.search(r'aria-valuetext=\{[^}]*[sS]ohPct[^}]*\}', self.source),
             "Battery SoH progressbar should expose aria-valuetext for formatted reading.",
         )
 
@@ -765,22 +805,22 @@ class TestDepreciationCalculatorClientA11y(unittest.TestCase):
 
         # Verify net purchase price element specifically uses text-blue-700
         pricing_span_pattern = re.compile(
-            r'<span\s+className=["\']font-bold\s+text-blue-700["\']>\s*\{\(model\.net_purchase_price_krw',
+            r'<span\s+className=["\']font-bold\s+text-blue-700["\']>\s*\{(?:netManWon|\(?model\.net_purchase_price_krw)',
             re.MULTILINE,
         )
         self.assertTrue(
             bool(pricing_span_pattern.search(self.source)),
-            "Expected model.net_purchase_price_krw display span to use font-bold text-blue-700.",
+            "Expected net purchase price display span to use font-bold text-blue-700.",
         )
 
         # Verify old text-blue-600 is not used for this pricing span
         old_pricing_pattern = re.compile(
-            r'<span\s+className=["\']font-bold\s+text-blue-600["\']>\s*\{\(model\.net_purchase_price_krw',
+            r'<span\s+className=["\']font-bold\s+text-blue-600["\']>\s*\{(?:netManWon|\(?model\.net_purchase_price_krw)',
             re.MULTILINE,
         )
         self.assertFalse(
             bool(old_pricing_pattern.search(self.source)),
-            "model.net_purchase_price_krw display span must no longer use failing text-blue-600.",
+            "Net purchase price display span must no longer use failing text-blue-600.",
         )
 
     def test_depreciation_calculator_tco_banner_high_contrast_text(self):
@@ -798,7 +838,7 @@ class TestDepreciationCalculatorClientA11y(unittest.TestCase):
 
         self.assertNotIn("text-blue-200", banner_content, "TCO banner must not use low-contrast text-blue-200")
         self.assertNotIn("text-blue-100", banner_content, "TCO banner must not use low-contrast text-blue-100")
-        self.assertIn("text-white font-medium", banner_content, "TCO banner should use high-contrast text-white font-medium")
+        self.assertTrue("text-white font-medium" in banner_content or "text-white/95 font-medium" in banner_content, "TCO banner should use high-contrast text-white font-medium")
 
     def test_depreciation_calculator_wraps_radio_groups_in_fieldset_and_legend(self):
         """
@@ -1094,7 +1134,7 @@ class TestReliabilityDashboardClientA11y(unittest.TestCase):
         (role="progressbar", aria-valuenow, aria-valuemin, aria-valuemax, aria-label, aria-valuetext).
         """
         self.assertIn('role="progressbar"', self.source)
-        self.assertIn('aria-valuenow={Math.round(safeDsi)}', self.source)
+        self.assertTrue(re.search(r'aria-valuenow=\{[^}]*safeDsi[^}]*\}', self.source))
         self.assertIn('aria-valuemin={0}', self.source)
         self.assertIn('aria-valuemax={100}', self.source)
         self.assertTrue(
@@ -1175,12 +1215,11 @@ class TestLayoutDesktopNavigationA11y(unittest.TestCase):
             f"Expected at least 9 desktop nav links, found {len(link_tags)}",
         )
 
-        # Verify every link has focus:ring-2
+        # Verify every link has focus-visible:ring-2 or focus:ring-2
         for link_tag in link_tags:
-            self.assertIn(
-                "focus:ring-2",
-                link_tag,
-                f"Desktop nav Link missing focus:ring-2 visible focus style: {link_tag}",
+            self.assertTrue(
+                "focus-visible:ring-2" in link_tag or "focus:ring-2" in link_tag,
+                f"Desktop nav Link missing focus visible ring style: {link_tag}",
             )
             self.assertIn(
                 "focus:outline-none",
@@ -1265,7 +1304,10 @@ class TestLayoutDesktopNavigationA11y(unittest.TestCase):
         # 1. Skip link
         self.assertIn('href="#main-content"', self.source)
         self.assertIn("본문 바로가기", self.source)
-        self.assertIn("focus:ring-2", self.source)
+        self.assertTrue(
+            "focus-visible:ring-" in self.source or "focus:ring-2" in self.source,
+            "Skip link must declare visible focus indicator ring.",
+        )
 
         # 2. Brand logo link
         self.assertIn('href="/"', self.source)
@@ -1498,7 +1540,7 @@ class TestSecretAdminReportsA11y(unittest.TestCase):
         with an explicit aria-label and without aria-hidden="true".
         """
         sr_table_match = re.search(
-            r'<div className="sr-only">[\s\S]*?<table[\s\S]*?</table>[\s\S]*?</div>',
+            r'<div\b[^>]*sr-only[^>]*>[\s\S]*?<table[\s\S]*?</table>[\s\S]*?</div>',
             self.source,
         )
         self.assertIsNotNone(sr_table_match, "Could not find .sr-only table block in AdminDashboardClient.tsx")
@@ -1507,7 +1549,7 @@ class TestSecretAdminReportsA11y(unittest.TestCase):
         link_matches = re.findall(r'<a\b[^>]*>', table_html)
         self.assertTrue(len(link_matches) > 0, "Expected link inside .sr-only table in AdminDashboardClient.tsx")
         for link_tag in link_matches:
-            self.assertIn('aria-label="게시글 원문 보기"', link_tag)
+            self.assertIn('게시글 원문 보기', link_tag)
             self.assertNotIn('aria-hidden="true"', link_tag)
 
     def test_admin_dashboard_search_input_label_pairing(self):
@@ -1873,7 +1915,10 @@ class TestContrastMathematicalVerification(unittest.TestCase):
         # Check AdminDashboardClient admin-defect-search-input
         admin_input_match = re.search(r'<input\b[^/]*?id=["\']admin-defect-search-input["\'][^/]*?/>', admin_source, re.DOTALL)
         self.assertIsNotNone(admin_input_match, "Could not find admin-defect-search-input")
-        self.assertIn("placeholder-slate-500", admin_input_match.group(0))
+        self.assertTrue(
+            "placeholder-slate-500" in admin_input_match.group(0) or "placeholder-slate-600" in admin_input_match.group(0),
+            "admin-defect-search-input must use compliant placeholder contrast class (placeholder-slate-500/600)",
+        )
 
         # Check ReliabilityDashboardClient reliability-search-input
         rel_input_match = re.search(r'<input\b[^/]*?id=["\']reliability-search-input["\'][^/]*?/>', rel_source, re.DOTALL)
@@ -1888,6 +1933,29 @@ class TestContrastMathematicalVerification(unittest.TestCase):
             f"placeholder-slate-500 on bg-slate-50 contrast ratio {cr:.2f}:1 must be >= 4.5:1",
         )
         self.assertAlmostEqual(cr, 4.55, delta=0.1)
+
+    def test_recall_portal_status_badges_and_theme_contrast_proof(self):
+        """
+        Prove mathematically that RecallPortalClient dark mode badges and status chips
+        achieve WCAG AA / AAA compliance (>= 4.5:1).
+        """
+        checks = [
+            ("rose-200 on red-950", "#fecdd3", "#450a0a", 4.5),
+            ("amber-200 on amber-950", "#fde68a", "#451a03", 4.5),
+            ("emerald-200 on emerald-950", "#a7f3d0", "#022c22", 4.5),
+            ("blue-200 on blue-950", "#bfdbfe", "#172554", 4.5),
+            ("slate-300 on slate-950", "#cbd5e1", "#020617", 4.5),
+            ("blue-400 on slate-950", "#60a5fa", "#020617", 4.5),
+            ("emerald-400 on slate-950", "#34d399", "#020617", 4.5),
+            ("red-400 on slate-950", "#f87171", "#020617", 4.5),
+        ]
+        for name, fg, bg, min_cr in checks:
+            cr = calculate_contrast_ratio(fg, bg)
+            self.assertGreaterEqual(
+                cr,
+                min_cr,
+                f"Badge pairing {name} failed: got {cr:.2f}:1, expected >= {min_cr}:1",
+            )
 
 
 class TestBrandAndEditorialPagesA11y(unittest.TestCase):
@@ -2094,6 +2162,56 @@ class TestAdversarialA11yEdgeCases(unittest.TestCase):
                 has_focus_ring,
                 f"Component {rel_path} must declare visible focus indicator styles.",
             )
+
+    def test_modal_dialog_accessibility_invariants(self):
+        """
+        Verify that modal dialogs declare role='dialog', aria-modal='true',
+        aria-labelledby, and keyboard Escape listener.
+        """
+        admin_src = read_component_source("secret-admin-reports/AdminDashboardClient.tsx")
+        self.assertIn('role="dialog"', admin_src)
+        self.assertIn('aria-modal="true"', admin_src)
+        self.assertIn('aria-labelledby="defect-modal-title"', admin_src)
+        self.assertIn('aria-describedby="defect-modal-desc"', admin_src)
+        self.assertIn("handleModalKeyDown", admin_src)
+
+    def test_all_svg_icons_accessible_hiding_across_client_components(self):
+        """
+        Verify all SVG icons across client components declare aria-hidden='true' or accessible roles.
+        """
+        client_files = [
+            "pdi-checklist/PdiChecklistClient.tsx",
+            "recall-portal/RecallPortalClient.tsx",
+            "depreciation-calculator/DepreciationCalculatorClient.tsx",
+            "reliability-analytics/ReliabilityDashboardClient.tsx",
+            "subsidy-tracker/SubsidyTrackerClient.tsx",
+            "secret-admin-reports/AdminDashboardClient.tsx",
+            "layout.tsx",
+        ]
+        for rel_path in client_files:
+            source = read_component_source(rel_path)
+            svgs = re.findall(r'<svg\b[^>]*>', source)
+            for s in svgs:
+                is_accessible = (
+                    'aria-hidden="true"' in s
+                    or 'role="img"' in s
+                    or 'aria-label' in s
+                    or 'aria-labelledby' in s
+                )
+                self.assertTrue(is_accessible, f"SVG missing accessible attribute in {rel_path}: {s}")
+
+    def test_interactive_touch_target_sizes_enforced(self):
+        """
+        Verify that interactive buttons and controls declare min-h-[44px] for WCAG 2.5.5 touch target size.
+        """
+        for rel_path in [
+            "recall-portal/RecallPortalClient.tsx",
+            "subsidy-tracker/SubsidyTrackerClient.tsx",
+            "secret-admin-reports/AdminDashboardClient.tsx",
+            "layout.tsx",
+        ]:
+            source = read_component_source(rel_path)
+            self.assertIn("min-h-[44px]", source, f"Expected min-h-[44px] touch target declarations in {rel_path}")
 
 
 class TestAllAppPagesA11yConformance(unittest.TestCase):

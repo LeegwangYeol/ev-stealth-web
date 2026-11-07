@@ -47,6 +47,28 @@ const recallJsonLd = {
       temporalCoverage: '2018/2026',
     },
     {
+      '@type': 'ItemList',
+      '@id': `${SITE_URL}/recall-portal#itemlist`,
+      name: '공식 전기차 리콜 및 배터리 화재 안전 핵심 서비스',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: '국토교통부·NHTSA 공인 전기차 결함 시정조치 리콜 캠페인 실시간 조회',
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: '17자리 차대번호(VIN) 기반 배터리 셀 제조사(LG·SK·CATL·파라시스·삼성) 실명 확인',
+        },
+        {
+          '@type': 'ListItem',
+          position: 3,
+          name: '아파트 지하주차장 충전율 90% 제한 및 전기차 화재 예방 안전 권고안',
+        },
+      ],
+    },
+    {
       '@type': 'FAQPage',
       '@id': `${SITE_URL}/recall-portal#faq`,
       mainEntity: [

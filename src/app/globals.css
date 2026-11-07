@@ -9,6 +9,14 @@
 
 html {
   overflow-x: clip;
+  scrollbar-gutter: stable;
+}
+
+/* Smooth scrolling only when user has no reduced motion preference */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 body {
@@ -20,9 +28,16 @@ body {
   word-break: keep-all;
   overflow-wrap: break-word;
   overflow-x: clip;
+  min-height: 100vh;
+  min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* Prevent Safari/WebKit summary marker layout shift */
+summary::-webkit-details-marker {
+  display: none;
 }
 
 /* Korean typography readability: preserve word boundaries in titles & paragraphs */
@@ -41,9 +56,54 @@ p, th, td, label, button, a {
   .text-balance {
     text-wrap: balance;
   }
+
+  /* High contrast text utilities ensuring WCAG AAA (7:1 minimum) */
+  .text-contrast-high {
+    color: #0f172a;
+  }
+  .dark .text-contrast-high,
+  [data-theme="dark"] .text-contrast-high,
+  .bg-slate-900 .text-contrast-high,
+  .bg-slate-950 .text-contrast-high {
+    color: #ffffff;
+  }
+
+  /* Accessible secondary text ensuring WCAG AA (4.5:1 minimum) */
+  .text-contrast-muted {
+    color: #334155;
+  }
+  .dark .text-contrast-muted,
+  [data-theme="dark"] .text-contrast-muted,
+  .bg-slate-900 .text-contrast-muted,
+  .bg-slate-950 .text-contrast-muted {
+    color: #e2e8f0;
+  }
+
+  /* Accessible border ensuring WCAG 1.4.11 Non-text contrast (3:1 minimum) */
+  .border-contrast-accessible {
+    border-color: #64748b;
+  }
+  .dark .border-contrast-accessible,
+  [data-theme="dark"] .border-contrast-accessible,
+  .bg-slate-900 .border-contrast-accessible,
+  .bg-slate-950 .border-contrast-accessible {
+    border-color: #94a3b8;
+  }
+
+  /* WCAG 2.5.5 Target Size compliance (minimum 44x44px) */
+  .min-touch-target {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 @layer base {
+  /* Suppress default outline on pointer clicks while preserving keyboard focus */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Universal keyboard focus indicator (WCAG 2.4.7 AA & AAA) */
   :focus-visible {
     outline: 2px solid #2563eb;
     outline-offset: 2px;
@@ -57,13 +117,65 @@ p, th, td, label, button, a {
     outline-color: #60a5fa;
   }
 
+  /* Header navigation keyboard focus indicators */
   header a[href="/"]:focus-visible,
   header nav[data-testid="desktop-nav"] a:focus-visible,
   header details summary:focus-visible,
   header nav[data-testid="mobile-drawer"] a:focus-visible {
-    outline: none !important;
+    outline: 2px solid transparent;
     box-shadow: 0 0 0 2px #0f172a, 0 0 0 4px #60a5fa !important;
     border-radius: 0.5rem;
+  }
+}
+
+/* Windows High Contrast / Forced Colors Mode accessibility (WCAG 2.4.7 AA) */
+@media (forced-colors: active) {
+  :focus-visible,
+  header a[href="/"]:focus-visible,
+  header nav[data-testid="desktop-nav"] a:focus-visible,
+  header details summary:focus-visible,
+  header nav[data-testid="mobile-drawer"] a:focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px !important;
+    box-shadow: none !important;
+  }
+}
+
+/* Accessibility: Reduced Motion (WCAG 2.3.3 AA) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Accessibility: High Contrast Preference (WCAG 1.4.3 & 1.4.6 AAA) */
+@media (prefers-contrast: more) {
+  :root {
+    --background: #ffffff;
+    --foreground: #000000;
+  }
+
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  :focus-visible {
+    outline: 3px solid #000000 !important;
+    outline-offset: 2px !important;
+  }
+
+  .dark :focus-visible,
+  [data-theme="dark"] :focus-visible,
+  .bg-slate-900 :focus-visible,
+  .bg-slate-950 :focus-visible {
+    outline: 3px solid #ffffff !important;
+    outline-offset: 2px !important;
   }
 }
 

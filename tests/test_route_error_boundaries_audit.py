@@ -37,10 +37,22 @@ class TestRouteErrorBoundariesAudit(unittest.TestCase):
         root_error = os.path.join(self.app_dir, "error.tsx")
         root_loading = os.path.join(self.app_dir, "loading.tsx")
         root_not_found = os.path.join(self.app_dir, "not-found.tsx")
+        root_global_error = os.path.join(self.app_dir, "global-error.tsx")
 
         self.assertTrue(os.path.isfile(root_error), "Root error.tsx must exist")
         self.assertTrue(os.path.isfile(root_loading), "Root loading.tsx must exist")
         self.assertTrue(os.path.isfile(root_not_found), "Root not-found.tsx must exist")
+        self.assertTrue(os.path.isfile(root_global_error), "Root global-error.tsx must exist")
+
+        with open(root_global_error, "r", encoding="utf-8") as f:
+            content = f.read()
+            self.assertTrue(content.startswith("'use client'") or content.startswith('"use client"'))
+            self.assertIn("<html", content, "global-error.tsx must render <html>")
+            self.assertIn("<body", content, "global-error.tsx must render <body>")
+            self.assertIn('role="alert"', content)
+            self.assertIn('aria-live="assertive"', content)
+            self.assertIn("다시 시도", content)
+            self.assertIn("reset()", content)
 
         with open(root_error, "r", encoding="utf-8") as f:
             content = f.read()

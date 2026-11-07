@@ -112,52 +112,161 @@ export function parseStoredChecklistState(
 }
 
 /**
- * Safely loads state from localStorage, automatically migrating legacy keys if found.
+ * Detects whether an exception is a QuotaExceededError across major browsers:
+ * - WebKit / Safari: QuotaExceededError (code 22)
+ * - Gecko / Firefox: NS_ERROR_DOM_QUOTA_REACHED (code 1014)
+ * - Chromium / Edge: QuotaExceededError (code 22)
+ */
+export function isQuotaExceededError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { name?: string; code?: number; number?: number };
+  return (
+    e.name === 'QuotaExceededError' ||
+    e.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+    e.code === 22 ||
+    e.code === 1014 ||
+    e.number === -2147024882
+  );
+}
+
+/**
+ * Checks if localStorage is functional and not blocked by private browsing or security policies.
+ */
+export function isLocalStorageAvailable(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const storage = window.localStorage;
+    if (!storage) return false;
+    const testKey = '__pdi_storage_probe__';
+    storage.setItem(testKey, '1');
+    storage.removeItem(testKey);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Determines current active storage medium for UX transparency.
+ */
+export function getStorageType(): 'localStorage' | 'sessionStorage' | 'memory' {
+  if (typeof window === 'undefined') return 'memory';
+  if (isLocalStorageAvailable()) return 'localStorage';
+  try {
+    if (window.sessionStorage) {
+      const testKey = '__pdi_session_probe__';
+      window.sessionStorage.setItem(testKey, '1');
+      window.sessionStorage.removeItem(testKey);
+      return 'sessionStorage';
+    }
+  } catch {
+    // Restricted private mode or security policy
+  }
+  return 'memory';
+}
+
+/**
+ * Safely loads state from storage (localStorage with fallback to sessionStorage),
+ * automatically migrating legacy keys if found.
+ * Highly resilient against SSR, private browsing SecurityError, and corrupted JSON.
  */
 export function loadChecklistFromStorage(defaultItems: ChecklistItem[]): ChecklistItem[] {
   if (typeof window === 'undefined') return defaultItems;
+
+  // 1. Attempt primary localStorage
   try {
-    if (!window.localStorage) return defaultItems;
+    if (window.localStorage) {
+      const primary = window.localStorage.getItem(STORAGE_KEY);
+      if (primary) {
+        return parseStoredChecklistState(primary, defaultItems);
+      }
 
-    // 1. Check primary key
-    const primary = window.localStorage.getItem(STORAGE_KEY);
-    if (primary) {
-      return parseStoredChecklistState(primary, defaultItems);
-    }
-
-    // 2. Fall back to legacy keys and auto-migrate
-    for (const legacyKey of LEGACY_STORAGE_KEYS) {
-      const legacyVal = window.localStorage.getItem(legacyKey);
-      if (legacyVal) {
-        const migrated = parseStoredChecklistState(legacyVal, defaultItems);
-        try {
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
-          window.localStorage.removeItem(legacyKey);
-        } catch {
-          // Ignore write failure in restricted environments
+      // Check legacy keys and auto-migrate
+      for (const legacyKey of LEGACY_STORAGE_KEYS) {
+        const legacyVal = window.localStorage.getItem(legacyKey);
+        if (legacyVal) {
+          const migrated = parseStoredChecklistState(legacyVal, defaultItems);
+          try {
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+            window.localStorage.removeItem(legacyKey);
+          } catch {
+            // Ignore migration write errors in restricted/quota environments
+          }
+          return migrated;
         }
-        return migrated;
       }
     }
   } catch (e) {
     console.warn('[PDI Checklist] Failed to load checklist from localStorage:', e);
   }
+
+  // 2. Secondary fallback: sessionStorage (for private browsing or localStorage disabled)
+  try {
+    if (window.sessionStorage) {
+      const sessionVal = window.sessionStorage.getItem(STORAGE_KEY);
+      if (sessionVal) {
+        return parseStoredChecklistState(sessionVal, defaultItems);
+      }
+    }
+  } catch {
+    // Ignore sessionStorage errors
+  }
+
   return defaultItems;
 }
 
 /**
- * Safely writes checklist state to localStorage with QuotaExceeded protection.
+ * Safely writes checklist state to storage with QuotaExceeded recovery and private browsing fallbacks.
+ * 1. Writes to localStorage.
+ * 2. On QuotaExceededError, purges legacy keys and retries once.
+ * 3. On persistent QuotaExceededError or SecurityError (private browsing), falls back to sessionStorage.
  */
 export function saveChecklistToStorage(items: ChecklistItem[]): boolean {
   if (typeof window === 'undefined') return false;
+
+  const serialized = JSON.stringify(items);
+
+  // 1. Try localStorage
   try {
-    if (!window.localStorage) return false;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    return true;
+    if (window.localStorage) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, serialized);
+        return true;
+      } catch (err) {
+        if (isQuotaExceededError(err)) {
+          // Attempt quota recovery: purge legacy keys
+          for (const legacyKey of LEGACY_STORAGE_KEYS) {
+            try {
+              window.localStorage.removeItem(legacyKey);
+            } catch {
+              // Ignore
+            }
+          }
+          // Retry write after purge
+          try {
+            window.localStorage.setItem(STORAGE_KEY, serialized);
+            return true;
+          } catch {
+            // Fall through to sessionStorage
+          }
+        }
+      }
+    }
   } catch (e) {
     console.warn('[PDI Checklist] Failed to save checklist to localStorage:', e);
-    return false;
   }
+
+  // 2. Fallback to sessionStorage
+  try {
+    if (window.sessionStorage) {
+      window.sessionStorage.setItem(STORAGE_KEY, serialized);
+      return true;
+    }
+  } catch {
+    // In-memory fallback will preserve state for active React session
+  }
+
+  return false;
 }
 
 /**
@@ -165,17 +274,29 @@ export function saveChecklistToStorage(items: ChecklistItem[]): boolean {
  */
 export function clearChecklistFromStorage(): boolean {
   if (typeof window === 'undefined') return false;
+  let cleared = false;
   try {
-    if (!window.localStorage) return false;
-    window.localStorage.removeItem(STORAGE_KEY);
-    for (const legacyKey of LEGACY_STORAGE_KEYS) {
-      window.localStorage.removeItem(legacyKey);
+    if (window.localStorage) {
+      window.localStorage.removeItem(STORAGE_KEY);
+      for (const legacyKey of LEGACY_STORAGE_KEYS) {
+        window.localStorage.removeItem(legacyKey);
+      }
+      cleared = true;
     }
-    return true;
   } catch (e) {
     console.warn('[PDI Checklist] Failed to clear checklist localStorage:', e);
-    return false;
   }
+
+  try {
+    if (window.sessionStorage) {
+      window.sessionStorage.removeItem(STORAGE_KEY);
+      cleared = true;
+    }
+  } catch {
+    // Ignore sessionStorage clear errors
+  }
+
+  return cleared;
 }
 
 export interface PdiItemRowProps {
@@ -232,10 +353,12 @@ export const PdiItemRow = memo(function PdiItemRow({ item, onToggle }: PdiItemRo
 export default function PdiChecklistClient() {
   const [items, setItems] = useState<ChecklistItem[]>(INITIAL_PDI_ITEMS);
   const [mounted, setMounted] = useState(false);
+  const [storageType, setStorageType] = useState<'localStorage' | 'sessionStorage' | 'memory'>('localStorage');
 
   // Safe client mounting check: hydrate from localStorage after mount with schema migration
   useEffect(() => {
     setMounted(true);
+    setStorageType(getStorageType());
     const loaded = loadChecklistFromStorage(INITIAL_PDI_ITEMS);
     setItems(loaded);
   }, []);
@@ -422,15 +545,32 @@ export default function PdiChecklistClient() {
           <div><span className="font-semibold">인수 점검자 (서명):</span> __________________________</div>
         </div>
         <div className="mt-3 flex items-center gap-2 text-xs text-slate-700 print:hidden">
-          <span aria-hidden="true" className={`w-2.5 h-2.5 rounded-full ${mounted ? 'bg-emerald-600' : 'bg-slate-400'}`} />
-          <span>{mounted ? '로컬 저장소 동기화 활성화됨 (새로고침 시 체크 상태 유지)' : '초기화 중...'}</span>
+          <span
+            aria-hidden="true"
+            className={`w-2.5 h-2.5 rounded-full ${
+              !mounted
+                ? 'bg-slate-400'
+                : storageType === 'localStorage'
+                ? 'bg-emerald-600'
+                : 'bg-amber-500'
+            }`}
+          />
+          <span>
+            {!mounted
+              ? '초기화 중...'
+              : storageType === 'localStorage'
+              ? '로컬 저장소 동기화 활성화됨 (새로고침 시 체크 상태 유지)'
+              : storageType === 'sessionStorage'
+              ? '세션 임시 저장소 활성화됨 (비공개 브라우징 모드 대응)'
+              : '메모리 저장소 사용 중 (브라우저 저장소 제한)'}
+          </span>
         </div>
-        {/* Screen Reader Dynamic Progression Announcement */}
-        {mounted && (
-          <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-            신차 검수 진행률 {progress}%, 총 {totalItems}개 중 {checkedCount}개 완료
-          </div>
-        )}
+        {/* Screen Reader Dynamic Progression Announcement (always in DOM for reliable a11y announcements) */}
+        <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {mounted
+            ? `신차 검수 진행률 ${progress}%, 총 ${totalItems}개 중 ${checkedCount}개 완료`
+            : '신차 검수 준비 중'}
+        </div>
       </header>
 
       <div className="sticky top-0 bg-white/90 backdrop-blur-md p-4 rounded-xl border border-gray-200 shadow-sm z-10 space-y-3 print:hidden">
@@ -526,6 +666,7 @@ export default function PdiChecklistClient() {
           const isCategoryActive = selectedCategory === 'ALL' || selectedCategory === category;
           const isCollapsed = Boolean(collapsedCategories[category]);
           const contentId = `pdi-category-items-${idx}`;
+          const headerId = `pdi-cat-${category}`;
           return (
             <fieldset
               key={category}
@@ -563,7 +704,7 @@ export default function PdiChecklistClient() {
               <div
                 id={contentId}
                 role="region"
-                aria-labelledby={`pdi-cat-${category}`}
+                aria-labelledby={headerId}
                 className={`divide-y divide-gray-100 ${isCollapsed ? 'hidden print:block' : 'block'}`}
               >
                 {(itemsByCategory.get(category) || []).map((item) => (

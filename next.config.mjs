@@ -10,6 +10,8 @@ const cspDirectives = [
   "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net",
   `connect-src 'self'${isProd ? '' : ' ws: wss:'}`,
   "worker-src 'self' blob:",
+  "manifest-src 'self'",
+  "media-src 'self' blob: data:",
   "object-src 'none'",
   "frame-ancestors 'none'",
   "base-uri 'self'",
@@ -55,7 +57,7 @@ const nextConfig = {
           {
             key: 'Permissions-Policy',
             value:
-              'camera=(), microphone=(), geolocation=(), interest-cohort=(), payment=(), usb=(), accelerometer=(), autoplay=(), encrypted-media=(), gyroscope=(), magnetometer=(), midi=(), screen-wake-lock=(), xr-spatial-tracking=()',
+              'camera=(), microphone=(), geolocation=(), browsing-topics=(), interest-cohort=(), payment=(), usb=(), bluetooth=(), accelerometer=(), autoplay=(), encrypted-media=(), gyroscope=(), magnetometer=(), midi=(), screen-wake-lock=(), xr-spatial-tracking=(), display-capture=(), sync-xhr=()',
           },
           {
             key: 'X-XSS-Protection',
@@ -88,6 +90,15 @@ const nextConfig = {
         ],
       },
       {
+        source: '/secret-admin-reports/:path*',
+        headers: [
+          {
+            key: 'X-Robots-Tag',
+            value: 'noindex, nofollow, noarchive',
+          },
+        ],
+      },
+      {
         source: '/data/:path*',
         headers: [
           {
@@ -97,11 +108,15 @@ const nextConfig = {
         ],
       },
       {
-        source: '/:all*\\.(svg|ico|png|jpg|jpeg|webp|woff|woff2|ttf|otf)',
+        source: '/:all*\\.(svg|ico|png|jpg|jpeg|webp|avif|woff|woff2|ttf|otf)',
         headers: [
           {
             key: 'Cache-Control',
             value: 'public, max-age=86400, stale-while-revalidate=604800',
+          },
+          {
+            key: 'Cross-Origin-Resource-Policy',
+            value: 'cross-origin',
           },
         ],
       },
@@ -111,6 +126,10 @@ const nextConfig = {
           {
             key: 'Cache-Control',
             value: 'public, max-age=31536000, immutable',
+          },
+          {
+            key: 'Cross-Origin-Resource-Policy',
+            value: 'cross-origin',
           },
         ],
       },

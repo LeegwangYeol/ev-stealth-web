@@ -23,7 +23,7 @@ from pathlib import Path
 import tempfile
 import threading
 import time
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 try:
     import fcntl
@@ -39,6 +39,9 @@ import shutil
 import uuid
 
 logger = logging.getLogger(__name__)
+
+_last_temp_dir_cleanup_time: float = 0.0
+_cleanup_meta_lock = threading.Lock()
 
 
 def is_pid_alive(pid: int) -> bool:
@@ -107,6 +110,7 @@ class FileLock:
         self.fail_on_timeout = fail_on_timeout
         self.fd: Optional[int] = None
         self.acquired: bool = False
+        self._thread_locked: bool = False
         with self._meta_lock:
             if self.lock_path not in self._process_locks:
                 self._process_locks[self.lock_path] = threading.RLock()
@@ -118,7 +122,21 @@ class FileLock:
         return self.acquired and self.fd is not None
 
     def __enter__(self) -> FileLock:
-        self._thread_lock.acquire()
+        acquired_thread = self._thread_lock.acquire(timeout=self.timeout)
+        if not acquired_thread:
+            if self.fail_on_timeout:
+                raise TimeoutError(
+                    f"Timeout ({self.timeout:.1f}s) acquiring thread lock on {self.lock_path}"
+                )
+            logger.warning(
+                "Timeout (%.1fs) acquiring thread lock on %s. Proceeding defensively.",
+                self.timeout,
+                self.lock_path,
+            )
+            self.acquired = False
+            return self
+
+        self._thread_locked = True
         try:
             if not hasattr(self._local, "depths"):
                 self._local.depths = {}
@@ -145,14 +163,24 @@ class FileLock:
                         try:
                             f_stat = os.fstat(self.fd)
                             p_stat = os.stat(self.lock_path)
-                            if f_stat.st_ino != 0 and (
-                                f_stat.st_ino != p_stat.st_ino or f_stat.st_dev != p_stat.st_dev
+                            if f_stat.st_nlink == 0 or (
+                                f_stat.st_ino != 0 and (
+                                    f_stat.st_ino != p_stat.st_ino or f_stat.st_dev != p_stat.st_dev
+                                )
                             ):
-                                os.close(self.fd)
+                                try:
+                                    os.close(self.fd)
+                                except OSError:
+                                    pass
+                                self.fd = None
                                 self.fd = os.open(self.lock_path, flags, 0o644)
                                 continue
                         except OSError:
-                            os.close(self.fd)
+                            try:
+                                os.close(self.fd)
+                            except OSError:
+                                pass
+                            self.fd = None
                             self.fd = os.open(self.lock_path, flags, 0o644)
                             continue
                         self.acquired = True
@@ -171,28 +199,36 @@ class FileLock:
                         # Check for stale lock from dead PID or expired timeout
                         holder_pid, holder_ts = read_lock_metadata(self.lock_path)
                         now = time.time()
-                        is_dead_holder = holder_pid is not None and not is_pid_alive(holder_pid)
-                        is_expired_holder = (
-                            holder_ts is not None and (now - holder_ts) > self.stale_timeout
-                        )
                         try:
                             mtime_age = now - os.path.getmtime(self.lock_path)
                         except OSError:
                             mtime_age = 0.0
 
-                        if is_dead_holder or (is_expired_holder and mtime_age > self.stale_timeout):
+                        is_dead_holder = holder_pid is not None and not is_pid_alive(holder_pid)
+                        is_expired_holder = (
+                            (holder_ts is not None and (now - holder_ts) > self.stale_timeout)
+                            or (holder_ts is None and mtime_age > self.stale_timeout)
+                        )
+                        lock_age = max(mtime_age, (now - holder_ts) if holder_ts is not None else mtime_age)
+
+                        if (
+                            (is_dead_holder and lock_age > self.stale_timeout)
+                            or (is_expired_holder and lock_age > self.stale_timeout)
+                            or (holder_pid is None and holder_ts is None and lock_age > self.stale_timeout)
+                        ):
                             logger.warning(
                                 "Breaking stale lock on %s (holder pid=%s alive=%s, age=%.1fs > %.1fs)",
                                 self.lock_path,
                                 holder_pid,
                                 not is_dead_holder,
-                                mtime_age,
+                                lock_age,
                                 self.stale_timeout,
                             )
                             try:
                                 os.close(self.fd)
                             except OSError:
                                 pass
+                            self.fd = None
                             try:
                                 os.unlink(self.lock_path)
                             except OSError:
@@ -232,10 +268,39 @@ class FileLock:
                         if exc.errno not in (errno.EACCES, getattr(errno, "EDEADLK", 36), getattr(errno, "EAGAIN", 11)):
                             raise
                         holder_pid, holder_ts = read_lock_metadata(self.lock_path)
-                        if holder_pid is not None and not is_pid_alive(holder_pid):
-                            logger.warning("Breaking stale Windows lock on %s (pid %s dead)", self.lock_path, holder_pid)
+                        now = time.time()
+                        try:
+                            mtime_age = now - os.path.getmtime(self.lock_path)
+                        except OSError:
+                            mtime_age = 0.0
+
+                        is_dead_holder = holder_pid is not None and not is_pid_alive(holder_pid)
+                        is_expired_holder = (
+                            (holder_ts is not None and (now - holder_ts) > self.stale_timeout)
+                            or (holder_ts is None and mtime_age > self.stale_timeout)
+                        )
+
+                        lock_age = max(mtime_age, (now - holder_ts) if holder_ts is not None else mtime_age)
+
+                        if (
+                            (is_dead_holder and lock_age > self.stale_timeout)
+                            or (is_expired_holder and lock_age > self.stale_timeout)
+                            or (holder_pid is None and holder_ts is None and lock_age > self.stale_timeout)
+                        ):
+                            logger.warning(
+                                "Breaking stale Windows lock on %s (pid %s dead=%s, age=%.1fs > %.1fs)",
+                                self.lock_path,
+                                holder_pid,
+                                is_dead_holder,
+                                lock_age,
+                                self.stale_timeout,
+                            )
                             try:
                                 os.close(self.fd)
+                            except OSError:
+                                pass
+                            self.fd = None
+                            try:
                                 os.unlink(self.lock_path)
                             except OSError:
                                 pass
@@ -257,18 +322,39 @@ class FileLock:
             else:
                 self.acquired = True
 
-            self._local.depths[self.lock_path] = 1
-            self._local.fds[self.lock_path] = self.fd
+            if self.acquired:
+                self._local.depths[self.lock_path] = 1
+                self._local.fds[self.lock_path] = self.fd
             return self
         except BaseException:
             if self.fd is not None:
+                if fcntl is not None:
+                    try:
+                        fcntl.flock(self.fd, fcntl.LOCK_UN)
+                    except OSError:
+                        pass
+                elif msvcrt is not None:
+                    try:
+                        os.lseek(self.fd, 0, os.SEEK_SET)
+                        msvcrt.locking(self.fd, msvcrt.LK_UNLCK, 1)
+                    except OSError:
+                        pass
                 try:
                     os.close(self.fd)
                 except OSError:
                     pass
                 self.fd = None
             self.acquired = False
-            self._thread_lock.release()
+            if hasattr(self._local, "depths") and self.lock_path in self._local.depths:
+                del self._local.depths[self.lock_path]
+            if hasattr(self._local, "fds") and self.lock_path in self._local.fds:
+                del self._local.fds[self.lock_path]
+            if self._thread_locked:
+                self._thread_locked = False
+                try:
+                    self._thread_lock.release()
+                except RuntimeError:
+                    pass
             raise
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
@@ -305,7 +391,21 @@ class FileLock:
             self.fd = None
             self.acquired = False
         finally:
-            self._thread_lock.release()
+            if getattr(self, "_thread_locked", False):
+                self._thread_locked = False
+                try:
+                    self._thread_lock.release()
+                except RuntimeError:
+                    pass
+
+    def acquire(self) -> bool:
+        """Explicit acquire method conforming to Lock protocol."""
+        self.__enter__()
+        return self.acquired
+
+    def release(self) -> None:
+        """Explicit release method conforming to Lock protocol."""
+        self.__exit__(None, None, None)
 
 
 def get_lock_path(target_path: Union[str, Path]) -> Path:
@@ -365,12 +465,25 @@ def cleanup_stale_lock_files(
             try:
                 st = entry.stat()
                 age = now - st.st_mtime
+                holder_pid, holder_ts = read_lock_metadata(entry)
+                is_dead_holder = holder_pid is not None and not is_pid_alive(holder_pid)
+                is_expired_holder = (
+                    (holder_ts is not None and (now - holder_ts) > max_age_seconds)
+                    or (holder_ts is None and age > max_age_seconds)
+                )
+
+                # Skip if file has an active, living holder
+                if holder_pid and is_pid_alive(holder_pid):
+                    continue
+
+                if holder_ts is not None and (now - holder_ts) <= max_age_seconds:
+                    continue
+
                 if age <= max_age_seconds:
                     continue
 
-                # Check if file has an active holder
-                holder_pid, holder_ts = read_lock_metadata(entry)
-                if holder_pid and is_pid_alive(holder_pid) and age < (max_age_seconds * 2):
+                # Skip if not confirmed dead holder and not expired
+                if not is_dead_holder and not is_expired_holder:
                     continue
 
                 # Test non-blocking flock to guarantee no active process holds it
@@ -392,6 +505,35 @@ def cleanup_stale_lock_files(
                                 fcntl.flock(test_fd, fcntl.LOCK_UN)
                             except OSError:
                                 pass
+                            try:
+                                os.close(test_fd)
+                            except OSError:
+                                pass
+                elif msvcrt is not None:
+                    test_fd = None
+                    try:
+                        test_fd = os.open(str(entry), os.O_RDWR)
+                        try:
+                            os.lseek(test_fd, 0, os.SEEK_SET)
+                            msvcrt.locking(test_fd, msvcrt.LK_NBLCK, 1)
+                            try:
+                                os.lseek(test_fd, 0, os.SEEK_SET)
+                                msvcrt.locking(test_fd, msvcrt.LK_UNLCK, 1)
+                            except OSError:
+                                pass
+                            try:
+                                os.close(test_fd)
+                            except OSError:
+                                pass
+                            test_fd = None
+                            entry.unlink(missing_ok=True)
+                            cleaned += 1
+                        except (BlockingIOError, OSError):
+                            pass
+                    except OSError:
+                        pass
+                    finally:
+                        if test_fd is not None:
                             try:
                                 os.close(test_fd)
                             except OSError:
@@ -424,10 +566,13 @@ def quarantine_corrupted_file(
 
     Supports standard timestamped pattern (.corrupt_YYYYMMDD_HHMMSS_ffffff.json)
     and custom suffix isolation (.corrupted).
-    Guarantees atomic replace, cross-device EXDEV fallback, POSIX directory fsync durability,
+    Guarantees atomic replace, avoids accidental overwrite of existing valid files,
+    cross-device EXDEV fallback, POSIX directory fsync durability,
     and standard permissions (0o644).
     """
-    p = Path(file_path)
+    if not file_path or not str(file_path).strip():
+        return None
+    p = Path(file_path).resolve()
     if not p.exists() or p.is_dir():
         return None
     try:
@@ -435,27 +580,52 @@ def quarantine_corrupted_file(
         if suffix:
             s = suffix if suffix.startswith(".") else f".{suffix}"
             if s == ".corrupted":
-                quarantine_path = p.with_name(f"{p.stem}.corrupt_{ts}.corrupted")
+                target_name = f"{p.stem}.corrupt_{ts}.corrupted"
             else:
-                quarantine_path = p.with_name(f"{p.stem}{s}")
+                target_name = f"{p.stem}{s}"
         else:
-            quarantine_path = p.with_name(f"{p.stem}.corrupt_{ts}{p.suffix}")
+            target_name = f"{p.stem}.corrupt_{ts}{p.suffix}"
 
-        try:
-            os.replace(str(p), str(quarantine_path))
-        except OSError as exc:
-            if exc.errno == errno.EXDEV:
-                shutil.copyfile(str(p), str(quarantine_path))
-                try:
-                    with open(quarantine_path, "a+b") as qf:
-                        os.fsync(qf.fileno())
-                except OSError:
-                    pass
-                try:
-                    os.unlink(str(p))
-                except OSError:
-                    pass
-            else:
+        quarantine_path = p.with_name(target_name)
+
+        # Avoid accidental overwrite of valid existing files or destination collision
+        if quarantine_path.exists() or quarantine_path.resolve() == p.resolve():
+            counter = 1
+            base_stem = quarantine_path.stem
+            base_suffix = quarantine_path.suffix
+            candidate = quarantine_path
+            while candidate.exists() or candidate.resolve() == p.resolve():
+                candidate = p.with_name(f"{base_stem}_{counter}{base_suffix}")
+                counter += 1
+            quarantine_path = candidate
+
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                os.replace(str(p), str(quarantine_path))
+                break
+            except OSError as exc:
+                if exc.errno == errno.ENOENT:
+                    # Concurrent worker or thread already moved/quarantined the file
+                    return None
+                if exc.errno == errno.EXDEV:
+                    shutil.copyfile(str(p), str(quarantine_path))
+                    try:
+                        with open(quarantine_path, "a+b") as qf:
+                            os.fsync(qf.fileno())
+                    except OSError:
+                        pass
+                    try:
+                        os.unlink(str(p))
+                    except OSError:
+                        pass
+                    break
+                if (
+                    exc.errno in (errno.EACCES, errno.EPERM, getattr(errno, "EBUSY", 16))
+                    and attempt < max_retries - 1
+                ):
+                    time.sleep(0.02 * (2 ** attempt))
+                    continue
                 raise
 
         try:
@@ -464,14 +634,18 @@ def quarantine_corrupted_file(
             pass
 
         # Directory fsync to ensure quarantine rename is crash-durably committed
-        try:
-            dir_fd = os.open(str(p.parent), os.O_RDONLY)
+        if os.name != "nt":
+            dir_flags = os.O_RDONLY
+            if hasattr(os, "O_DIRECTORY"):
+                dir_flags |= os.O_DIRECTORY
             try:
-                os.fsync(dir_fd)
-            finally:
-                os.close(dir_fd)
-        except OSError:
-            pass
+                dir_fd = os.open(str(p.parent), dir_flags)
+                try:
+                    os.fsync(dir_fd)
+                finally:
+                    os.close(dir_fd)
+            except OSError:
+                pass
 
         logger.warning("Quarantined corrupted file: %s -> %s", p, quarantine_path)
         return quarantine_path
@@ -668,9 +842,23 @@ def atomic_write_json(
 
     with FileLock(lock_file):
         try:
+            if mode is None and preserve_permissions and dest.exists():
+                try:
+                    target_mode = dest.stat().st_mode & 0o777
+                except OSError:
+                    target_mode = 0o644
+
             cleanup_stale_temp_files(dest_dir, prefix=temp_prefix, max_age_seconds=3600.0)
             cleanup_stale_lock_files(dest_dir, max_age_seconds=3600.0)
-            cleanup_stale_lock_files(tempfile.gettempdir(), max_age_seconds=3600.0)
+
+            # Throttle global temp directory cleanup to avoid disk thrashing
+            global _last_temp_dir_cleanup_time
+            now_mono = time.monotonic()
+            if (now_mono - _last_temp_dir_cleanup_time) > 60.0:
+                with _cleanup_meta_lock:
+                    if (now_mono - _last_temp_dir_cleanup_time) > 60.0:
+                        cleanup_stale_lock_files(tempfile.gettempdir(), max_age_seconds=3600.0)
+                        _last_temp_dir_cleanup_time = time.monotonic()
 
             # Create temp file in the same directory to ensure atomic os.replace across filesystem boundaries
             with tempfile.NamedTemporaryFile(
@@ -702,22 +890,31 @@ def atomic_write_json(
                 except OSError:
                     pass
 
-            try:
-                os.replace(temp_name, dest)
-            except OSError as exc:
-                if exc.errno == errno.EXDEV:
-                    # Fallback for cross-device or overlayfs filesystems
-                    shutil.copyfile(temp_name, str(dest))
-                    try:
-                        with open(dest, "a+b") as df:
-                            os.fsync(df.fileno())
-                    except OSError:
-                        pass
-                    try:
-                        os.unlink(temp_name)
-                    except OSError:
-                        pass
-                else:
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    os.replace(temp_name, dest)
+                    break
+                except OSError as exc:
+                    if exc.errno == errno.EXDEV:
+                        # Fallback for cross-device or overlayfs filesystems
+                        shutil.copyfile(temp_name, str(dest))
+                        try:
+                            with open(dest, "a+b") as df:
+                                os.fsync(df.fileno())
+                        except OSError:
+                            pass
+                        try:
+                            os.unlink(temp_name)
+                        except OSError:
+                            pass
+                        break
+                    if (
+                        exc.errno in (errno.EACCES, errno.EPERM, getattr(errno, "EBUSY", 16))
+                        and attempt < max_retries - 1
+                    ):
+                        time.sleep(0.02 * (2 ** attempt))
+                        continue
                     raise
 
             temp_name = None  # Replaced or copied successfully
@@ -729,14 +926,18 @@ def atomic_write_json(
                     pass
 
             # Directory fsync to commit the replacement to disk with leak-proof fd lifecycle
-            try:
-                dir_fd = os.open(str(dest_dir), os.O_RDONLY)
+            if os.name != "nt":
+                dir_flags = os.O_RDONLY
+                if hasattr(os, "O_DIRECTORY"):
+                    dir_flags |= os.O_DIRECTORY
                 try:
-                    os.fsync(dir_fd)
-                finally:
-                    os.close(dir_fd)
-            except OSError:
-                pass
+                    dir_fd = os.open(str(dest_dir), dir_flags)
+                    try:
+                        os.fsync(dir_fd)
+                    finally:
+                        os.close(dir_fd)
+                except OSError:
+                    pass
 
             logger.debug("Atomically wrote %s", dest)
             return dest

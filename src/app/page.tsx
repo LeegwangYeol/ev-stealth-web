@@ -46,6 +46,104 @@ const homeJsonLd = {
       ],
     },
     {
+      "@type": "ItemList",
+      "@id": `${SITE_URL}/#features-list`,
+      "name": "Global EV Hub 핵심 분석 및 인터랙티브 인텔리전스 도구",
+      "description": "실시간 보조금 소진율 추적기, 감가방어율 계산기, 결함 DSI 통계, 리콜 포털 및 제조사별 연식 가이드",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "전국 지자체별 전기차 실시간 보조금 소진율 추적기",
+          "url": `${SITE_URL}/subsidy-tracker`,
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "전기차 감가방어율 & 배터리 수명 계산기",
+          "url": `${SITE_URL}/depreciation-calculator`,
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI)",
+          "url": `${SITE_URL}/reliability-analytics`,
+        },
+        {
+          "@type": "ListItem",
+          "position": 4,
+          "name": "공식 전기차 리콜 & 배터리 화재 안전 포털",
+          "url": `${SITE_URL}/recall-portal`,
+        },
+        {
+          "@type": "ListItem",
+          "position": 5,
+          "name": "2026년식 KDM EV 초기 품질 리포트",
+          "url": `${SITE_URL}/2026-latest`,
+        },
+        {
+          "@type": "ListItem",
+          "position": 6,
+          "name": "전기차 신차 인수(PDI) 체크리스트",
+          "url": `${SITE_URL}/pdi-checklist`,
+        },
+        {
+          "@type": "ListItem",
+          "position": 7,
+          "name": "현대/기아 전기차 연식별 결함 및 구매 가이드",
+          "url": `${SITE_URL}/hyundai-kia`,
+        },
+        {
+          "@type": "ListItem",
+          "position": 8,
+          "name": "테슬라 연식별 결함 및 구매 가이드",
+          "url": `${SITE_URL}/tesla`,
+        },
+        {
+          "@type": "ListItem",
+          "position": 9,
+          "name": "BYD 전기차 연식별 결함 및 구매 가이드",
+          "url": `${SITE_URL}/byd`,
+        },
+        {
+          "@type": "ListItem",
+          "position": 10,
+          "name": "글로벌 EV 브랜드 연식별 결함 및 구매 가이드",
+          "url": `${SITE_URL}/global-brands`,
+        },
+      ],
+    },
+    {
+      "@type": "FAQPage",
+      "@id": `${SITE_URL}/#faq`,
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "중고 전기차 구매 시 가장 주의해야 할 연식별 고질병은 무엇인가요?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "현대/기아 초기형(2021~2022년식) E-GMP의 통합충전제어장치(ICCU) 전원 상실 결함, 테슬라 모델3/Y 2017~2020년식 PTC 히터 고장 및 옥토밸브 파손, BYD 돌핀 2021~2023년식 에어컨 알루미늄 백색가루 분출, 메르세데스-벤츠 EQE 초기형 파라시스 배터리 화재 리스크가 대표적입니다.",
+          },
+        },
+        {
+          "@type": "Question",
+          "name": "전국 지자체별 전기차 보조금 소진율은 어떻게 확인하나요?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "환경부 무공해차 통합누리집 및 17개 광역시도 73개 지자체 공고를 연계한 본 포털의 실시간 보조금 추적기에서 지역별 접수/출고 대수와 잔여 쿼터, 5단계 긴급 소진 경보(원활·주의·경고·위험·마감), 출고가 상한제 기준 실구매가를 즉시 확인할 수 있습니다.",
+          },
+        },
+        {
+          "@type": "Question",
+          "name": "전기차 배터리 잔여수명(SoH)과 중고차 잔존가치는 어떤 관계가 있나요?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "고전압 배터리 팩 교체비는 1,500만~7,500만 원에 달하므로, 배터리 수명(SoH) 85% 이상 유지 차량은 감가 방어율이 탁월합니다. 본 포털의 감가·배터리 계산기에서 주행거리, 급속충전 비율에 따른 5개년 잔존가치와 대기환경보전법 제58조 보조금 환수액을 정밀 시뮬레이션할 수 있습니다.",
+          },
+        },
+      ],
+    },
+    {
       "@type": "BreadcrumbList",
       "@id": `${SITE_URL}/#breadcrumb`,
       "itemListElement": [

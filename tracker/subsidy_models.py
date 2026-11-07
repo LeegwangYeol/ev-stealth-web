@@ -14,9 +14,16 @@ from typing import Any, Dict, List, Optional, Union
 
 
 def _safe_int(val: Any, default: int = 0) -> int:
-    """Safely convert value to int, catching None, NaN, Inf, ValueError, TypeError, and OverflowError."""
+    """Safely convert value to int, catching None, NaN, Inf, ValueError, TypeError, and OverflowError.
+    
+    Also sanitizes formatted numeric strings containing thousands separators (e.g. '1,500,000').
+    """
     if val is None:
         return default
+    if isinstance(val, str):
+        val = val.strip().replace(",", "")
+        if not val:
+            return default
     try:
         f = float(val)
         if math.isnan(f) or math.isinf(f):
@@ -27,9 +34,16 @@ def _safe_int(val: Any, default: int = 0) -> int:
 
 
 def _safe_float(val: Any, default: float = 0.0) -> float:
-    """Safely convert value to float, catching None, NaN, Inf, ValueError, TypeError, and OverflowError."""
+    """Safely convert value to float, catching None, NaN, Inf, ValueError, TypeError, and OverflowError.
+    
+    Also sanitizes formatted numeric strings containing thousands separators (e.g. '1,500.50').
+    """
     if val is None:
         return default
+    if isinstance(val, str):
+        val = val.strip().replace(",", "")
+        if not val:
+            return default
     try:
         f = float(val)
         if math.isnan(f) or math.isinf(f):
@@ -246,14 +260,46 @@ class CategoryMetrics:
             return data
         if not isinstance(data, dict):
             data = {}
+        ann = max(0, _safe_int(data.get("announced_units", data.get("announced", 0))))
+        app = max(0, _safe_int(data.get("applied_units", data.get("applied", 0))))
+        deliv = max(0, _safe_int(data.get("delivered_units", data.get("delivered", 0))))
+
+        rem_raw = data.get("remaining_units") if "remaining_units" in data else data.get("remaining")
+        if rem_raw is None:
+            rem = max(0, ann - app)
+        else:
+            rem = max(0, _safe_int(rem_raw, 0))
+
+        rate_raw = data.get("depletion_rate") if "depletion_rate" in data else data.get("rate")
+        if rate_raw is not None:
+            dep_rate = max(0.0, _safe_float(rate_raw, 0.0))
+        elif ann > 0 and app > 0:
+            dep_rate = max(0.0, round((app / ann) * 100.0, 1))
+        else:
+            dep_rate = 0.0
+
+        deliv_rate_raw = data.get("delivery_rate")
+        if deliv_rate_raw is not None:
+            deliv_rate = max(0.0, _safe_float(deliv_rate_raw, 0.0))
+        elif ann > 0 and deliv > 0:
+            deliv_rate = max(0.0, round((deliv / ann) * 100.0, 1))
+        else:
+            deliv_rate = 0.0
+
+        status_raw = data.get("status")
+        if status_raw is not None and str(status_raw).strip():
+            status = getattr(status_raw, "value", str(status_raw))
+        else:
+            status = AlertSeverity.from_rate(dep_rate).value
+
         return cls(
-            announced_units=max(0, _safe_int(data.get("announced_units", data.get("announced", 0)))),
-            applied_units=max(0, _safe_int(data.get("applied_units", data.get("applied", 0)))),
-            delivered_units=max(0, _safe_int(data.get("delivered_units", data.get("delivered", 0)))),
-            remaining_units=max(0, _safe_int(data.get("remaining_units", data.get("remaining", 0)))),
-            depletion_rate=max(0.0, _safe_float(data.get("depletion_rate", data.get("rate", 0.0)))),
-            delivery_rate=max(0.0, _safe_float(data.get("delivery_rate", 0.0))),
-            status=str(data.get("status") or "HEALTHY"),
+            announced_units=ann,
+            applied_units=app,
+            delivered_units=deliv,
+            remaining_units=rem,
+            depletion_rate=dep_rate,
+            delivery_rate=deliv_rate,
+            status=status,
             max_local_subsidy_krw=max(0, _safe_int(data.get("max_local_subsidy_krw", data.get("local_subsidy_krw", 0)))),
             max_total_subsidy_krw=max(0, _safe_int(data.get("max_total_subsidy_krw", data.get("total_subsidy_krw", 0)))),
             total_budget_krw=max(0, _safe_int(data.get("total_budget_krw", data.get("total_budget", 0)))),
@@ -327,18 +373,42 @@ class MunicipalityMetrics:
             return data
         if not isinstance(data, dict):
             data = {}
+        ann = max(0, _safe_int(data.get("announced_units", data.get("announced", 0))))
+        app = max(0, _safe_int(data.get("applied_units", data.get("applied", 0))))
+        deliv = max(0, _safe_int(data.get("delivered_units", data.get("delivered", 0))))
+
+        rem_raw = data.get("remaining_units") if "remaining_units" in data else data.get("remaining")
+        if rem_raw is None:
+            rem = max(0, ann - app)
+        else:
+            rem = max(0, _safe_int(rem_raw, 0))
+
+        rate_raw = data.get("depletion_rate") if "depletion_rate" in data else data.get("rate")
+        if rate_raw is not None:
+            dep_rate = max(0.0, _safe_float(rate_raw, 0.0))
+        elif ann > 0 and app > 0:
+            dep_rate = max(0.0, round((app / ann) * 100.0, 1))
+        else:
+            dep_rate = 0.0
+
+        status_raw = data.get("status")
+        if status_raw is not None and str(status_raw).strip():
+            status = getattr(status_raw, "value", str(status_raw))
+        else:
+            status = AlertSeverity.from_rate(dep_rate).value
+
         return cls(
             name_ko=str(data.get("name_ko") or data.get("name") or ""),
-            announced_units=max(0, _safe_int(data.get("announced_units", data.get("announced", 0)))),
-            applied_units=max(0, _safe_int(data.get("applied_units", data.get("applied", 0)))),
-            remaining_units=max(0, _safe_int(data.get("remaining_units", data.get("remaining", 0)))),
-            depletion_rate=max(0.0, _safe_float(data.get("depletion_rate", data.get("rate", 0.0)))),
-            status=str(data.get("status") or "HEALTHY"),
+            announced_units=ann,
+            applied_units=app,
+            remaining_units=rem,
+            depletion_rate=dep_rate,
+            status=status,
             local_subsidy_krw=max(0, _safe_int(data.get("local_subsidy_krw", data.get("local_subsidy", 0)))),
             muni_id=str(data.get("muni_id") or data.get("id") or data.get("code") or ""),
             name_en=str(data.get("name_en") or ""),
             category=str(data.get("category") or "passenger"),
-            delivered_units=max(0, _safe_int(data.get("delivered_units", data.get("delivered", 0)))),
+            delivered_units=deliv,
             total_subsidy_krw=max(0, _safe_int(data.get("total_subsidy_krw", data.get("total_subsidy", 0)))),
         )
 
@@ -540,14 +610,30 @@ class RegionRecord:
                     munis.append(MunicipalityMetrics.from_dict(muni_data))
 
         code_val = str(data.get("code") or data.get("region_id") or data.get("id") or "")
+        rate_val = data.get("overall_depletion_rate") if "overall_depletion_rate" in data else data.get("depletion_rate")
+        if rate_val is not None:
+            overall_rate = max(0.0, _safe_float(rate_val, 0.0))
+        elif cats:
+            tot_ann = sum(_safe_int(getattr(c, "announced_units", 0), 0) for c in cats.values())
+            tot_app = sum(_safe_int(getattr(c, "applied_units", 0), 0) for c in cats.values())
+            overall_rate = max(0.0, round((tot_app / tot_ann) * 100.0, 1)) if tot_ann > 0 and tot_app > 0 else 0.0
+        else:
+            overall_rate = 0.0
+
+        st_raw = data.get("overall_status") or data.get("status")
+        if st_raw is not None and str(st_raw).strip():
+            overall_status = getattr(st_raw, "value", str(st_raw))
+        else:
+            overall_status = AlertSeverity.from_rate(overall_rate).value
+
         return cls(
             region_id=str(data.get("region_id") or data.get("code") or data.get("id") or ""),
             iso_code=str(data.get("iso_code") or data.get("code") or data.get("region_id") or ""),
             name_ko=str(data.get("name_ko") or data.get("name") or data.get("region_name") or ""),
             name_en=str(data.get("name_en") or ""),
             tier=str(data.get("tier") or "province"),
-            overall_depletion_rate=max(0.0, _safe_float(data.get("overall_depletion_rate", data.get("depletion_rate", 0.0)))),
-            overall_status=str(data.get("overall_status") or data.get("status") or "HEALTHY"),
+            overall_depletion_rate=overall_rate,
+            overall_status=overall_status,
             residency_requirement_days=max(0, _safe_int(data.get("residency_requirement_days", data.get("residency_days", 30)), default=30)),
             supplementary_budget_added=bool(data.get("supplementary_budget_added", False)),
             categories=cats,
@@ -621,8 +707,8 @@ class PopularModelEntry:
         return asdict(self)
 
     def get_regional_subsidy(self, region_code: str, subsidy_type: str = "local_subsidy_krw") -> int:
-        """Safely retrieve local subsidy for a region code, handling missing or malformed samples."""
-        if not self.regional_subsidy_samples or not isinstance(self.regional_subsidy_samples, dict):
+        """Safely retrieve local subsidy for a region code, handling missing, case variations, or malformed samples."""
+        if not region_code or not self.regional_subsidy_samples or not isinstance(self.regional_subsidy_samples, dict):
             return 0
         entry = self.regional_subsidy_samples.get(region_code)
         if entry is None:
@@ -631,6 +717,35 @@ class PopularModelEntry:
                 if str(k).strip().upper() == code_upper:
                     entry = v
                     break
+        if entry is None:
+            alias_map = {
+                "서울": "seoul",
+                "경기": "gyeonggi",
+                "인천": "incheon",
+                "부산": "busan",
+                "대구": "daegu",
+                "광주": "gwangju",
+                "대전": "daejeon",
+                "울산": "ulsan",
+                "세종": "sejong",
+                "강원": "gangwon",
+                "충북": "chungbuk",
+                "충남": "chungnam",
+                "전북": "jeonbuk",
+                "전남": "jeonnam",
+                "경북": "gyeongbuk",
+                "경남": "gyeongnam",
+                "제주": "jeju",
+            }
+            code_str = str(region_code).strip()
+            for ko_key, en_key in alias_map.items():
+                if ko_key in code_str or en_key in code_str.lower():
+                    for k, v in self.regional_subsidy_samples.items():
+                        if en_key in str(k).lower():
+                            entry = v
+                            break
+                    if entry is not None:
+                        break
         if entry is None:
             return 0
         if isinstance(entry, (int, float)):
@@ -856,14 +971,48 @@ class NationwideSummary:
         if not isinstance(alert_region_counts, dict):
             alert_region_counts = {}
 
+        total_ann = max(0, _safe_int(data.get("total_announced_units", data.get("announced", 0))))
+        total_app = max(0, _safe_int(data.get("total_applied_units", data.get("applied", 0))))
+        total_del = max(0, _safe_int(data.get("total_delivered_units", data.get("delivered", 0))))
+
+        rem_raw = data.get("total_remaining_units") if "total_remaining_units" in data else data.get("remaining")
+        if rem_raw is None:
+            total_rem = max(0, total_ann - total_app)
+        else:
+            total_rem = max(0, _safe_int(rem_raw, 0))
+
+        rate_raw = data.get("nationwide_depletion_rate") if "nationwide_depletion_rate" in data else data.get("depletion_rate")
+        if rate_raw is not None:
+            dep_rate = max(0.0, _safe_float(rate_raw, 0.0))
+        elif total_ann > 0 and total_app > 0:
+            dep_rate = max(0.0, round((total_app / total_ann) * 100.0, 1))
+        else:
+            dep_rate = 0.0
+
+        tb_billion_raw = data.get("total_budget_billion_krw") if "total_budget_billion_krw" in data else data.get("total_budget")
+        if tb_billion_raw is not None:
+            tb_billion = max(0.0, _safe_float(tb_billion_raw, 0.0))
+        elif "total_budget_krw" in data and data.get("total_budget_krw") is not None:
+            tb_billion = max(0.0, round(_safe_float(data.get("total_budget_krw"), 0.0) / 1_000_000_000, 1))
+        else:
+            tb_billion = 0.0
+
+        db_billion_raw = data.get("disbursed_budget_billion_krw") if "disbursed_budget_billion_krw" in data else data.get("disbursed_budget")
+        if db_billion_raw is not None:
+            db_billion = max(0.0, _safe_float(db_billion_raw, 0.0))
+        elif "disbursed_budget_krw" in data and data.get("disbursed_budget_krw") is not None:
+            db_billion = max(0.0, round(_safe_float(data.get("disbursed_budget_krw"), 0.0) / 1_000_000_000, 1))
+        else:
+            db_billion = 0.0
+
         return cls(
-            total_announced_units=max(0, _safe_int(data.get("total_announced_units", data.get("announced", 0)))),
-            total_applied_units=max(0, _safe_int(data.get("total_applied_units", data.get("applied", 0)))),
-            total_delivered_units=max(0, _safe_int(data.get("total_delivered_units", data.get("delivered", 0)))),
-            total_remaining_units=max(0, _safe_int(data.get("total_remaining_units", data.get("remaining", 0)))),
-            nationwide_depletion_rate=max(0.0, _safe_float(data.get("nationwide_depletion_rate", data.get("depletion_rate", 0.0)))),
-            total_budget_billion_krw=max(0.0, _safe_float(data.get("total_budget_billion_krw", data.get("total_budget", 0.0)))),
-            disbursed_budget_billion_krw=max(0.0, _safe_float(data.get("disbursed_budget_billion_krw", data.get("disbursed_budget", 0.0)))),
+            total_announced_units=total_ann,
+            total_applied_units=total_app,
+            total_delivered_units=total_del,
+            total_remaining_units=total_rem,
+            nationwide_depletion_rate=dep_rate,
+            total_budget_billion_krw=tb_billion,
+            disbursed_budget_billion_krw=db_billion,
             category_totals=cat_totals,
             alert_region_counts=alert_region_counts,
         )

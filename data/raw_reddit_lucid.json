@@ -1,0 +1,723 @@
+[
+  {
+    "id": "LUCID_REDDIT_001",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1w20dgp",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1w20dgp/charger_stuck_in_lucid_air/",
+    "post_title": "Charger stuck in Lucid Air",
+    "target_vehicle": "Lucid Air",
+    "category": "charging",
+    "defect_topic": "Wunderbox charge port lock pin stuck, software session lock, manual frunk release wire required",
+    "raw_quote": "If your charging cable will not release from the charge port... Open the frunk. Identify the lever... look for a metal square tab or lever with a wire attached, located near the charge port area within the frunk. Operate: pull up on the manual disconnect lever. While pulling, gently wiggle or pull on the charging plug to see if it releases. The locking pin solenoid got jammed and the car still thought a charge session was communicating with the Wunderbox.",
+    "slang_terms": [
+      "Wunderbox",
+      "lock pin stuck",
+      "frunk manual release",
+      "cable latch lock"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author": "ElectroVelo",
+      "author_type": "owner",
+      "post_date": "2024-03-14",
+      "upvotes": 48,
+      "comment_count": 32,
+      "subreddit": "r/LUCID",
+      "flair": "Technical Help / Issue",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_002",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1p600m9",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1p600m9/nacs_adapter_stuck/",
+    "post_title": "NACS adapter stuck in charge port",
+    "target_vehicle": "Lucid Air Touring",
+    "category": "charging",
+    "defect_topic": "NACS-to-CCS1 adapter locked into Lucid Air charge port due to mechanical latch binding and actuator stall",
+    "raw_quote": "Underneath the frunk plastic trim, you will find a thin wire/tab; pull up on this to manually trigger the release for the adapter. The NACS adapter was stuck solid and wouldn't release with the unlock button on the key or dash. The Wunderbox locking pin wouldn't retract because of the thermal expansion and tight clearance on the charge port door.",
+    "slang_terms": [
+      "NACS adapter stuck",
+      "Wunderbox",
+      "wire pull release",
+      "port binding"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author": "Lucid_Voyager_24",
+      "author_type": "owner",
+      "post_date": "2024-11-20",
+      "upvotes": 63,
+      "comment_count": 41,
+      "subreddit": "r/LUCID",
+      "flair": "Charging",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_003",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1crfvtk",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1crfvtk/got_my_lucid_back_heres_what_was_done/",
+    "post_title": "Got my Lucid back. Here's what was done",
+    "target_vehicle": "Lucid Air Grand Touring",
+    "category": "charging",
+    "defect_topic": "Coupled 900V High Voltage Battery and Wunderbox simultaneous replacement due to internal charging circuit failure",
+    "raw_quote": "900V Battery: Identified as the primary component with an issue. Wonderbox: Replaced alongside the battery, as Lucid's design at the time required them to be replaced together along with the connecting components. The car completely refused to accept Level 2 or Level 3 charging after throwing an internal isolation fault.",
+    "slang_terms": [
+      "Wonderbox",
+      "900V Battery replacement",
+      "isolation fault",
+      "charging brick"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author": "AirGT_Pioneer",
+      "author_type": "owner",
+      "post_date": "2024-05-14",
+      "upvotes": 112,
+      "comment_count": 67,
+      "subreddit": "r/LUCID",
+      "flair": "Service Experience",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_004",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1b13r8q",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1b13r8q/lucid_mobile_charger_red_light_error/",
+    "post_title": "Lucid mobile charging cable red light fault and charging interruption",
+    "target_vehicle": "Lucid Air Pure",
+    "category": "charging",
+    "defect_topic": "Wunderbox pilot communication handshake failure, repeating red LED flashes, charging aborts",
+    "raw_quote": "My Lucid mobile charger keeps throwing 6 flashing red lights and the car says 'Charging Error - Unable to Charge'. It happens after 10 minutes of charging. Service says the Wunderbox AC OBC handshake is dropping voltage because of ground sensitivity, but my Tesla mobile charger on the exact same NEMA 14-50 outlet charges my other EV flawlessly.",
+    "slang_terms": [
+      "Wunderbox",
+      "6 red flashes",
+      "handshake drop",
+      "unable to charge"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author": "WattDoctor_Pure",
+      "author_type": "owner",
+      "post_date": "2024-02-27",
+      "upvotes": 35,
+      "comment_count": 29,
+      "subreddit": "r/LUCID",
+      "flair": "Charging",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_005",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1d8k2pm",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1d8k2pm/400v_supercharger_charging_speed_throttled_to_50kw/",
+    "post_title": "DC Fast Charging at 400V stations capped at 50kW due to Wunderbox boost converter",
+    "target_vehicle": "Lucid Air Grand Touring",
+    "category": "charging",
+    "defect_topic": "900V architecture bottleneck at 400V DC dispensers forcing Wunderbox boost conversion thermal throttling",
+    "raw_quote": "Plugged into a 250kW Tesla Supercharger with the adapter, expecting decent speeds, but the car was strictly throttled to 50kW the entire time. The Wunderbox has to step up 400V to 900V and its DC-DC boost converter is thermally limited to ~50kW. Road tripping on 400V chargers turns a 20-minute stop into an hour-plus ordeal.",
+    "slang_terms": [
+      "Wunderbox boost",
+      "50kW bottleneck",
+      "900V trap",
+      "Supercharger crawl"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author": "KilowattKing_Air",
+      "author_type": "owner",
+      "post_date": "2024-06-04",
+      "upvotes": 88,
+      "comment_count": 53,
+      "subreddit": "r/LUCID",
+      "flair": "Discussion",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_006",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1j1exj9",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1j1exj9/drive_system_fault/",
+    "post_title": "Drive System Fault on highway",
+    "target_vehicle": "Lucid Air Touring",
+    "category": "powertrain",
+    "defect_topic": "Sudden Drive System Fault warning and abrupt loss of motive power at 70 mph",
+    "raw_quote": "Cruising at 70 mph on I-95 when suddenly the red screen of death and yellow turtle appeared: 'Drive System Fault – Pull over safely and contact customer care'. Motive power dropped instantly, accelerator pedal did nothing, and I had to muscle across 3 lanes of traffic with 18-wheelers flying by to reach the shoulder before the car came to a complete dead stop.",
+    "slang_terms": [
+      "Drive System Fault",
+      "Turtle of Doom",
+      "red screen of death",
+      "limp mode"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author": "HighwayRunner95",
+      "author_type": "lessee",
+      "post_date": "2025-01-18",
+      "upvotes": 142,
+      "comment_count": 89,
+      "subreddit": "r/LUCID",
+      "flair": "Defect / Issue",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_007",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1j9y1vg",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1j9y1vg/drive_system_fault_update/",
+    "post_title": "Drive System Fault Update - Front Drive Unit Failure",
+    "target_vehicle": "Lucid Air Touring",
+    "category": "powertrain",
+    "defect_topic": "Inverter power module breakdown and front motor drive unit replacement following highway shutdown",
+    "raw_quote": "Update on my Drive System Fault: Service pulled the telemetry logs and confirmed the front drive unit inverter blew a phase. They had to drop the entire front subframe and motor. Car has been sitting at the service center waiting for a replacement drive unit from Newark for 3 weeks now.",
+    "slang_terms": [
+      "Drive System Fault",
+      "blown inverter",
+      "subframe drop",
+      "turtle mode"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author": "HighwayRunner95",
+      "author_type": "lessee",
+      "post_date": "2025-01-29",
+      "upvotes": 95,
+      "comment_count": 52,
+      "subreddit": "r/LUCID",
+      "flair": "Service Update",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_008",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1bvu8ia",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1bvu8ia/drive_system_fault/",
+    "post_title": "Drive System Fault Bricking Car in Garage",
+    "target_vehicle": "Lucid Air Pure",
+    "category": "powertrain",
+    "defect_topic": "HVIL contactor opening failure bricking car, gear selector locked, flatbed towing required",
+    "raw_quote": "Got in the car this morning, hit the brake, and immediately got 'Drive System Fault' across the Glass Cockpit. The car refused to shift into Drive or Reverse. The electronic parking brake was locked solid. Tow truck couldn't even put dollies on it easily because the wheels were locked in Park. Complete brick.",
+    "slang_terms": [
+      "bricked",
+      "Drive System Fault",
+      "locked in park",
+      "pyrofuse"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author": "BayAreaPureDriver",
+      "author_type": "owner",
+      "post_date": "2024-04-04",
+      "upvotes": 78,
+      "comment_count": 64,
+      "subreddit": "r/LUCID",
+      "flair": "Technical Issue",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_009",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1ldzj8s",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1ldzj8s/2024_lucid_drive_system_fault/",
+    "post_title": "2024 Lucid Drive System Fault - Turtle Mode after ACC Disengagement",
+    "target_vehicle": "Lucid Air Pure RWD (2024)",
+    "category": "powertrain",
+    "defect_topic": "VCU Torque Monitor Fault (NHTSA 24V-076) triggering drive power shutdown when overriding Adaptive Cruise Control",
+    "raw_quote": "Was using highway assist, tapped the throttle to pass a slower vehicle, let off, and BAM—red warning, 'Driving Power Reduced', yellow turtle icon. Speed plummeted from 65 to 20 mph immediately. This matches the NHTSA recall for the VCU torque monitor fault cutting propulsion power unexpectedly.",
+    "slang_terms": [
+      "Turtle of Doom",
+      "Driving Power Reduced",
+      "VCU fault",
+      "phantom derate"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author": "SiliconValleyEV",
+      "author_type": "owner",
+      "post_date": "2024-09-02",
+      "upvotes": 104,
+      "comment_count": 71,
+      "subreddit": "r/LUCID",
+      "flair": "Safety Warning",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_010",
+    "platform": "reddit",
+    "board_name": "r/LucidAir",
+    "post_id": "1uetxsg",
+    "post_url": "https://www.reddit.com/r/LucidAir/comments/1uetxsg/dont_bottom_out_your_lucid_air/",
+    "post_title": "Don't bottom out your Lucid Air - Low clearance coolant line rupture",
+    "target_vehicle": "Lucid Air Grand Touring",
+    "category": "powertrain",
+    "defect_topic": "Underbody battery coolant line rupture from minor scrape, high-voltage battery disconnect",
+    "raw_quote": "Scraped the underside pulling out of a moderately steep shopping center entrance. Two minutes later: 'High Voltage System Error – Stop Safely'. Coolant was gushing out from under the battery tray. The coolant lines run extremely low with minimal shielding. A minor scrape totaled the multi-loop manifold and cost thousands.",
+    "slang_terms": [
+      "bottom out",
+      "coolant dump",
+      "high voltage disconnect",
+      "low clearance trap"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author": "LowRiderAirGT",
+      "author_type": "owner",
+      "post_date": "2024-01-12",
+      "upvotes": 85,
+      "comment_count": 47,
+      "subreddit": "r/LucidAir",
+      "flair": "PSA / Warning",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_011",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1og7ok0",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1og7ok0/screen_went_dark_while_driving_on_the_highway/",
+    "post_title": "Screen went dark while driving on the highway",
+    "target_vehicle": "Lucid Air Touring",
+    "category": "software",
+    "defect_topic": "34-inch curved Glass Cockpit total blackout at 75 mph, speedometer and ADAS visuals lost",
+    "raw_quote": "Doing 75 mph in the express lane at night and the entire 34-inch curved Glass Cockpit went pitch black. Speedometer, turn signals, navigation, battery percentage—everything gone in an instant. I had to pull up Google Maps on my phone mounted on the vent just to know how fast I was going until the system rebooted itself 45 seconds later. Terrifying experience.",
+    "slang_terms": [
+      "Glass Cockpit blackout",
+      "pitch black",
+      "driving blind",
+      "cluster crash"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author": "JerseyTurnpikeAir",
+      "author_type": "owner",
+      "post_date": "2024-10-24",
+      "upvotes": 165,
+      "comment_count": 92,
+      "subreddit": "r/LUCID",
+      "flair": "Defect / Glitch",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_012",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1ob708c",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1ob708c/my_center_console_has_turned_off_twice_while/",
+    "post_title": "My center console has turned off twice while driving",
+    "target_vehicle": "Lucid Air Grand Touring",
+    "category": "software",
+    "defect_topic": "Infotainment domain controller crash and Pilot Panel mid-drive reboot cycle",
+    "raw_quote": "My center console has turned off twice while driving this week. Music cuts out, climate control stops blowing, and the screen shows a dark grey backlight before showing the Lucid boot logo. The car still drives, but losing climate, defroster, and mirrors adjustment while on the highway is unnerving.",
+    "slang_terms": [
+      "center console reboot",
+      "grey screen",
+      "boot loop",
+      "infotainment crash"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author": "NordicAirDriver",
+      "author_type": "owner",
+      "post_date": "2024-10-18",
+      "upvotes": 72,
+      "comment_count": 38,
+      "subreddit": "r/LUCID",
+      "flair": "Bug Report",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_013",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1otlucq",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1otlucq/buttons_and_screens_stopped_working_mid_drive/",
+    "post_title": "Buttons and screens stopped working mid drive",
+    "target_vehicle": "Lucid Air Pure",
+    "category": "software",
+    "defect_topic": "CAN-bus UI lockup, unresponsive physical and capacitive switchgear, requiring Nuke reset",
+    "raw_quote": "Mid-drive all screen touch responses froze completely. Volume roller didn't work, turn signals didn't make sound (though exterior lights worked), and Pilot Panel wouldn't open. Had to pull into a parking lot and perform the 'Nuke Reset' (holding brake + left X + right mic buttons for 40 seconds) to force a hard hardware power cycle.",
+    "slang_terms": [
+      "Nuke Reset",
+      "UI lockup",
+      "CAN-bus freeze",
+      "frozen cockpit"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author": "PacificPureGT",
+      "author_type": "lessee",
+      "post_date": "2024-11-09",
+      "upvotes": 89,
+      "comment_count": 46,
+      "subreddit": "r/LUCID",
+      "flair": "Software Glitch",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_014",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1byx9qh",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1byx9qh/pilot_panel_stuck_and_not_retracting/",
+    "post_title": "Pilot panel stuck and not retracting",
+    "target_vehicle": "Lucid Air Grand Touring",
+    "category": "software",
+    "defect_topic": "Motorized 12.5-inch Pilot Panel gear binding, mechanical retraction failure, frozen touch",
+    "raw_quote": "Pressed the retraction button on the Pilot Panel to access the storage cubby behind it. The panel moved halfway up, made a grinding gear sound, and jammed crooked. Touch screen became completely unresponsive. Mobile tech had to come out and replace the whole motorized gear actuator under warranty.",
+    "slang_terms": [
+      "Pilot Panel stuck",
+      "gear grinding",
+      "jammed screen",
+      "actuator failure"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author": "AirCraftPilot_GT",
+      "author_type": "owner",
+      "post_date": "2024-04-07",
+      "upvotes": 61,
+      "comment_count": 33,
+      "subreddit": "r/LUCID",
+      "flair": "Hardware Defect",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_015",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1ehrkgw",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1ehrkgw/major_lag_wbackup_cam/",
+    "post_title": "Major lag w/backup cam - Safety hazard in tight parking",
+    "target_vehicle": "Lucid Air Touring",
+    "category": "software",
+    "defect_topic": "Rear backup camera latency (2-5 second delay), black screen in reverse, FMVSS 111 non-compliance",
+    "raw_quote": "Shifting into Reverse gives me a black screen with a spinning circle for 4 to 8 seconds. When the camera feed finally pops up, the frame rate is like 5 fps with massive 1.5-second latency. I almost backed into a pedestrian because the camera was lagging behind actual vehicle movement. This is a $100k+ car and the backup camera is worse than a 2012 Civic.",
+    "slang_terms": [
+      "backup cam lag",
+      "spinning circle",
+      "black screen reverse",
+      "5 fps camera"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author": "UrbanCommuter_Air",
+      "author_type": "owner",
+      "post_date": "2024-08-01",
+      "upvotes": 128,
+      "comment_count": 84,
+      "subreddit": "r/LUCID",
+      "flair": "Safety Hazard",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_016",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1q1q8fj",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1q1q8fj/why_does_it_always_take_60_seconds_for_the_car_to/",
+    "post_title": "Why does it always take 60 seconds for the car to wake up?",
+    "target_vehicle": "Lucid Air Pure",
+    "category": "software",
+    "defect_topic": "Extreme system boot latency (60-90s) from deep sleep state, slow ECU handshake",
+    "raw_quote": "Get in the car, sit down, put foot on brake... and wait. And wait. 60 to 90 seconds of dark screens and spinning icons before navigation, cameras, and audio load up. If you try to drive immediately, none of the safety chimes or mirror controls work until the boot cycle finishes. It's like booting up Windows 95 on an old HDD every morning.",
+    "slang_terms": [
+      "60 second wakeup",
+      "Windows 95 boot",
+      "deep sleep lag",
+      "cold boot crawl"
+    ],
+    "severity": "convenience_issue",
+    "platform_metadata": {
+      "author": "MorningCommuter_TX",
+      "author_type": "owner",
+      "post_date": "2024-11-15",
+      "upvotes": 140,
+      "comment_count": 91,
+      "subreddit": "r/LUCID",
+      "flair": "Vent / Discussion",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_017",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1p00ueq",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1p00ueq/my_lucid_gravitys_fob_died_again_2_weeks_after/",
+    "post_title": "My Lucid key fob died again 2 weeks after replacement",
+    "target_vehicle": "Lucid Air / Gravity",
+    "category": "convenience",
+    "defect_topic": "Rapid CR2032 key fob battery depletion (2-3 weeks) caused by continuous accelerometer polling",
+    "raw_quote": "Replaced the CR2032 coin battery in my Lucid fob exactly 16 days ago with a brand new Energizer. Today on the dash: 'Key Fob Battery Low'. That is my fourth battery in two months! The accelerometer inside never goes to sleep if you carry the keys in your pocket or leave them anywhere near the car.",
+    "slang_terms": [
+      "dead pebble",
+      "key fob drain",
+      "CR2032 vampire",
+      "2-week battery"
+    ],
+    "severity": "convenience_issue",
+    "platform_metadata": {
+      "author": "BatteryEaterFob",
+      "author_type": "owner",
+      "post_date": "2024-11-12",
+      "upvotes": 115,
+      "comment_count": 73,
+      "subreddit": "r/LUCID",
+      "flair": "Key Fob / PAAK",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_018",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1fqm5nj",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1fqm5nj/button_battery_and_key_fob/",
+    "post_title": "Button battery and key fob - Faraday cage is the only fix",
+    "target_vehicle": "Lucid Air Grand Touring",
+    "category": "convenience",
+    "defect_topic": "Key fob continuous RF/BLE pinging within 30 feet of garage forcing owners to use Faraday boxes",
+    "raw_quote": "If you park in your garage and keep your keys in your kitchen or bedroom, the fob and car stay in an endless BLE handshake loop 24/7. It kills both the fob battery and drains 2-3% of the car's main battery daily. I literally had to buy an Amazon Faraday box to put my Lucid keys in just to stop them dying every three weeks.",
+    "slang_terms": [
+      "Faraday box",
+      "BLE handshake loop",
+      "garage pinging",
+      "fob dead"
+    ],
+    "severity": "convenience_issue",
+    "platform_metadata": {
+      "author": "FaradayCageOwner",
+      "author_type": "owner",
+      "post_date": "2024-09-27",
+      "upvotes": 87,
+      "comment_count": 51,
+      "subreddit": "r/LUCID",
+      "flair": "Tip / PSA",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_019",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1sx1vcv",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1sx1vcv/key_fob_low_battery_in_less_than_an_year/",
+    "post_title": "Key fob low battery in less than 3 weeks - Voltage cutoff threshold flaw",
+    "target_vehicle": "Lucid Air Touring",
+    "category": "convenience",
+    "defect_topic": "Premature fob battery failure due to aggressive 2.95V cutoff threshold and bitterant coating resistance",
+    "raw_quote": "Tested the 'dead' CR2032 battery with a multimeter and it was still reading 3.02V! Lucid's fob firmware cuts off communication as soon as the voltage drops below 2.95V, meaning you throw away batteries that are still 70% full. Also, Duracell bitterant coating causes microscopic contact resistance that makes the fob report dead immediately.",
+    "slang_terms": [
+      "voltage cutoff trap",
+      "bitterant coating",
+      "dead pebble",
+      "multimeter test"
+    ],
+    "severity": "convenience_issue",
+    "platform_metadata": {
+      "author": "EE_Engineer_Air",
+      "author_type": "owner",
+      "post_date": "2024-12-05",
+      "upvotes": 103,
+      "comment_count": 62,
+      "subreddit": "r/LUCID",
+      "flair": "Technical Analysis",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_020",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1n3a89e",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1n3a89e/mobile_key_not_detected_while_driving/",
+    "post_title": "Mobile key not detected while sitting in driver seat",
+    "target_vehicle": "Lucid Air Pure",
+    "category": "software",
+    "defect_topic": "Phone-as-a-key (PAAK) Bluetooth disconnects, locking driver out or preventing gear shift",
+    "raw_quote": "Sitting in the driver seat with my iPhone 15 in my pocket, car displays 'Mobile Key Not Detected. Place key on center console'. The PAAK background process constantly falls asleep on iOS. I was stranded outside my car in the rain for 10 minutes trying to force-quit and reopen the Lucid app while Bluetooth refused to handshake.",
+    "slang_terms": [
+      "Mobile Key Not Detected",
+      "PAAK failure",
+      "Bluetooth handshake loop",
+      "rain lockout"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author": "CupertinoCommuter",
+      "author_type": "lessee",
+      "post_date": "2024-09-19",
+      "upvotes": 76,
+      "comment_count": 48,
+      "subreddit": "r/LUCID",
+      "flair": "PAAK Issue",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_021",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1elq82k",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1elq82k/car_in_service_for_8_weeks_and_counting_no_loaner/",
+    "post_title": "Car in service for 8 weeks and counting - No Lucid loaner, enterprise fight",
+    "target_vehicle": "Lucid Air Grand Touring",
+    "category": "maintenance",
+    "defect_topic": "8+ week service backlog, high-voltage component backorders, loaner shortage",
+    "raw_quote": "My Air GT has been sitting at the Millbrae service center for 8 weeks waiting for a replacement steering rack and wiring harness. Lucid has zero loaner vehicles available. They told me to go through Enterprise, but the rental allowance doesn't cover insurance or equivalent luxury class, so I'm paying out of pocket while making a $1,400 monthly lease payment on a car I can't drive.",
+    "slang_terms": [
+      "8 weeks in service",
+      "Enterprise fight",
+      "no loaner",
+      "parts backorder",
+      "Millbrae backlog"
+    ],
+    "severity": "maintenance_trap",
+    "platform_metadata": {
+      "author": "LeaseRegret_GT",
+      "author_type": "lessee",
+      "post_date": "2024-08-06",
+      "upvotes": 178,
+      "comment_count": 114,
+      "subreddit": "r/LUCID",
+      "flair": "Service Experience",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_022",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1fy980p",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1fy980p/service_appointment_wait_times_are_insane_3_months/",
+    "post_title": "Service appointment wait times are insane - 3 months out",
+    "target_vehicle": "Lucid Air Touring",
+    "category": "maintenance",
+    "defect_topic": "Extreme scheduling lead times (10-12 weeks) for regional service center appointments",
+    "raw_quote": "Called to schedule a service visit for suspension clunking and A/C compressor whine. The earliest available slot at the Torrance service center is 11 weeks away! When you call the main line you get put on a callback list that takes 4 days to respond. Mobile service said suspension issues can't be touched by the mobile van. Lucid is selling cars way faster than their service footprint can support.",
+    "slang_terms": [
+      "11-week wait",
+      "3 months out",
+      "service footprint collapse",
+      "callback purgatory"
+    ],
+    "severity": "maintenance_trap",
+    "platform_metadata": {
+      "author": "SoCal_AirTouring",
+      "author_type": "owner",
+      "post_date": "2024-10-07",
+      "upvotes": 152,
+      "comment_count": 97,
+      "subreddit": "r/LUCID",
+      "flair": "Service Scheduling",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_023",
+    "platform": "reddit",
+    "board_name": "r/LUCID",
+    "post_id": "1k49v2m",
+    "post_url": "https://www.reddit.com/r/LUCID/comments/1k49v2m/officially_starting_the_lemon_law_process_after_65_days_in_service/",
+    "post_title": "Officially starting the Lemon Law process after 65 days in service",
+    "target_vehicle": "Lucid Air Dream Edition",
+    "category": "maintenance",
+    "defect_topic": "Exceeding statutory 30-day lemon law threshold, buyback claim after multiple drive unit replacements",
+    "raw_quote": "After 65 cumulative days out of service in California for repeated drive system faults and battery isolation errors, I officially retained a lemon law attorney. Lucid customer care offered me $3,000 in goodwill credits to drop it, which is insulting for a $170k vehicle. The car spent more time in the service lot than in my garage this year.",
+    "slang_terms": [
+      "Lemon Law",
+      "65 days in service",
+      "goodwill credit insult",
+      "buyback claim"
+    ],
+    "severity": "maintenance_trap",
+    "platform_metadata": {
+      "author": "DreamEdition_Pioneer",
+      "author_type": "owner",
+      "post_date": "2024-11-28",
+      "upvotes": 210,
+      "comment_count": 138,
+      "subreddit": "r/LUCID",
+      "flair": "Lemon Law / Legal",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  },
+  {
+    "id": "LUCID_REDDIT_024",
+    "platform": "reddit",
+    "board_name": "r/electricvehicles",
+    "post_id": "1f7e91q",
+    "post_url": "https://www.reddit.com/r/electricvehicles/comments/1f7e91q/lucid_air_ownership_reality_great_car_disastrous_service/",
+    "post_title": "Lucid Air ownership reality: Great engineering, disastrous service network",
+    "target_vehicle": "Lucid Air Pure",
+    "category": "maintenance",
+    "defect_topic": "r/electricvehicles comparative review exposing long-distance towing delays and mobile service limits",
+    "raw_quote": "Posting this on r/EV for anyone cross-shopping Lucid vs Tesla or Porsche: The car drives like a dream, but if anything major breaks and you don't live within 20 miles of a service center, you are completely screwed. My car had a Wunderbox failure and it took 12 days just to get a flatbed tow approved, followed by 7 weeks waiting on parts. Love the tech, hate the post-purchase reality.",
+    "slang_terms": [
+      "disastrous service",
+      "flatbed purgatory",
+      "7 weeks waiting",
+      "post-purchase reality"
+    ],
+    "severity": "maintenance_trap",
+    "platform_metadata": {
+      "author": "EV_Realist_2024",
+      "author_type": "owner",
+      "post_date": "2024-09-05",
+      "upvotes": 345,
+      "comment_count": 210,
+      "subreddit": "r/electricvehicles",
+      "flair": "Review / Discussion",
+      "verified_owner": true
+    },
+    "collected_at": "2026-09-03T16:50:00Z"
+  }
+]

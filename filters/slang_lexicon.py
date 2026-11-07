@@ -15,7 +15,8 @@ Authoritative reference:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
+import unicodedata
 
 
 @dataclass(frozen=True)
@@ -1524,19 +1525,50 @@ _SORTED_SLANG_ENTRIES: Tuple[SlangEntry, ...] = tuple(
     sorted(RAW_SLANG_ENTRIES, key=lambda x: len(x.term), reverse=True)
 )
 
+# Pre-normalized and pre-lowercased tuples for high-speed zero-allocation iteration
+_SLANG_ENTRY_LOWER_PAIRS: Tuple[Tuple[SlangEntry, str, str], ...] = tuple(
+    (entry, unicodedata.normalize("NFC", entry.term), unicodedata.normalize("NFC", entry.term).lower())
+    for entry in _SORTED_SLANG_ENTRIES
+)
 
-def find_matching_slang(text: str) -> List[SlangEntry]:
+
+def find_matching_slang(text: Any) -> List[SlangEntry]:
     """Identify all slang entries present in the given text.
 
     Sorts by term length descending to match composite idioms first.
+    Resilient to:
+    - None, empty string, non-string scalars
+    - Decomposed Hangul (NFD / NFKD from macOS / iOS / web input)
+    - Mixed-case Latin acronyms (ICCU, iccu, BMS, bms, OTA, ota, TCAM, tcam, HUD, hud, V2L, v2l)
+    - Null bytes and oversized payloads (capped to 50,000 characters)
     """
-    if not text:
+    if text is None:
         return []
-    text_str = str(text)
+    if isinstance(text, (bytes, bytearray)):
+        try:
+            raw_str = text.decode("utf-8", errors="replace")
+        except Exception:
+            raw_str = str(text)
+    else:
+        raw_str = str(text)
+
+    if not raw_str or not raw_str.strip():
+        return []
+
+    if "\x00" in raw_str:
+        raw_str = raw_str.replace("\x00", "")
+
+    # Truncate oversized text to prevent CPU starvation / ReDoS
+    if len(raw_str) > 50_000:
+        raw_str = raw_str[:50_000]
+
+    # Normalize unicode to precomposed NFC (handles decomposed Hangul syllables)
+    text_nfc = unicodedata.normalize("NFC", raw_str)
+    text_lower = text_nfc.lower()
+
     matches: List[SlangEntry] = []
     # Match longer terms first (e.g. 'ICCU 폭탄' before 'ICCU')
-    for entry in _SORTED_SLANG_ENTRIES:
-        if entry.term in text_str:
-            # Avoid duplicate matching of sub-terms if already represented
+    for entry, term_nfc, term_lower in _SLANG_ENTRY_LOWER_PAIRS:
+        if term_nfc in text_nfc or term_lower in text_lower:
             matches.append(entry)
     return matches

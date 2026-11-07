@@ -30,6 +30,7 @@ from crawlers.dcinside import (
 from utils.http_client import (
     MAX_COOKIEJAR_ENTRIES,
     MAX_RESPONSE_BYTES,
+    USER_AGENT_POOL,
     SafeHttpClient,
     clean_html_text,
     encode_euc_kr_query,
@@ -653,6 +654,133 @@ class TestHttpAdvancedErrorRecoveryAndBaseCrawlerLifecycle(unittest.TestCase):
             self.assertIsNotNone(pipeline.client)
             self.assertIsNotNone(pipeline.bobae_crawler)
             self.assertIsNotNone(pipeline.dc_crawler)
+
+
+class TestCrawlerHttpAuditAndDegradation(unittest.TestCase):
+    """
+    Verification suite for:
+    - crawlers.safe_http alias parity
+    - Header rotation diversity (exclude=current_ua)
+    - Case-insensitive retry-after & X-RateLimit-Reset
+    - HTTP 429 adaptive rate limiting & graceful degradation
+    - DCInside mobile fallback safety on 429 & deleted posts
+    - Pagination loop circuit breaker on consecutive failures
+    - Restricted/blocked page degradation across maintenance, 403, and WAF challenges
+    """
+
+    def test_crawlers_safe_http_alias(self):
+        """crawlers.safe_http exports SafeHttpClient and core utilities matching utils.http_client."""
+        import crawlers.safe_http as c_safe_http
+        self.assertIs(c_safe_http.SafeHttpClient, SafeHttpClient)
+        self.assertTrue(callable(c_safe_http.clean_html_text))
+        self.assertTrue(callable(c_safe_http.encode_euc_kr_query))
+        self.assertTrue(callable(c_safe_http.robust_decode))
+        self.assertEqual(c_safe_http.MAX_RESPONSE_BYTES, MAX_RESPONSE_BYTES)
+        self.assertEqual(c_safe_http.MAX_COOKIEJAR_ENTRIES, MAX_COOKIEJAR_ENTRIES)
+
+    def test_user_agent_rotation_diversity(self):
+        """get_random_user_agent(exclude=...) picks a distinct user agent from the pool."""
+        client = SafeHttpClient(enable_jitter=False)
+        first_ua = USER_AGENT_POOL[0]
+        for _ in range(20):
+            picked_ua = client.get_random_user_agent(exclude=first_ua)
+            self.assertNotEqual(picked_ua, first_ua)
+
+    def test_case_insensitive_retry_after_and_reset(self):
+        """_parse_retry_after handles lowercase retry-after and X-RateLimit-Reset epoch."""
+        client = SafeHttpClient(enable_jitter=False)
+
+        # 1. Lowercase retry-after
+        class DummyHE1:
+            headers = {"retry-after": "12.5"}
+        self.assertEqual(client._parse_retry_after(DummyHE1()), 12.5)
+
+        # 2. Uppercase Retry-After
+        class DummyHE2:
+            headers = {"Retry-After": "7"}
+        self.assertEqual(client._parse_retry_after(DummyHE2()), 7.0)
+
+        # 3. X-RateLimit-Reset
+        import time
+        future_time = time.time() + 15
+        class DummyHE3:
+            headers = {"x-ratelimit-reset": str(future_time)}
+        parsed = client._parse_retry_after(DummyHE3())
+        self.assertIsNotNone(parsed)
+        self.assertAlmostEqual(parsed, 15.0, delta=2.0)
+
+    def test_http_429_sets_rate_limited_until(self):
+        """Receiving HTTP 429 sets _rate_limited_until timestamp."""
+        mock_opener = unittest.mock.MagicMock()
+        err_429 = urllib.error.HTTPError("https://example.com", 429, "Too Many Requests", hdrs={"retry-after": "10"}, fp=io.BytesIO(b""))
+        mock_opener.open.side_effect = err_429
+
+        client = SafeHttpClient(max_retries=1, enable_jitter=False, opener=mock_opener)
+        status, _, _ = client.get("https://example.com/api")
+        self.assertEqual(status, 429)
+        self.assertGreater(client._rate_limited_until, 0.0)
+
+    def test_dcinside_fetch_post_does_not_hit_mobile_on_429(self):
+        """DCInsideCrawler fetch_post does not hit mobile endpoint if desktop returned 429."""
+        mock_client = unittest.mock.MagicMock(spec=SafeHttpClient)
+        mock_client.get.return_value = (429, "Too Many Requests", b"")
+        crawler = DCInsideCrawler(client=mock_client)
+        res = crawler.fetch_post("https://gall.dcinside.com/board/view/?id=car_new1&no=12345")
+        self.assertIsNone(res)
+        self.assertEqual(mock_client.get.call_count, 1)
+
+    def test_dcinside_fetch_post_mobile_fallback_deleted_returns_none(self):
+        """DCInsideCrawler mobile fallback returns None when post is deleted."""
+        mock_client = unittest.mock.MagicMock(spec=SafeHttpClient)
+        mock_client.get.side_effect = [
+            (404, "Not Found", b""),
+            (200, "<script>alert('삭제된 게시물입니다.'); history.back();</script>", b""),
+        ]
+        crawler = DCInsideCrawler(client=mock_client)
+        res = crawler.fetch_post("https://gall.dcinside.com/board/view/?id=car_new1&no=12345")
+        self.assertIsNone(res)
+
+    def test_pagination_halts_outer_loop_on_max_consecutive_failures(self):
+        """crawl_board / crawl_gallery halts entire pagination loop when hitting MAX_CONSECUTIVE_FAILURES."""
+        mock_client = unittest.mock.MagicMock(spec=SafeHttpClient)
+        list_html = "".join([f"<a href='/view?code=national&No={i}'>글 {i}</a>" for i in range(1, 6)])
+        mock_client.get.side_effect = [
+            (200, list_html, b""),
+            (429, "", b""),
+            (429, "", b""),
+            (429, "", b""),
+            (429, "", b""),
+            (429, "", b""),
+            (200, list_html, b""),
+        ]
+        crawler = BobaeDreamCrawler(client=mock_client)
+        results = crawler.crawl_board("national", pages=3)
+        self.assertEqual(len(results), 0)
+        self.assertEqual(mock_client.get.call_count, 6)
+
+    def test_graceful_degradation_on_restricted_and_maintenance_pages(self):
+        """is_deleted_or_restricted detects service maintenance, 403 in title, and IP block."""
+        from crawlers.bobaedream import is_deleted_or_restricted as bd_check
+        from crawlers.dcinside import is_deleted_or_restricted as dc_check
+
+        maint_html = "<html><head><title>서비스 점검 중입니다</title></head><body>정기 점검 진행중입니다.</body></html>"
+        is_blocked, reason = bd_check(maint_html)
+        self.assertTrue(is_blocked)
+        self.assertEqual(reason, "service_maintenance")
+
+        is_blocked_dc, reason_dc = dc_check(maint_html)
+        self.assertTrue(is_blocked_dc)
+        self.assertEqual(reason_dc, "service_maintenance")
+
+        access_denied_html = "<html><head><title>403 Forbidden</title></head></html>"
+        is_ad, reason_ad = bd_check(access_denied_html)
+        self.assertTrue(is_ad)
+        self.assertEqual(reason_ad, "access_denied")
+
+        ip_block_html = "<html><body>접근이 차단되었습니다. 고객센터로 문의하세요.</body></html>"
+        is_ip, reason_ip = dc_check(ip_block_html)
+        self.assertTrue(is_ip)
+        self.assertEqual(reason_ip, "ip_blocked")
 
 
 if __name__ == "__main__":

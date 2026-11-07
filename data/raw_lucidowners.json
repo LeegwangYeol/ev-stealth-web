@@ -1,0 +1,946 @@
+[
+  {
+    "id": "LO_CHG_001",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/charging-port-security-pin-deployed.10565/",
+    "title": "Charging port security pin deployed",
+    "author": "fadooly",
+    "date": "2024-11-15T09:57:49-0600",
+    "vehicle": "Lucid Air",
+    "category": "charging",
+    "topic": "Wunderbox charge port security pin deployed preventing charging plug insertion",
+    "quote": "Have any had any incident where the inside security pin of the charging port deployed before plugging in the charger ? I was trying to plug my car in my home charging today but the car won’t charge and it was showing cable connected and the charger was showing error sometimes and other times it is not doing anything I troubleshooted from everywhere until I realized the charging cable is not going in fully And I look into the charging port and I saw the security pin to hold the charging cable already deployed It was loss so I pushed back in its original place I am wondering what should I do if this happens again and the charging cable is stuck inside or when I go traveling the charging security pin deployed by itself Is it broken? And that is why it was deployed",
+    "reply_insights": [
+      "hydbob: There is an emergency/physical release.inside the frunk right above the charge port....",
+      "maractwin: Was the car locked? That pin is deployed when the car locks....",
+      "fadooly: No it was open and the charge port was open and I was trying to plug in my home charging..."
+    ],
+    "slang_terms": [
+      "wunderbox fault",
+      "pin deployed",
+      "charge port failure"
+    ],
+    "severity": "functional_failure",
+    "dsi_factors": [
+      "charging_inoperable",
+      "mechanical_jam"
+    ],
+    "sentiment": "negative"
+  },
+  {
+    "id": "LO_CHG_002",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/help-troubleshooting-car-wont-ac-charge-bug.13093/",
+    "title": "Help - Troubleshooting Car won't AC Charge Bug?",
+    "author": "illopp00",
+    "date": "2025-09-10T16:14:32-0500",
+    "vehicle": "Lucid Air",
+    "category": "charging",
+    "topic": "Wunderbox AC onboard charging failure and handshake error",
+    "quote": "Hi All, I have a 24 Touring with the latest 2.8 update. A couple of days ago, I got home and it would no longer accept AC charging from L1 or L2. It still DC charges. When I plug in it does all the normal stuff then sits there and says 0KW for a min before the red error lights. Just as a quick troubleshooting test before I got to request service could someone who has successfully AC charged use testmycode.cc and pull the values for the charging stuff? I am particularly interested in the 'Field 19, port_power: 5.9604644775390625e-06' reading a nonsense number.... <class 'vehicle_state_service_pb2.ChargingState'>: Field 1, charge_state: CHARGE_STATE_NOT_CONNECTED (1) Field 7, session_minutes_remaining: 65535 Field 8, charge_limit: 44290 Field 10, cable_lock: LOCK_STATE_LOCKED (2) Field 14, charge_limit_percent: 75.00000111758709 Field 16, charge_scheduled_time: 900 Field 17, scheduled_charge: SCHEDULED_CHARGE_STATE_IDLE (1) Field 18, scheduled_charge_unavailable: SCHEDULED_CHARGE_UNAVAILABLE_NO_REQUEST (1) Field 19, port_power: 5.9604644775390625e-06 Field 26, discharge_target_soe: 10",
+    "reply_insights": [
+      "illopp00: I just got the car back, so I'd thought I share for the benefit of the group. Car was out from Aug 25th to Sept 10th, sat in a Service queue for a while and then slowed by Labor Day weekend. After a b...",
+      "Shane_SLC: Wish I had seen this earlier! This is similar to what happened to my car at the end of last year. My MPB was replaced in addition to the HV battery. Haven't had any issues with AC charging since....",
+      "illopp00: Your parts list in the doc looks similar to mine Without naming names, I have a suspicion a certain branded but poorly maintained public L2 charger caused the fault......."
+    ],
+    "slang_terms": [
+      "ac charging bug",
+      "wunderbox",
+      "handshake error"
+    ],
+    "severity": "functional_failure",
+    "dsi_factors": [
+      "charging_inoperable",
+      "onboard_charger_fault"
+    ],
+    "sentiment": "negative"
+  },
+  {
+    "id": "LO_CHG_003",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/2-9-0-update-seemed-to-cause-home-charging-issue-solved-through-lowering-current-limiter-to-30-a.15890/",
+    "title": "2.9.0 Update seemed to cause home charging issue - solved through lowering Current Limiter to 30 A",
+    "author": "hal_in_PHX",
+    "date": "2026-05-26T09:58:38-0500",
+    "vehicle": "Lucid Air",
+    "category": "charging",
+    "topic": "Firmware 2.9.0 home charging failure requiring current derating to 30A",
+    "quote": "I did the 2.9.0 OTA this past weekend, then ran into a new issue while home charging with the Lucid Charger installed in my garage on 240V /30 AMP circuit. When I plugged into my home charger after doing the OTA update, the car would start charging for about 5 seconds, then stop. Over and over again roughly 5 times, then I'd get a red message to reattach the charging cable.. I noticed the charging would consistently stop when the charging speed hit 8kw... seemed to be fine all the way up to 8kw. After messing around with a few times, I lowered the Current Limiter from 40 AMP to down to 30, which seemed to prevent the charging speed from climbing past 7kw and hitting 8kw, where I'd get the error... Not 100% certain this is the correct fix since its now only worked 2 nights in a row, tonight will be night 3... But - seems to have solved the problem. Just wanted to share in case anyone else has experienced the same issue with home charging following the 2.9.0 updated... 2023 Air GT btw...",
+    "reply_insights": [
+      "nck: Power (KW) = Voltage (V) * Current (AMP) . Lowering the current will lower your charging power. Your circuit breaker has a 30 AMP limit, and that's probably why it's working fine when you limit it to ...",
+      "Adnillien: EV charging needs to be derated by 20%, the most that a 30A circuit should provide to an EV is 24A. The Lucid home charger should be set up to limit the current based on the 30A circuit. I am guessing...",
+      "hal_in_PHX: Appreciate the responses guys. Good insights. I guess the most interesting part is how/why the issue started the very first time I tried to charge after the OTA update. Maybe they put some additional ..."
+    ],
+    "slang_terms": [
+      "firmware 2.9.0",
+      "current limiter",
+      "derated charging"
+    ],
+    "severity": "functional_failure",
+    "dsi_factors": [
+      "thermal_throttling",
+      "firmware_regression"
+    ],
+    "sentiment": "negative"
+  },
+  {
+    "id": "LO_CHG_004",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/large-number-of-errors-after-charging.16453/",
+    "title": "Large number of errors after charging",
+    "author": "Akiogoesmoo",
+    "date": "2026-07-25T17:52:49-0500",
+    "vehicle": "Lucid Air Grand Touring",
+    "category": "charging",
+    "topic": "Cascading electrical error cascade following DC fast charging session",
+    "quote": "This morning after plugging charging at a Whole Foods and getting in my car to drive home, a number of warnings popped up including being limited to 35mph, regen braking turned off along with stability and safety features. The car required manually braking and would roll without the brake pressed. I contacted support who asked me to step away from the car for a few minutes. I had my 2 year old with me so this was a little bit of a hassle and after returning to the car, it began to severely shake once I hit 9mph. I ended up having support call me an Uber and had to get all of our groceries, stroller, car seat, and 2 year old home in that and left the car to be towed. Service center in Millbrae said it would be 2.5-3 weeks just to diagnose. Has anyone had similar issues come up and if so , what was the resolution? I have had my Gravity for exactly 1 week. On delivery day, I had to wait 3 hours because the car was stuck in service mode. Very poor experience so far.",
+    "reply_insights": [],
+    "slang_terms": [
+      "dc charging cascade",
+      "error swarm",
+      "high voltage glitch"
+    ],
+    "severity": "critical_safety",
+    "dsi_factors": [
+      "cascading_faults",
+      "bms_error"
+    ],
+    "sentiment": "extremely_negative"
+  },
+  {
+    "id": "LO_CHG_005",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/lucid-air-charge-port-door-alignment.15416/",
+    "title": "Lucid air charge port door alignment",
+    "author": "LucidTouring 25",
+    "date": "2026-04-05T11:45:13-0500",
+    "vehicle": "Lucid Air",
+    "category": "charging",
+    "topic": "Motorized charge port door misalignment and latching failure",
+    "quote": "Anyone have an issue with the alignment of the charge port door..mine seems to have shifted after 10k miles..anyone know of a diy to readjust",
+    "reply_insights": [
+      "L-Dude: I don't have an answer, but I am happy to bitch about something. I don't know why car manufacturers have to make everything motorized. Just make this a hinged door that you press to open, like a gas c...",
+      "Adnillien: This happened to my Air a long time ago. I had service fix it for me so I do not know a DIY solution. I would asked service next time you are in for service....",
+      "Halodde: Mine was never good and now it's worse because service didn't do a great job replacing the motor that died. If you come up with a solution, lmk..."
+    ],
+    "slang_terms": [
+      "charge port door",
+      "alignment defect",
+      "motor binding"
+    ],
+    "severity": "convenience_issue",
+    "dsi_factors": [
+      "fit_and_finish",
+      "motor_binding"
+    ],
+    "sentiment": "negative"
+  },
+  {
+    "id": "LO_PWR_001",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/drive-system-fault-megathread.5479/",
+    "title": "Drive System Fault Megathread",
+    "author": "goshen",
+    "date": "2023-01-02T20:25:42-0600",
+    "vehicle": "Lucid Air Grand Touring",
+    "category": "powertrain",
+    "topic": "Drive System Fault shutdown preventing gear engagement and vehicle movement",
+    "quote": "After almost 3 days of my AGT parked/idle at home, I was going to drive the vehicle to my son’s game tonight and alas, I got the “Drive system fault” error on the screen. And of course, the vehicle won’t drive. While, so glad and fortunate to be at home when this happened, this is indeed very scary. The last time I drove the vehicle was to an EA charging station and then to my local discount tire shop to purchase extended warranty on the tires. Current odometer mileage is 265 miles. Luckily, customer service was still opened and they worked me through using the fob to reset the vehicle (press the C letter on the fob once) to put the vehicle to sleep and twice to wake it up again. I am a bit uncomfortable now to drive the vehicle until mobile service show up later in the week to diagnose. The one thing I am concerned about is them coming and not able to replicate or figure out what could have led to the issue.",
+    "reply_insights": [
+      "joec: They should have a record in the logs of it happening, even if they can’t make it happen again. But in many cases, this warning does seem to happen once and then go away. Which is not reassuring, I’m ...",
+      "goshen: It sure is scary, especially if one is in the middle of the highway or some remote locations out of nowhere. I just read someone on the forum encountered the issue while on a road trip and had to wait...",
+      "borski: A recall would imply it was either a widespread or consistent issue, or that it was a safety issue. If it’s an intermittent warning that happens once when you start the car, is fixed on a reset, and i..."
+    ],
+    "slang_terms": [
+      "drive system fault",
+      "turtle mode",
+      "limp mode"
+    ],
+    "severity": "critical_safety",
+    "dsi_factors": [
+      "propulsion_shutdown",
+      "immobilization"
+    ],
+    "sentiment": "extremely_negative"
+  },
+  {
+    "id": "LO_PWR_002",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/turtle-mode-2025-at.11175/",
+    "title": "Turtle Mode - 2025 AT",
+    "author": "kac34",
+    "date": "2025-01-30T09:18:33-0600",
+    "vehicle": "Lucid Air Touring",
+    "category": "powertrain",
+    "topic": "Sudden Turtle Mode power derating and limp home activation on 2025 Air Touring",
+    "quote": "Short time lurker, first time poster. So I've been driving my 2025 AT in the ND winter and a couple days ago, on the way to work, I experienced \"turtle mode\" with a drive system warning. I pulled over, shifted to park, did a soft reset and the indications cleared. Thought I was fine but then on the drive home, it happened again. Again, cleared with a shift to park and soft reset. It was single digits and negative temp so I figured it was cold related. Contacted service and they said they'd have the engineers take a look. The next day, they said the engineers spotted a rear motor issue in the telemetry. Now I am waiting for a transport to the Goose Island service center and a rental car on Monday. Service has been pretty helpful so far. Anyway, decided to press my luck today, with temps finally above freezing (plus needing to run some errands)... Nope, happened again. It always seems to preceded by a loss of regen braking and a \"clunk\" from the rear motor. Frustrating that my car with <3,000mi has this issue. Figured I'd post my experience as data for others and maybe a data point for the 2025 model year.",
+    "reply_insights": [
+      "kac34: Update 1: Recieved a phone call from roadside assistance that I missed. Returned the call and they looked up my case number and saw that the tow request was \"closed by the provider.\" They said they ha...",
+      "Sid432: Sorry to hear that.. First time I heard this happened on 2025 model. Have you contacted the SC directly? If not, I would do that.. Rest assured, once this issue is fixed, you will forgive and forget a...",
+      "kac34: Update 3: Seems like a comedy of errors at this point. Tow driver came to pick up my vehicle today and ended up damaging the rear bumper (or under cowling?) while loading it on the trailer, popping a ..."
+    ],
+    "slang_terms": [
+      "turtle mode",
+      "turtle of doom",
+      "reduced power"
+    ],
+    "severity": "critical_safety",
+    "dsi_factors": [
+      "highway_stall",
+      "power_loss_in_traffic"
+    ],
+    "sentiment": "extremely_negative"
+  },
+  {
+    "id": "LO_PWR_003",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/two-faults-together-automatic-vehicle-hold-fault-and-drive-system-fault-at-9-8k-miles.9741/",
+    "title": "Two faults together - Automatic Vehicle Hold Fault and Drive System Fault at 9.8K miles",
+    "author": "SM_NCarolina",
+    "date": "2024-08-18T12:48:13-0500",
+    "vehicle": "Lucid Air",
+    "category": "powertrain",
+    "topic": "Dual simultaneous failure of Automatic Vehicle Hold and Drive System Fault",
+    "quote": "No signs of any other issues for quite some time and it hit me today with two faults together at the same time at 9800 miles. Are these some mechanical issues or they are sensors failing?",
+    "reply_insights": [
+      "borski: It's a real failure. You'll likely need a component (or more than one) replaced. A reset may help you get the car driving again to get it to a safe spot....",
+      "SM_NCarolina: Thanks. I called customer care and they arranged a towing but never told me to reset. Anyways now its waiting for someone to have a look at it....",
+      "frank4711: Had same issue - rear drive unit had to be replaced. Reset did not work for me but I would try it anyway...."
+    ],
+    "slang_terms": [
+      "vehicle hold fault",
+      "drive system fault",
+      "dual fault"
+    ],
+    "severity": "critical_safety",
+    "dsi_factors": [
+      "braking_failure",
+      "drive_system_fault"
+    ],
+    "sentiment": "extremely_negative"
+  },
+  {
+    "id": "LO_PWR_004",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/drive-system-fault.10917/",
+    "title": "Drive system Fault",
+    "author": "keemit99",
+    "date": "2024-12-27T00:16:02-0600",
+    "vehicle": "Lucid Air Pure",
+    "category": "powertrain",
+    "topic": "Catastrophic Drive System Fault stranding driver and requiring flatbed tow",
+    "quote": "Today I purchased a used 2022 Lucid Grand Touring with 12,000 miles. Driving from Philly back to Chicago , 4 hours into the drive from leaving the dealership I got this message and the car powered off in a Turnpike in a Road construction zone with no Shoulders at 8PM .. 30 degrees outside. Out of fear I’d be rear end I got out the car and stood outside for over an hour until Highway support came. Luckily I hit the hazards before escaping the car. The car went completely dead. Had it towed, for $300 bucks, then paid $80 more for another tow truck to try and jump it from the passenger rear. Still nothing. I called the dealership at Audi West Chester and my sales rep told me to call my insurance company! Wowwwww!! IS THIS REPAIRABLE OR A COMMON LUCID PROBLEM. BASICALLY ARE LUCIDS LEMONS?",
+    "reply_insights": [
+      "borski: I'm sorry you've run into this; definitely not a fun experience after buying a car, even if it's used. Definitely repairable. Have you installed the Lucid app? Lucid has 24/7 Roadside Assistance. You ...",
+      "HC_79: At 3 years in I’m surprised this is still a problem....",
+      "borski: Hard to say without knowing the history of the car. I have no idea if it ever saw service from the time it was bought. 12k is the first service, technically, but did they do the one-year or two-year? ..."
+    ],
+    "slang_terms": [
+      "drive system fault",
+      "flatbed tow",
+      "stranded"
+    ],
+    "severity": "critical_safety",
+    "dsi_factors": [
+      "immobilization",
+      "towing_required"
+    ],
+    "sentiment": "extremely_negative"
+  },
+  {
+    "id": "LO_PWR_005",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/stuck-in-napa-totally-dead-vehicle.13135/",
+    "title": "STUCK IN NAPA--totally Dead Vehicle",
+    "author": "Peter Coyote",
+    "date": "2025-08-10T12:27:47-0500",
+    "vehicle": "Lucid Air",
+    "category": "powertrain",
+    "topic": "Complete 12V and high-voltage electrical shutdown stranding vehicle in Napa",
+    "quote": "I parked my car in Napa, CA last night (Sat. Aug. 9th) to visit my wife’s and my other home. I had 221 miles on the charger. I clicked to download and upgrade, locked the car and went to bed. When I went to the car the next day, the charge read ZER0 in red ink. The steering was locked, the car wouldn’t move. Customer Service (an oxymoron) was closed for the weekend. I called roadside assistance and managed to get a tow truck. The tow truck driver could not find any setting on the car for TOWING. He told me that he’d towed LUCIDS before. He fiddled around quite a while, and finally managed to get it into neutral (he had to leave the door open.) He towed me to a cluster of EVGO chargers at the Factory Stores in Napa, CA. I hooked up to a machine, and the machine told me my car was half charged. However, after 30 minutes of charging my car had not acknowledged receiving a single mile. (The charger showed it was charging 4 mi. a minute. I called EVGO, they reset the machine. I did it again. They told me to move the car to another charger. (You try that with no battery!) I located two men who helped me push the car to an EVGO supercharger 150 amps. It told me my car was ¾ full but after ten minutes of charging my car hadn’t registered a mile…..it is not accepting power. I had to lock the car and leave it in a Mall unattended--- You can imagine how I felt. It’s Sunday morning. I need to return the car to a factory or dealer. I can’t get anyone on the phone and don’t know where to send it. I’ll have to take an UBER 65 miles to my home and use my truck, but I can’t leave my car. This is not the kind of service I’m used to with high-end automobiles. I hope I hear from someone soon. Peter",
+    "reply_insights": [
+      "Haggy: I don't know why EVGO chargers were not working, but if it showed that you were half or 3/4 full, you should have been able to drive. A software upgrade won't happen if the charge is below a certain l...",
+      "L-Dude: I had the same thing happen and lucid fixed it over the air. Look at my story starting with post number 473 and this thread.: https://lucidowners.com/threads/2-8-0-software-update.13025/page-25#post-2...",
+      "Clyde2575: Do you have a specific service person at your service location that you can call? I had near this exact same thing on Friday. The car opened and the center dash screen said zero miles in red. All othe..."
+    ],
+    "slang_terms": [
+      "dead vehicle",
+      "12v bricked",
+      "total shutdown"
+    ],
+    "severity": "critical_safety",
+    "dsi_factors": [
+      "high_voltage_disconnect",
+      "complete_brick"
+    ],
+    "sentiment": "extremely_negative"
+  },
+  {
+    "id": "LO_SCR_001",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/pilot-panel-frozen.10025/",
+    "title": "RESOLVED Pilot Panel Frozen",
+    "author": "24LAPS",
+    "date": "2024-09-17T20:01:32-0500",
+    "vehicle": "Lucid Air Pure",
+    "category": "software_ux",
+    "topic": "Pilot Panel freeze with Air logo overlay while driving at freeway speeds",
+    "quote": "While driving, the pilot panel froze with the Air logo super-imposed over what looks like a blurred navigation map. Most anxiety I’ve had since I was on the freeway and didn’t know if the software will reboot or not. Exited the freeway, stopped, exited the car, locked the doors for about 10 minutes, unlocked and pilot still frozen. Drove to EA and started charging. After 20 mins of charging, with the same frozen pilot panel, started to drive and after a couple of minutes, pilot panel went back to normal operations. Weird and worrisome… is it safe to drive when pilot freezes like that? SW ver 2.3.10 on Air Pure.",
+    "reply_insights": [
+      "segbrk: The pilot panel is not critical for driving. It's not ideal if it crashes, but it won't cut power to your motors or anything like that. Was the top right screen usable? If so, a \"Bobby reset\" likely w...",
+      "Neurio: Someone else posted about this yesterday too. Here's my response/solution: Post in thread '2.4.0 / 2.4.2 OTA' https://lucidowners.com/threads/2-4-0-2-4-2-ota.9929/post-223937...",
+      "24LAPS: Thanks for the response. Good to know that it won’t cut power. I was on the chat with customer care who recommended a brake/X/mic reset when it fixed itself...."
+    ],
+    "slang_terms": [
+      "pilot panel freeze",
+      "screen hang",
+      "air logo frozen"
+    ],
+    "severity": "critical_safety",
+    "dsi_factors": [
+      "infotainment_freeze",
+      "driver_distraction"
+    ],
+    "sentiment": "extremely_negative"
+  },
+  {
+    "id": "LO_SCR_002",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/pilot-panel-is-down-blank-and-frozen.5590/",
+    "title": "RESOLVED Pilot panel is down, blank and frozen!",
+    "author": "dwfallin",
+    "date": "2023-05-01T22:09:43-0500",
+    "vehicle": "Lucid Air",
+    "category": "software_ux",
+    "topic": "Retractable Pilot Panel blank, unresponsive and frozen post DC charging",
+    "quote": "anyone else seeing this? no problem with the other displays, just cant do anything with the pilot panel. tried swiping, tapping, moving maps to it, an adjusting temp to try and get something to show up! ended up doing a valet card reset and 20 seconds later - good to go. i had just finished a charging session (dc charging), and pulling out of a big parking lot - so the surround view of the car stayed up for some time. i went to start searching for next location (by clicking the map in the top display), and thats when i lost it. i'm on 2.0.64",
+    "reply_insights": [
+      "dwfallin: cant remember all the resets yet! but i remembered (thought i remembered!?) reading the quickest reset was to step outta the car, hold the valet card up to the apillar and lock the door... and wait 20...",
+      "HariK: Change profile to guest and back to yours. Booby reset. Next try Logo reset. Touch and hold the Lucid Logo. Next try walk away reset. Left or right blinker for visual. Walk away and see the blinker go..."
+    ],
+    "slang_terms": [
+      "blank screen",
+      "valet card reset",
+      "5-tier reboot",
+      "nuke reset"
+    ],
+    "severity": "functional_failure",
+    "dsi_factors": [
+      "screen_blackout",
+      "unresponsive_controls"
+    ],
+    "sentiment": "negative"
+  },
+  {
+    "id": "LO_SCR_003",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/pilot-panel-stuck.4341/",
+    "title": "Pilot Panel Stuck",
+    "author": "Tailspin74",
+    "date": "2023-01-10T21:26:07-0600",
+    "vehicle": "Lucid Air",
+    "category": "software_ux",
+    "topic": "Mechanical retraction mechanism failure causing Pilot Panel to stick in dash",
+    "quote": "Has anyone run into an issue of the pilot panel stuck in the down position? When I swipe up it tries to go up but can't. It's going back into the shop next week for a laundry list of items, but I thought I would see if there is a simple fix I can do at home. Also, it never worked correctly.",
+    "reply_insights": [
+      "joec: Sounds like either an alignment issue with the rails that the panel glides on, or something else is obstructing the motion. A few other people have reported similar issues. I’m sure service will get i...",
+      "MHDave: If you really need it up you might try assisting it with light pressure. But if the motion isn't equal on both sides, it is off the rails and there could be further damage. So use caution...."
+    ],
+    "slang_terms": [
+      "pilot panel stuck",
+      "mechanical binding",
+      "gear slip"
+    ],
+    "severity": "functional_failure",
+    "dsi_factors": [
+      "actuator_jam",
+      "hardware_defect"
+    ],
+    "sentiment": "negative"
+  },
+  {
+    "id": "LO_SCR_004",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/pilot-panel-not-turning-on-car-is-inoperable.10899/",
+    "title": "Pilot Panel not turning on car is inoperable",
+    "author": "djstone713",
+    "date": "2024-12-24T22:00:38-0600",
+    "vehicle": "Lucid Air Grand Touring",
+    "category": "software_ux",
+    "topic": "Pilot Panel complete startup failure rendering vehicle inoperable",
+    "quote": "The pilot panel is blank and not not on making the car is inoperable. Ive tried the logo reset, Bobby reset and I believe nuclear reset and nothing won't turn it. Unfortunately it's Christmas Eve and we are stuck and Lucid is closed. Any other suggestions?",
+    "reply_insights": [
+      "borski: The pilot panel doesn’t make the car inoperable, and you couldn’t have tried the logo reset if it is inoperable. The pilot panel is the center panel by the center console, not the screens in the drive...",
+      "djstone713: Thanks the drivers panel is not working... will look at instructions....",
+      "djstone713: Leaving the car alone and fall asleep seemed to work. Strangely, I received an alert that my trunk was open. Went to the car, trunk somehow opened up (it wasnt open before) and I had to manually close..."
+    ],
+    "slang_terms": [
+      "inoperable car",
+      "panel startup failure",
+      "blackout"
+    ],
+    "severity": "critical_safety",
+    "dsi_factors": [
+      "primary_controls_lost",
+      "immobilization"
+    ],
+    "sentiment": "extremely_negative"
+  },
+  {
+    "id": "LO_SCR_005",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/560-miles-in-black-screens.11853/",
+    "title": "560 Miles In - Black Screens",
+    "author": "JohnFliesYou",
+    "date": "2025-08-17T14:29:26-0500",
+    "vehicle": "Lucid Air Pure",
+    "category": "software_ux",
+    "topic": "Total multi-display Glass Cockpit blackout at 560 miles on brand new vehicle",
+    "quote": "With just under 560 total miles on my 2025 Lucid Air Touring, both center console screens have been going black while driving. The Service Center has now had my vehicle for 7 days and just sent me an update stating that they cannot find anything wrong. I really like the vehicle, and have praised it as compared to the Tesla that I traded, but It’s concerning that there is undoubtedly an issue (which is likely going reoccur) with my brand-new vehicle and even after keeping it for 7 days (out of the 33 days I’ve owned it) Lucid is unable to determine the issue. The service center states that they did the following: Checked system, no trouble codes. Inspected control module for water or other damage, none. Inspected connectors and harness, no issue. Did wiggle test on harness to ensure no chaffing, none. Brought in engineer team, no issues found. I'd like to note that I have not seen the vehicle leave the service facility the entire time that it's been there, but they stated that they would take it on a \"test drive\" tonight (which I would've thought they would've already done) no more than 20 minutes from the facility. According to the app it's currently 24 miles away (at least 40 mins one way) from the service center, parked at a small baseball field. Aside from this issue, the vehicle has been great and I've expressed my satisfaction many people that have asked about the car. Hopefully in the future I'm able to say that I had an issue, but Lucid got it taken care of. Not off to the best start. I've shared this a couple other places, and also wanted to do so here.",
+    "reply_insights": [
+      "amcclain: Curious about if/how this was resolved. Hope things have been better for you. I have been away - car was parked and off for ~2 weeks. Went to drive it today and having what might be a similar issue - ...",
+      "Temmrich: I'm on the 14th month of my 18 month lease - you describe pretty well the entire experience, which is a shame because it is truly a beautiful car and the drive experience is excellent (which i tell to...",
+      "borski: That type of failure happens after a bad boot where things did not come up correctly or in the right order. The steering wheel reset should have resolved it, but if it didn’t, let the car fall fully a..."
+    ],
+    "slang_terms": [
+      "glass cockpit blackout",
+      "black screens",
+      "speedometer lost"
+    ],
+    "severity": "critical_safety",
+    "dsi_factors": [
+      "speedometer_blackout",
+      "safety_violation"
+    ],
+    "sentiment": "extremely_negative"
+  },
+  {
+    "id": "LO_SCR_006",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/pinched-wiring-drivers-screen.16228/",
+    "title": "Pinched wiring- drivers screen.",
+    "author": "R.Bel",
+    "date": "2026-07-02T11:16:49-0500",
+    "vehicle": "Lucid Air Pure",
+    "category": "software_ux",
+    "topic": "Pinched wiring harness from fuse box mb11 blowing fuses and killing main screen",
+    "quote": "Hello, I'm looking for any insight on the possible location of a pinched wire from the interior fuse box mb11 to the main driving screen on a 2023 lucid air pure. The 15a fuse is blowing immediately once connected. { \"lightbox_close\": \"Close\", \"lightbox_next\": \"Next\", \"lightbox_previous\": \"Previous\", \"lightbox_error\": \"The requested content cannot be loaded. Please try again later.\", \"lightbox_start_slideshow\": \"Start slideshow\", \"lightbox_stop_slideshow\": \"Stop slideshow\", \"lightbox_full_screen\": \"Full screen\", \"lightbox_thumbnails\": \"Thumbnails\", \"lightbox_download\": \"Download\", \"lightbox_share\": \"Share\", \"lightbox_zoom\": \"Zoom\", \"lightbox_new_window\": \"New window\", \"lightbox_toggle_sidebar\": \"Toggle sidebar\" }",
+    "reply_insights": [
+      "borski: Post in thread 'Does anyone have the fuse panel layout?' https://lucidowners.com/threads/does-anyone-have-the-fuse-panel-layout.5405/post-130594 Page 2 of the PDF...",
+      "R.Bel: Thanks borski, I already have this. I'm looking for something like a wiring diagram or just the location of the screen wiring from the screen to the fuse panel. Thanks...."
+    ],
+    "slang_terms": [
+      "pinched wiring",
+      "fuse mb11",
+      "harness chafing"
+    ],
+    "severity": "critical_safety",
+    "dsi_factors": [
+      "electrical_short",
+      "wiring_defect"
+    ],
+    "sentiment": "extremely_negative"
+  },
+  {
+    "id": "LO_SCR_007",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/camera-lag-and-cccv2-question.15717/",
+    "title": "Camera lag and CCCv2 question",
+    "author": "jugvara",
+    "date": "2026-05-08T08:30:57-0500",
+    "vehicle": "Lucid Air Grand Touring",
+    "category": "software_ux",
+    "topic": "Severe backup camera lag, low frame rate and Pilot Panel freeze despite CCCv2",
+    "quote": "I recently purchased a used 2023 Air GT and one thing that I've noticed is that the video in the dashboard for the turn sign cameras has some lag to it. I'm wondering if upgrading to CCCv2 makes any difference in the smoothness of that video.",
+    "reply_insights": [
+      "JimmyBreeze: 2026 here- can't say if it's an improvement from yours or not but it still has hiccups, as does the reverse camera. Not terribly laggy per se but definitely not smooth/particularly HD....",
+      "socktucker: My 26 lags badly too, including the backup camera which is incredibly frustrating....",
+      "BS8899: on my 2022 AGT, aside from the backup camera lag, from time-to-time, I encounter blank or frozen pilot panel (is that the right term?). Sometimes it recovers on its own, other time, it requires a rest..."
+    ],
+    "slang_terms": [
+      "camera lag",
+      "cccv2",
+      "reverse camera stutter"
+    ],
+    "severity": "critical_safety",
+    "dsi_factors": [
+      "fmvss_111_violation",
+      "rearview_blindness"
+    ],
+    "sentiment": "extremely_negative"
+  },
+  {
+    "id": "LO_SCR_008",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/anybody-else-having-rear-camera-problems-since-2-10.16493/",
+    "title": "Anybody else having rear camera problems since 2.10?",
+    "author": "JGard18",
+    "date": "2026-07-30T11:36:35-0500",
+    "vehicle": "Lucid Air",
+    "category": "software_ux",
+    "topic": "Rear camera failure message and blackout when shifting between Reverse and Park",
+    "quote": "Seems like every time, if i shift to R, but then within maybe 5 seconds, shift to P or D, wait a short time (again less than 5 weconds), then back to R, the camera fails to turn on. My screen even says camera failure, and to restart the car to get it working again. I’ve had this happen 3x in the past few days and it’s never happened before 2.10. Anybody else getting this?",
+    "reply_insights": [
+      "knewman: Think I've only had this scenario (quickly shifting back and forth) once or twice since 2.10 but haven't experienced any problems....",
+      "Miami_Lucid_Man: I’ve had more black screens with CarPlay from time to time since this update than I’ve ever had before. That’s about the only difference I notice....",
+      "Hmaal: I just noticed today a slight hiccup/lag in the image but nothing major. In general the camera is a bit delayed, which I feel like I've only recently noticed but I don't think it's related to the new ..."
+    ],
+    "slang_terms": [
+      "rear camera failure",
+      "black screen on reverse",
+      "camera restart"
+    ],
+    "severity": "critical_safety",
+    "dsi_factors": [
+      "camera_blackout",
+      "parking_hazard"
+    ],
+    "sentiment": "extremely_negative"
+  },
+  {
+    "id": "LO_RBT_001",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/new-2025-at-have-to-reboot-every-2-3-days.12014/",
+    "title": "New 2025 AT - have to reboot every ~2-3 days",
+    "author": "quark",
+    "date": "2025-04-18T12:58:23-0500",
+    "vehicle": "Lucid Air Touring",
+    "category": "software_ux",
+    "topic": "Persistent system instability on 2025 Air Touring requiring reboots every 2-3 days",
+    "quote": "Took delivery of our 2025 Air Touring just under a month ago. Love the car most of the time, but finding the software to be super unreliable. Having to reboot the car roughly every 2-3 days to resolve issues such as no audio (music/bluetooth/calls/nav), CarPlay not connecting at all, front camera not activating, steering wheel heater not turning on, and today a very loud buzzing sound inside when parking and opening the door. Is this something I should schedule service for or is this the normal Lucid experience right now? Have had other issues also like the soft closing driver door not working also. How often do people reboot their cars?",
+    "reply_insights": [
+      "marsarbu: Schedule service but don't get your hopes high. I have/had most of the issues you mentioned here....",
+      "knewman: That's an excessive amount of rebooting. Unfortunately I don't believe Lucid has an answer for the audio issue just yet. Here's a thread where we've discussed the audio cutouts - https://lucidowners.c..."
+    ],
+    "slang_terms": [
+      "chronic reboot",
+      "system crash",
+      "2-3 day reboot cycle"
+    ],
+    "severity": "functional_failure",
+    "dsi_factors": [
+      "system_instability",
+      "memory_leak"
+    ],
+    "sentiment": "negative"
+  },
+  {
+    "id": "LO_RBT_002",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/how-many-soft-resets-should-you-do-to-correct-a-faulty-shifter-before-taking-into-service.12384/",
+    "title": "How many soft resets should you do to correct a faulty shifter before taking into service?",
+    "author": "michiganice91",
+    "date": "2025-05-24T17:18:48-0500",
+    "vehicle": "Lucid Air",
+    "category": "software_ux",
+    "topic": "Drive stalk shifter failure requiring repetitive soft reboot sequences",
+    "quote": "So the last 3 weeks or so I've started to get the faulty shifter issue. Unlock the vehicle, hit the break to move the seat, CAR STUCK IN PARK and won't shift to D or R. The first couple times I had to lock and unlock the vehicle to get it to work. Today that failed and I had to sit and wait for a soft reboot to fix it. So my question is how many times should I be encountering this before taking it into service or is this just something that comes and goes like the rest of the funky bugs I've dealt with. Thanks!",
+    "reply_insights": [
+      "doubletwist: I think it's a software issue that started with the most recent OTA. You can call service but unless they've found an association with some specific revision piece of hardware, it likely won't really ...",
+      "michiganice91: It seems to be mainly happening after a charging session as opposed to just being parked out somewhere....",
+      "Bthegreek: Unfortunately it’s a software issue that started after the latest update. I am taking my car to service next week.but I have no idea how they would handle it. Nobody seems to know what to do about it ..."
+    ],
+    "slang_terms": [
+      "shifter fault",
+      "soft reset cycle",
+      "drive stalk glitch"
+    ],
+    "severity": "functional_failure",
+    "dsi_factors": [
+      "shifter_malfunction",
+      "repetitive_reboot"
+    ],
+    "sentiment": "negative"
+  },
+  {
+    "id": "LO_FOB_001",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/key-fob-battery.16411/",
+    "title": "Key Fob Battery",
+    "author": "OtusDog",
+    "date": "2026-07-21T17:45:27-0500",
+    "vehicle": "Lucid Air",
+    "category": "hardware_keys",
+    "topic": "Chronic Key Fob CR2032 battery drain requiring 3 replacements in 2 weeks",
+    "quote": "I keep getting a notice that my Key Fob battery is low on my dash. I have replaced 3 times in the past 2 weeks. Is this a known issue or are all my batteries drained? Is there a way to check FOB battery levels?",
+    "reply_insights": [
+      "DeaneG: Might you be using bitterant-coated batteries? These can cause problems. You can remove the bitterant by wiping the battery with rubbing alcohol....",
+      "Chrome: Ensure that the fob is far enough from the car to prevent the two from communicating; I'd estimate 20ft. A stronger measure for this is to purchase a faraday box [Link] . The distance will no longer m...",
+      "Saksak: Another thing to check: Purchase Panasonic (Lucid recommended) or Energizer (I trust the brand) batteries from another store. I once had 4 bad batteries in a row, all from the same batch...."
+    ],
+    "slang_terms": [
+      "key fob battery",
+      "cr2032 drain",
+      "faraday box"
+    ],
+    "severity": "functional_failure",
+    "dsi_factors": [
+      "rapid_battery_depletion",
+      "rf_polling_loop"
+    ],
+    "sentiment": "negative"
+  },
+  {
+    "id": "LO_FOB_002",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/jiggling-the-key-fob.13297/",
+    "title": "Jiggling the key FOB",
+    "author": "L-Dude",
+    "date": "2025-08-25T12:13:15-0500",
+    "vehicle": "Lucid Air Grand Touring",
+    "category": "hardware_keys",
+    "topic": "Key fob proximity sleep failure requiring pocket jiggling to awaken vehicle",
+    "quote": "I've tried getting an answer to this in various threads without luck, so I thought I'd ask directly here. Occasionally, my Air GT fails to unlock as I approach. When this happens, I jiggle the key FOB in my pocket and the car unlocks immediately. This works 100% of the time. My question is: Why does this work? (FWIW I do not have mobile key set up.)",
+    "reply_insights": [
+      "nashvillelucid: I’m adding this to my techniques. Thanks!...",
+      "HC_79: Because the key is probably asleep to preserve battery and shaking it wakes it up....",
+      "Miami_Lucid_Man: If you \"wake\" your iphone it generally works as well, at least it does for me...."
+    ],
+    "slang_terms": [
+      "jiggling the fob",
+      "accelerometer sleep",
+      "proximity glitch"
+    ],
+    "severity": "convenience_issue",
+    "dsi_factors": [
+      "proximity_failure",
+      "sleep_mode_hang"
+    ],
+    "sentiment": "negative"
+  },
+  {
+    "id": "LO_FOB_003",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/newbie-key-fob-is-working-50-of-the-time.13448/",
+    "title": "Newbie Key Fob is working 50% of the time.",
+    "author": "RichardH",
+    "date": "2025-09-12T14:31:20-0500",
+    "vehicle": "Lucid Air",
+    "category": "hardware_keys",
+    "topic": "Intermittent walk-away passive locking failure operating only 50 percent of the time",
+    "quote": "Super annoying. I tried changing the batteries and turning off the mobile key on my iPhone. Separately, if I walk away and the car doesn't self lock (50% of the time). Does it go into sleep mode or does it literally stay \"on\" the whole time?",
+    "reply_insights": [],
+    "slang_terms": [
+      "passive locking failure",
+      "walk away fail",
+      "unlocked vehicle"
+    ],
+    "severity": "convenience_issue",
+    "dsi_factors": [
+      "security_risk",
+      "ble_handshake_drop"
+    ],
+    "sentiment": "negative"
+  },
+  {
+    "id": "LO_FOB_004",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/at-not-going-to-sleep-losing-15-charge-daily.15452/",
+    "title": "AT Not Going to Sleep-Losing 15% Charge Daily",
+    "author": "lucidtouringman",
+    "date": "2026-04-08T21:18:33-0500",
+    "vehicle": "Lucid Air Touring",
+    "category": "hardware_keys",
+    "topic": "High vampire drain losing 15 percent charge daily due to vehicle sleep inhibition",
+    "quote": "So my 2023 AT won't go to sleep. My garage and bedroom is fairly close to one another but I pause my Lucid app to disconnect any comms between app and car. Losing 15% charge just sitting there all day not sleeping. Fixes? Thoughts?",
+    "reply_insights": [
+      "Duncan C: After putting a HUGE note on the start button to remind you, put your keys in a microwave since it’s a natural faraday cage and see if that makes a difference...",
+      "DeaneG: Or just take the battery out of the fob temporarily....",
+      "Chrome: If you have the standard keyfob nearby, it will communicate with the car. Personally, I do not use the Mobile Key. I also do not use the Lucid App as a key, since it's incredibly unreliable. I only us..."
+    ],
+    "slang_terms": [
+      "vampire drain",
+      "15% loss daily",
+      "microwave faraday cage"
+    ],
+    "severity": "functional_failure",
+    "dsi_factors": [
+      "parasitic_drain",
+      "ecus_awake"
+    ],
+    "sentiment": "negative"
+  },
+  {
+    "id": "LO_FOB_005",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/battery-drain-5-to-6-overnight.11356/",
+    "title": "Battery drain 5% to 6% overnight",
+    "author": "sri",
+    "date": "2025-02-14T07:04:07-0600",
+    "vehicle": "Lucid Air",
+    "category": "hardware_keys",
+    "topic": "Unplugged phantom vampire drain losing 5-6 percent SOC overnight in garage",
+    "quote": "I have my 2022 Lucid from last 15months. Since last charge, overnight i have lost 5% to 6% twice. All my keys are far away from car and i am sure they are not waking up the car. I have one phone with mobile key and i have bluetooth turned off. Car is parked inside garage. I have noticed that car cabin temperature showing 87F both the times when the battery drain occurred. Anyone having similar issues with there car? Tried to reach customer support and all they are saying was keep keys away, it is normal…. I am fine if it is normal, my question is why all of sudden it happened twice in a week after 15months of ownership",
+    "reply_insights": [
+      "gmglass: Was car outside? In a garage? What was the temp outside of the car?...",
+      "sri: Its parked in garage and temps in the night are between 70 and 75....",
+      "gmglass: Weird. Maybe restart the software and see if it keeps happening...."
+    ],
+    "slang_terms": [
+      "battery drain",
+      "phantom drain",
+      "sleep failure"
+    ],
+    "severity": "functional_failure",
+    "dsi_factors": [
+      "range_loss",
+      "standby_consumption"
+    ],
+    "sentiment": "negative"
+  },
+  {
+    "id": "LO_FOB_006",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/mobile-key-bluetooth-issues-after-car-inactive-24-hours.15520/",
+    "title": "Mobile Key/Bluetooth Issues After Car Inactive > 24 Hours",
+    "author": "MacBain00",
+    "date": "2026-04-17T15:15:30-0500",
+    "vehicle": "Lucid Air",
+    "category": "hardware_keys",
+    "topic": "Bluetooth Mobile Key connectivity dropouts after vehicle inactive for 24 hours",
+    "quote": "Like the post says above, after the car is asleep for more than 24 hours, my mobile key no longer works. I have to launch the app and unlock the doors. When I get in the car, the mobile key never connects, and I have to enter my pin to drive. I need to do 2 resets to get the Bluetooth working again. The first reset gets my phone to connect to the car, so I have audio. The 2nd reset has mobile key working again. It seems like this issue started after the last update as I've never had this problem before. Side note: The car seems to be having issues with normal mobile key usage as it's been significantly slower to respond. Outside of having to unlock my Pixel phone for the mobile key to connect, the lag for the doors to open has increased. For anyone who's had these problems, you know when the lag feels worse than it already is. Anyone have any suggestions on what I can do to try and resolve this issue. This is a weekly issue for me since I switch to a business car every Wednesday/Thursday.",
+    "reply_insights": [
+      "knewman: I was experiencing a similar issue, the car would always ask for my PIN to drive, and passive door lock went from sometimes working to never working. I reached out to support about it. I never got a r...",
+      "socktucker: Same here. Doesn’t recognize mobile key after a sleep. When my car was in service they said they don’t even have a way to test that. There’s nothing you can do, it’s just slow and unreliable now. Comp...",
+      "MacBain00: So this was happening every day/every drive for the last few days so I tried to figure out what was happening. 2-3 resets of the car didn't work, resyncing my phone didn't work, turning off bluetooth ..."
+    ],
+    "slang_terms": [
+      "mobile key fail",
+      "bluetooth disconnect",
+      "deep sleep drop"
+    ],
+    "severity": "convenience_issue",
+    "dsi_factors": [
+      "paak_failure",
+      "bluetooth_deadlock"
+    ],
+    "sentiment": "negative"
+  },
+  {
+    "id": "LO_SVC_001",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/mclean-va-awful-service-and-i-am-done-with-lucid.16797/",
+    "title": "McLean VA awful service and I am done with Lucid",
+    "author": "nemecizer",
+    "date": "2026-09-01T13:16:21-0500",
+    "vehicle": "Lucid Air",
+    "category": "maintenance_repair",
+    "topic": "Service center communication breakdown and unworked vehicle backlog at McLean VA",
+    "quote": "I want to share a terrible experience I am having so far at the McLean VA service center. I brought the car in Thursday and was told maybe, maybe they would not get to it until Friday. Weekend at the latest. Now I see on the app the car is parked and not shown as in service. All they will tell me is that it is in the queue. I asked where in the queue and how long each car takes on average. No answer. In order to get this appointment I had to call multiple times but they never picked up. I finally just called the sales line and of course they picked up right away. I had to basically make the appointment for end of August, and I called back in May. I am done with Lucid. The software sucks, the car won't reliably open, the panels reboot at random, and the service is awful. This has already cost Lucid sales. My wife was really interested in buying the Gravity and after she saw what I went through she ran right away. I am seriously considering just buy out my lease and going to Mercedes. I have never seen such shoddy organization in my life.",
+    "reply_insights": [
+      "gaskiller: Not a shoddy organization but they need improvement in customer communication and service. They will place your car in queue to get it fixed. This is due to lack of service availability. Try not to ov...",
+      "gaskiller: So you came here, just to say all this in your First post? I’m rightfully skeptical....",
+      "nemecizer: Want me to post the chat thread I had with Hannah from the Tysons Lucid? I've been frustrated with Lucid for awhile, and this has really proven to me: go elsewhere. I hope people reading this thread a..."
+    ],
+    "slang_terms": [
+      "mclean va service",
+      "parts delay",
+      "done with lucid"
+    ],
+    "severity": "financial_hazard",
+    "dsi_factors": [
+      "service_blackout",
+      "unworked_vehicle"
+    ],
+    "sentiment": "extremely_negative"
+  },
+  {
+    "id": "LO_SVC_002",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/lucid-gravity-in-service-for-9-weeks-%E2%80%94-can-i-request-lease-payment-reimbursement.16611/",
+    "title": "Lucid Gravity in Service for 9+ Weeks — Can I Request Lease Payment Reimbursement?",
+    "author": "Brian_N",
+    "date": "2026-08-14T13:59:55-0500",
+    "vehicle": "Lucid Gravity",
+    "category": "maintenance_repair",
+    "topic": "Nine week service center delay for parts repair and lease payment reimbursement request",
+    "quote": "I leased my Lucid Gravity and took delivery in September 2025. Unfortunately, during the very first week of ownership, I had to bring it back because of technical issues. Lucid kept the vehicle for approximately 15 days. In January 2026, the vehicle needed service again. This time, I was advised to wait for an upcoming software update instead of bringing it in. The update resulted in several noticeable improvements, but I continued to experience technical problems. In April, I tried to schedule another service appointment. The earliest appointment Lucid could offer was August 10—yes, that meant waiting approximately four months just to get the vehicle into the service center. After waiting all that time, I finally dropped off my Gravity at the Lucid Service Center in Costa Mesa, California. I was then informed that the repair process would take at least nine weeks. That is an incredibly long time to be without a vehicle, especially while I am still responsible for the monthly lease payments. Two months of lease payments amount to approximately $4,000–$5,000. Has anyone experienced a similar situation? Would it be reasonable to ask Lucid to reimburse or cover my lease payments—or provide an account credit—for the period during which the vehicle is unavailable? Has Lucid ever offered anyone payment assistance, goodwill reimbursement, or another form of compensation in a similar situation? I would also appreciate any advice regarding other options I should consider, including possible rights under the California Lemon Law or my lease agreement. Thank you in advance for sharing your experiences or recommendations.",
+    "reply_insights": [
+      "segbrk: Have you at least been given a loaner / rental for all of that time?...",
+      "Leftlane: Not sure why anyone wouldn’t go lemon law route if the situation warrants. Nine weeks is asinine - what that probably means is they will get around to looking at in seven weeks and hope to take only t...",
+      "Bdr100: To me it is not just did you get a loaner but was the loaner comparable to your leased car. In my case, I got a Lucid Air Pure (zero options) as a loaner and was not happy. Next time I got a Gravity t..."
+    ],
+    "slang_terms": [
+      "9 weeks in service",
+      "lease reimbursement",
+      "parts famine"
+    ],
+    "severity": "financial_hazard",
+    "dsi_factors": [
+      "extreme_downtime",
+      "parts_unavailability"
+    ],
+    "sentiment": "extremely_negative"
+  },
+  {
+    "id": "LO_SVC_003",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/nobody-left-working-lucid-support-also-dark-pattern-hold-music.16666/",
+    "title": "Nobody left working Lucid Support? (Also, dark pattern hold music.)",
+    "author": "jered",
+    "date": "2026-08-19T19:07:35-0500",
+    "vehicle": "Lucid Air",
+    "category": "maintenance_repair",
+    "topic": "Lucid customer care phone support abandonment and infinite hold music dark patterns",
+    "quote": "My passenger window won't go up. This seems to be a pretty regular software issue, so I want to see if they can reset the window remotely.... I've been waiting on hold for 45 minutes on the main Lucid Support number. \"We're working on connecting you to the next available specialist. Remain on the line and we will connect you shortly.\" LIES! Nobody is answering. Also, the dark pattern of a short music loop followed by a voice (so you can't just leave it on in the background without thinking someone has picked up) -- this is a dark pattern that is only ever done to get people to hang up rather than wait for service. Have they rolled up the business and not let us know? I am NOT happy about this experience.",
+    "reply_insights": [
+      "jered: Other interesting things -- the Lucid Support number is no longer visible in the app under Service. Texting replied with:...",
+      "j4gates: I've had luck this week selecting the call back option. Called on 2 separate occasions. First time I waited about 20 minutes before surrendering, second I selected the option right away. Both times a ...",
+      "RONR: I have run into this issue numerous times with Lucid, and found it best to call the local service center directly. That still won't ensure a satisfactory service experience, but it at least gets you c..."
+    ],
+    "slang_terms": [
+      "support dark pattern",
+      "hold music",
+      "unresponsive care"
+    ],
+    "severity": "convenience_issue",
+    "dsi_factors": [
+      "support_collapse",
+      "abandoned_calls"
+    ],
+    "sentiment": "negative"
+  },
+  {
+    "id": "LO_SVC_004",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/aug-2026-air-service-experience-journal.16725/",
+    "title": "Aug 2026 - Air Service Experience Journal",
+    "author": "doubletwist",
+    "date": "2026-08-25T17:51:10-0500",
+    "vehicle": "Lucid Air",
+    "category": "maintenance_repair",
+    "topic": "Prolonged service turnaround and repetitive visit journal for persistent Air defects",
+    "quote": "Hopefully this is something others may find useful. I'm going through a warranty service incident for my 2025 AT (plus a few other items) and I thought it might be good to have a semi-real-time narration of what the process entails and how everything goes. I know this won't be an example of everyone's service experience, and should I encounter any issues, hopefully the service capacity will continue to be addressed by the new leadership. This is just a snapshot of what the service center experience is RIGHT NOW with the Houston service center. ## Day 1 (ish) Wed 2026-08-19 Our story actually begins last week (well, not really but we'll address that in a moment) when I pulled into my garage and got an alert on the dashboard that the parking brake may not be engaged, and that the vehicle may roll, and this suggested I park someplace flat. I did a brake+steering wheel reboot in the hopes that it would clear, but it did not. I decided to let the car sleep and see if that cleared it. A few hours later, I needed to go pick up the kiddo from school. The alert was still there but since it said the brake wasn't engaged, I figured it was safe enough to run to the school and back since I wouldn't need to park or leave the vehicle. So I set off... Just as I was about to turn into the school parking lot (about 1.5-2 miles tops), I noticed smoke coming from the left rear wheel. That's when I realized the brake WAS engaged. I pulled into the parking lot and stopped in the first available space. Just as I was pulling into the parking lot, two additional alerts popped up on the dash. (See attached) While I was waiting for the kiddo to come out, I called roadside assistance, and I called my wife to come pick up the kiddo since I'm sure she didn't want to sit in the car waiting for a tow truck. They were able to dispatch a tow truck, which to about 2 hours later (rush hour in DFW sucks). Really? My only complaint there was that for some reason they order with dollies, instead of a flatbed, which would have been fine There aren't as many of those around here so it took longer. While waiting, I also contacted customer service and asked about a loaner or rental. Initially they just told me that when the service center contacted me, they would arrange for a loaner. The tow arrived a couple hours later and per Lucid, they towed my vehicle back to my house, and I was told that I would get another call from Lucid to schedule an actual transport to bring the car down to Houston (about 250 miles away). Later that evening I called customer support back again. they called me back fairly quickly. I had to ask them for a rental to bridge the gap while I waited to hear from the service center. Since Enterprise has NO EVs available within like a 200 mile radius (not even the exotics locations) they okayed me to get something from anywhere with a $450 limit. So the next day I went and got a Volvo C40 from Budget. Its not terrible. It drives fairly nice, but it's got less room and the range is garbage. ## Mon 2026-08-24 ~6pm I got a call that showed up on my caller ID as \"World of Khaos\" (wtf?). It was the transport driver (he apparently also owns a haunted house somewhere around here). He arranged for him to come pick up my car on Tuesday the 25th around lunch time. I mentioned my need for a longer term loaner and he said he'd have someone from the service center call. ## Tues 2026-08-25 This morning I got a call from Irving at the Houston SC. He was very helpful, to the degree possible. He tried to find me an EV with Enterprise, even contacting several exotics locations but like me was unsuccessful. So it looks like I'll be stuck with an ICE vehicle while my Air is in service. He did mention he would try to see if they could get me an actual loaner. He mentioned that they had gotten some more vehicles in in as a loner fleet, but that they weren't ready yet. And I suspect I'm not first in line. They also (this is my own guess) are probably mostly for the folks in the Houston area, since I'm sure Lucid would rather not ship loaner vehicles all over the place. He did mention hope that things would get better when the Dallas service center opened in October. He said they were supposed to have something like 13 bays, which I guess is quite a bit more than they have in Houston. So I'm keeping my fingers crossed for that in case I have any future service center needs. I'll be picking up whatever my new rental is tomorrow at lunch, and returning the Volvo to Budget. I don't know exactly what vehicle they will actually have available for me, hopefully at least something in a similar luxury sedan range as what I'm used to with the Air. I'll provide an update on that tomorrow. I also texted him letting him know that I had two additional things I wanted done since they would have the vehicle, because I tried to contact them previously to arrange something and I couldn't get a hold of anyone in Houston or the Dallas mobile dispatch. 1. I've requested that they also do my 24,000 mile service. 2. I requested that they inspect the right front suspension, after my incident with the pothole that bent the wheel. I want to know if there's any hidden damage that I need to bring to my insurance company to address. In the meantime, it's now 5:00 p.m., And I haven't heard anything from the transport guy. So I'm about to contact him and see if he's going to actually make it today or not.",
+    "reply_insights": [
+      "socktucker: My whole service experience took a weird twist today too, I got some email from a guy in mediation offering me $2000 payment to not take them to court I think? It was a really weird email, I don't thi...",
+      "doubletwist: For sure. It was just a very odd thing to see on my caller ID. I almost didn't answer it. When my car was shipped from New York to King of Prussia, apparently either the original tow truck or the tran...",
+      "socktucker: same! But it was 3 wheels. They replaced one...."
+    ],
+    "slang_terms": [
+      "service journal",
+      "repetitive repair",
+      "service backlog"
+    ],
+    "severity": "functional_failure",
+    "dsi_factors": [
+      "chronic_issues",
+      "repeat_visits"
+    ],
+    "sentiment": "negative"
+  },
+  {
+    "id": "LO_ADS_001",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/highway-assist-disengaged.10095/",
+    "title": "highway assist disengaged",
+    "author": "coma24",
+    "date": "2024-09-24T17:36:19-0500",
+    "vehicle": "Lucid Air",
+    "category": "safety_adas",
+    "topic": "Highway Assist sudden disengagement triggering abrupt regenerative braking jerk",
+    "quote": "v2.2.4, HA was engaged and driving well, including a few lane changes. Out of the blue, HA disengaged with a red error message (I don't recall the specifics, it wasn't on screen for very long, and I was driving at that point). From that point on, HA would not come up as an option....the only choice was Adaptive Cruise, despite being on an interstate where I have used HA without issue in the past. Customer Care noted the issue and asked me to let them know if it happens again, however, they weren't interested in pulling the logs to find out what happened in this instance. There were no sensor errors or persistent warnings. It was completely out of the blue. It was an issue because the car started braking hard (high regen) since my foot wasn't on the throttle. I took over, obviously, as quickly as possible, but RIP anyone who was following close behind (nobody in this case, mercifully). Additionally, had this happened while taking a corner, it would've been even more startling and could've easily ended up in a lane departure, or a trip into the shoulder, depending on driver reaction time. @mcr16 given that a red error message showed up (something along the lines of \"Highway Assist canceled,\" but with a bit more detail), it sounds like the required constraints for HA engagement were no longer met, hence the system dropped out, leaving HA unavailable for the remainder of the drive, despite the issue not being associated with any specific sensor outage (otherwise I would've been an error along those lines). Has anyone come across this before?",
+    "reply_insights": [
+      "Adnillien: I have had this happen twice. I believe the red error message says driver assist ended but like you the message does not display long enough to read when you are driving. It is very startling when it ...",
+      "Tâm: I don't recall that kind of sudden loss of HA prior to this version for the past 2 years. With this current one, it has happened quite often. I assume it's just a bug and subsequent versions will make..."
+    ],
+    "slang_terms": [
+      "highway assist disengaged",
+      "regen jerk",
+      "phantom brake"
+    ],
+    "severity": "critical_safety",
+    "dsi_factors": [
+      "sudden_deceleration",
+      "rear_end_risk"
+    ],
+    "sentiment": "extremely_negative"
+  },
+  {
+    "id": "LO_ADS_002",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/drive-assist-intermittent-braking.12903/",
+    "title": "Drive Assist Intermittent Braking",
+    "author": "Driveabout",
+    "date": "2025-07-16T19:00:15-0500",
+    "vehicle": "Lucid Air Grand Touring",
+    "category": "safety_adas",
+    "topic": "DreamDrive phantom braking and intermittent brake tapping while passing trucks",
+    "quote": "During my March service the ADAS was supposedly checked and calibrated. A month ago, while on a long distance trip, while in Drive Assist it would intermittently brake and release as I passed a vehicle on my right. Since much of that driving was on curving highways I thought the sensor might be catching a vehicle as we approached a curve, especially toward the lefthand. This weekend I completed a 1500 mile drive on highways with long straight stretches. During this trip the intermittent braking while passing became increasingly frequent. It happened anywhere from about 10’ prior to the encounter up to midway past the vehicle. It was usually a semi-truck with a trailer(s), but also occasionally included vehicles pulling trailers and twice an SUV. It didn’t happen all the time, but enough times to keep me a bit on edge, especially with vehicles following behind me. Since I was on a long drive, I methodically turned off each of the 14 DreamDrive settings one at a time and waited to see if the issue disappeared. No luck. Any suggestions?",
+    "reply_insights": [
+      "marsarbu: M Thread 'More phantom braking in the last month or so ...' Jun 19, 2025 Since the last update before the Android Auto one, I am having a lot of phantom breaking. Not the throw-you-through-the-windshi...",
+      "Driveabout: Thanks for pointing this out. I apparently missed prior posts..."
+    ],
+    "slang_terms": [
+      "phantom braking",
+      "passing trucks",
+      "radar false positive"
+    ],
+    "severity": "critical_safety",
+    "dsi_factors": [
+      "phantom_braking",
+      "sensor_ghosting"
+    ],
+    "sentiment": "extremely_negative"
+  },
+  {
+    "id": "LO_ADS_003",
+    "platform": "lucidowners.com",
+    "board": "Lucid Air Forum",
+    "url": "https://lucidowners.com/threads/this-is-getting-serious-dd-pro-thinks-the-dotted-line-is-the-center-of-the-lane.11271/",
+    "title": "This is getting serious.  DD Pro thinks the dotted line is the center of the lane.",
+    "author": "Joelaron",
+    "date": "2025-02-05T12:32:04-0600",
+    "vehicle": "Lucid Air Grand Touring",
+    "category": "safety_adas",
+    "topic": "DreamDrive Pro lane centering failure misidentifying dotted line as lane center",
+    "quote": "I've posted on other threads, but wanted to start this up to see if anyone else is having the same issue with their 2025 Air GT w/ DD Pro... because it got very serious today to the point of where I need to speak to Lucid legal dept. I just got the car back from service over a week ago where all cameras were calibrated/replaced and have not had a chance to try Drive Assist.. today I did, and nearly caused a massive accident on Highway 101. I am able to re-create the event 100% of the time. On a very clear stretch of highway 101, with clear lane markings.. I activated Drive Assist.. as soon as I hit the button on the wheel, the wheel immediately jerked hard to the right, sending the car rapidly into the right lane where the person in that lane behind me nearly drove off the highway. I instantly overrode the system by grabbing the wheel to pull me back into my lane.. as soon as I let go of the wheel, the car again jerked hard into the rt lane, eventually settling on driving on the dotted line, taking up two lanes. Pulled over and did a walk around of the the car. No cameras blocked. Tried it again when I had no cars around me, and the car repeated exactly as it did before. Every time, the car wants to ride on the dotted lines between two lanes. Has anyone ever seen this? I'm chatting w/ my tech at Millbrae.. so they're aware... but good golly...this a waste of $7k for DD Pro.",
+    "reply_insights": [
+      "borski: There is something wrong with your car. This is not normal and I’ve never seen it happen. Have you had service check it out? Perhaps it needs a recalibration, or a wheel balance…...",
+      "Blue Lectroid: Almost seems like when the service team recalibrated your cameras they inadvertently set the “zero point” on the line of a line rather than between two lines!!...",
+      "Sid432: Actually, I received my car from service and it’s doing the exact same thing but it’s pulling towards left. Spoke to SC and she said my cameras need to re-calibrated. I’m hopeful, this will fix the is..."
+    ],
+    "slang_terms": [
+      "dd pro lane center",
+      "dotted line center",
+      "pulling left"
+    ],
+    "severity": "critical_safety",
+    "dsi_factors": [
+      "lane_departure",
+      "perception_failure"
+    ],
+    "sentiment": "extremely_negative"
+  }
+]

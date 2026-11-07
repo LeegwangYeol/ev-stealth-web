@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef, startTransition } from 'react';
 import Link from 'next/link';
 
 interface DepreciationErrorProps {
@@ -13,15 +13,34 @@ interface DepreciationErrorProps {
  * Catches unhandled runtime calculations during battery degradation or depreciation simulation.
  */
 export default function DepreciationCalculatorError({ error, reset }: DepreciationErrorProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     console.error('Unhandled Depreciation Calculator route error:', error);
+    containerRef.current?.focus();
   }, [error]);
+
+  const handleRetry = () => {
+    try {
+      startTransition(() => {
+        reset();
+      });
+    } catch {
+      if (typeof window !== 'undefined') {
+        window.location.reload();
+      }
+    }
+  };
 
   return (
     <div
+      ref={containerRef}
+      tabIndex={-1}
       role="alert"
       aria-live="assertive"
-      className="min-h-[60vh] flex items-center justify-center px-4 py-12"
+      aria-labelledby="depreciation-error-heading"
+      aria-describedby="depreciation-error-description"
+      className="min-h-[60vh] flex items-center justify-center px-4 py-12 outline-none focus:outline-none"
     >
       <div className="max-w-xl w-full bg-white border border-emerald-200 rounded-3xl p-8 sm:p-10 shadow-xl text-center space-y-6">
         <div
@@ -32,15 +51,21 @@ export default function DepreciationCalculatorError({ error, reset }: Depreciati
         </div>
 
         <div className="space-y-3">
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+          <h1
+            id="depreciation-error-heading"
+            className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight"
+          >
             감가율 시뮬레이션 계산 중 오류가 발생했습니다
           </h1>
-          <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-md mx-auto">
+          <p
+            id="depreciation-error-description"
+            className="text-sm sm:text-base text-slate-700 leading-relaxed max-w-md mx-auto"
+          >
             배터리 노화(Arrhenius Kinetics) 및 5개년 잔존가치 연산 중 일시적인 계산 오류가 발생했습니다.
             기본 안전 프리셋으로 복구하려면 아래 &apos;다시 시도&apos; 버튼을 눌러주세요.
           </p>
           {error?.digest && (
-            <p className="text-xs text-slate-600 font-mono pt-1">
+            <p className="text-xs text-slate-700 font-mono pt-1">
               오류 참조 코드: <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">{error.digest}</span>
             </p>
           )}
@@ -49,17 +74,9 @@ export default function DepreciationCalculatorError({ error, reset }: Depreciati
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
           <button
             type="button"
-            onClick={() => {
-              try {
-                reset();
-              } catch {
-                if (typeof window !== 'undefined') {
-                  window.location.reload();
-                }
-              }
-            }}
+            onClick={handleRetry}
             aria-label="감가 계산기 다시 시도"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+            className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">🔄</span> 다시 시도
           </button>
@@ -67,31 +84,31 @@ export default function DepreciationCalculatorError({ error, reset }: Depreciati
             href="/"
             prefetch={false}
             aria-label="메인 홈으로 이동"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+            className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">🏠</span> 홈으로 이동
           </Link>
         </div>
 
-        <div className="pt-4 border-t border-slate-100 text-xs text-slate-700 flex flex-wrap justify-center gap-4">
+        <div className="pt-4 border-t border-slate-100 text-xs text-slate-700 flex flex-wrap justify-center gap-3">
           <Link
             href="/subsidy-tracker"
             prefetch={true}
-            className="hover:text-emerald-700 transition inline-flex items-center gap-1 px-1.5 py-0.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+            className="hover:text-emerald-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
           >
             <span aria-hidden="true">⚡</span> 보조금 추적기
           </Link>
           <Link
             href="/reliability-analytics"
             prefetch={false}
-            className="hover:text-blue-700 transition inline-flex items-center gap-1 px-1.5 py-0.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="hover:text-blue-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <span aria-hidden="true">📊</span> 결함 분석 포털
           </Link>
           <Link
             href="/recall-portal"
             prefetch={false}
-            className="hover:text-rose-700 transition inline-flex items-center gap-1 px-1.5 py-0.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+            className="hover:text-rose-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
           >
             <span aria-hidden="true">🚨</span> 리콜 포털
           </Link>

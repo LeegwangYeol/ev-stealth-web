@@ -17,6 +17,12 @@ from filters.slang_lexicon import (
     SlangEntry,
     find_matching_slang,
 )
+from filters.slang_filter import (
+    SlangFilter,
+    extract_slang_tags,
+    filter_slang,
+    is_slang_present,
+)
 
 __all__ = [
     "SLANG_CATALOG",
@@ -33,4 +39,8 @@ __all__ = [
     "SYMPTOM_PREDICATES",
     "SlangEntry",
     "find_matching_slang",
+    "SlangFilter",
+    "filter_slang",
+    "extract_slang_tags",
+    "is_slang_present",
 ]

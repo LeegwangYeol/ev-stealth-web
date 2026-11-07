@@ -7,6 +7,7 @@ from models.complaint import (
     DailyReportPayload,
     DEFECT_CATEGORY_KO_MAP,
 )
+from models.defect_report import DefectReport
 
 __all__ = [
     "RawPost",
@@ -14,4 +15,5 @@ __all__ = [
     "DailyReportStatistics",
     "DailyReportPayload",
     "DEFECT_CATEGORY_KO_MAP",
+    "DefectReport",
 ]

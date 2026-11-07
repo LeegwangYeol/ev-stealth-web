@@ -47,6 +47,73 @@ const reliabilityJsonLd = {
       temporalCoverage: '2021/2026',
     },
     {
+      '@type': 'ItemList',
+      '@id': `${SITE_URL}/reliability-analytics#itemlist`,
+      name: '글로벌 전기차 주요 고질병 및 결함 심각도(DSI) 분석 리스트',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: '현대/기아 E-GMP ICCU (통합충전제어장치) 파손 및 주행 중 전원 상실',
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: '테슬라 옥토밸브 히트펌프 냉각수 누수 및 컨트롤 암 부싱 파손',
+        },
+        {
+          '@type': 'ListItem',
+          position: 3,
+          name: '메르세데스-벤츠 EQE/EQS 파라시스 배터리 화재 위험 및 7,500만 원 교체비',
+        },
+        {
+          '@type': 'ListItem',
+          position: 4,
+          name: 'BYD 돌핀 에어컨 에바코어 수산화알루미늄 백색가루 분출 및 조향기판 결함',
+        },
+        {
+          '@type': 'ListItem',
+          position: 5,
+          name: '폭스바겐 ID.4 터치센서 빗물 침수 주행 중 도어 열림 및 CO2 콤프레셔 파손',
+        },
+        {
+          '@type': 'ListItem',
+          position: 6,
+          name: '볼보 EX30 통합 디스플레이 꺼짐 및 폴스타 2 고전압 세라믹 히터 파괴',
+        },
+      ],
+    },
+    {
+      '@type': 'FAQPage',
+      '@id': `${SITE_URL}/reliability-analytics#faq`,
+      mainEntity: [
+        {
+          '@type': 'Question',
+          name: '전기차 결함 심각도 지수(DSI, Defect Severity Index)란 무엇인가요?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'DSI는 국토교통부·NHTSA 공식 리콜 이력, 1,280건의 실차주 제보, 주행 안전 위협도(화재, 주행 중 셧다운, 조향 상실), 보증 외 자비 수리비 부담액을 가중 평균하여 산출한 내구성 위험 지수입니다.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: '보증 만료 후 고전압 배터리 교체비 매트릭스는 어떻게 산정되나요?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: '국내외 서비스센터 표준 공임 및 부품가(모비스, 테슬라, 벤츠 서비스코리아)를 기준으로 실비 반영되며, 최저 900만 원(BYD 블레이드)부터 최고 7,560만 원(벤츠 EQS 118kWh 팩)까지 차종별 편차를 비교합니다.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: '중고 전기차 구매 시 연식별 리스크 히트맵을 어떻게 확인하나요?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: '차종 및 연식 선택 시 붉은색(구매 회피 - 치명 결함), 노란색(주의 요망 - 보증 확인 필수), 초록색(안심 추천 - 개선품 적용) 3단계 배지와 구체적인 고질병 원인 및 점검 가이드를 확인하실 수 있습니다.',
+          },
+        },
+      ],
+    },
+    {
       '@type': 'BreadcrumbList',
       '@id': `${SITE_URL}/reliability-analytics#breadcrumb`,
       itemListElement: [
@@ -118,7 +185,12 @@ export default function ReliabilityAnalyticsPage() {
   const data = getReliabilityTrendsData();
 
   return (
-    <div className="py-6 sm:py-8 space-y-6">
+    <div
+      id="reliability-analytics-page"
+      role="region"
+      aria-label="전기차 모델·연식별 결함 통계 및 내구성 분석 대시보드"
+      className="py-6 sm:py-8 space-y-6"
+    >
       <JsonLd data={reliabilityJsonLd} />
       <Suspense
         fallback={

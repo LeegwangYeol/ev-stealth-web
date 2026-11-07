@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef, startTransition } from 'react';
 import Link from 'next/link';
 
 interface RecallErrorProps {
@@ -13,15 +13,34 @@ interface RecallErrorProps {
  * Catches unhandled exceptions during VIN decoding and recall database searches.
  */
 export default function RecallPortalError({ error, reset }: RecallErrorProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     console.error('Unhandled Recall Portal route error:', error);
+    containerRef.current?.focus();
   }, [error]);
+
+  const handleRetry = () => {
+    try {
+      startTransition(() => {
+        reset();
+      });
+    } catch {
+      if (typeof window !== 'undefined') {
+        window.location.reload();
+      }
+    }
+  };
 
   return (
     <div
+      ref={containerRef}
+      tabIndex={-1}
       role="alert"
       aria-live="assertive"
-      className="min-h-[60vh] flex items-center justify-center px-4 py-12"
+      aria-labelledby="recall-error-heading"
+      aria-describedby="recall-error-description"
+      className="min-h-[60vh] flex items-center justify-center px-4 py-12 outline-none focus:outline-none"
     >
       <div className="max-w-xl w-full bg-white border border-rose-200 rounded-3xl p-8 sm:p-10 shadow-xl text-center space-y-6">
         <div
@@ -32,10 +51,16 @@ export default function RecallPortalError({ error, reset }: RecallErrorProps) {
         </div>
 
         <div className="space-y-3">
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+          <h1
+            id="recall-error-heading"
+            className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight"
+          >
             공식 리콜 정보를 불러올 수 없습니다
           </h1>
-          <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-md mx-auto">
+          <p
+            id="recall-error-description"
+            className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-md mx-auto"
+          >
             국토교통부 자동차리콜센터 연동 및 배터리 제조사 안전 데이터베이스 검색 중 오류가 발생했습니다.
             아래 &apos;다시 시도&apos; 버튼을 눌러 안전하게 재조회해 주세요.
           </p>
@@ -49,15 +74,7 @@ export default function RecallPortalError({ error, reset }: RecallErrorProps) {
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
           <button
             type="button"
-            onClick={() => {
-              try {
-                reset();
-              } catch {
-                if (typeof window !== 'undefined') {
-                  window.location.reload();
-                }
-              }
-            }}
+            onClick={handleRetry}
             aria-label="리콜 포털 다시 시도"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 min-h-[44px] rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2"
           >
@@ -67,13 +84,13 @@ export default function RecallPortalError({ error, reset }: RecallErrorProps) {
             href="/"
             prefetch={false}
             aria-label="메인 홈으로 이동"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 min-h-[44px] rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 min-h-[44px] rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">🏠</span> 홈으로 이동
           </Link>
         </div>
 
-        <div className="pt-4 border-t border-slate-100 text-xs text-slate-600 flex flex-wrap justify-center gap-4">
+        <div className="pt-4 border-t border-slate-100 text-xs text-slate-700 flex flex-wrap justify-center gap-3">
           <Link
             href="/reliability-analytics"
             prefetch={false}
@@ -94,6 +111,13 @@ export default function RecallPortalError({ error, reset }: RecallErrorProps) {
             className="hover:text-cyan-800 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
           >
             <span aria-hidden="true">✅</span> PDI 체크리스트
+          </Link>
+          <Link
+            href="/depreciation-calculator"
+            prefetch={true}
+            className="hover:text-emerald-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          >
+            <span aria-hidden="true">📉</span> 감가 계산기
           </Link>
         </div>
       </div>

@@ -13,6 +13,8 @@ import {
   PopularModelEntry,
 } from '@/types/subsidy';
 import { calculateNetSubsidy, getRegionById, getModelById } from '@/lib/getSubsidyData';
+import { sortRegions } from '@/lib/subsidyCalculations';
+import type { RegionSortOption } from '@/lib/subsidyCalculations';
 import ClientTimestamp from '@/components/ClientTimestamp';
 import SubsidyErrorBoundary from '@/components/subsidy/SubsidyErrorBoundary';
 import SubsidyBadge from '@/components/subsidy/SubsidyBadge';
@@ -24,17 +26,18 @@ export const getBadgeStyle = (status?: AlertSeverity | string | null): string =>
   switch (normalized) {
     case 'HEALTHY':
     case 'AVAILABLE':
-      return 'bg-emerald-950 text-emerald-300 border-emerald-500/50';
+    case 'available':
+      return 'bg-emerald-950 text-emerald-200 border-emerald-400';
     case 'CAUTION':
-      return 'bg-amber-950 text-amber-300 border-amber-500/50';
+      return 'bg-amber-950 text-amber-200 border-amber-400';
     case 'WARNING':
-      return 'bg-orange-950 text-orange-300 border-orange-500/50';
+      return 'bg-orange-950 text-orange-200 border-orange-400';
     case 'CRITICAL':
-      return 'bg-rose-950 text-rose-300 border-rose-500/50 animate-pulse motion-reduce:animate-none';
+      return 'bg-rose-950 text-rose-200 border-rose-400 animate-pulse motion-reduce:animate-none';
     case 'DEPLETED':
-      return 'bg-slate-900 text-slate-200 border-slate-500';
+      return 'bg-slate-950 text-slate-100 border-slate-400';
     default:
-      return 'bg-emerald-950 text-emerald-300 border-emerald-500/50';
+      return 'bg-emerald-950 text-emerald-200 border-emerald-400';
   }
 };
 
@@ -81,7 +84,7 @@ interface SubsidyTrackerClientProps {
 
 type CategoryType = 'passenger' | 'commercial' | 'bus';
 type ZoneFilter = 'ALL' | 'CAPITAL' | 'YEONGNAM' | 'HONAM' | 'CHUNGCHEONG' | 'GANGWON_JEJU';
-type SortOption = 'DEPLETION_DESC' | 'DEPLETION_ASC' | 'REMAINING_ASC' | 'LOCAL_SUBSIDY_DESC' | 'NAME_ASC';
+export type SortOption = RegionSortOption;
 
 const CATEGORY_TABS: { id: CategoryType; label: string; icon: string }[] = [
   { id: 'passenger', label: '전기승용 (승용차)', icon: '🚗' },
@@ -99,7 +102,7 @@ const ZONE_FILTERS: { id: ZoneFilter; label: string }[] = [
 ];
 
 const isSortOption = (v: string): v is SortOption =>
-  ['DEPLETION_DESC', 'DEPLETION_ASC', 'REMAINING_ASC', 'LOCAL_SUBSIDY_DESC', 'NAME_ASC'].includes(v);
+  ['DEPLETION_DESC', 'DEPLETION_ASC', 'REMAINING_ASC', 'REMAINING_DESC', 'LOCAL_SUBSIDY_DESC', 'LOCAL_SUBSIDY_ASC', 'NAME_ASC', 'NAME_DESC'].includes(v);
 
 // Hoisted brand regexes to module scope to avoid re-allocating RegExp objects on every render
 export const BRAND_PREFIX_REGEX = /^(현대|기아|테슬라|KGM|비야디|BYD)\s+/;
@@ -163,7 +166,7 @@ const FALLBACK_THRESHOLDS: Record<AlertSeverity, AlertThresholdConfig> = Object.
     label_ko: '원활 (신청 여유)',
     severity: 'HEALTHY',
     color_hex: '#10B981',
-    badge_class: 'bg-emerald-950 text-emerald-300 border-emerald-500/40',
+    badge_class: 'bg-emerald-950 text-emerald-200 border-emerald-400',
     recommended_action: '보조금 잔여량이 충분하여 신청 접수 후 통상 1~2주 내 교부 결정됩니다.',
   },
   CAUTION: {
@@ -172,7 +175,7 @@ const FALLBACK_THRESHOLDS: Record<AlertSeverity, AlertThresholdConfig> = Object.
     label_ko: '주의 (소진 가속)',
     severity: 'CAUTION',
     color_hex: '#F59E0B',
-    badge_class: 'bg-amber-950 text-amber-300 border-amber-500/40',
+    badge_class: 'bg-amber-950 text-amber-200 border-amber-400',
     recommended_action: '출고 예정 시기가 1~2개월 이내인 경우 조속한 서류 접수를 권장합니다.',
   },
   WARNING: {
@@ -181,7 +184,7 @@ const FALLBACK_THRESHOLDS: Record<AlertSeverity, AlertThresholdConfig> = Object.
     label_ko: '경고 (마감 임박)',
     severity: 'WARNING',
     color_hex: '#F97316',
-    badge_class: 'bg-orange-950 text-orange-300 border-orange-500/40',
+    badge_class: 'bg-orange-950 text-orange-200 border-orange-400',
     recommended_action: '잔여 예산 소진이 임박했습니다. 즉시 출고 가능한 실재고 매칭이 필요합니다.',
   },
   CRITICAL: {
@@ -190,7 +193,7 @@ const FALLBACK_THRESHOLDS: Record<AlertSeverity, AlertThresholdConfig> = Object.
     label_ko: '위험 (잔여 극소)',
     severity: 'CRITICAL',
     color_hex: '#EF4444',
-    badge_class: 'bg-rose-950 text-rose-300 border-rose-500/50 animate-pulse motion-reduce:animate-none',
+    badge_class: 'bg-rose-950 text-rose-200 border-rose-400 animate-pulse motion-reduce:animate-none',
     recommended_action: '선착순 마감 직전입니다. 담당 지자체 문의 및 추경 예산 편성 여부를 확인하세요.',
   },
   DEPLETED: {
@@ -199,7 +202,7 @@ const FALLBACK_THRESHOLDS: Record<AlertSeverity, AlertThresholdConfig> = Object.
     label_ko: '마감 (접수 종료)',
     severity: 'DEPLETED',
     color_hex: '#94A3B8',
-    badge_class: 'bg-slate-900 text-slate-200 border-slate-500',
+    badge_class: 'bg-slate-950 text-slate-100 border-slate-400',
     recommended_action: '2026년 공고 예산이 전액 소진되었습니다. 취소분 대기 접수 또는 차년도 사업을 준비하세요.',
   },
 });
@@ -257,72 +260,59 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   const filteredRegions = useMemo(() => {
     const trimmedQuery = deferredSearchQuery.trim().toLowerCase();
 
-    return regions
-      .filter((region) => {
-        // Category Metrics
-        const catMetrics: CategoryMetrics | undefined = region.categories?.[selectedCategory];
-        if (!catMetrics) return false;
+    const filtered = regions.filter((region) => {
+      // Category Metrics
+      const catMetrics: CategoryMetrics | undefined = region.categories?.[selectedCategory];
+      if (!catMetrics) return false;
 
-        // Zone filter
-        if (zoneFilter !== 'ALL' && getRegionZone(region.iso_code) !== zoneFilter) {
-          return false;
-        }
+      // Zone filter
+      if (zoneFilter !== 'ALL' && getRegionZone(region.iso_code) !== zoneFilter) {
+        return false;
+      }
 
-        // Alert filter
-        if (alertFilter !== 'ALL' && catMetrics.status !== alertFilter) {
-          return false;
-        }
+      // Alert filter
+      const status = catMetrics.status || 'HEALTHY';
+      if (alertFilter !== 'ALL' && status !== alertFilter) {
+        return false;
+      }
 
-        // Supplementary budget filter
-        if (supplementaryOnly && !region.supplementary_budget_added) {
-          return false;
-        }
+      // Supplementary budget filter
+      if (supplementaryOnly && !region.supplementary_budget_added) {
+        return false;
+      }
 
-        // Search Query
-        if (trimmedQuery) {
-          const matchRegion =
-            region.name_ko.toLowerCase().includes(trimmedQuery) ||
-            region.name_en.toLowerCase().includes(trimmedQuery) ||
-            region.iso_code.toLowerCase().includes(trimmedQuery);
+      // Search Query
+      if (trimmedQuery) {
+        const matchRegion =
+          (region.name_ko || '').toLowerCase().includes(trimmedQuery) ||
+          (region.name_en || '').toLowerCase().includes(trimmedQuery) ||
+          (region.iso_code || '').toLowerCase().includes(trimmedQuery);
 
-          const matchMuni =
-            region.municipalities?.some((m) => m.name_ko.toLowerCase().includes(trimmedQuery)) ?? false;
+        const matchMuni =
+          region.municipalities?.some((m) => (m.name_ko || '').toLowerCase().includes(trimmedQuery)) ?? false;
 
-          if (!matchRegion && !matchMuni) return false;
-        }
+        if (!matchRegion && !matchMuni) return false;
+      }
 
-        return true;
-      })
-      .sort((a, b) => {
-        const catA = a.categories?.[selectedCategory];
-        const catB = b.categories?.[selectedCategory];
+      return true;
+    });
 
-        switch (sortOption) {
-          case 'DEPLETION_DESC':
-            return (catB?.depletion_rate ?? 0) - (catA?.depletion_rate ?? 0);
-          case 'DEPLETION_ASC':
-            return (catA?.depletion_rate ?? 0) - (catB?.depletion_rate ?? 0);
-          case 'REMAINING_ASC':
-            return (catA?.remaining_units ?? 0) - (catB?.remaining_units ?? 0);
-          case 'LOCAL_SUBSIDY_DESC':
-            return (catB?.max_local_subsidy_krw ?? 0) - (catA?.max_local_subsidy_krw ?? 0);
-          case 'NAME_ASC':
-            return (a.name_ko || '').localeCompare(b.name_ko || '', 'ko');
-          default:
-            return 0;
-        }
-      });
+    // Deterministic, NaN-safe, stable sorting using sortRegions
+    return sortRegions(filtered, sortOption, selectedCategory);
   }, [regions, selectedCategory, zoneFilter, alertFilter, supplementaryOnly, deferredSearchQuery, sortOption]);
 
-  // Critical regions (for emergency ticker)
+  // Critical regions (for emergency ticker) with safe fallback computation
   const criticalRegions = useMemo(() => {
     return regions.filter((r) => {
       const p = r.categories?.passenger;
       if (!p) return false;
+      const ann = Number.isFinite(p.announced_units) ? Math.max(0, p.announced_units) : 0;
+      const app = Number.isFinite(p.applied_units) ? Math.max(0, p.applied_units) : 0;
+      const rate = Number.isFinite(p.depletion_rate) ? p.depletion_rate : ann > 0 ? (app / ann) * 100 : 0;
       return (
         p.status === 'CRITICAL' ||
         p.status === 'DEPLETED' ||
-        (p.depletion_rate ?? 0) >= 95.0
+        rate >= 95.0
       );
     });
   }, [regions]);
@@ -350,6 +340,10 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
     setSelectedRegionId(regionId);
   }, []);
 
+  const handleSortChange = useCallback((newSort: RegionSortOption) => {
+    setSortOption(newSort);
+  }, []);
+
   const handleCategoryKeyDown = useCallback((e: React.KeyboardEvent, currentIndex: number) => {
     const count = CATEGORY_TABS.length;
     let nextIndex = -1;
@@ -375,6 +369,20 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
       }
     }
   }, []);
+
+  // Performance & Stability: Memoized regional cards to prevent re-render cascades
+  const renderedGridCards = useMemo(() => {
+    return filteredRegions.map((regionItem) => (
+      <RegionCard
+        key={regionItem.region_id}
+        region={regionItem}
+        selectedCategory={selectedCategory}
+        isExpanded={Boolean(expandedRegions[regionItem.region_id])}
+        toggleRegionExpand={toggleRegionExpand}
+        onSelectForCalc={handleSelectRegionForCalc}
+      />
+    ));
+  }, [filteredRegions, selectedCategory, expandedRegions, toggleRegionExpand, handleSelectRegionForCalc]);
 
   return (
     <div className="space-y-10 py-6 text-slate-100 max-w-6xl mx-auto">
@@ -556,9 +564,9 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                   <span className={`text-xs px-2 py-0.5 rounded font-semibold border ${getBadgeStyle(key)}`}>
                     {getStatusLabel(key)}
                   </span>
-                  <span className="text-[11px] text-slate-300 font-medium">{(t?.min_percent ?? 0)}%~{(t?.max_percent ?? 100)}%</span>
+                  <span className={`text-[11px] font-medium ${isSelected ? 'text-slate-100 font-semibold' : 'text-slate-300'}`}>{(t?.min_percent ?? 0)}%~{(t?.max_percent ?? 100)}%</span>
                 </div>
-                <div className="text-[11px] text-slate-300 line-clamp-2 mt-2 leading-relaxed">
+                <div className={`text-[11px] line-clamp-2 mt-2 leading-relaxed ${isSelected ? 'text-slate-100' : 'text-slate-300'}`}>
                   {t?.recommended_action || ''}
                 </div>
               </button>
@@ -624,8 +632,13 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             </div>
             <input
               id="region-search-input"
-              type="text"
+              type="search"
+              role="searchbox"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck="false"
               aria-label="지자체 검색"
+              aria-describedby="filter-feedback-status"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="시·도 또는 세부 시·군·구 검색 (예: 서울, 수원, 성남, 대구, 포항, 울릉)"
@@ -680,8 +693,11 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               <option value="DEPLETION_DESC">소진율 높은 순 (마감임박)</option>
               <option value="DEPLETION_ASC">소진율 낮은 순 (신청여유)</option>
               <option value="REMAINING_ASC">잔여 대수 적은 순</option>
+              <option value="REMAINING_DESC">잔여 대수 많은 순</option>
               <option value="LOCAL_SUBSIDY_DESC">지자체 보조금 높은 순</option>
-              <option value="NAME_ASC">지역명 가나다순</option>
+              <option value="LOCAL_SUBSIDY_ASC">지자체 보조금 낮은 순</option>
+              <option value="NAME_ASC">지역명 가나다순 (ㄱ~ㅎ)</option>
+              <option value="NAME_DESC">지역명 역순 (ㅎ~ㄱ)</option>
             </select>
           </div>
         </div>
@@ -689,7 +705,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         {/* Active Filter Clear indicator with role="status" and aria-live */}
         {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || searchQuery || supplementaryOnly) && (
           <div className="flex items-center justify-between text-xs text-slate-300 pt-2 border-t border-slate-800">
-            <span role="status" aria-live="polite">
+            <span id="filter-feedback-status" role="status" aria-live="polite">
               필터 적용 중: 총 <strong>{filteredRegions.length}</strong>개 지역 표시 중
             </span>
             <button
@@ -763,9 +779,13 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         </div>
 
         {filteredRegions.length === 0 ? (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-300">
-            <div className="text-3xl mb-2">🔍</div>
-            <div className="text-base font-semibold text-slate-300">검색 및 필터 조건에 일치하는 지자체가 없습니다.</div>
+          <div
+            role="status"
+            aria-live="polite"
+            className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-300"
+          >
+            <div className="text-3xl mb-2" aria-hidden="true">🔍</div>
+            <div className="text-base font-semibold text-slate-200">검색 및 필터 조건에 일치하는 지자체가 없습니다.</div>
             <p className="text-xs text-slate-300 mt-1">검색어를 변경하거나 필터를 초기화해 보세요.</p>
           </div>
         ) : viewMode === 'table' ? (
@@ -773,23 +793,14 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             regions={filteredRegions}
             selectedCategory={selectedCategory}
             sortOption={sortOption}
-            onSortChange={setSortOption}
+            onSortChange={handleSortChange}
             expandedRegions={expandedRegions}
             onToggleExpand={toggleRegionExpand}
             onSelectForCalc={handleSelectRegionForCalc}
           />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredRegions.map((regionItem) => (
-              <RegionCard
-                key={regionItem.region_id}
-                region={regionItem}
-                selectedCategory={selectedCategory}
-                isExpanded={!!expandedRegions[regionItem.region_id]}
-                toggleRegionExpand={toggleRegionExpand}
-                onSelectForCalc={handleSelectRegionForCalc}
-              />
-            ))}
+            {renderedGridCards}
           </div>
         )}
       </section>
@@ -845,12 +856,14 @@ const RegionCard = React.memo(function RegionCard({
   };
 
   const announcedUnits = Number.isFinite(cat?.announced_units) ? Math.max(0, cat.announced_units) : 0;
+  const safeAnnounced = announcedUnits > 0 ? announcedUnits : 1;
   const safeDelivered = Number.isFinite(cat?.delivered_units) ? cat.delivered_units : 0;
   const safeApplied = Number.isFinite(cat?.applied_units) ? cat.applied_units : 0;
+  const pendingUnits = Math.max(0, safeApplied - safeDelivered);
   const safeDepletion = Number.isFinite(cat?.depletion_rate)
     ? cat.depletion_rate
     : announcedUnits > 0
-    ? (safeApplied / announcedUnits) * 100
+    ? (safeApplied / safeAnnounced) * 100
     : 0;
   const safeRemaining = Number.isFinite(cat?.remaining_units)
     ? cat.remaining_units
@@ -858,8 +871,49 @@ const RegionCard = React.memo(function RegionCard({
 
   const regionName = region?.name_ko || '해당 지역';
   const regionId = region?.region_id || '';
-  const munis = Array.isArray(region?.municipalities) ? region.municipalities : [];
+  const munis = useMemo(
+    () => (Array.isArray(region?.municipalities) ? region.municipalities : []),
+    [region?.municipalities]
+  );
   const categoryLabel = selectedCategory === 'passenger' ? '전기승용' : selectedCategory === 'commercial' ? '전기화물' : '전기승합';
+
+  // Memoized sub-municipalities list
+  const renderedMunis = useMemo(() => {
+    return munis.map((muni) => {
+      const muniAnnounced = Number.isFinite(muni.announced_units) ? Math.max(0, muni.announced_units) : 0;
+      const muniApplied = Number.isFinite(muni.applied_units) ? Math.max(0, muni.applied_units) : 0;
+      const muniRemaining = Number.isFinite(muni.remaining_units)
+        ? Math.max(0, muni.remaining_units)
+        : Math.max(0, muniAnnounced - muniApplied);
+      const muniDepletion = Number.isFinite(muni.depletion_rate)
+        ? Math.max(0, muni.depletion_rate)
+        : muniAnnounced > 0
+        ? (muniApplied / muniAnnounced) * 100
+        : 0;
+      const muniLocalSubsidy = Number.isFinite(muni.local_subsidy_krw) ? Math.max(0, muni.local_subsidy_krw) : 0;
+
+      return (
+        <div
+          key={muni.muni_id || `${regionId}-${muni.name_ko}`}
+          className="p-2 rounded bg-slate-950 border border-slate-800 flex items-center justify-between text-[11px]"
+        >
+          <div>
+            <span className="font-semibold text-slate-200">{muni.name_ko}</span>
+            <span className="text-slate-300 ml-2">
+              {((muniLocalSubsidy) / 10000).toLocaleString()}만 원
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-slate-300">잔여 {muniRemaining.toLocaleString()}대</span>
+            <SubsidyBadge status={muni.status || 'available'} />
+            <span className="font-mono text-amber-300 font-semibold text-[10px]">
+              {muniDepletion.toFixed(1)}%
+            </span>
+          </div>
+        </div>
+      );
+    });
+  }, [munis, regionId]);
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg hover:border-slate-700 transition flex flex-col justify-between">
@@ -894,7 +948,7 @@ const RegionCard = React.memo(function RegionCard({
             showDetails={true}
           />
           <div className="sr-only">
-            잔여 <strong>{safeRemaining.toLocaleString()}</strong> / {announcedUnits.toLocaleString()}대
+            잔여 <strong>{safeRemaining.toLocaleString()}</strong> / {announcedUnits.toLocaleString()}대 (출고 대기: {pendingUnits.toLocaleString()}대)
           </div>
         </div>
 
@@ -956,39 +1010,7 @@ const RegionCard = React.memo(function RegionCard({
               aria-label={`${region.name_ko} 세부 시·군·구 보조금 현황 목록`}
               className={`${!isExpanded ? 'hidden' : ''} mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg`}
             >
-              {munis.map((muni) => {
-                const muniAnnounced = Number.isFinite(muni.announced_units) ? Math.max(0, muni.announced_units) : 0;
-                const muniApplied = Number.isFinite(muni.applied_units) ? Math.max(0, muni.applied_units) : 0;
-                const muniRemaining = Number.isFinite(muni.remaining_units)
-                  ? Math.max(0, muni.remaining_units)
-                  : Math.max(0, muniAnnounced - muniApplied);
-                const muniDepletion = Number.isFinite(muni.depletion_rate)
-                  ? Math.max(0, muni.depletion_rate)
-                  : muniAnnounced > 0
-                  ? (muniApplied / muniAnnounced) * 100
-                  : 0;
-
-                return (
-                  <div
-                    key={muni.muni_id || `${region.region_id}-${muni.name_ko}`}
-                    className="p-2 rounded bg-slate-950 border border-slate-800 flex items-center justify-between text-[11px]"
-                  >
-                    <div>
-                      <span className="font-semibold text-slate-200">{muni.name_ko}</span>
-                      <span className="text-slate-300 ml-2">
-                        {((Number.isFinite(muni.local_subsidy_krw) ? Math.max(0, muni.local_subsidy_krw) : 0) / 10000).toLocaleString()}만 원
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-300">잔여 {muniRemaining.toLocaleString()}대</span>
-                      <SubsidyBadge status={muni.status || 'available'} />
-                      <span className="font-mono text-amber-300 font-semibold text-[10px]">
-                        {muniDepletion.toFixed(1)}%
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
+              {renderedMunis}
             </div>
           </div>
         )}

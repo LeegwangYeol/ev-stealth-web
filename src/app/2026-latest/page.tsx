@@ -36,6 +36,68 @@ const latest2026JsonLd = {
       mainEntityOfPage: `${SITE_URL}/2026-latest`,
     },
     {
+      '@type': 'ItemList',
+      '@id': `${SITE_URL}/2026-latest#itemlist`,
+      name: '2026년식 최신 KDM 전기차 초기 품질 평가 모델 리스트',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: '기아 EV3 (초기 클러스터 오류, i-Pedal 3.0 회생제동 이질감 및 도어핸들 결빙)',
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: '현대 아이오닉 5 2026 (ccNC 내비게이션 무선 업데이트 및 2세대 개선형 ICCU)',
+        },
+        {
+          '@type': 'ListItem',
+          position: 3,
+          name: '현대 아이오닉 9 (110.3kWh 대용량 배터리팩 열관리 및 3열 전장 점검)',
+        },
+        {
+          '@type': 'ListItem',
+          position: 4,
+          name: '테슬라 모델 Y 2026 주니퍼 (일체형 기가 프레스 다이캐스팅 및 실내 정숙성)',
+        },
+        {
+          '@type': 'ListItem',
+          position: 5,
+          name: 'BYD 시라이언 7 (KDM 국내 인증 배터리 사양 및 공식 서비스망 인프라)',
+        },
+      ],
+    },
+    {
+      '@type': 'FAQPage',
+      '@id': `${SITE_URL}/2026-latest#faq`,
+      mainEntity: [
+        {
+          '@type': 'Question',
+          name: '2026년식 국내 신차 EV에서 차주들이 가장 많이 제보한 초기 결함은?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: '차세대 인포테인먼트(ccNC) 화면 일시 먹통 및 무선 연결 끊김, 겨울철 플러시 도어 핸들 모터 결빙, 원페달 드라이빙 정차 시 미세한 울컥거림이 가장 많은 비중을 차지합니다.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: '2026년식 아이오닉 5는 과거 악명 높던 ICCU 고장이 재발하지 않나요?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: '2026년식은 설계가 전면 개선된 2세대 ICCU 하드웨어와 전력 제어 소프트웨어가 기본 적용되어 2021~2022년식 초기형과 같은 전원 상실 고장률이 대폭 낮아졌습니다.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: '2026년 신차 출고 직후 초기 결함 발견 시 제조사 대응 절차는?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: '인수증 서명 전 PDI 단계에서 발견 시 무상 조치 또는 인수 거부가 가능하며, 출고 후 1년 이내 레몬법(중대 하자 2회, 일반 하자 3회 이상 수리 불가 시 교환·환불) 대상이 될 수 있습니다.',
+          },
+        },
+      ],
+    },
+    {
       '@type': 'BreadcrumbList',
       '@id': `${SITE_URL}/2026-latest#breadcrumb`,
       itemListElement: [
@@ -126,6 +188,184 @@ export default function Latest2026Page() {
         </p>
       </div>
 
+      {/* 2026년식 신차 초기 결함 요약 표 (WCAG AA Compliance: table headers, caption, overflow container) */}
+      <section aria-labelledby="heading-latest-summary" className="space-y-3">
+        <h2 id="heading-latest-summary" className="text-xl sm:text-2xl font-bold text-slate-900">
+          2026년식 신차 초기 결함 및 리콜 판정 요약 표
+        </h2>
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <table className="w-full min-w-[640px] text-left border-collapse text-xs sm:text-sm" aria-label="2026년식 KDM 주요 신차 초기 결함 및 리콜 판정 요약 표">
+            <caption className="sr-only">2026년식 기아 EV3, 아이오닉 5 PE, 테슬라 모델 Y 주니퍼, BYD 시라이언 7, 현대 아이오닉 9 초기 결함 및 심각도 비교 표</caption>
+            <thead className="bg-slate-900 text-slate-100 uppercase text-[11px] sm:text-xs tracking-wider">
+              <tr>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">차종/모델</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">초기 판정</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">보고된 결함 증상</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">조치 및 권고 사항</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100 text-center">검증 출처</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <th scope="row" className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  1. 기아 EV3
+                </th>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-900">
+                    AVOID (위험)
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  주행 중 MCU 통신 오류로 동력 차단 및 시동 꺼짐
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  한국교통안전공단 공식 무상수리 및 리콜 조치 필수
+                </td>
+                <td className="py-3 px-4 text-center whitespace-nowrap">
+                  <a
+                    href="https://m.bobaedream.co.kr/board/bbs_view/national/2328953/2/1"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="기아 EV3 보배드림 커뮤니티 결함 원문 (새 창에서 열림)"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                  >
+                    <span>보배드림</span>
+                    <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                  </a>
+                </td>
+              </tr>
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <th scope="row" className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  2. 더 뉴 아이오닉 5 PE
+                </th>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-900">
+                    CAUTION (주의)
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  페이스리프트 후에도 여전한 ICCU 고장 및 출력 제한(거북이 모드)
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  ccNC 인포테인먼트 최신 펌웨어 업데이트 및 ICCU 검사
+                </td>
+                <td className="py-3 px-4 text-center whitespace-nowrap">
+                  <a
+                    href="https://www.reddit.com/r/Ioniq5/comments/1ibf63c/800_miles_in_my_2025_ioniq_5_officially_has_a/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="더 뉴 아이오닉 5 페이스리프트 레딧 차주 ICCU 고장 인증글 (새 창에서 열림)"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                  >
+                    <span>레딧 인증</span>
+                    <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                  </a>
+                </td>
+              </tr>
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <th scope="row" className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  3. 테슬라 모델 Y 주니퍼
+                </th>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-900">
+                    CAUTION (주의)
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  혹한기 플러시 도어 핸들 동결 및 컨트롤 암 부싱 찌걱거림
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  동절기 12V 배터리 보충 및 컨트롤 암 볼조인트 방청 점검
+                </td>
+                <td className="py-3 px-4 text-center whitespace-nowrap">
+                  <a
+                    href="https://www.bobaedream.co.kr/view?code=cnews&No=872"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="테슬라 모델 Y 주니퍼 보배드림 문 열림 결함 보도 (새 창에서 열림)"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                  >
+                    <span>보배드림</span>
+                    <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                  </a>
+                </td>
+              </tr>
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <th scope="row" className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  4. BYD 시라이언 7
+                </th>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-900">
+                    CAUTION (주의)
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  하체 서브프레임 조기 부식 및 공공 급속 충전기 타임아웃
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  출고 직후 하부 언더코팅 시공 및 DiLink 내비 펌웨어 확인
+                </td>
+                <td className="py-3 px-4 text-center whitespace-nowrap">
+                  <a
+                    href="https://www.bobaedream.co.kr/view?code=best&No=888548"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="BYD 시라이언 7 보배드림 조기 녹 부식 현상 제보 (새 창에서 열림)"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                  >
+                    <span>보배드림</span>
+                    <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                  </a>
+                </td>
+              </tr>
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <th scope="row" className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  5. 현대 아이오닉 9
+                </th>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-900">
+                    AVOID (치명적)
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  출고 즉시 고전압 배터리팩 내부 PCB 소손 및 단차 유격 불량
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  신차 탁송 검수(PDI) 시 고전압 배터리 진단기 점검 필수
+                </td>
+                <td className="py-3 px-4 text-center whitespace-nowrap">
+                  <a
+                    href="https://m.bobaedream.co.kr/board/bbs_view/best/1008916/2/8?cmt=1"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="현대 아이오닉 9 보배드림 배터리 결함 제보 (새 창에서 열림)"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                  >
+                    <span>보배드림</span>
+                    <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                  </a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       {/* 1. Kia EV3 */}
       <section aria-labelledby="heading-ev3-2026" className="space-y-4">
         <h2 id="heading-ev3-2026" className="text-2xl sm:text-3xl font-bold text-slate-800">
@@ -145,7 +385,34 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;도심 주행 중 갑작스러운 동력 상실로 뒤차와 추돌할 뻔해 생명의 위협을 느꼈다.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <a href="https://m.bobaedream.co.kr/board/bbs_view/national/2328953/2/1" target="_blank" rel="noopener noreferrer" aria-label="기아 EV3 보배드림 커뮤니티 결함 원문 (새 창에서 열림)" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 rounded outline-none inline-block py-0.5">보배드림 커뮤니티 원문<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://www.autodaily.co.kr/news/articleView.html?idxno=535684" target="_blank" rel="noopener noreferrer" aria-label="기아 EV3 오토데일리 리콜 보도 기사 (새 창에서 열림)" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 rounded outline-none inline-block py-0.5">오토데일리 기사<span className="sr-only"> (새 창에서 열림)</span></a>
+              <strong>출처:</strong>{' '}
+              <a
+                href="https://m.bobaedream.co.kr/board/bbs_view/national/2328953/2/1"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="기아 EV3 보배드림 커뮤니티 결함 원문 (새 창에서 열림)"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+              >
+                <span>보배드림 커뮤니티 원문</span>
+                <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                <span className="sr-only"> (새 창에서 열림)</span>
+              </a>
+              <span aria-hidden="true" className="mx-1.5 text-slate-400">|</span>
+              <a
+                href="https://www.autodaily.co.kr/news/articleView.html?idxno=535684"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="기아 EV3 오토데일리 리콜 보도 기사 (새 창에서 열림)"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+              >
+                <span>오토데일리 기사</span>
+                <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                <span className="sr-only"> (새 창에서 열림)</span>
+              </a>
             </li>
           </ul>
         </div>
@@ -170,7 +437,34 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;페이스리프트 신차임에도 이전 모델의 ICCU 문제가 터졌다. 고속 주행 중 출력 저하로 불안감이 큼.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <a href="https://www.reddit.com/r/Ioniq5/comments/1ibf63c/800_miles_in_my_2025_ioniq_5_officially_has_a/" target="_blank" rel="noopener noreferrer" aria-label="더 뉴 아이오닉 5 페이스리프트 레딧 차주 ICCU 고장 인증글 (새 창에서 열림)" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 rounded outline-none inline-block py-0.5">레딧 차주 인증<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://m.bobaedream.co.kr/board/bbs_view/national/2317279" target="_blank" rel="noopener noreferrer" aria-label="더 뉴 아이오닉 5 보배드림 출력저하 후기 (새 창에서 열림)" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 rounded outline-none inline-block py-0.5">보배드림 출력저하 후기<span className="sr-only"> (새 창에서 열림)</span></a>
+              <strong>출처:</strong>{' '}
+              <a
+                href="https://www.reddit.com/r/Ioniq5/comments/1ibf63c/800_miles_in_my_2025_ioniq_5_officially_has_a/"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="더 뉴 아이오닉 5 페이스리프트 레딧 차주 ICCU 고장 인증글 (새 창에서 열림)"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+              >
+                <span>레딧 차주 인증</span>
+                <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                <span className="sr-only"> (새 창에서 열림)</span>
+              </a>
+              <span aria-hidden="true" className="mx-1.5 text-slate-400">|</span>
+              <a
+                href="https://m.bobaedream.co.kr/board/bbs_view/national/2317279"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="더 뉴 아이오닉 5 보배드림 출력저하 후기 (새 창에서 열림)"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+              >
+                <span>보배드림 출력저하 후기</span>
+                <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                <span className="sr-only"> (새 창에서 열림)</span>
+              </a>
             </li>
           </ul>
         </div>
@@ -195,7 +489,34 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;기가 상하이 생산이라 단차는 나아졌지만, 혹한기 아침에 문이 안 열려서 출근에 큰 차질을 빚었다.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <a href="https://www.bobaedream.co.kr/view?code=cnews&No=872" target="_blank" rel="noopener noreferrer" aria-label="테슬라 모델 Y 주니퍼 보배드림 문 열림 결함 보도 (새 창에서 열림)" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 rounded outline-none inline-block py-0.5">보배드림 문 열림 결함 보도<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://m.bobaedream.co.kr/board/bbs_view/best/927611/2/2?cmt=1" target="_blank" rel="noopener noreferrer" aria-label="테슬라 모델 Y 주니퍼 보배드림 하부 소음 후기 (새 창에서 열림)" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 rounded outline-none inline-block py-0.5">하부 소음 후기<span className="sr-only"> (새 창에서 열림)</span></a>
+              <strong>출처:</strong>{' '}
+              <a
+                href="https://www.bobaedream.co.kr/view?code=cnews&No=872"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="테슬라 모델 Y 주니퍼 보배드림 문 열림 결함 보도 (새 창에서 열림)"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+              >
+                <span>보배드림 문 열림 결함 보도</span>
+                <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                <span className="sr-only"> (새 창에서 열림)</span>
+              </a>
+              <span aria-hidden="true" className="mx-1.5 text-slate-400">|</span>
+              <a
+                href="https://m.bobaedream.co.kr/board/bbs_view/best/927611/2/2?cmt=1"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="테슬라 모델 Y 주니퍼 보배드림 하부 소음 후기 (새 창에서 열림)"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+              >
+                <span>하부 소음 후기</span>
+                <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                <span className="sr-only"> (새 창에서 열림)</span>
+              </a>
             </li>
           </ul>
         </div>
@@ -220,7 +541,34 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;가격은 매력적이나 하체 방청 수준이 엉망이라 겨울 염화칼슘 도로를 타면 금방 썩을 것 같다. 내비 번역체도 거슬린다.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <a href="https://www.bobaedream.co.kr/view?code=best&No=888548" target="_blank" rel="noopener noreferrer" aria-label="BYD 시라이언 7 보배드림 조기 녹 부식 현상 제보 (새 창에서 열림)" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 rounded outline-none inline-block py-0.5">보배드림 조기 녹(부식) 현상<span className="sr-only"> (새 창에서 열림)</span></a> | <a href="https://m.bobaedream.co.kr/board/bbs_view/cnews/595" target="_blank" rel="noopener noreferrer" aria-label="BYD 시라이언 7 보배드림 충전기 호환성 문제 제보 (새 창에서 열림)" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 rounded outline-none inline-block py-0.5">충전기 호환성 문제<span className="sr-only"> (새 창에서 열림)</span></a>
+              <strong>출처:</strong>{' '}
+              <a
+                href="https://www.bobaedream.co.kr/view?code=best&No=888548"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="BYD 시라이언 7 보배드림 조기 녹 부식 현상 제보 (새 창에서 열림)"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+              >
+                <span>보배드림 조기 녹(부식) 현상</span>
+                <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                <span className="sr-only"> (새 창에서 열림)</span>
+              </a>
+              <span aria-hidden="true" className="mx-1.5 text-slate-400">|</span>
+              <a
+                href="https://m.bobaedream.co.kr/board/bbs_view/cnews/595"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="BYD 시라이언 7 보배드림 충전기 호환성 문제 제보 (새 창에서 열림)"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+              >
+                <span>충전기 호환성 문제</span>
+                <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                <span className="sr-only"> (새 창에서 열림)</span>
+              </a>
             </li>
           </ul>
         </div>
@@ -245,7 +593,20 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;8,000만 원짜리 차를 뽑자마자 고전압 배터리를 통째로 뜯어내야 한다고 해서 환불을 요구 중이다.&quot;
             </li>
             <li>
-              <strong>출처:</strong> <a href="https://m.bobaedream.co.kr/board/bbs_view/best/1008916/2/8?cmt=1" target="_blank" rel="noopener noreferrer" aria-label="현대 아이오닉 9 보배드림 배터리 결함 제보 (새 창에서 열림)" className="text-blue-700 hover:text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 rounded outline-none inline-block py-0.5">보배드림 아이오닉9 배터리 결함<span className="sr-only"> (새 창에서 열림)</span></a>
+              <strong>출처:</strong>{' '}
+              <a
+                href="https://m.bobaedream.co.kr/board/bbs_view/best/1008916/2/8?cmt=1"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="현대 아이오닉 9 보배드림 배터리 결함 제보 (새 창에서 열림)"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+              >
+                <span>보배드림 아이오닉9 배터리 결함</span>
+                <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                <span className="sr-only"> (새 창에서 열림)</span>
+              </a>
             </li>
           </ul>
         </div>

@@ -1,0 +1,542 @@
+{
+  "감가폭탄": {
+    "term": "감가폭탄",
+    "category": "financial_depreciation",
+    "definition": "신차 출고 후 2~3년 만에 중고차 잔존가치가 50% 이상 폭락하는 극심한 감가상각 현상.",
+    "nuance": "전기차 오너들이 중고 매각 시점에 체감하는 절망과 공포를 자조적으로 표현하며, 내연기관 대비 턱없이 낮은 중고 방어율을 비꼬는 데 쓰임.",
+    "english_equiv": "Depreciation Bomb / Massive Resale Value Collapse",
+    "severity_weight": 4,
+    "example_quote": "기름값 몇백 아끼겠다고 전기차 샀다가 3년 만에 감가폭탄 처맞고 3천만원 공중분해됨."
+  },
+  "벽돌차": {
+    "term": "벽돌차",
+    "category": "hardware_defect",
+    "definition": "OTA 소프트웨어 업데이트 오류나 12V/고전압 전장 결함으로 시동, 문 열림, 변속 등 모든 전자기능이 먹통이 되어 굴러가지 않는 차.",
+    "nuance": "첨단 테크카를 자처하던 전기차가 순식간에 도로 위 거대한 고철 덩어리이자 벽돌로 전락했을 때 쓰는 자조적 비하어.",
+    "english_equiv": "Bricked Car",
+    "severity_weight": 5,
+    "example_quote": "퇴근하려는데 OTA 에러 뜨더니 화면 나가고 도어도 안 열리는 완벽한 벽돌차가 되어버림."
+  },
+  "퐁퐁차": {
+    "term": "퐁퐁차",
+    "category": "financial_depreciation",
+    "definition": "신차 가격과 보조금 혜택은 전 차주가 다 누리고, 배터리 잔존수명 저하와 보증 만료 폭탄 수리비만 떠안게 되는 중고 전기차.",
+    "nuance": "인터넷 밈 '설거지론'에서 유래하여, 아무것도 모른 채 중고 전기차를 구매해 배터리 통교체 비용을 고스란히 뒤집어쓴 구매자를 조롱하는 뉘앙스.",
+    "english_equiv": "Bagholder Car / Lemon EV Sucker",
+    "severity_weight": 4,
+    "example_quote": "보증 1년 남은 중고 전기차 싸다고 주워온 놈이 진정한 퐁퐁차 설거지남이다."
+  },
+  "흉기차": {
+    "term": "흉기차",
+    "category": "community_derogatory",
+    "definition": "현대자동차 및 기아 차량에 안전 결함, 에어백 미전개, 급발진, 원가절감 문제가 발생할 때 비하하는 대표적 은어.",
+    "nuance": "국내 커뮤니티에서 현기차의 독점적 지위와 결함에 대한 미온적 대처를 비판할 때 상시 쓰이는 가장 공격적인 멸칭.",
+    "english_equiv": "Murder Weapon Car (Hyundai/Kia pejorative)",
+    "severity_weight": 4,
+    "example_quote": "흉기차가 아무리 원가절감 심해도 중국산 듣보잡 전기차보단 브레이크는 제대로 잡힌다."
+  },
+  "서민포르쉐": {
+    "term": "서민포르쉐",
+    "category": "community_derogatory",
+    "definition": "포르쉐 타이칸의 외관 디자인을 모방하면서 저렴한 가전제품 수준의 가격으로 출시된 샤오미 SU7을 풍자하는 표현.",
+    "nuance": "초기에는 가성비를 칭송하는 듯했으나, 서킷 브레이크 파손 등 기본기 결함이 폭로되면서 겉멋만 부린 모조품을 비웃는 조롱어로 정착.",
+    "english_equiv": "Poor Man's Porsche (Xiaomi SU7 satirical clone)",
+    "severity_weight": 3,
+    "example_quote": "서민포르쉐라고 유튜브에서 띄워주더니 서킷 세 바퀴 돌고 브레이크 패드가 가루가 됐네."
+  },
+  "뻥연비": {
+    "term": "뻥연비",
+    "category": "winter_environment",
+    "definition": "제조사 공인 1회 충전 주행거리나 스펙상 전비(km/kWh)가 겨울철이나 고속주행 등 실생활에서 대폭 미달하는 현상.",
+    "nuance": "환경부 인증이나 CLTC 수치만 믿고 샀다가 실주행 거리가 급감하여 낭패를 본 차주들의 배신감 섞인 불만 표현.",
+    "english_equiv": "Exaggerated Range / Fake Range Claims",
+    "severity_weight": 3,
+    "example_quote": "공인 450km라더니 영하 8도에 히터 켜고 고속도로 올리니까 230km 찍히는 전형적인 뻥연비다."
+  },
+  "뻥배터리": {
+    "term": "뻥배터리",
+    "category": "powertrain_battery",
+    "definition": "표기된 배터리 팩 용량에 비해 실제 가용 용량(Usable Capacity)이 적거나, 급격한 전압 강하(Voltage Drop)로 조기 방전되는 불량 배터리.",
+    "nuance": "급가속이나 저온 시 배터리 잔량(SoC) 게이지가 순식간에 몇 퍼센트씩 증발하는 결함을 겪은 유저들의 분노.",
+    "english_equiv": "Fake Battery / Sub-spec Degraded Battery",
+    "severity_weight": 4,
+    "example_quote": "배터리 잔량 20% 남았다더니 급가속 한 번에 8%로 곤두박질치는 완전 뻥배터리임."
+  },
+  "배터리복권": {
+    "term": "배터리복권",
+    "category": "powertrain_battery",
+    "definition": "동일한 차종임에도 제조 시기나 공급사에 따라 CATL, 파라시스, LG엔솔, SK온 등 배터리 셀 제조사가 달라 성능과 안전성이 복불복으로 갈리는 현상.",
+    "nuance": "수천만 원짜리 자동차를 사면서 안전과 직결된 핵심 배터리 셀 브랜드를 뽑기 운에 맡겨야 하는 불합리한 현실을 풍자.",
+    "english_equiv": "Battery Cell Lottery",
+    "severity_weight": 4,
+    "example_quote": "벤츠 EQE 샀는데 삼원계 LG인 줄 알았더니 중국산 파라시스 당첨... 배터리복권 꽝 맞았다."
+  },
+  "엉뜨구독": {
+    "term": "엉뜨구독",
+    "category": "software_subscription",
+    "definition": "차량 시트에 이미 물리적으로 내장된 열선 기능을 활성화하기 위해 매달 또는 매년 제조사에 소프트웨어 이용료를 결제하게 만드는 정책.",
+    "nuance": "이미 하드웨어 값을 지불했음에도 기본 편의 기능을 소프트웨어로 잠궈 지속적으로 돈을 갈취하려는 완성차 업체의 탐욕에 대한 극심한 반발.",
+    "english_equiv": "Heated Seat Subscription / Paywalled Comfort",
+    "severity_weight": 3,
+    "example_quote": "한겨울 영하 15도에 얼어붙은 가죽시트에 앉으면서 엉뜨구독료 2만원 결제해야 하는 현실 실화냐?"
+  },
+  "움직이는 보조배터리": {
+    "term": "움직이는 보조배터리",
+    "category": "community_derogatory",
+    "definition": "샤오미 등 스마트폰 및 가전 제조사가 자동차의 기본 주행/제동/섀시 설계 역량 없이 거대한 배터리와 모터만 얹어 만든 전기차를 깎아내리는 멸칭.",
+    "nuance": "차량의 주행 안정성, 서스펜션, 브레이크 내구성을 등한시하고 IT 전자제품처럼 자동차를 만드는 신흥 브랜드를 조롱.",
+    "english_equiv": "Rolling Powerbank / Gadget on Wheels",
+    "severity_weight": 4,
+    "example_quote": "스마트폰 보조배터리 만들던 짬밥으로 600마력 차를 조립하니까 서킷에서 벽을 들이박지."
+  },
+  "대륙의 폭탄": {
+    "term": "대륙의 폭탄",
+    "category": "safety_hazard",
+    "definition": "과거 가성비 IT 제품을 칭하던 '대륙의 실수'를 패러디하여, 화재 위험성과 치명적 결함을 안고 있는 중국산 전기차 및 배터리를 일컫는 말.",
+    "nuance": "중국산 전기차의 화재 폭발 사고나 하체 부러짐 사례를 목격한 국내 네티즌들의 불안감과 조롱이 섞인 표현.",
+    "english_equiv": "Mainland Bomb / Chinese Fire Hazard EV",
+    "severity_weight": 5,
+    "example_quote": "가성비 좋다고 칭찬하던 대륙의 실수인 줄 알았더니 내 목숨을 노리는 대륙의 폭탄이었네."
+  },
+  "림프홈": {
+    "term": "림프홈",
+    "category": "powertrain_battery",
+    "definition": "배터리 잔량 부족, 모터 인버터 과열, 통신 에러 발생 시 차량 파손을 방지하기 위해 출력을 극도로 제한하여 시속 20~30km 이하로 서행하게 만드는 비상 주행 모드.",
+    "nuance": "고속도로 1차로나 오르막길에서 예고 없이 림프홈이 걸려 후속 차량 추돌 공포를 겪은 차주들의 트라우마 섞인 용어.",
+    "english_equiv": "Limp-Home Mode / Severe Power Cut",
+    "severity_weight": 4,
+    "example_quote": "경부고속도로 1차선에서 갑자기 림프홈 걸려서 악셀 밟아도 30km 이상 안 올라가 죽을 뻔했다."
+  },
+  "활어차": {
+    "term": "활어차",
+    "category": "safety_hazard",
+    "definition": "배터리 열폭주 화재 발생 시 물속에 차를 통째로 담그는 이동식 침수조에 넣거나, 소방차가 물을 들이붓는 광경을 횟집 활어 수송차에 빗댄 은어.",
+    "nuance": "지하주차장 화재 사고 이후 전기차 전체에 대한 사회적 기피와 혐오 분위기를 반영하는 자조적 표현.",
+    "english_equiv": "Live Fish Tank Truck (Water Submersion Firefighting Stigma)",
+    "severity_weight": 4,
+    "example_quote": "불나면 소방관들이 수조에 담가야 끌 수 있으니 도로 위의 활어차가 따로 없다."
+  },
+  "피쉬테일": {
+    "term": "피쉬테일",
+    "category": "safety_hazard",
+    "definition": "주행 중 급제동, 급격한 차선 변경 또는 노면 불균형 시 차량 후미가 물고기 꼬리처럼 좌우로 심하게 요동치며 제어 불능에 빠지는 현상.",
+    "nuance": "무거운 배터리가 하부에 실려 관성이 크고 후륜 세팅이 미숙한 전기차에서 자주 나타나는 차체 거동 불안정을 비판할 때 사용.",
+    "english_equiv": "Fishtail Effect / Rear Instability",
+    "severity_weight": 5,
+    "example_quote": "비 올 때 코너 돌다가 회생제동 물리는 순간 피쉬테일 일어나서 가드레일에 차 털릴 뻔함."
+  },
+  "화재포비아": {
+    "term": "화재포비아",
+    "category": "safety_hazard",
+    "definition": "인천 청라 벤츠 EQE 화재 사건 이후 아파트 지하주차장 진입 거부, 충전소 설치 반대 등 전기차 배터리 화재에 대해 한국 사회 전반에 퍼진 극심한 공포증.",
+    "nuance": "전기차 차주들은 주차 차별에 대한 억울함을, 일반 입주민들은 재산과 인명 피해에 대한 극도의 공포를 나타내는 사회적 갈등 단어.",
+    "english_equiv": "EV Fire Phobia / Thermal Runaway Panic",
+    "severity_weight": 4,
+    "example_quote": "아파트 단지마다 화재포비아 도져서 전기차 지하주차 금지 플래카드 걸고 난리도 아니다."
+  },
+  "공동인수": {
+    "term": "공동인수",
+    "category": "financial_depreciation",
+    "definition": "손해율이 극도로 높은 고가 전기차나 신흥 스타트업 차량에 대해 개별 보험사가 단독 가입을 거부하여 여러 보험사가 위험을 분담해 인수하는 제도.",
+    "nuance": "보험료가 일반 차량의 2~3배로 치솟아 '보험료 폭탄'을 맞았음을 의미하며, 중고 감가와 더불어 전기차 유지비의 복병으로 꼽힘.",
+    "english_equiv": "Insurance Co-Underwriting / Pool Assignment",
+    "severity_weight": 4,
+    "example_quote": "리비안이랑 루시드는 부품 수급 안 된다고 보험사에서 거절당해서 결국 공동인수로 450만원 냈다."
+  },
+  "단차뽑기": {
+    "term": "단차뽑기",
+    "category": "hardware_defect",
+    "definition": "차체 패널 간의 틈새(단차)나 도장 불량이 균일하지 않아 신차 인수 시 양품을 받기 위해 운에 맡겨야 하는 현실.",
+    "nuance": "품질 관리가 부실한 제조사(테슬라, 샤오미 등)를 향해 소비자가 신차 검수에서 겪는 피로감과 조롱을 표현.",
+    "english_equiv": "Panel Gap Lottery / Build Quality Gacha",
+    "severity_weight": 3,
+    "example_quote": "테슬라 단차뽑기 망해서 보닛 한쪽 틈새로 A4 용지가 아니라 손가락이 들어가게 생김."
+  },
+  "급발진": {
+    "term": "급발진",
+    "category": "safety_hazard",
+    "definition": "운전자의 의도와 상관없이 모터나 엔진 출력이 통제 불능 상태로 급격히 치솟아 차량이 폭주하는 현상.",
+    "nuance": "전자제어 비중이 높은 전기차에서 모터 드라이브 인버터 에러나 페달 오인 논란과 결부되어 결함 입증 책임을 제조사가 회피할 때 쓰는 격렬한 비판 용어.",
+    "english_equiv": "Sudden Unintended Acceleration (SUA)",
+    "severity_weight": 5,
+    "example_quote": "브레이크 페달이 돌처럼 딱딱해지면서 굉음과 함께 튀어나가는데 이걸 운전자 과실이라 우기네."
+  },
+  "수타이": {
+    "term": "수타이",
+    "category": "community_derogatory",
+    "definition": "샤오미 SU7과 포르쉐 타이칸의 합성어로, 포르쉐의 디자인을 그대로 베낀 파렴치한 카피캣 차량을 조롱하는 은어.",
+    "nuance": "독창적인 디자인 철학 없이 해외 명차를 무단 복제하여 판매하는 중국 완성차 업계의 짝퉁 문화를 꼬집음.",
+    "english_equiv": "Sutaican (Xiaomi SU7 + Porsche Taycan copycat portmanteau)",
+    "severity_weight": 3,
+    "example_quote": "길거리에서 수타이 실물 봤는데 엠블럼만 떼면 진짜 타이칸 짝퉁인 거 다 티남."
+  },
+  "샤이칸": {
+    "term": "샤이칸",
+    "category": "community_derogatory",
+    "definition": "샤오미(Xiaomi)와 타이칸(Taycan)의 합성어로 수타이와 동일하게 쓰이며, 타이칸 흉내를 낸 짝퉁 전기차를 가리킴.",
+    "nuance": "샤오미의 맹목적 팬덤이 '포르쉐보다 낫다'고 포장하는 여론에 반발하여 냉소적으로 비꼴 때 주로 쓰임.",
+    "english_equiv": "Shaican (Xiaomi Taycan knockoff)",
+    "severity_weight": 3,
+    "example_quote": "샤이칸 차주들 자기가 포르쉐 오너 된 줄 착각하고 차갤에서 나대다가 팩폭 맞음."
+  },
+  "전자식 관짝": {
+    "term": "전자식 관짝",
+    "category": "safety_hazard",
+    "definition": "전동식 팝업 플러시 도어 핸들이 사고 충돌이나 화재로 12V 전원이 차단되었을 때 외부에서 돌출되지 않아 탑승자를 탈출시키지 못하는 구조적 살인 결함.",
+    "nuance": "미적 디자인만 추구하다 비상시 인명 구조 골든타임을 날려버리는 위험천만한 설계를 맹비난하는 극단적 분노의 단어.",
+    "english_equiv": "Electronic Coffin (Flush Door Lockout Trap)",
+    "severity_weight": 5,
+    "example_quote": "불붙었는데 밖에서 손잡이가 안 튀어나와서 창문도 못 깨고 그대로 전자식 관짝 되는 거임."
+  },
+  "통교체 갑질": {
+    "term": "통교체 갑질",
+    "category": "financial_depreciation",
+    "definition": "배터리 하부 케이스의 미세한 스크래치나 모듈 한두 개 결함에도 부분 수리를 거부하고 2,000만~3,500만 원 상당의 배터리 팩 전체 교체를 강요하는 제조사의 AS 정책.",
+    "nuance": "사설 수리나 모듈 재생을 원천 봉쇄하여 소비자와 보험사에 막대한 수리비 부담을 떠넘기는 대기업의 독점적 폭리 규탄.",
+    "english_equiv": "Full Pack Swap Extortion / OEM Repair Monopolization",
+    "severity_weight": 5,
+    "example_quote": "하부 긁힘 2mm 생겼다고 볼트 하나 안 풀고 배터리 통교체 2800만원 부르는 날강도 갑질."
+  },
+  "하드웨어 인질극": {
+    "term": "하드웨어 인질극",
+    "category": "software_subscription",
+    "definition": "차량에 이미 장착되어 출고된 물리적 부품(조향각, 배터리 용량, 모터 출력 등)을 소프트웨어 코드로 잠가두고 매달 구독료를 요구하는 제조사의 행태.",
+    "nuance": "물건을 돈 주고 샀는데도 온전한 소유권을 인정받지 못하고 소프트웨어 볼모로 전락했다는 깊은 소비자 배신감.",
+    "english_equiv": "Hardware Hostage Crisis / Feature Paywalling",
+    "severity_weight": 4,
+    "example_quote": "모터랑 배터리 다 차에 달려있는데 구독료 안 내면 마력 묶어두는 게 인질극이지 뭐냐?"
+  },
+  "핸따구독": {
+    "term": "핸따구독",
+    "category": "software_subscription",
+    "definition": "스티어링 휠(핸들) 열선 기능을 월간/연간 구독 서비스로 묶어 결제해야만 작동하게 만드는 과금 유도 방식.",
+    "nuance": "영하의 날씨에 필수적인 기초 방한 편의 장비까지 구독 모델로 전락시킨 완성차 업체의 탐욕을 조롱.",
+    "english_equiv": "Heated Steering Wheel Subscription",
+    "severity_weight": 3,
+    "example_quote": "손 시려워 죽겠는데 핸따구독 한 달 만이천 원 결제하라는 팝업창 뜨는 거 보고 경악함."
+  },
+  "마력 구독": {
+    "term": "마력 구독",
+    "category": "software_subscription",
+    "definition": "동일한 전기 모터의 출력과 가속력(제로백)을 인위적으로 제한해두고, 연간 일정 금액을 지불해야 잠금을 해제해주는 부가 서비스.",
+    "nuance": "가속력마저 온라인 결제 여부에 따라 차별하는 소프트웨어 중심 자동차(SDV)의 어두운 이면을 비판.",
+    "english_equiv": "Horsepower Acceleration Subscription",
+    "severity_weight": 4,
+    "example_quote": "벤츠 전기차 제로백 1초 줄이려면 매년 백만원씩 마력 구독료 바쳐야 한다니 코미디다."
+  },
+  "후륜 조향 인질": {
+    "term": "후륜 조향 인질",
+    "category": "software_subscription",
+    "definition": "차량 뒷바퀴 조향 모터가 10도까지 회전할 수 있음에도 기본 4.5도로 제한하고, 10도 확장을 위해 연간 수십만 원의 구독료를 요구하는 정책.",
+    "nuance": "대형 전기차의 유턴 및 주차 필수 하드웨어를 인위적으로 성능 저하시켜 돈을 뜯어내는 행태를 비꼬는 단어.",
+    "english_equiv": "Rear-Wheel Steering Angle Subscription Hostage",
+    "severity_weight": 3,
+    "example_quote": "전장 5.2미터짜리 거구 차를 팔아놓고 뒷바퀴 더 꺾으려면 후륜 조향 인질값을 내라네."
+  },
+  "블루링크 인질": {
+    "term": "블루링크 인질",
+    "category": "software_subscription",
+    "definition": "무료 제공 기간(5년 등)이 끝난 후 유료 가입을 하지 않으면 원격 에어컨/히터 작동 및 도어 개폐 기능을 전면 차단하는 텔레매틱스 서비스.",
+    "nuance": "폭염이나 혹한에 필수적인 원격 공조 제어를 미끼로 평생 매달 만 원 이상의 요금을 뜯어간다는 불만.",
+    "english_equiv": "Telematics Subscription Hostage (BlueLink/Kia Connect Paywall)",
+    "severity_weight": 3,
+    "example_quote": "블루링크 구독 해지했더니 한여름 땡볕에 실내온도 65도짜리 불지옥 차에 그냥 타야 됨."
+  },
+  "ICCU 폭탄": {
+    "term": "ICCU 폭탄",
+    "category": "hardware_defect",
+    "definition": "현대차그룹 E-GMP 전용 전기차(아이오닉 5/6, EV6/9, GV60 등)의 통합 충전 제어 장치(ICCU) 내 전력 반도체 소자가 타버려 고전압 충전 및 12V 전원 공급이 일시에 중단되는 고질병.",
+    "nuance": "주행 중 갑자기 '펑' 소리와 함께 출력이 상실되어 도로 한복판에 멈춰서는 치명적 결함을 시한폭탄에 비유.",
+    "english_equiv": "ICCU Blowout Defect / Integrated Charging Control Unit Bomb",
+    "severity_weight": 5,
+    "example_quote": "리콜받고 소프트웨어 업데이트까지 했는데 고속도로에서 또 ICCU 폭탄 터져서 견인차 불렀다."
+  },
+  "전손트럭": {
+    "term": "전손트럭",
+    "category": "financial_depreciation",
+    "definition": "리비안 R1T 등 차체 후면 펜더부터 C필러, 배드 프레임까지 하나의 거대한 알루미늄 일체형 패널로 제작되어 가벼운 접촉 사고에도 수리비가 차값을 초과해 강제 전손 처리되는 차량.",
+    "nuance": "혁신적 제조 공법이라 자랑하던 기가캐스팅과 유니바디 픽업트럭이 사고 한 번에 폐차장으로 직행하는 현실을 조롱.",
+    "english_equiv": "Total-Loss Truck (Gigacasting Repair Nightmare)",
+    "severity_weight": 5,
+    "example_quote": "리비안 뒤 펜더 판금 안 된다고 수리비 5천만원 나와서 보험사에서 전손트럭 확정 찍음."
+  },
+  "원더박스 사망": {
+    "term": "원더박스 사망",
+    "category": "hardware_defect",
+    "definition": "루시드 에어(Lucid Air)의 핵심 통합 전력 모듈인 '원더박스(Wunderbox)' 인버터 및 온보드 차저가 과전압이나 열충격으로 영구 고장나 구동이 정지되는 결함.",
+    "nuance": "2억 원에 육박하는 럭셔리 전기차가 핵심 부품 하나 고장으로 국내 사설 수리도 안 된 채 몇 달씩 방치되는 사태를 비꼼.",
+    "english_equiv": "Wunderbox PDU Failure (Lucid Air Fatal Inverter Breakdown)",
+    "severity_weight": 5,
+    "example_quote": "루시드 직수입해서 타다가 원더박스 사망해서 미국 본사 부품 올 때까지 6개월째 주차장 감금 중."
+  },
+  "알리표 자율주행": {
+    "term": "알리표 자율주행",
+    "category": "safety_hazard",
+    "definition": "신흥 브랜드 전기차의 주행 보조 및 자동 발레파킹(AVP) 기능이 센서 융합 미숙으로 기둥, 방호벽, 주차 스토퍼 등을 들이받는 저품질 ADAS 결함.",
+    "nuance": "화려한 스펙 광고와 달리 실제 주차장이나 도로에서 조잡한 인식 알고리즘으로 사고를 유발하는 기술적 미완성을 조롱.",
+    "english_equiv": "AliExpress-Grade Autonomous Driving",
+    "severity_weight": 4,
+    "example_quote": "라이다 떡칠했다고 자랑하더니 에폭시 바닥 반사광 못 읽고 기둥에 박는 게 딱 알리표 자율주행임."
+  },
+  "롱패딩 에디션": {
+    "term": "롱패딩 에디션",
+    "category": "winter_environment",
+    "definition": "겨울철 히터를 틀면 배터리 주행거리가 30~40% 깎여 목적지에 도달하지 못할까 봐, 실내에서 히터를 끄고 롱패딩과 장갑, 털모자를 착용한 채 벌벌 떨며 운전하는 상태.",
+    "nuance": "첨단 친환경 미래 모빌리티를 표방하면서 현실은 원시적 방한 복장으로 고통받는 모순적 라이프스타일을 자조.",
+    "english_equiv": "Long Padded Coat Edition / Freezing Commute",
+    "severity_weight": 2,
+    "example_quote": "전기차 오너들 출근길에 다들 롱패딩 에디션 장착하고 입김 뿜으면서 운전하는 거 눈물겹다."
+  },
+  "입돌아감": {
+    "term": "입돌아감",
+    "category": "winter_environment",
+    "definition": "영하 10도 이하의 한파 속에서 전비를 아끼기 위해 공조 히터를 끄고 시트 열선만 켠 채 주행하다가 안면마비가 올 정도로 춥다는 과장된 비유.",
+    "nuance": "전기차 카페에서 '히터 끄고 전비 7km/kWh 찍었다'고 자랑하는 극단적 연비충들을 향한 차갤러들의 신랄한 비아냥.",
+    "english_equiv": "Facial Palsy Warning (Sub-zero No-Heater Commute)",
+    "severity_weight": 3,
+    "example_quote": "기름값 몇 푼 아끼려다 진짜 얼굴 입돌아가서 한의원 침 맞으러 가게 생겼다."
+  },
+  "용달지옥": {
+    "term": "용달지옥",
+    "category": "charging_infrastructure",
+    "definition": "배터리 용량이 작은 1톤 전기 화물차(포터 EV, 봉고 EV)들이 겨울철 주행거리 100km 미만으로 추락하여 고속도로 휴게소 충전기마다 줄을 서며 발생하는 충전 대란.",
+    "nuance": "영업용 생계 화물차에 부적합한 배터리를 얹어 차주와 일반 승용차 차주 모두를 충전소 대기 지옥으로 몰아넣은 정부와 제조사 정책 비판.",
+    "english_equiv": "1-Ton EV Hauler Charging Hell",
+    "severity_weight": 4,
+    "example_quote": "휴게소 갔더니 포터 봉고가 급속 충전기 8개 다 물고 있어서 일반 승용차는 충전도 못 하는 용달지옥 펼쳐짐."
+  },
+  "충전 고문": {
+    "term": "충전 고문",
+    "category": "charging_infrastructure",
+    "definition": "급속 충전기에 연결했음에도 배터리 열화, 충전기 출력 저하, 차량의 배터리 보호 로직(BMS 스로틀링) 등으로 충전 속도가 20kW 이하 완속 수준으로 기어가는 고통.",
+    "nuance": "10분이면 충전된다던 광고와 달리 추위 속에서 1시간 넘게 충전기 앞에 갇혀 시간을 낭비하는 차주들의 분통.",
+    "english_equiv": "Charging Torture / Thermal Throttling Stall Trap",
+    "severity_weight": 3,
+    "example_quote": "급속 물려놨는데 15kW로 기어가서 2시간 동안 편의점 커피나 마시며 충전 고문당함."
+  },
+  "시체차": {
+    "term": "시체차",
+    "category": "hardware_defect",
+    "definition": "차량에 내장된 저전압 12V 보조 배터리가 방전되어 스마트키 인식, 도어 언락, 충전구 오픈 등 모든 기능이 정지되어 주차면에 미동 없이 굳어버린 차량.",
+    "nuance": "고전압 메인 배터리가 90% 차 있어도 12V 납축전지 하나 방전되면 문조차 열지 못하는 전기차 아키텍처의 취약성을 조롱.",
+    "english_equiv": "Corpse Car / Completely Dead Unresponsive EV",
+    "severity_weight": 4,
+    "example_quote": "메인 배터리 90%인데 12V 방전돼서 문짝도 안 열리는 완벽한 시체차 돼서 긴급출동 불렀다."
+  },
+  "금융치료": {
+    "term": "금융치료",
+    "category": "financial_depreciation",
+    "definition": "전기차를 타며 기름값과 세금을 아꼈다고 기뻐하다가, 막상 중고차 판매 시 수천만 원의 감가와 비싼 보험료 청구서를 받고 경제적 현실을 뼈저리게 깨닫는 상황.",
+    "nuance": "비합리적 신념에 빠져 전기차를 맹신하던 이들이 잔혹한 자본주의 시장의 감가 현실에 의해 강제로 교정되는 상황을 풍자.",
+    "english_equiv": "Financial Therapy / Brutal Harsh Reality of Total Cost of Ownership",
+    "severity_weight": 4,
+    "example_quote": "기름값 300만원 아꼈다고 자랑하더니 중고 감가 2500만원 쳐맞고 제대로 금융치료 당함."
+  },
+  "종이 브레이크": {
+    "term": "종이 브레이크",
+    "category": "safety_hazard",
+    "definition": "2톤이 넘는 고중량·고마력 전기차에 소형 내연기관용 표준 오가닉 브레이크 패드와 얇은 디스크를 장착하여 서킷이나 급제동 시 마찰재가 타서 사라지는 결함.",
+    "nuance": "중국 샤오미 SU7의 서킷 브레이크 패드 소멸 및 방호벽 충돌 사건에서 직관적으로 파생된 멸칭.",
+    "english_equiv": "Paper Brakes (Undersized Track Brake Friction Material)",
+    "severity_weight": 5,
+    "example_quote": "600마력 넘는 차에 종이 브레이크 패드 꽂아놓고 서킷 달렸으니 벽에 처박히는 게 당연하지."
+  },
+  "보험료 폭탄": {
+    "term": "보험료 폭탄",
+    "category": "financial_depreciation",
+    "definition": "전기차의 높은 부품값, 경미한 하부 긁힘에도 발생하는 배터리 전손 처리 등으로 인해 매년 갱신 시 자동차 보험료가 기하급수적으로 폭등하는 현상.",
+    "nuance": "차량 가격 대비 상상을 초월하는 자차 보험료로 인해 절감했던 유지비가 일순간에 상쇄되는 차주들의 비명.",
+    "english_equiv": "Insurance Assassin / Astronomical Premium Hike",
+    "severity_weight": 4,
+    "example_quote": "무사고인데도 전기차 손해율 올랐다고 자차 보험료 280만원 찍히는 거 보고 보험료 폭탄 제대로 실감함."
+  },
+  "유령 제동": {
+    "term": "유령 제동",
+    "category": "safety_hazard",
+    "definition": "고속도로 주행 보조(HDA)나 테슬라 오토파일럿 주행 중 전방에 아무런 장애물이 없음에도 교각 그림자나 아지랑이를 장애물로 오인해 풀브레이크를 밟는 치명적 소프트웨어 오작동.",
+    "nuance": "후속 대형 트럭에 추돌당할 수 있는 극도의 공포를 유발하는 자율주행 비전 센서의 치명적 결함.",
+    "english_equiv": "Phantom Braking",
+    "severity_weight": 5,
+    "example_quote": "110km로 고속도로 달리는데 전방 허공 보고 유령 제동 걸려서 뒤차한테 쌍라이트 맞고 식은땀 흘림."
+  },
+  "거북이등": {
+    "term": "거북이등",
+    "category": "powertrain_battery",
+    "definition": "계기판에 거북이 모양의 노란색 경고등이 점등되며 출력이 즉각 30~50% 이하로 다운되는 상태.",
+    "nuance": "배터리 충전량이 바닥났거나 배터리 셀 간 전압 편차(셀 밸런싱 붕괴)로 차가 멈추기 직전의 위급 상황을 뜻함.",
+    "english_equiv": "Turtle Mode Warning / Power Limiter Light",
+    "severity_weight": 4,
+    "example_quote": "터널 안에서 계기판에 거북이등 번쩍 뜨는 순간 심장이 덜컥 내려앉았음."
+  },
+  "옥토밸브 사망": {
+    "term": "옥토밸브 사망",
+    "category": "hardware_defect",
+    "definition": "테슬라 모델 3/Y의 핵심 통합 열관리 8방향 밸브(Octovalve) 구동 액추에이터나 씰이 파손되어 냉각수 누수 및 실내 난방이 완전히 정지되는 고질병.",
+    "nuance": "혹한기 영하의 날씨에 옥토밸브가 뻗으면 차내에 찬바람만 나와 주행이 불가능해지는 테슬라 차주들의 겨울철 악몽.",
+    "english_equiv": "Octovalve Failure (Tesla Thermal Loop Breakdown)",
+    "severity_weight": 4,
+    "example_quote": "영하 12도 강원도 가다가 옥토밸브 사망해서 히터 안 나오고 송풍구에서 북극바람만 나옴."
+  },
+  "정신병 와이퍼": {
+    "term": "정신병 와이퍼",
+    "category": "hardware_defect",
+    "definition": "비가 전혀 안 오는 화창한 대낮에 최고 속도로 미친 듯이 유리창을 긁어대고, 정작 폭우가 쏟아질 때는 멈춰 있는 카메라 기반 오토 와이퍼의 정신 나간 오작동.",
+    "nuance": "전용 레인센서를 원가절감으로 삭제하고 카메라 비전만 고집하다 사용자에게 극심한 스트레스를 주는 행태 풍자.",
+    "english_equiv": "Psychotic Auto-Wiper / Erratic Vision-Only Wiper",
+    "severity_weight": 3,
+    "example_quote": "햇빛 쨍쨍한 마른하늘에 혼자 미쳐서 광란의 댄스를 추는 테슬라 정신병 와이퍼 수준."
+  },
+  "단차 에디션": {
+    "term": "단차 에디션",
+    "category": "hardware_defect",
+    "definition": "좌우 도어, 휀더, 트렁크 리드의 조립 간격이 짝짝이거나 삐뚤어져 비가 새고 풍절음이 유입되는 조립 불량 차량을 비꼬는 표현.",
+    "nuance": "제조 공정 기본기가 결여된 신생 브랜드들이 '스펙'만 내세우고 마감 품질은 처참한 현실을 조롱.",
+    "english_equiv": "Panel Gap Special Edition",
+    "severity_weight": 3,
+    "example_quote": "트렁크 좌우 간격이 5mm나 차이 나서 자동세차 돌리면 물 새어 들어오는 단차 에디션 당첨."
+  },
+  "파라시스 폭탄": {
+    "term": "파라시스 폭탄",
+    "category": "safety_hazard",
+    "definition": "청라 아파트 지하주차장에서 주차 중 스스로 폭발·전소하여 차량 140여 대를 태운 벤츠 EQE에 탑재된 중국 파라시스(Farasis) 파우치형 NCM 배터리를 지칭.",
+    "nuance": "프리미엄 수입차 브랜드가 원가절감을 위해 검증되지 않은 저가 중국 배터리를 채용해 대참사를 일으킨 배신감을 고발.",
+    "english_equiv": "Farasis Battery Fire Bomb",
+    "severity_weight": 5,
+    "example_quote": "1억짜리 벤츠 엠블럼 밑에 파라시스 폭탄 숨겨놓고 팔아먹은 놈들은 천벌받아야 됨."
+  },
+  "도어캐치 실종": {
+    "term": "도어캐치 실종",
+    "category": "hardware_defect",
+    "definition": "겨울철 폭설이나 세차 후 매립형 플러시 도어 핸들이 얼어붙어 튀어나오지 않거나 모터 고장으로 문을 열지 못하는 상황.",
+    "nuance": "공기역학 저항을 줄이겠다고 내놓은 히든 손잡이가 혹한기 실생활에서 치명적인 불편을 초래함을 꼬집음.",
+    "english_equiv": "Frozen / Jammed Flush Door Handle",
+    "severity_weight": 3,
+    "example_quote": "영하 15도 한파에 도어캐치 실종돼서 손잡이 얼어붙는 바람에 아침에 주먹으로 차 때리다 출근 늦음."
+  },
+  "충전 난민": {
+    "term": "충전 난민",
+    "category": "charging_infrastructure",
+    "definition": "구축 아파트나 빌라 거주자처럼 집에 완속 충전기가 없어 퇴근 후 공공 충전소나 마트 주차장을 헤매며 충전 자리를 구걸하듯 찾는 차주들.",
+    "nuance": "집밥(가정용 완속 충전기) 없는 전기차 구매는 고행길이자 스트레스의 주범임을 경고하는 커뮤니티 정설.",
+    "english_equiv": "Charging Refugee / Unhoused EV Charger Hunter",
+    "severity_weight": 3,
+    "example_quote": "집밥 없는 아파트에서 전기차 샀다가 매일 밤 11시에 충전 난민 생활하며 뼈저리게 후회 중."
+  },
+  "지하주차장 출입금지": {
+    "term": "지하주차장 출입금지",
+    "category": "safety_hazard",
+    "definition": "화재 위험과 질식 소화 어려움으로 인해 전국 아파트, 대형 상가, 병원 지하주차장에서 전기차 진입을 원천 차단하는 사태.",
+    "nuance": "환경 친화적이라며 정부가 권장하던 전기차가 하룻밤 사이에 사회적 혐오와 격리의 대상으로 전락한 비극을 대변.",
+    "english_equiv": "Underground Garage EV Entry Ban",
+    "severity_weight": 4,
+    "example_quote": "내 돈 주고 산 아파트인데 입주자대표회의에서 지하주차장 출입금지 때려서 지상 땡볕에 세워야 함."
+  },
+  "배터리 밑바닥 찍힘": {
+    "term": "배터리 밑바닥 찍힘",
+    "category": "financial_depreciation",
+    "definition": "과속방지턱, 도로 낙하물, 비포장도로 주행 중 배터리 팩 하부 알루미늄 보호판에 경미한 찍힘이 발생했을 때 정밀 진단 없이 통교체 판정이 나오는 사태.",
+    "nuance": "내연기관이면 5만 원짜리 언더커버 교환으로 끝날 일이 배터리 팩 2,500만 원 견적으로 둔갑해 자차 전손으로 직결되는 공포.",
+    "english_equiv": "Battery Bottom Dents / Scrapes Total-Loss Trigger",
+    "severity_weight": 5,
+    "example_quote": "방지턱에 배터리 밑바닥 찍힘 1cm 생겼다고 서비스센터에서 3천만원 견적 내며 전손 권유함."
+  },
+  "FSD 먹튀": {
+    "term": "FSD 먹튀",
+    "category": "software_subscription",
+    "definition": "차량 구매 시 900만 원 이상의 고액을 지불하고 구입한 완전자율주행(FSD) 옵션이 차량 매각 시 계정 귀속이 아니라 차체에 귀속되거나 중고차 가치에서 0원 취급당하는 사기적 구조.",
+    "nuance": "소프트웨어 가치를 보존해주지 않고 신차 구매 시 다시 천만 원을 내고 재구매하게 만드는 제조사의 독점적 횡포 규탄.",
+    "english_equiv": "FSD License Wipe / Non-Transferable Software Extortion",
+    "severity_weight": 4,
+    "example_quote": "900만원 주고 산 FSD 소프트웨어를 차 팔 때 계정 이전도 안 해주고 중고값에도 안 쳐주는 완전 먹튀임."
+  },
+  "주행거리 공포증": {
+    "term": "주행거리 공포증",
+    "category": "winter_environment",
+    "definition": "목적지까지 남은 거리와 배터리 잔여 주행거리가 비슷할 때, 도로 정체나 날씨 악화로 방전되어 멈출까 봐 극도의 불안과 공황에 시달리는 심리 상태.",
+    "nuance": "전기차를 타는 한 상시 뇌리를 떠나지 않는 근본적인 주행거리 불안(Range Anxiety)을 일컫는 말.",
+    "english_equiv": "Range Anxiety / Depletion Panic",
+    "severity_weight": 3,
+    "example_quote": "고속도로에서 다음 휴게소까지 30km 남았는데 배터리 잔여거리 32km 찍혀서 주행거리 공포증에 식은땀 줄줄 흘림."
+  },
+  "물새는 테슬라": {
+    "term": "물새는 테슬라",
+    "category": "hardware_defect",
+    "definition": "글라스 루프 접착 불량, 트렁크 고무 실링 단차, 테일램프 습기 등으로 세차나 비 올 때 실내로 빗물이 줄줄 새어 들어오는 누수 결함.",
+    "nuance": "조립 품질과 마감 내구성이 떨어지는 테슬라 초기/후기 모델들의 만성적인 수밀 결함을 비꼬는 말.",
+    "english_equiv": "Water Leaking Tesla / Roof Seal Defect",
+    "severity_weight": 4,
+    "example_quote": "비 오는 날 운전하는데 A필러 타고 물이 뚝뚝 떨어지는 물새는 테슬라 타다 보면 도 닦는 기분임."
+  },
+  "타이어 파쇄기": {
+    "term": "타이어 파쇄기",
+    "category": "powertrain_battery",
+    "definition": "2톤이 훌쩍 넘는 공차중량과 정지 상태에서 즉각 뿜어져 나오는 고토크로 인해 고가의 EV 전용 타이어 트레드가 2만km도 못 버티고 조기 마모되는 현상.",
+    "nuance": "연료비 아꼈다고 좋아하다가 1년 만에 150만 원 상당의 EV 타이어 4짝을 갈아치우며 유지비에 경악하는 오너들의 비명.",
+    "english_equiv": "Tire Shredder / Accelerated EV Tire Wear",
+    "severity_weight": 3,
+    "example_quote": "무게가 2.3톤인데 토크가 60이라 타이어 파쇄기가 따로 없음. 2만km 만에 철심 나오게 생김."
+  },
+  "회생제동 멀미": {
+    "term": "회생제동 멀미",
+    "category": "powertrain_battery",
+    "definition": "가속 페달을 뗄 때 급격히 걸리는 감속 회생제동 에너지 회수로 인해 동승자나 뒷좌석 탑승자가 심한 울렁거림과 두통, 구토 증상을 겪는 현상.",
+    "nuance": "원페달 드라이빙의 조작 미숙이나 급격한 피칭 모션으로 인해 가족이나 택시 승객들 사이에서 전기차 기피를 부르는 원인.",
+    "english_equiv": "Regenerative Braking Motion Sickness",
+    "severity_weight": 3,
+    "example_quote": "전기 택시 뒷자리 탔다가 원페달 회생제동 멀미 때문에 토할 뻔해서 중간에 내려달라고 함."
+  },
+  "보조금 사냥꾼": {
+    "term": "보조금 사냥꾼",
+    "category": "community_derogatory",
+    "definition": "국내 사후 서비스(AS) 네트워크나 부품 공급망 없이 국민 세금으로 조성된 친환경차 구매 보조금만 타먹고 철수하거나 방치하는 부실 수입사 및 저가 중국산 차량.",
+    "nuance": "국고 낭비와 함께 차량 구매 후 부품이 없어 수리조차 못 받는 피해자를 양산하는 약탈적 판매 행태 비판.",
+    "english_equiv": "Subsidy Hunter / Rebate Exploiter",
+    "severity_weight": 4,
+    "example_quote": "한국 세금 보조금 사냥꾼처럼 털어먹고 수입사 부도나면 그 차 산 사람들만 덤탱이 쓰는 거다."
+  },
+  "모터 고주파 귀신소리": {
+    "term": "모터 고주파 귀신소리",
+    "category": "hardware_defect",
+    "definition": "인버터 스위칭 주파수와 전기 모터의 코일 진동으로 인해 가속 또는 감속 시 실내로 유입되는 10~15kHz 대역의 찌르는 듯한 삐- 고주파 소음.",
+    "nuance": "엔진 소음이 없는 전기차 특성상 귀를 찌르는 모터 소음이 이명과 두통을 유발해 차주를 미치게 만드는 감성 품질 결함.",
+    "english_equiv": "High-Frequency Motor Whine / Inverter Ghost Noise",
+    "severity_weight": 3,
+    "example_quote": "악셀 밟을 때마다 귀신 곡소리처럼 삐이익 하는 모터 고주파 귀신소리 때문에 이명 생길 지경이다."
+  },
+  "12V 방전 지옥": {
+    "term": "12V 방전 지옥",
+    "category": "hardware_defect",
+    "definition": "대용량 고전압 배터리가 완충되어 있어도, 전장 시스템을 깨우는 12V 납축/인산철 보조 배터리가 암전류나 LDC(저전압 직류변환기) 결함으로 방전되어 차가 영구 기절하는 사태.",
+    "nuance": "수천만 원짜리 배터리를 밑에 깔고도 10만 원짜리 오토바이 배터리만도 못한 보조 배터리 방전으로 견인차를 불러야 하는 황당함.",
+    "english_equiv": "12V Auxiliary Battery Drain Hell",
+    "severity_weight": 4,
+    "example_quote": "지하주차장에서 3일 세워놨다고 12V 방전 지옥 걸려서 물리키로 트렁크 뜯고 점프선 연결함."
+  },
+  "OTA 먹통": {
+    "term": "OTA 먹통",
+    "category": "software_subscription",
+    "definition": "원격 무선 소프트웨어 업데이트 도중 펌웨어 설치가 멈추거나 꼬여서 인포테인먼트 디스플레이가 켜지지 않거나 주행이 불가해지는 결함.",
+    "nuance": "편리하자고 도입한 무선 업데이트가 소비자의 아침 출근길을 망쳐놓는 골칫덩이로 변질되는 상황.",
+    "english_equiv": "OTA Firmware Brick / Over-The-Air Update Freeze",
+    "severity_weight": 4,
+    "example_quote": "새벽에 OTA 업데이트 하더니 아침에 내비 화면 새까맣게 먹통 돼서 속도계도 안 보임."
+  },
+  "겨울철 전비 반토막": {
+    "term": "겨울철 전비 반토막",
+    "category": "winter_environment",
+    "definition": "영하의 기온에서 배터리 내부 리튬 이온 이동성 저하와 실내 난방용 PTC 히터/히트펌프 가동으로 인해 에너지 효율(km/kWh)이 봄·가을 대비 50% 수준으로 격감하는 현상.",
+    "nuance": "한국의 혹독한 겨울 기후를 버티지 못하고 반쪽짜리로 전락하는 리튬 배터리 전기차의 본질적 한계를 한탄.",
+    "english_equiv": "Winter Efficiency Halving / Sub-zero Range Halving",
+    "severity_weight": 3,
+    "example_quote": "여름엔 전비 6km 넘게 나오던 차가 한파 오자마자 겨울철 전비 반토막 나서 3.1km 찍힌다."
+  },
+  "충전기 알박기": {
+    "term": "충전기 알박기",
+    "category": "charging_infrastructure",
+    "definition": "충전이 완료되었거나 충전을 하지 않으면서도 공용 충전 구역에 차량을 장시간 방치하여 타 차량의 충전을 고의로 방해하는 얌체 행위.",
+    "nuance": "충전 방해 금지법 과태료에도 불구하고 아파트 입주민 간 감정싸움과 칼부림 위협까지 초래하는 대표적 이기주의 행태.",
+    "english_equiv": "EV Charger Hogging / Stall Squatting",
+    "severity_weight": 3,
+    "example_quote": "완충된 지 12시간 지났는데 차 안 빼고 충전기 알박기 해놓은 놈 때문에 퇴근하고 충전 못 함."
+  }
+}

@@ -12,6 +12,7 @@ from datetime import date, datetime, timezone
 import math
 import re
 from typing import Any, Dict, List, Optional, Union
+import unicodedata
 
 
 DEFECT_CATEGORY_KO_MAP: Dict[str, str] = {
@@ -358,25 +359,43 @@ class RawPost:
         url: str = "",
         title: str = "",
         content: str = "",
-        comments: Optional[List[Any]] = None,
+        comments: Optional[Union[List[Any], Tuple[Any, ...], Set[Any], str]] = None,
         created_at: str = "",
         author: str = "",
         id: Optional[str] = None,
         source: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
-        self.platform = str(source or platform or "unknown")
-        self.post_id = str(id if id is not None else (post_id if post_id is not None else ""))
-        self.url = str(url or "")
-        self.title = str(title or "")
-        self.content = str(content or "")
-        self.comments = (
-            [str(c) for c in comments if c is not None]
-            if isinstance(comments, (list, tuple, set))
-            else []
-        )
-        self.created_at = str(created_at or "")
-        self.author = str(author or "")
+        self.platform = unicodedata.normalize("NFC", str(source or platform or "unknown").replace("\x00", "").strip())
+        self.post_id = str(id if id is not None else (post_id if post_id is not None else "")).replace("\x00", "").strip()
+        self.url = str(url or "").replace("\x00", "").strip()[:2048]
+
+        raw_title = str(title or "").replace("\x00", "").strip()
+        if len(raw_title) > 10_000:
+            raw_title = raw_title[:10_000]
+        self.title = unicodedata.normalize("NFC", raw_title)
+
+        raw_content = str(content or "").replace("\x00", "").strip()
+        if len(raw_content) > 100_000:
+            raw_content = raw_content[:100_000]
+        self.content = unicodedata.normalize("NFC", raw_content)
+
+        if isinstance(comments, str):
+            c_clean = unicodedata.normalize("NFC", comments.replace("\x00", "")[:10_000].strip())
+            self.comments = [c_clean] if c_clean else []
+        elif isinstance(comments, (list, tuple, set)):
+            safe_c: List[str] = []
+            for c in comments:
+                if c is not None:
+                    c_clean = unicodedata.normalize("NFC", str(c).replace("\x00", "")[:10_000].strip())
+                    if c_clean:
+                        safe_c.append(c_clean)
+            self.comments = safe_c
+        else:
+            self.comments = []
+
+        self.created_at = str(created_at or "").replace("\x00", "").strip()[:128]
+        self.author = unicodedata.normalize("NFC", str(author or "").replace("\x00", "").strip()[:256])
 
     @property
     def id(self) -> str:
@@ -440,6 +459,8 @@ class RawPost:
     def from_dict(cls, data: Any) -> RawPost:
         if isinstance(data, cls):
             return data
+        if data is None or not isinstance(data, (dict, object)) or isinstance(data, (int, float, bool, list, tuple, set, str, bytes)):
+            return cls()
         def _get(k: str, default: Any = "") -> Any:
             if isinstance(data, dict):
                 return data.get(k, default)
@@ -568,6 +589,17 @@ class ComplaintRecord:
             self.slang_terms_detected = []
         elif not isinstance(self.slang_terms_detected, list):
             self.slang_terms_detected = list(self.slang_terms_detected)
+
+        # Sanitize text fields from null bytes and normalize NFC Unicode
+        if self.title:
+            self.title = unicodedata.normalize("NFC", str(self.title).replace("\x00", ""))
+        if self.summary:
+            self.summary = unicodedata.normalize("NFC", str(self.summary).replace("\x00", ""))
+        if self.verbatim_quote:
+            self.verbatim_quote = unicodedata.normalize("NFC", str(self.verbatim_quote).replace("\x00", ""))
+        if self.filter_reason:
+            self.filter_reason = unicodedata.normalize("NFC", str(self.filter_reason).replace("\x00", ""))
+
         if self.sentiment_polarity is not None:
             try:
                 p = float(self.sentiment_polarity)
@@ -709,7 +741,7 @@ class ComplaintRecord:
         """Construct ComplaintRecord from dict or ComplaintRecord instance with aliases and fallbacks."""
         if isinstance(data, cls):
             return data
-        if not isinstance(data, (dict, object)) or data is None:
+        if not isinstance(data, (dict, object)) or data is None or isinstance(data, (int, float, bool, list, tuple, set, str, bytes)):
             data = {}
 
         def _get(key: str, default: Any = None) -> Any:

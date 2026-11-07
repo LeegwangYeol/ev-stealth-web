@@ -17,17 +17,17 @@ export const getBadgeStyle = (status?: AlertSeverity | string | null): string =>
   switch (normalized) {
     case 'HEALTHY':
     case 'AVAILABLE':
-      return 'bg-emerald-950 text-emerald-300 border-emerald-500/50';
+      return 'bg-emerald-950 text-emerald-200 border-emerald-400';
     case 'CAUTION':
-      return 'bg-amber-950 text-amber-300 border-amber-500/50';
+      return 'bg-amber-950 text-amber-200 border-amber-400';
     case 'WARNING':
-      return 'bg-orange-950 text-orange-300 border-orange-500/50';
+      return 'bg-orange-950 text-orange-200 border-orange-400';
     case 'CRITICAL':
-      return 'bg-rose-950 text-rose-300 border-rose-500/50 animate-pulse motion-reduce:animate-none';
+      return 'bg-rose-950 text-rose-200 border-rose-400 animate-pulse motion-reduce:animate-none';
     case 'DEPLETED':
-      return 'bg-slate-900 text-slate-200 border-slate-500';
+      return 'bg-slate-950 text-slate-100 border-slate-400';
     default:
-      return 'bg-emerald-950 text-emerald-300 border-emerald-500/50';
+      return 'bg-emerald-950 text-emerald-200 border-emerald-400';
   }
 };
 

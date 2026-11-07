@@ -181,6 +181,10 @@ class BaseCrawler(abc.ABC):
                 eff_url = f"{base_clean}/{path_clean}"
 
         self.ensure_warm_up(base_url)
+        if not self.client:
+            logger.warning(f"No HTTP client configured on {self.__class__.__name__}")
+            return None
+
         timeout = kwargs.get("timeout", getattr(self, "default_timeout", getattr(self.client, "timeout", 15.0)))
         try:
             resp = self.client.get(eff_url, referer=referer, timeout=timeout)
@@ -192,6 +196,10 @@ class BaseCrawler(abc.ABC):
             logger.warning(f"Network error fetching post {eff_url}: {e}")
             return None
 
+        if status == 429:
+            logger.warning(f"Rate-limited (HTTP 429) fetching post {eff_url}. Degrading gracefully.")
+            return None
+
         if status != 200 or not text:
             logger.warning(f"Failed to fetch post: {eff_url} (status: {status})")
             return None
@@ -201,7 +209,21 @@ class BaseCrawler(abc.ABC):
             if not isinstance(detail, dict):
                 logger.warning(f"parse_post_detail returned non-dict ({type(detail)}) for {eff_url}")
                 return None
-            if detail.get("is_deleted") or detail.get("is_restricted"):
+            if (
+                detail.get("is_deleted")
+                or detail.get("is_restricted")
+                or detail.get("status")
+                in (
+                    "deleted_post",
+                    "restricted_post",
+                    "cloudflare_challenge",
+                    "abnormal_access_blocked",
+                    "ip_blocked",
+                    "captcha_challenge",
+                    "access_denied",
+                    "service_maintenance",
+                )
+            ):
                 return None
             return detail
         except Exception as e:

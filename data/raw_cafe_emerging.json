@@ -1,0 +1,674 @@
+[
+  {
+    "id": "NC_BAT_001",
+    "platform": "naver_cafe",
+    "board_name": "전기차 동호회",
+    "post_url": "https://cafe.naver.com/electrictrain/148293",
+    "post_title": "과속방지턱 긁힘 하나로 배터리 보증 거부당하고 2,450만원 견적서 받았습니다",
+    "target_vehicle": "Hyundai Ioniq 5",
+    "category": "repair_as",
+    "defect_topic": "배터리 하부 1.5mm 스크래치로 인한 제조사 보증 거부 및 2,450만원 배터리 통교체 청구",
+    "raw_quote": "아파트 단지 지하주차장 진입로 과속방지턱에 배터리 하부 알루미늄 보호판이 살짝 닿아서 1.5mm 정도 긁혔는데 블루핸즈 직영 하이테크센터 입고하니까 엔지니어가 리프트 띄워보고 '외력에 의한 하부 충격 흔적으로 배터리 보증수리 불가' 판정 내렸습니다. 계기판에 BMS 경고등 하나 안 떴고 누액이나 셀 이상 전혀 없는데 케이스만 별도 교환은 안 되고 배터리 통교체만 가능하다면서 부품값 2,200만원에 공임 포함 2,450만원 견적서 던져주네요. 1.5mm 기스 하나 났다고 2천만원 넘게 내놓으라는 게 말이 됩니까? 결국 자차 처리하려니까 보험사에서도 자기부담금 50만원에 다음 갱신 때 할증 폭탄 맞을 거라고 경고하네요.",
+    "slang_terms": [
+      "하부 긁힘 2천만원",
+      "배터리 통교체",
+      "하이테크 유배",
+      "할증 폭탄"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "아이오닉 3년차",
+      "post_date": "2025-05-14",
+      "view_count": 18400,
+      "comment_count": 215,
+      "vote_count": 89
+    },
+    "collected_at": "2025-05-14T14:20:00Z"
+  },
+  {
+    "id": "NC_BAT_002",
+    "platform": "naver_cafe",
+    "board_name": "전기차 타는 사람들",
+    "post_url": "https://cafe.naver.com/evowners/219842",
+    "post_title": "비포장 자갈길에서 튄 돌빵에 EV6 배터리 팩 2,600만원 전손 위기 실화냐",
+    "target_vehicle": "Kia EV6",
+    "category": "repair_as",
+    "defect_topic": "주행 중 자갈 충격으로 인한 배터리 하부 하우징 찍힘 및 2,600만원 어셈블리 통교체 강제",
+    "raw_quote": "캠핑장 들어가는 임도 비포장도로 천천히 지나가다가 바퀴에서 튕겨 오른 자갈에 배터리 하단 커버 2mm 찍혔습니다. 혹시나 해서 기아 오토큐 갔더니 배터리 케이스 손상은 화재 위험 때문에 내부 모듈이나 셀 점검 없이 무조건 어셈블리 통교체가 매뉴얼이라네요. 부품값 2,400만원에 공임 합쳐서 2,600만원 청구서 찍혀 나왔습니다. 하부 스키드 플레이트 단독 수리나 판금은 본사 규정상 원천 금지라는데, 차량 잔존가치가 3천만원 초반인데 수리비가 2,600만원 나와서 보험사 출동직원이 차라리 배터리 전손 처리하고 잔존물 매각하자고 권유함. 돌멩이 하나 밟았다고 멀쩡히 굴러가는 차를 묻지마 전손 시켜야 되는 현실이 진짜 기가 찹니다.",
+    "slang_terms": [
+      "배터리 통교체",
+      "배터리 전손",
+      "전손 폭탄",
+      "묻지마 전손"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "정회원",
+      "post_date": "2025-07-22",
+      "view_count": 22100,
+      "comment_count": 280,
+      "vote_count": 114
+    },
+    "collected_at": "2025-07-22T16:45:00Z"
+  },
+  {
+    "id": "NC_BAT_003",
+    "platform": "naver_cafe",
+    "board_name": "테슬라 코리아 동호회",
+    "post_url": "https://cafe.naver.com/teslakoreaclub/88310",
+    "post_title": "고속도로 낙하물 스치고 모델Y 배터리 냉각수 파이프 파손 2,700만원 견적 후기",
+    "target_vehicle": "Tesla Model Y",
+    "category": "repair_as",
+    "defect_topic": "고속도로 노면 이물질 충격으로 배터리 팩 냉각 피팅 크랙 및 2,700만원 통교체 요구",
+    "raw_quote": "영동고속도로 주행 중 전방 트럭에서 떨어진 작은 플라스틱 조각을 피하지 못하고 하부로 넘겼는데, 하부 배터리 앞단 냉각수 니플 플라스틱 피팅에 실금이 가면서 부동액이 찔끔찔끔 누유됐습니다. 테슬라 광명 서비스센터 입고했더니 어드바이저가 배터리 팩 일체형 구조라 피팅 부품만 따로 교체할 수 없고 팩 어셈블리 전체를 갈아야 한다며 2,700만원 견적 때렸습니다. 미국 사설에서는 10달러짜리 황동 피팅으로 탭 내서 수리한다는데 국내 테슬라는 사설 수리 이력 남으면 슈퍼차저 영구 차단한다고 협박하네요. 결국 자차 처리 접수했더니 보험사 대물 담당자가 테슬라 배터리 통교체 청구 너무 심해서 손해율 터진다고 난색을 표합니다.",
+    "slang_terms": [
+      "배터리 통교체",
+      "섭센 예약 대기",
+      "전손 폭탄",
+      "할증 폭탄"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "우수회원",
+      "post_date": "2025-08-11",
+      "view_count": 27300,
+      "comment_count": 340,
+      "vote_count": 142
+    },
+    "collected_at": "2025-08-11T11:15:00Z"
+  },
+  {
+    "id": "NC_BAT_004",
+    "platform": "naver_cafe",
+    "board_name": "전기차 매니아",
+    "post_url": "https://cafe.naver.com/evmania/63402",
+    "post_title": "포르쉐 타이칸 1.5mm 하부 스크래치에 7,800만원 전손 통보받았습니다",
+    "target_vehicle": "Porsche Taycan",
+    "category": "repair_as",
+    "defect_topic": "포르쉐 공식 센터의 1.5mm 미세 스크래치 배터리 보증 배제 및 7,800만원 통교체 강제 전손",
+    "raw_quote": "지하주차장 카스토퍼 살짝 건드리면서 배터리 알루미늄 언더커버에 1.5mm 긁힘이 발생했는데 포르쉐 센터에서 정기점검 중 발견하더니 바로 배터리 보증 무효 처리했습니다. 배터리 셀 전압 편차 0.01V 이내로 완벽히 정상인데도 '외력에 의한 하우징 변형 가능성' 핑계 대면서 독일 본사 매뉴얼상 무조건 팩 통교체해야 된다고 7,800만원 견적서 발송함. 3년 탄 중고차 시세가 8,000만원인데 배터리 교체비가 7,800만원이라 결국 보험사에서 7천만원 전손 종결 처리하자고 통보왔습니다. 멀쩡한 배터리를 긁힘 하나로 폐기처분하고 차주를 신용불량자 만들 뻔한 7천만원 전손 폭탄입니다.",
+    "slang_terms": [
+      "7천만원 전손",
+      "배터리 통교체",
+      "하부 긁힘 2천만원",
+      "전손 폭탄"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "VIP",
+      "post_date": "2025-06-05",
+      "view_count": 34500,
+      "comment_count": 420,
+      "vote_count": 198
+    },
+    "collected_at": "2025-06-05T09:30:00Z"
+  },
+  {
+    "id": "NC_BAT_005",
+    "platform": "naver_cafe",
+    "board_name": "클럽 BYD 코리아",
+    "post_url": "https://cafe.naver.com/clubbyd/12094",
+    "post_title": "아토3 블레이드 배터리 하부 찍힘 AS 센터 견적 2,100만원 청구... 중국 직구 불가",
+    "target_vehicle": "BYD Atto 3",
+    "category": "repair_as",
+    "defect_topic": "BYD 블레이드 배터리 팩 하부 외판 손상 시 모듈 분해 불가 및 2,100만원 통교환",
+    "raw_quote": "골목길 연석에 조수석 하부 살짝 걸쳐서 배터리팩 언더트레이 모서리가 긁히고 1mm 정도 찌그러졌습니다. BYD 공식 서비스센터 입고시켰더니 블레이드 배터리는 셀투팩(CTP) 구조라 모듈 단위 분해 정비가 불가능하고 팩 통교체만 가능하답니다. 견적서에 부품값 1,800만원에 인건비랑 배터리 냉각수 교환비 합쳐서 2,100만원 찍혔습니다. 차값이 3천만원대인데 배터리 한번 긁혔다고 2,100만원 내라는 게 제정신인가요? 국내 부품 재고도 없어서 중국 선전 본사에서 해상 운송으로 3개월 기다려야 된답니다. 중국산 짱깨차 가성비 믿고 샀다가 부품 수급 3개월에 수리비 폭탄 맞고 길바닥에 주저앉았습니다.",
+    "slang_terms": [
+      "배터리 통교체",
+      "짱깨차",
+      "부품 수급 3개월",
+      "선전직구 부품"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "신규회원",
+      "post_date": "2025-09-17",
+      "view_count": 16700,
+      "comment_count": 195,
+      "vote_count": 72
+    },
+    "collected_at": "2025-09-17T18:10:00Z"
+  },
+  {
+    "id": "NC_BAT_006",
+    "platform": "naver_cafe",
+    "board_name": "전기차 동호회",
+    "post_url": "https://cafe.naver.com/electrictrain/159820",
+    "post_title": "벤츠 EQE 하부 알루미늄 커버 2mm 함몰로 6,500만원 배터리 교체 견적 맞았습니다",
+    "target_vehicle": "Mercedes-Benz EQE",
+    "category": "repair_as",
+    "defect_topic": "메르세데스-벤츠 EQE 하부 보호판 충격 시 비분해 원칙 및 6,500만원 청구",
+    "raw_quote": "도로 파인 포트홀 밟으면서 하부에서 쿵 소리 났는데 계기판 경고등은 전혀 안 들어왔습니다. 정기점검 차 벤츠 한성모터스 서비스센터 들어갔는데 하부 리프트 떠보더니 배터리 알루미늄 보호판 중앙에 2mm 미세 함몰이 있다고 사진 찍어 보여주더군요. 그러더니 셀 내부 단락 화재 위험성 배제 못한다며 팩 통교체 견적 6,500만원을 들이밀었습니다. 외판 커버만 따로 분리 교체할 수 없냐고 따졌더니 본사 안전 규정상 팩 완전 밀봉이라 커버 단독 부품은 안 나온답니다. 청라 화재 이후로 벤츠가 배터리 리스크 전부 소비자한테 전가하고 조금만 흠집 나도 무조건 6,500만원짜리 통교체 강요하는 꼴입니다.",
+    "slang_terms": [
+      "하부 긁힘 2천만원",
+      "배터리 통교체",
+      "화재 포비아",
+      "청라 화재 포비아"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "EQE 2년차",
+      "post_date": "2025-08-29",
+      "view_count": 29800,
+      "comment_count": 390,
+      "vote_count": 165
+    },
+    "collected_at": "2025-08-29T13:40:00Z"
+  },
+  {
+    "id": "NC_BAT_007",
+    "platform": "naver_cafe",
+    "board_name": "포터2/봉고3/T4K 전기트럭 동호회",
+    "post_url": "https://cafe.naver.com/evtruckclub/45120",
+    "post_title": "T4K 1톤 트럭 공사현장 자갈 턱 넘다가 배터리 케이스 긁힘 1,950만원 견적...",
+    "target_vehicle": "BYD T4K 1-Ton Truck",
+    "category": "repair_as",
+    "defect_topic": "상용 1톤 전기트럭 하부 배터리 노출로 인한 험로 긁힘 및 통교체 1,950만원 요구",
+    "raw_quote": "공사현장 진입로 흙길 턱 넘어가다가 바닥에 돌 튀면서 배터리 팩 하부 언더가드가 긁히고 모서리 리벳이 하나 떨어져 나갔습니다. GS글로벌 서비스 입고시켰더니 배터리 방수 실링 파손 의심된다고 팩 전체 교체 1,950만원 견적 때렸습니다. 보조금 받고 1,900만원에 산 1톤 트럭인데 배터리 수리비가 신차 가격보다 더 비쌉니다. 생업으로 용달 뛰는데 2천만원 돈이 어디 있습니까? 결국 자차 처리 물어봤더니 영업용 화물 전기차는 단독사고 자차 가입도 거절당해서 전액 생돈 날리게 생겼습니다. 짱트럭 알리트럭 사서 영업 뛰려다 인생 망가질 판입니다.",
+    "slang_terms": [
+      "알리트럭",
+      "짱트럭",
+      "배터리 통교체",
+      "보조금 털이범"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "화물운송기사",
+      "post_date": "2025-10-04",
+      "view_count": 14200,
+      "comment_count": 178,
+      "vote_count": 64
+    },
+    "collected_at": "2025-10-04T15:50:00Z"
+  },
+  {
+    "id": "NC_INS_001",
+    "platform": "naver_cafe",
+    "board_name": "테슬라 코리아 동호회",
+    "post_url": "https://cafe.naver.com/teslakoreaclub/91204",
+    "post_title": "무사고 9년차 모델3 자차 다이렉트 전면 인수 거부당하고 공동인수 380만원 떴습니다",
+    "target_vehicle": "Tesla Model 3",
+    "category": "repair_as",
+    "defect_topic": "테슬라 기가캐스팅 및 배터리 전손 급증으로 인한 대형 손보사 다이렉트 인수 거절 및 공동인수 강제",
+    "raw_quote": "무사고 9년 20등급이라 작년까지 모델3 롱레인지 자차 포함 보험료 110만원 내고 탔습니다. 이번에 만기 돌아와서 삼성화재 다이렉트 갱신하려니까 '해당 차량은 인수 심사 기준 미달'이라며 가입 거절 뜨더군요. DB손보, 현대해상, KB손보 다이렉트 전부 다 넣어봤는데 테슬라 전산에서 단독 자차 거부로 싹 튕겼습니다. 결국 손보협회 공동인수로 넘어갔더니 자차 보험료만 280만원에 총 보험료 380만원 견적 날아왔습니다. 1년 무사고였는데 110만원에서 380만원으로 3배 넘게 폭등한 이유가 뭐냐고 보험사에 따졌더니, 테슬라는 기가캐스팅 크랙이랑 배터리 하부 긁힘 2천만원짜리 전손 폭탄 때문에 손해율 100% 넘겨서 단독 다이렉트 가입 전면 차단 중이라네요. 내연기관 탈 때는 상상도 못 해본 할증 폭탄입니다.",
+    "slang_terms": [
+      "할증 폭탄",
+      "공동인수",
+      "인수 거부",
+      "전손 폭탄"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "모델3 4년차",
+      "post_date": "2025-06-19",
+      "view_count": 31200,
+      "comment_count": 385,
+      "vote_count": 156
+    },
+    "collected_at": "2025-06-19T10:15:00Z"
+  },
+  {
+    "id": "NC_INS_002",
+    "platform": "naver_cafe",
+    "board_name": "전기차 동호회",
+    "post_url": "https://cafe.naver.com/electrictrain/154311",
+    "post_title": "아이오닉5 경미 접촉사고 1건 자차 처리했더니 이듬해 보험 갱신 전면 거절...",
+    "target_vehicle": "Hyundai Ioniq 5",
+    "category": "repair_as",
+    "defect_topic": "단일 1회 배터리 점검 이력으로 인한 다이렉트 보험 갱신 거절 및 손해보험사 퇴짜",
+    "raw_quote": "작년 겨울에 눈길에서 미끄러져 보도블럭 툭 부딪혀서 하부 점검 겸 범퍼 도색으로 자차 180만원 썼습니다. 올해 만기 돼서 현대해상 다이렉트 갱신 버튼 눌렀더니 '인수 제한 차량'이라고 팝업 뜨면서 거절당함. DB, 삼성, 캐롯 전부 전화 돌렸는데 '전기차 자차 청구 이력 1건이라도 있으면 3년간 다이렉트 인수 제한 대상'이라는 답변만 앵무새처럼 반복하네요. 대리점 오프라인 설계사 통해서 넣었더니 보험료 130만원 내던 게 310만원으로 뛰었습니다. 사고 180만원 치 치고 보험료를 3년간 500만원 더 내야 하는 구조입니다. 전기차 타면서 자차 보험 쓰는 순간 보험사 블랙리스트에 오르는 꼴입니다.",
+    "slang_terms": [
+      "할증 폭탄",
+      "인수 거부",
+      "공동인수"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "열심회원",
+      "post_date": "2025-07-08",
+      "view_count": 21800,
+      "comment_count": 260,
+      "vote_count": 98
+    },
+    "collected_at": "2025-07-08T17:30:00Z"
+  },
+  {
+    "id": "NC_INS_003",
+    "platform": "naver_cafe",
+    "board_name": "전기차 타는 사람들",
+    "post_url": "https://cafe.naver.com/evowners/224501",
+    "post_title": "EV9 출고 1년차 자차 보험 갱신하려니 420만원 달랍니다... 손보사 담합인가요",
+    "target_vehicle": "Kia EV9",
+    "category": "repair_as",
+    "defect_topic": "99.8kWh 대용량 배터리 장착 대형 전기 SUV 자차 손해율 급증으로 인한 보험료 400만원 돌파",
+    "raw_quote": "EV9 4WD 어스 트림 타고 있는데 1년 무사고 만기 갱신 견적 받아보고 뒤로 넘어갈 뻔했습니다. 첫해 신차 출고할 때 220만원 줬는데 올해 무사고 할인 들어가기는커녕 420만원이 찍혀 나왔습니다. 삼성화재 다이렉트 담당자 통화해보니까 100kWh에 달하는 대용량 배터리 팩 가격만 3천만원 육박하고 경미한 하부 충격에도 전손 처리되는 사례가 쏟아져서 대형 전기 SUV 손해율이 감당이 안 돼 본사 요율이 80% 이상 강제 인상됐답니다. 자차 빼고 책임보험만 넣으려고 해도 차량가액 8천만원짜리를 자차 없이 어떻게 타고 다닙니까? 한 달 유지비 계산할 때 유류비 절감은커녕 보험료로 다 털리고 있습니다.",
+    "slang_terms": [
+      "할증 폭탄",
+      "배터리 전손",
+      "전손 폭탄"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "우수회원",
+      "post_date": "2025-08-03",
+      "view_count": 25600,
+      "comment_count": 310,
+      "vote_count": 128
+    },
+    "collected_at": "2025-08-03T11:45:00Z"
+  },
+  {
+    "id": "NC_INS_004",
+    "platform": "naver_cafe",
+    "board_name": "클럽 BYD 코리아",
+    "post_url": "https://cafe.naver.com/clubbyd/13490",
+    "post_title": "BYD 아토3 자차 가입 거부당해서 강제 공동인수... 보험료만 270만원",
+    "target_vehicle": "BYD Atto 3",
+    "category": "repair_as",
+    "defect_topic": "중국산 전기차 신규 유입에 대한 국내 손해보험사 언더라이팅 거부 및 강제 공동인수",
+    "raw_quote": "BYD 아토3 사전예약해서 신차 등록하려고 보험 다이렉트 비교견적 사이트 들어갔는데 11개 손해보험사 중 8곳에서 '해당 차종 데이터 미비 및 부품 공급망 불확실' 사유로 자차 인수 거부 때렸습니다. 메이저 3사 다이렉트 전부 퇴짜 맞고 결국 손보협회 공동인수 지정 배정받아 DB손보로 들어갔는데 차값 3천만원대 차량 자차 보험료가 270만원 나왔습니다. 차 가격은 싼데 보험료랑 정비 리스크로 다 털리는 전형적인 테무차 알리직구차 함정에 걸린 기분입니다.",
+    "slang_terms": [
+      "공동인수",
+      "인수 거부",
+      "테무차",
+      "알리직구차"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "신규오너",
+      "post_date": "2025-10-12",
+      "view_count": 17800,
+      "comment_count": 204,
+      "vote_count": 79
+    },
+    "collected_at": "2025-10-12T15:20:00Z"
+  },
+  {
+    "id": "NC_INS_005",
+    "platform": "naver_cafe",
+    "board_name": "전기차 동호회",
+    "post_url": "https://cafe.naver.com/electrictrain/163219",
+    "post_title": "폴스타2 자차 갱신 거절... 알루미늄 배터리 서브프레임 수리 불가 이슈 여파",
+    "target_vehicle": "Polestar 2",
+    "category": "repair_as",
+    "defect_topic": "CMA 플랫폼 배터리 팩 케이스 용접 불가로 인한 전손율 폭등 및 보험 갱신 불응",
+    "raw_quote": "폴스타 2 싱글모터 무사고 3년 차 갱신하려니까 KB손해보험에서 단독 자차 담보 제외 조건부 인수 통보를 보냈습니다. 자차를 빼고 가입하라는 건 사실상 가입 거부나 마찬가지죠. 이유를 물어보니 볼보/폴스타 CMA 플랫폼이 하부 충격 시 배터리 알루미늄 트레이 용접/교정 불가로 전손 처리 비율이 국산 내연기관 대비 4배 이상 높아서 손보사들이 계약 갱신을 털어내고 있는 중이랍니다. 결국 삼성화재 오프라인 설계사 통해서 140만원 내던 걸 260만원 주고 울며 겨자 먹기로 갱신했습니다.",
+    "slang_terms": [
+      "인수 거부",
+      "배터리 전손",
+      "할증 폭탄"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "폴스타 오너",
+      "post_date": "2025-09-02",
+      "view_count": 19400,
+      "comment_count": 230,
+      "vote_count": 88
+    },
+    "collected_at": "2025-09-02T12:00:00Z"
+  },
+  {
+    "id": "NC_INS_006",
+    "platform": "naver_cafe",
+    "board_name": "포터2/봉고3/T4K 전기트럭 동호회",
+    "post_url": "https://cafe.naver.com/evtruckclub/48730",
+    "post_title": "전기 화물차는 자차 보험 들지도 말라는 손보사들의 횡포",
+    "target_vehicle": "Hyundai Porter II Electric",
+    "category": "repair_as",
+    "defect_topic": "1톤 전기 화물차 하부 노출 배터리 손상 위험으로 인한 손보사 단독 자차 가입 거절",
+    "raw_quote": "포터 일렉트릭 신차 뽑고 택배 영업 뛰려고 보험 다이렉트 넣었더니 화물 전기차는 단독 자차 가입 불가라고 뜹니다. 대물 10억에 자손만 넣어주고 자기차량손해는 공동인수 넘어가도 인수 거절 통지서 날아옴. 택배 트럭이라 골목길이나 지하 램프 자주 타는데 하부 배터리 한번 긁히면 2천만원 자비로 물어내야 되는 시한폭탄 안고 운전하는 셈입니다. 보험사들이 전기트럭 손해율 높다고 아예 자차를 안 받아주는데 정부는 친환경 화물차 타라고 등 떠밀고 보험사는 내팽개치는 이 모순을 어찌해야 합니까?",
+    "slang_terms": [
+      "인수 거부",
+      "공동인수",
+      "하부 긁힘 2천만원",
+      "시한폭탄"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "택배기사",
+      "post_date": "2025-09-25",
+      "view_count": 20500,
+      "comment_count": 255,
+      "vote_count": 105
+    },
+    "collected_at": "2025-09-25T14:35:00Z"
+  },
+  {
+    "id": "NC_CHG_001",
+    "platform": "naver_cafe",
+    "board_name": "클럽 BYD 코리아",
+    "post_url": "https://cafe.naver.com/clubbyd/14102",
+    "post_title": "영하 3도 환경부 100kW 급속 물렸는데 충전속도 24kW 실화냐? 굼벵이 충전 극악",
+    "target_vehicle": "BYD Atto 3",
+    "category": "charging",
+    "defect_topic": "혹한기 저온 LFP 배터리 내부 저항 급증으로 인한 급속 충전 속도 75% 급락 (굼벵이 충전)",
+    "raw_quote": "겨울철 강원도 원주 휴게소 환경부 100kW 급속 충전기에 아토3 꽂았습니다. 배터리 잔량 22%였는데 화면에 찍히는 속도가 24kW에서 1도 안 올라갑니다. 옆 스톨에 들어온 아이오닉5는 800V 초급속 꽂더니 180kW 뽑아내며 15분 만에 완충하고 떠나는데, 저 혼자 차 안에서 패딩 입고 덜덜 떨면서 80% 채우는 데 1시간 40분 걸렸습니다. LFP 블레이드 배터리가 겨울철 저온 승온(프리컨디셔닝) 로직이 워낙 부실해서 영하 날씨에 급속 물리면 그냥 완속 충전기 수준으로 기어갑니다. 고속도로 장거리 뛸 때 겨울철 굼벵이 충전 때문에 스케줄 다 박살납니다.",
+    "slang_terms": [
+      "굼벵이 충전",
+      "환경부 튕김",
+      "LFP",
+      "쓰로틀링"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "아토3 오너",
+      "post_date": "2025-12-14",
+      "view_count": 24100,
+      "comment_count": 280,
+      "vote_count": 112
+    },
+    "collected_at": "2025-12-14T19:20:00Z"
+  },
+  {
+    "id": "NC_CHG_002",
+    "platform": "naver_cafe",
+    "board_name": "테슬라 코리아 동호회",
+    "post_url": "https://cafe.naver.com/teslakoreaclub/94502",
+    "post_title": "E-pit 350kW 초급속 물렸더니 400V 승압 변환 병목으로 72kW 락 걸리고 세션 튕김",
+    "target_vehicle": "Tesla Model Y",
+    "category": "charging",
+    "defect_topic": "800V 초급속 충전소에서 400V 아키텍처 승압 인버터 발열 쓰로틀링 및 세션 단절",
+    "raw_quote": "안성휴게소 현대 E-pit 초급속 스톨에 DC콤보 어댑터 물리고 모델Y 충전 시작했는데, 800V E-pit 충전기가 400V 테슬라 차량을 감지하고 승압 모드로 들어가자마자 70kW 부근에서 락 걸려버립니다. 게다가 10분쯤 지나니까 어댑터 접촉부 온도가 85도 넘어가면서 '충전기 통신 오류' 빨간불 뜨고 세션 튕김 발생했습니다. DC콤보 어댑터 손으로 만져보니 화상 입을 정도로 뜨겁고 커넥터 락 고착돼서 5분 동안 낑낑대며 뽑았네요. 슈퍼차저 없으면 고속도로 E-pit 초급속 인프라는 그림의 떡이고 충전 속도 반토막에 튕김 스트레스만 받습니다.",
+    "slang_terms": [
+      "이피트 튕김",
+      "세션 튕김",
+      "통신 락",
+      "충전건 고착"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "모델Y RWD",
+      "post_date": "2025-11-20",
+      "view_count": 28900,
+      "comment_count": 330,
+      "vote_count": 139
+    },
+    "collected_at": "2025-11-20T16:10:00Z"
+  },
+  {
+    "id": "NC_CHG_003",
+    "platform": "naver_cafe",
+    "board_name": "포터2/봉고3/T4K 전기트럭 동호회",
+    "post_url": "https://cafe.naver.com/evtruckclub/50214",
+    "post_title": "T4K 급속 충전기만 물리면 5분 만에 통신 에러 뿜고 튕겨버림... 채비/환경부 다 똑같음",
+    "target_vehicle": "BYD T4K 1-Ton Truck",
+    "category": "charging",
+    "defect_topic": "국내 급속 충전기 PLC 통신 모뎀 호환성 결함으로 인한 핸드셰이크 단절 및 충전 중단",
+    "raw_quote": "공용 충전소 채비랑 환경부 100kW 급속만 가면 5분 충전되다가 '차량 통신 두절(0x3B)' 에러 뜨면서 충전기 화면 먹통 되고 세션 튕깁니다. 하루에 세 번씩 충전해야 배달 물량 맞추는데 충전소마다 꽂았다 튕겼다 반복하느라 길바닥에서 1시간씩 날립니다. 서비스센터 물어보니까 국내 충전기 PLC 통신 프로토콜이랑 중국산 통신 모듈 간에 핸드셰이크 신호 타이밍이 안 맞아서 튕기는 현상이라는데 소프트웨어 업데이트는 기약도 없답니다. 충전기 옆에서 지키고 서서 튕길 때마다 다시 결제해야 하는 짱트럭 신세가 한탄스럽습니다.",
+    "slang_terms": [
+      "세션 튕김",
+      "환경부 튕김",
+      "통신 락",
+      "짱트럭"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "운송인",
+      "post_date": "2025-10-28",
+      "view_count": 15800,
+      "comment_count": 182,
+      "vote_count": 71
+    },
+    "collected_at": "2025-10-28T13:25:00Z"
+  },
+  {
+    "id": "NC_CHG_004",
+    "platform": "naver_cafe",
+    "board_name": "아이오닉 멤버스",
+    "post_url": "https://cafe.naver.com/ioniqmembers/77410",
+    "post_title": "ICCU 리콜 소프트웨어 패치 받고 급속 충전 속도 120kW 반토막 락 걸림",
+    "target_vehicle": "Hyundai Ioniq 5",
+    "category": "charging",
+    "defect_topic": "ICCU 전력 변환 모듈 파손 방지를 위한 강제 충전 전류 하향 패치로 충전 지연",
+    "raw_quote": "현대차에서 ICCU 리콜 통지서 와서 소프트웨어 업데이트 받고 왔습니다. 원래 350kW 초급속 꽂으면 220kW 이상 뿜어주면서 18분 만에 80% 찍던 차가, 업데이트 이후로는 배터리 온도 다 올렸는데도 최대 120kW 이상을 절대 안 올립니다. 블루핸즈 기사한테 따지니까 ICCU 과열 폭발 막으려고 BMS 충전 전류 맵핑을 보수적으로 깎아내린 '꼼수 리콜 패치'라고 은근슬쩍 인정하네요. 하드웨어를 튼튼하게 개선해줄 생각은 안 하고 멀쩡한 초급속 충전 속도를 반토막 내서 소비자한테 충전 대기 시간 전가하는 현대차 클라스에 정떨어집니다.",
+    "slang_terms": [
+      "ICCU 터짐",
+      "꼼수 리콜",
+      "완속 반토막 패치",
+      "쓰로틀링"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "아이오닉 원년멤버",
+      "post_date": "2025-06-25",
+      "view_count": 28400,
+      "comment_count": 345,
+      "vote_count": 150
+    },
+    "collected_at": "2025-06-25T11:00:00Z"
+  },
+  {
+    "id": "NC_CHG_005",
+    "platform": "naver_cafe",
+    "board_name": "전기차 동호회",
+    "post_url": "https://cafe.naver.com/electrictrain/168490",
+    "post_title": "혹한기 영하 12도 급속 충전구 락 핀 결빙으로 커넥터 고착... 드라이기 들고 출동",
+    "target_vehicle": "Kia EV6",
+    "category": "charging",
+    "defect_topic": "충전 인렛 솔레노이드 락 핀 수분 유입 동결로 인한 급속 충전 건 물리적 분리 불가",
+    "raw_quote": "대관령 스키장 갔다가 영하 12도 강추위 속에서 50kW 급속 충전 마치고 커넥터 뽑으려는데 철컥 소리만 나고 락 핀이 전혀 안 풀렸습니다. 충전기 회사 원격 언락도 실패하고 트렁크 내장재 뜯어서 비상 수동 해제 와이어를 있는 힘껏 당겼는데 플라스틱 와이어 손잡이만 뚝 끊어졌습니다. 뒤에 충전 대기하던 다른 전기차 차주들은 추위에 떨며 쳐다보고, 결국 인근 펜션 사장님한테 부탁해서 연장선 끌어와 드라이기로 충전구 30분 동안 녹여서 겨우 뽑았습니다. 충전구 실링 결함으로 빗물이나 세차수가 들어가 얼어붙는 고질병이라는데 겨울철마다 충전소 갈 때마다 트라우마 생깁니다.",
+    "slang_terms": [
+      "충전건 고착",
+      "충전건 물림",
+      "락 결빙",
+      "수동 와이어 당김"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "강원오너",
+      "post_date": "2026-01-18",
+      "view_count": 26700,
+      "comment_count": 315,
+      "vote_count": 133
+    },
+    "collected_at": "2026-01-18T20:40:00Z"
+  },
+  {
+    "id": "NC_CHG_006",
+    "platform": "naver_cafe",
+    "board_name": "테슬라 코리아 동호회",
+    "post_url": "https://cafe.naver.com/teslakoreaclub/96118",
+    "post_title": "슈퍼차저 V2 스톨 페어링 반토막 충전 속도에 주말 대기 지옥 1시간",
+    "target_vehicle": "Tesla Model 3",
+    "category": "charging",
+    "defect_topic": "슈퍼차저 V2 1A/1B 스톨 전력 분할로 인한 충전 속도 60kW 급락 및 대기열 병목",
+    "raw_quote": "주말에 여주 아울렛 슈퍼차저 V2 방문했는데 빈자리가 1B 하나뿐이라 꽂았습니다. 이미 1A에 모델X가 충전 중이었는데 전력 쉐어링 걸리면서 최대 150kW 나오던 스피드가 58kW로 곤두박질쳤습니다. 배터리 프리컨디셔닝 30분 동안 켜고 와서 전비 15% 갉아먹었는데 정작 충전기 꽂으니 완속보다 조금 빠른 수준으로 기어가네요. 뒤에 대기 차량만 6대 줄 서 있고 차주들끼리 자리 비우지 말라고 신경전 벌이고 있습니다. V3나 V4로 언제 교체해줄 건지, 비싼 돈 내고 슈차 지옥에서 시간만 버리는 꼴입니다.",
+    "slang_terms": [
+      "슈차 지옥",
+      "프리컨 방전",
+      "쓰로틀링"
+    ],
+    "severity": "convenience_issue",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "모델3 롱레인지",
+      "post_date": "2025-10-19",
+      "view_count": 23400,
+      "comment_count": 270,
+      "vote_count": 110
+    },
+    "collected_at": "2025-10-19T14:50:00Z"
+  },
+  {
+    "id": "NC_WIN_001",
+    "platform": "naver_cafe",
+    "board_name": "클럽 BYD 코리아",
+    "post_url": "https://cafe.naver.com/clubbyd/15230",
+    "post_title": "영하 10도 한파에 아토3 주행거리 420km에서 210km 반토막... LFP 겨울철 한계 절감",
+    "target_vehicle": "BYD Atto 3",
+    "category": "hill_climbing",
+    "defect_topic": "영하 10도 혹한기 LFP 배터리 내부 화학 활성도 급락 및 히터 가동 시 주행거리 50% 붕괴",
+    "raw_quote": "여름철에 완충하면 계기판에 420km 찍히고 시내 주행 전비 6.5km/kWh씩 뽑아주던 아토3인데, 이번 1월 영하 10도 한파에 히터 23도 오토 켜고 고속도로 올리자마자 전비가 2.9km/kWh로 곤두박질쳤습니다. 완충 실주행거리가 정확히 210km 찍히면서 반토막 났습니다. 서울에서 대전 편도 150km 가는데 배터리 잔량이 18%밖에 안 남아서 중간에 휴게소 들러 벌벌 떨며 충전했습니다. LFP 배터리가 화재에 안전하다는 마케팅만 믿고 샀는데 겨울철 주행거리 급락은 진짜 재앙 수준입니다. 왜 한국에서 겨울철 LFP 전기차 타는 사람들이 눈꽃 마크 공포에 떠는지 뼈저리게 느꼈습니다.",
+    "slang_terms": [
+      "배터리 광탈",
+      "눈꽃 마크",
+      "LFP",
+      "얼음방 에디션"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "실차주",
+      "post_date": "2026-01-11",
+      "view_count": 32000,
+      "comment_count": 410,
+      "vote_count": 175
+    },
+    "collected_at": "2026-01-11T21:10:00Z"
+  },
+  {
+    "id": "NC_WIN_002",
+    "platform": "naver_cafe",
+    "board_name": "포터2/봉고3/T4K 전기트럭 동호회",
+    "post_url": "https://cafe.naver.com/evtruckclub/52190",
+    "post_title": "T4K 1톤 트럭 겨울철 짐 1톤 싣고 히터 켰더니 실주행거리 90km 실화냐",
+    "target_vehicle": "BYD T4K 1-Ton Truck",
+    "category": "hill_climbing",
+    "defect_topic": "LFP 장착 1톤 상용 전기트럭 혹한기 적재 시 주행거리 급락 및 100km 미만 붕괴",
+    "raw_quote": "BYD T4K 트럭으로 신선식품 새벽 배송 뛰는데 영하 8도 날씨에 적재함 1톤 채우고 히터 틀었더니 100% 완충에서 90km 타고 배터리 10% 남았습니다. 카탈로그 복합 주행거리 246km라고 적힌 거 완전 대국민 사기극입니다. 배터리 잔량 15% 밑으로 떨어지자마자 계기판에 거북이 경고등 뜨면서 언덕길 30km/h로 빌빌 기어가서 뒤차들한테 하이빔 세례 받았습니다. 하루 200km 코스 도는데 중간에 급속 충전 두 번씩 해야 해서 일당보다 전기세랑 충전 시간 낭비가 더 큽니다. 보조금 털어먹으려고 들여온 알리트럭 산 내 손가락을 자르고 싶습니다.",
+    "slang_terms": [
+      "알리트럭",
+      "거북이 경고등",
+      "거북이 모드",
+      "보조금 털이범"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "새벽배송기사",
+      "post_date": "2026-01-20",
+      "view_count": 27500,
+      "comment_count": 335,
+      "vote_count": 140
+    },
+    "collected_at": "2026-01-20T05:30:00Z"
+  },
+  {
+    "id": "NC_WIN_003",
+    "platform": "naver_cafe",
+    "board_name": "전기차 동호회",
+    "post_url": "https://cafe.naver.com/electrictrain/171092",
+    "post_title": "BMS 잔량 18%에서 갑자기 2%로 수직낙하... 도로 한복판 벽돌 방전 견인 후기",
+    "target_vehicle": "Tesla Model 3",
+    "category": "charging",
+    "defect_topic": "LFP 특유의 평탄 전압 곡선으로 인한 겨울철 BMS SOC 잔량 추정 실패 및 절벽 방전",
+    "raw_quote": "테슬라 모델3 하이랜드 후륜(LFP) 영하 7도 퇴근길에 겪은 아찔한 실화입니다. 내비에 충전소 4km 남았고 계기판 배터리 18% 주행가능거리 55km 떠 있길래 여유 있게 가고 있었는데, 오르막길 올라가며 가속 페달 밟는 순간 배터리 잔량이 18% -> 11% -> 5% -> 2%로 1분 만에 수직낙하하더니 '전원 차단 안전하게 정차하십시오' 뜨며 차가 도로 한복판에 멈췄습니다. 브레이크 페달도 딱딱해지고 파워스티어링 먹통 되며 완벽한 벽돌차가 됐습니다. 갓길에 겨우 걸쳐서 사설 어부바 렉카 불러 견인했네요. LFP는 셀 전압이 평평해서 겨울에 배터리 잔량 계산이 뻥배터리 룰렛 수준입니다. 20% 이하는 그냥 0%로 간주해야 생존할 수 있습니다.",
+    "slang_terms": [
+      "절벽 방전",
+      "뻥배터리",
+      "뻥SoC",
+      "벽돌차",
+      "어부바 견인"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "하이랜드 오너",
+      "post_date": "2026-01-27",
+      "view_count": 38900,
+      "comment_count": 460,
+      "vote_count": 210
+    },
+    "collected_at": "2026-01-27T19:45:00Z"
+  },
+  {
+    "id": "NC_WIN_004",
+    "platform": "naver_cafe",
+    "board_name": "전기차 매니아",
+    "post_url": "https://cafe.naver.com/evmania/66184",
+    "post_title": "타이칸 혹한기 800V 고전압 히터(PTC) 사망... 2달째 냉동고 주행 중",
+    "target_vehicle": "Porsche Taycan",
+    "category": "hill_climbing",
+    "defect_topic": "타이칸 고전압 PTC 캐빈 히터 소자 소손으로 인한 실내 난방 불가 및 부품 백오더",
+    "raw_quote": "한겨울 영하 14도 출근길에 갑자기 송풍구에서 북극 찬바람만 나오더니 계기판에 '전기 시스템 오류 정비 필요' 경고등이 떴습니다. 포르쉐 일산 센터 입고하니 타이칸의 고질병인 800V 고전압 PTC 히터가 타버렸다고 하네요. 문제는 독일 본사에도 PTC 히터 부품 재고가 없어서 백오더 넣고 2달 넘게 기다려야 한답니다. 대차로 나온 차도 없고 영하 10도 날씨에 패딩에 귀마개 하고 핫팩 양손에 쥐고 1억 5천만원짜리 차를 몰고 다닙니다. 앞유리에 입김 서려서 김서림도 안 빠지고 창문 열고 달리는 냉동고 타이칸 얼음방 에디션 오너 신세입니다.",
+    "slang_terms": [
+      "냉동고 타이칸",
+      "얼음방 에디션",
+      "히터 찬바람",
+      "800V 히터 사망"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "타이칸 4S",
+      "post_date": "2026-02-04",
+      "view_count": 25100,
+      "comment_count": 295,
+      "vote_count": 124
+    },
+    "collected_at": "2026-02-04T08:20:00Z"
+  },
+  {
+    "id": "NC_WIN_005",
+    "platform": "naver_cafe",
+    "board_name": "전기차 타는 사람들",
+    "post_url": "https://cafe.naver.com/evowners/231902",
+    "post_title": "겨울철 전기차 저온 배터리 히터 켜면 주행거리 40% 증발... 배터리 광탈 현실",
+    "target_vehicle": "Genesis GV60",
+    "category": "hill_climbing",
+    "defect_topic": "혹한기 PTC 히터 및 배터리 승온 히터 동시 작동으로 인한 전비 급락 (4.8 -> 2.6km/kWh)",
+    "raw_quote": "제네시스 GV60 사륜 타고 있는데 날씨 영하 8도로 떨어지니까 전비가 2.6km/kWh 찍히네요. 실내 온도 22도 맞추고 시트 열선 켜면 주행용 전력보다 공조/배터리 케어 전력이 5~6kW씩 상시로 빠져나갑니다. 완충 400km 달리던 차가 겨울만 되면 240km도 겨우 달리고 툭하면 배터리 잔량 게이지가 뚝뚝 떨어지는 게 눈에 보입니다. 충전소 찾아가면 또 배터리 차가워서 급속 충전 속도도 안 나오고, 전기차는 겨울철 3개월 동안 유지비와 시간 측면에서 최악의 스트레스를 선물해줍니다.",
+    "slang_terms": [
+      "배터리 광탈",
+      "히터 찬바람",
+      "눈꽃 마크",
+      "뚝떨어짐"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "골드멤버",
+      "post_date": "2026-01-19",
+      "view_count": 21300,
+      "comment_count": 240,
+      "vote_count": 94
+    },
+    "collected_at": "2026-01-19T17:15:00Z"
+  },
+  {
+    "id": "NC_WIN_006",
+    "platform": "naver_cafe",
+    "board_name": "아이오닉 멤버스",
+    "post_url": "https://cafe.naver.com/ioniqmembers/81205",
+    "post_title": "영하 15도 한파에 옥토밸브/히트펌프 밸브 고착으로 고속도로에서 난방 중단 덜덜",
+    "target_vehicle": "Tesla Model Y",
+    "category": "hill_climbing",
+    "defect_topic": "혹한기 냉매 팽창 밸브(EXV) 결빙으로 인한 옥토밸브 히트펌프 정지 및 실내 냉골화",
+    "raw_quote": "설 연휴에 고향 내려가다 원주 부근 영하 15도 구간에서 갑자기 '차량 실내 공조 시스템 점검 필요' 메시지가 뜨더니 히터가 완전히 꺼졌습니다. 찬바람만 쌩쌩 나와서 앞유리에 성에가 하얗게 얼어붙어 시야가 완전히 가려졌습니다. 갓길에 비상등 켜고 서서 수건으로 유리 닦으며 겨우 출구로 빠져나왔습니다. 서비스센터 가보니 옥토밸브 냉매 팽창 밸브가 수분 결빙으로 고착되면서 히트펌프 컴프레서가 안전 셧다운된 거라고 하네요. 영하 극저온에서 사람 목숨 위협하는 치명적 설계 결함입니다.",
+    "slang_terms": [
+      "옥토밸브 사망",
+      "얼음방 에디션",
+      "히터 찬바람",
+      "디프로스트 먹통"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "테슬라 매니아",
+      "post_date": "2026-02-12",
+      "view_count": 31500,
+      "comment_count": 370,
+      "vote_count": 162
+    },
+    "collected_at": "2026-02-12T14:30:00Z"
+  }
+]

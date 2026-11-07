@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef, startTransition } from 'react';
 import Link from 'next/link';
 
 interface ReliabilityErrorProps {
@@ -13,15 +13,34 @@ interface ReliabilityErrorProps {
  * Catches unhandled exceptions during DSI metrics, brand ranking, and defect heatmap rendering.
  */
 export default function ReliabilityAnalyticsError({ error, reset }: ReliabilityErrorProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     console.error('Unhandled Reliability Analytics route error:', error);
+    containerRef.current?.focus();
   }, [error]);
+
+  const handleRetry = () => {
+    try {
+      startTransition(() => {
+        reset();
+      });
+    } catch {
+      if (typeof window !== 'undefined') {
+        window.location.reload();
+      }
+    }
+  };
 
   return (
     <div
+      ref={containerRef}
+      tabIndex={-1}
       role="alert"
       aria-live="assertive"
-      className="min-h-[60vh] flex items-center justify-center px-4 py-12"
+      aria-labelledby="reliability-error-heading"
+      aria-describedby="reliability-error-description"
+      className="min-h-[60vh] flex items-center justify-center px-4 py-12 outline-none focus:outline-none"
     >
       <div className="max-w-xl w-full bg-white border border-blue-200 rounded-3xl p-8 sm:p-10 shadow-xl text-center space-y-6">
         <div
@@ -32,15 +51,21 @@ export default function ReliabilityAnalyticsError({ error, reset }: ReliabilityE
         </div>
 
         <div className="space-y-3">
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+          <h1
+            id="reliability-error-heading"
+            className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight"
+          >
             결함 통계 데이터를 불러올 수 없습니다
           </h1>
-          <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-md mx-auto">
+          <p
+            id="reliability-error-description"
+            className="text-sm sm:text-base text-slate-700 leading-relaxed max-w-md mx-auto"
+          >
             9대 브랜드 22개 차종의 1,280건 결함 통계 및 연식별 위험도(DSI) 히트맵 렌더링 중 오류가 발생했습니다.
             아래 &apos;다시 시도&apos; 버튼을 눌러 안전하게 재로딩해 주세요.
           </p>
           {error?.digest && (
-            <p className="text-xs text-slate-600 font-mono pt-1">
+            <p className="text-xs text-slate-700 font-mono pt-1">
               오류 참조 코드: <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">{error.digest}</span>
             </p>
           )}
@@ -49,17 +74,9 @@ export default function ReliabilityAnalyticsError({ error, reset }: ReliabilityE
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
           <button
             type="button"
-            onClick={() => {
-              try {
-                reset();
-              } catch {
-                if (typeof window !== 'undefined') {
-                  window.location.reload();
-                }
-              }
-            }}
+            onClick={handleRetry}
             aria-label="결함 분석 포털 다시 시도"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+            className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">🔄</span> 다시 시도
           </button>
@@ -67,31 +84,31 @@ export default function ReliabilityAnalyticsError({ error, reset }: ReliabilityE
             href="/"
             prefetch={false}
             aria-label="메인 홈으로 이동"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+            className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">🏠</span> 홈으로 이동
           </Link>
         </div>
 
-        <div className="pt-4 border-t border-slate-100 text-xs text-slate-600 flex flex-wrap justify-center gap-4">
+        <div className="pt-4 border-t border-slate-100 text-xs text-slate-700 flex flex-wrap justify-center gap-3">
           <Link
             href="/recall-portal"
             prefetch={false}
-            className="hover:text-rose-600 transition inline-flex items-center gap-1 px-1.5 py-0.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+            className="hover:text-rose-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
           >
             <span aria-hidden="true">🚨</span> 공식 리콜 포털
           </Link>
           <Link
             href="/subsidy-tracker"
             prefetch={true}
-            className="hover:text-amber-600 transition inline-flex items-center gap-1 px-1.5 py-0.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+            className="hover:text-amber-800 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
           >
             <span aria-hidden="true">⚡</span> 보조금 추적기
           </Link>
           <Link
             href="/depreciation-calculator"
             prefetch={true}
-            className="hover:text-emerald-600 transition inline-flex items-center gap-1 px-1.5 py-0.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+            className="hover:text-emerald-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
           >
             <span aria-hidden="true">📉</span> 감가 계산기
           </Link>

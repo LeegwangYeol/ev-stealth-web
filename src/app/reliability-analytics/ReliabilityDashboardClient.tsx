@@ -45,12 +45,12 @@ const CATEGORY_BG_COLORS: Record<DefectCategoryKey, string> = {
 };
 
 const CATEGORY_TAG_COLORS: Record<DefectCategoryKey, { bg: string; text: string; border: string }> = {
-  BATTERY_CHARGING: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
+  BATTERY_CHARGING: { bg: 'bg-rose-50', text: 'text-rose-800', border: 'border-rose-200' },
   DRIVING_POWERTRAIN: { bg: 'bg-amber-50', text: 'text-amber-900', border: 'border-amber-200' },
-  SOFTWARE_ELECTRONICS: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
-  BUILD_QUALITY: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+  SOFTWARE_ELECTRONICS: { bg: 'bg-blue-50', text: 'text-blue-800', border: 'border-blue-200' },
+  BUILD_QUALITY: { bg: 'bg-purple-50', text: 'text-purple-800', border: 'border-purple-200' },
   SERVICE_REPAIR_COST: { bg: 'bg-emerald-50', text: 'text-emerald-800', border: 'border-emerald-200' },
-  COLD_WEATHER: { bg: 'bg-cyan-50', text: 'text-cyan-800', border: 'border-cyan-200' },
+  COLD_WEATHER: { bg: 'bg-cyan-50', text: 'text-cyan-900', border: 'border-cyan-200' },
 };
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
@@ -149,15 +149,18 @@ interface HeatmapRowProps {
   evalMap?: Map<number, YearEvaluation>;
   heatmapYears: number[];
   selectedCellKey?: string | null;
-  onCellClick: (cell: {
-    modelName: string;
-    brandName: string;
-    year: number;
-    verdict: ModelYearVerdict;
-    dsi: number;
-    primaryDefect: string;
-    quote: string;
-  }) => void;
+  onCellClick: (
+    cell: {
+      modelName: string;
+      brandName: string;
+      year: number;
+      verdict: ModelYearVerdict;
+      dsi: number;
+      primaryDefect: string;
+      quote: string;
+    },
+    triggerEl?: HTMLButtonElement | null
+  ) => void;
 }
 
 const HeatmapRow = React.memo(function HeatmapRow({
@@ -219,16 +222,19 @@ const HeatmapRow = React.memo(function HeatmapRow({
           <td key={yr} className="p-2 text-center">
             <button
               type="button"
-              onClick={() =>
-                onCellClick({
-                  modelName: model.name,
-                  brandName: model.brand_name_ko,
-                  year: evalData.year,
-                  verdict: evalData.verdict,
-                  dsi: safeDsi,
-                  primaryDefect,
-                  quote: rawQuote,
-                })
+              onClick={(e) =>
+                onCellClick(
+                  {
+                    modelName: model.name,
+                    brandName: model.brand_name_ko,
+                    year: evalData.year,
+                    verdict: evalData.verdict,
+                    dsi: safeDsi,
+                    primaryDefect,
+                    quote: rawQuote,
+                  },
+                  e.currentTarget
+                )
               }
               aria-expanded={isCellSelected}
               aria-haspopup="dialog"
@@ -300,7 +306,7 @@ const BrandRankingItem = React.memo(function BrandRankingItem({
         </div>
         <div className="flex items-center gap-3 text-xs sm:text-sm">
           <span className="text-slate-700">
-            치명 결함율: <strong className="text-rose-700">{criticalRate}%</strong>
+            치명 결함율: <strong className="text-rose-800">{criticalRate}%</strong>
           </span>
           <span className="font-black text-slate-900 text-sm sm:text-base">
             DSI {safeDsi}점
@@ -333,18 +339,19 @@ const CategoryShareCard = React.memo(function CategoryShareCard({
   isSelected,
   onToggle,
 }: CategoryShareCardProps) {
-  const color = CATEGORY_TAG_COLORS[cat.code] || {
+  const codeKey = cat?.code || 'UNKNOWN';
+  const color = (cat?.code && CATEGORY_TAG_COLORS[cat.code]) || {
     bg: 'bg-slate-50',
     text: 'text-slate-700',
     border: 'border-slate-200',
   };
-  const dotColor = CATEGORY_BG_COLORS[cat.code] || 'bg-slate-500';
-  const sharePct = Number.isFinite(cat.industry_share_pct) ? cat.industry_share_pct : 0;
+  const dotColor = (cat?.code && CATEGORY_BG_COLORS[cat.code]) || 'bg-slate-500';
+  const sharePct = Number.isFinite(cat?.industry_share_pct) ? cat.industry_share_pct : 0;
 
   return (
     <button
       type="button"
-      onClick={() => onToggle(cat.code)}
+      onClick={() => onToggle(codeKey)}
       aria-pressed={isSelected}
       aria-labelledby={`cat-title-${cat.code}`}
       aria-describedby={`cat-desc-${cat.code} cat-cost-${cat.code}`}
@@ -389,7 +396,7 @@ const RepairCostMatrixRow = React.memo(function RepairCostMatrixRow({ item }: Re
           {item.affected_systems || '-'}
         </div>
       </th>
-      <td className="p-4 font-extrabold text-rose-700 align-top whitespace-nowrap">
+      <td className="p-4 font-extrabold text-rose-800 align-top whitespace-nowrap">
         {item.avg_cost_krw || '-'}
       </td>
       <td className="p-4 text-slate-700 align-top text-xs">
@@ -412,7 +419,7 @@ const RepairCostMatrixRow = React.memo(function RepairCostMatrixRow({ item }: Re
         </div>
       </td>
       <td className="p-4 text-xs text-slate-700 leading-relaxed align-top">
-        <span className="font-semibold text-rose-700 mr-1">주의:</span>
+        <span className="font-semibold text-rose-800 mr-1">주의:</span>
         {item.critical_warning || '-'}
       </td>
     </tr>
@@ -444,6 +451,10 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     primaryDefect: string;
     quote: string;
   } | null>(null);
+
+  // Accessible Focus Management Refs
+  const activeTriggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Defensive fallbacks for database collections and metadata
   const metadata = useMemo(
@@ -664,15 +675,24 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     return [...categories].sort((a, b) => (b.industry_share_pct || 0) - (a.industry_share_pct || 0))[0];
   }, [categories]);
 
-  // Brand SVG dynamic dimensions and description
+  // Total category share for safe 100% proportional rendering
+  const totalCategoryShare = useMemo(() => {
+    return categories.reduce(
+      (sum, c) => sum + (Number.isFinite(c.industry_share_pct) ? Math.max(0, c.industry_share_pct) : 0),
+      0
+    );
+  }, [categories]);
+
+  // Brand SVG dynamic dimensions and accessible description
   const brandSvgHeight = useMemo(() => {
     return Math.max(140, 30 + sortedBrands.length * 28 + 45);
   }, [sortedBrands.length]);
 
   const brandSvgDesc = useMemo(() => {
     if (!sortedBrands.length) return '브랜드별 종합 결함 심각도 지수 시각화 차트입니다.';
-    const brandNames = sortedBrands.map((b) => b.name_ko).filter(Boolean).join(', ');
-    return `${brandNames}의 종합 결함 심각도 지수(DSI 0~100점)를 시각화한 수평 막대 차트입니다.`;
+    const bestBrand = sortedBrands[0];
+    const worstBrand = sortedBrands[sortedBrands.length - 1];
+    return `9대 전기차 제조사별 결함 심각도 지수(DSI 0~100점, 낮을수록 우수) 수평 막대 차트입니다. 최저(최우수) DSI는 ${bestBrand?.name_ko || ''}(${bestBrand?.overall_dsi || 0}점), 최고(주의) DSI는 ${worstBrand?.name_ko || ''}(${worstBrand?.overall_dsi || 0}점)입니다. 아래에 전체 브랜드별 스크린 리더용 데이터 표가 제공됩니다.`;
   }, [sortedBrands]);
 
   // Stabilized Callback Handlers
@@ -709,15 +729,19 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
   }, []);
 
   const handleCellClick = useCallback(
-    (cell: {
-      modelName: string;
-      brandName: string;
-      year: number;
-      verdict: ModelYearVerdict;
-      dsi: number;
-      primaryDefect: string;
-      quote: string;
-    }) => {
+    (
+      cell: {
+        modelName: string;
+        brandName: string;
+        year: number;
+        verdict: ModelYearVerdict;
+        dsi: number;
+        primaryDefect: string;
+        quote: string;
+      },
+      triggerEl?: HTMLButtonElement | null
+    ) => {
+      activeTriggerRef.current = triggerEl || (document.activeElement as HTMLButtonElement | null);
       setHoveredCell(cell);
     },
     []
@@ -725,19 +749,23 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
   const handleCloseCell = useCallback(() => {
     setHoveredCell(null);
+    if (activeTriggerRef.current && typeof activeTriggerRef.current.focus === 'function') {
+      activeTriggerRef.current.focus();
+    }
   }, []);
 
-  // Escape key listener for accessible dismissal of detail card
+  // Escape key listener for accessible dismissal of detail card with focus return
   useEffect(() => {
     if (!hoveredCell) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setHoveredCell(null);
+        e.preventDefault();
+        handleCloseCell();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hoveredCell]);
+  }, [hoveredCell, handleCloseCell]);
 
   const handleBrandToggle = useCallback((brandId: string) => {
     setSelectedBrand((prev) => (prev === brandId ? 'ALL' : brandId));
@@ -799,6 +827,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
         </div>
 
         {/* KPI Score Cards */}
+        <h2 className="sr-only">주요 결함 통계 지표 요약 (KPI)</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-8 pt-8 border-t border-slate-800">
           <div
             role="region"
@@ -806,7 +835,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             aria-describedby="kpi-records-desc"
             className="bg-slate-800/80 backdrop-blur rounded-2xl p-4 sm:p-5 border border-slate-700"
           >
-            <div id="kpi-records-heading" className="text-xs sm:text-sm text-slate-300 font-medium">분석 결함 제보</div>
+            <h3 id="kpi-records-heading" className="text-xs sm:text-sm text-slate-300 font-medium">분석 결함 제보</h3>
             <div className="text-2xl sm:text-3xl font-black text-white mt-1">
               {(Number.isFinite(metadata?.total_records_analyzed) ? metadata.total_records_analyzed : 0).toLocaleString()}건
             </div>
@@ -821,7 +850,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             aria-describedby="kpi-dsi-desc"
             className="bg-slate-800/80 backdrop-blur rounded-2xl p-4 sm:p-5 border border-slate-700"
           >
-            <div id="kpi-dsi-heading" className="text-xs sm:text-sm text-slate-300 font-medium">산업 평균 DSI 점수</div>
+            <h3 id="kpi-dsi-heading" className="text-xs sm:text-sm text-slate-300 font-medium">산업 평균 DSI 점수</h3>
             <div className="text-2xl sm:text-3xl font-black text-amber-400 mt-1">
               {Number.isFinite(metadata?.avg_industry_dsi) ? metadata.avg_industry_dsi : 0}
               <span className="text-sm font-normal text-slate-300 ml-1">/ 100</span>
@@ -837,7 +866,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             aria-describedby="kpi-avoid-desc"
             className="bg-slate-800/80 backdrop-blur rounded-2xl p-4 sm:p-5 border border-slate-700"
           >
-            <div id="kpi-avoid-heading" className="text-xs sm:text-sm text-slate-300 font-medium">구매 회피 (AVOID) 연식</div>
+            <h3 id="kpi-avoid-heading" className="text-xs sm:text-sm text-slate-300 font-medium">구매 회피 (AVOID) 연식</h3>
             <div className="text-2xl sm:text-3xl font-black text-rose-300 mt-1">
               {avoidPercentage}%
             </div>
@@ -852,9 +881,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             aria-describedby="kpi-category-desc"
             className="bg-slate-800/80 backdrop-blur rounded-2xl p-4 sm:p-5 border border-slate-700"
           >
-            <div id="kpi-category-heading" className="text-xs sm:text-sm text-slate-300 font-medium">최다 결함 발생 부문</div>
+            <h3 id="kpi-category-heading" className="text-xs sm:text-sm text-slate-300 font-medium">최다 결함 발생 부문</h3>
             <div className="text-2xl sm:text-3xl font-black text-emerald-400 mt-1">
-              {topCategory ? `${topCategory.industry_share_pct}%` : '0%'}
+              {topCategory ? `${Number.isFinite(topCategory.industry_share_pct) ? topCategory.industry_share_pct : 0}%` : '0%'}
             </div>
             <div id="kpi-category-desc" className="text-xs text-emerald-300 mt-1 font-medium">
               {topCategory ? topCategory.label_ko : '데이터 없음'}
@@ -915,9 +944,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           {activeChartTab === 'heatmap' && (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                <div className="font-medium text-slate-700 flex items-center gap-1.5">
+                <div id="heatmap-instructions" className="font-medium text-slate-700 flex items-center gap-1.5">
                   <span aria-hidden="true">💡</span>
-                  <span>셀을 클릭하거나 마우스를 올리면 해당 연식의 결함 증상과 차주 코멘트를 확인하실 수 있습니다.</span>
+                  <span>셀을 클릭하거나 엔터키를 누르면 해당 연식의 결함 증상과 차주 코멘트를 확인하실 수 있습니다. (닫기: ESC)</span>
                 </div>
                 <ul
                   aria-label="히트맵 판정 범례"
@@ -949,9 +978,13 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 aria-label="연식별 전기차 신뢰성 및 결함 심각도 매트릭스 표 스크롤 영역"
                 className="overflow-x-auto border border-slate-200 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
-                <table className="w-full min-w-[680px] text-left text-xs sm:text-sm border-collapse" aria-label="연식별 전기차 신뢰성 및 결함 심각도(DSI) 매트릭스">
+                <table
+                  className="w-full min-w-[680px] text-left text-xs sm:text-sm border-collapse"
+                  aria-label="연식별 전기차 신뢰성 및 결함 심각도(DSI) 매트릭스"
+                  aria-describedby="heatmap-instructions"
+                >
                   <caption className="sr-only">
-                    연식별 전기차 신뢰성 및 결함 심각도(DSI) 매트릭스 - 모델별 2017년부터 2025년까지의 구매 권장(SAFE), 주의(CAUTION), 회피(AVOID) 평가 현황
+                    연식별 전기차 신뢰성 및 결함 심각도(DSI) 매트릭스 - 모델별 2017년부터 2025년까지의 구매 권장(SAFE), 주의(CAUTION), 회피(AVOID) 평가 현황. 셀의 숫자는 0~100점의 DSI 결함 심각도 점수이며 클릭 시 세부 결함 증상과 리콜 링크가 표시됩니다.
                   </caption>
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200">
@@ -996,10 +1029,12 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               {/* Heatmap Detail Card (if selected) */}
               {hoveredCell && (
                 <div
+                  id="heatmap-detail-card"
                   role="region"
                   aria-label={`${hoveredCell.brandName} ${hoveredCell.modelName} ${hoveredCell.year}년식 세부 결함 분석`}
                   aria-live="polite"
-                  className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-700 shadow-xl animate-fade-in motion-reduce:animate-none flex flex-col sm:flex-row justify-between gap-4"
+                  tabIndex={-1}
+                  className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-700 shadow-xl animate-fade-in motion-reduce:animate-none flex flex-col sm:flex-row justify-between gap-4 focus:outline-none"
                 >
                   <div className="space-y-1 max-w-2xl">
                     <div className="flex flex-wrap items-center gap-2">
@@ -1009,9 +1044,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full font-bold ${
                           hoveredCell.verdict === 'AVOID'
-                            ? 'bg-rose-500/30 text-rose-300 border border-rose-500/50'
+                            ? 'bg-rose-500/30 text-rose-200 border border-rose-500/50'
                             : hoveredCell.verdict === 'CAUTION'
-                            ? 'bg-amber-400/30 text-amber-200 border border-amber-400/50'
+                            ? 'bg-amber-400/30 text-amber-100 border border-amber-400/50'
                             : 'bg-emerald-500/30 text-emerald-200 border border-emerald-500/50'
                         }`}
                       >
@@ -1144,7 +1179,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     {/* Horizontal Bars */}
                     {sortedBrands.map((brand, i) => {
                       const y = 20 + i * 28;
-                      const safeDsi = Number.isFinite(brand.overall_dsi) ? brand.overall_dsi : 0;
+                      const safeDsi = Number.isFinite(brand.overall_dsi)
+                        ? Math.min(100, Math.max(0, brand.overall_dsi))
+                        : 0;
                       const barWidth = Math.max(12, (safeDsi / 100) * 480);
                       const barFill =
                         safeDsi < 50
@@ -1277,19 +1314,25 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
                   {/* Stacked Proportional Bar */}
                   <div className="space-y-2">
+                    <p id="category-share-summary" className="sr-only">
+                      전기차 6대 주요 결함 부문(배터리·충전, 구동계·모터, 소프트웨어·전자장비, 조립품질, 수리비·정비, 혹한기 특성)의 산업 전체 결함 발생 비중을 나타내는 누적 점유율 바입니다.
+                    </p>
                     <div
                       role="region"
                       aria-label="전기차 결함 부문별 산업 점유율 분포 바"
+                      aria-describedby="category-share-summary"
                       className="w-full h-6 rounded-xl overflow-hidden flex shadow-inner border border-slate-200"
                     >
                       {categories.map((cat) => {
                         const safeShare = Number.isFinite(cat.industry_share_pct) ? Math.max(0, cat.industry_share_pct) : 0;
                         if (safeShare === 0) return null;
+                        const baseTotal = totalCategoryShare > 0 ? totalCategoryShare : 100;
+                        const normalizedWidth = (safeShare / baseTotal) * 100;
                         return (
                           <div
                             key={cat.code}
-                            style={{ width: `${safeShare}%` }}
-                            className={`${CATEGORY_BG_COLORS[cat.code] || 'bg-slate-500'} transition-all hover:opacity-80`}
+                            style={{ width: `${normalizedWidth}%` }}
+                            className={`${CATEGORY_BG_COLORS[cat.code] || 'bg-slate-500'} transition-all hover:opacity-80 shrink-0`}
                             role="img"
                             aria-label={`${cat.label_ko} 점유율 ${safeShare}%`}
                             title={`${cat.label_ko}: ${safeShare}%`}
@@ -1355,6 +1398,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             <input
               id="reliability-search-input"
               type="text"
+              ref={searchInputRef}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -1374,7 +1418,10 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             {searchQuery && (
               <button
                 type="button"
-                onClick={() => setSearchQuery('')}
+                onClick={() => {
+                  setSearchQuery('');
+                  searchInputRef.current?.focus();
+                }}
                 className="absolute inset-y-0 right-0 pr-3 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-700 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
                 title="검색어 지우기"
                 aria-label="검색어 지우기"
@@ -1408,8 +1455,11 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             {hasActiveFilter && (
               <button
                 type="button"
-                onClick={resetFilters}
-                className="px-3 py-2 min-h-[44px] inline-flex items-center gap-1 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs sm:text-sm font-semibold rounded-xl border border-rose-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                onClick={() => {
+                  resetFilters();
+                  searchInputRef.current?.focus();
+                }}
+                className="px-3 py-2 min-h-[44px] inline-flex items-center gap-1 bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs sm:text-sm font-semibold rounded-xl border border-rose-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <span>필터 초기화</span>
                 <span aria-hidden="true">↺</span>
@@ -1575,7 +1625,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             총 <strong className="text-slate-900">{sortedModels.length}</strong>개 차종 표시 중
           </div>
           {hasActiveFilter && (
-            <div className="text-xs text-blue-700 font-semibold">
+            <div className="text-xs text-blue-800 font-semibold">
               필터 적용됨
             </div>
           )}
@@ -1595,7 +1645,10 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             {hasActiveFilter && (
               <button
                 type="button"
-                onClick={resetFilters}
+                onClick={() => {
+                  resetFilters();
+                  searchInputRef.current?.focus();
+                }}
                 className="mt-2 px-4 py-2 min-h-[44px] inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 전체 모델 보기
@@ -1614,7 +1667,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       {/* 5. OUT-OF-WARRANTY REPAIR COST MATRIX TABLE */}
       <section aria-labelledby="repair-cost-heading" className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200 space-y-6">
         <div className="max-w-3xl space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-50 text-rose-700 text-xs font-bold border border-rose-200">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-50 text-rose-800 text-xs font-bold border border-rose-200">
             <span aria-hidden="true">💣</span>
             <span>중고 전기차 구매자 필수 참고</span>
           </div>
@@ -1706,7 +1759,7 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
         {/* Card Header */}
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-xs font-semibold text-blue-700 tracking-wide uppercase">
+            <div className="text-xs font-semibold text-blue-800 tracking-wide uppercase">
               {[model.brand_name_ko, model.segment].filter(Boolean).join(' · ')}
             </div>
             <h3 id={`model-title-${model.id}`} className="text-xl font-extrabold text-slate-900 mt-0.5 tracking-tight">
@@ -1822,7 +1875,7 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
         <Link
           href={`/recall-portal?model=${encodeURIComponent(model.name)}`}
           prefetch={false}
-          className="text-xs font-bold text-blue-700 hover:text-blue-900 min-h-[44px] flex items-center gap-1.5 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+          className="text-xs font-bold text-blue-800 hover:text-blue-950 min-h-[44px] flex items-center gap-1.5 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
         >
           <span aria-hidden="true">🚨</span>
           <span>이 차종 공식 리콜·화재 조회</span>

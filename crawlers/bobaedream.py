@@ -134,14 +134,23 @@ def is_deleted_or_restricted(html_content: Optional[str]) -> Tuple[bool, str]:
         return True, "empty_content"
 
     # 1. Cloudflare / Bot challenge / WAF blocking
-    if "<title>Just a moment...</title>" in html_content or "cf-browser-verification" in html_content or "__cf_chl_" in html_content:
+    if (
+        "<title>Just a moment...</title>" in html_content
+        or "cf-browser-verification" in html_content
+        or "__cf_chl_" in html_content
+        or "challenges.cloudflare.com" in html_content
+    ):
         return True, "cloudflare_challenge"
-    if re.search(r"비정상적인\s*접근입니다", html_content):
+    if re.search(r"(?:비정상적인|잘못된)\s*(?:접근|요청)입니다", html_content, re.IGNORECASE):
         return True, "abnormal_access_blocked"
-    if re.search(r"접근이\s*차단되었습니다", html_content):
+    if re.search(r"(?:접근이\s*차단되었습니다|(?:차단된|제한된)\s*(?:아이피|IP))", html_content, re.IGNORECASE):
         return True, "ip_blocked"
-    if re.search(r"자동\s*방지\s*문자", html_content) or re.search(r"보안\s*문자를\s*입력", html_content):
+    if re.search(r"(?:자동\s*방지\s*문자|보안\s*문자를\s*입력|reCAPTCHA|hCaptcha)", html_content, re.IGNORECASE):
         return True, "captcha_challenge"
+    if re.search(r"<title>\s*(?:403\s+Forbidden|429\s+Too\s+Many\s+Requests|Access\s+Denied)\s*</title>", html_content, re.IGNORECASE):
+        return True, "access_denied"
+    if re.search(r"(?:서비스\s*점검\s*중|시스템\s*점검\s*중)", html_content, re.IGNORECASE):
+        return True, "service_maintenance"
 
     # 2. Check if page has actual substantial article body:
     # If a page contains a large bodyCont (> 50 chars), only alert(...) can indicate deletion
@@ -865,6 +874,10 @@ class BobaeDreamCrawler(BaseCrawler):
             logger.warning(f"Network error fetching BobaeDream post {eff_url}: {e}")
             return None
 
+        if status == 429:
+            logger.warning(f"Rate-limited (HTTP 429) fetching BobaeDream post: {eff_url}. Degrading gracefully.")
+            return None
+
         if status != 200 or not text:
             logger.warning(f"Failed to fetch BobaeDream post: {eff_url} (status: {status})")
             return None
@@ -879,7 +892,21 @@ class BobaeDreamCrawler(BaseCrawler):
             detail = self.parse_post_detail(text, eff_url, board_code=board_code, post_id=post_id or "", **kwargs)
             if not isinstance(detail, dict):
                 return None
-            if detail.get("is_deleted") or detail.get("is_restricted"):
+            if (
+                detail.get("is_deleted")
+                or detail.get("is_restricted")
+                or detail.get("status")
+                in (
+                    "deleted_post",
+                    "restricted_post",
+                    "cloudflare_challenge",
+                    "abnormal_access_blocked",
+                    "ip_blocked",
+                    "captcha_challenge",
+                    "access_denied",
+                    "service_maintenance",
+                )
+            ):
                 return None
             return detail
         except Exception as e:
@@ -925,10 +952,10 @@ class BobaeDreamCrawler(BaseCrawler):
                 logger.warning(f"Failed to fetch list for {board_code} page {page} (status: {status})")
                 break
 
-            # Check if list page itself was blocked by anti-scraping
+            # Check if list page itself was blocked by anti-scraping or restricted
             is_blocked, block_reason = is_deleted_or_restricted(text)
-            if is_blocked and block_reason in ("cloudflare_challenge", "abnormal_access_blocked", "ip_blocked", "captcha_challenge"):
-                logger.warning(f"BobaeDream list page blocked by {block_reason} on page {page}")
+            if is_blocked:
+                logger.warning(f"BobaeDream list page unavailable ({block_reason}) on page {page}")
                 break
 
             items = self.parse_list_page(text, board_code)
@@ -945,6 +972,7 @@ class BobaeDreamCrawler(BaseCrawler):
 
             consecutive_failures = 0
             MAX_CONSECUTIVE_FAILURES = 5
+            halt_crawl = False
 
             for item in items:
                 post = self.fetch_post(
@@ -963,9 +991,13 @@ class BobaeDreamCrawler(BaseCrawler):
                     if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
                         logger.warning(
                             f"Encountered {consecutive_failures} consecutive fetch failures on BobaeDream [{board_code}]. "
-                            f"Halting page loop to prevent rate-limit bans."
+                            f"Halting crawl loop to prevent rate-limit bans."
                         )
+                        halt_crawl = True
                         break
+
+            if halt_crawl:
+                break
 
         return results
 
@@ -1009,10 +1041,10 @@ class BobaeDreamCrawler(BaseCrawler):
                 logger.warning(f"Search request failed for {board_code} keyword '{keyword}' page {page} (status: {status})")
                 break
 
-            # Check if search page was blocked by anti-scraping
+            # Check if search page was blocked by anti-scraping or restricted
             is_blocked, block_reason = is_deleted_or_restricted(text)
-            if is_blocked and block_reason in ("cloudflare_challenge", "abnormal_access_blocked", "ip_blocked", "captcha_challenge"):
-                logger.warning(f"BobaeDream search page blocked by {block_reason} on page {page}")
+            if is_blocked:
+                logger.warning(f"BobaeDream search page unavailable ({block_reason}) on page {page}")
                 break
 
             items = self.parse_list_page(text, board_code)
@@ -1029,6 +1061,7 @@ class BobaeDreamCrawler(BaseCrawler):
 
             consecutive_failures = 0
             MAX_CONSECUTIVE_FAILURES = 5
+            halt_crawl = False
 
             for item in items:
                 post = self.fetch_post(
@@ -1047,9 +1080,13 @@ class BobaeDreamCrawler(BaseCrawler):
                     if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
                         logger.warning(
                             f"Encountered {consecutive_failures} consecutive fetch failures on BobaeDream [{board_code}]. "
-                            f"Halting page loop to prevent rate-limit bans."
+                            f"Halting search crawl loop to prevent rate-limit bans."
                         )
+                        halt_crawl = True
                         break
+
+            if halt_crawl:
+                break
 
         return results
 

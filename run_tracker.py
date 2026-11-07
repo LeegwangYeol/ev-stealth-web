@@ -31,10 +31,19 @@ _POSSIBLE_ROOTS = [
     _CURRENT_DIR.parent,
     _CURRENT_DIR / "ev-stealth-web",
     _CURRENT_DIR.parent / "ev-stealth-web",
+    Path.cwd(),
+    Path.cwd() / "ev-stealth-web",
 ]
 for root_path in _POSSIBLE_ROOTS:
-    if root_path.exists() and str(root_path) not in sys.path:
-        sys.path.insert(0, str(root_path))
+    try:
+        resolved_root = root_path.resolve()
+        for cand in (root_path, resolved_root):
+            cand_str = str(cand)
+            if cand.exists() and cand_str not in sys.path:
+                sys.path.insert(0, cand_str)
+    except (OSError, RuntimeError):
+        if root_path.exists() and str(root_path) not in sys.path:
+            sys.path.insert(0, str(root_path))
 
 from tracker.subsidy_models import SubsidyPayload
 from tracker.subsidy_tracker import SubsidyTracker
@@ -43,16 +52,34 @@ logger = logging.getLogger("run_tracker")
 
 
 def _find_repo_root() -> Path:
-    """Locate canonical repository root."""
+    """Locate canonical repository root from module file location, active working directory, and symlinks."""
     candidates = [
         _CURRENT_DIR,
         _CURRENT_DIR.parent,
         _CURRENT_DIR.parent.parent,
+        Path.cwd(),
+        Path.cwd().parent,
+        Path.cwd().parent.parent,
     ]
+    seen: Set[str] = set()
+    expanded_candidates: List[Path] = []
     for c in candidates:
+        try:
+            c_res = c.resolve()
+            for cand in (c, c_res):
+                cand_str = str(cand)
+                if cand_str not in seen:
+                    seen.add(cand_str)
+                    expanded_candidates.append(cand)
+        except (OSError, RuntimeError):
+            if str(c) not in seen:
+                seen.add(str(c))
+                expanded_candidates.append(c)
+
+    for c in expanded_candidates:
         if (c / "data").is_dir() and (c / "ev-stealth-web").is_dir():
             return c
-    for c in candidates:
+    for c in expanded_candidates:
         if (c / "data").is_dir() or (c / "ev-stealth-web" / "src" / "data").is_dir():
             return c
     return _CURRENT_DIR
@@ -240,7 +267,10 @@ def sync_defect_reports(
     seen_pub = set()
     deduped_public: List[Path] = []
     for p in public_reports_paths:
-        r_str = str(p.resolve()) if p.exists() else str(p.absolute())
+        try:
+            r_str = str(p.resolve())
+        except (OSError, RuntimeError):
+            r_str = str(p.absolute())
         if r_str not in seen_pub:
             seen_pub.add(r_str)
             deduped_public.append(p)
@@ -303,9 +333,16 @@ def sync_defect_reports(
             return []
 
         target_paths: List[Path] = []
-        seen_target_abs: Set[str] = {str(Path(source_path).resolve())}
+        try:
+            source_resolved = str(Path(source_path).resolve())
+        except (OSError, RuntimeError):
+            source_resolved = str(Path(source_path).absolute())
+        seen_target_abs: Set[str] = {source_resolved}
         for p in known_paths:
-            resolved_p = str(Path(p).resolve())
+            try:
+                resolved_p = str(Path(p).resolve())
+            except (OSError, RuntimeError):
+                resolved_p = str(Path(p).absolute())
             if resolved_p not in seen_target_abs and (p.parent.exists() or p.parent.parent.exists()):
                 seen_target_abs.add(resolved_p)
                 target_paths.append(p)
@@ -651,7 +688,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             unique_destinations: List[Path] = []
             seen_paths: Set[str] = set()
             for dst in destinations:
-                resolved_str = str(dst.resolve())
+                try:
+                    resolved_str = str(dst.resolve())
+                except (OSError, RuntimeError):
+                    resolved_str = str(dst.absolute())
                 if resolved_str not in seen_paths:
                     seen_paths.add(resolved_str)
                     unique_destinations.append(dst)

@@ -1,0 +1,876 @@
+[
+  {
+    "id": "BOBAE_XM_001",
+    "platform": "bobaedream",
+    "board_name": "보배드림 수입차게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=import&No=718942",
+    "post_title": "샤오미 SU7 서킷 주행 중 브레이크 패드 가루되고 벽 처박는 영상 충격이네요",
+    "target_vehicle": "Xiaomi SU7 Max",
+    "category": "safety",
+    "defect_topic": "샤오미 SU7 서킷 고속 제동 시 브레이크 패드 열화 소손 및 페달 바닥 꺼짐 충돌",
+    "raw_quote": "영상 보는데 진짜 오금이 저리더라. 673마력짜리 괴물 차를 만들어놓고 브레이크 패드는 쏘나타만도 못한 걸 꽂아놨네? 서킷 3바퀴 돌았다고 패드 마찰재가 다 녹아내려서 쇠판때기끼리 갈리다가 브레이크 페달이 바닥까지 푹 꺼짐. 제동력 0% 돼서 타이어 방호벽에 150km/h로 냅다 꽂아버림. 이게 바퀴 달린 움직이는 보조배터리지 차냐? 대륙의 실수라더니 그냥 대륙의 폭탄 그 자체다. 겉멋만 부린 샤이칸 타고 다니다가 황천길 하이패스 탄다.",
+    "slang_terms": [
+      "움직이는 보조배터리",
+      "샤이칸",
+      "대륙의 폭탄",
+      "황천길 하이패스"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "enthusiast",
+      "author_badge": "수입차 10년차",
+      "post_date": "2024-05-18",
+      "view_count": 28400,
+      "comment_count": 142,
+      "vote_count": 215
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_XM_002",
+    "platform": "bobaedream",
+    "board_name": "보배드림 시승기/배틀",
+    "post_url": "https://www.bobaedream.co.kr/view?code=battle&No=115042",
+    "post_title": "샤오미 뉘르 6분대 기록? 껍데기만 씌운 원오프 레이스카 사기극이지",
+    "target_vehicle": "Xiaomi SU7 Ultra Prototype",
+    "category": "safety",
+    "defect_topic": "샤오미 SU7 양산형과 괴리된 원오프 프로토타입 레이스카 마케팅 기만 논란",
+    "raw_quote": "샤오미가 뉘르부르크링에서 포르쉐 타이칸 깼다고 언론플레이 존나게 때리는데 뜯어보면 실소만 나옴. 양산차도 아니고 롤케이지에 풀 카본 섀시 두르고 다운포스 2톤짜리 스포일러 단 1대짜리 원오프 특수 제작 프로토타입 갖고 기록 세운 거잖아. 그래놓고 양산형 SU7 파는 데다가 '뉘르 1등의 혈통' 이 지랄 마케팅함. 실상은 공도용 양산차는 서킷 3바퀴 돌면 브레이크 타서 불나는데 ㅋㅋㅋ 이런 역겨운 짱깨식 기만에 낚이는 흑우 없제?",
+    "slang_terms": [
+      "언론플레이",
+      "원오프 특수제작",
+      "짱깨식 기만",
+      "흑우"
+    ],
+    "severity": "social_conflict",
+    "platform_metadata": {
+      "author_type": "track_enthusiast",
+      "author_badge": "트랙마니아",
+      "post_date": "2024-11-04",
+      "view_count": 31200,
+      "comment_count": 198,
+      "vote_count": 340
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_XM_003",
+    "platform": "bobaedream",
+    "board_name": "보배드림 교통사고/블랙박스",
+    "post_url": "https://www.bobaedream.co.kr/view?code=accident&No=845913",
+    "post_title": "오늘 아침 샤오미SU7 충돌 화재 사망사고",
+    "target_vehicle": "Xiaomi SU7",
+    "category": "safety",
+    "defect_topic": "샤오미 SU7 고속 충돌 후 12V 전원 차단으로 전자식 팝업 도어핸들 미전개 탑승자 탈출 불가 화재 참사",
+    "raw_quote": "샤오미 SU7 고속도로 충돌 영상 보니까 충돌 직후 고전압 배터리에 불붙었는데 전동 팝업 도어핸들이 튀어나오질 않음. 바깥에서 지나가던 운전자들이 맨손으로 문 열려고 발버둥치는데 손잡이가 차체 안에 쏙 들어가서 잡히질 않음. 12V 전원 죽으면 문짝도 못 열게 만든 놈들은 진짜 살인죄로 처벌해야 됨. 완전 전자식 관짝이다.",
+    "slang_terms": [
+      "전자식 관짝",
+      "팝업 도어핸들",
+      "통구이",
+      "대륙의 폭탄"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "witness",
+      "author_badge": "교통사고분석가",
+      "post_date": "2026-08-20",
+      "view_count": 42100,
+      "comment_count": 285,
+      "vote_count": 512
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_XM_004",
+    "platform": "bobaedream",
+    "board_name": "보배드림 신유머/이슈",
+    "post_url": "https://www.bobaedream.co.kr/view?code=humor&No=57647",
+    "post_title": "중국 청두 샤오미 SU7 전기차 화재..문 안 열려 사망",
+    "target_vehicle": "Xiaomi SU7",
+    "category": "safety",
+    "defect_topic": "샤오미 SU7 충돌 화재 시 외부 비상 기계식 래치 부재 및 도어락 해제 실패",
+    "raw_quote": "중국 청두에서 발생한 샤오미 SU7 화재 사건... 주변 시민들이 소화기 들고 달려와서 구하려고 해도 문 손잡이가 안 튀어나와서 문을 못 열었답니다. 유리창 깨려 해도 삼중 방음 유리라 벽돌로 쳐도 안 깨짐. 결국 안에서 운전자 불타 죽음. 이게 차냐 흉기냐? 바퀴 달린 움직이는 화장터지.",
+    "slang_terms": [
+      "움직이는 화장터",
+      "대륙의 실수",
+      "흉기",
+      "도어락 락아웃"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "member",
+      "author_badge": "보배중사",
+      "post_date": "2026-08-18",
+      "view_count": 35400,
+      "comment_count": 178,
+      "vote_count": 320
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_XM_005",
+    "platform": "bobaedream",
+    "board_name": "보배드림 자동차사진",
+    "post_url": "https://www.bobaedream.co.kr/view?code=dica&No=117965",
+    "post_title": "샤오미SU7 화재사망사고 다음 바퀴 또 빠짐 ㅋ",
+    "target_vehicle": "Xiaomi SU7",
+    "category": "maintenance",
+    "defect_topic": "샤오미 SU7 저압 주조 알루미늄 로워암 연석 충돌 취성 파괴 및 조향 휠 이탈 결함",
+    "raw_quote": "샤오미 SU7 화재로 사망사고 난 지 며칠이나 됐다고 이번엔 또 바퀴가 통째로 빠져버림 ㅋㅋㅋ 서스펜션 로워암 부러져서 앞바퀴가 45도로 꺾이고 휠하우스에 처박힘. 방지턱 넘다가 하체 분질러지는 차를 제로백 2초라고 자랑질 ㅋㅋㅋ 대륙의 실수라더니 그냥 달리는 관짝 맞네.",
+    "slang_terms": [
+      "달리는 관짝",
+      "하체 뽀개짐",
+      "바퀴 빠짐",
+      "자랑질"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "member",
+      "author_badge": "보배하사",
+      "post_date": "2026-08-16",
+      "view_count": 21800,
+      "comment_count": 94,
+      "vote_count": 180
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_XM_006",
+    "platform": "bobaedream",
+    "board_name": "보배드림 자동차뉴스/토론",
+    "post_url": "https://www.bobaedream.co.kr/view?code=cnews&No=2851",
+    "post_title": "샤오미 SU7 울트라 주행 중 화재, 배터리 이상은 아닌 것으로 판단",
+    "target_vehicle": "Xiaomi SU7 Ultra",
+    "category": "safety",
+    "defect_topic": "샤오미 SU7 고성능 트랙 주행 중 브레이크 열 축적으로 인한 휠 타이어 발화 및 화재",
+    "raw_quote": "샤오미 공식 해명이 더 가관임. '배터리 열폭주가 아니라 브레이크 패드 과열로 인한 휠타이어 발화'라고 발표함 ㅋㅋㅋ 아니 600마력 넘게 쏴대면서 브레이크를 도대체 어떤 싸구려 패드를 쳐넣었길래 서킷 좀 돌았다고 불이 붙냐? 쏘나타도 서킷에서 불은 안 난다. 제동 시스템 기본도 안 된 차를 슈퍼카로 포장하는 짱깨식 사기극.",
+    "slang_terms": [
+      "싸구려 패드",
+      "짱깨식 사기극",
+      "화재 폭탄",
+      "제동 제로"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "auto_journalist",
+      "author_badge": "모터뉴스",
+      "post_date": "2026-07-28",
+      "view_count": 18900,
+      "comment_count": 133,
+      "vote_count": 245
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_XM_007",
+    "platform": "bobaedream",
+    "board_name": "보배드림 국산차게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=national&No=2299958",
+    "post_title": "현빠들이 좋아할 만한 뉴스...샤오미 SU7",
+    "target_vehicle": "Xiaomi SU7 vs Hyundai Ioniq 5 N",
+    "category": "safety",
+    "defect_topic": "샤오미 SU7 서킷 주행 브레이크 페이드 벽면 격돌 영상 및 샤이칸 조롱",
+    "raw_quote": "샤오미 SU7 서킷 영상 뜨고 보배 국게 난리 났네 ㅋㅋㅋ 브레이크 밟았는데 속도 1도 안 줄고 벽에 냅다 쳐박는 거 보고 오줌 지릴 뻔했다. 현대 아이오닉 5N은 뉘르에서 랩타임 찍고 풀브레이킹 때려도 멀쩡한데 샤오미 뻥마력 샤이칸은 서킷 3랩 돌고 브레이크 실종됨 ㅋㅋㅋ 움직이는 보조배터리 타고 목숨 배팅하는 놈들 현실 자각 타임 왔제?",
+    "slang_terms": [
+      "샤이칸",
+      "움직이는 보조배터리",
+      "브레이크 실종",
+      "뻥마력",
+      "현실 자각"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "member",
+      "author_badge": "국게네임드",
+      "post_date": "2024-05-25",
+      "view_count": 54200,
+      "comment_count": 310,
+      "vote_count": 680
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_XM_008",
+    "platform": "bobaedream",
+    "board_name": "보배드림 신유머/이슈",
+    "post_url": "https://www.bobaedream.co.kr/view?code=humor&No=180522",
+    "post_title": "최근 중국의 전기차 사고",
+    "target_vehicle": "Chinese EV General (Xiaomi / BYD)",
+    "category": "safety",
+    "defect_topic": "중국산 전기차 배터리 열폭주 충전 중 발화 및 조잡한 품질에 대한 유저 성토",
+    "raw_quote": "싸다고 중국차 탈 바에야 차라리 난 걷겠구먼... 목숨이 두 갠가? 충전 꽂아놓으면 터지고, 달리다가 멈추고, 벽돌차 돼서 견인차 타고... 대륙의 실수라고 칭찬해주니까 진짜 실수로 만든 차를 팔아먹고 자빠졌네. 중국산 전기차 수입되면 도로가 지옥문 열리는 거다.",
+    "slang_terms": [
+      "목숨이 두 갠가",
+      "대륙의 실수",
+      "지옥문",
+      "벽돌차"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "member",
+      "author_badge": "보배상병",
+      "post_date": "2026-08-19",
+      "view_count": 17961,
+      "comment_count": 21,
+      "vote_count": 81
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_XM_009",
+    "platform": "bobaedream",
+    "board_name": "보배드림 수입차게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=import&No=714897",
+    "post_title": "테슬라, 중국에서 300만대 대규모 리콜…\"사고 시 손잡이 결함\"",
+    "target_vehicle": "Tesla Model 3 / Model Y (China Build)",
+    "category": "safety",
+    "defect_topic": "플러시 도어핸들 사고 충격 시 도어 잠금 해제 소프트웨어 로직 결함 대규모 리콜",
+    "raw_quote": "사고 났을 때 도어 손잡이 안 튀어나와서 탑승자 갇히는 결함 결국 중국에서 300만 대 리콜 터졌네. 샤오미도 그렇고 테슬라도 그렇고 이 빌어먹을 히든 도어핸들 디자인 때문에 얼마나 많은 사람이 타 죽어야 정신 차릴 거냐? 물리 레버를 의무화해야지 전기로만 여는 도어캐치는 살인 흉기나 다름없다.",
+    "slang_terms": [
+      "히든 도어핸들",
+      "살인 흉기",
+      "타 죽음",
+      "리콜 대란"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "member",
+      "author_badge": "수입차베테랑",
+      "post_date": "2026-08-22",
+      "view_count": 2171,
+      "comment_count": 2,
+      "vote_count": 17
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_XM_010",
+    "platform": "bobaedream",
+    "board_name": "보배드림 자유게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=freeb&No=3352134",
+    "post_title": "집에 아무도 없을 때 샤오미 보조배터리가 폭발했습니다",
+    "target_vehicle": "Xiaomi EV / Energy Systems",
+    "category": "safety",
+    "defect_topic": "샤오미 리튬이온 배터리 셀 팽창 및 무부하 자연 발화 폭발",
+    "raw_quote": "보조배터리도 이 지랄로 터지는데 70kWh짜리 고전압 배터리 깔고 앉아있는 샤오미 SU7을 산다고? 집에 불나서 가재도구 다 태워먹고 피눈물 흘리고 있는데 보상도 안 해줌. '움직이는 보조배터리'라는 말이 괜히 나온 게 아니다. 배터리 셀 품질 관리가 쓰레기 수준임. 샤오미 차 타는 건 시한폭탄 위에 앉아있는 거다.",
+    "slang_terms": [
+      "움직이는 보조배터리",
+      "시한폭탄",
+      "피눈물",
+      "쓰레기 품질"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "victim",
+      "author_badge": "자게이",
+      "post_date": "2025-12-16",
+      "view_count": 51110,
+      "comment_count": 86,
+      "vote_count": 736
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_XM_011",
+    "platform": "bobaedream",
+    "board_name": "보배드림 자유게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=freeb&No=3433967",
+    "post_title": "샤오미도 가격 많이 올라왔네요",
+    "target_vehicle": "Xiaomi SU7",
+    "category": "economics",
+    "defect_topic": "샤오미 SU7 가격 대비 조악한 서스펜션과 제동 내구성 결함 및 가성비 허상",
+    "raw_quote": "샤오미 가성비 옛말입니다. SU7 풀옵션 뽑으려면 6천만원 넘어가는데 그 돈이면 검증된 아이오닉 5N이나 모델3 하이랜드 사지 누가 중국산 조립 컴퓨터 같은 차를 탑니까? 스펙상 제로백만 뻥튀기해놓고 실제 몰아보면 브레이크 패드 열변형 오고 코너에서 차체 흔들림. 대륙의 가성비라는 마약에 취해서 목숨을 담보로 베팅하지 마세요.",
+    "slang_terms": [
+      "조립 컴퓨터 같은 차",
+      "뻥튀기",
+      "가성비 마약",
+      "목숨 담보 베팅"
+    ],
+    "severity": "convenience_issue",
+    "platform_metadata": {
+      "author_type": "member",
+      "author_badge": "자유게시판",
+      "post_date": "2026-08-28",
+      "view_count": 3410,
+      "comment_count": 18,
+      "vote_count": 42
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_XM_012",
+    "platform": "bobaedream",
+    "board_name": "보배드림 신유머/이슈",
+    "post_url": "https://www.bobaedream.co.kr/view?code=humor&No=177961",
+    "post_title": "샤오미 기술력 근황",
+    "target_vehicle": "Xiaomi SU7",
+    "category": "safety",
+    "defect_topic": "샤오미 SU7 자동발렛주차(AVP) 및 긴급제동 미작동 지하주차장 다중 추돌 참사",
+    "raw_quote": "샤오미 자율주행 기술력 근황 ㅋㅋㅋ 지하주차장에서 자동주차 시켜놨더니 기둥을 정면으로 들이받고 옆에 서 있던 차까지 긁어먹음. 라이다랑 카메라 떡칠해놓고 에폭시 바닥 반사광 하나 구별 못 해서 풀악셀 밟아버림. 중국 현지에서만 주차 사고 수십 건 터졌다는데 이런 베타버전 소프트웨어를 도로에 풀어놓는 샤오미의 뻔뻔함에 부랄을 탁 칩니다.",
+    "slang_terms": [
+      "풀악셀",
+      "부랄을 탁 침",
+      "베타버전 소프트웨어",
+      "알리발 기술력"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author_type": "member",
+      "author_badge": "유머이슈러",
+      "post_date": "2026-05-12",
+      "view_count": 29800,
+      "comment_count": 125,
+      "vote_count": 380
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_XM_013",
+    "platform": "bobaedream",
+    "board_name": "보배드림 자동차뉴스/토론",
+    "post_url": "https://www.bobaedream.co.kr/view?code=cnews&No=2797",
+    "post_title": "최고속도 300km/h·990마력... 샤오미 고성능 SUV YU7 브레이크 과열 논란",
+    "target_vehicle": "Xiaomi YU7 SUV",
+    "category": "safety",
+    "defect_topic": "샤오미 YU7 고마력 SUV 공차중량 2.4톤 대비 소구경 브레이크 로터 장착 페이드 결함",
+    "raw_quote": "SU7에서 브레이크 패드 다 녹아내려 벽 처박던 실력으로 990마력짜리 대형 SUV YU7을 만든답니다 ㅋㅋㅋ 차 무게만 2.4톤인데 브레이크 로터랑 캘리퍼는 중형 세단급을 박아둠. 내리막길에서 급제동 두 번만 하면 브레이크 오일 끓어 넘쳐서 페달 푹 꺼질 게 뻔함. 이건 차를 만드는 게 아니라 공도 위의 대량 살상 무기를 제조하는 수준임. 대륙의 브레이크 폭탄 시즌 2 개막이다.",
+    "slang_terms": [
+      "대륙의 브레이크 폭탄 시즌 2",
+      "살상 무기",
+      "페달 푹 꺼짐",
+      "녹아내림"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "industry_watcher",
+      "author_badge": "오토포커스",
+      "post_date": "2026-07-15",
+      "view_count": 15400,
+      "comment_count": 79,
+      "vote_count": 190
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_RV_001",
+    "platform": "bobaedream",
+    "board_name": "보배드림 수입차게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=import&No=724018",
+    "post_title": "리비안 R1T 뒤 펜더 살짝 긁혔는데 수리비 5,500만원... 전손 판정 났답니다",
+    "target_vehicle": "Rivian R1T",
+    "category": "maintenance",
+    "defect_topic": "리비안 R1T 일체형 모노코크 리어 쿼터패널 경미 사고 5,500만원 수리비 전손",
+    "raw_quote": "미국에서 직구로 리비안 R1T 들여온 지인이 주차하다가 뒤 펜더를 모퉁이에 쿵 찍었음. 일반 내연기관 차면 판금 도색 50만원이면 끝날 상처인데, 리비안 공인 수리센터 견적이 4만 2천 불(약 5,500만 원) 나옴 ㅋㅋㅋ 알고 보니까 C필러부터 적재함까지 통짜 알루미늄 프레스 패널이라 부분 판금이 아예 안 됨. 차체를 다 절단해서 통으로 갈아야 한대서 보험사에서 그냥 전손 처리해 버림. 한국 정식 출시돼도 이거 타다 사고 나면 보험료 폭탄 맞고 인생 종친다. 진정한 전손트럭임.",
+    "slang_terms": [
+      "전손트럭",
+      "수리비 폭탄",
+      "통짜 알루미늄",
+      "인생 종친다"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "importer",
+      "author_badge": "수입차 베테랑",
+      "post_date": "2024-06-22",
+      "view_count": 45100,
+      "comment_count": 275,
+      "vote_count": 480
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_LC_001",
+    "platform": "bobaedream",
+    "board_name": "보배드림 수입차게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=import&No=729311",
+    "post_title": "루시드 에어 실내 소프트웨어 오류 수준... 키 들고 5분간 탭댄스 췄습니다",
+    "target_vehicle": "Lucid Air Grand Touring",
+    "category": "maintenance",
+    "defect_topic": "루시드 에어 안드로이드 오토모티브 34인치 글래스 콕핏 블랙아웃 및 UWB 키 인식 먹통",
+    "raw_quote": "지하주차장에서 루시드 에어 문 열려고 스마트키 주머니에 넣고 다가갔는데 문손잡이가 꿈쩍도 안 함. UWB 인식 오류 나서 키 들고 차 앞에서 5분 동안 탭댄스 추듯이 왔다 갔다 흔들어야 겨우 열림. 차 타서 시동 걸었더니 이번엔 34인치 커브드 글래스 콕핏 화면 3개가 전부 깜깜한 블랙아웃 먹통 ㅋㅋㅋ 속도계도 안 보이고 후방카메라도 안 켜짐. 리부팅 단축키 눌러도 묵묵부답이라 15분 동안 멍때리다가 겨우 켜졌음. 하드웨어만 럭셔리지 소프트웨어는 10년 전 안드로이드 태블릿 수준임.",
+    "slang_terms": [
+      "탭댄스",
+      "블랙아웃 먹통",
+      "안드로이드 태블릿 수준",
+      "껍데기만 럭셔리"
+    ],
+    "severity": "convenience_issue",
+    "platform_metadata": {
+      "author_type": "early_adopter",
+      "author_badge": "수입전기차오너",
+      "post_date": "2024-09-15",
+      "view_count": 22400,
+      "comment_count": 110,
+      "vote_count": 145
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_LC_002",
+    "platform": "bobaedream",
+    "board_name": "보배드림 자유게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=freeb&No=3409653",
+    "post_title": "제로백 1.89초 한국에서 포착된 루시드 에어 사파이어",
+    "target_vehicle": "Lucid Air Sapphire",
+    "category": "maintenance",
+    "defect_topic": "루시드 에어 국내 직수입 공도 포착 후 사설 정비 불가 및 고장 시 폐차 우려 댓글 폭발",
+    "raw_quote": "한국 공도에서 루시드 에어 사파이어 찍혔는데 댓글 반응이 존나 현실적임 ㅋㅋㅋ '와 멋지다' 하다가도 '근데 저거 고장 나면 어디서 고치냐? 원더박스 인버터 나가면 사우디에 차 보내야 됨?' ㅋㅋㅋ 2억 5천 주고 사서 배터리나 전장 하나 맛가면 바로 2억짜리 고철 덩어리 됨. 국내 AS망도 없는 스타트업 전기차 직수입하는 용자들은 진짜 돈이 썩어 넘치는 퐁퐁남들임.",
+    "slang_terms": [
+      "2억짜리 고철 덩어리",
+      "돈이 썩어 넘치는 퐁퐁남",
+      "원더박스",
+      "폐차 각"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "member",
+      "author_badge": "슈퍼카포착",
+      "post_date": "2026-06-11",
+      "view_count": 3444,
+      "comment_count": 7,
+      "vote_count": 23
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_LT_001",
+    "platform": "bobaedream",
+    "board_name": "보배드림 수입차게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=import&No=713158",
+    "post_title": "2815만원 수리비 폭탄 韓소비자 뒤통수치는 테슬라 배터리 논란",
+    "target_vehicle": "Tesla Model 3 Long Range",
+    "category": "maintenance",
+    "defect_topic": "보증만료 직후 배터리 BMS 오류로 2,815만원 배터리 통교체 청구 폭탄",
+    "raw_quote": "테슬라 모델3 5년 타고 보증 끝나자마자 배터리 충전제한 걸리더니 서비스센터에서 2,815만 원 수리비 폭탄 때림. 배터리 팩 내부 불량 셀 1~2개 탓인데 모듈 수리는 일체 거부하고 통교체만 강요함. 2천만원짜리 중고차에 2800만원 수리비 내라는 게 제정신이냐? 보증 끝나면 그냥 폐차장으로 직행하는 일회용 퐁퐁차 그 자체다.",
+    "slang_terms": [
+      "2815만원 폭탄",
+      "수리비 폭탄",
+      "통교체 갑질",
+      "일회용 퐁퐁차",
+      "폐차장 직행"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "테슬라오너",
+      "post_date": "2025-11-20",
+      "view_count": 3518,
+      "comment_count": 2,
+      "vote_count": 20
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_LT_002",
+    "platform": "bobaedream",
+    "board_name": "보배드림 자유게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=freeb&No=3428905",
+    "post_title": "23년 차 정비사가 보배드림에 글을씁니다. 전기차 시대, 정비 현장은 이미 시한 폭탄입니다.",
+    "target_vehicle": "EV General (Hyundai, Kia, Tesla)",
+    "category": "maintenance",
+    "defect_topic": "23년차 베테랑 정비사가 폭로한 전기차 보증만료 후 수리 불가 구조와 3천만원 배터리 교체비 트랩",
+    "raw_quote": "현직 23년차 정비사입니다. 전기차 타시는 분들 기름값 아낀다고 좋아하시는데 정비 현장은 이미 시한폭탄입니다. 보증기간 8년 16만km 끝나면 모듈 단위 수리 장비도 없고 제조사에서 부품도 안 줍니다. 배터리팩 살짝 찍히거나 BMS 에러 뜨면 무조건 2,500만~3,500만원 통교체 견적 나옵니다. 차값 3천짜리에 배터리 교체비 3천 청구되면 차주들 다 주저앉아서 웁니다. 감가폭탄 맞고 폐차도 못 하는 덫에 걸리는 겁니다.",
+    "slang_terms": [
+      "시한폭탄",
+      "감가폭탄",
+      "통교체 견적",
+      "유지보수 트랩"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "mechanic",
+      "author_badge": "23년차정비사",
+      "post_date": "2026-08-14",
+      "view_count": 84844,
+      "comment_count": 332,
+      "vote_count": 1566
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_LT_003",
+    "platform": "bobaedream",
+    "board_name": "보배드림 자유게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=freeb&No=3429353",
+    "post_title": "23년 경력의 정비사분이 쓴 전기차의 문제점을 보고 전기차 운용시 내연기관 대비 기회비용 정리",
+    "target_vehicle": "EV General",
+    "category": "economics",
+    "defect_topic": "전기차 3년 소유 시 절감 유류비 대비 3천만원 중고차 감가상각 및 배터리 수리비 역전 현상",
+    "raw_quote": "전기차 3년 굴려본 사람이면 뼈저리게 공감할 겁니다. 3년 동안 충전비 아낀 게 500만원 남짓인데, 중고차 감가로 2,800만원 날리고 타이어값 내연기관 2배로 뜯기고 자차 보험료 연 200만원씩 냈음. 총 소유비용(TCO) 계산기 두드려보면 내연기관 그랜저보다 2천만원 더 손해임. '전기차가 경제적이다'는 제조사와 얼리어답터들이 만든 사기극임. 배터리 폭탄 떠안은 채 중고 시장에 던져도 딜러들이 쳐다도 안 봄.",
+    "slang_terms": [
+      "TCO 사기극",
+      "배터리 폭탄",
+      "감가폭탄",
+      "딜러 매입 거부",
+      "뼈저린 공감"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "전기차3년차",
+      "post_date": "2026-08-15",
+      "view_count": 513,
+      "comment_count": 5,
+      "vote_count": 3
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_LT_004",
+    "platform": "bobaedream",
+    "board_name": "보배드림 신유머/이슈",
+    "post_url": "https://www.bobaedream.co.kr/view?code=humor&No=186449",
+    "post_title": "1억 벤츠 화재 여파에 '전기차 타는 죄인' 된 입주민들",
+    "target_vehicle": "Mercedes-Benz EQE 350+",
+    "category": "parking",
+    "defect_topic": "인천 청라 벤츠 EQE 화재 이후 아파트 지하주차장 출입금지 및 입주민 간 극심한 혐오 갈등",
+    "raw_quote": "1억 넘는 벤츠 전기차 사놓고 아파트 지하주차장에 차도 못 대고 지상 땡볕에 세워둠. 입대의에서 전기차 충전기 전원 다 차단하고 엘리베이터에 '전기차 지하 진입 시 형사 고발' 현수막 걸어둠. 이웃들이 지나가면서 '저 사람 또 폭탄 끌고 왔네' 수군거리는데 진짜 피눈물 남. 팔려고 엔카에 올렸더니 신차가 1억 300만원짜리가 4,500만원에도 입질이 없음. 완벽한 사회적 사형선고를 받았다.",
+    "slang_terms": [
+      "전기차 죄인",
+      "폭탄 끌고 옴",
+      "사회적 사형선고",
+      "지하주차장 출입금지",
+      "피눈물"
+    ],
+    "severity": "social_conflict",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "EQE오너",
+      "post_date": "2026-08-31",
+      "view_count": 2232,
+      "comment_count": 12,
+      "vote_count": 7
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_LT_005",
+    "platform": "bobaedream",
+    "board_name": "보배드림 전기차게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=electric&No=29104",
+    "post_title": "아이오닉 5 출고 3년 12만km 주행... 배터리 SOH 77% 찍고 겨울 주행거리 반토막 났습니다",
+    "target_vehicle": "Hyundai Ioniq 5 Long Range",
+    "category": "charging",
+    "defect_topic": "아이오닉 5 3년 12만km SOH 77% 열화 및 혹한기 주행거리 50% 급락 무상교체 거부",
+    "raw_quote": "영업용으로 아이오닉 5 3년 동안 12만km 알차게 탔습니다. OBD 스캐너 물려보니 배터리 건강상태(SOH)가 77.2%로 떨어졌네요. 신차 때 완충하면 430km 찍히던 게 요즘 영하 5도 날씨에 히터 22도 틀고 고속도로 올리면 210km 만에 배터리 10% 남았다고 삑삑거립니다. 배터리 복권 완전 꽝 뽑았네요. 현대 블루핸즈 가니까 '보증 기준인 70% 이하가 아니라서 무상교체 불가'라고 단칼에 자릅니다. 기름값 아낀다고 좋아했는데 3년 만에 주행거리 반토막 난 뻥연비 전기차 끌고 겨울마다 충전소 찾아 삼만리 찍는 중입니다.",
+    "slang_terms": [
+      "배터리복권 꽝",
+      "뻥연비",
+      "반토막",
+      "충전소 찾아 삼만리"
+    ],
+    "severity": "functional_failure",
+    "platform_metadata": {
+      "author_type": "fleet_owner",
+      "author_badge": "영업용12만km",
+      "post_date": "2024-12-08",
+      "view_count": 39800,
+      "comment_count": 230,
+      "vote_count": 412
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_LT_006",
+    "platform": "bobaedream",
+    "board_name": "보배드림 국산차게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=national&No=2248109",
+    "post_title": "포터 일렉트릭 4년 차... 짐 싣고 대관령 넘다 거북이등 켜지고 갓길 정차했습니다",
+    "target_vehicle": "Hyundai Porter II Electric",
+    "category": "hill_climbing",
+    "defect_topic": "포터2 일렉트릭 4년차 배터리 열화 및 800kg 적재 혹한기 대관령 등판 전압강하 거북이모드",
+    "raw_quote": "용달 화물 뛰는 사람입니다. 2021년식 포터 전기차 배터리 4년 동안 14만km 뛰었더니 이제 짐 800kg 싣고 겨울철 영하 8도에 대관령 오르막 타면 주행가능거리 1km 갈 때마다 계기판 수치가 4km씩 줄어듭니다. 배터리 잔량 25% 남아있길래 충분할 줄 알았는데 경사로에서 악셀 밟자마자 전압 급강하 오면서 삑- 소리와 함께 거북이등 출력 제한 걸림. 2차선에서 시속 30km로 기어가다 갓길에 겨우 댔습니다. 영업용 번호판 달아준다고 꼬셔서 팔아먹더니 이건 차가 아니라 달리는 시한폭탄 용달지옥임. 뻥연비에 속아서 하루에 충전기만 4번씩 꽂고 있습니다.",
+    "slang_terms": [
+      "용달지옥",
+      "거북이등",
+      "뻥연비",
+      "달리는 시한폭탄"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "cargo_driver",
+      "author_badge": "용달기사",
+      "post_date": "2025-01-14",
+      "view_count": 34100,
+      "comment_count": 185,
+      "vote_count": 520
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_LT_007",
+    "platform": "bobaedream",
+    "board_name": "보배드림 자유게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=freeb&No=3224012",
+    "post_title": "미니일렉트릭 사고. 이정도면 전손인가요?(사진有)",
+    "target_vehicle": "MINI Cooper SE Electric",
+    "category": "maintenance",
+    "defect_topic": "하부 배터리 마운트 경미 찌그러짐으로 2,700만원 수리비 청구 및 보험사 강제 전손",
+    "raw_quote": "도로 위에 떨어진 돌멩이 밟아서 하부에서 쿵 소리 났는데 센터 입고하니 배터리 팩 알루미늄 케이스 모서리가 1.5cm 눌렸다고 배터리 통교체 2,700만원 견적 냄. 신차 가격이 4,500만원인데 배터리 하나 갈면 차 잔존가치 넘어서 보험사에서 강제 전손 처리하자고 함. 긁힌 자국 하나에 멀쩡히 굴러가는 차가 사망선고 받음. 이게 전기차 오너들이 겪는 현실이다.",
+    "slang_terms": [
+      "강제 전손",
+      "사망선고",
+      "통교체 2700만원",
+      "수리비 폭탄"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "미니차주",
+      "post_date": "2025-02-12",
+      "view_count": 466,
+      "comment_count": 2,
+      "vote_count": 1
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_LT_008",
+    "platform": "bobaedream",
+    "board_name": "보배드림 교통사고/블랙박스",
+    "post_url": "https://www.bobaedream.co.kr/view?code=accident&No=760712",
+    "post_title": "작년 12/15 볼트ev화재 차주 입니다. 도와주세요.",
+    "target_vehicle": "Chevrolet Bolt EV",
+    "category": "safety",
+    "defect_topic": "배터리 충전 중 주차장 열폭주 전소 후 제조사 책임 회피 및 보험 구상권 분쟁",
+    "raw_quote": "아파트 완속충전기 꽂아놓고 자고 있었는데 새벽 3시에 쾅 소리와 함께 배터리 폭발 전소됐습니다. 주변 차량 5대 태워먹고 스프링클러 터져서 수억 원 배상 청구 들어왔는데 GM 코리아는 '차주 과실 여부 조사 중'이라며 1년째 보상 거부 중입니다. 보험사에서는 구상권 차주한테 청구하겠다고 으름장 놓고 인생이 송두리째 파탄 났습니다. 전기차 화재는 차주 인생을 끝장내는 재앙입니다.",
+    "slang_terms": [
+      "폭발 전소",
+      "구상권 청구",
+      "인생 파탄",
+      "제조사 모르쇠"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "victim",
+      "author_badge": "피해차주",
+      "post_date": "2023-02-11",
+      "view_count": 4123,
+      "comment_count": 19,
+      "vote_count": 36
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_LT_009",
+    "platform": "bobaedream",
+    "board_name": "보배드림 수입차게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=import&No=714893",
+    "post_title": "리스승계 첫날 구동장치 결함",
+    "target_vehicle": "Porsche Taycan 4S",
+    "category": "maintenance",
+    "defect_topic": "포르쉐 타이칸 중고 리스 승계 당일 고전압 배터리 림프홈 및 2천만원 인버터 결함 방치",
+    "raw_quote": "타이칸 중고로 리스 승계받아서 타고 온 지 3시간 만에 계기판에 빨간색 경고등 뜨면서 '구동장치 결함, 안전한 곳에 정차하십시오' 뜸. 악셀 밟아도 시속 20km 이상 안 나가는 림프홈 걸림. 전 차주는 자기는 멀쩡했다고 발뺌하고 포르쉐 센터는 인버터 교체비용 2,200만원 청구함. 중고 전기차는 전 차주가 배터리 고전압 결함 숨기고 던진 폭탄 설거지하는 퐁퐁남 되는 지름길임.",
+    "slang_terms": [
+      "림프홈",
+      "폭탄 설거지",
+      "퐁퐁남",
+      "구동장치 결함",
+      "2200만원 청구"
+    ],
+    "severity": "critical_safety",
+    "platform_metadata": {
+      "author_type": "victim",
+      "author_badge": "타이칸승계",
+      "post_date": "2026-08-22",
+      "view_count": 8555,
+      "comment_count": 42,
+      "vote_count": 47
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_DP_001",
+    "platform": "bobaedream",
+    "board_name": "보배드림 수입차게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=import&No=731045",
+    "post_title": "청라 화재 이후 벤츠 EQE 차주들의 비참한 현실... 감가 55%에 주차장 출입금지",
+    "target_vehicle": "Mercedes-Benz EQE 350+",
+    "category": "economics",
+    "defect_topic": "벤츠 EQE 파라시스 배터리 열폭주 화재 참사 후 55% 감가폭탄 및 지하주차장 입차 거부",
+    "raw_quote": "인천 청라 아파트 지하 화재 터지고 벤츠 EQE 차주들은 그냥 죄인 취급받고 살고 있습니다. 아파트 입대의에서 지하주차장 진입 금지 스티커 붙여서 지상 땡볕에 세워둬야 하고, 골프장이나 대형 마트 가도 주차요원이 막아섭니다. 열받아서 팔아치우려고 중고차 견적 냈더니 신차가 1억 300만원짜리가 1년 반 만에 4,600만원 부릅니다 ㅋㅋㅋ 1년 타고 6천만원 감가 실화냐? 파라시스 짱깨 배터리 폭탄 달고 다니는 활어차라고 조롱당하는데 벤츠 코리아는 입 꾹 닫고 모르쇠... 진짜 삼각별에 눈멀어서 인생 최대의 흑우 짓을 했습니다.",
+    "slang_terms": [
+      "파라시스 짱깨 배터리",
+      "활어차",
+      "삼각별",
+      "인생 최대의 흑우",
+      "지하주차장 진입 금지"
+    ],
+    "severity": "social_conflict",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "EQE차주",
+      "post_date": "2024-08-25",
+      "view_count": 68500,
+      "comment_count": 489,
+      "vote_count": 910
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_DP_002",
+    "platform": "bobaedream",
+    "board_name": "보배드림 자동차뉴스/토론",
+    "post_url": "https://www.bobaedream.co.kr/view?code=cnews&No=3320",
+    "post_title": "그랜저 가격이면 이걸 탄다고? 1억→5천만 원대로 감가",
+    "target_vehicle": "Genesis Electrified G80 / GV70",
+    "category": "economics",
+    "defect_topic": "1억원대 프리미엄 전기차 2년 만에 5천만원대 반토막 감가폭탄 실태",
+    "raw_quote": "신차가 1억 넘던 제네시스 전기차가 2년 반 만에 4천만 후반~5천만원 초반으로 반토막 났음. 감가율이 무려 52%임. 감가 맞은 액수만 5,500만원인데 이 돈이면 아반떼 N 신차 두 대를 사고도 기름값까지 남음. 전기차 오너들이 '기름값 아꼈다'고 자위할 때 통장에서는 그랜저 한 대 값이 공중분해된 거임. 중고 전기차 감가는 진짜 악마의 감가상각이다.",
+    "slang_terms": [
+      "반토막 감가",
+      "공중분해",
+      "악마의 감가상각",
+      "자위",
+      "아반떼N 두 대 값"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "auto_analyst",
+      "author_badge": "중고차시황",
+      "post_date": "2026-08-20",
+      "view_count": 12800,
+      "comment_count": 64,
+      "vote_count": 140
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_DP_003",
+    "platform": "bobaedream",
+    "board_name": "보배드림 자동차뉴스/토론",
+    "post_url": "https://www.bobaedream.co.kr/view?code=cnews&No=3318",
+    "post_title": "이 가격이면 혹할 만한데... 7천만 원대→1천만 원대로 뚝 떨어진 중고 전기차",
+    "target_vehicle": "Early Generation EV (Bolt, Ioniq, SM3 ZE)",
+    "category": "economics",
+    "defect_topic": "보증만료 초기형 전기차 7천만원에서 1천만원대로 80% 잔존가치 폭락 및 배터리 수리 리스크",
+    "raw_quote": "출고가 6~7천만원 하던 초기형 전기차들 중고차 사이트 가면 1,200만~1,500만원에 널려있음. 싼 맛에 샀다간 진짜 인생 종친다. 배터리 건강상태(SOH) 60% 밑으로 떨어져서 겨울에 완충해도 100km도 못 달리고, 배터리 교체하려면 차값의 2배인 2,500만원 내야 됨. 1천만원에 업어와서 2500만원 배터리 폭탄 맞는 호구 새끼 되는 거임. 중고 딜러들도 전기차는 기피 매물 1위임.",
+    "slang_terms": [
+      "인생 종친다",
+      "배터리 폭탄",
+      "호구 새끼",
+      "기피 매물 1위",
+      "80% 폭락"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "dealer_watcher",
+      "author_badge": "카시황",
+      "post_date": "2026-08-19",
+      "view_count": 16400,
+      "comment_count": 88,
+      "vote_count": 175
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_SB_001",
+    "platform": "bobaedream",
+    "board_name": "보배드림 수입차게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=import&No=712490",
+    "post_title": "BMW 엉뜨 구독제 월 24,000원... 진짜 선 넘은 날강도 새끼들 아닙니까?",
+    "target_vehicle": "BMW i4 eDrive40",
+    "category": "subscription",
+    "defect_topic": "BMW 커넥티드드라이브 물리 시트 열선 월 24,000원 소프트웨어 인질극 구독제 논란",
+    "raw_quote": "BMW 커넥티드 드라이브 스토어 보다가 뒷목 잡았습니다. 차 시트 안에 열선 코일이랑 모듈 다 박아놓고 출고해놓고, 겨울에 엉덩이 따뜻하게 하려면 매달 24,000원씩 월세를 내라네요? 1년 구독하면 25만원, 평생 쓰려면 53만원 결제하랍니다. 내 돈 주고 산 차에 물리적으로 붙어있는 하드웨어를 지들 서버에서 소프트웨어로 잠가놓고 인질극 벌이는 게 말이 됩니까? 이러다 나중엔 에어컨도 월 구독, 브레이크 페달 밟는 횟수도 종량제로 돈 뜯어가겠네. 사설 코딩 업체 가서 락 풀어버리는 게 답입니다.",
+    "slang_terms": [
+      "엉뜨 구독제",
+      "핸따 구독",
+      "하드웨어 인질극",
+      "날강도",
+      "사설 코딩"
+    ],
+    "severity": "social_conflict",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "비머매니아",
+      "post_date": "2024-02-14",
+      "view_count": 52300,
+      "comment_count": 367,
+      "vote_count": 780
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_SB_002",
+    "platform": "bobaedream",
+    "board_name": "보배드림 수입차게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=import&No=733812",
+    "post_title": "벤츠 EQS 뒷바퀴 조향각 10도 꺾으려면 연간 70만원 내라는 게 제정신인가요?",
+    "target_vehicle": "Mercedes-Benz EQS 450+",
+    "category": "subscription",
+    "defect_topic": "벤츠 EQS 리어 액슬 스티어링 10도 물리 조향각 소프트웨어 4.5도 락 및 연 70만원 구독 요구",
+    "raw_quote": "EQS 전장이 5.2미터가 넘어서 좁은 골목길이나 유턴할 때 후륜 조향이 필수임. 출고할 때 기본 4.5도 꺾이게 해놓고, 최대 10도까지 꺾고 싶으면 '리어 액슬 스티어링 10도' 소프트웨어 업그레이드를 1년에 70만원씩 구독하랍니다. 기계적으로는 이미 10도까지 꺾일 수 있는 모터랑 조향 링크를 다 달아놓고, 구독료 안 내면 4.5도로 강제 제한해 둠. 이게 진짜 뇌절 구독의 끝판왕이지. 뒷바퀴 더 꺾는데 연간 구독료를 내야 하는 시대가 올 줄은 몰랐다. 벤츠 코리아는 반성해라.",
+    "slang_terms": [
+      "뇌절 구독의 끝판왕",
+      "후륜 조향 인질",
+      "제정신인가",
+      "하드웨어 락"
+    ],
+    "severity": "social_conflict",
+    "platform_metadata": {
+      "author_type": "owner",
+      "author_badge": "삼각별오너",
+      "post_date": "2024-10-19",
+      "view_count": 31400,
+      "comment_count": 182,
+      "vote_count": 435
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_SB_003",
+    "platform": "bobaedream",
+    "board_name": "보배드림 자동차뉴스/토론",
+    "post_url": "https://www.bobaedream.co.kr/view?code=cnews&No=2492",
+    "post_title": "배터리 빼고 차만 산다? 현대차, 초기 비용 부담 덜어낼 구독제 시동",
+    "target_vehicle": "Hyundai / Kia EV",
+    "category": "subscription",
+    "defect_topic": "현대차 배터리 구독 서비스(BaaS) 도입 시 월 구독료 영구 납부 및 중고차 매각 불가 논란",
+    "raw_quote": "현대차가 배터리 구독제 도입한다고 간 보는데 유저들 댓글에 욕밖에 없음. '차값 2천 깎아주고 매달 배터리 월세 30만원씩 영구 상납하라는 거냐?' 10년 타면 배터리값 3,600만원 내는 꼴임. 게다가 배터리 리스 차량은 중고로 팔 때 승계할 사람 없어서 감가폭탄 100% 맞고 고철값에 넘겨야 함. 제조사들 배터리 구독 장난질에 속으면 평생 현대차 노예 되는 거다.",
+    "slang_terms": [
+      "배터리 월세",
+      "영구 상납",
+      "평생 현대차 노예",
+      "고철값 넘김",
+      "감가폭탄 100%"
+    ],
+    "severity": "social_conflict",
+    "platform_metadata": {
+      "author_type": "member",
+      "author_badge": "친환경포럼",
+      "post_date": "2026-05-03",
+      "view_count": 563,
+      "comment_count": 1,
+      "vote_count": 1
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  },
+  {
+    "id": "BOBAE_SB_004",
+    "platform": "bobaedream",
+    "board_name": "보배드림 자유게시판",
+    "post_url": "https://www.bobaedream.co.kr/view?code=freeb&No=3390285",
+    "post_title": "오토플러스(리본카) 중고차구독 피해사례 공유합니다.",
+    "target_vehicle": "Hyundai Ioniq 5 (Subscription)",
+    "category": "subscription",
+    "defect_topic": "전기차 월 구독형 렌트 계약 중도 해지 시 배터리 잔존가치 감가 위약금 30% 폭탄 청구",
+    "raw_quote": "전기차 월 89만원 구독 상품 타다가 사정 생겨서 1년 만에 중도 해지 신청했더니 위약금 폭탄 맞았습니다. 잔여 기간 요금의 30%에다가 '전기차 특수 감가 손실금'이라며 450만원을 추가 청구함. 구독제가 초기 비용 없다고 홍보하더니 나갈 때는 영혼까지 털어가는 악질 노예계약이었음. 전기차 구독이나 리스는 절대 타지 마세요.",
+    "slang_terms": [
+      "영혼 털림",
+      "악질 노예계약",
+      "위약금 폭탄",
+      "특수 감가 손실금"
+    ],
+    "severity": "financial_hazard",
+    "platform_metadata": {
+      "author_type": "victim",
+      "author_badge": "구독피해자",
+      "post_date": "2026-04-09",
+      "view_count": 783,
+      "comment_count": 4,
+      "vote_count": 2
+    },
+    "collected_at": "2026-09-04T01:50:00Z"
+  }
+]

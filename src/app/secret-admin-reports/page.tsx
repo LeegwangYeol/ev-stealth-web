@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { getDailyReports } from '@/lib/getDailyReports';
+import { getDailyReports, getFallbackReportData } from '@/lib/getDailyReports';
 import AdminDashboardClient from './AdminDashboardClient';
 
 export const dynamic = 'force-static';
@@ -26,11 +26,17 @@ export const metadata: Metadata = {
 };
 
 export default function SecretAdminReportsPage() {
-  const data = getDailyReports();
+  let data;
+  try {
+    data = getDailyReports();
+  } catch {
+    data = getFallbackReportData();
+  }
+  const safeData = data || getFallbackReportData();
 
   return (
     <div className="py-2">
-      <AdminDashboardClient initialData={data} />
+      <AdminDashboardClient initialData={safeData} />
     </div>
   );
 }

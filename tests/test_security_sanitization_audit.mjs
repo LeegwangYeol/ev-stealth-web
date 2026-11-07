@@ -35,6 +35,7 @@ if (fs.existsSync(sanitizePath)) {
 
 const {
   sanitizeSafeUrl,
+  sanitizeWhitelistedUrl,
   isSafeUrl,
   isExternalUrl,
   sanitizeText,
@@ -44,6 +45,23 @@ const {
   safeDecodePercent,
   extractAndNormalizeScheme,
   isOpenRedirect,
+  isPrototypePollutionKey,
+  stripPrototypePollutionQueryParams,
+  parseSafeQueryParams,
+  extractHostname,
+  matchDomain,
+  matchesAnyDomain,
+  isGovernmentDomain,
+  isManufacturerDomain,
+  isCommunityDomain,
+  isInternalDomain,
+  isWhitelistedDomain,
+  classifyDomain,
+  GOVERNMENT_DOMAINS,
+  MANUFACTURER_DOMAINS,
+  COMMUNITY_DOMAINS,
+  INTERNAL_DOMAINS,
+  ALL_WHITELISTED_DOMAINS,
   ALLOWED_SCHEMES,
   FORBIDDEN_SCHEMES,
 } = sanitizeUrlModule;
@@ -705,6 +723,382 @@ test('ReDoS resilience: sanitizeSafeUrl executes on 50,000-character malicious i
   const duration = performance.now() - start;
 
   assert.ok(duration < 25, `ReDoS benchmark took too long: ${duration.toFixed(2)}ms (must be < 25ms)`);
+});
+
+// -------------------------------------------------------------
+// 13. WCAG AA ACCESSIBILITY & SECURE ASSISTIVE INTEROPERABILITY AUDIT
+// -------------------------------------------------------------
+console.log('\n--- [13. WCAG AA Accessibility & Secure Assistive Interoperability Audit] ---');
+
+test('All external target="_blank" anchors across src/ include screen-reader accessible notifications', () => {
+  const srcDir = path.resolve(__dirname, '../src');
+
+  function scanAnchors(dir) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        scanAnchors(fullPath);
+      } else if (entry.name.endsWith('.tsx') || entry.name.endsWith('.ts')) {
+        const content = fs.readFileSync(fullPath, 'utf-8');
+        // Match each complete <a ... target="_blank" ...>...</a> block
+        const anchorBlockRegex = /<a\b[^>]*target=["']_blank["'][^>]*>([\s\S]*?)<\/a>/gi;
+        let match;
+        while ((match = anchorBlockRegex.exec(content)) !== null) {
+          const fullTag = match[0];
+          const innerContent = match[1];
+          const hasSrOnly = /sr-only/i.test(innerContent) || /sr-only/i.test(fullTag);
+          const hasAriaLabel = /aria-label=["'][^"']*(?:새 창|new window|새창)[^"']*["']/i.test(fullTag);
+          const hasTitle = /title=["'][^"']*(?:새 창|new window|새창)[^"']*["']/i.test(fullTag);
+
+          assert.ok(
+            hasSrOnly || hasAriaLabel || hasTitle,
+            `External target="_blank" anchor missing screen-reader notification in ${fullPath}: ${fullTag.slice(0, 120)}`
+          );
+        }
+      }
+    }
+  }
+
+  scanAnchors(srcDir);
+});
+
+test('All external target="_blank" anchors across src/ include visible keyboard focus styles', () => {
+  const srcDir = path.resolve(__dirname, '../src');
+
+  function scanFocus(dir) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        scanFocus(fullPath);
+      } else if (entry.name.endsWith('.tsx') || entry.name.endsWith('.ts')) {
+        const content = fs.readFileSync(fullPath, 'utf-8');
+        const anchorTagRegex = /<a\b[^>]*target=["']_blank["'][^>]*>/gi;
+        let match;
+        while ((match = anchorTagRegex.exec(content)) !== null) {
+          const tag = match[0];
+          const hasFocusRing = /focus(?:-visible)?:ring/i.test(tag) || /focus:outline/i.test(tag);
+          assert.ok(
+            hasFocusRing,
+            `External anchor missing visible focus indicator in ${fullPath}: ${tag}`
+          );
+        }
+      }
+    }
+  }
+
+  scanFocus(srcDir);
+});
+
+test('Sanitized URLs preserve HTML attribute boundary integrity without injection', () => {
+  const vectors = [
+    'https://example.com/" onfocus="alert(1)"',
+    "https://example.com/' onfocus='alert(1)'",
+    'https://example.com/<script>alert(1)</script>',
+    'https://example.com/><img src=x onerror=alert(1)>',
+  ];
+
+  for (const v of vectors) {
+    const sanitized = sanitizeSafeUrl(v);
+    assert.strictEqual(sanitized, '#', `Malicious payload must be sanitized to #: ${v}`);
+    assert.ok(!sanitized.includes('"'), 'Sanitized output must not contain unescaped double quotes');
+    assert.ok(!sanitized.includes("'"), 'Sanitized output must not contain unescaped single quotes');
+    assert.ok(!sanitized.includes('<'), 'Sanitized output must not contain unescaped <');
+    assert.ok(!sanitized.includes('>'), 'Sanitized output must not contain unescaped >');
+  }
+});
+
+test('All SVG icons across src/ components are accessible (aria-hidden="true" or role="img")', () => {
+  const srcDir = path.resolve(__dirname, '../src');
+  let svgCount = 0;
+
+  function scanSvgs(dir) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        scanSvgs(fullPath);
+      } else if (entry.name.endsWith('.tsx')) {
+        const content = fs.readFileSync(fullPath, 'utf-8');
+        const svgMatches = content.match(/<svg\b[^>]*>/g) || [];
+        for (const svg of svgMatches) {
+          svgCount++;
+          const isAccessible =
+            /aria-hidden="true"/i.test(svg) ||
+            /role=["']img["']/i.test(svg) ||
+            /aria-label/i.test(svg) ||
+            /aria-labelledby/i.test(svg);
+          assert.ok(
+            isAccessible,
+            `SVG icon missing accessible labeling or aria-hidden="true" in ${fullPath}: ${svg}`
+          );
+        }
+      }
+    }
+  }
+
+  scanSvgs(srcDir);
+  assert.ok(svgCount > 20, `Expected at least 20 SVGs scanned across src/, found ${svgCount}`);
+});
+
+test('Mathematical color contrast proof for theme dark badges and text tokens (WCAG AA >= 4.5:1)', () => {
+  function getLuminance(r, g, b) {
+    const [rs, gs, bs] = [r, g, b].map((c) => {
+      c = c / 255;
+      return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+  }
+
+  function getContrastRatio(hex1, hex2) {
+    const parse = (h) => {
+      const c = h.replace('#', '');
+      return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
+    };
+    const l1 = getLuminance(...parse(hex1));
+    const l2 = getLuminance(...parse(hex2));
+    return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+  }
+
+  const checks = [
+    { fg: '#ffffff', bg: '#0f172a', name: 'white on slate-900', min: 4.5 },
+    { fg: '#cbd5e1', bg: '#0f172a', name: 'slate-300 on slate-900', min: 4.5 },
+    { fg: '#cbd5e1', bg: '#020617', name: 'slate-300 on slate-950', min: 4.5 },
+    { fg: '#60a5fa', bg: '#0f172a', name: 'blue-400 on slate-900', min: 4.5 },
+    { fg: '#34d399', bg: '#0f172a', name: 'emerald-400 on slate-900', min: 4.5 },
+    { fg: '#fecdd3', bg: '#450a0a', name: 'rose-200 on red-950', min: 4.5 },
+    { fg: '#fde68a', bg: '#451a03', name: 'amber-200 on amber-950', min: 4.5 },
+    { fg: '#a7f3d0', bg: '#022c22', name: 'emerald-200 on emerald-950', min: 4.5 },
+    { fg: '#bfdbfe', bg: '#172554', name: 'blue-200 on blue-950', min: 4.5 },
+  ];
+
+  for (const { fg, bg, name, min } of checks) {
+    const cr = getContrastRatio(fg, bg);
+    assert.ok(cr >= min, `${name} contrast ratio ${cr.toFixed(2)}:1 must meet or exceed ${min}:1`);
+  }
+});
+
+// -------------------------------------------------------------
+// 14. PROTOTYPE POLLUTION IN QUERY PARAMETERS & PARAMETER SANITIZATION
+// -------------------------------------------------------------
+console.log('\n--- [14. Prototype Pollution in Query Parameters & Parameter Sanitization Tests] ---');
+
+test('isPrototypePollutionKey accurately detects dangerous prototype keys', () => {
+  assert.strictEqual(isPrototypePollutionKey('__proto__'), true);
+  assert.strictEqual(isPrototypePollutionKey('__proto__[polluted]'), true);
+  assert.strictEqual(isPrototypePollutionKey('__proto__.admin'), true);
+  assert.strictEqual(isPrototypePollutionKey('constructor'), true);
+  assert.strictEqual(isPrototypePollutionKey('constructor[prototype]'), true);
+  assert.strictEqual(isPrototypePollutionKey('constructor.prototype.evil'), true);
+  assert.strictEqual(isPrototypePollutionKey('prototype'), true);
+  assert.strictEqual(isPrototypePollutionKey('prototype[admin]'), true);
+  assert.strictEqual(isPrototypePollutionKey('prototype.user'), true);
+
+  // Percent-encoded variations
+  assert.strictEqual(isPrototypePollutionKey('%5f%5fproto%5f%5f'), true);
+  assert.strictEqual(isPrototypePollutionKey('%63onstructor'), true);
+  assert.strictEqual(isPrototypePollutionKey('%70rototype'), true);
+
+  // Legitimate business parameters must NOT be flagged
+  assert.strictEqual(isPrototypePollutionKey('model'), false);
+  assert.strictEqual(isPrototypePollutionKey('brand'), false);
+  assert.strictEqual(isPrototypePollutionKey('search'), false);
+  assert.strictEqual(isPrototypePollutionKey('vin'), false);
+  assert.strictEqual(isPrototypePollutionKey('category'), false);
+  assert.strictEqual(isPrototypePollutionKey('year'), false);
+  assert.strictEqual(isPrototypePollutionKey('q'), false);
+});
+
+test('stripPrototypePollutionQueryParams eliminates pollution keys while preserving legitimate params and fragments', () => {
+  // Absolute URL test
+  const dirtyAbsolute = 'https://www.car.go.kr/recall?id=123&__proto__[polluted]=true&filter=battery#details';
+  const cleanAbsolute = stripPrototypePollutionQueryParams(dirtyAbsolute);
+  assert.ok(!cleanAbsolute.includes('__proto__'), 'Cleaned URL must not contain __proto__');
+  assert.ok(cleanAbsolute.includes('id=123'), 'Cleaned URL must preserve id=123');
+  assert.ok(cleanAbsolute.includes('filter=battery'), 'Cleaned URL must preserve filter=battery');
+  assert.ok(cleanAbsolute.includes('#details'), 'Cleaned URL must preserve fragment #details');
+
+  // Relative URL test
+  const dirtyRelative = '/recall-portal?brand=hyundai&constructor[prototype][admin]=true&model=ioniq5#search';
+  const cleanRelative = stripPrototypePollutionQueryParams(dirtyRelative);
+  assert.ok(!cleanRelative.includes('constructor'), 'Cleaned relative URL must not contain constructor');
+  assert.ok(cleanRelative.includes('brand=hyundai'), 'Cleaned relative URL must preserve brand=hyundai');
+  assert.ok(cleanRelative.includes('model=ioniq5'), 'Cleaned relative URL must preserve model=ioniq5');
+  assert.ok(cleanRelative.includes('#search'), 'Cleaned relative URL must preserve hash');
+
+  // URL where only prototype pollution parameter existed
+  const onlyDirty = 'https://ev.or.kr/?__proto__=malicious';
+  const cleanedOnlyDirty = stripPrototypePollutionQueryParams(onlyDirty);
+  assert.strictEqual(cleanedOnlyDirty, 'https://ev.or.kr/');
+});
+
+test('parseSafeQueryParams parses query string into null-prototype object without prototype pollution', () => {
+  const query = 'https://ev.or.kr/search?q=ioniq&__proto__[isAdmin]=true&brand=hyundai&constructor.prototype.polluted=1&%5f%5fproto%5f%5f=evil';
+  const parsed = parseSafeQueryParams(query);
+
+  assert.strictEqual(Object.getPrototypeOf(parsed), null, 'Parsed result must have null prototype');
+  assert.strictEqual(parsed.q, 'ioniq');
+  assert.strictEqual(parsed.brand, 'hyundai');
+  assert.strictEqual(parsed['__proto__'], undefined);
+  assert.strictEqual(parsed['constructor'], undefined);
+  assert.strictEqual(parsed['prototype'], undefined);
+  assert.strictEqual(({}).isAdmin, undefined, 'Object.prototype must not be polluted');
+  assert.strictEqual(({}).polluted, undefined, 'Object.prototype must not be polluted');
+
+  // Preserves values containing keyword "prototype" or "constructor" when parameter key is safe
+  const legitimate = parseSafeQueryParams('?keyword=prototype&mode=constructor');
+  assert.strictEqual(legitimate.keyword, 'prototype');
+  assert.strictEqual(legitimate.mode, 'constructor');
+});
+
+test('sanitizeSafeUrl automatically strips prototype pollution from query parameters', () => {
+  const dirtyUrl = 'https://www.car.go.kr/recall?id=456&__proto__[polluted]=true&year=2026';
+  const sanitized = sanitizeSafeUrl(dirtyUrl);
+  assert.ok(!sanitized.includes('__proto__'));
+  assert.ok(sanitized.includes('id=456'));
+  assert.ok(sanitized.includes('year=2026'));
+
+  const dirtyRelative = '/recall-portal?model=ev6&__proto__[role]=admin';
+  const sanitizedRelative = sanitizeSafeUrl(dirtyRelative);
+  assert.strictEqual(sanitizedRelative, '/recall-portal?model=ev6');
+});
+
+// -------------------------------------------------------------
+// 15. MALFORMED ENCODINGS, NULL BYTES & CRLF INJECTION DEFENSE
+// -------------------------------------------------------------
+console.log('\n--- [15. Malformed Encodings, Null Bytes & CRLF Injection Tests] ---');
+
+test('Blocks URLs containing percent-encoded null bytes (%00)', () => {
+  assert.strictEqual(sanitizeSafeUrl('https://car.go.kr/%00/path'), '#');
+  assert.strictEqual(sanitizeSafeUrl('https://car.go.kr/search?q=%00exploit'), '#');
+});
+
+test('Blocks CRLF response splitting injection vectors (%0d, %0a, %0D%0A)', () => {
+  assert.strictEqual(sanitizeSafeUrl('https://car.go.kr/view%0d%0aSet-Cookie:session=evil'), '#');
+  assert.strictEqual(sanitizeSafeUrl('https://car.go.kr/view%0dSet-Cookie:session=evil'), '#');
+  assert.strictEqual(sanitizeSafeUrl('https://car.go.kr/view%0aSet-Cookie:session=evil'), '#');
+});
+
+test('Decodes and blocks legacy Microsoft %uXXXX unicode encoding bypass vectors', () => {
+  assert.strictEqual(sanitizeSafeUrl('java%u0073cript:alert(1)'), '#');
+  assert.strictEqual(sanitizeSafeUrl('javascript%u003aalert(1)'), '#');
+  assert.strictEqual(sanitizeSafeUrl('data%u003atext/html,<script>alert(1)</script>'), '#');
+  assert.strictEqual(safeDecodePercent('java%u0073cript:'), 'javascript:');
+});
+
+test('Gracefully handles incomplete or malformed percent-encoded sequences without throwing URIError', () => {
+  // Trailing lone percent
+  assert.strictEqual(safeDecodePercent('https://example.com/%'), 'https://example.com/%');
+  // Incomplete UTF-8 continuation
+  assert.doesNotThrow(() => safeDecodePercent('https://example.com/%E0%A0'));
+});
+
+// -------------------------------------------------------------
+// 16. SAFE DOMAIN WHITELISTING & VERIFIED EV ECOSYSTEM DOMAINS
+// -------------------------------------------------------------
+console.log('\n--- [16. Safe Domain Whitelisting & EV Ecosystem Domain Tests] ---');
+
+test('GOVERNMENT_DOMAINS contains official Korean government & safety authorities', () => {
+  assert.ok(Array.isArray(GOVERNMENT_DOMAINS) || GOVERNMENT_DOMAINS instanceof Set);
+  assert.ok(GOVERNMENT_DOMAINS.includes('ev.or.kr'));
+  assert.ok(GOVERNMENT_DOMAINS.includes('molit.go.kr'));
+  assert.ok(GOVERNMENT_DOMAINS.includes('car.go.kr'));
+  assert.ok(GOVERNMENT_DOMAINS.includes('kotsa.or.kr'));
+  assert.ok(GOVERNMENT_DOMAINS.includes('me.go.kr'));
+});
+
+test('isGovernmentDomain recognizes official government domains and subdomains', () => {
+  assert.strictEqual(isGovernmentDomain('https://ev.or.kr/portal/main'), true);
+  assert.strictEqual(isGovernmentDomain('https://www.ev.or.kr/sub/sub1'), true);
+  assert.strictEqual(isGovernmentDomain('https://sub.portal.ev.or.kr'), true);
+  assert.strictEqual(isGovernmentDomain('https://www.molit.go.kr/USR/WPGE0201/m_35398/DTL.jsp'), true);
+  assert.strictEqual(isGovernmentDomain('https://car.go.kr/recall/search'), true);
+  assert.strictEqual(isGovernmentDomain('https://www.kotsa.or.kr/'), true);
+  assert.strictEqual(isGovernmentDomain('https://www.nhtsa.gov/recalls'), true);
+  assert.strictEqual(isGovernmentDomain('https://www.epa.gov/fuel-economy'), true);
+});
+
+test('isManufacturerDomain recognizes verified EV manufacturers', () => {
+  assert.strictEqual(isManufacturerDomain('https://www.hyundai.com/kr/ko/e'), true);
+  assert.strictEqual(isManufacturerDomain('https://www.kia.com/kr/vehicles/ev6/features.html'), true);
+  assert.strictEqual(isManufacturerDomain('https://www.genesis.com/kr/ko/models/luxury-sedan-genesis/g80-electrified/highlights.html'), true);
+  assert.strictEqual(isManufacturerDomain('https://www.tesla.com/ko_kr/model3'), true);
+  assert.strictEqual(isManufacturerDomain('https://www.bmw.co.kr/ko/all-models/bmw-i/i4/2021/bmw-i4.html'), true);
+  assert.strictEqual(isManufacturerDomain('https://www.mercedes-benz.co.kr/passengercars/models/saloon/eqe-saloon/overview.html'), true);
+  assert.strictEqual(isManufacturerDomain('https://www.polestar.com/kr/polestar-2/'), true);
+  assert.strictEqual(isManufacturerDomain('https://www.porsche.com/korea/ko/models/taycan/'), true);
+  assert.strictEqual(isManufacturerDomain('https://www.byd.com/en/passenger-cars'), true);
+  assert.strictEqual(isManufacturerDomain('https://rivian.com/r1t'), true);
+  assert.strictEqual(isManufacturerDomain('https://lucidmotors.com/air'), true);
+});
+
+test('isCommunityDomain recognizes verified automotive communities and consumer defect forums', () => {
+  assert.strictEqual(isCommunityDomain('https://www.bobaedream.co.kr/view?code=national&No=12345'), true);
+  assert.strictEqual(isCommunityDomain('https://www.clien.net/service/board/cm_car/18000000'), true);
+  assert.strictEqual(isCommunityDomain('https://www.ppomppu.co.kr/zboard/view.php?id=car&no=99999'), true);
+  assert.strictEqual(isCommunityDomain('https://gall.dcinside.com/board/view/?id=car_new1&no=123'), true);
+  assert.strictEqual(isCommunityDomain('https://cafe.naver.com/allfm08/123456'), true);
+  assert.strictEqual(isCommunityDomain('https://www.teamblind.com/kr/post/123456'), true);
+  assert.strictEqual(isCommunityDomain('https://www.reddit.com/r/electricvehicles/comments/abc/'), true);
+  assert.strictEqual(isCommunityDomain('https://teslamotorsclub.com/tmc/threads/123/'), true);
+});
+
+test('Domain spoofing defense: strictly blocks prefix, suffix, and credential-style spoofing', () => {
+  // Prefix spoofing (fake-ev.or.kr)
+  assert.strictEqual(isGovernmentDomain('https://fake-ev.or.kr/phish'), false);
+  assert.strictEqual(isWhitelistedDomain('https://fake-ev.or.kr/phish'), false);
+
+  // Suffix spoofing (ev.or.kr.evil.com)
+  assert.strictEqual(isGovernmentDomain('https://ev.or.kr.evil.com/login'), false);
+  assert.strictEqual(isWhitelistedDomain('https://ev.or.kr.evil.com/login'), false);
+  assert.strictEqual(isGovernmentDomain('https://molit.go.kr.attacker.org/'), false);
+
+  // Credential style userinfo spoofing (https://ev.or.kr@attacker.com)
+  assert.strictEqual(isGovernmentDomain('https://ev.or.kr@attacker.com/steal'), false);
+  assert.strictEqual(isWhitelistedDomain('https://ev.or.kr@attacker.com/steal'), false);
+
+  // Query parameter spoofing (https://evil.com?target=ev.or.kr)
+  assert.strictEqual(isGovernmentDomain('https://evil.com?target=ev.or.kr'), false);
+  assert.strictEqual(isWhitelistedDomain('https://evil.com?target=ev.or.kr'), false);
+});
+
+test('classifyDomain accurately maps hostnames to their respective security categories', () => {
+  assert.strictEqual(classifyDomain('https://ev.or.kr'), 'government');
+  assert.strictEqual(classifyDomain('https://molit.go.kr'), 'government');
+  assert.strictEqual(classifyDomain('https://www.tesla.com'), 'manufacturer');
+  assert.strictEqual(classifyDomain('https://www.hyundai.com'), 'manufacturer');
+  assert.strictEqual(classifyDomain('https://bobaedream.co.kr'), 'community');
+  assert.strictEqual(classifyDomain('https://cafe.naver.com'), 'community');
+  assert.strictEqual(classifyDomain('https://ev-stealth.kr'), 'internal');
+  assert.strictEqual(classifyDomain('https://localhost:3000'), 'internal');
+  assert.strictEqual(classifyDomain('https://unknown-phishing-site.xyz'), 'untrusted');
+});
+
+test('sanitizeWhitelistedUrl allows trusted domains and blocks untrusted destinations', () => {
+  // Legitimate whitelisted domains are preserved
+  const govUrl = 'https://ev.or.kr/portal/main';
+  assert.strictEqual(sanitizeWhitelistedUrl(govUrl), govUrl);
+
+  const mfgUrl = 'https://www.tesla.com/model3';
+  assert.strictEqual(sanitizeWhitelistedUrl(mfgUrl), mfgUrl);
+
+  const commUrl = 'https://www.bobaedream.co.kr/view/123';
+  assert.strictEqual(sanitizeWhitelistedUrl(commUrl), commUrl);
+
+  // Internal routes and anchors are preserved
+  assert.strictEqual(sanitizeWhitelistedUrl('/recall-portal?brand=hyundai'), '/recall-portal?brand=hyundai');
+  assert.strictEqual(sanitizeWhitelistedUrl('#battery-directory'), '#battery-directory');
+
+  // Untrusted external domain is rejected to '#'
+  assert.strictEqual(sanitizeWhitelistedUrl('https://evil-hacker.com/malware'), '#');
+  assert.strictEqual(sanitizeWhitelistedUrl('https://fake-ev.or.kr/phish'), '#');
+  assert.strictEqual(sanitizeWhitelistedUrl('https://ev.or.kr.evil.com/phish'), '#');
+
+  // Category filtering constraint: strictly requiring 'government' blocks community & manufacturer
+  assert.strictEqual(sanitizeWhitelistedUrl(govUrl, ['government']), govUrl);
+  assert.strictEqual(sanitizeWhitelistedUrl(mfgUrl, ['government']), '#');
+  assert.strictEqual(sanitizeWhitelistedUrl(commUrl, ['government']), '#');
 });
 
 console.log('\n======================================================');

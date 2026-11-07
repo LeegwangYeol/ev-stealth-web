@@ -200,6 +200,7 @@ class SafeHttpClient:
         self.verify_ssl = verify_ssl
         self.request_count = 0
         self.last_request_time = 0.0
+        self._rate_limited_until = 0.0
 
         # Dedicated session UA if rotation is disabled
         self._session_user_agent = user_agent or self.get_random_user_agent()
@@ -271,8 +272,12 @@ class SafeHttpClient:
         self.close()
         return False
 
-    def get_random_user_agent(self) -> str:
-        """Pick a modern browser User-Agent from pool."""
+    def get_random_user_agent(self, exclude: Optional[str] = None) -> str:
+        """Pick a modern browser User-Agent from pool, optionally excluding the specified UA."""
+        if exclude and len(USER_AGENT_POOL) > 1:
+            candidates = [ua for ua in USER_AGENT_POOL if ua != exclude]
+            if candidates:
+                return random.choice(candidates)
         return random.choice(USER_AGENT_POOL)
 
     def _sleep_with_jitter(self):
@@ -301,6 +306,15 @@ class SafeHttpClient:
             return
 
         now = time.time()
+
+        # Proactive rate-limit cooldown: if recently throttled by HTTP 429, respect backoff
+        if self._rate_limited_until > 0 and now < self._rate_limited_until:
+            wait_sec = (self._rate_limited_until - now) + random.uniform(0.5, 1.5)
+            logger.info(f"Proactive rate-limit protection: sleeping {wait_sec:.2f}s before next request...")
+            time.sleep(wait_sec)
+            self._rate_limited_until = 0.0
+            now = time.time()
+
         elapsed = now - self.last_request_time
 
         # Prolonged cooldown pause every 20 requests to protect rate limits
@@ -383,7 +397,16 @@ class SafeHttpClient:
         if referer:
             req_headers["Referer"] = referer
         if headers:
-            req_headers.update(headers)
+            for k, v in headers.items():
+                # Case-insensitive update to avoid duplicate headers like User-Agent vs user-agent
+                matching_keys = [ek for ek in req_headers if ek.lower() == k.lower()]
+                for mk in matching_keys:
+                    del req_headers[mk]
+                req_headers[k] = v
+
+        has_custom_ua = bool(
+            self.user_agent or (headers and any(k.lower() == "user-agent" for k in headers))
+        )
 
         payload_bytes: Optional[bytes] = None
         if data is not None:
@@ -405,8 +428,9 @@ class SafeHttpClient:
         eff_retries = max(1, int(self.max_retries)) if self.max_retries is not None else 3
 
         for attempt in range(1, eff_retries + 1):
-            if attempt > 1 and self.rotate_user_agent and not self.user_agent:
-                req_headers["User-Agent"] = self.get_random_user_agent()
+            if attempt > 1 and self.rotate_user_agent and not has_custom_ua:
+                current_ua = req_headers.get("User-Agent")
+                req_headers["User-Agent"] = self.get_random_user_agent(exclude=current_ua)
             try:
                 req = urllib.request.Request(
                     norm_url,
@@ -467,6 +491,11 @@ class SafeHttpClient:
                             resp.close()
                         except Exception:
                             pass
+                    if hasattr(resp, "fp") and resp.fp and hasattr(resp.fp, "close"):
+                        try:
+                            resp.fp.close()
+                        except Exception:
+                            pass
 
             except urllib.error.HTTPError as he:
                 logger.warning(
@@ -480,11 +509,17 @@ class SafeHttpClient:
                     ):
                         if he.code in (403, 429):
                             self.clear_cookies()
-                        retry_after = self._parse_retry_after(he) if he.code == 429 else None
+                        retry_after = self._parse_retry_after(he) if he.code in (429, 503) else None
                         backoff = self._calc_backoff(attempt, retry_after=retry_after)
+                        if he.code == 429:
+                            self._rate_limited_until = time.time() + backoff
                         logger.info(f"Backing off for {backoff:.2f}s before retry (status {he.code})...")
                         time.sleep(backoff)
                     else:
+                        if he.code == 429:
+                            retry_after = self._parse_retry_after(he)
+                            backoff = self._calc_backoff(attempt, retry_after=retry_after)
+                            self._rate_limited_until = time.time() + backoff
                         # Return error content if not retrying
                         try:
                             try:
@@ -590,35 +625,56 @@ class SafeHttpClient:
 
     def _parse_retry_after(self, he: urllib.error.HTTPError) -> Optional[float]:
         """
-        Parse standard HTTP Retry-After header if present on HTTPError response.
-        Supports integer/float delay seconds or HTTP-date string (RFC 9110 / RFC 7231).
+        Parse standard HTTP Retry-After header or X-RateLimit-Reset if present on HTTPError response.
+        Supports case-insensitive headers, integer/float delay seconds, or HTTP-date string (RFC 9110 / RFC 7231).
         """
         if not hasattr(he, "headers") or not he.headers:
             return None
 
-        val = he.headers.get("Retry-After")
-        if not val:
-            return None
+        val = None
+        if hasattr(he.headers, "get"):
+            val = he.headers.get("Retry-After")
+            if val is None:
+                val = he.headers.get("retry-after")
+        if val is None and hasattr(he.headers, "items"):
+            for k, v in he.headers.items():
+                if str(k).lower() == "retry-after":
+                    val = v
+                    break
 
-        val_str = str(val).strip()
-        # 1. Delay seconds
-        try:
-            sec = float(val_str)
-            if sec >= 0:
-                return sec
-        except ValueError:
-            pass
+        if val:
+            val_str = str(val).strip()
+            # 1. Delay seconds
+            try:
+                sec = float(val_str)
+                if sec >= 0:
+                    return sec
+            except ValueError:
+                pass
 
-        # 2. HTTP-date
-        try:
-            parsed_dt = email.utils.parsedate_to_datetime(val_str)
-            now = datetime.datetime.now(datetime.timezone.utc)
-            if parsed_dt.tzinfo is None:
-                parsed_dt = parsed_dt.replace(tzinfo=datetime.timezone.utc)
-            delta = (parsed_dt - now).total_seconds()
-            return max(0.0, delta)
-        except Exception:
-            pass
+            # 2. HTTP-date
+            try:
+                parsed_dt = email.utils.parsedate_to_datetime(val_str)
+                now = datetime.datetime.now(datetime.timezone.utc)
+                if parsed_dt.tzinfo is None:
+                    parsed_dt = parsed_dt.replace(tzinfo=datetime.timezone.utc)
+                delta = (parsed_dt - now).total_seconds()
+                return max(0.0, delta)
+            except Exception:
+                pass
+
+        # Fallback: check X-RateLimit-Reset (epoch timestamp)
+        reset_val = None
+        if hasattr(he.headers, "get"):
+            reset_val = he.headers.get("X-RateLimit-Reset") or he.headers.get("x-ratelimit-reset")
+        if reset_val:
+            try:
+                epoch = float(reset_val)
+                now_epoch = time.time()
+                if epoch > now_epoch:
+                    return min(60.0, max(0.0, epoch - now_epoch))
+            except (ValueError, TypeError):
+                pass
 
         return None
 
@@ -628,18 +684,18 @@ class SafeHttpClient:
         If retry_after is provided by server (e.g. on HTTP 429), honor it.
         Otherwise calculate exponential backoff with jitter.
         """
+        max_backoff = getattr(self, "max_backoff", 30.0)
+        factor = getattr(self, "backoff_factor", 1.5)
         if retry_after is not None and retry_after >= 0:
             if not self.enable_jitter:
                 return float(retry_after)
             jitter = random.uniform(0.1, 0.5)
-            return min(60.0, float(retry_after) + jitter)
+            return min(max(max_backoff, 60.0), float(retry_after) + jitter)
 
         if not self.enable_jitter:
-            return float(2 ** attempt)
-        factor = getattr(self, "backoff_factor", 1.5)
+            return min(max_backoff, float(2 ** attempt))
         base = (2 ** attempt) * factor
         jitter = random.uniform(0.5, 1.5)
-        max_backoff = getattr(self, "max_backoff", 30.0)
         return min(max_backoff, base + jitter)
 
     @staticmethod

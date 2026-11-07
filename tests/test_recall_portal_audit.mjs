@@ -126,6 +126,157 @@ assert.ok(
   'Safe verification badges must use high-contrast text-emerald-200 on dark background'
 );
 
+// 1.9 Tablist Keyboard Navigation & WAI-ARIA 1.2 compliance
+assert.ok(
+  recallPortalClientCode.includes("handleModeKeyDown = (e: React.KeyboardEvent, currentMode: 'VIN' | 'MODEL')"),
+  'RecallPortalClient must implement keyboard navigation handler for mode switcher tabs'
+);
+assert.ok(
+  recallPortalClientCode.includes("e.key === 'ArrowRight' || e.key === 'ArrowDown'") &&
+  recallPortalClientCode.includes("e.key === 'ArrowLeft' || e.key === 'ArrowUp'") &&
+  recallPortalClientCode.includes("e.key === 'Home'") &&
+  recallPortalClientCode.includes("e.key === 'End'"),
+  'handleModeKeyDown must support ArrowLeft/Right/Up/Down and Home/End keys'
+);
+assert.ok(
+  recallPortalClientCode.includes("tabIndex={activeCheckerMode === 'VIN' ? 0 : -1}") &&
+  recallPortalClientCode.includes("tabIndex={activeCheckerMode === 'MODEL' ? 0 : -1}"),
+  'Mode tabs must toggle tabIndex between 0 and -1 based on active selection (WAI-ARIA roving tabindex)'
+);
+assert.ok(
+  recallPortalClientCode.includes('id="vin-checker-panel" role="tabpanel" aria-labelledby="vin-checker-tab" tabIndex={0}') &&
+  recallPortalClientCode.includes('id="model-checker-panel" role="tabpanel" aria-labelledby="model-checker-tab" tabIndex={0}'),
+  'Tabpanels must declare role="tabpanel", tabIndex={0}, and link back to tabs via aria-labelledby'
+);
+
+// 1.10 Touch Target Minimum Size (WCAG 2.5.5 / 2.5.8 Target Size)
+assert.ok(
+  recallPortalClientCode.includes('min-h-[44px]'),
+  'RecallPortalClient must enforce min-h-[44px] touch target sizes across interactive elements'
+);
+const minH44Count = (recallPortalClientCode.match(/min-h-\[44px\]/g) || []).length;
+assert.ok(
+  minH44Count >= 20,
+  `Expected at least 20 elements declaring min-h-[44px], found ${minH44Count}`
+);
+
+// 1.11 Filter Chips ARIA State & Grouping (WCAG 4.1.2 & 1.3.1)
+assert.ok(
+  recallPortalClientCode.includes('aria-pressed={selectedSupplierFilter === s.key}'),
+  'Supplier filter buttons must declare aria-pressed state'
+);
+assert.ok(
+  recallPortalClientCode.includes('aria-pressed={selectedFireStatusFilter === f.key}'),
+  'Fire status filter buttons must declare aria-pressed state'
+);
+assert.ok(
+  recallPortalClientCode.includes('aria-pressed={selectedRiskFilter === rf.key}'),
+  'Risk filter buttons must declare aria-pressed state'
+);
+assert.ok(
+  recallPortalClientCode.includes('aria-pressed={selectedRemedyFilter === rm.key}'),
+  'Remedy filter buttons must declare aria-pressed state'
+);
+assert.ok(
+  recallPortalClientCode.includes('role="group" aria-label="배터리 셀 제조사 필터"') &&
+  recallPortalClientCode.includes('role="group" aria-label="화재 리스크 상태별 필터"') &&
+  recallPortalClientCode.includes('role="group" aria-label="리콜 위험 등급별 필터"') &&
+  recallPortalClientCode.includes('role="group" aria-label="시정 조치 유형별 필터"'),
+  'Filter chip containers must declare role="group" and descriptive accessible aria-labels'
+);
+
+// 1.12 Form Fieldset & Semantic Grouping in Mode B (WCAG 1.3.1)
+assert.ok(
+  recallPortalClientCode.includes('<fieldset className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-0 p-0 m-0">') &&
+  recallPortalClientCode.includes('<legend className="sr-only">제조사, 모델, 생산 연식 선택 필터</legend>'),
+  'Mode B form must enclose brand, model, and year dropdowns in a semantic <fieldset> with <legend>'
+);
+
+// 1.13 Keyboard Dismiss Shortcuts (Escape Key)
+assert.ok(
+  recallPortalClientCode.includes("e.key === 'Escape' && vinInput"),
+  'VIN input must support Escape key to clear input and reset search'
+);
+assert.ok(
+  recallPortalClientCode.includes("e.key === 'Escape' && batterySearch"),
+  'Battery search input must support Escape key to clear query'
+);
+assert.ok(
+  recallPortalClientCode.includes("e.key === 'Escape' && recallSearch"),
+  'Recall search input must support Escape key to clear query'
+);
+
+// 1.14 Dual Error and Format Hint Linkage on VIN Input (WCAG 1.3.1 & 3.3.1)
+assert.ok(
+  recallPortalClientCode.includes('aria-describedby={vinError ? "vin-error-feedback vin-format-hint" : "vin-format-hint"}'),
+  'VIN input must dynamically link aria-describedby to both format hint and error feedback'
+);
+assert.ok(
+  recallPortalClientCode.includes('id="vin-format-hint" className="sr-only"'),
+  'vin-format-hint must provide accessible instructions for screen readers'
+);
+assert.ok(
+  recallPortalClientCode.includes('id="vin-error-feedback" role="alert" aria-live="assertive"'),
+  'vin-error-feedback must announce validation failures with role="alert" and aria-live="assertive"'
+);
+
+// 1.15 SVG Icons Accessibility
+const svgTags = recallPortalClientCode.match(/<svg\b[^>]*>/g) || [];
+assert.ok(svgTags.length >= 8, `Expected at least 8 SVGs in RecallPortalClient, found ${svgTags.length}`);
+for (const tag of svgTags) {
+  assert.ok(
+    tag.includes('aria-hidden="true"') && tag.includes('focusable="false"'),
+    `SVG tag must declare aria-hidden="true" and focusable="false": ${tag}`
+  );
+}
+
+// 1.16 Mathematical Color Contrast Verification (WCAG 1.4.3 Level AA & AAA)
+function calculateLuminance(r, g, b) {
+  const [rs, gs, bs] = [r, g, b].map((c) => {
+    c = c / 255;
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+}
+
+function calculateContrast(hex1, hex2) {
+  const parseHex = (h) => {
+    const clean = h.replace('#', '');
+    return [
+      parseInt(clean.substring(0, 2), 16),
+      parseInt(clean.substring(2, 4), 16),
+      parseInt(clean.substring(4, 6), 16),
+    ];
+  };
+  const [r1, g1, b1] = parseHex(hex1);
+  const [r2, g2, b2] = parseHex(hex2);
+  const l1 = calculateLuminance(r1, g1, b1);
+  const l2 = calculateLuminance(r2, g2, b2);
+  const brighter = Math.max(l1, l2);
+  const darker = Math.min(l1, l2);
+  return (brighter + 0.05) / (darker + 0.05);
+}
+
+const contrastChecks = [
+  { name: 'rose-200 on red-950', fg: '#fecdd3', bg: '#450a0a', minRatio: 4.5 },
+  { name: 'amber-200 on amber-950', fg: '#fde68a', bg: '#451a03', minRatio: 4.5 },
+  { name: 'emerald-200 on emerald-950', fg: '#a7f3d0', bg: '#022c22', minRatio: 4.5 },
+  { name: 'blue-200 on blue-950', fg: '#bfdbfe', bg: '#172554', minRatio: 4.5 },
+  { name: 'placeholder-slate-400 on slate-900', fg: '#94a3b8', bg: '#0f172a', minRatio: 4.5 },
+  { name: 'text-slate-300 on slate-950', fg: '#cbd5e1', bg: '#020617', minRatio: 4.5 },
+  { name: 'text-blue-400 on slate-950', fg: '#60a5fa', bg: '#020617', minRatio: 4.5 },
+  { name: 'text-emerald-400 on slate-950', fg: '#34d399', bg: '#020617', minRatio: 4.5 },
+  { name: 'text-red-400 on slate-950', fg: '#f87171', bg: '#020617', minRatio: 4.5 },
+];
+
+for (const { name, fg, bg, minRatio } of contrastChecks) {
+  const ratio = calculateContrast(fg, bg);
+  assert.ok(
+    ratio >= minRatio,
+    `Color contrast for ${name} (${ratio.toFixed(2)}:1) failed to meet required ${minRatio}:1`
+  );
+}
+
 console.log('✅ WCAG AA Accessibility tests passed!');
 
 // ---------------------------------------------------------------------------

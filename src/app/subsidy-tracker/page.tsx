@@ -56,6 +56,38 @@ const subsidyJsonLd = {
       },
     },
     {
+      '@type': 'ItemList',
+      '@id': `${SITE_URL}/subsidy-tracker#regions`,
+      name: '2026 대한민국 17개 광역시도 권역별 보조금 추적 리스트',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: '수도권 권역 (서울특별시, 경기도, 인천광역시)',
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: '영남권 권역 (부산광역시, 대구광역시, 울산광역시, 경상북도, 경상남도)',
+        },
+        {
+          '@type': 'ListItem',
+          position: 3,
+          name: '호남권 권역 (광주광역시, 전북특별자치도, 전라남도)',
+        },
+        {
+          '@type': 'ListItem',
+          position: 4,
+          name: '충청권 권역 (대전광역시, 세종특별자치시, 충청북도, 충청남도)',
+        },
+        {
+          '@type': 'ListItem',
+          position: 5,
+          name: '강원·제주·도서 권역 (강원특별자치도, 제주특별자치도, 울릉군 등)',
+        },
+      ],
+    },
+    {
       '@type': 'FAQPage',
       '@id': `${SITE_URL}/subsidy-tracker#faq`,
       mainEntity: [
