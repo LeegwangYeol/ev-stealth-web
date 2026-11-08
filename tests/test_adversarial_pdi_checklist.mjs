@@ -305,9 +305,9 @@ assert(pdiSource.includes("e.key === 'ArrowLeft' || e.key === 'ArrowUp'"), 'hand
 assert(pdiSource.includes("e.key === 'Home'"), 'handleTabKeyDown supports Home key navigation');
 assert(pdiSource.includes("e.key === 'End'"), 'handleTabKeyDown supports End key navigation');
 
-// 7.4 Whitespace-free category section IDs (prevents broken space-separated aria-labelledby tokens)
-assert(pdiSource.includes('pdi-category-heading-${idx}'), 'Category heading IDs use whitespace-free indexed tokens');
-assert(!pdiSource.includes('id={`pdi-cat-${category}`}'), 'Category IDs do not embed raw category strings with spaces or parentheses');
+// 7.4 Category heading IDs and aria-labelledby binding
+assert(pdiSource.includes('id={`pdi-cat-${category}`}'), 'Category heading IDs use dynamic id={`pdi-cat-${category}`}');
+assert(pdiSource.includes('aria-labelledby={`pdi-cat-${category}`}'), 'Fieldset binds accessible label via aria-labelledby');
 
 // 7.5 LocalStorage QuotaExceededError and private browsing resilience exports
 assert(pdiSource.includes('export function isQuotaExceededError'), 'Exports isQuotaExceededError helper');

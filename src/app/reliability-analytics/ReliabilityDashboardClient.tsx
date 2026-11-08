@@ -1132,10 +1132,10 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   className="w-full overflow-x-auto border border-slate-800 rounded-2xl p-4 sm:p-6 bg-slate-900 text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 shadow-inner"
                 >
                   <svg
+                    className="w-full min-w-[560px] h-auto select-none"
                     viewBox={`0 0 680 ${brandSvgHeight}`}
                     width="680"
                     height={brandSvgHeight}
-                    className="w-full min-w-[560px] h-auto select-none"
                     role="img"
                     aria-labelledby="brand-dsi-svg-title brand-dsi-svg-desc"
                   >

@@ -1381,10 +1381,10 @@ export default function DepreciationCalculatorClient({
             className="w-full overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <svg
+              className="w-full min-w-[550px] h-64 select-none"
               viewBox="0 0 700 280"
               width="700"
               height="280"
-              className="w-full min-w-[550px] h-64 select-none"
               role="img"
               aria-labelledby="dep-chart-title dep-chart-desc"
             >
