@@ -36,6 +36,81 @@ const teslaJsonLd = {
       mainEntityOfPage: `${SITE_URL}/tesla`,
     },
     {
+      '@type': 'Vehicle',
+      '@id': `${SITE_URL}/tesla#vehicle-model3`,
+      name: '테슬라 모델 3 하이랜드 (Tesla Model 3 Highland)',
+      brand: {
+        '@type': 'Brand',
+        name: 'Tesla',
+      },
+      manufacturer: {
+        '@type': 'Organization',
+        name: 'Tesla, Inc.',
+      },
+      model: 'Model 3 Highland',
+      vehicleModelDate: '2024-2026',
+      vehicleTransmission: '1단 고정 기어 (전기 모터)',
+      fuelType: 'https://schema.org/Electric',
+      description: '테슬라 모델 3 하이랜드 페이스리프트. FSD 댐퍼 및 전좌석 이중접합 유리 적용, LFP(스탠다드) 및 삼원계 NCMA(롱레인지) 배터리 탑재.',
+      additionalProperty: [
+        {
+          '@type': 'PropertyValue',
+          name: 'Battery Chemistry (RWD)',
+          value: 'CATL LFP (리튬인산철) 60 kWh',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Battery Chemistry (Long Range)',
+          value: 'LG에너지솔루션 NCM/NCMA (삼원계) 81.6 kWh',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Safety Rating',
+          value: 'Euro NCAP 5-Star / NHTSA 5-Star',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Thermal Runaway Threshold',
+          value: 'LFP > 270°C, NCM ~210°C',
+        },
+      ],
+    },
+    {
+      '@type': 'Vehicle',
+      '@id': `${SITE_URL}/tesla#vehicle-modely`,
+      name: '테슬라 모델 Y 주니퍼 / 컴포트 (Tesla Model Y Juniper)',
+      brand: {
+        '@type': 'Brand',
+        name: 'Tesla',
+      },
+      manufacturer: {
+        '@type': 'Organization',
+        name: 'Tesla, Inc.',
+      },
+      model: 'Model Y',
+      vehicleModelDate: '2024-2026',
+      vehicleTransmission: '1단 고정 기어 (전기 모터)',
+      fuelType: 'https://schema.org/Electric',
+      description: '테슬라 모델 Y 중형 크로스오버 EV. HW4.0 차세대 오토파일럿 컴퓨터 및 컴포트 서스펜션 기본 적용, RWD LFP 및 롱레인지 AWD NCMA 배터리 탑재.',
+      additionalProperty: [
+        {
+          '@type': 'PropertyValue',
+          name: 'Battery Chemistry (RWD)',
+          value: 'CATL LFP (리튬인산철) 60 kWh',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Battery Chemistry (Long Range AWD)',
+          value: 'LG에너지솔루션/파나소닉 NCMA/NCA 81.6 kWh',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Safety Rating',
+          value: 'Euro NCAP 5-Star (성인 탑승자 97%) / IIHS TSP+',
+        },
+      ],
+    },
+    {
       '@type': 'ItemList',
       '@id': `${SITE_URL}/tesla#itemlist`,
       name: '테슬라 모델별 연식 고질병 및 구매 가이드 리스트',
@@ -171,7 +246,12 @@ export default function TeslaPage() {
         <h2 id="heading-tesla-summary" className="text-xl sm:text-2xl font-bold text-slate-900">
           테슬라 주요 차종 연식별 판정 요약 표
         </h2>
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div
+          tabIndex={0}
+          role="region"
+          aria-label="가로 스크롤 가능한 테슬라 주요 차종 연식별 판정 요약 표"
+          className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+        >
           <table className="w-full min-w-[640px] text-left border-collapse text-xs sm:text-sm" aria-label="테슬라 주요 모델별 주의 및 추천 연식 요약 표">
             <caption className="sr-only">테슬라 모델 3 및 모델 Y 연식별 회피 연식, 주의 연식, 추천 연식, 주요 고질병 및 리콜 출처 요약 표</caption>
             <thead className="bg-slate-900 text-slate-100 uppercase text-[11px] sm:text-xs tracking-wider">
