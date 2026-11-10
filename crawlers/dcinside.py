@@ -1146,6 +1146,12 @@ class DCInsideCrawler(BaseCrawler):
                 logger.info(f"No more items in DCInside [{gallery_id}] page {page}")
                 break
 
+            # Pagination loop detection
+            page_nos = {it["post_id"] for it in items if it.get("post_id")}
+            if page_nos and page_nos.issubset(seen_pids):
+                logger.info(f"Page {page} of [{gallery_id}] repeated previously seen posts. Halting pagination loop.")
+                break
+
             consecutive_failures = 0
             MAX_CONSECUTIVE_FAILURES = 5
             halt_crawl = False
@@ -1224,6 +1230,12 @@ class DCInsideCrawler(BaseCrawler):
             items = self.parse_gallery_list(text, gallery_id)
             if not items:
                 logger.info(f"No items found for DC [{gallery_id}] keyword '{keyword}' page {page}")
+                break
+
+            # Pagination loop detection
+            page_nos = {it["post_id"] for it in items if it.get("post_id")}
+            if page_nos and page_nos.issubset(seen_pids):
+                logger.info(f"Search page {page} of [{gallery_id}] repeated previously seen posts. Halting loop.")
                 break
 
             consecutive_failures = 0
