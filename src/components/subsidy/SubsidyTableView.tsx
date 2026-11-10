@@ -155,7 +155,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
               </span>
             )}
             {region?.supplementary_budget_added && (
-              <span className="text-[9px] px-1.5 py-0.2 bg-emerald-950 text-emerald-300 border border-emerald-500/40 rounded font-normal">
+              <span className="text-[9px] px-1.5 py-0.5 bg-emerald-950 text-emerald-300 border border-emerald-500/40 rounded font-normal">
                 추경
               </span>
             )}

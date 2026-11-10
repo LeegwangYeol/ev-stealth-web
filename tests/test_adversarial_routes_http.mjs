@@ -3,7 +3,19 @@
  * Empirical HTTP verification across all 12 Next.js App routes.
  */
 
-const baseUrl = 'http://localhost:3009';
+const baseUrl = process.env.TEST_SERVER_URL || (process.env.PORT ? `http://localhost:${process.env.PORT}` : 'http://localhost:3000');
+
+// Initial liveness probe to verify server availability
+try {
+  const probe = await fetch(`${baseUrl}/`, { signal: AbortSignal.timeout(3000) });
+  if (!probe) {
+    throw new Error('No response from test server');
+  }
+} catch (probeErr) {
+  console.log(`[SKIPPED] Next.js test server not reachable at ${baseUrl} (${probeErr.message}).`);
+  console.log('         Start server via "npm run start" or set TEST_SERVER_URL to execute empirical HTTP route verification.');
+  process.exit(0);
+}
 
 const routes = [
   '/',

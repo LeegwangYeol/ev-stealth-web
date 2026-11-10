@@ -1054,7 +1054,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               >
                 <span>{tab.label}</span>
                 <span
-                  className={`text-[11px] px-1.5 py-0.2 rounded-full ${
+                  className={`text-[11px] px-1.5 py-0.5 rounded-full ${
                     isSelected ? 'bg-slate-700 text-slate-200' : 'bg-slate-200 text-slate-700'
                   }`}
                 >
