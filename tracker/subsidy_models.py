@@ -119,6 +119,12 @@ class AlertSeverity(str, Enum):
     CRITICAL = "CRITICAL"
     DEPLETED = "DEPLETED"
 
+    def __str__(self) -> str:
+        return self.value
+
+    def __format__(self, format_spec: str) -> str:
+        return self.value
+
     @classmethod
     def from_rate(cls, rate: Any) -> AlertSeverity:
         """Determine alert severity tier based on depletion percentage."""
@@ -549,15 +555,21 @@ class RegionRecord:
 
     def is_critical(self) -> bool:
         """Return True if overall status is CRITICAL or DEPLETED (depletion >= 95%)."""
-        return str(self.overall_status).strip().upper() in ("CRITICAL", "DEPLETED") or self.overall_depletion_rate >= 95.0
+        st = getattr(self.overall_status, "value", self.overall_status)
+        st_str = str(st).split(".")[-1].strip().upper()
+        return st_str in ("CRITICAL", "DEPLETED") or self.overall_depletion_rate >= 95.0
 
     def is_warning(self) -> bool:
         """Return True if overall status is WARNING (depletion 80% to 94.9%)."""
-        return str(self.overall_status).strip().upper() == "WARNING" or (80.0 <= self.overall_depletion_rate < 95.0)
+        st = getattr(self.overall_status, "value", self.overall_status)
+        st_str = str(st).split(".")[-1].strip().upper()
+        return st_str == "WARNING" or (80.0 <= self.overall_depletion_rate < 95.0)
 
     def is_depleted(self) -> bool:
         """Return True if overall status is DEPLETED or depletion >= 100%."""
-        return str(self.overall_status).strip().upper() == "DEPLETED" or self.overall_depletion_rate >= 100.0
+        st = getattr(self.overall_status, "value", self.overall_status)
+        st_str = str(st).split(".")[-1].strip().upper()
+        return st_str == "DEPLETED" or self.overall_depletion_rate >= 100.0
 
     def to_dict(self) -> Dict[str, Any]:
         result = {
@@ -1128,34 +1140,83 @@ class SubsidyPayload:
         return len(self.to_dict())
 
     def get_region(self, region_id_or_name: str) -> Optional[RegionRecord]:
-        """Find region by region_id, iso_code, code, or Korean/English name."""
-        if not self.regions or not isinstance(self.regions, (list, tuple)):
+        """Find region by region_id, iso_code, code, Korean/English name, or common alias."""
+        if not region_id_or_name or not self.regions or not isinstance(self.regions, (list, tuple)):
             return None
         target = str(region_id_or_name).strip().lower()
+        if not target:
+            return None
+
+        # 1. Exact match on ID, ISO code, code, Korean name, or English name
         for r in self.regions:
             if isinstance(r, dict):
                 r_id = str(r.get("region_id", "") or r.get("code", "")).strip().lower()
                 r_iso = str(r.get("iso_code", "")).strip().lower()
+                r_code = str(r.get("code", "")).strip().lower()
                 r_ko = str(r.get("name_ko", "")).strip().lower()
                 r_en = str(r.get("name_en", "")).strip().lower()
-                if target in (r_id, r_iso, r_ko, r_en):
+                if target in (r_id, r_iso, r_code, r_ko, r_en):
                     return RegionRecord.from_dict(r)
             elif hasattr(r, "region_id"):
-                if target in (
-                    str(r.region_id).strip().lower(),
-                    str(r.iso_code).strip().lower(),
-                    str(getattr(r, "code", "") or "").strip().lower(),
-                    str(r.name_ko).strip().lower(),
-                    str(r.name_en).strip().lower(),
-                ):
+                r_id = str(r.region_id).strip().lower()
+                r_iso = str(r.iso_code).strip().lower()
+                r_code = str(getattr(r, "code", "") or "").strip().lower()
+                r_ko = str(r.name_ko).strip().lower()
+                r_en = str(r.name_en).strip().lower()
+                if target in (r_id, r_iso, r_code, r_ko, r_en):
                     return r
+
+        # 2. Known statutory alias mapping
+        alias_map = {
+            "서울": ("kr-11", "서울특별시", "seoul"),
+            "부산": ("kr-26", "부산광역시", "busan"),
+            "대구": ("kr-27", "대구광역시", "daegu"),
+            "인천": ("kr-28", "인천광역시", "incheon"),
+            "광주": ("kr-29", "광주광역시", "gwangju"),
+            "대전": ("kr-30", "대전광역시", "daejeon"),
+            "울산": ("kr-31", "울산광역시", "ulsan"),
+            "세종": ("kr-36", "세종특별자치시", "sejong"),
+            "경기": ("kr-41", "경기도", "gyeonggi"),
+            "강원": ("kr-42", "강원특별자치도", "gangwon"),
+            "충북": ("kr-43", "충청북도", "chungbuk"),
+            "충남": ("kr-44", "충청남도", "chungnam"),
+            "전북": ("kr-45", "전북특별자치도", "jeonbuk"),
+            "전남": ("kr-46", "전라남도", "jeonnam"),
+            "경북": ("kr-47", "경상북도", "gyeongbuk"),
+            "경남": ("kr-48", "경상남도", "gyeongnam"),
+            "제주": ("kr-49", "제주특별자치도", "jeju"),
+        }
+        mapped_keys = alias_map.get(target)
+        if mapped_keys:
+            for cand in mapped_keys:
+                for r in self.regions:
+                    r_id = str(r.get("region_id", "") if isinstance(r, dict) else getattr(r, "region_id", "")).strip().lower()
+                    r_iso = str(r.get("iso_code", "") if isinstance(r, dict) else getattr(r, "iso_code", "")).strip().lower()
+                    r_ko = str(r.get("name_ko", "") if isinstance(r, dict) else getattr(r, "name_ko", "")).strip().lower()
+                    r_en = str(r.get("name_en", "") if isinstance(r, dict) else getattr(r, "name_en", "")).strip().lower()
+                    if cand in (r_id, r_iso, r_ko, r_en):
+                        return r if isinstance(r, RegionRecord) else RegionRecord.from_dict(r)
+
+        # 3. Substring match on Korean name or English name
+        for r in self.regions:
+            r_ko = str(r.get("name_ko", "") if isinstance(r, dict) else getattr(r, "name_ko", "")).strip().lower()
+            r_en = str(r.get("name_en", "") if isinstance(r, dict) else getattr(r, "name_en", "")).strip().lower()
+            if target in r_ko or target in r_en:
+                return r if isinstance(r, RegionRecord) else RegionRecord.from_dict(r)
+            if r_ko and r_ko in target:
+                return r if isinstance(r, RegionRecord) else RegionRecord.from_dict(r)
+
         return None
 
     def get_model(self, model_id_or_name: str) -> Optional[PopularModelEntry]:
-        """Find popular vehicle model by model_id or Korean name."""
-        if not self.popular_models_matrix or not isinstance(self.popular_models_matrix, (list, tuple)):
+        """Find popular vehicle model by model_id, Korean name, or model alias/substring."""
+        if not model_id_or_name or not self.popular_models_matrix or not isinstance(self.popular_models_matrix, (list, tuple)):
             return None
         target = str(model_id_or_name).strip().lower()
+        if not target:
+            return None
+
+        # 1. Exact match on model_id or name_ko
         for m in self.popular_models_matrix:
             if isinstance(m, dict):
                 m_id = str(m.get("model_id", "") or m.get("id", "")).strip().lower()
@@ -1168,6 +1229,17 @@ class SubsidyPayload:
                     str(m.name_ko).strip().lower(),
                 ):
                     return m
+
+        # 2. Substring / prefix match on model_id or name_ko
+        clean_target = target.replace(" ", "").replace("-", "")
+        for m in self.popular_models_matrix:
+            m_id = str(m.get("model_id", "") if isinstance(m, dict) else getattr(m, "model_id", "")).strip().lower()
+            m_ko = str(m.get("name_ko", "") if isinstance(m, dict) else getattr(m, "name_ko", "")).strip().lower()
+            clean_id = m_id.replace(" ", "").replace("-", "")
+            clean_ko = m_ko.replace(" ", "").replace("-", "")
+            if clean_target in clean_id or clean_target in clean_ko:
+                return m if isinstance(m, PopularModelEntry) else PopularModelEntry.from_dict(m)
+
         return None
 
     def get_vehicle(self, model_id_or_name: str) -> Optional[PopularModelEntry]:
@@ -1180,9 +1252,11 @@ class SubsidyPayload:
             return []
         res = []
         for r in self.regions:
-            st = str(r.get("overall_status", "") if hasattr(r, "get") else getattr(r, "overall_status", "")).strip().upper()
+            st_raw = r.get("overall_status", "") if hasattr(r, "get") else getattr(r, "overall_status", "")
+            st = getattr(st_raw, "value", st_raw)
+            st_str = str(st).split(".")[-1].strip().upper()
             rate = _safe_float(r.get("overall_depletion_rate", 0.0) if hasattr(r, "get") else getattr(r, "overall_depletion_rate", 0.0))
-            if st in ("CRITICAL", "DEPLETED") or rate >= 95.0:
+            if st_str in ("CRITICAL", "DEPLETED") or rate >= 95.0:
                 res.append(r if isinstance(r, RegionRecord) else RegionRecord.from_dict(r))
         return res
 
@@ -1192,9 +1266,11 @@ class SubsidyPayload:
             return []
         res = []
         for r in self.regions:
-            st = str(r.get("overall_status", "") if hasattr(r, "get") else getattr(r, "overall_status", "")).strip().upper()
+            st_raw = r.get("overall_status", "") if hasattr(r, "get") else getattr(r, "overall_status", "")
+            st = getattr(st_raw, "value", st_raw)
+            st_str = str(st).split(".")[-1].strip().upper()
             rate = _safe_float(r.get("overall_depletion_rate", 0.0) if hasattr(r, "get") else getattr(r, "overall_depletion_rate", 0.0))
-            if st == "WARNING" or (80.0 <= rate < 95.0):
+            if st_str == "WARNING" or (80.0 <= rate < 95.0):
                 res.append(r if isinstance(r, RegionRecord) else RegionRecord.from_dict(r))
         return res
 
@@ -1204,9 +1280,11 @@ class SubsidyPayload:
             return []
         res = []
         for r in self.regions:
-            st = str(r.get("overall_status", "") if hasattr(r, "get") else getattr(r, "overall_status", "")).strip().upper()
+            st_raw = r.get("overall_status", "") if hasattr(r, "get") else getattr(r, "overall_status", "")
+            st = getattr(st_raw, "value", st_raw)
+            st_str = str(st).split(".")[-1].strip().upper()
             rate = _safe_float(r.get("overall_depletion_rate", 0.0) if hasattr(r, "get") else getattr(r, "overall_depletion_rate", 0.0))
-            if st not in ("CRITICAL", "DEPLETED", "WARNING") and rate < 80.0:
+            if st_str not in ("CRITICAL", "DEPLETED", "WARNING") and rate < 80.0:
                 res.append(r if isinstance(r, RegionRecord) else RegionRecord.from_dict(r))
         return res
 

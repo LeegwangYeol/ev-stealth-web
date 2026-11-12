@@ -34,6 +34,7 @@ export default function Latest2026Error({ error, reset }: ErrorProps) {
       tabIndex={-1}
       role="alert"
       aria-live="assertive"
+      aria-atomic="true"
       aria-labelledby="latest-2026-error-heading"
       aria-describedby="latest-2026-error-description"
       className="min-h-[60vh] flex items-center justify-center px-4 py-12 outline-none focus:outline-none"

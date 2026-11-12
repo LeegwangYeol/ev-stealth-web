@@ -7,18 +7,41 @@ Assembles, validates, and serializes the complete 264-case multi-brand complaint
 import json
 import os
 import sys
+from typing import Any, Dict, List, Optional, Union
 
 # Add root directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from scrapers.common_utils import ComplaintRecord
+from tracker.atomic_writer import atomic_write_json
 from part1_tesla_hyundai import tesla_records, hyundai_records
 from part2_kia_genesis_mercedes import kia_records, genesis_records, mercedes_records
 from part3_bmw_porsche_polestar_gm import bmw_records, porsche_records, polestar_records, gm_records
 from part4_chinese_ev import chinese_records
 
-def compile_database() -> str:
+
+class CompiledDatabaseResult(list):
+    """List of compiled complaint records that also evaluates to the output file path as string."""
+
+    def __init__(self, records: List[Dict[str, Any]], file_path: str):
+        super().__init__(records)
+        self.file_path = str(file_path)
+
+    def __str__(self) -> str:
+        return self.file_path
+
+    def __repr__(self) -> str:
+        return f"<CompiledDatabaseResult file_path={self.file_path!r} records={len(self)}>"
+
+    def __fspath__(self) -> str:
+        return self.file_path
+
+
+def compile_database(
+    output_path: Optional[str] = None,
+    slang_path: Optional[str] = None,
+) -> CompiledDatabaseResult:
     all_raw_groups = [
         ("Tesla", tesla_records),
         ("Hyundai", hyundai_records),
@@ -75,15 +98,25 @@ def compile_database() -> str:
             )
             all_records.append(record.to_dict())
 
-    output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
-    os.makedirs(output_dir, exist_ok=True)
-    output_file = os.path.join(output_dir, "compiled_complaints.json")
+    if output_path:
+        output_file = os.path.abspath(output_path)
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    else:
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+        os.makedirs(output_dir, exist_ok=True)
+        output_file = os.path.join(output_dir, "compiled_complaints.json")
 
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(all_records, f, ensure_ascii=False, indent=2)
+    atomic_write_json(
+        all_records,
+        output_file,
+        indent=2,
+        ensure_ascii=False,
+        mode=0o644,
+        temp_prefix=".tmp_compile_",
+    )
 
     print(f"Successfully compiled {len(all_records)} complaint records to {output_file}")
-    return output_file
+    return CompiledDatabaseResult(all_records, output_file)
 
 if __name__ == "__main__":
     compile_database()

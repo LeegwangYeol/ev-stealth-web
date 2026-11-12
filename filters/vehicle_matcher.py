@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 from typing import Dict, List, Optional, Pattern, Tuple
+import unicodedata
 
 
 # Canonical brand definitions
@@ -32,6 +33,40 @@ VALID_BRANDS = [BRAND_HYUNDAI, BRAND_KIA, BRAND_TESLA, BRAND_BYD, BRAND_OTHER]
 
 MAX_MATCHER_TITLE_LEN = 1_000
 MAX_MATCHER_CONTENT_LEN = 30_000
+
+# Pre-compiled regex for stripping invalid characters: null bytes, non-printable control chars,
+# Trojan Source / Unicode BiDi overrides, unpaired surrogates, BOM, and Unicode non-characters.
+RE_INVALID_CHARS: re.Pattern[str] = re.compile(
+    r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u202a-\u202e\u2066-\u2069\ud800-\udfff\ufeff\ufffe\uffff]"
+)
+
+
+def _sanitize_matcher_text(val: Any, max_len: int) -> str:
+    """Safely coerces input to str, strips null bytes, control chars, BiDi overrides & surrogates,
+    normalizes NFC, and caps length."""
+    if val is None or val is False:
+        return ""
+    if isinstance(val, (bytes, bytearray)):
+        try:
+            val_str = val.decode("utf-8", errors="replace")
+        except Exception:
+            val_str = str(val)
+    elif isinstance(val, str):
+        val_str = val
+    else:
+        try:
+            val_str = str(val)
+        except Exception:
+            return ""
+
+    if not val_str:
+        return ""
+
+    val_str = RE_INVALID_CHARS.sub("", val_str)
+    val_str = val_str.strip()
+    if len(val_str) > max_len:
+        val_str = val_str[:max_len]
+    return unicodedata.normalize("NFC", val_str)
 
 # Comprehensive Hangul particle and ending lookahead
 PARTICLE_LOOKAHEAD = (
@@ -288,8 +323,8 @@ def extract_vehicle_info(title: str, content: str = "") -> Tuple[str, str]:
     Returns:
         (vehicle_brand, vehicle_model)
     """
-    title_str = str(title or "").strip()[:MAX_MATCHER_TITLE_LEN]
-    content_str = str(content or "").strip()[:MAX_MATCHER_CONTENT_LEN]
+    title_str = _sanitize_matcher_text(title, MAX_MATCHER_TITLE_LEN)
+    content_str = _sanitize_matcher_text(content, MAX_MATCHER_CONTENT_LEN)
 
     # 1. Search in title first for high-confidence model match
     if title_str:
@@ -331,3 +366,17 @@ class VehicleMatcher:
     @staticmethod
     def extract_vehicle_info(title: str, content: str = "") -> Tuple[str, str]:
         return extract_vehicle_info(title, content)
+
+
+__all__ = [
+    "VehicleMatcher",
+    "extract_vehicle_info",
+    "BRAND_HYUNDAI",
+    "BRAND_KIA",
+    "BRAND_TESLA",
+    "BRAND_BYD",
+    "BRAND_OTHER",
+    "VALID_BRANDS",
+    "MODEL_RULES",
+    "BRAND_KEYWORDS",
+]

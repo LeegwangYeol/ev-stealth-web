@@ -21,6 +21,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 import re
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
+import unicodedata
 
 from filters.slang_lexicon import (
     LAUGHING_MARKERS,
@@ -31,16 +32,23 @@ from filters.slang_lexicon import (
 )
 
 # ---------------------------------------------------------------------------
-# Maximum input boundaries (DoS / ReDoS / memory leak defense)
+# Maximum input boundaries and invalid character removal
 # ---------------------------------------------------------------------------
 MAX_TEXT_LENGTH: int = 50_000
 MAX_URL_LENGTH: int = 2_048
 
+# Pre-compiled regex for stripping invalid characters: null bytes, non-printable control chars,
+# Trojan Source / Unicode BiDi overrides, unpaired surrogates, BOM, and Unicode non-characters.
+RE_INVALID_CHARS: re.Pattern[str] = re.compile(
+    r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u202a-\u202e\u2066-\u2069\ud800-\udfff\ufeff\ufffe\uffff]"
+)
+
 
 def sanitize_input(val: Any, max_len: int = MAX_TEXT_LENGTH) -> str:
-    """Safely coerces input to str, strips null bytes & control chars, and caps length.
+    """Safely coerces input to str, strips null bytes, control chars, BiDi overrides & surrogates,
+    normalizes NFC, and caps length.
 
-    Prevents ReDoS, memory bloat, database insertion failure, and regex crash.
+    Prevents ReDoS, memory bloat, database insertion failure, surrogate crash, and regex error.
     """
     if val is None or val is False:
         return ""
@@ -57,14 +65,15 @@ def sanitize_input(val: Any, max_len: int = MAX_TEXT_LENGTH) -> str:
         except Exception:
             return ""
 
-    if "\x00" in val_str:
-        val_str = val_str.replace("\x00", "")
+    if not val_str:
+        return ""
 
+    val_str = RE_INVALID_CHARS.sub("", val_str)
     val_str = val_str.strip()
     if len(val_str) > max_len:
         val_str = val_str[:max_len]
 
-    return val_str
+    return unicodedata.normalize("NFC", val_str)
 
 
 # Pre-compiled regular expressions for Journalistic News matching

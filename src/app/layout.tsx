@@ -74,7 +74,12 @@ const globalJsonLd = {
       "@id": `${SITE_URL}/#organization`,
       "name": "Global EV Hub",
       "url": SITE_URL,
-      "logo": `${SITE_URL}/favicon.ico`,
+      "logo": {
+        "@type": "ImageObject",
+        "url": `${SITE_URL}/og-image.png`,
+        "width": 1200,
+        "height": 630,
+      },
       "sameAs": [
         "https://www.youtube.com/@lolollol2379",
       ],
@@ -105,6 +110,10 @@ export const metadata: Metadata = {
   publisher: "Global EV Hub",
   alternates: {
     canonical: "/",
+    languages: {
+      "ko-KR": "/",
+      "x-default": "/",
+    },
   },
   icons: {
     icon: "/favicon.ico",
@@ -166,6 +175,7 @@ export default function RootLayout({
     <html lang="ko" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased bg-slate-50 text-slate-900`}
+        suppressHydrationWarning
       >
         <JsonLd data={globalJsonLd} />
         {/* Global Skip Navigation Link */}
@@ -326,7 +336,7 @@ export default function RootLayout({
             </details>
           </div>
         </header>
-        <main id="main-content" tabIndex={-1} role="main" className="max-w-6xl mx-auto p-4 sm:p-6 min-h-screen min-h-[100dvh] outline-none focus:outline-none">
+        <main id="main-content" tabIndex={-1} role="main" className="w-full max-w-6xl mx-auto p-4 sm:p-6 min-h-screen min-h-[100dvh] outline-none focus:outline-none">
           {children}
         </main>
         <SiteFooter />

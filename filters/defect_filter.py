@@ -26,6 +26,8 @@ from filters.defect_classifier import (
     NEGATIVE_LEXICON,
     POSITIVE_LEXICON,
     DefectClassifier,
+    normalize_date,
+    sanitize_text,
 )
 from filters.slang_lexicon import (
     CONCESSIVES,
@@ -71,3 +73,14 @@ class ContextualDefectFilter(DefectClassifier):
 
 # Primary alias for callers
 DefectFilter = ContextualDefectFilter
+
+__all__ = [
+    "ContextualDefectFilter",
+    "DefectFilter",
+    "normalize_date",
+    "sanitize_text",
+    "SpamFilter",
+    "is_spam",
+    "evaluate_stage1_noise",
+    "extract_vehicle_info",
+]

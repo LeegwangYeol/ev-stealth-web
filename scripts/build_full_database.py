@@ -86,7 +86,15 @@ for cat, c in category_counts.items():
 output_dir = os.path.join(PROJECT_ROOT, "data")
 os.makedirs(output_dir, exist_ok=True)
 output_path = os.path.join(output_dir, "compiled_complaints.json")
-with open(output_path, "w", encoding="utf-8") as f:
-    json.dump(all_records, f, ensure_ascii=False, indent=2)
+from tracker.atomic_writer import atomic_write_json
+
+atomic_write_json(
+    all_records,
+    output_path,
+    indent=2,
+    ensure_ascii=False,
+    mode=0o644,
+    temp_prefix=".tmp_full_db_",
+)
 
 print(f"\nSuccessfully compiled and wrote {len(all_records)} records to {output_path}")

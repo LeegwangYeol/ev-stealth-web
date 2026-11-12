@@ -175,11 +175,18 @@ def get_baseline_thresholds() -> Dict[str, Any]:
     return DEFAULT_ALERT_THRESHOLDS
 
 
+def _clean_num(val: Any) -> Any:
+    """Sanitize numeric input, stripping thousands separators (commas) from strings."""
+    if isinstance(val, str):
+        val = val.strip().replace(",", "")
+    return val
+
+
 def calculate_depletion_rate(
-    applied: Union[int, float] = 0,
-    announced: Union[int, float, None] = None,
+    applied: Union[int, float, str, None] = 0,
+    announced: Union[int, float, str, None] = None,
     clamp_100: bool = False,
-    quota: Union[int, float, None] = None,
+    quota: Union[int, float, str, None] = None,
     clamp: bool = False,
     max_rate: Optional[float] = None,
 ) -> float:
@@ -189,7 +196,7 @@ def calculate_depletion_rate(
         (applied / quota) * 100.0
 
     Args:
-        applied: Number of received applications (int or float).
+        applied: Number of received applications (int, float, or numeric string).
         announced: Total allocated quota units (legacy alias).
         clamp_100: If True, clamp result to [0.0, 100.0]. Defaults to False to track
                    over-exhaustion / waitlisted status (> 100.0%).
@@ -204,8 +211,8 @@ def calculate_depletion_rate(
         target_quota = quota if quota is not None else announced
         if target_quota is None or applied is None:
             return 0.0
-        quota_val = float(target_quota)
-        applied_val = float(applied)
+        quota_val = float(_clean_num(target_quota))
+        applied_val = float(_clean_num(applied))
         if math.isnan(quota_val) or math.isnan(applied_val) or math.isinf(quota_val) or math.isinf(applied_val):
             return 0.0
         if quota_val <= 0.0 or applied_val <= 0.0:
@@ -218,7 +225,7 @@ def calculate_depletion_rate(
             rate = min(100.0, rate)
         if max_rate is not None:
             try:
-                mr = float(max_rate)
+                mr = float(_clean_num(max_rate))
                 if not math.isnan(mr) and not math.isinf(mr) and mr >= 0.0:
                     rate = min(mr, rate)
             except (ValueError, TypeError, OverflowError):
@@ -228,19 +235,21 @@ def calculate_depletion_rate(
         return 0.0
 
 
-def is_depletion_over_exhausted(depletion_rate: Union[int, float]) -> bool:
+def is_depletion_over_exhausted(depletion_rate: Union[int, float, str, None]) -> bool:
     """Return True if depletion rate strictly exceeds 100.0% (over-exhaustion / waitlisted)."""
     try:
-        r = float(depletion_rate)
+        if depletion_rate is None:
+            return False
+        r = float(_clean_num(depletion_rate))
         return not (math.isnan(r) or math.isinf(r)) and r > 100.0
     except (TypeError, ValueError, OverflowError):
         return False
 
 
 def calculate_remaining_units(
-    applied: Union[int, float] = 0,
-    announced: Union[int, float, None] = None,
-    quota: Union[int, float, None] = None,
+    applied: Union[int, float, str, None] = 0,
+    announced: Union[int, float, str, None] = None,
+    quota: Union[int, float, str, None] = None,
 ) -> int:
     """Calculate remaining quota units clamped at zero: max(0, quota - applied).
 
@@ -256,8 +265,8 @@ def calculate_remaining_units(
         target_quota = quota if quota is not None else announced
         if target_quota is None or applied is None:
             return 0
-        quota_f = float(target_quota)
-        applied_f = float(applied)
+        quota_f = float(_clean_num(target_quota))
+        applied_f = float(_clean_num(applied))
         if math.isnan(quota_f) or math.isnan(applied_f) or math.isinf(quota_f) or math.isinf(applied_f):
             return 0
         safe_quota = max(0, int(quota_f))
@@ -268,17 +277,17 @@ def calculate_remaining_units(
 
 
 def calculate_waitlist_units(
-    applied: Union[int, float] = 0,
-    announced: Union[int, float, None] = None,
-    quota: Union[int, float, None] = None,
+    applied: Union[int, float, str, None] = 0,
+    announced: Union[int, float, str, None] = None,
+    quota: Union[int, float, str, None] = None,
 ) -> int:
     """Calculate waitlisted/over-subscribed units beyond announced quota: max(0, applied - quota)."""
     try:
         target_quota = quota if quota is not None else announced
         if target_quota is None or applied is None:
             return 0
-        quota_f = float(target_quota)
-        applied_f = float(applied)
+        quota_f = float(_clean_num(target_quota))
+        applied_f = float(_clean_num(applied))
         if math.isnan(quota_f) or math.isnan(applied_f) or math.isinf(quota_f) or math.isinf(applied_f):
             return 0
         safe_quota = max(0, int(quota_f))
@@ -289,9 +298,9 @@ def calculate_waitlist_units(
 
 
 def calculate_delivery_rate(
-    delivered: Union[int, float] = 0,
-    announced: Union[int, float, None] = None,
-    quota: Union[int, float, None] = None,
+    delivered: Union[int, float, str, None] = 0,
+    announced: Union[int, float, str, None] = None,
+    quota: Union[int, float, str, None] = None,
     clamp_100: bool = False,
     clamp: bool = False,
     max_rate: Optional[float] = None,
@@ -308,15 +317,15 @@ def calculate_delivery_rate(
 
 
 def calculate_pending_deliveries(
-    applied: Union[int, float] = 0,
-    delivered: Union[int, float] = 0,
+    applied: Union[int, float, str, None] = 0,
+    delivered: Union[int, float, str, None] = 0,
 ) -> int:
     """Calculate pending delivery units (applied - delivered) clamped at zero."""
     try:
         if applied is None or delivered is None:
             return 0
-        applied_f = float(applied)
-        delivered_f = float(delivered)
+        applied_f = float(_clean_num(applied))
+        delivered_f = float(_clean_num(delivered))
         if math.isnan(applied_f) or math.isnan(delivered_f) or math.isinf(applied_f) or math.isinf(delivered_f):
             return 0
         safe_applied = max(0, int(applied_f))
@@ -324,6 +333,117 @@ def calculate_pending_deliveries(
         return max(0, safe_applied - safe_delivered)
     except (TypeError, ValueError, OverflowError):
         return 0
+
+
+# ============================================================================
+# Velocity Tracking and Quota Exhaustion Prediction
+# ============================================================================
+
+def calculate_depletion_velocity(
+    applied_start: Union[int, float, str, None],
+    applied_end: Union[int, float, str, None],
+    days: Union[int, float, str, None],
+) -> float:
+    """Calculate daily application velocity (units/day) with zero-division and invalid input guards.
+
+    Formula:
+        (applied_end - applied_start) / days
+
+    Args:
+        applied_start: Initial application count at period start.
+        applied_end: Final application count at period end.
+        days: Elapsed calendar days between observation points.
+
+    Returns:
+        Average units applied per day, non-negative float rounded to 2 decimal places.
+        Returns 0.0 if days <= 0 or invalid inputs provided. Never raises ZeroDivisionError.
+    """
+    try:
+        if applied_start is None or applied_end is None or days is None:
+            return 0.0
+        f_start = float(_clean_num(applied_start))
+        f_end = float(_clean_num(applied_end))
+        f_days = float(_clean_num(days))
+        if math.isnan(f_start) or math.isnan(f_end) or math.isnan(f_days):
+            return 0.0
+        if math.isinf(f_start) or math.isinf(f_end) or math.isinf(f_days):
+            return 0.0
+        if f_days <= 0.0:
+            return 0.0
+        diff = max(0.0, f_end - f_start)
+        velocity = round(diff / f_days, 2)
+        if math.isnan(velocity) or math.isinf(velocity):
+            return 0.0
+        return max(0.0, velocity)
+    except (TypeError, ValueError, ZeroDivisionError, OverflowError):
+        return 0.0
+
+
+def predict_exhaustion_days(
+    remaining_units: Union[int, float, str, None],
+    daily_velocity: Union[int, float, str, None],
+) -> Optional[int]:
+    """Predict number of calendar days until quota exhaustion based on daily burn velocity.
+
+    Formula:
+        remaining_units / daily_velocity
+
+    Guards:
+        - If remaining_units <= 0: returns 0 (already depleted/exhausted).
+        - If daily_velocity <= 0: returns None (cannot exhaust at non-positive velocity).
+        - Catches ZeroDivisionError, OverflowError, ValueError, TypeError, NaN, Inf.
+
+    Returns:
+        Non-negative integer days remaining, or None if velocity is non-positive.
+    """
+    try:
+        if remaining_units is None or daily_velocity is None:
+            return None
+        f_rem = float(_clean_num(remaining_units))
+        f_vel = float(_clean_num(daily_velocity))
+        if math.isnan(f_rem) or math.isnan(f_vel) or math.isinf(f_rem) or math.isinf(f_vel):
+            return None
+        if f_rem <= 0.0:
+            return 0
+        if f_vel <= 0.0:
+            return None
+        days = int(math.ceil(f_rem / f_vel))
+        return max(0, days)
+    except (TypeError, ValueError, ZeroDivisionError, OverflowError):
+        return None
+
+
+def predict_exhaustion_date(
+    remaining_units: Union[int, float, str, None],
+    daily_velocity: Union[int, float, str, None],
+    start_date: Optional[Union[datetime, str]] = None,
+) -> Optional[str]:
+    """Predict estimated calendar date (YYYY-MM-DD) of subsidy exhaustion.
+
+    Returns None if burn rate is zero or negative, or if calculation fails.
+    Guarantees no ZeroDivisionError or OverflowError.
+    """
+    from datetime import timedelta
+    days = predict_exhaustion_days(remaining_units, daily_velocity)
+    if days is None:
+        return None
+    try:
+        if start_date is None:
+            base_dt = datetime.now(timezone.utc)
+        elif isinstance(start_date, datetime):
+            base_dt = start_date
+        elif isinstance(start_date, str):
+            clean_s = start_date.strip()
+            if "T" in clean_s:
+                base_dt = datetime.fromisoformat(clean_s.replace("Z", "+00:00"))
+            else:
+                base_dt = datetime.strptime(clean_s[:10], "%Y-%m-%d")
+        else:
+            base_dt = datetime.now(timezone.utc)
+        target_date = base_dt + timedelta(days=days)
+        return target_date.strftime("%Y-%m-%d")
+    except Exception:
+        return None
 
 
 def classify_region_group(region: Union[RegionRecord, Dict[str, Any], str, None]) -> str:
@@ -449,12 +569,12 @@ def classify_alert_tier(depletion_rate: float) -> str:
     return AlertSeverity.from_rate(depletion_rate).value
 
 
-def calculate_price_cap_ratio(msrp: int) -> float:
+def calculate_price_cap_ratio(msrp: Union[int, float, str, None]) -> float:
     """Statutory 2026 Korean EV subsidy ratio tiers: 1.0 (<=55M), 0.5 (55M-85M), 0.0 (>85M)."""
     try:
         if msrp is None:
             return 0.0
-        f_msrp = float(msrp)
+        f_msrp = float(_clean_num(msrp))
         if math.isnan(f_msrp) or math.isinf(f_msrp):
             return 0.0
         safe_msrp = int(f_msrp)
@@ -471,33 +591,33 @@ def calculate_price_cap_ratio(msrp: int) -> float:
 
 
 def calculate_net_subsidy(
-    model_national: int,
-    max_national: int,
-    max_local: int,
-    msrp: int,
+    model_national: Union[int, float, str, None],
+    max_national: Union[int, float, str, None],
+    max_local: Union[int, float, str, None],
+    msrp: Union[int, float, str, None],
 ) -> Dict[str, Union[int, float]]:
     """Calculate national subsidy, local subsidy, total subsidy, and net consumer purchase price."""
     try:
         if msrp is None:
             safe_msrp = 0
         else:
-            f_msrp = float(msrp)
+            f_msrp = float(_clean_num(msrp))
             safe_msrp = 0 if (math.isnan(f_msrp) or math.isinf(f_msrp)) else max(0, int(f_msrp))
     except (ValueError, TypeError, OverflowError):
         safe_msrp = 0
 
     try:
-        safe_model_nat = max(0, int(model_national)) if model_national is not None else 0
+        safe_model_nat = max(0, int(float(_clean_num(model_national)))) if model_national is not None else 0
     except (ValueError, TypeError, OverflowError):
         safe_model_nat = 0
 
     try:
-        safe_max_nat = max(0, int(max_national)) if max_national is not None else 0
+        safe_max_nat = max(0, int(float(_clean_num(max_national)))) if max_national is not None else 0
     except (ValueError, TypeError, OverflowError):
         safe_max_nat = 0
 
     try:
-        safe_max_loc = max(0, int(max_local)) if max_local is not None else 0
+        safe_max_loc = max(0, int(float(_clean_num(max_local)))) if max_local is not None else 0
     except (ValueError, TypeError, OverflowError):
         safe_max_loc = 0
 
@@ -1199,16 +1319,19 @@ class SubsidyTracker:
         if export_models_matrix:
             matrix_data = build_comprehensive_models_matrix()
             seen_matrix_dirs = set()
+            matrix_files: List[Path] = []
             for p in unique_destinations:
                 parent_dir = Path(p).parent.resolve()
                 if parent_dir not in seen_matrix_dirs:
                     seen_matrix_dirs.add(parent_dir)
-                    matrix_file = parent_dir / "models_subsidy_matrix.json"
-                    try:
-                        atomic_write_json(matrix_data, matrix_file)
+                    matrix_files.append(parent_dir / "models_subsidy_matrix.json")
+            if matrix_files:
+                try:
+                    atomic_write_json_multiple(matrix_data, matrix_files)
+                    for matrix_file in matrix_files:
                         logger.info("  ✓ Saved vehicle models matrix: %s", matrix_file)
-                    except Exception as exc:
-                        logger.warning("Failed to save models matrix to %s: %s", matrix_file, exc)
+                except Exception as exc:
+                    logger.warning("Failed to save models matrix to %s: %s", matrix_files, exc)
 
         return written
 
@@ -1262,6 +1385,43 @@ class SubsidyTracker:
                 ],
             }
         return summaries
+
+    def predict_region_exhaustion(
+        self,
+        region: Union[RegionRecord, Dict[str, Any]],
+        category_name: str = "passenger",
+        reference_days: float = 30.0,
+    ) -> Dict[str, Any]:
+        """Estimate exhaustion velocity and predicted runout days for a region category."""
+        if region is None:
+            return {
+                "category": category_name,
+                "remaining_units": 0,
+                "applied_units": 0,
+                "daily_velocity": 0.0,
+                "days_to_exhaustion": 0,
+                "predicted_exhaustion_date": None,
+                "status": "DEPLETED",
+            }
+        cats = region.get("categories") if isinstance(region, dict) else getattr(region, "categories", {})
+        cat = (cats or {}).get(category_name)
+        rem = max(0, _safe_int_metric(_metric_val(cat, "remaining_units", 0), 0))
+        app = max(0, _safe_int_metric(_metric_val(cat, "applied_units", 0), 0))
+        st = str(_metric_val(cat, "status", "HEALTHY")).split(".")[-1].strip().upper()
+
+        velocity = calculate_depletion_velocity(0, app, reference_days)
+        days = predict_exhaustion_days(rem, velocity)
+        pred_date = predict_exhaustion_date(rem, velocity)
+
+        return {
+            "category": category_name,
+            "remaining_units": rem,
+            "applied_units": app,
+            "daily_velocity": velocity,
+            "days_to_exhaustion": days,
+            "predicted_exhaustion_date": pred_date,
+            "status": st,
+        }
 
     def get_fallback_payload(self) -> SubsidyPayload:
         """Return fresh authoritative fallback baseline dataset."""
@@ -1476,6 +1636,9 @@ __all__ = [
     "calculate_waitlist_units",
     "calculate_delivery_rate",
     "calculate_pending_deliveries",
+    "calculate_depletion_velocity",
+    "predict_exhaustion_days",
+    "predict_exhaustion_date",
     "is_depletion_over_exhausted",
     "classify_alert_tier",
     "calculate_price_cap_ratio",

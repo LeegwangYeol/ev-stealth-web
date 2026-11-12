@@ -173,8 +173,17 @@ const fallbackDataset: EVSubsidyDataset = {
  */
 export function getSubsidyDatabase(): EVSubsidyDataset {
   try {
-    if (rawData && typeof rawData === 'object' && 'regions' in rawData) {
-      return rawData as unknown as EVSubsidyDataset;
+    if (rawData && typeof rawData === 'object' && Array.isArray((rawData as Record<string, unknown>).regions)) {
+      const typed = rawData as unknown as Partial<EVSubsidyDataset>;
+      return {
+        metadata: typed.metadata || fallbackDataset.metadata,
+        alert_thresholds: typed.alert_thresholds || fallbackDataset.alert_thresholds,
+        nationwide_summary: typed.nationwide_summary || fallbackDataset.nationwide_summary,
+        regions: Array.isArray(typed.regions) ? typed.regions : fallbackDataset.regions,
+        popular_models_matrix: Array.isArray(typed.popular_models_matrix)
+          ? typed.popular_models_matrix
+          : fallbackDataset.popular_models_matrix,
+      };
     }
     return fallbackDataset;
   } catch (err) {
@@ -188,7 +197,7 @@ export function getSubsidyDatabase(): EVSubsidyDataset {
  */
 export function getAllRegions(): RegionEntry[] {
   const db = getSubsidyDatabase();
-  return db.regions || [];
+  return Array.isArray(db?.regions) ? db.regions : [];
 }
 
 /**
@@ -330,7 +339,7 @@ export function getRegionById(regionId: string): RegionEntry | undefined {
  */
 export function getAllModels(): PopularModelEntry[] {
   const db = getSubsidyDatabase();
-  return db.popular_models_matrix || [];
+  return Array.isArray(db?.popular_models_matrix) ? db.popular_models_matrix : [];
 }
 
 /**
@@ -557,12 +566,13 @@ export function calculateNetSubsidy(
     : calculateRemainingUnits(pApplied, pAnnounced);
 
   let warningNotice: string | undefined;
+  const safeRemainingUnits = Number.isFinite(remainingUnits) ? remainingUnits : 0;
   if (depletionRate >= 95.0) {
     warningNotice = `🚨 ${region.name_ko}의 승용 보조금 소진율이 ${depletionRate}%로 선착순 마감 직전입니다! 즉시 출고 가능 실재고 매칭이 필요합니다.`;
   } else if (depletionRate >= 80.0) {
     warningNotice = `⚠️ ${region.name_ko}의 승용 보조금 소진율이 ${depletionRate}%에 달해 조기 마감 위험이 높습니다.`;
   } else {
-    warningNotice = `✅ ${region.name_ko}의 보조금 잔여량이 비교적 여유롭습니다 (${remainingUnits.toLocaleString()}대 잔여).`;
+    warningNotice = `✅ ${region.name_ko}의 보조금 잔여량이 비교적 여유롭습니다 (${safeRemainingUnits.toLocaleString()}대 잔여).`;
   }
 
   return {
@@ -625,15 +635,20 @@ export function getCategoryDepletion(
     : calculateDepletionRate(applied, announced);
   const status: AlertSeverity = category?.status || (rate >= 100.0 ? 'DEPLETED' : rate >= 95.0 ? 'CRITICAL' : rate >= 80.0 ? 'WARNING' : rate >= 60.0 ? 'CAUTION' : 'HEALTHY');
 
+  const safeAnnounced = Number.isFinite(announced) ? announced : 0;
+  const safeApplied = Number.isFinite(applied) ? applied : 0;
+  const safeRemaining = Number.isFinite(remaining) ? remaining : 0;
+  const safeRate = Number.isFinite(rate) ? rate : 0.0;
+
   return {
-    announcedUnits: announced,
-    appliedUnits: applied,
-    remainingUnits: remaining,
-    depletionRate: rate,
+    announcedUnits: safeAnnounced,
+    appliedUnits: safeApplied,
+    remainingUnits: safeRemaining,
+    depletionRate: safeRate,
     status,
-    formattedRemaining: remaining.toLocaleString(),
-    formattedAnnounced: announced.toLocaleString(),
-    formattedApplied: applied.toLocaleString(),
+    formattedRemaining: safeRemaining.toLocaleString(),
+    formattedAnnounced: safeAnnounced.toLocaleString(),
+    formattedApplied: safeApplied.toLocaleString(),
   };
 }
 

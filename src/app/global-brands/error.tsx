@@ -34,6 +34,7 @@ export default function GlobalBrandsGuideError({ error, reset }: ErrorProps) {
       tabIndex={-1}
       role="alert"
       aria-live="assertive"
+      aria-atomic="true"
       aria-labelledby="global-brands-error-heading"
       aria-describedby="global-brands-error-description"
       className="min-h-[60vh] flex items-center justify-center px-4 py-12 outline-none focus:outline-none"

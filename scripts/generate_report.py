@@ -402,8 +402,15 @@ def main():
 
     # Generate Statistical Report
     report_content = generate_statistical_report_content(records, ranker, aggregator)
-    with open(args.output, "w", encoding="utf-8") as f:
-        f.write(report_content)
+    from tracker.atomic_writer import atomic_write_text
+
+    atomic_write_text(
+        report_content,
+        args.output,
+        encoding="utf-8",
+        mode=0o644,
+        temp_prefix=".tmp_stat_report_",
+    )
 
     print(f"[SUCCESS] STATISTICAL_REPORT.md generated: {args.output} ({len(report_content.encode('utf-8')):,} bytes)")
 

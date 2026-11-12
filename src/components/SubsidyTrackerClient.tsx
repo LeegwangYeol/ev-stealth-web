@@ -6,3 +6,5 @@ export {
   getStatusLabel,
   BRAND_PREFIX_REGEX,
 } from '@/app/subsidy-tracker/SubsidyTrackerClient';
+
+export type { SortOption } from '@/app/subsidy-tracker/SubsidyTrackerClient';

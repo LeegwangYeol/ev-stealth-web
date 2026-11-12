@@ -5,6 +5,7 @@ cookie session warm-up, encoding helpers (EUC-KR/UTF-8), and standard schema def
 """
 
 import email.utils
+import hashlib
 import html
 import http.client
 import http.cookiejar
@@ -13,8 +14,10 @@ import logging
 import os
 import random
 import re
+import shutil
 import socket
 import ssl
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -234,10 +237,94 @@ class ComplaintRecord:
         return asdict(self)
 
 
+class ResilientHTTPConnection(http.client.HTTPConnection):
+    """HTTPConnection supporting explicit separate connect and read timeouts."""
+
+    def __init__(self, *args, connect_timeout: float = 5.0, read_timeout: float = 15.0, **kwargs):
+        self._conn_timeout = float(connect_timeout) if connect_timeout is not None and connect_timeout > 0 else 5.0
+        self._read_timeout = float(read_timeout) if read_timeout is not None and read_timeout > 0 else 15.0
+        super().__init__(*args, **kwargs)
+
+    def connect(self):
+        self.sock = socket.create_connection(
+            (self.host, self.port),
+            self._conn_timeout,
+            self.source_address,
+        )
+        if self._read_timeout is not None:
+            self.sock.settimeout(self._read_timeout)
+
+
+class ResilientHTTPSConnection(http.client.HTTPSConnection):
+    """HTTPSConnection supporting explicit separate connect and read timeouts."""
+
+    def __init__(self, *args, connect_timeout: float = 5.0, read_timeout: float = 15.0, **kwargs):
+        self._conn_timeout = float(connect_timeout) if connect_timeout is not None and connect_timeout > 0 else 5.0
+        self._read_timeout = float(read_timeout) if read_timeout is not None and read_timeout > 0 else 15.0
+        super().__init__(*args, **kwargs)
+
+    def connect(self):
+        self.sock = socket.create_connection(
+            (self.host, self.port),
+            self._conn_timeout,
+            self.source_address,
+        )
+        if self._read_timeout is not None:
+            self.sock.settimeout(self._read_timeout)
+        if self._tunnel_host:
+            self._tunnel()
+        server_hostname = self.host if ssl.HAS_SNI else None
+        self.sock = self._context.wrap_socket(self.sock, server_hostname=server_hostname)
+
+
+class ResilientHTTPHandler(urllib.request.HTTPHandler):
+    """HTTP handler injecting ResilientHTTPConnection with explicit timeouts."""
+
+    def __init__(self, connect_timeout: float = 5.0, read_timeout: float = 15.0, **kwargs):
+        super().__init__(**kwargs)
+        self._connect_timeout = connect_timeout
+        self._read_timeout = read_timeout
+
+    def http_open(self, req):
+        def _factory(host, **kwargs):
+            return ResilientHTTPConnection(
+                host,
+                connect_timeout=self._connect_timeout,
+                read_timeout=self._read_timeout,
+                **kwargs,
+            )
+        return self.do_open(_factory, req)
+
+
+class ResilientHTTPSHandler(urllib.request.HTTPSHandler):
+    """HTTPS handler injecting ResilientHTTPSConnection with explicit timeouts."""
+
+    def __init__(self, connect_timeout: float = 5.0, read_timeout: float = 15.0, context=None, **kwargs):
+        super().__init__(context=context, **kwargs)
+        self._connect_timeout = connect_timeout
+        self._read_timeout = read_timeout
+
+    def https_open(self, req):
+        def _factory(host, **kwargs):
+            ctx = getattr(self, "_context", None)
+            if ctx is not None:
+                kwargs.setdefault("context", ctx)
+            if hasattr(self, "_check_hostname"):
+                kwargs.setdefault("check_hostname", getattr(self, "_check_hostname"))
+            return ResilientHTTPSConnection(
+                host,
+                connect_timeout=self._connect_timeout,
+                read_timeout=self._read_timeout,
+                **kwargs,
+            )
+        return self.do_open(_factory, req)
+
+
 class SafeHttpClient:
     """
     Robust, rate-limited HTTP client with session cookie persistence,
-    User-Agent rotation, exponential backoff, bounded memory stream reads,
+    User-Agent rotation, explicit timeouts (connect & read), exponential backoff,
+    caching with fallback on 5xx/unreachable, bounded memory stream reads,
     resource cleanup, and encoding handling.
     """
 
@@ -248,9 +335,15 @@ class SafeHttpClient:
         max_retries: int = 3,
         cooldown_interval: int = 18,
         cooldown_time: float = 6.0,
-        timeout: float = 15.0,
+        timeout: Union[float, Tuple[float, float]] = 15.0,
         max_response_size: int = MAX_RESPONSE_BYTES,
         max_cookies: int = MAX_COOKIEJAR_ENTRIES,
+        connect_timeout: Optional[float] = None,
+        read_timeout: Optional[float] = None,
+        enable_cache: bool = True,
+        cache_fallback: bool = True,
+        cache_dir: Optional[str] = None,
+        opener: Optional[urllib.request.OpenerDirector] = None,
     ):
         self.min_delay = min_delay
         self.max_delay = max_delay
@@ -260,14 +353,162 @@ class SafeHttpClient:
         self.timeout = timeout
         self.max_response_size = max_response_size
         self.max_cookies = max_cookies
+        self.enable_cache = enable_cache
+        self.cache_fallback = cache_fallback
         self.request_count = 0
         self.last_request_time = 0.0
+        self.last_response_from_cache = False
+        self._memory_cache: Dict[str, Dict[str, Any]] = {}
+
+        # Resolve explicit connect and read timeouts
+        if connect_timeout is not None:
+            try:
+                self._connect_timeout = float(connect_timeout)
+            except (ValueError, TypeError):
+                self._connect_timeout = 5.0
+        elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
+            try:
+                self._connect_timeout = float(timeout[0])
+            except (ValueError, TypeError):
+                self._connect_timeout = 5.0
+        elif isinstance(timeout, (int, float)) and timeout > 0:
+            self._connect_timeout = min(5.0, float(timeout))
+        else:
+            self._connect_timeout = 5.0
+
+        if read_timeout is not None:
+            try:
+                self._read_timeout = float(read_timeout)
+            except (ValueError, TypeError):
+                self._read_timeout = 15.0
+        elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
+            try:
+                self._read_timeout = float(timeout[1])
+            except (ValueError, TypeError):
+                self._read_timeout = 15.0
+        elif isinstance(timeout, (int, float)) and timeout > 0:
+            self._read_timeout = float(timeout)
+        else:
+            self._read_timeout = 15.0
+
+        # Cache directory setup
+        if cache_dir:
+            self.cache_dir = cache_dir
+        else:
+            self.cache_dir = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", ".cache", "http"
+            )
 
         # Setup cookie jar and opener
         self.cookie_jar = http.cookiejar.CookieJar()
-        self.opener = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(self.cookie_jar)
-        )
+        if opener is not None:
+            self.opener = opener
+        else:
+            cookie_processor = urllib.request.HTTPCookieProcessor(self.cookie_jar)
+            http_handler = ResilientHTTPHandler(
+                connect_timeout=self._connect_timeout,
+                read_timeout=self._read_timeout,
+            )
+            https_handler = ResilientHTTPSHandler(
+                connect_timeout=self._connect_timeout,
+                read_timeout=self._read_timeout,
+            )
+            self.opener = urllib.request.build_opener(cookie_processor, http_handler, https_handler)
+
+    @property
+    def connect_timeout(self) -> float:
+        """Connect timeout in seconds."""
+        return self._connect_timeout
+
+    @property
+    def read_timeout(self) -> float:
+        """Read timeout in seconds."""
+        return self._read_timeout
+
+    def _cache_key(self, url: str) -> str:
+        norm = (url or "").strip()
+        return hashlib.sha256(norm.encode("utf-8")).hexdigest()
+
+    def get_cached_response(self, url: str) -> Optional[Tuple[int, str, bytes]]:
+        """Retrieve cached (status_code, decoded_text, raw_bytes) if present."""
+        if not self.enable_cache or not url:
+            return None
+        key = self._cache_key(url)
+        if key in self._memory_cache:
+            entry = self._memory_cache[key]
+            return entry.get("status", 200), entry.get("text", ""), entry.get("raw", b"")
+
+        if self.cache_dir:
+            file_path = os.path.join(self.cache_dir, f"{key}.json")
+            if os.path.isfile(file_path):
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    status = int(data.get("status", 200))
+                    text = str(data.get("text", ""))
+                    raw_hex = data.get("raw_hex", "")
+                    raw_bytes = bytes.fromhex(raw_hex) if raw_hex else text.encode("utf-8")
+                    self._memory_cache[key] = {
+                        "status": status,
+                        "text": text,
+                        "raw": raw_bytes,
+                        "time": data.get("time", time.time()),
+                        "url": url,
+                    }
+                    return status, text, raw_bytes
+                except Exception as e:
+                    logger.debug(f"Cache read error for {url}: {e}")
+        return None
+
+    def set_cached_response(
+        self,
+        url: str,
+        status_code: int,
+        decoded_text: str,
+        raw_bytes: bytes,
+    ) -> None:
+        """Cache response data in-memory and persistently to disk."""
+        if not self.enable_cache or not url or not decoded_text:
+            return
+        key = self._cache_key(url)
+        entry = {
+            "status": int(status_code),
+            "text": str(decoded_text),
+            "raw": bytes(raw_bytes),
+            "time": time.time(),
+            "url": str(url),
+        }
+        self._memory_cache[key] = entry
+        if len(self._memory_cache) > 500:
+            oldest_k = min(self._memory_cache, key=lambda k: self._memory_cache[k].get("time", 0))
+            del self._memory_cache[oldest_k]
+
+        if self.cache_dir:
+            try:
+                os.makedirs(self.cache_dir, exist_ok=True)
+                file_path = os.path.join(self.cache_dir, f"{key}.json")
+                temp_path = f"{file_path}.tmp.{os.getpid()}"
+                payload = {
+                    "url": str(url),
+                    "status": int(status_code),
+                    "text": str(decoded_text),
+                    "raw_hex": bytes(raw_bytes).hex(),
+                    "time": time.time(),
+                }
+                with open(temp_path, "w", encoding="utf-8") as f:
+                    json.dump(payload, f)
+                os.replace(temp_path, file_path)
+            except Exception as e:
+                logger.debug(f"Failed to persist cache file for {url}: {e}")
+
+    def clear_cache(self) -> None:
+        """Clear memory and disk HTTP response caches."""
+        self._memory_cache.clear()
+        if self.cache_dir and os.path.isdir(self.cache_dir):
+            try:
+                shutil.rmtree(self.cache_dir, ignore_errors=True)
+            except Exception:
+                pass
 
     def clear_cookies(self) -> None:
         """Clear all stored cookies from the session cookie jar."""
@@ -341,6 +582,13 @@ class SafeHttpClient:
         except Exception:
             pass
 
+        min_d = max(0.0, float(min(self.min_delay, self.max_delay)))
+        max_d = max(0.0, float(max(self.min_delay, self.max_delay)))
+        if max_d <= 0:
+            self.last_request_time = time.time()
+            self.request_count += 1
+            return
+
         now = time.time()
         elapsed = now - self.last_request_time
 
@@ -351,7 +599,7 @@ class SafeHttpClient:
             time.sleep(extra_cooldown)
 
         # Standard jittered delay (1.5s - 3.5s)
-        target_delay = random.uniform(self.min_delay, self.max_delay)
+        target_delay = random.uniform(min_d, max_d)
         if elapsed < target_delay:
             sleep_duration = target_delay - elapsed
             time.sleep(sleep_duration)
@@ -413,7 +661,9 @@ class SafeHttpClient:
         headers: Optional[Dict[str, str]] = None,
         encoding: Optional[str] = None,
         referer: Optional[str] = None,
-        timeout: Optional[float] = None,
+        timeout: Optional[Union[float, Tuple[float, float]]] = None,
+        connect_timeout: Optional[float] = None,
+        read_timeout: Optional[float] = None,
     ) -> Tuple[int, str, bytes]:
         """
         Execute an HTTP request with automatic rate limiting, header injection,
@@ -430,6 +680,7 @@ class SafeHttpClient:
             logger.warning(f"Unsupported URL scheme: {norm_url!r}")
             return 0, "", b""
 
+        self.last_response_from_cache = False
         self._sleep_with_jitter()
 
         req_headers = get_random_headers(referer=referer)
@@ -446,7 +697,42 @@ class SafeHttpClient:
             elif isinstance(data, str):
                 payload_bytes = data.encode("utf-8")
 
-        eff_timeout = float(timeout) if timeout is not None and timeout > 0 else float(self.timeout)
+        # Resolve explicit connect and read timeouts
+        if connect_timeout is not None:
+            try:
+                eff_connect_timeout = float(connect_timeout)
+            except (ValueError, TypeError):
+                eff_connect_timeout = self._connect_timeout
+        elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
+            try:
+                eff_connect_timeout = float(timeout[0])
+            except (ValueError, TypeError):
+                eff_connect_timeout = self._connect_timeout
+        elif isinstance(timeout, (int, float)) and float(timeout) > 0:
+            eff_connect_timeout = min(5.0, float(timeout))
+        else:
+            eff_connect_timeout = self._connect_timeout
+
+        if read_timeout is not None:
+            try:
+                eff_read_timeout = float(read_timeout)
+            except (ValueError, TypeError):
+                eff_read_timeout = self._read_timeout
+        elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
+            try:
+                eff_read_timeout = float(timeout[1])
+            except (ValueError, TypeError):
+                eff_read_timeout = self._read_timeout
+        elif isinstance(timeout, (int, float)) and float(timeout) > 0:
+            eff_read_timeout = float(timeout)
+        else:
+            try:
+                raw_to = float(self.timeout)
+                eff_read_timeout = raw_to if raw_to > 0 else 15.0
+            except (ValueError, TypeError):
+                eff_read_timeout = 15.0
+
+        eff_timeout = eff_read_timeout
 
         for attempt in range(1, self.max_retries + 1):
             if attempt > 1:
@@ -458,8 +744,15 @@ class SafeHttpClient:
                     headers=req_headers,
                     method=method.upper()
                 )
-                with self.opener.open(req, timeout=eff_timeout) as resp:
+                resp = self.opener.open(req, timeout=eff_timeout)
+                try:
                     status_code = resp.getcode()
+
+                    if hasattr(resp, "fp") and resp.fp and hasattr(resp.fp, "raw") and hasattr(resp.fp.raw, "_sock"):
+                        try:
+                            resp.fp.raw._sock.settimeout(eff_read_timeout)
+                        except Exception:
+                            pass
 
                     # Bounded stream reading up to max_response_size
                     chunks = []
@@ -480,7 +773,7 @@ class SafeHttpClient:
                             if attempt < self.max_retries:
                                 raise
                             break
-                        if not chunk:
+                        if not chunk or not isinstance(chunk, (bytes, str)):
                             break
                         chunks.append(chunk)
                         bytes_read += len(chunk)
@@ -498,7 +791,16 @@ class SafeHttpClient:
                     detected_encoding = encoding or self._detect_encoding(content_type, raw_bytes)
                     decoded_text = robust_decode(raw_bytes, declared_encoding=detected_encoding)
 
+                    if status_code == 200 and decoded_text:
+                        self.set_cached_response(norm_url, status_code, decoded_text, raw_bytes)
+
                     return status_code, decoded_text, raw_bytes
+                finally:
+                    if hasattr(resp, "close"):
+                        try:
+                            resp.close()
+                        except Exception:
+                            pass
 
             except urllib.error.HTTPError as he:
                 logger.warning(f"HTTPError {he.code} on {norm_url} (Attempt {attempt}/{self.max_retries}): {he.reason}")
@@ -515,6 +817,14 @@ class SafeHttpClient:
                         logger.info(f"Backing off for {backoff:.2f}s before retry (status {he.code})...")
                         time.sleep(backoff)
                     else:
+                        if he.code in [500, 502, 503, 504, 520, 521, 522, 523, 524] and self.cache_fallback:
+                            cached = self.get_cached_response(norm_url)
+                            if cached is not None:
+                                logger.warning(
+                                    f"Remote endpoint {norm_url} returned HTTP {he.code}. Falling back to cached response."
+                                )
+                                self.last_response_from_cache = True
+                                return cached
                         try:
                             try:
                                 raw_bytes = he.read(self.max_response_size)
@@ -531,13 +841,43 @@ class SafeHttpClient:
                         he.close()
                     except Exception:
                         pass
-            except Exception as ex:
+            except (
+                TimeoutError,
+                socket.timeout,
+                urllib.error.URLError,
+                http.client.RemoteDisconnected,
+                http.client.IncompleteRead,
+                http.client.HTTPException,
+                ConnectionError,
+                BrokenPipeError,
+                ssl.SSLError,
+                socket.gaierror,
+                OSError,
+                Exception,
+            ) as ex:
                 logger.warning(f"Request error on {norm_url} (Attempt {attempt}/{self.max_retries}): {ex}")
                 if attempt < self.max_retries:
                     backoff = min(30.0, (2 ** attempt) * 1.5 + random.uniform(0.5, 1.5))
                     time.sleep(backoff)
                 else:
+                    if self.cache_fallback:
+                        cached = self.get_cached_response(norm_url)
+                        if cached is not None:
+                            logger.warning(
+                                f"Remote endpoint {norm_url} unreachable ({ex}). Falling back to cached response."
+                            )
+                            self.last_response_from_cache = True
+                            return cached
                     break
+
+        if self.cache_fallback:
+            cached = self.get_cached_response(norm_url)
+            if cached is not None:
+                logger.warning(
+                    f"Remote endpoint {norm_url} unreachable. Falling back to cached response."
+                )
+                self.last_response_from_cache = True
+                return cached
 
         logger.error(f"Failed to fetch {norm_url} after {self.max_retries} attempts.")
         return 0, "", b""
@@ -547,7 +887,9 @@ class SafeHttpClient:
         url: str,
         referer: Optional[str] = None,
         headers: Optional[Dict[str, str]] = None,
-        timeout: Optional[float] = None,
+        timeout: Optional[Union[float, Tuple[float, float]]] = None,
+        connect_timeout: Optional[float] = None,
+        read_timeout: Optional[float] = None,
         **kwargs: Any,
     ) -> Tuple[int, str]:
         """Convenience GET helper returning (status_code, decoded_text)."""
@@ -557,6 +899,8 @@ class SafeHttpClient:
             headers=headers,
             referer=referer,
             timeout=timeout,
+            connect_timeout=connect_timeout,
+            read_timeout=read_timeout,
         )
         return status, text
 
@@ -566,7 +910,9 @@ class SafeHttpClient:
         data: Optional[Union[Dict[str, Any], bytes, str]] = None,
         referer: Optional[str] = None,
         headers: Optional[Dict[str, str]] = None,
-        timeout: Optional[float] = None,
+        timeout: Optional[Union[float, Tuple[float, float]]] = None,
+        connect_timeout: Optional[float] = None,
+        read_timeout: Optional[float] = None,
         **kwargs: Any,
     ) -> Tuple[int, str]:
         """Convenience POST helper returning (status_code, decoded_text)."""
@@ -577,6 +923,8 @@ class SafeHttpClient:
             headers=headers,
             referer=referer,
             timeout=timeout,
+            connect_timeout=connect_timeout,
+            read_timeout=read_timeout,
         )
         return status, text
 

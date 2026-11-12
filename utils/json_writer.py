@@ -53,6 +53,10 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
         return safe_default
 
 
+_DATE_4DIGIT_RE = re.compile(r"(\d{4})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})")
+_DATE_2DIGIT_RE = re.compile(r"(?:^|[^\d])(\d{2})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})")
+
+
 def _extract_record_date(record: Dict[str, Any]) -> str:
     """Extract normalized YYYY-MM-DD date string from a complaint record dict."""
     for field in ("date", "created_at", "timestamp"):
@@ -60,11 +64,11 @@ def _extract_record_date(record: Dict[str, Any]) -> str:
         if not val:
             continue
         val_str = str(val).strip()
-        match_4 = re.search(r"(\d{4})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})", val_str)
+        match_4 = _DATE_4DIGIT_RE.search(val_str)
         if match_4:
             y, m, d = match_4.group(1), match_4.group(2).zfill(2), match_4.group(3).zfill(2)
             return f"{y}-{m}-{d}"
-        match_2 = re.search(r"(?:^|[^\d])(\d{2})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})", val_str)
+        match_2 = _DATE_2DIGIT_RE.search(val_str)
         if match_2:
             yy, m, d = int(match_2.group(1)), match_2.group(2).zfill(2), match_2.group(3).zfill(2)
             y = f"20{yy:02d}" if yy < 70 else f"19{yy:02d}"
@@ -90,7 +94,7 @@ def format_daily_report_payload(
         generated_at = datetime.now(timezone.utc).isoformat()
 
     report_dicts: List[Dict[str, Any]] = []
-    negativity_scores: List[float] = []
+    total_negativity: float = 0.0
     critical_count = 0
     category_counts: Counter[str] = Counter()
 
@@ -134,14 +138,14 @@ def format_daily_report_payload(
             continue
 
         report_dicts.append(record_dict)
-        negativity_scores.append(neg_score)
+        total_negativity += neg_score
         if is_critical:
             critical_count += 1
         category_counts[category] += 1
 
     total_filtered = len(report_dicts)
     computed_total_scraped = total_scraped if total_scraped is not None else total_filtered
-    avg_neg = (sum(negativity_scores) / total_filtered) if total_filtered > 0 else 0.0
+    avg_neg = (total_negativity / total_filtered) if total_filtered > 0 else 0.0
 
     # Build category breakdown
     top_categories = []
@@ -316,12 +320,16 @@ def write_daily_reports(
         items_to_write = merged_reports
         total_scraped = combined_total_scraped
 
-        payload = format_daily_report_payload(
-            complaints=items_to_write,
-            total_scraped=total_scraped,
-            pipeline_version=pipeline_version,
-            generated_at=generated_at,
-        )
+        # Fast path: reuse existing payload if no historical merge was performed
+        if not existing_reports and len(merged_reports) == len(new_reports) and new_payload.statistics.total_scraped == combined_total_scraped:
+            payload = new_payload
+        else:
+            payload = format_daily_report_payload(
+                complaints=items_to_write,
+                total_scraped=total_scraped,
+                pipeline_version=pipeline_version,
+                generated_at=generated_at,
+            )
 
         data = payload.to_dict()
 

@@ -112,20 +112,25 @@ const FaqItemRow = memo(function FaqItemRow({
           type="button"
           aria-expanded={isOpen}
           aria-controls={`faq-panel-${item.id}`}
+          aria-labelledby={`faq-title-${item.id}`}
           onClick={() => onToggle(item.id)}
           onKeyDown={(e) => onKeyDown(e, idx)}
           className="w-full py-3.5 px-4 sm:px-5 min-h-[44px] text-left text-xs sm:text-sm font-semibold text-slate-200 hover:text-white flex items-center justify-between gap-3 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
         >
           <span className="flex items-center gap-2">
             <span className="text-amber-400 font-bold" aria-hidden="true">Q.</span>
-            <span>{item.question}</span>
+            <span id={`faq-title-${item.id}`}>{item.question}</span>
           </span>
-          <span
+          <svg
+            className={`w-4 h-4 shrink-0 text-slate-300 transition-transform duration-200 ${isOpen ? 'rotate-180 text-amber-400' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
             aria-hidden="true"
-            className={`text-slate-300 text-xs shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-amber-400' : ''}`}
+            focusable="false"
           >
-            ▼
-          </span>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
         </button>
       </h3>
 
@@ -184,7 +189,7 @@ export const SubsidyFaqAccordion = memo(function SubsidyFaqAccordion() {
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-900 pb-3">
         <h2 id="subsidy-guidelines-heading" className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-          <span>📌</span> 2026년 환경부 및 지자체 전기차 보조금 제도 가이드 &amp; 자주 묻는 질문
+          <span aria-hidden="true">📌</span> 2026년 환경부 및 지자체 전기차 보조금 제도 가이드 &amp; 자주 묻는 질문
         </h2>
         <span className="text-xs text-slate-300">클릭하여 세부 기준 확인</span>
       </div>

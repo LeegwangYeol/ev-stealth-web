@@ -11,18 +11,20 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  retryCount: number;
 }
 
 export default class SubsidyErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
     error: null,
+    retryCount: 0,
   };
 
   private containerRef = createRef<HTMLDivElement>();
   private retryButtonRef = createRef<HTMLButtonElement>();
 
-  public static getDerivedStateFromError(error: Error): State {
+  public static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
@@ -42,9 +44,19 @@ export default class SubsidyErrorBoundary extends Component<Props, State> {
   }
 
   public handleReset = () => {
-    this.setState({ hasError: false, error: null });
+    this.setState((prevState) => ({
+      hasError: false,
+      error: null,
+      retryCount: prevState.retryCount + 1,
+    }));
     if (this.props.onReset) {
       this.props.onReset();
+    }
+  };
+
+  private handleReload = () => {
+    if (typeof window !== 'undefined') {
+      window.location.reload();
     }
   };
 
@@ -82,19 +94,37 @@ export default class SubsidyErrorBoundary extends Component<Props, State> {
               {this.state.error?.message ? ` (${this.state.error.message})` : ''}
             </p>
           </div>
-          <button
-            ref={this.retryButtonRef}
-            type="button"
-            onClick={this.handleReset}
-            className="px-4 py-2.5 min-h-[44px] min-w-[44px] inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
-          >
-            <span aria-hidden="true">🔄</span>
-            <span>다시 계산 시도</span>
-          </button>
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            <button
+              ref={this.retryButtonRef}
+              type="button"
+              onClick={this.handleReset}
+              aria-label="보조금 계산 다시 시도"
+              className="px-4 py-2.5 min-h-[44px] min-w-[44px] inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+            >
+              <span aria-hidden="true">🔄</span>
+              <span>다시 계산 시도</span>
+            </button>
+            {this.state.retryCount > 0 && (
+              <button
+                type="button"
+                onClick={this.handleReload}
+                aria-label="페이지 새로고침"
+                className="px-4 py-2.5 min-h-[44px] min-w-[44px] inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+              >
+                <span aria-hidden="true">🔃</span>
+                <span>새로고침</span>
+              </button>
+            )}
+          </div>
         </div>
       );
     }
 
-    return this.props.children;
+    return (
+      <React.Fragment key={this.state.retryCount}>
+        {this.props.children}
+      </React.Fragment>
+    );
   }
 }

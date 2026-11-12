@@ -38,6 +38,7 @@ export default function DepreciationCalculatorError({ error, reset }: Depreciati
       tabIndex={-1}
       role="alert"
       aria-live="assertive"
+      aria-atomic="true"
       aria-labelledby="depreciation-error-heading"
       aria-describedby="depreciation-error-description"
       className="min-h-[60vh] flex items-center justify-center px-4 py-12 outline-none focus:outline-none"

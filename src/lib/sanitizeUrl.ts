@@ -193,6 +193,7 @@ export function decodeHtmlEntities(str: string): string {
     .replace(/&colon;?/gi, ':')
     .replace(/&tab;?/gi, '\t')
     .replace(/&newline;?/gi, '\n')
+    .replace(/&nbsp;?/gi, ' ')
     .replace(/&sol;?/gi, '/')
     .replace(/&bsol;?/gi, '\\')
     .replace(/&quot;?/gi, '"')
@@ -528,25 +529,54 @@ export function classifyDomain(urlOrHost?: unknown): DomainCategory {
  */
 export function sanitizeSafeUrl(url?: unknown, options?: SanitizeUrlOptions): string {
   if (!url || typeof url !== 'string') return '#';
+
+  // 1. Check for raw control characters or null bytes in untrimmed input (rejecting embedded nulls, C0/C1, separators)
+  // Allows standard leading/trailing whitespace (\t, \r, \n, space) to be trimmed cleanly, but blocks all other raw controls
+  if (/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u00ad\u200b-\u200f\u2028-\u202f\u2060-\u206f\ufeff]/u.test(url)) {
+    return '#';
+  }
+
   const trimmed = url.trim();
   if (!trimmed) return '#';
 
-  // Explicitly disallow raw control characters or null bytes
-  if (/[\x00-\x1f\x7f]/.test(trimmed)) {
+  // 2. Reject if any control characters remain after trim (e.g. tabs or newlines within the URL body)
+  if (/[\x00-\x1f\x7f-\x9f\u00ad\u200b-\u200f\u2028-\u202f\u2060-\u206f\ufeff]/u.test(trimmed)) {
     return '#';
   }
 
-  // Reject literal null byte escape sequences in string (\0, \x00, \u0000, \u{0})
-  if (/\\0|\\x00|\\u0000|\\u\{0+\}/i.test(trimmed)) {
+  // 3. Reject literal escape sequences in string for null or control characters (\0, \x00-\x1f, \u0000-\u001f, etc.)
+  if (/\\(?:0|x0[0-9a-fA-F]|x1[0-9a-fA-F]|x7[fF]|x[89][0-9a-fA-F]|u00[0-1][0-9a-fA-F]|u007[fF]|u00[89][0-9a-fA-F]|u\{0+\})/i.test(trimmed)) {
     return '#';
   }
 
-  // Reject percent-encoded null bytes (%00) and CRLF injection (%0d, %0a)
-  if (/(?:%00|%0d|%0a)/i.test(trimmed)) {
+  // 4. Reject percent-encoded C0 controls (%00-%1F) and DEL (%7F)
+  if (/%(?:0[0-9a-fA-F]|1[0-9a-fA-F]|7[fF])/i.test(trimmed)) {
     return '#';
   }
 
-  // Extract scheme and check against allowed and forbidden schemes
+  // 5. Reject Microsoft unicode percent-encoding for control characters (%u0000-%u001F, %u007F-%u009F, %u2028-%u2029)
+  if (/%u(?:00[0-1][0-9a-fA-F]|007[fF]|00[89][0-9a-fA-F]|202[89]|200[b-fB-F]|feff|FEFF)/i.test(trimmed)) {
+    return '#';
+  }
+
+  // 6. Decode entities and percent-encodings to detect decoded control characters
+  const decodedCheck = safeDecodePercent(decodeHtmlEntities(trimmed));
+  if (/[\x00-\x1f\x7f-\x9f\u00ad\u200b-\u200f\u2028-\u202f\u2060-\u206f\ufeff]/u.test(decodedCheck)) {
+    return '#';
+  }
+
+  // 7. Explicit check for forbidden schemes (javascript:, data:, vbscript:)
+  if (
+    /^(?:\s*|.*?)(?:javascript|data|vbscript)\s*:/i.test(trimmed) ||
+    /^(?:\s*|.*?)(?:javascript|data|vbscript)\s*:/i.test(decodedCheck)
+  ) {
+    const extracted = extractAndNormalizeScheme(trimmed);
+    if (!extracted || extracted === 'javascript' || extracted === 'data' || extracted === 'vbscript' || FORBIDDEN_SCHEMES.has(extracted)) {
+      return '#';
+    }
+  }
+
+  // 8. Extract scheme and check against allowed and forbidden schemes
   const normalizedScheme = extractAndNormalizeScheme(trimmed);
   if (normalizedScheme) {
     if (FORBIDDEN_SCHEMES.has(normalizedScheme) || !ALLOWED_SCHEMES.has(normalizedScheme)) {
@@ -554,33 +584,33 @@ export function sanitizeSafeUrl(url?: unknown, options?: SanitizeUrlOptions): st
     }
   }
 
-  // Block protocol-relative URLs and backslash redirects
+  // 9. Block protocol-relative URLs and backslash redirects
   if (isOpenRedirect(trimmed)) {
     return '#';
   }
 
-  // Anchor links (#...)
+  // 10. Anchor links (#...)
   if (/^#[a-zA-Z0-9_\-.:]*$/.test(trimmed)) {
     return trimmed;
   }
 
-  // Safe internal relative routes (must start with / and not followed by / or \ or encoded slashes, no backslashes anywhere in path)
+  // 11. Safe internal relative routes (must start with / and not followed by / or \ or encoded slashes, no backslashes anywhere in path)
   if (/^\/(?![/\\])/.test(trimmed) && !/[\s<>"'\\]/.test(trimmed) && !/^\/(?:%2f|%5c)/i.test(trimmed)) {
     // Strip any prototype pollution from internal relative query params
     return stripPrototypePollutionQueryParams(trimmed);
   }
 
-  // mailto:
+  // 12. mailto:
   if (/^mailto:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i.test(trimmed)) {
     return trimmed;
   }
 
-  // tel:
+  // 13. tel:
   if (/^tel:[+0-9\-#*().]+$/i.test(trimmed)) {
     return trimmed;
   }
 
-  // Absolute web URLs: must be http or https with valid hostname
+  // 14. Absolute web URLs: must be http or https with valid hostname
   if (/^https?:\/\//i.test(trimmed) && !/[\s<>"'\\]/.test(trimmed)) {
     try {
       const parsed = new URL(trimmed);
@@ -611,6 +641,12 @@ export function sanitizeSafeUrl(url?: unknown, options?: SanitizeUrlOptions): st
 
   return '#';
 }
+
+/**
+ * Standard alias for sanitizeSafeUrl.
+ */
+export const sanitizeUrl = sanitizeSafeUrl;
+export default sanitizeSafeUrl;
 
 /**
  * Sanitizes a URL and strictly enforces that external destinations belong to the verified EV domain whitelist.

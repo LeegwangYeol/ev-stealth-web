@@ -10,7 +10,7 @@ export type DefectCategoryCode =
   | 'SOFTWARE_ELECTRONICS'
   | 'SERVICE_REPAIR_COST'
   | 'COLD_WEATHER'
-  | string;
+  | (string & {});
 
 export type SeverityLevel =
   | 'CRITICAL'
@@ -20,7 +20,12 @@ export type SeverityLevel =
   | 'CAUTION'
   | 'LOW'
   | 'INFO'
-  | string;
+  | (string & {});
+
+export type DefectReportSource =
+  | 'bobaedream'
+  | 'dcinside'
+  | (string & {});
 
 export interface DsiBreakdown {
   safety?: number;
@@ -33,17 +38,17 @@ export interface DsiBreakdown {
 
 export interface DefectReportItem {
   id: string;
-  source: string;
+  source: DefectReportSource | string;
   date: string;
   title: string;
   summary: string;
-  verbatim_quote?: string;
+  verbatim_quote: string;
   raw_quote?: string;
   vehicle_model: string;
   vehicle_brand?: string;
   target_vehicle?: string;
   defect_category: DefectCategoryCode;
-  defect_category_ko?: string;
+  defect_category_ko: string;
   category?: string;
   severity: SeverityLevel;
   sentiment_score: number;
@@ -53,7 +58,7 @@ export interface DefectReportItem {
   severity_index?: number;
   slang_tags: string[];
   slang_terms_detected?: string[];
-  url?: string;
+  url: string;
   post_url?: string;
   post_title?: string;
   platform?: string;

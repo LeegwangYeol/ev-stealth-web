@@ -26,13 +26,20 @@ interface ReliabilityDashboardClientProps {
 type ChartTabKey = 'heatmap' | 'brand_ranking' | 'category_share';
 export type ReliabilitySortOption = 'DSI_DESC' | 'DSI_ASC' | 'GRADE' | 'NAME';
 
-const isReliabilitySortOption = (val: string): val is ReliabilitySortOption =>
+export const isReliabilitySortOption = (val: string): val is ReliabilitySortOption =>
   ['DSI_DESC', 'DSI_ASC', 'GRADE', 'NAME'].includes(val);
 
 const CHART_TABS: { id: ChartTabKey; label: string }[] = [
   { id: 'heatmap', label: '연식 리스크 히트맵' },
   { id: 'brand_ranking', label: '브랜드 결함 심각도(DSI) 랭킹' },
   { id: 'category_share', label: '부문별 결함 비중' },
+];
+
+export const RELIABILITY_SORT_OPTIONS: { id: ReliabilitySortOption; label: string }[] = [
+  { id: 'DSI_DESC', label: 'DSI 위험순' },
+  { id: 'DSI_ASC', label: 'DSI 안전순' },
+  { id: 'GRADE', label: '등급순' },
+  { id: 'NAME', label: '이름순' },
 ];
 
 const CATEGORY_BG_COLORS: Record<DefectCategoryKey, string> = {
@@ -283,10 +290,11 @@ const BrandRankingItem = React.memo(function BrandRankingItem({
   return (
     <button
       type="button"
+      role="button"
       onClick={() => onToggle(brand.id)}
       aria-pressed={isSelected}
-      aria-label={`${idx + 1}위 ${brand?.name_ko || ''} (${brand?.name_en || ''}), 국가: ${brand?.country || ''}, ${modelCount}개 모델, 치명 결함율 ${criticalRate}%, 평균 DSI ${safeDsi}점 (${dsiInfo.label})`}
-      className={`w-full text-left p-3 sm:p-4 rounded-2xl border transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+      aria-label={`${idx + 1}위 ${brand?.name_ko || ''} (${brand?.name_en || ''}), 국가: ${brand?.country || ''}, ${modelCount}개 모델, 치명 결함율 ${criticalRate}%, 평균 DSI ${safeDsi}점 (${dsiInfo.label})${isSelected ? ' (선택됨, 필터 해제하려면 클릭)' : ' (클릭하여 이 브랜드만 필터링)'}`}
+      className={`w-full text-left p-3 sm:p-4 rounded-2xl border transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
         isSelected
           ? 'bg-indigo-50/80 border-indigo-300 ring-2 ring-indigo-200'
           : 'bg-slate-50 hover:bg-slate-100/80 border-slate-200'
@@ -320,7 +328,7 @@ const BrandRankingItem = React.memo(function BrandRankingItem({
         className="w-full bg-slate-200 rounded-full h-3.5 overflow-hidden relative"
       >
         <div
-          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+          className={`h-full rounded-full transition-all duration-500 motion-reduce:transition-none ${barColor}`}
           style={{ width: dsiWidth }}
         />
       </div>
@@ -692,7 +700,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     if (!sortedBrands.length) return '브랜드별 종합 결함 심각도 지수 시각화 차트입니다.';
     const bestBrand = sortedBrands[0];
     const worstBrand = sortedBrands[sortedBrands.length - 1];
-    return `9대 전기차 제조사별 결함 심각도 지수(DSI 0~100점, 낮을수록 우수) 수평 막대 차트입니다. 최저(최우수) DSI는 ${bestBrand?.name_ko || ''}(${bestBrand?.overall_dsi || 0}점), 최고(주의) DSI는 ${worstBrand?.name_ko || ''}(${worstBrand?.overall_dsi || 0}점)입니다. 아래에 전체 브랜드별 스크린 리더용 데이터 표가 제공됩니다.`;
+    return `${sortedBrands.length}대 전기차 제조사별 결함 심각도 지수(DSI 0~100점, 낮을수록 우수) 수평 막대 차트입니다. 최저(최우수) DSI는 ${bestBrand?.name_ko || ''}(${bestBrand?.overall_dsi || 0}점), 최고(주의) DSI는 ${worstBrand?.name_ko || ''}(${worstBrand?.overall_dsi || 0}점)입니다. 아래에 전체 브랜드별 스크린 리더용 데이터 표가 제공됩니다.`;
   }, [sortedBrands]);
 
   // Stabilized Callback Handlers
@@ -753,6 +761,13 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       activeTriggerRef.current.focus();
     }
   }, []);
+
+  // Focus detail dialog when opened
+  useEffect(() => {
+    if (hoveredCell) {
+      document.getElementById('heatmap-detail-card')?.focus();
+    }
+  }, [hoveredCell]);
 
   // Escape key listener for accessible dismissal of detail card with focus return
   useEffect(() => {
@@ -828,6 +843,43 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
         {/* KPI Score Cards */}
         <h2 className="sr-only">주요 결함 통계 지표 요약 (KPI)</h2>
+
+        {/* Visually hidden data summary table for screen readers */}
+        <div className="sr-only">
+          <table aria-label="주요 결함 통계 핵심 지표 (KPI) 요약 표">
+            <caption>전기차 신뢰성 통계 주요 핵심 지표 (KPI)</caption>
+            <thead>
+              <tr>
+                <th scope="col">지표 항목</th>
+                <th scope="col">측정 수치</th>
+                <th scope="col">상세 설명</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">분석 결함 제보</th>
+                <td>{(Number.isFinite(metadata?.total_records_analyzed) ? metadata.total_records_analyzed : 0).toLocaleString()}건</td>
+                <td>{brands.length}개 브랜드 · {metadata.models_count || allModels.length}개 모델 조사</td>
+              </tr>
+              <tr>
+                <th scope="row">산업 평균 DSI 점수</th>
+                <td>{Number.isFinite(metadata?.avg_industry_dsi) ? metadata.avg_industry_dsi : 0} / 100점</td>
+                <td>결함 심각도 지수 (높을수록 위험)</td>
+              </tr>
+              <tr>
+                <th scope="row">구매 회피 (AVOID) 연식</th>
+                <td>{avoidPercentage}%</td>
+                <td>총 {totalEvaluationsCount}개 중 {avoidEvaluationsCount}개 연식 위험</td>
+              </tr>
+              <tr>
+                <th scope="row">최다 결함 발생 부문</th>
+                <td>{topCategory ? `${Number.isFinite(topCategory.industry_share_pct) ? topCategory.industry_share_pct : 0}%` : '0%'}</td>
+                <td>{topCategory ? topCategory.label_ko : '데이터 없음'}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-8 pt-8 border-t border-slate-800">
           <div
             role="region"
@@ -976,8 +1028,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 tabIndex={0}
                 role="region"
                 aria-label="연식별 전기차 신뢰성 및 결함 심각도 매트릭스 표 스크롤 영역"
-                className="overflow-x-auto border border-slate-200 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="overflow-x-auto table-scroll-container border border-slate-200 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
+                <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-500 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true"><span>← 좌우로 밀어서 2017~2026 전 연식 확인</span><span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span></div>
                 <table
                   className="w-full min-w-[680px] text-left text-xs sm:text-sm border-collapse"
                   aria-label="연식별 전기차 신뢰성 및 결함 심각도(DSI) 매트릭스"
@@ -1026,21 +1079,22 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 </table>
               </div>
 
-              {/* Heatmap Detail Card (if selected) */}
+              {/* Heatmap Detail Dialog (if selected) */}
               {hoveredCell && (
                 <div
                   id="heatmap-detail-card"
-                  role="region"
-                  aria-label={`${hoveredCell.brandName} ${hoveredCell.modelName} ${hoveredCell.year}년식 세부 결함 분석`}
+                  role="dialog"
+                  aria-modal="false"
+                  aria-labelledby="heatmap-dialog-title"
                   aria-live="polite"
                   tabIndex={-1}
-                  className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-700 shadow-xl animate-fade-in motion-reduce:animate-none flex flex-col sm:flex-row justify-between gap-4 focus:outline-none"
+                  className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-700 shadow-xl animate-fade-in motion-reduce:animate-none flex flex-col sm:flex-row justify-between gap-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <div className="space-y-1 max-w-2xl">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-bold text-base text-blue-300">
+                      <h3 id="heatmap-dialog-title" className="font-bold text-base text-blue-300">
                         {hoveredCell.brandName} {hoveredCell.modelName} ({hoveredCell.year}년식)
-                      </span>
+                      </h3>
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full font-bold ${
                           hoveredCell.verdict === 'AVOID'
@@ -1129,8 +1183,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   tabIndex={0}
                   role="region"
                   aria-label="브랜드별 DSI 결함 심각도 지수 시각화 차트 스크롤 영역"
-                  className="w-full overflow-x-auto border border-slate-800 rounded-2xl p-4 sm:p-6 bg-slate-900 text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 shadow-inner"
+                  className="w-full overflow-x-auto table-scroll-container border border-slate-800 rounded-2xl p-4 sm:p-6 bg-slate-900 text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 shadow-inner"
                 >
+                  <div className="sm:hidden flex items-center justify-between pb-2 mb-2 text-[11px] font-medium text-slate-400 border-b border-slate-800 select-none" aria-hidden="true"><span>← 좌우로 밀어서 9대 브랜드 비교</span><span className="text-[10px] text-blue-400 font-semibold">차트 스크롤 ↔</span></div>
                   <svg
                     className="w-full min-w-[560px] h-auto select-none"
                     viewBox={`0 0 680 ${brandSvgHeight}`}
@@ -1410,7 +1465,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               aria-describedby="reliability-search-hint"
               aria-label="차종, 브랜드, 결함 증상 검색"
               placeholder="차종명, 브랜드, 결함 증상(ICCU, 배터리, 옥토밸브, 백색가루 등) 검색..."
-              className="w-full pl-10 pr-10 py-2.5 min-h-[44px] bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition placeholder-slate-500"
+              className="w-full pl-10 pr-10 py-2.5 min-h-[44px] bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus:bg-white transition placeholder-slate-500"
             />
             <span id="reliability-search-hint" className="sr-only">
               검색어를 입력하면 실시간으로 차종 목록이 필터링됩니다. ESC 키를 누르면 검색어가 초기화됩니다.
@@ -1422,7 +1477,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   setSearchQuery('');
                   searchInputRef.current?.focus();
                 }}
-                className="absolute inset-y-0 right-0 pr-3 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-700 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+                className="absolute inset-y-0 right-0 pr-3 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-700 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 rounded"
                 title="검색어 지우기"
                 aria-label="검색어 지우기"
               >
@@ -1433,24 +1488,44 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             )}
           </div>
 
-          <div className="flex items-center gap-3">
-            <label htmlFor="reliability-sort-select" className="sr-only">정렬 기준 선택</label>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <label htmlFor="reliability-sort-select" className="sr-only">차종 정렬 기준</label>
             <select
               id="reliability-sort-select"
               value={sortBy}
-              onChange={(e) => {
-                if (isReliabilitySortOption(e.target.value)) {
-                  setSortBy(e.target.value);
-                }
-              }}
-              aria-label="정렬 기준 선택"
-              className="px-3 py-2 min-h-[44px] bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm font-medium text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              onChange={(e) => setSortBy(e.target.value as ReliabilitySortOption)}
+              aria-label="차종 정렬 기준 선택"
+              className="sr-only"
             >
-              <option value="DSI_DESC">DSI 위험도 높은 순</option>
-              <option value="DSI_ASC">DSI 안전한 순</option>
-              <option value="GRADE">내구성 등급순 (A+ → F)</option>
-              <option value="NAME">차종 이름순</option>
+              {RELIABILITY_SORT_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
             </select>
+            <div
+              role="group"
+              aria-label="차종 목록 정렬 기준"
+              className="inline-flex bg-slate-100 p-1 rounded-xl"
+            >
+              {RELIABILITY_SORT_OPTIONS.map((opt) => {
+                const isSortActive = sortBy === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    role="button"
+                    aria-pressed={isSortActive}
+                    onClick={() => setSortBy(opt.id)}
+                    className={`px-3 py-1.5 min-h-[44px] inline-flex items-center text-xs font-bold rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+                      isSortActive
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-700 hover:text-slate-900'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
 
             {hasActiveFilter && (
               <button
@@ -1497,7 +1572,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 }`}
               >
                 <span>{brand.name_ko}</span>
-                <span className="text-[10px] opacity-75">({(brand.models || []).length})</span>
+                <span className={`text-[10px] font-semibold ${selectedBrand === brand.id ? 'text-blue-100' : 'text-slate-700'}`}>
+                  ({(brand.models || []).length})
+                </span>
               </button>
             ))}
           </div>
@@ -1683,8 +1760,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           tabIndex={0}
           role="region"
           aria-label="보증 만료 후 부품별 수리비 매트릭스 표 스크롤 영역"
-          className="overflow-x-auto border border-slate-200 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="overflow-x-auto table-scroll-container border border-slate-200 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
+          <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-500 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true"><span>← 좌우로 밀어서 부품별 수리비 확인</span><span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span></div>
           <table className="w-full min-w-[700px] text-left text-xs sm:text-sm border-collapse" aria-label="보증 만료 후 폭탄 수리비 및 핵심 부품별 교체 비용 매트릭스">
             <caption className="p-4 text-left font-bold text-slate-900 text-sm sm:text-base border-b border-slate-100 bg-slate-50/50">
               보증 만료 후 폭탄 수리비 및 핵심 부품별 교체 비용 매트릭스
@@ -1800,11 +1878,11 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
             className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden"
           >
             <div
-              className={`h-full rounded-full transition-all duration-300 ${dsiInfo.barBgClass}`}
+              className={`h-full rounded-full transition-all duration-300 motion-reduce:transition-none ${dsiInfo.barBgClass}`}
               style={{ width: `${Math.min(100, Math.max(10, safeDsi))}%` }}
             />
           </div>
-          <div id={`model-dsi-desc-${model.id}`} className="flex justify-between text-[10px] text-slate-700 font-semibold">
+          <div id={`model-dsi-desc-${model.id}`} className="flex justify-between text-xs text-slate-700 font-semibold">
             <span>안전 (0점)</span>
             <span className={dsiInfo.textColor}>{dsiInfo.label}</span>
             <span>치명 (100점)</span>

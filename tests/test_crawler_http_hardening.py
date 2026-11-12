@@ -13,6 +13,8 @@ import http.cookiejar
 import io
 import json
 import unittest
+import unittest.mock
+from unittest.mock import MagicMock, patch
 import urllib.error
 import urllib.request
 

@@ -16,6 +16,7 @@ const teslaJsonLd = {
       '@id': `${SITE_URL}/tesla#article`,
       headline: '테슬라 연식별 결함 및 구매 가이드',
       description: '테슬라 모델 3, 모델 Y 연식별(2017~2026) 히터 파괴, 컨트롤 암, 옥토밸브 히트펌프 결함 분석 및 중고차 구매 가이드',
+      image: [`${SITE_URL}/og-image.png`],
       url: `${SITE_URL}/tesla`,
       inLanguage: 'ko-KR',
       datePublished: '2026-01-01T00:00:00+09:00',
@@ -30,15 +31,22 @@ const teslaJsonLd = {
         name: 'Global EV Hub',
         logo: {
           '@type': 'ImageObject',
-          url: `${SITE_URL}/favicon.ico`,
+          url: `${SITE_URL}/og-image.png`,
+          width: 1200,
+          height: 630,
         },
       },
-      mainEntityOfPage: `${SITE_URL}/tesla`,
+      mainEntityOfPage: {
+        '@type': 'WebPage',
+        '@id': `${SITE_URL}/tesla`,
+      },
     },
     {
       '@type': 'Vehicle',
       '@id': `${SITE_URL}/tesla#vehicle-model3`,
       name: '테슬라 모델 3 하이랜드 (Tesla Model 3 Highland)',
+      image: `${SITE_URL}/og-image.png`,
+      url: `${SITE_URL}/tesla#heading-tesla-model3`,
       brand: {
         '@type': 'Brand',
         name: 'Tesla',
@@ -79,6 +87,8 @@ const teslaJsonLd = {
       '@type': 'Vehicle',
       '@id': `${SITE_URL}/tesla#vehicle-modely`,
       name: '테슬라 모델 Y 주니퍼 / 컴포트 (Tesla Model Y Juniper)',
+      image: `${SITE_URL}/og-image.png`,
+      url: `${SITE_URL}/tesla#heading-tesla-modely`,
       brand: {
         '@type': 'Brand',
         name: 'Tesla',
@@ -119,13 +129,13 @@ const teslaJsonLd = {
           '@type': 'ListItem',
           position: 1,
           name: '테슬라 모델 3 (2017~2020 초기형 PTC 히터 파괴 회피 및 2024 하이랜드 추천)',
-          url: `${SITE_URL}/tesla#heading-model3`,
+          url: `${SITE_URL}/tesla#heading-tesla-model3`,
         },
         {
           '@type': 'ListItem',
           position: 2,
           name: '테슬라 모델 Y (2020~2022 초기형 옥토밸브 히트펌프 결함 및 2025 주니퍼 페이스리프트)',
-          url: `${SITE_URL}/tesla#heading-modely`,
+          url: `${SITE_URL}/tesla#heading-tesla-modely`,
         },
       ],
     },
@@ -196,6 +206,10 @@ export const metadata: Metadata = {
   ],
   alternates: {
     canonical: '/tesla',
+    languages: {
+      'ko-KR': '/tesla',
+      'x-default': '/tesla',
+    },
   },
   openGraph: {
     title: '테슬라 연식별 결함 및 구매 가이드 | Global EV Hub',
@@ -204,6 +218,8 @@ export const metadata: Metadata = {
     siteName: 'Global EV Hub',
     locale: 'ko_KR',
     type: 'article',
+    authors: ['Global EV Hub'],
+    section: '전기차 결함 및 구매 가이드',
     publishedTime: '2026-01-01T00:00:00+09:00',
     modifiedTime: '2026-11-01T00:00:00+09:00',
     images: [
@@ -250,8 +266,12 @@ export default function TeslaPage() {
           tabIndex={0}
           role="region"
           aria-label="가로 스크롤 가능한 테슬라 주요 차종 연식별 판정 요약 표"
-          className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+          className="overflow-x-auto table-scroll-container rounded-2xl border border-slate-200 bg-white shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
         >
+          <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-500 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true">
+            <span>← 좌우로 밀어서 전체 모델 비교</span>
+            <span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span>
+          </div>
           <table className="w-full min-w-[640px] text-left border-collapse text-xs sm:text-sm" aria-label="테슬라 주요 모델별 주의 및 추천 연식 요약 표">
             <caption className="sr-only">테슬라 모델 3 및 모델 Y 연식별 회피 연식, 주의 연식, 추천 연식, 주요 고질병 및 리콜 출처 요약 표</caption>
             <thead className="bg-slate-900 text-slate-100 uppercase text-[11px] sm:text-xs tracking-wider">
@@ -293,7 +313,7 @@ export default function TeslaPage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="미국 NHTSA 테슬라 모델 3 공식 리콜 내역 (새 창에서 열림)"
-                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>NHTSA</span>
                     <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -331,7 +351,7 @@ export default function TeslaPage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="국토교통부 자동차리콜센터 테슬라 모델 Y 리콜 정보 (새 창에서 열림)"
-                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>리콜 조회</span>
                     <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">

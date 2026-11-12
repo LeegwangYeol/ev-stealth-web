@@ -21,10 +21,15 @@ export type FireIncidentStatus =
   | 'RECALLED_RESOLVED'
   | 'VERIFIED_SAFE';
 
+export type RecallAgency = 'MOLIT' | 'NHTSA' | (string & {});
+export type RecallStatus = 'ACTIVE' | 'RESOLVED' | (string & {});
+export type VinCheckMode = 'VIN' | 'MODEL';
+export type VinRiskGrade = 'CRITICAL' | 'WARNING' | 'SAFE';
+
 export interface OfficialRecallCampaign {
   id: string;
   campaign_no: string;
-  agency: 'MOLIT' | 'NHTSA' | string;
+  agency: RecallAgency;
   agency_ko: string;
   brand: string;
   target_model: string;
@@ -41,7 +46,7 @@ export interface OfficialRecallCampaign {
   consumer_emergency_guide: string;
   service_center_contact: string;
   official_link: string;
-  status: 'ACTIVE' | 'RESOLVED' | string;
+  status: RecallStatus;
 }
 
 export interface BatterySafetyProfile {
@@ -90,7 +95,7 @@ export interface RecallDatabase {
 export interface VinCheckResult {
   valid: boolean;
   query: string;
-  mode: 'VIN' | 'MODEL';
+  mode: VinCheckMode;
   validationError?: string;
   decodedBrand?: string;
   decodedModel?: string;
@@ -102,7 +107,7 @@ export interface VinCheckResult {
   activeCampaignsCount: number;
   hasFireRisk: boolean;
   hasPowerLoss: boolean;
-  overallRiskGrade: 'CRITICAL' | 'WARNING' | 'SAFE';
+  overallRiskGrade: VinRiskGrade;
   timestamp: string;
 }
 

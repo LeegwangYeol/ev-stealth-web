@@ -34,7 +34,10 @@ from models.complaint import (
     normalize_category,
     normalize_severity,
     parse_date_str,
+    quarantine_entry,
+    sanitize_string,
     validate_category,
+    validate_report_entry,
     validate_severity,
 )
 
@@ -49,9 +52,14 @@ class DefectReport(ComplaintRecord):
         return parse_date_str(self.created_at)
 
     @classmethod
-    def from_dict(cls, data: Any) -> DefectReport:
+    def from_dict(
+        cls,
+        data: Any,
+        strict: bool = False,
+        quarantine: bool = False,
+    ) -> DefectReport:
         """Construct DefectReport from dict, ComplaintRecord, or other object with fallbacks."""
-        rec = ComplaintRecord.from_dict(data)
+        rec = ComplaintRecord.from_dict(data, strict=strict, quarantine=quarantine)
         return cls(
             id=rec.id,
             source=rec.source,
@@ -80,6 +88,11 @@ class DefectReport(ComplaintRecord):
         """Create DefectReport instance directly from ComplaintRecord."""
         return cls.from_dict(record)
 
+    @classmethod
+    def from_json(cls, json_str: Union[str, bytes], **kwargs: Any) -> DefectReport:
+        """Safely parse JSON string into DefectReport with strict/quarantine options."""
+        return cls.from_dict(json_str, **kwargs)
+
 
 __all__ = [
     "DefectReport",
@@ -98,4 +111,7 @@ __all__ = [
     "normalize_severity",
     "validate_category",
     "normalize_category",
+    "validate_report_entry",
+    "quarantine_entry",
+    "sanitize_string",
 ]

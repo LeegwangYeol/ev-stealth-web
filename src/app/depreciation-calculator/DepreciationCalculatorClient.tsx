@@ -484,18 +484,25 @@ export default function DepreciationCalculatorClient({
     }
   }, [brands]);
 
-  // Enhanced keyboard navigation for range sliders (Home/End/PageUp/PageDown)
+  // Enhanced keyboard navigation for range sliders (Arrow keys, Home/End/PageUp/PageDown)
   const handleSliderKeyDown = useCallback(
     (
       e: React.KeyboardEvent<HTMLInputElement>,
       currentVal: number,
       min: number,
       max: number,
+      step: number,
       pageStep: number,
       setter: (val: number) => void
     ) => {
       let nextVal = currentVal;
-      if (e.key === 'Home') {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        nextVal = Math.min(max, Math.round((currentVal + step) * 1000) / 1000);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        nextVal = Math.max(min, Math.round((currentVal - step) * 1000) / 1000);
+      } else if (e.key === 'Home') {
         e.preventDefault();
         nextVal = min;
       } else if (e.key === 'End') {
@@ -503,10 +510,10 @@ export default function DepreciationCalculatorClient({
         nextVal = max;
       } else if (e.key === 'PageUp') {
         e.preventDefault();
-        nextVal = Math.min(max, currentVal + pageStep);
+        nextVal = Math.min(max, Math.round((currentVal + pageStep) * 1000) / 1000);
       } else if (e.key === 'PageDown') {
         e.preventDefault();
-        nextVal = Math.max(min, currentVal - pageStep);
+        nextVal = Math.max(min, Math.round((currentVal - pageStep) * 1000) / 1000);
       } else {
         return;
       }
@@ -768,7 +775,7 @@ export default function DepreciationCalculatorClient({
             </p>
           </div>
 
-          <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-4 text-right flex flex-col justify-center min-w-[200px]">
+          <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-4 text-right flex flex-col justify-center w-full md:w-auto md:min-w-[200px]">
             <span className="text-xs text-slate-300 font-medium">분석 대상 모델</span>
             <span className="text-2xl font-black text-blue-400">15개 차종</span>
             <span className="text-xs text-slate-300 mt-1">8대 브랜드 (2026년식 포함)</span>
@@ -965,19 +972,23 @@ export default function DepreciationCalculatorClient({
           </div>
 
           <div className="flex items-center gap-3">
-            <label htmlFor="winter-season-checkbox" className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer bg-slate-50 px-3 py-1.5 min-h-[44px] rounded-lg border border-slate-200">
+            <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 min-h-[44px] rounded-lg border border-slate-200">
               <input
                 id="winter-season-checkbox"
                 type="checkbox"
                 checked={winterSeason}
                 onChange={(e) => setWinterSeason(e.target.checked)}
                 aria-describedby="winter-season-hint"
-                className="w-5 h-5 rounded text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                aria-label="❄️ 혹한기(-5℃) 저온 패널티 반영 여부"
+                className="w-5 h-5 rounded text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 cursor-pointer"
+                aria-label="❄️ 혹한기(-5℃) 저온 패널티 반영"
               />
-              <span>❄️ 혹한기(-5℃) 저온 패널티 반영</span>
-              <span id="winter-season-hint" className="sr-only">혹한기(-5도) 저온 패널티 반영 시 겨울철 배터리 열화율 및 감가율이 추가 계산됩니다.</span>
-            </label>
+              <label htmlFor="winter-season-checkbox" className="text-xs font-semibold text-slate-700 cursor-pointer">
+                ❄️ 혹한기(-5℃) 저온 패널티 반영
+              </label>
+            </div>
+            <span id="winter-season-hint" className="sr-only">
+              혹한기(-5도) 저온 패널티 반영 시 겨울철 배터리 열화율 및 감가율이 추가 계산됩니다.
+            </span>
           </div>
         </div>
 
@@ -985,7 +996,7 @@ export default function DepreciationCalculatorClient({
           {/* Slider 1: Holding Period */}
           <div className="space-y-2 bg-slate-50/70 p-4 rounded-xl border border-slate-200">
             <div className="flex items-center justify-between">
-              <label htmlFor="holdingYearsInput" className="text-xs font-bold text-slate-700">
+              <label id="holdingYearsLabel" htmlFor="holdingYearsInput" className="text-xs font-bold text-slate-700">
                 보유 기간
               </label>
               <span className="text-sm font-extrabold text-blue-950 bg-blue-100 px-2 py-0.5 rounded">
@@ -999,13 +1010,13 @@ export default function DepreciationCalculatorClient({
               max="5"
               step="0.5"
               value={holdingYears}
-              onKeyDown={(e) => handleSliderKeyDown(e, holdingYears, 1, 5, 1.0, handleYearsChange)}
+              onKeyDown={(e) => handleSliderKeyDown(e, holdingYears, 1, 5, 0.5, 1.0, handleYearsChange)}
               onChange={(e) => {
                 const val = parseFloat(e.target.value);
                 if (Number.isFinite(val)) handleYearsChange(val);
               }}
-              className="w-full accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
-              aria-label="차량 보유 기간 설정 (1년에서 5년)"
+              className="w-full h-9 py-2 accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
+              aria-label="보유 기간 설정 (1년에서 5년)"
               aria-orientation="horizontal"
               aria-describedby="holding-years-hint"
               aria-valuenow={holdingYears}
@@ -1020,7 +1031,7 @@ export default function DepreciationCalculatorClient({
               <span>4년</span>
               <span>5년</span>
             </div>
-            <div className="flex gap-1 pt-1">
+            <div role="group" aria-label="보유 기간 빠른 선택 (1년~5년)" className="flex gap-1 pt-1">
               {[1, 2, 3, 4, 5].map((yr) => (
                 <button
                   key={yr}
@@ -1043,7 +1054,7 @@ export default function DepreciationCalculatorClient({
           {/* Slider 2: Annual Mileage */}
           <div className="space-y-2 bg-slate-50/70 p-4 rounded-xl border border-slate-200">
             <div className="flex items-center justify-between">
-              <label htmlFor="annualMileageInput" className="text-xs font-bold text-slate-700">
+              <label id="annualMileageLabel" htmlFor="annualMileageInput" className="text-xs font-bold text-slate-700">
                 연간 주행거리
               </label>
               <span className="text-sm font-extrabold text-blue-950 bg-blue-100 px-2 py-0.5 rounded">
@@ -1057,12 +1068,12 @@ export default function DepreciationCalculatorClient({
               max="50000"
               step="1000"
               value={annualMileageKm}
-              onKeyDown={(e) => handleSliderKeyDown(e, annualMileageKm, 5000, 50000, 5000, setAnnualMileageKm)}
+              onKeyDown={(e) => handleSliderKeyDown(e, annualMileageKm, 5000, 50000, 1000, 5000, setAnnualMileageKm)}
               onChange={(e) => {
                 const val = parseInt(e.target.value, 10);
                 if (Number.isFinite(val)) setAnnualMileageKm(Math.max(1000, Math.min(100000, val)));
               }}
-              className="w-full accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
+              className="w-full h-9 py-2 accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="연간 주행거리 설정 (5,000km에서 50,000km)"
               aria-orientation="horizontal"
               aria-describedby="annual-mileage-hint"
@@ -1085,7 +1096,7 @@ export default function DepreciationCalculatorClient({
           {/* Slider 3: DC Fast Charging (DCFC) Ratio */}
           <div className="space-y-2 bg-slate-50/70 p-4 rounded-xl border border-slate-200">
             <div className="flex items-center justify-between">
-              <label htmlFor="dcfcRatioInput" className="text-xs font-bold text-slate-700">
+              <label id="dcfcRatioLabel" htmlFor="dcfcRatioInput" className="text-xs font-bold text-slate-700">
                 급속 충전(DCFC) 비율
               </label>
               <span
@@ -1105,13 +1116,13 @@ export default function DepreciationCalculatorClient({
               max="100"
               step="5"
               value={dcfcRatio}
-              onKeyDown={(e) => handleSliderKeyDown(e, dcfcRatio, 0, 100, 20, setDcfcRatio)}
+              onKeyDown={(e) => handleSliderKeyDown(e, dcfcRatio, 0, 100, 5, 20, setDcfcRatio)}
               onChange={(e) => {
                 const val = parseInt(e.target.value, 10);
                 if (Number.isFinite(val)) setDcfcRatio(Math.max(0, Math.min(100, val)));
               }}
-              className="w-full accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
-              aria-label="급속 충전 비율 설정 (0%에서 100%)"
+              className="w-full h-9 py-2 accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
+              aria-label="급속 충전(DCFC) 비율 설정 (0%에서 100%)"
               aria-orientation="horizontal"
               aria-describedby="dcfc-ratio-hint"
               aria-valuenow={dcfcRatio}
@@ -1147,7 +1158,7 @@ export default function DepreciationCalculatorClient({
               </button>
             </div>
 
-            <div role="group" aria-label="차량 기준 가격 유형 선택" className="flex rounded-lg overflow-hidden border border-slate-200 text-xs">
+            <div role="group" aria-label="차량 기준 가격 유형 선택" className="flex rounded-lg border border-slate-200 text-xs">
               <button
                 type="button"
                 aria-pressed={priceBasis === 'effective'}
@@ -1155,7 +1166,7 @@ export default function DepreciationCalculatorClient({
                   setPriceBasis('effective');
                   setCustomPriceInput(null);
                 }}
-                className={`flex-1 py-1 min-h-[44px] flex items-center justify-center text-center font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none ${
+                className={`flex-1 py-1 min-h-[44px] flex items-center justify-center text-center font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:z-10 relative rounded-l-lg outline-none ${
                   priceBasis === 'effective'
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-slate-700 hover:bg-slate-100'
@@ -1171,7 +1182,7 @@ export default function DepreciationCalculatorClient({
                   setPriceBasis('msrp');
                   setCustomPriceInput(null);
                 }}
-                className={`flex-1 py-1 min-h-[44px] flex items-center justify-center text-center font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none ${
+                className={`flex-1 py-1 min-h-[44px] flex items-center justify-center text-center font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:z-10 relative rounded-r-lg outline-none ${
                   priceBasis === 'msrp'
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-slate-700 hover:bg-slate-100'
@@ -1183,29 +1194,31 @@ export default function DepreciationCalculatorClient({
             </div>
 
             <div className="relative">
-              <label htmlFor="customPriceInputField" className="sr-only">
-                차량 구매 가격 직접 입력 (원 단위)
+              <label htmlFor="customPriceInputField" className="block text-[11px] font-semibold text-slate-700 mb-1">
+                직접 입력 (원 단위)
               </label>
-              <input
-                id="customPriceInputField"
-                type="number"
-                min="0"
-                max="10000000000"
-                step="100000"
-                value={customPriceInput !== null ? customPriceInput : currentPurchasePrice}
-                onChange={(e) => {
-                  setCustomPriceInput(e.target.value);
-                }}
-                aria-invalid={hasPriceError}
-                aria-describedby={hasPriceError ? "custom-price-error-msg custom-price-hint" : "custom-price-hint"}
-                className={`w-full px-3 py-2 min-h-[44px] rounded-lg border text-xs font-bold text-right pr-8 bg-white focus:outline-none focus-visible:ring-2 ${
-                  hasPriceError
-                    ? 'border-rose-500 focus-visible:ring-rose-500 text-rose-950'
-                    : 'border-slate-300 focus-visible:ring-blue-500 text-slate-900'
-                }`}
-                aria-label="차량 구매 가격 직접 입력 (원 단위)"
-              />
-              <span aria-hidden="true" className="absolute right-3 top-3 text-xs text-slate-700">원</span>
+              <div className="relative">
+                <input
+                  id="customPriceInputField"
+                  type="number"
+                  min="0"
+                  max="10000000000"
+                  step="100000"
+                  value={customPriceInput !== null ? customPriceInput : currentPurchasePrice}
+                  onChange={(e) => {
+                    setCustomPriceInput(e.target.value);
+                  }}
+                  aria-invalid={hasPriceError}
+                  aria-describedby={hasPriceError ? "custom-price-error-msg custom-price-hint" : "custom-price-hint"}
+                  className={`w-full px-3 py-2 min-h-[44px] rounded-lg border text-xs font-bold text-right pr-8 bg-white focus:outline-none focus-visible:ring-2 ${
+                    hasPriceError
+                      ? 'border-rose-500 focus-visible:ring-rose-500 text-rose-950'
+                      : 'border-slate-300 focus-visible:ring-blue-500 text-slate-900'
+                  }`}
+                  aria-label="직접 입력 (원 단위)"
+                />
+                <span aria-hidden="true" className="absolute right-3 top-3 text-xs text-slate-700">원</span>
+              </div>
             </div>
 
             <span id="custom-price-hint" className="sr-only">원 단위로 차량 구매 가격을 직접 입력합니다. 기본값 복원 버튼으로 초기화할 수 있습니다.</span>
@@ -1250,12 +1263,12 @@ export default function DepreciationCalculatorClient({
 
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-600 font-medium hidden sm:inline">차트 보기:</span>
-            <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden text-xs">
+            <div role="group" aria-label="차트 표시 단위 선택" className="inline-flex rounded-lg border border-slate-200 text-xs">
               <button
                 type="button"
                 onClick={() => setChartViewMode('price')}
                 aria-pressed={chartViewMode === 'price'}
-                className={`px-3 py-1.5 min-h-[44px] flex items-center justify-center font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none ${
+                className={`px-3 py-1.5 min-h-[44px] flex items-center justify-center font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:z-10 relative rounded-l-lg outline-none ${
                   chartViewMode === 'price'
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-slate-700 hover:bg-slate-100'
@@ -1268,7 +1281,7 @@ export default function DepreciationCalculatorClient({
                 type="button"
                 onClick={() => setChartViewMode('percentage')}
                 aria-pressed={chartViewMode === 'percentage'}
-                className={`px-3 py-1.5 min-h-[44px] flex items-center justify-center font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none ${
+                className={`px-3 py-1.5 min-h-[44px] flex items-center justify-center font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:z-10 relative rounded-r-lg outline-none ${
                   chartViewMode === 'percentage'
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-slate-700 hover:bg-slate-100'
@@ -1378,8 +1391,9 @@ export default function DepreciationCalculatorClient({
           <div
             tabIndex={0}
             aria-label="연차별 잔존가치 프로젝션 비교 차트 스크롤 영역"
-            className="w-full overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="w-full overflow-x-auto table-scroll-container rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
+            <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-400 bg-slate-900 border-b border-slate-800 select-none" aria-hidden="true"><span>← 좌우로 밀어서 1~5년 차트 비교</span><span className="text-[10px] text-blue-400 font-semibold">차트 스크롤 ↔</span></div>
             <svg
               className="w-full min-w-[550px] h-64 select-none"
               viewBox="0 0 700 280"
@@ -1904,7 +1918,7 @@ export default function DepreciationCalculatorClient({
           {/* Control 1: Held Months */}
           <div className="space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
             <div className="flex items-center justify-between">
-              <label htmlFor="heldMonthsInput" className="text-xs font-bold text-slate-700">
+              <label id="heldMonthsLabel" htmlFor="heldMonthsInput" className="text-xs font-bold text-slate-700">
                 실운행 보유 개월 수
               </label>
               <span
@@ -1925,7 +1939,7 @@ export default function DepreciationCalculatorClient({
               step="1"
               value={heldMonths}
               onKeyDown={(e) =>
-                handleSliderKeyDown(e, heldMonths, 0, 36, 6, (val) => {
+                handleSliderKeyDown(e, heldMonths, 0, 36, 1, 6, (val: number) => {
                   setSyncMonthsWithYears(false);
                   setHeldMonths(val);
                 })
@@ -1937,8 +1951,8 @@ export default function DepreciationCalculatorClient({
                   setHeldMonths(val);
                 }
               }}
-              className="w-full accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
-              aria-label="보조금 의무운행 기간 중 보유 개월 수 설정"
+              className="w-full h-9 py-2 accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
+              aria-label="실운행 보유 개월 수 설정 (0개월에서 36개월)"
               aria-orientation="horizontal"
               aria-describedby="held-months-hint"
               aria-valuenow={heldMonths}
@@ -1972,11 +1986,11 @@ export default function DepreciationCalculatorClient({
           {/* Control 2: Transfer Type Selector */}
           <fieldset className="space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
             <legend className="text-xs font-bold text-slate-700 block mb-1">이전 / 매매 유형 선택</legend>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" role="radiogroup" aria-label="이전 및 매매 유형 선택">
               {TRANSFER_OPTIONS.map((item) => (
-                <label
+                <div
                   key={item.id}
-                  htmlFor={`transfer-type-radio-${item.id}`}
+                  onClick={() => setTransferType(item.id)}
                   className={`flex items-start gap-2 p-2 min-h-[44px] rounded-lg border cursor-pointer text-xs transition has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500 ${
                     transferType === item.id
                       ? 'bg-blue-50 border-blue-500 text-blue-950 font-semibold'
@@ -1990,13 +2004,15 @@ export default function DepreciationCalculatorClient({
                     checked={transferType === item.id}
                     onChange={() => setTransferType(item.id)}
                     aria-describedby={`transfer-desc-${item.id}`}
-                    className="mt-0.5 text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    className="mt-0.5 text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"
                   />
                   <div>
-                    <div className="font-bold">{item.title}</div>
+                    <label htmlFor={`transfer-type-radio-${item.id}`} className="font-bold block cursor-pointer">
+                      {item.title}
+                    </label>
                     <div id={`transfer-desc-${item.id}`} className="text-[11px] text-slate-700">{item.desc}</div>
                   </div>
-                </label>
+                </div>
               ))}
             </div>
           </fieldset>
@@ -2022,8 +2038,8 @@ export default function DepreciationCalculatorClient({
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <label htmlFor="nationalSubsidyInput" className="text-slate-300 block text-[11px]">
-                    국비 보조금
+                  <label htmlFor="nationalSubsidyInput" className="text-slate-300 block text-[11px] mb-1 font-semibold">
+                    국비 보조금 (원)
                   </label>
                   <input
                     id="nationalSubsidyInput"
@@ -2035,12 +2051,12 @@ export default function DepreciationCalculatorClient({
                     onChange={(e) => setCustomNationalSubsidyInput(e.target.value)}
                     aria-invalid={hasNationalSubsidyError}
                     aria-describedby={hasNationalSubsidyError ? "national-subsidy-error-msg national-subsidy-hint" : "national-subsidy-hint"}
-                    className={`w-full px-3 py-2 min-h-[44px] rounded bg-slate-800 border text-right font-semibold text-white focus:outline-none focus-visible:ring-2 ${
+                    className={`w-full px-3 py-2 min-h-[44px] rounded bg-slate-800 border text-right font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900 ${
                       hasNationalSubsidyError
-                        ? 'border-rose-500 focus-visible:ring-rose-500 text-rose-200'
-                        : 'border-slate-700 focus-visible:ring-blue-500'
+                        ? 'border-rose-500 focus-visible:ring-rose-400 text-rose-200'
+                        : 'border-slate-700 focus-visible:ring-blue-400'
                     }`}
-                    aria-label="국비 보조금 금액 입력"
+                    aria-label="국비 보조금 (원)"
                   />
                   <span id="national-subsidy-hint" className="sr-only">정부 국비 전기차 보조금 지원 금액(원)을 입력합니다.</span>
                   {hasNationalSubsidyError && (
@@ -2050,8 +2066,8 @@ export default function DepreciationCalculatorClient({
                   )}
                 </div>
                 <div>
-                  <label htmlFor="localSubsidyInput" className="text-slate-300 block text-[11px]">
-                    지방비 보조금
+                  <label htmlFor="localSubsidyInput" className="text-slate-300 block text-[11px] mb-1 font-semibold">
+                    지방비 보조금 (원)
                   </label>
                   <input
                     id="localSubsidyInput"
@@ -2063,12 +2079,12 @@ export default function DepreciationCalculatorClient({
                     onChange={(e) => setCustomLocalSubsidyInput(e.target.value)}
                     aria-invalid={hasLocalSubsidyError}
                     aria-describedby={hasLocalSubsidyError ? "local-subsidy-error-msg local-subsidy-hint" : "local-subsidy-hint"}
-                    className={`w-full px-3 py-2 min-h-[44px] rounded bg-slate-800 border text-right font-semibold text-white focus:outline-none focus-visible:ring-2 ${
+                    className={`w-full px-3 py-2 min-h-[44px] rounded bg-slate-800 border text-right font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900 ${
                       hasLocalSubsidyError
-                        ? 'border-rose-500 focus-visible:ring-rose-500 text-rose-200'
-                        : 'border-slate-700 focus-visible:ring-blue-500'
+                        ? 'border-rose-500 focus-visible:ring-rose-400 text-rose-200'
+                        : 'border-slate-700 focus-visible:ring-blue-400'
                     }`}
-                    aria-label="지방비 보조금 금액 입력"
+                    aria-label="지방비 보조금 (원)"
                   />
                   <span id="local-subsidy-hint" className="sr-only">지자체 지방비 전기차 보조금 지원 금액(원)을 입력합니다.</span>
                   {hasLocalSubsidyError && (
@@ -2110,8 +2126,9 @@ export default function DepreciationCalculatorClient({
             <div
               tabIndex={0}
               aria-label="8단계 법정 의무운행기간 보조금 회수요율표 스크롤 영역"
-              className="mt-3 overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="mt-3 overflow-x-auto table-scroll-container rounded-xl border border-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
+              <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-500 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true"><span>← 좌우로 밀어서 법정 환수율 확인</span><span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span></div>
               <table className="w-full min-w-[480px] text-left border-collapse" aria-label="8단계 법정 의무운행기간 보조금 회수요율표">
                 <caption className="sr-only">대기환경보전법 시행규칙 8단계 의무운행 회수요율표</caption>
                 <thead>
@@ -2189,7 +2206,7 @@ export default function DepreciationCalculatorClient({
                 setIceDisplacementCc(Number.isFinite(val) && val > 0 ? val : 1998);
               }}
               aria-describedby="ice-displacement-hint"
-              className="w-full sm:w-auto px-3 py-2 min-h-[44px] rounded-lg border border-slate-300 font-medium bg-white text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="w-full sm:w-auto px-3 py-2 min-h-[44px] rounded-lg border border-slate-300 font-medium bg-white text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"
               aria-label="비교 내연기관 배기량 선택"
             >
               <option value={1598}>1,600cc 준중형 가솔린 (아반떼급)</option>
@@ -2264,8 +2281,9 @@ export default function DepreciationCalculatorClient({
         <div
           tabIndex={0}
           aria-label="5개년 총소유비용(TCO) 및 유지비 절감 내역 표 스크롤 영역"
-          className="overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="overflow-x-auto table-scroll-container rounded-xl border border-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
+          <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-500 bg-slate-100 border-b border-slate-200 select-none" aria-hidden="true"><span>← 좌우로 밀어서 5개년 누적 비용 확인</span><span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span></div>
           <table className="w-full min-w-[640px] text-xs text-left border-collapse" aria-label="5개년 총소유비용(TCO) 및 유지비 절감 내역">
             <caption className="sr-only">5개년 총소유비용(TCO) 및 내연기관 대비 유지비 절감 내역</caption>
             <thead>

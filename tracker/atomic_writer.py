@@ -212,7 +212,7 @@ class FileLock:
                         lock_age = max(mtime_age, (now - holder_ts) if holder_ts is not None else mtime_age)
 
                         if (
-                            (is_dead_holder and lock_age > self.stale_timeout)
+                            is_dead_holder
                             or (is_expired_holder and lock_age > self.stale_timeout)
                             or (holder_pid is None and holder_ts is None and lock_age > self.stale_timeout)
                         ):
@@ -283,7 +283,7 @@ class FileLock:
                         lock_age = max(mtime_age, (now - holder_ts) if holder_ts is not None else mtime_age)
 
                         if (
-                            (is_dead_holder and lock_age > self.stale_timeout)
+                            is_dead_holder
                             or (is_expired_holder and lock_age > self.stale_timeout)
                             or (holder_pid is None and holder_ts is None and lock_age > self.stale_timeout)
                         ):
@@ -476,11 +476,12 @@ def cleanup_stale_lock_files(
                 if holder_pid and is_pid_alive(holder_pid):
                     continue
 
-                if holder_ts is not None and (now - holder_ts) <= max_age_seconds:
-                    continue
-
-                if age <= max_age_seconds:
-                    continue
+                # For locks without a confirmed dead holder, require expiration
+                if not is_dead_holder:
+                    if holder_ts is not None and (now - holder_ts) <= max_age_seconds:
+                        continue
+                    if age <= max_age_seconds:
+                        continue
 
                 # Skip if not confirmed dead holder and not expired
                 if not is_dead_holder and not is_expired_holder:
@@ -776,6 +777,7 @@ def atomic_write_json(
     mode: Optional[int] = None,
     preserve_permissions: bool = True,
     temp_prefix: str = ".tmp_subsidy_",
+    _pre_encoded_content: Optional[bytes] = None,
 ) -> Path:
     """Atomically write data as JSON to target_path using crash-durable semantics.
 
@@ -801,6 +803,7 @@ def atomic_write_json(
         mode: Optional explicit POSIX mode (e.g. 0o644). Overrides preserve_permissions.
         preserve_permissions: Whether to retain mode and ownership of existing target file.
         temp_prefix: Prefix for temporary scratch file. Defaults to '.tmp_subsidy_'.
+        _pre_encoded_content: Optional pre-serialized UTF-8 JSON bytes to skip redundant serialization.
 
     Returns:
         Path: The absolute path of the written file.
@@ -811,19 +814,22 @@ def atomic_write_json(
     dest_dir = dest.parent
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    # Convert object with to_dict / as_dict / model_dump / dataclass if present
-    if hasattr(data, "to_dict") and callable(getattr(data, "to_dict")):
-        payload = data.to_dict()
-    elif hasattr(data, "as_dict") and callable(getattr(data, "as_dict")):
-        payload = data.as_dict()
-    elif hasattr(data, "model_dump") and callable(getattr(data, "model_dump")):
-        payload = data.model_dump()
-    elif dataclasses.is_dataclass(data) and not isinstance(data, type):
-        payload = dataclasses.asdict(data)
-    else:
-        payload = data
+    if _pre_encoded_content is None:
+        # Convert object with to_dict / as_dict / model_dump / dataclass if present
+        if hasattr(data, "to_dict") and callable(getattr(data, "to_dict")):
+            payload = data.to_dict()
+        elif hasattr(data, "as_dict") and callable(getattr(data, "as_dict")):
+            payload = data.as_dict()
+        elif hasattr(data, "model_dump") and callable(getattr(data, "model_dump")):
+            payload = data.model_dump()
+        elif dataclasses.is_dataclass(data) and not isinstance(data, type):
+            payload = dataclasses.asdict(data)
+        else:
+            payload = data
 
-    payload = sanitize_nan_inf(payload)
+        payload = sanitize_nan_inf(payload)
+    else:
+        payload = None
 
     # Determine POSIX permission target
     target_mode = mode
@@ -861,18 +867,31 @@ def atomic_write_json(
                         _last_temp_dir_cleanup_time = time.monotonic()
 
             # Create temp file in the same directory to ensure atomic os.replace across filesystem boundaries
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                dir=str(dest_dir),
-                delete=False,
-                encoding="utf-8",
-                prefix=temp_prefix,
-                suffix=".json",
-            ) as tf:
-                temp_name = tf.name
-                json.dump(payload, tf, ensure_ascii=ensure_ascii, indent=indent, default=serializer, allow_nan=False)
-                tf.flush()
-                os.fsync(tf.fileno())
+            if _pre_encoded_content is not None:
+                with tempfile.NamedTemporaryFile(
+                    mode="wb",
+                    dir=str(dest_dir),
+                    delete=False,
+                    prefix=temp_prefix,
+                    suffix=".json",
+                ) as tf:
+                    temp_name = tf.name
+                    tf.write(_pre_encoded_content)
+                    tf.flush()
+                    os.fsync(tf.fileno())
+            else:
+                with tempfile.NamedTemporaryFile(
+                    mode="w",
+                    dir=str(dest_dir),
+                    delete=False,
+                    encoding="utf-8",
+                    prefix=temp_prefix,
+                    suffix=".json",
+                ) as tf:
+                    temp_name = tf.name
+                    json.dump(payload, tf, ensure_ascii=ensure_ascii, indent=indent, default=serializer, allow_nan=False)
+                    tf.flush()
+                    os.fsync(tf.fileno())
 
             try:
                 os.chmod(temp_name, target_mode)
@@ -968,19 +987,224 @@ def atomic_write_json_multiple(
     mode: Optional[int] = None,
     preserve_permissions: bool = True,
 ) -> List[Path]:
-    """Atomically write data as JSON to multiple target paths."""
+    """Atomically write data as JSON to multiple target paths with single-pass serialization."""
+    if not target_paths:
+        return []
+
+    # Validate target_paths early to fail fast on invalid arguments
+    for p in target_paths:
+        if not p or not str(p).strip():
+            raise ValueError("target_path cannot be empty")
+
+    # Serialize and sanitize once across all destination writes
+    if hasattr(data, "to_dict") and callable(getattr(data, "to_dict")):
+        payload = data.to_dict()
+    elif hasattr(data, "as_dict") and callable(getattr(data, "as_dict")):
+        payload = data.as_dict()
+    elif hasattr(data, "model_dump") and callable(getattr(data, "model_dump")):
+        payload = data.model_dump()
+    elif dataclasses.is_dataclass(data) and not isinstance(data, type):
+        payload = dataclasses.asdict(data)
+    else:
+        payload = data
+
+    payload = sanitize_nan_inf(payload)
+    serializer = default if default is not None else _json_default
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=ensure_ascii,
+        indent=indent,
+        default=serializer,
+        allow_nan=False,
+    ).encode("utf-8")
+
     written_paths: List[Path] = []
     for p in target_paths:
         written = atomic_write_json(
-            data,
+            payload,
             p,
             indent=indent,
             ensure_ascii=ensure_ascii,
-            default=default,
+            default=serializer,
             preserve_mtime=preserve_mtime,
             mode=mode,
             preserve_permissions=preserve_permissions,
+            _pre_encoded_content=encoded,
         )
         written_paths.append(written)
     return written_paths
+
+
+def atomic_write_text(
+    content: str,
+    target_path: Union[str, Path],
+    encoding: str = "utf-8",
+    preserve_mtime: Optional[float] = None,
+    mode: Optional[int] = None,
+    preserve_permissions: bool = True,
+    temp_prefix: str = ".tmp_text_",
+) -> Path:
+    """Atomically write string content to target_path using crash-durable semantics.
+
+    Steps:
+    1. Resolve target directory and create if not existing.
+    2. Acquire advisory FileLock to prevent race conditions during multi-process execution.
+    3. Defensively prune orphaned temp files older than 1 hour in target directory.
+    4. Write content to NamedTemporaryFile in the same filesystem directory with explicit encoding.
+    5. Flush application buffers and issue OS fsync on file descriptor.
+    6. Preserve existing POSIX permissions (st_mode) or enforce standard mode (0o644).
+    7. Atomically swap temp file with target using os.replace.
+    8. Optionally preserve st_mtime.
+    9. Issue directory fsync on parent directory for durability with leak-proof descriptor handling.
+    10. Clean up temporary file in finally block if replacement fails.
+
+    Args:
+        content: String content to write.
+        target_path: Target destination path.
+        encoding: File character encoding, defaults to "utf-8".
+        preserve_mtime: Optional float timestamp to preserve on destination.
+        mode: Optional explicit POSIX mode (e.g. 0o644). Overrides preserve_permissions.
+        preserve_permissions: Whether to retain mode and ownership of existing target file.
+        temp_prefix: Prefix for temporary scratch file. Defaults to '.tmp_text_'.
+
+    Returns:
+        Path: The absolute path of the written file.
+    """
+    if not target_path or not str(target_path).strip():
+        raise ValueError("target_path cannot be empty")
+    dest = Path(target_path).resolve()
+    dest_dir = dest.parent
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    if not isinstance(content, str):
+        content = str(content)
+
+    # Determine POSIX permission target
+    target_mode = mode
+    if target_mode is None:
+        if preserve_permissions and dest.exists():
+            try:
+                target_mode = dest.stat().st_mode & 0o777
+            except OSError:
+                target_mode = 0o644
+        else:
+            target_mode = 0o644
+
+    temp_name: Optional[str] = None
+    lock_file = get_lock_path(dest)
+
+    with FileLock(lock_file):
+        try:
+            if mode is None and preserve_permissions and dest.exists():
+                try:
+                    target_mode = dest.stat().st_mode & 0o777
+                except OSError:
+                    target_mode = 0o644
+
+            cleanup_stale_temp_files(dest_dir, prefix=temp_prefix, max_age_seconds=3600.0)
+            cleanup_stale_lock_files(dest_dir, max_age_seconds=3600.0)
+
+            global _last_temp_dir_cleanup_time
+            now_mono = time.monotonic()
+            if (now_mono - _last_temp_dir_cleanup_time) > 60.0:
+                with _cleanup_meta_lock:
+                    if (now_mono - _last_temp_dir_cleanup_time) > 60.0:
+                        cleanup_stale_lock_files(tempfile.gettempdir(), max_age_seconds=3600.0)
+                        _last_temp_dir_cleanup_time = time.monotonic()
+
+            suffix = dest.suffix if dest.suffix else ".txt"
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                dir=str(dest_dir),
+                delete=False,
+                encoding=encoding,
+                prefix=temp_prefix,
+                suffix=suffix,
+            ) as tf:
+                temp_name = tf.name
+                tf.write(content)
+                tf.flush()
+                os.fsync(tf.fileno())
+
+            try:
+                os.chmod(temp_name, target_mode)
+            except OSError:
+                pass
+
+            if preserve_permissions and dest.exists():
+                try:
+                    st = dest.stat()
+                    if hasattr(os, "chown") and os.geteuid() == 0:
+                        try:
+                            os.chown(temp_name, st.st_uid, st.st_gid)
+                        except OSError:
+                            pass
+                except OSError:
+                    pass
+
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    os.replace(temp_name, dest)
+                    break
+                except OSError as exc:
+                    if exc.errno == errno.EXDEV:
+                        shutil.copyfile(temp_name, str(dest))
+                        try:
+                            with open(dest, "a+b") as df:
+                                os.fsync(df.fileno())
+                        except OSError:
+                            pass
+                        try:
+                            os.unlink(temp_name)
+                        except OSError:
+                            pass
+                        break
+                    if (
+                        exc.errno in (errno.EACCES, errno.EPERM, getattr(errno, "EBUSY", 16))
+                        and attempt < max_retries - 1
+                    ):
+                        time.sleep(0.02 * (2 ** attempt))
+                        continue
+                    raise
+
+            temp_name = None
+
+            if preserve_mtime is not None:
+                try:
+                    os.utime(dest, (preserve_mtime, preserve_mtime))
+                except OSError:
+                    pass
+
+            if os.name != "nt":
+                dir_flags = os.O_RDONLY
+                if hasattr(os, "O_DIRECTORY"):
+                    dir_flags |= os.O_DIRECTORY
+                try:
+                    dir_fd = os.open(str(dest_dir), dir_flags)
+                    try:
+                        os.fsync(dir_fd)
+                    finally:
+                        os.close(dir_fd)
+                except OSError:
+                    pass
+
+            logger.debug("Atomically wrote text to %s", dest)
+            return dest
+        except OSError as e:
+            if e.errno in (errno.ENOSPC, getattr(errno, "EDQUOT", errno.ENOSPC)):
+                logger.error("Disk space or quota exhausted (errno %d) during atomic text write to %s: %s", e.errno, dest, e)
+            else:
+                logger.error("Failed atomic text write to %s: %s", dest, e)
+            raise
+        except Exception as e:
+            logger.error("Failed atomic text write to %s: %s", dest, e)
+            raise
+        finally:
+            if temp_name and os.path.exists(temp_name):
+                try:
+                    os.unlink(temp_name)
+                except OSError:
+                    pass
+
 

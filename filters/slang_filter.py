@@ -12,6 +12,8 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import unicodedata
 
+from filters.defect_classifier import RE_INVALID_CHARS, sanitize_text
+
 from filters.slang_lexicon import (
     CONCESSIVES,
     DIMINISHERS,
@@ -43,29 +45,9 @@ class SlangFilter:
         self.raw_entries = RAW_SLANG_ENTRIES
 
     def normalize_text(self, text: Any) -> str:
-        """Safely normalizes input text: null/empty guards, null byte stripping,
+        """Safely normalizes input text: null/empty guards, control char, BiDi override & surrogate stripping,
         NFC Unicode normalization, and length bounding."""
-        if text is None:
-            return ""
-        if isinstance(text, (bytes, bytearray)):
-            try:
-                val = text.decode("utf-8", errors="replace")
-            except Exception:
-                val = str(text)
-        else:
-            val = str(text)
-
-        if not val or not val.strip():
-            return ""
-
-        if "\x00" in val:
-            val = val.replace("\x00", "")
-
-        val = val.strip()
-        if len(val) > self.max_length:
-            val = val[: self.max_length]
-
-        return unicodedata.normalize("NFC", val)
+        return sanitize_text(text, max_len=self.max_length)
 
     def find_matching_slang(self, text: Any) -> List[SlangEntry]:
         """Identify all slang entries present in the given text with Unicode & case resilience."""
@@ -123,6 +105,10 @@ def filter_slang(text: Any) -> List[SlangEntry]:
     return find_matching_slang(text)
 
 
+def normalize_text(text: Any) -> str:
+    return SlangFilter().normalize_text(text)
+
+
 __all__ = [
     "SlangFilter",
     "SlangEntry",
@@ -143,5 +129,6 @@ __all__ = [
     "extract_slang_tags",
     "is_slang_present",
     "filter_slang",
+    "normalize_text",
     "MAX_POST_TEXT_LENGTH",
 ]

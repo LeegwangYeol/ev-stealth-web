@@ -38,6 +38,7 @@ export default function SubsidyTrackerError({ error, reset }: SubsidyErrorProps)
       tabIndex={-1}
       role="alert"
       aria-live="assertive"
+      aria-atomic="true"
       aria-labelledby="subsidy-error-heading"
       aria-describedby="subsidy-error-description"
       className="min-h-[60vh] flex items-center justify-center px-4 py-12 outline-none focus:outline-none"

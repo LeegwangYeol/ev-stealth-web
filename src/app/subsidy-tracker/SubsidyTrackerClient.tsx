@@ -12,8 +12,8 @@ import {
   RegionEntry,
   PopularModelEntry,
 } from '@/types/subsidy';
-import { calculateNetSubsidy, getRegionById, getModelById } from '@/lib/getSubsidyData';
-import { sortRegions } from '@/lib/subsidyCalculations';
+import { getRegionById, getModelById } from '@/lib/getSubsidyData';
+import { sortRegions, calculateNetSubsidyPure } from '@/lib/subsidyCalculations';
 import type { RegionSortOption } from '@/lib/subsidyCalculations';
 import ClientTimestamp from '@/components/ClientTimestamp';
 import SubsidyErrorBoundary from '@/components/subsidy/SubsidyErrorBoundary';
@@ -137,7 +137,7 @@ const getRegionZone = (isoCode: string): ZoneFilter => {
   }
 };
 
-const FALLBACK_SUMMARY = Object.freeze({
+const FALLBACK_SUMMARY: EVSubsidyDataset['nationwide_summary'] = Object.freeze({
   total_announced_units: 0,
   total_applied_units: 0,
   total_delivered_units: 0,
@@ -205,6 +205,232 @@ const FALLBACK_THRESHOLDS: Record<AlertSeverity, AlertThresholdConfig> = Object.
     badge_class: 'bg-slate-950 text-slate-100 border-slate-400',
     recommended_action: '2026년 공고 예산이 전액 소진되었습니다. 취소분 대기 접수 또는 차년도 사업을 준비하세요.',
   },
+});
+
+const FALLBACK_CATEGORY_METRICS: Readonly<CategoryMetrics> = Object.freeze({
+  status: 'HEALTHY' as AlertSeverity,
+  announced_units: 0,
+  applied_units: 0,
+  delivered_units: 0,
+  remaining_units: 0,
+  depletion_rate: 0,
+  delivery_rate: 0,
+  max_local_subsidy_krw: 0,
+  max_total_subsidy_krw: 0,
+});
+
+// ============================================================================
+// Sub-Component: Memoized Tracker Header Banner & Nationwide Stat Cards
+// (Isolated from typing and filter toggles to prevent re-render cascades)
+// ============================================================================
+interface TrackerHeaderProps {
+  summary: EVSubsidyDataset['nationwide_summary'];
+  generatedAt?: string;
+  criticalRegions: RegionEntry[];
+  onSelectCriticalRegion: (nameKo: string, regionId: string) => void;
+}
+
+const TrackerHeader = React.memo(function TrackerHeader({
+  summary,
+  generatedAt,
+  criticalRegions,
+  onSelectCriticalRegion,
+}: TrackerHeaderProps) {
+  return (
+    <section aria-labelledby="tracker-heading" className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-amber-500/10 via-blue-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
+
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            role="status"
+            aria-label="실시간 스케줄러 동기화 상태: 정상"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950 border border-emerald-500/50 text-emerald-300 text-xs font-semibold tracking-wide"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping motion-reduce:animate-none inline-block" aria-hidden="true" />
+            실시간 스케줄러 동기화 완료
+          </span>
+          <span className="text-xs text-slate-300">
+            기준: 2026년 환경부 무공해차 통합누리집 (ev.or.kr)
+          </span>
+        </div>
+        <span className="text-xs text-slate-300">
+          데이터 갱신 시각:{' '}
+          <ClientTimestamp
+            isoString={generatedAt}
+            options={{
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            }}
+          />
+        </span>
+      </div>
+
+      <div className="max-w-3xl space-y-3">
+        <h1 id="tracker-heading" className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white flex items-center gap-3">
+          <span className="text-amber-400 text-3xl sm:text-4xl" aria-hidden="true">⚡</span>
+          전국 지자체별 전기차 실시간 보조금 소진율 추적기
+        </h1>
+        <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
+          전국 17개 광역시도 및 73개 주요 지자체의 <strong>전기승용·화물·승합 공고 쿼터</strong>, 접수·출고 현황, 실시간 소진율을 5단계 경보로 감시합니다. 출고 전 <strong>내 거주지 잔여 예산</strong>을 확인하고 실구매 체감가를 원스톱으로 산출하세요.
+        </p>
+      </div>
+
+      {/* Live Nationwide Stat Cards - Responsive Grid on Mobile (320px+) & Solid Opaque Backgrounds */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mt-8 pt-6 border-t border-slate-800">
+        <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+          <div className="text-xs font-medium text-slate-300">전국 평균 소진율</div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-amber-400 mt-1">
+            {(Number.isFinite(summary?.nationwide_depletion_rate) ? summary.nationwide_depletion_rate : 0).toFixed(1)}%
+          </div>
+          <div className="text-[11px] text-slate-300 mt-1">
+            전체 카테고리 종합
+          </div>
+        </div>
+
+        <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+          <div className="text-xs font-medium text-slate-300">총 공고 대수</div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-slate-100 mt-1">
+            {(Number.isFinite(summary?.total_announced_units) ? Math.max(0, summary.total_announced_units) : 0).toLocaleString()}
+            <span className="text-xs font-normal text-slate-300 ml-1">대</span>
+          </div>
+          <div className="text-[11px] text-slate-300 mt-1">
+            총 배정 예산 {(Number.isFinite(summary?.total_budget_billion_krw) ? Math.max(0, summary.total_budget_billion_krw) : 0).toLocaleString()}억 원
+          </div>
+        </div>
+
+        <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+          <div className="text-xs font-medium text-slate-300">총 접수 대수</div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-blue-400 mt-1">
+            {(Number.isFinite(summary?.total_applied_units) ? Math.max(0, summary.total_applied_units) : 0).toLocaleString()}
+            <span className="text-xs font-normal text-slate-300 ml-1">대</span>
+          </div>
+          <div className="text-[11px] text-slate-300 mt-1">
+            출고 완료: {(Number.isFinite(summary?.total_delivered_units) ? Math.max(0, summary.total_delivered_units) : 0).toLocaleString()}대
+          </div>
+        </div>
+
+        <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+          <div className="text-xs font-medium text-slate-300">전국 잔여 대수</div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-emerald-400 mt-1">
+            {(Number.isFinite(summary?.total_remaining_units) ? Math.max(0, summary.total_remaining_units) : 0).toLocaleString()}
+            <span className="text-xs font-normal text-slate-300 ml-1">대</span>
+          </div>
+          <div className="text-[11px] text-slate-300 mt-1">
+            잔여율 {(100 - (Number.isFinite(summary?.nationwide_depletion_rate) ? summary.nationwide_depletion_rate : 0)).toFixed(1)}%
+          </div>
+        </div>
+
+        <div className="sm:col-span-2 lg:col-span-1 bg-rose-950 border border-rose-500/50 rounded-2xl p-4 flex flex-col justify-between">
+          <div className="text-xs font-medium text-rose-300">긴급 마감 위험 지역</div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-rose-400 mt-1">
+            {(Number.isFinite(summary?.alert_region_counts?.critical) ? summary.alert_region_counts.critical : 0) +
+              (Number.isFinite(summary?.alert_region_counts?.depleted) ? summary.alert_region_counts.depleted : 0)}
+            <span className="text-xs font-normal text-rose-300 ml-1">개 시도</span>
+          </div>
+          <div className="text-[11px] text-rose-300 mt-1">
+            소진율 95% 이상 극소량
+          </div>
+        </div>
+      </div>
+
+      {/* Emergency Alert Ticker for Critical Municipalities */}
+      {criticalRegions.length > 0 && (
+        <div
+          role="region"
+          aria-label="보조금 긴급 소진 주의보"
+          className="mt-6 bg-rose-950 border border-rose-500/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm"
+        >
+          <div className="flex flex-wrap items-center gap-2 text-rose-200">
+            <div role="alert" className="flex items-center gap-1.5">
+              <span className="text-base" aria-hidden="true">🚨</span>
+              <strong className="text-rose-100 font-semibold">마감 임박 특보 (소진율 95% 초과):</strong>
+            </div>
+            <div className="flex flex-wrap gap-1.5 ml-1">
+              {criticalRegions.map((crit) => (
+                <button
+                  key={crit.region_id}
+                  type="button"
+                  onClick={() => onSelectCriticalRegion(crit.name_ko, crit.region_id)}
+                  aria-label={`${crit.name_ko} 소진율 ${(Number.isFinite(crit.categories?.passenger?.depletion_rate) ? crit.categories.passenger.depletion_rate : 0).toFixed(1)}%, 보조금 계산기로 이동`}
+                  className="px-2.5 py-1.5 min-h-[44px] inline-flex items-center rounded bg-rose-900 border border-rose-500/50 text-rose-200 hover:bg-rose-800 hover:text-white transition font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                  title={`${crit.name_ko} 보조금 계산기로 이동`}
+                >
+                  {crit.name_ko} ({(Number.isFinite(crit.categories?.passenger?.depletion_rate) ? crit.categories.passenger.depletion_rate : 0).toFixed(1)}%)
+                </button>
+              ))}
+            </div>
+          </div>
+          <a
+            href="#subsidy-calculator"
+            className="text-amber-300 hover:text-amber-200 underline font-semibold shrink-0 rounded px-2 py-2 min-h-[44px] flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+          >
+            내 차 실구매가 즉시 계산 &rarr;
+          </a>
+        </div>
+      )}
+    </section>
+  );
+});
+
+// ============================================================================
+// Sub-Component: Memoized 5-Tier Alert Legend Section
+// (Isolated from search typing to eliminate re-renders on keystrokes)
+// ============================================================================
+interface AlertLegendSectionProps {
+  thresholds: Record<AlertSeverity, AlertThresholdConfig>;
+  alertFilter: AlertSeverity | 'ALL';
+  onSelectAlertFilter: (key: AlertSeverity) => void;
+}
+
+const AlertLegendSection = React.memo(function AlertLegendSection({
+  thresholds,
+  alertFilter,
+  onSelectAlertFilter,
+}: AlertLegendSectionProps) {
+  return (
+    <section aria-labelledby="subsidy-alert-legend-heading" className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <h2 id="subsidy-alert-legend-heading" className="text-sm font-bold text-slate-300 flex items-center gap-2">
+          <span aria-hidden="true">🛡️</span> 전국 지자체 보조금 소진 5단계 경보 기준
+        </h2>
+        <span className="text-xs text-slate-300">배지 클릭 시 해당 경보 지역만 필터링</span>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+        {(Object.keys(thresholds) as AlertSeverity[]).map((key) => {
+          const t = thresholds[key];
+          const isSelected = alertFilter === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={isSelected}
+              aria-label={`${t?.label_ko || key} 경보 필터 ${isSelected ? '해제' : '적용'}`}
+              onClick={() => onSelectAlertFilter(key)}
+              className={`p-3 min-h-[44px] rounded-xl border text-left transition flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
+                isSelected
+                  ? 'ring-2 ring-amber-400 ' + getBadgeStyle(key)
+                  : 'bg-slate-950 hover:bg-slate-800 border-slate-800 text-slate-300'
+              }`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className={`text-xs px-2 py-0.5 rounded font-semibold border ${getBadgeStyle(key)}`}>
+                  {getStatusLabel(key)}
+                </span>
+                <span className={`text-[11px] font-medium ${isSelected ? 'text-slate-100 font-semibold' : 'text-slate-300'}`}>{(t?.min_percent ?? 0)}%~{(t?.max_percent ?? 100)}%</span>
+              </div>
+              <div className={`text-[11px] line-clamp-2 mt-2 leading-relaxed ${isSelected ? 'text-slate-100' : 'text-slate-300'}`}>
+                {t?.recommended_action || ''}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
 });
 
 // ============================================================================
@@ -344,6 +570,41 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
     setSortOption(newSort);
   }, []);
 
+  const handleSelectAlertFilter = useCallback((key: AlertSeverity) => {
+    setAlertFilter((prev) => (prev === key ? 'ALL' : key));
+  }, []);
+
+  const handleSelectCriticalRegion = useCallback((nameKo: string, regionId: string) => {
+    setSearchQuery(nameKo);
+    handleSelectRegionForCalc(regionId);
+  }, [handleSelectRegionForCalc]);
+
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+  }, []);
+
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery('');
+  }, []);
+
+  const handleToggleSupplementary = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSupplementaryOnly(e.target.checked);
+  }, []);
+
+  const handleSelectZone = useCallback((zone: ZoneFilter) => {
+    setZoneFilter(zone);
+  }, []);
+
+  const handleResetFilters = useCallback(() => {
+    setZoneFilter('ALL');
+    setAlertFilter('ALL');
+    setSearchQuery('');
+    setSupplementaryOnly(false);
+  }, []);
+
+  const handleSetViewGrid = useCallback(() => setViewMode('grid'), []);
+  const handleSetViewTable = useCallback(() => setViewMode('table'), []);
+
   const handleCategoryKeyDown = useCallback((e: React.KeyboardEvent, currentIndex: number) => {
     const count = CATEGORY_TABS.length;
     let nextIndex = -1;
@@ -394,186 +655,20 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         보조금 계산기로 건너뛰기
       </a>
 
-      {/* 1. Header Banner & Live Tracker Status - Solid Opaque Background */}
-      <section aria-labelledby="tracker-heading" className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-amber-500/10 via-blue-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
+      {/* 1. Header Banner & Live Tracker Status - Isolated Memoized Pure Component */}
+      <TrackerHeader
+        summary={summary}
+        generatedAt={initialData?.metadata?.generated_at}
+        criticalRegions={criticalRegions}
+        onSelectCriticalRegion={handleSelectCriticalRegion}
+      />
 
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              role="status"
-              aria-label="실시간 스케줄러 동기화 상태: 정상"
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950 border border-emerald-500/50 text-emerald-300 text-xs font-semibold tracking-wide"
-            >
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping motion-reduce:animate-none inline-block" aria-hidden="true" />
-              실시간 스케줄러 동기화 완료
-            </span>
-            <span className="text-xs text-slate-300">
-              기준: 2026년 환경부 무공해차 통합누리집 (ev.or.kr)
-            </span>
-          </div>
-          <span className="text-xs text-slate-300">
-            데이터 갱신 시각:{' '}
-            <ClientTimestamp
-              isoString={initialData?.metadata?.generated_at}
-              options={{
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              }}
-            />
-          </span>
-        </div>
-
-        <div className="max-w-3xl space-y-3">
-          <h1 id="tracker-heading" className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white flex items-center gap-3">
-            <span className="text-amber-400 text-3xl sm:text-4xl" aria-hidden="true">⚡</span>
-            전국 지자체별 전기차 실시간 보조금 소진율 추적기
-          </h1>
-          <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-            전국 17개 광역시도 및 73개 주요 지자체의 <strong>전기승용·화물·승합 공고 쿼터</strong>, 접수·출고 현황, 실시간 소진율을 5단계 경보로 감시합니다. 출고 전 <strong>내 거주지 잔여 예산</strong>을 확인하고 실구매 체감가를 원스톱으로 산출하세요.
-          </p>
-        </div>
-
-        {/* Live Nationwide Stat Cards - Responsive Grid on Mobile (320px+) & Solid Opaque Backgrounds */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mt-8 pt-6 border-t border-slate-800">
-          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-            <div className="text-xs font-medium text-slate-300">전국 평균 소진율</div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-amber-400 mt-1">
-              {(Number.isFinite(summary?.nationwide_depletion_rate) ? summary.nationwide_depletion_rate : 0).toFixed(1)}%
-            </div>
-            <div className="text-[11px] text-slate-300 mt-1">
-              전체 카테고리 종합
-            </div>
-          </div>
-
-          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-            <div className="text-xs font-medium text-slate-300">총 공고 대수</div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-slate-100 mt-1">
-              {(Number.isFinite(summary?.total_announced_units) ? Math.max(0, summary.total_announced_units) : 0).toLocaleString()}
-              <span className="text-xs font-normal text-slate-300 ml-1">대</span>
-            </div>
-            <div className="text-[11px] text-slate-300 mt-1">
-              총 배정 예산 {(Number.isFinite(summary?.total_budget_billion_krw) ? Math.max(0, summary.total_budget_billion_krw) : 0).toLocaleString()}억 원
-            </div>
-          </div>
-
-          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-            <div className="text-xs font-medium text-slate-300">총 접수 대수</div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-blue-400 mt-1">
-              {(Number.isFinite(summary?.total_applied_units) ? Math.max(0, summary.total_applied_units) : 0).toLocaleString()}
-              <span className="text-xs font-normal text-slate-300 ml-1">대</span>
-            </div>
-            <div className="text-[11px] text-slate-300 mt-1">
-              출고 완료: {(Number.isFinite(summary?.total_delivered_units) ? Math.max(0, summary.total_delivered_units) : 0).toLocaleString()}대
-            </div>
-          </div>
-
-          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-            <div className="text-xs font-medium text-slate-300">전국 잔여 대수</div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-emerald-400 mt-1">
-              {(Number.isFinite(summary?.total_remaining_units) ? Math.max(0, summary.total_remaining_units) : 0).toLocaleString()}
-              <span className="text-xs font-normal text-slate-300 ml-1">대</span>
-            </div>
-            <div className="text-[11px] text-slate-300 mt-1">
-              잔여율 {(100 - (Number.isFinite(summary?.nationwide_depletion_rate) ? summary.nationwide_depletion_rate : 0)).toFixed(1)}%
-            </div>
-          </div>
-
-          <div className="sm:col-span-2 lg:col-span-1 bg-rose-950 border border-rose-500/50 rounded-2xl p-4 flex flex-col justify-between">
-            <div className="text-xs font-medium text-rose-300">긴급 마감 위험 지역</div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-rose-400 mt-1">
-              {(Number.isFinite(summary?.alert_region_counts?.critical) ? summary.alert_region_counts.critical : 0) +
-                (Number.isFinite(summary?.alert_region_counts?.depleted) ? summary.alert_region_counts.depleted : 0)}
-              <span className="text-xs font-normal text-rose-300 ml-1">개 시도</span>
-            </div>
-            <div className="text-[11px] text-rose-300 mt-1">
-              소진율 95% 이상 극소량
-            </div>
-          </div>
-        </div>
-
-        {/* Emergency Alert Ticker for Critical Municipalities */}
-        {criticalRegions.length > 0 && (
-          <div
-            role="region"
-            aria-label="보조금 긴급 소진 주의보"
-            className="mt-6 bg-rose-950 border border-rose-500/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm"
-          >
-            <div className="flex flex-wrap items-center gap-2 text-rose-200">
-              <div role="alert" className="flex items-center gap-1.5">
-                <span className="text-base" aria-hidden="true">🚨</span>
-                <strong className="text-rose-100 font-semibold">마감 임박 특보 (소진율 95% 초과):</strong>
-              </div>
-              <div className="flex flex-wrap gap-1.5 ml-1">
-                {criticalRegions.map((crit) => (
-                  <button
-                    key={crit.region_id}
-                    type="button"
-                    onClick={() => {
-                      setSearchQuery(crit.name_ko);
-                      handleSelectRegionForCalc(crit.region_id);
-                    }}
-                    aria-label={`${crit.name_ko} 소진율 ${(Number.isFinite(crit.categories?.passenger?.depletion_rate) ? crit.categories.passenger.depletion_rate : 0).toFixed(1)}%, 보조금 계산기로 이동`}
-                    className="px-2.5 py-1.5 min-h-[44px] inline-flex items-center rounded bg-rose-900 border border-rose-500/50 text-rose-200 hover:bg-rose-800 hover:text-white transition font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-                    title={`${crit.name_ko} 보조금 계산기로 이동`}
-                  >
-                    {crit.name_ko} ({(Number.isFinite(crit.categories?.passenger?.depletion_rate) ? crit.categories.passenger.depletion_rate : 0).toFixed(1)}%)
-                  </button>
-                ))}
-              </div>
-            </div>
-            <a
-              href="#subsidy-calculator"
-              className="text-amber-300 hover:text-amber-200 underline font-semibold shrink-0 rounded px-2 py-2 min-h-[44px] flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-            >
-              내 차 실구매가 즉시 계산 &rarr;
-            </a>
-          </div>
-        )}
-      </section>
-
-      {/* 2. 5-Tier Alert Badges Legend & Quick Filter - Solid Opaque Background for WCAG AA Contrast */}
-      <section aria-labelledby="subsidy-alert-legend-heading" className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <h2 id="subsidy-alert-legend-heading" className="text-sm font-bold text-slate-300 flex items-center gap-2">
-            <span aria-hidden="true">🛡️</span> 전국 지자체 보조금 소진 5단계 경보 기준
-          </h2>
-          <span className="text-xs text-slate-300">배지 클릭 시 해당 경보 지역만 필터링</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
-          {(Object.keys(thresholds) as AlertSeverity[]).map((key) => {
-            const t = thresholds[key];
-            const isSelected = alertFilter === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={isSelected}
-                aria-label={`${t?.label_ko || key} 경보 필터 ${isSelected ? '해제' : '적용'}`}
-                onClick={() => setAlertFilter(isSelected ? 'ALL' : key)}
-                className={`p-3 min-h-[44px] rounded-xl border text-left transition flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
-                  isSelected
-                    ? 'ring-2 ring-amber-400 ' + getBadgeStyle(key)
-                    : 'bg-slate-950 hover:bg-slate-800 border-slate-800 text-slate-300'
-                }`}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className={`text-xs px-2 py-0.5 rounded font-semibold border ${getBadgeStyle(key)}`}>
-                    {getStatusLabel(key)}
-                  </span>
-                  <span className={`text-[11px] font-medium ${isSelected ? 'text-slate-100 font-semibold' : 'text-slate-300'}`}>{(t?.min_percent ?? 0)}%~{(t?.max_percent ?? 100)}%</span>
-                </div>
-                <div className={`text-[11px] line-clamp-2 mt-2 leading-relaxed ${isSelected ? 'text-slate-100' : 'text-slate-300'}`}>
-                  {t?.recommended_action || ''}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </section>
+      {/* 2. 5-Tier Alert Badges Legend & Quick Filter - Isolated Memoized Pure Component */}
+      <AlertLegendSection
+        thresholds={thresholds}
+        alertFilter={alertFilter}
+        onSelectAlertFilter={handleSelectAlertFilter}
+      />
 
       {/* 3. Search & Filter Bar */}
       <section aria-labelledby="filter-controls-heading" className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4">
@@ -613,7 +708,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               type="checkbox"
               aria-label="추경 예산 편성 지자체만 보기"
               checked={supplementaryOnly}
-              onChange={(e) => setSupplementaryOnly(e.target.checked)}
+              onChange={handleToggleSupplementary}
               className="w-5 h-5 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             />
             <span>추경 예산 편성 지자체만 보기</span>
@@ -640,14 +735,14 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               aria-label="지자체 검색"
               aria-describedby="filter-feedback-status"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={handleSearchChange}
               placeholder="시·도 또는 세부 시·군·구 검색 (예: 서울, 수원, 성남, 대구, 포항, 울릉)"
               className="w-full pl-10 pr-9 py-2.5 min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 text-white placeholder-slate-300 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             />
             {searchQuery && (
               <button
                 type="button"
-                onClick={() => setSearchQuery('')}
+                onClick={handleClearSearch}
                 aria-label="검색어 지우기"
                 className="absolute inset-y-0 right-0 pr-3 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-300 hover:text-white text-sm rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
               >
@@ -664,7 +759,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 type="button"
                 aria-pressed={zoneFilter === zone.id}
                 aria-label={`${zone.label} 권역 필터 ${zoneFilter === zone.id ? '해제' : '적용'}`}
-                onClick={() => setZoneFilter(zone.id)}
+                onClick={() => handleSelectZone(zone.id)}
                 className={`px-2.5 py-1.5 min-h-[44px] flex items-center justify-center rounded-lg border font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                   zoneFilter === zone.id
                     ? 'bg-blue-600 text-white border-blue-500'
@@ -684,7 +779,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               value={sortOption}
               onChange={(e) => {
                 if (isSortOption(e.target.value)) {
-                  setSortOption(e.target.value);
+                  handleSortChange(e.target.value);
                 }
               }}
               aria-label="지자체 정렬 방식"
@@ -711,12 +806,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             <button
               type="button"
               aria-label="적용된 전체 필터 초기화"
-              onClick={() => {
-                setZoneFilter('ALL');
-                setAlertFilter('ALL');
-                setSearchQuery('');
-                setSupplementaryOnly(false);
-              }}
+              onClick={handleResetFilters}
               className="text-amber-400 hover:text-amber-300 underline font-medium rounded px-2.5 py-1.5 min-h-[44px] inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
               전체 필터 초기화
@@ -752,7 +842,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 type="button"
                 aria-pressed={viewMode === 'grid'}
                 aria-label="카드 그리드 형식으로 보기"
-                onClick={() => setViewMode('grid')}
+                onClick={handleSetViewGrid}
                 className={`px-3 py-1.5 min-h-[44px] inline-flex items-center justify-center rounded-lg font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                   viewMode === 'grid'
                     ? 'bg-blue-600 text-white shadow'
@@ -765,7 +855,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 type="button"
                 aria-pressed={viewMode === 'table'}
                 aria-label="표(테이블) 형식으로 보기"
-                onClick={() => setViewMode('table')}
+                onClick={handleSetViewTable}
                 className={`px-3 py-1.5 min-h-[44px] inline-flex items-center justify-center rounded-lg font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                   viewMode === 'table'
                     ? 'bg-blue-600 text-white shadow'
@@ -824,7 +914,6 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   );
 }
 
-
 // ============================================================================
 // Sub-Component: Memoized Region Card (prevents re-render cascades on typing)
 // ============================================================================
@@ -843,17 +932,7 @@ const RegionCard = React.memo(function RegionCard({
   toggleRegionExpand,
   onSelectForCalc,
 }: RegionCardProps) {
-  const cat: CategoryMetrics = region?.categories?.[selectedCategory] ?? {
-    status: 'HEALTHY',
-    announced_units: 0,
-    applied_units: 0,
-    delivered_units: 0,
-    remaining_units: 0,
-    depletion_rate: 0,
-    delivery_rate: 0,
-    max_local_subsidy_krw: 0,
-    max_total_subsidy_krw: 0,
-  };
+  const cat: CategoryMetrics = region?.categories?.[selectedCategory] ?? FALLBACK_CATEGORY_METRICS;
 
   const announcedUnits = Number.isFinite(cat?.announced_units) ? Math.max(0, cat.announced_units) : 0;
   const safeAnnounced = announcedUnits > 0 ? announcedUnits : 1;
@@ -877,8 +956,24 @@ const RegionCard = React.memo(function RegionCard({
   );
   const categoryLabel = selectedCategory === 'passenger' ? '전기승용' : selectedCategory === 'commercial' ? '전기화물' : '전기승합';
 
+  // Memoized handlers for button interactions
+  const handleSelectCalc = useCallback(() => {
+    onSelectForCalc(regionId);
+  }, [onSelectForCalc, regionId]);
+
+  // Performance optimization: Lazy render sub-municipalities once opened.
+  // Preserves container element in DOM with hidden={!isExpanded} so aria-controls never breaks.
+  const [hasBeenExpanded, setHasBeenExpanded] = useState(isExpanded);
+
+  useEffect(() => {
+    if (isExpanded && !hasBeenExpanded) {
+      setHasBeenExpanded(true);
+    }
+  }, [isExpanded, hasBeenExpanded]);
+
   // Memoized sub-municipalities list
   const renderedMunis = useMemo(() => {
+    if (!hasBeenExpanded) return null;
     return munis.map((muni) => {
       const muniAnnounced = Number.isFinite(muni.announced_units) ? Math.max(0, muni.announced_units) : 0;
       const muniApplied = Number.isFinite(muni.applied_units) ? Math.max(0, muni.applied_units) : 0;
@@ -913,7 +1008,7 @@ const RegionCard = React.memo(function RegionCard({
         </div>
       );
     });
-  }, [munis, regionId]);
+  }, [hasBeenExpanded, munis, regionId]);
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg hover:border-slate-700 transition flex flex-col justify-between">
@@ -1020,7 +1115,7 @@ const RegionCard = React.memo(function RegionCard({
       <div className="pt-4 mt-3 border-t border-slate-800">
         <button
           type="button"
-          onClick={() => onSelectForCalc(regionId)}
+          onClick={handleSelectCalc}
           aria-label={`${regionName} 보조금으로 실구매가 계산`}
           className="w-full py-3 px-4 min-h-[44px] rounded-xl bg-blue-600/90 hover:bg-blue-600 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5 shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
         >
@@ -1084,11 +1179,54 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
     setCalcOptions((prev) => ({ ...prev, isOldDieselScrappage: val }));
   }, []);
 
+  const handleModelSelectChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    onSelectModelId(e.target.value);
+  }, [onSelectModelId]);
+
+  const handleRegionSelectChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    onSelectRegionId(e.target.value);
+  }, [onSelectRegionId]);
+
+  const handleCustomMsrpChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setCustomMsrpInput(e.target.value.replace(/[^0-9]/g, ''));
+  }, []);
+
+  const handleSetPresetMsrp = useCallback((msrp: string) => {
+    setCustomMsrpInput(msrp);
+  }, []);
+
+  // Performance: Fast O(1) indexed lookup maps for models and regions
+  const modelsMap = useMemo(() => {
+    const map = new Map<string, PopularModelEntry>();
+    for (const m of models) {
+      if (m?.model_id) {
+        map.set(m.model_id.toLowerCase(), m);
+      }
+    }
+    return map;
+  }, [models]);
+
+  const regionsMap = useMemo(() => {
+    const map = new Map<string, RegionEntry>();
+    for (const r of regions) {
+      if (r?.region_id) {
+        map.set(r.region_id.toLowerCase(), r);
+      }
+      if (r?.iso_code) {
+        map.set(r.iso_code.toLowerCase(), r);
+      }
+    }
+    return map;
+  }, [regions]);
+
   const activeModel = useMemo(() => {
     const q = (selectedModelId || '').trim().toLowerCase();
+    if (modelsMap.has(q)) {
+      return modelsMap.get(q)!;
+    }
     const resolved = getModelById(q);
     if (resolved) {
-      const matchInModels = models.find((m) => m.model_id === resolved.model_id);
+      const matchInModels = modelsMap.get(resolved.model_id.toLowerCase());
       if (matchInModels) return matchInModels;
       return resolved;
     }
@@ -1099,13 +1237,16 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
           m.name_ko.toLowerCase().includes(q)
       ) || models[0] || undefined
     );
-  }, [models, selectedModelId]);
+  }, [models, modelsMap, selectedModelId]);
 
   const activeRegionForCalc = useMemo(() => {
     const q = (selectedRegionId || '').trim().toLowerCase();
+    if (regionsMap.has(q)) {
+      return regionsMap.get(q)!;
+    }
     const resolved = getRegionById(q);
     if (resolved) {
-      const matchInRegions = regions.find((r) => r.region_id === resolved.region_id);
+      const matchInRegions = regionsMap.get(resolved.region_id.toLowerCase());
       if (matchInRegions) return matchInRegions;
       return resolved;
     }
@@ -1119,7 +1260,15 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
           r.name_en.toLowerCase() === q
       ) || regions[0] || undefined
     );
-  }, [regions, selectedRegionId]);
+  }, [regions, regionsMap, selectedRegionId]);
+
+  const handleToggleCustomMsrp = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const checked = e.target.checked;
+    setIsCustomMsrp(checked);
+    if (checked && !customMsrpInput && activeModel) {
+      setCustomMsrpInput(activeModel.base_price_krw.toString());
+    }
+  }, [customMsrpInput, activeModel]);
 
   const topModels = useMemo(() => (Array.isArray(models) ? models.slice(0, 8) : []), [models]);
 
@@ -1130,18 +1279,15 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
       const parsed = cleaned ? parseInt(cleaned, 10) : NaN;
       customMsrpNum = Number.isFinite(parsed) && parsed > 0 ? parsed : (activeModel?.base_price_krw ?? 0);
     }
-    return calculateNetSubsidy(
-      activeModel?.model_id || selectedModelId || 'ioniq-5-2026',
-      activeRegionForCalc?.region_id || selectedRegionId || 'KR-11',
+    return calculateNetSubsidyPure(
+      activeModel!,
+      activeRegionForCalc!,
       customMsrpNum,
       calcOptions
     );
   }, [
-    activeModel?.model_id,
-    activeModel?.base_price_krw,
-    activeRegionForCalc?.region_id,
-    selectedModelId,
-    selectedRegionId,
+    activeModel,
+    activeRegionForCalc,
     isCustomMsrp,
     customMsrpInput,
     calcOptions,
@@ -1179,7 +1325,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               id="model-select"
               aria-label="차량 모델 선택"
               value={activeModel?.model_id || selectedModelId}
-              onChange={(e) => onSelectModelId(e.target.value)}
+              onChange={handleModelSelectChange}
               className="w-full py-3 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
             >
               {models.map((model) => (
@@ -1231,7 +1377,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               id="region-select"
               aria-label="거주 지자체 (시·도) 선택"
               value={activeRegionForCalc?.region_id || selectedRegionId}
-              onChange={(e) => onSelectRegionId(e.target.value)}
+              onChange={handleRegionSelectChange}
               aria-describedby="region-residency-note"
               className="w-full py-3 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
             >
@@ -1255,12 +1401,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                   type="checkbox"
                   aria-label="옵션 포함 출고가 직접 입력 (커스텀 MSRP)"
                   checked={isCustomMsrp}
-                  onChange={(e) => {
-                    setIsCustomMsrp(e.target.checked);
-                    if (e.target.checked && !customMsrpInput && activeModel) {
-                      setCustomMsrpInput(activeModel.base_price_krw.toString());
-                    }
-                  }}
+                  onChange={handleToggleCustomMsrp}
                   className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 />
                 <span>옵션 포함 출고가 직접 입력 (커스텀 MSRP)</span>
@@ -1282,7 +1423,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                     inputMode="numeric"
                     aria-label="직접 차량 출고가 입력"
                     value={customMsrpInput && Number.isFinite(parseInt(customMsrpInput, 10)) ? parseInt(customMsrpInput, 10).toLocaleString('ko-KR') : ''}
-                    onChange={(e) => setCustomMsrpInput(e.target.value.replace(/[^0-9]/g, ''))}
+                    onChange={handleCustomMsrpChange}
                     placeholder="원 단위 출고가 입력 (예: 54,900,000)"
                     className="w-full py-2.5 px-3.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 pr-12"
                   />
@@ -1294,7 +1435,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                   <button
                     type="button"
                     aria-label="차량 출고가 5,400만 원 (100% 구간) 프리셋 적용"
-                    onClick={() => setCustomMsrpInput('54000000')}
+                    onClick={() => handleSetPresetMsrp('54000000')}
                     className="px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     5,400만 원 (100% 구간)
@@ -1302,7 +1443,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                   <button
                     type="button"
                     aria-label="차량 출고가 6,200만 원 (50% 감액 구간) 프리셋 적용"
-                    onClick={() => setCustomMsrpInput('62000000')}
+                    onClick={() => handleSetPresetMsrp('62000000')}
                     className="px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     6,200만 원 (50% 감액)
@@ -1310,7 +1451,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                   <button
                     type="button"
                     aria-label="차량 출고가 8,600만 원 (보조금 0원 구간) 프리셋 적용"
-                    onClick={() => setCustomMsrpInput('86000000')}
+                    onClick={() => handleSetPresetMsrp('86000000')}
                     className="px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     8,600만 원 (보조금 0원)
@@ -1487,4 +1628,3 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
     </section>
   );
 });
-

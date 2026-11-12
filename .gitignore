@@ -46,3 +46,7 @@ __pycache__/
 *.lock
 *.corrupt*
 *.corrupted
+.cache/
+data/.cache/
+*.tmp*
+

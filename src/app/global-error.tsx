@@ -49,21 +49,23 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
   return (
     <html lang="ko">
       <body className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 antialiased font-sans">
-        <main
-          ref={containerRef}
-          tabIndex={-1}
-          role="alert"
-          aria-live="assertive"
-          aria-labelledby="global-error-heading"
-          aria-describedby="global-error-description"
-          className="max-w-lg w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 sm:p-10 shadow-2xl text-center space-y-6 outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-        >
+        <main id="main-content" className="max-w-lg w-full">
           <div
-            className="w-16 h-16 mx-auto rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center text-3xl shadow-inner"
-            aria-hidden="true"
+            ref={containerRef}
+            tabIndex={-1}
+            role="alert"
+            aria-live="assertive"
+            aria-atomic="true"
+            aria-labelledby="global-error-heading"
+            aria-describedby="global-error-description"
+            className="w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 sm:p-10 shadow-2xl text-center space-y-6 outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
-            ⚠️
-          </div>
+            <div
+              className="w-16 h-16 mx-auto rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center text-3xl shadow-inner"
+              aria-hidden="true"
+            >
+              ⚠️
+            </div>
 
           <div className="space-y-3">
             <h1
@@ -112,8 +114,9 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
               <span aria-hidden="true">🏠</span> 홈으로 이동
             </button>
           </div>
-        </main>
-      </body>
-    </html>
+        </div>
+      </main>
+    </body>
+  </html>
   );
 }

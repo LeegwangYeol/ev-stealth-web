@@ -69,7 +69,7 @@ export const SubsidyProgressBar = memo(function SubsidyProgressBar({
         aria-valuemax={100}
         aria-label={`${safeRegionName} ${safeCategoryLabel} 보조금 소진율`}
         aria-valuetext={`소진율 ${safeDepletion.toFixed(1)}% (${getStatusLabel(status)}), 잔여 ${safeRemaining.toLocaleString()}대`}
-        className="w-full bg-slate-950 rounded-full h-3.5 overflow-hidden flex relative border border-slate-600"
+        className="w-full bg-slate-950 rounded-full h-3.5 overflow-hidden flex relative border border-slate-600 border-slate-500"
       >
         {/* Layer 1: Confirmed Delivered */}
         {deliveredPct > 0 && (
@@ -89,11 +89,11 @@ export const SubsidyProgressBar = memo(function SubsidyProgressBar({
             aria-hidden="true"
           />
         )}
-        {/* Layer 3: Remaining (slate track with >= 3:1 contrast against bg-slate-950) */}
+        {/* Layer 3: Remaining (slate track with >= 3:1 contrast against bg-slate-950: slate-500 is 4.24:1) */}
         {remainingPct > 0 && (
           <div
             style={{ width: `${remainingPct}%` }}
-            className="bg-slate-700 h-full"
+            className="bg-slate-500 h-full"
             title={`잔여: ${safeRemaining.toLocaleString()}대 (${remainingPct.toFixed(1)}%)`}
             aria-hidden="true"
           />
@@ -111,7 +111,7 @@ export const SubsidyProgressBar = memo(function SubsidyProgressBar({
             심사중 {pendingCount.toLocaleString()}대
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-slate-600 inline-block border border-slate-400" aria-hidden="true" />
+            <span className="w-2 h-2 rounded-full bg-slate-500 inline-block border border-slate-400" aria-hidden="true" />
             잔여 {safeRemaining.toLocaleString()}대
           </span>
         </div>

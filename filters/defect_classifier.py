@@ -49,6 +49,7 @@ from models.complaint import (
     ComplaintRecord,
     DSIBreakdown,
     RawPost,
+    parse_date_str,
 )
 
 # High-precision compound defect phrases mapping to canonical taxonomy
@@ -186,8 +187,16 @@ _SLANG_TERM_LOWER_PAIRS: Tuple[Tuple[SlangEntry, str, str], ...] = tuple(
 )
 
 
+# Pre-compiled regex for stripping invalid characters: null bytes, non-printable control chars,
+# Trojan Source / Unicode BiDi overrides, unpaired surrogates, BOM, and Unicode non-characters.
+RE_INVALID_CHARS: re.Pattern[str] = re.compile(
+    r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u202a-\u202e\u2066-\u2069\ud800-\udfff\ufeff\ufffe\uffff]"
+)
+
+
 def sanitize_text(val: Any, max_len: int = MAX_TEXT_LENGTH) -> str:
-    """Safely coerces input to str, strips null bytes & control chars, normalizes NFC, and caps length."""
+    """Safely coerces input to str, strips null bytes, control chars, BiDi overrides & surrogates,
+    normalizes NFC, and caps length."""
     if val is None or val is False:
         return ""
     if isinstance(val, (bytes, bytearray)):
@@ -203,14 +212,21 @@ def sanitize_text(val: Any, max_len: int = MAX_TEXT_LENGTH) -> str:
         except Exception:
             return ""
 
-    if "\x00" in val_str:
-        val_str = val_str.replace("\x00", "")
+    if not val_str:
+        return ""
 
+    val_str = RE_INVALID_CHARS.sub("", val_str)
     val_str = val_str.strip()
     if len(val_str) > max_len:
         val_str = val_str[:max_len]
 
     return unicodedata.normalize("NFC", val_str)
+
+
+def normalize_date(date_val: Any, default: Optional[str] = None) -> str:
+    """Safely normalizes any date representation (ISO 8601, Korean format, timestamps) to YYYY-MM-DD."""
+    res = parse_date_str(date_val)
+    return res if res else (default or "")
 
 
 class DefectClassifier:
@@ -223,6 +239,10 @@ class DefectClassifier:
         self.standard_intensifiers = STANDARD_INTENSIFIERS
         self.diminishers = DIMINISHERS
         self.concessives = set(CONCESSIVES)
+
+    def normalize_date(self, date_val: Any, default: Optional[str] = None) -> str:
+        """Instance method to normalize dates."""
+        return normalize_date(date_val, default=default)
 
     # -----------------------------------------------------------------
     # STAGE 1: Noise & Exclusion Filter
@@ -926,3 +946,18 @@ class DefectClassifier:
 
 # Backward compatibility alias
 ContextualDefectFilter = DefectClassifier
+
+__all__ = [
+    "DefectClassifier",
+    "ContextualDefectFilter",
+    "COMPOUND_DEFECT_RULES",
+    "NEGATIVE_LEXICON",
+    "POSITIVE_LEXICON",
+    "normalize_date",
+    "sanitize_text",
+    "RE_INVALID_CHARS",
+    "RE_CLAUSE_SPLIT",
+    "RE_TOKENS",
+    "RE_HANGUL",
+    "RE_AS_KEYWORD",
+]

@@ -148,54 +148,51 @@ export interface BatteryChemistryProfile {
   vulnerabilities?: string;
 }
 
+export interface WarrantyCliffAdjustment {
+  safe_period_multiplier: number;
+  approaching_cliff_1_2_years_penalty: number;
+  expired_warranty_penalty: number;
+  description: string;
+}
+
+export interface BatteryChemistryAdjustment {
+  cycle_life_bonus_yr3_5: number;
+  winter_seasonal_discount: number;
+  fire_safety_reputation_bonus: number;
+  description: string;
+}
+
+export interface FaceliftHardwareAdjustment {
+  platform_800V_premium: number;
+  platform_400V_penalty: number;
+  major_facelift_compute_shift_penalty: number;
+  description: string;
+}
+
+export interface MileageSensitivityAdjustment {
+  base_km_per_year?: number;
+  baseline_annual_km?: number;
+  penalty_per_10000km_excess: number;
+  bonus_per_10000km_deficit: number;
+  max_mileage_discount_cap?: number;
+  description?: string;
+}
+
 export interface AdjustmentFactors {
-  warranty_cliff: {
-    safe_period_multiplier: number;
-    approaching_cliff_1_2_years_penalty: number;
-    expired_warranty_penalty: number;
-    description: string;
-  };
+  warranty_cliff: WarrantyCliffAdjustment;
   battery_chemistry:
-    | Record<
-        BatteryChemistryType,
-        {
-          cycle_life_bonus_yr3_5: number;
-          winter_seasonal_discount: number;
-          fire_safety_reputation_bonus: number;
-          description: string;
-        }
-      >
-    | Record<
-        string,
-        {
-          cycle_life_bonus_yr3_5: number;
-          winter_seasonal_discount: number;
-          fire_safety_reputation_bonus: number;
-          description: string;
-        }
-      >;
-  facelift_hardware?: {
-    platform_800V_premium: number;
-    platform_400V_penalty: number;
-    major_facelift_compute_shift_penalty: number;
-    description: string;
-  };
+    | Record<BatteryChemistryType, BatteryChemistryAdjustment>
+    | Record<string, BatteryChemistryAdjustment>;
+  facelift_hardware?: FaceliftHardwareAdjustment;
   software_ota?:
     | Record<SoftwareOtaLevel, number>
     | Record<string, number>
     | {
         full_stack_fota_bonus: number;
         legacy_infotainment_penalty: number;
-        description: string;
+        description?: string;
       };
-  mileage_sensitivity: {
-    base_km_per_year?: number;
-    baseline_annual_km?: number;
-    penalty_per_10000km_excess: number;
-    bonus_per_10000km_deficit: number;
-    max_mileage_discount_cap?: number;
-    description?: string;
-  };
+  mileage_sensitivity: MileageSensitivityAdjustment;
 }
 
 export interface ClawbackTier {
@@ -529,6 +526,10 @@ export interface TcoResult {
 }
 
 export interface CalculateDepreciationOptions {
-  customPurchasePriceKrw?: number;
+  model?: EvModelDepreciation;
+  models?: EvModelDepreciation[];
+  baselineAnnualMileageKm?: number;
   annualAverageKm?: number;
+  adjustmentFactors?: AdjustmentFactors;
+  customPurchasePriceKrw?: number;
 }

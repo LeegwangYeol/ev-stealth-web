@@ -154,38 +154,44 @@ export function normalizeManufacturer(brand?: string | null): string {
  */
 export function getRecallDatabase(): RecallDatabase {
   try {
-    const data = rawRecallData as unknown as Partial<RecallDatabase>;
+    const raw = rawRecallData && typeof rawRecallData === 'object' ? (rawRecallData as unknown as Partial<RecallDatabase>) : {};
+    const meta = raw.metadata && typeof raw.metadata === 'object' ? raw.metadata : undefined;
     const metadata: RecallDatabaseMetadata = {
-      version: data.metadata?.version || '1.0.0',
-      updated_at: data.metadata?.updated_at || new Date().toISOString(),
-      total_campaigns: typeof data.metadata?.total_campaigns === 'number' ? data.metadata.total_campaigns : 0,
+      version: typeof meta?.version === 'string' ? meta.version : '1.0.0',
+      updated_at: typeof meta?.updated_at === 'string' ? meta.updated_at : new Date().toISOString(),
+      total_campaigns:
+        typeof meta?.total_campaigns === 'number' && Number.isFinite(meta.total_campaigns)
+          ? Math.max(0, meta.total_campaigns)
+          : 0,
       total_affected_vehicles_kdm:
-        typeof data.metadata?.total_affected_vehicles_kdm === 'number'
-          ? data.metadata.total_affected_vehicles_kdm
+        typeof meta?.total_affected_vehicles_kdm === 'number' && Number.isFinite(meta.total_affected_vehicles_kdm)
+          ? Math.max(0, meta.total_affected_vehicles_kdm)
           : 0,
       active_fire_campaigns:
-        typeof data.metadata?.active_fire_campaigns === 'number'
-          ? data.metadata.active_fire_campaigns
+        typeof meta?.active_fire_campaigns === 'number' && Number.isFinite(meta.active_fire_campaigns)
+          ? Math.max(0, meta.active_fire_campaigns)
           : 0,
       ota_remedy_rate_pct:
-        typeof data.metadata?.ota_remedy_rate_pct === 'number'
-          ? data.metadata.ota_remedy_rate_pct
+        typeof meta?.ota_remedy_rate_pct === 'number' && Number.isFinite(meta.ota_remedy_rate_pct)
+          ? Math.min(100, Math.max(0, meta.ota_remedy_rate_pct))
           : 0,
     };
 
-    const vin_prefixes: VinPrefixMapping[] = Array.isArray(data.vin_prefixes)
-      ? (data.vin_prefixes as VinPrefixMapping[])
+    const vin_prefixes: VinPrefixMapping[] = Array.isArray(raw.vin_prefixes)
+      ? (raw.vin_prefixes.filter((p): p is VinPrefixMapping => Boolean(p && typeof p === 'object')))
       : [];
 
-    const battery_profiles: BatterySafetyProfile[] = Array.isArray(data.battery_profiles)
-      ? (data.battery_profiles as BatterySafetyProfile[])
+    const battery_profiles: BatterySafetyProfile[] = Array.isArray(raw.battery_profiles)
+      ? (raw.battery_profiles.filter((bp): bp is BatterySafetyProfile => Boolean(bp && typeof bp === 'object')))
       : [];
 
-    const recalls: OfficialRecallCampaign[] = Array.isArray(data.recalls)
-      ? (data.recalls as OfficialRecallCampaign[]).map((r) => ({
-          ...r,
-          official_link: sanitizeSafeUrl(r?.official_link),
-        }))
+    const recalls: OfficialRecallCampaign[] = Array.isArray(raw.recalls)
+      ? (raw.recalls
+          .filter((r): r is OfficialRecallCampaign => Boolean(r && typeof r === 'object'))
+          .map((r) => ({
+            ...r,
+            official_link: sanitizeSafeUrl(r.official_link),
+          })))
       : [];
 
     return {
@@ -823,7 +829,7 @@ export function checkRecallsByModel(
     mode: 'MODEL',
     decodedBrand: cleanBrand,
     decodedModel: cleanModel,
-    decodedYear: year,
+    decodedYear: typeof year === 'number' && Number.isFinite(year) ? year : undefined,
     decodedCountry:
       canonicalBrand === '현대자동차' ||
       canonicalBrand === '기아' ||

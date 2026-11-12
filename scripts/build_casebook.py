@@ -288,8 +288,15 @@ def build_casebook(data_path: Path, slang_path: Path, output_path: Path) -> None
 
     casebook_content = "\n".join(sections) + "\n"
 
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(casebook_content)
+    from tracker.atomic_writer import atomic_write_text
+
+    atomic_write_text(
+        casebook_content,
+        output_path,
+        encoding="utf-8",
+        mode=0o644,
+        temp_prefix=".tmp_casebook_",
+    )
 
     print(f"[SUCCESS] CASEBOOK.md successfully generated at: {output_path}")
     print(f"Total Bytes: {len(casebook_content.encode('utf-8')):,} bytes")

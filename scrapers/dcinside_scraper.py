@@ -56,15 +56,31 @@ VEHICLE_PATTERNS = COMMON_VEHICLE_PATTERNS
 class DCInsideScraper:
     """Scraper and parser for DC Inside major and minor galleries."""
 
-    def __init__(self, client: Optional[SafeHttpClient] = None, slang_path: Optional[str] = None):
+    def __init__(
+        self,
+        client: Optional[SafeHttpClient] = None,
+        slang_path: Optional[str] = None,
+        timeout: Union[float, Tuple[float, float]] = (5.0, 15.0),
+        connect_timeout: Optional[float] = None,
+        read_timeout: Optional[float] = None,
+    ):
         # Enforce polite delay with randomized jitter (1.5s - 3.5s) and cooldown
-        self.client = client or SafeHttpClient(min_delay=1.5, max_delay=3.5)
+        self.timeout = timeout
+        self.connect_timeout = connect_timeout or (timeout[0] if isinstance(timeout, (tuple, list)) and len(timeout) >= 2 else 5.0)
+        self.read_timeout = read_timeout or (timeout[1] if isinstance(timeout, (tuple, list)) and len(timeout) >= 2 else 15.0)
+        self.client = client or SafeHttpClient(
+            min_delay=1.5,
+            max_delay=3.5,
+            connect_timeout=self.connect_timeout,
+            read_timeout=self.read_timeout,
+        )
         self.min_delay = 1.5
         self.max_delay = 3.5
         self.slang_path = slang_path or os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "slang_dict.json"
         )
         self.slang_dict = self._load_slang_dict()
+        self.post_cache: Dict[str, Dict[str, Any]] = {}
         self._warmed_up = False
 
     def sleep_polite(self):
@@ -119,7 +135,8 @@ class DCInsideScraper:
                 search_url,
                 method="GET",
                 referer=f"{DC_BASE_URL}/",
-                encoding="utf-8"
+                encoding="utf-8",
+                timeout=self.timeout,
             )
 
             if status != 200 or not text:
@@ -207,7 +224,8 @@ class DCInsideScraper:
                 method="POST",
                 data=form_data,
                 headers=headers,
-                encoding="utf-8"
+                encoding="utf-8",
+                timeout=self.timeout,
             )
 
             if status == 200 and text:
@@ -245,7 +263,8 @@ class DCInsideScraper:
         return []
 
     def fetch_post_detail(self, gallery_id: str, post_id: str) -> Dict[str, Any]:
-        """Fetch post detail with fallback between desktop view and mobile view."""
+        """Fetch post detail with fallback between desktop view, mobile view, and cached data."""
+        cache_key = f"{gallery_id}_{post_id}"
         self.ensure_warm_up()
         is_minor = GALLERIES.get(gallery_id, {}).get("is_minor", True)
         board_prefix = "mgallery/board" if is_minor else "board"
@@ -256,7 +275,8 @@ class DCInsideScraper:
                 desktop_url,
                 method="GET",
                 referer=f"{DC_BASE_URL}/{board_prefix}/lists/?id={gallery_id}",
-                encoding="utf-8"
+                encoding="utf-8",
+                timeout=self.timeout,
             )
 
             if status == 200 and text:
@@ -272,6 +292,7 @@ class DCInsideScraper:
                         ajax_comments = self.fetch_comments_ajax(gallery_id, post_id, e_s_n_o=e_s_n_o, is_minor=is_minor)
                         if ajax_comments:
                             post_data["comments"] = ajax_comments
+                    self.post_cache[cache_key] = post_data
                     return post_data
         except Exception as e:
             logger.warning(f"Error fetching DC desktop post ({desktop_url}): {e}")
@@ -287,17 +308,25 @@ class DCInsideScraper:
                 mobile_url,
                 method="GET",
                 headers=headers,
-                encoding="utf-8"
+                encoding="utf-8",
+                timeout=self.timeout,
             )
 
             if status == 200 and text:
                 try:
-                    return self.parse_post_detail(text, mobile_url, gallery_id, post_id, is_desktop=False)
+                    res = self.parse_post_detail(text, mobile_url, gallery_id, post_id, is_desktop=False)
+                    if res:
+                        self.post_cache[cache_key] = res
+                    return res
                 except Exception as e:
                     logger.warning(f"Error parsing DC mobile post detail ({mobile_url}): {e}")
                     return {}
         except Exception as e:
             logger.warning(f"Error fetching DC mobile post ({mobile_url}): {e}")
+
+        if cache_key in self.post_cache:
+            logger.warning(f"Remote DC post unreachable ({gallery_id}/{post_id}); falling back to cached post.")
+            return self.post_cache[cache_key]
 
         logger.warning(f"Failed to fetch DC post {gallery_id}/{post_id}")
         return {}

@@ -22,10 +22,29 @@ from filters.slang_filter import (
     extract_slang_tags,
     filter_slang,
     is_slang_present,
+    normalize_text,
+)
+from filters.defect_classifier import (
+    DefectClassifier,
+    ContextualDefectFilter,
+    normalize_date,
+    sanitize_text,
+)
+from filters.defect_filter import DefectFilter
+from filters.spam_filter import (
+    SpamFilter,
+    evaluate_stage1_noise,
+    is_spam,
+    sanitize_input,
+)
+from filters.vehicle_matcher import (
+    VehicleMatcher,
+    extract_vehicle_info,
 )
 
 __all__ = [
     "SLANG_CATALOG",
+    "RAW_SLANG_ENTRIES",
     "SUPER_INTENSIFIERS",
     "STANDARD_INTENSIFIERS",
     "DIMINISHERS",
@@ -43,4 +62,16 @@ __all__ = [
     "filter_slang",
     "extract_slang_tags",
     "is_slang_present",
+    "normalize_text",
+    "DefectClassifier",
+    "ContextualDefectFilter",
+    "DefectFilter",
+    "normalize_date",
+    "sanitize_text",
+    "SpamFilter",
+    "evaluate_stage1_noise",
+    "is_spam",
+    "sanitize_input",
+    "VehicleMatcher",
+    "extract_vehicle_info",
 ]

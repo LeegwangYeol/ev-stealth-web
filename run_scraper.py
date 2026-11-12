@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import json
 import logging
 import os
 from pathlib import Path
@@ -188,6 +189,8 @@ def _atomic_copy_file(src_path: Union[str, Path], dest_path: Union[str, Path]) -
     dest.parent.mkdir(parents=True, exist_ok=True)
     temp_name = None
     try:
+        src_p = Path(src_path)
+        src_stat = src_p.stat()
         with tempfile.NamedTemporaryFile("wb", dir=str(dest.parent), delete=False, prefix=".tmp_sync_") as tf:
             temp_name = tf.name
             with open(src_path, "rb") as sf:
@@ -199,6 +202,22 @@ def _atomic_copy_file(src_path: Union[str, Path], dest_path: Union[str, Path]) -
         except OSError:
             pass
         os.replace(temp_name, dest)
+        try:
+            os.utime(dest, (src_stat.st_atime, src_stat.st_mtime))
+        except OSError:
+            pass
+        if os.name != "nt":
+            dir_flags = os.O_RDONLY
+            if hasattr(os, "O_DIRECTORY"):
+                dir_flags |= os.O_DIRECTORY
+            try:
+                dir_fd = os.open(str(dest.parent), dir_flags)
+                try:
+                    os.fsync(dir_fd)
+                finally:
+                    os.close(dir_fd)
+            except OSError:
+                pass
         return str(dest)
     finally:
         if temp_name and os.path.exists(temp_name):
@@ -206,6 +225,9 @@ def _atomic_copy_file(src_path: Union[str, Path], dest_path: Union[str, Path]) -
                 os.unlink(temp_name)
             except OSError:
                 pass
+
+
+_TARGET_DATE_RE = re.compile(r"^(\d{4})[./\-](\d{1,2})[./\-](\d{1,2})$")
 
 
 WEB_DATA_DAILY_REPORTS_PATH = str(_resolve_web_reports_path())
@@ -236,7 +258,7 @@ def parse_target_date(date_str: Optional[str]) -> Optional[str]:
     if not val:
         return None
 
-    m_simple = re.match(r"^(\d{4})[./\-](\d{1,2})[./\-](\d{1,2})$", val)
+    m_simple = _TARGET_DATE_RE.match(val)
     if m_simple:
         y, m, d = int(m_simple.group(1)), int(m_simple.group(2)), int(m_simple.group(3))
         try:
@@ -346,10 +368,41 @@ class ScraperPipeline:
         dc_crawler: Optional[DCInsideCrawler] = None,
         defect_filter: Optional[Any] = None,
         client: Optional[SafeHttpClient] = None,
+        connect_timeout: float = 5.0,
+        read_timeout: float = 15.0,
+        enable_cache: bool = True,
+        cache_fallback: bool = False,
+        cache_dir: Optional[Union[str, Path]] = None,
     ):
-        self.client = client or SafeHttpClient(min_delay=1.0, max_delay=2.5, enable_jitter=True)
-        self.bobae_crawler = bobae_crawler or BobaeDreamCrawler(client=self.client)
-        self.dc_crawler = dc_crawler or DCInsideCrawler(client=self.client)
+        self.connect_timeout = float(connect_timeout) if connect_timeout > 0 else 5.0
+        self.read_timeout = float(read_timeout) if read_timeout > 0 else 15.0
+        self.enable_cache = enable_cache
+        self.cache_fallback = cache_fallback
+        self._custom_cache_dir = Path(cache_dir) if cache_dir else None
+        self.client = client or SafeHttpClient(
+            min_delay=1.0,
+            max_delay=2.5,
+            enable_jitter=True,
+            connect_timeout=self.connect_timeout,
+            read_timeout=self.read_timeout,
+            enable_cache=self.enable_cache,
+            cache_fallback=self.cache_fallback,
+            cache_dir=str(self._custom_cache_dir) if self._custom_cache_dir else None,
+        )
+        self.bobae_crawler = bobae_crawler or BobaeDreamCrawler(
+            client=self.client,
+            connect_timeout=self.connect_timeout,
+            read_timeout=self.read_timeout,
+            enable_cache=self.enable_cache,
+            cache_fallback=self.cache_fallback,
+        )
+        self.dc_crawler = dc_crawler or DCInsideCrawler(
+            client=self.client,
+            connect_timeout=self.connect_timeout,
+            read_timeout=self.read_timeout,
+            enable_cache=self.enable_cache,
+            cache_fallback=self.cache_fallback,
+        )
         self.defect_filter = defect_filter or DefectFilter()
 
     def close(self) -> None:
@@ -487,7 +540,58 @@ class ScraperPipeline:
                 except Exception as e:
                     logger.warning(f"DCInside crawler encountered an unhandled error: {e}")
 
+        if len(raw_posts) > 0:
+            self._save_harvest_cache(raw_posts)
+        elif self.cache_fallback:
+            cached_posts = self._load_harvest_cache()
+            if cached_posts:
+                logger.warning(
+                    f"Harvest yielded 0 posts from remote sources (unreachable or 5xx). "
+                    f"Falling back to {len(cached_posts)} cached posts from previous harvest."
+                )
+                filtered = [
+                    p for p in cached_posts
+                    if isinstance(p, dict) and p.get("platform") in selected_sources
+                ]
+                raw_posts = (filtered if filtered else cached_posts)[:clamped_limit]
+                stats["bobaedream"] = sum(1 for p in raw_posts if p.get("platform") == "bobaedream")
+                stats["dcinside"] = sum(1 for p in raw_posts if p.get("platform") == "dcinside")
+
         return raw_posts, stats
+
+    def _get_harvest_cache_path(self) -> Path:
+        if self._custom_cache_dir:
+            cache_dir = Path(self._custom_cache_dir)
+        else:
+            cache_dir = REPO_ROOT / "data" / ".cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        return cache_dir / "harvest_posts_cache.json"
+
+    def _save_harvest_cache(self, posts: List[Dict[str, Any]]) -> None:
+        if not posts or not self.enable_cache:
+            return
+        try:
+            cache_file = self._get_harvest_cache_path()
+            temp_file = cache_file.with_suffix(f".tmp.{os.getpid()}")
+            with open(temp_file, "w", encoding="utf-8") as f:
+                json.dump(posts, f, ensure_ascii=False)
+            os.replace(temp_file, cache_file)
+        except Exception as e:
+            logger.debug(f"Failed to save harvest cache: {e}")
+
+    def _load_harvest_cache(self) -> List[Dict[str, Any]]:
+        if not self.enable_cache:
+            return []
+        try:
+            cache_file = self._get_harvest_cache_path()
+            if cache_file.is_file():
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    return data
+        except Exception as e:
+            logger.debug(f"Failed to load harvest cache: {e}")
+        return []
 
     def filter_defects(self, raw_post_dicts: Optional[Iterable[Any]]) -> List[ComplaintRecord]:
         """Classify raw post dictionaries through 4-stage DefectFilter."""

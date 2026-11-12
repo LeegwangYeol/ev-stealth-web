@@ -492,14 +492,15 @@ class DefectTracker:
                 break
 
         # Thread-safe true LRU cache with promotion and bounded eviction
+        result = [_to_record_dict(r) for r in filtered]
         if use_cache:
             with self._cache_lock:
-                self._query_cache[cache_key] = [_to_record_dict(r) for r in filtered]
+                self._query_cache[cache_key] = result
                 self._query_cache.move_to_end(cache_key)
                 while len(self._query_cache) > 1024:
                     self._query_cache.popitem(last=False)
 
-        return [_to_record_dict(r) for r in filtered]
+        return [dict(r) for r in result]
 
     def get_statistics(self, file_path: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
         """Return high-level statistics and category breakdown for defect reports."""
@@ -677,6 +678,8 @@ class DefectTracker:
         dry_run: bool = False,
         run_crawler: bool = False,
         quarantine_corrupted: bool = True,
+        lock_timeout: float = 15.0,
+        stale_timeout: float = 60.0,
     ) -> List[str]:
         """Synchronize defect reports between root data/, web src/data/, and public/data/ with atomic safety and validation.
 
@@ -710,9 +713,11 @@ class DefectTracker:
 
         written_paths: List[str] = []
         sync_lock_path = root_path.parent / ".sync_defect_reports.lock"
-        cleanup_stale_lock_files(root_path.parent, max_age_seconds=3600.0)
+        cleanup_stale_lock_files(root_path.parent, prefix=(".sync_",), max_age_seconds=stale_timeout)
+        if web_path.parent != root_path.parent and web_path.parent.is_dir():
+            cleanup_stale_lock_files(web_path.parent, prefix=(".sync_",), max_age_seconds=stale_timeout)
 
-        with FileLock(sync_lock_path):
+        with FileLock(sync_lock_path, timeout=lock_timeout, stale_timeout=stale_timeout):
             if run_crawler and self.pipeline:
                 try:
                     res = self.pipeline.run(
@@ -761,14 +766,11 @@ class DefectTracker:
                     seen_targets.add(resolved_p)
                     target_paths.append(p)
 
-            if source_path and target_paths and self.validate_report_file(source_path):
+            if source_path and target_paths:
                 try:
                     source_stat = source_path.stat()
-                    h_src = hashlib.sha256()
-                    with open(source_path, "rb") as sf:
-                        while chunk := sf.read(65536):
-                            h_src.update(chunk)
-                    source_hash = h_src.hexdigest()
+                    source_bytes = source_path.read_bytes()
+                    source_hash = hashlib.sha256(source_bytes).hexdigest()
                 except Exception as e:
                     logger.error("Failed to inspect source defect report %s: %s", source_path, e)
                     return []
@@ -777,34 +779,31 @@ class DefectTracker:
                     if tgt.exists():
                         if is_corrupted_or_quarantined_filename(tgt):
                             continue
+                        try:
+                            tgt_bytes = tgt.read_bytes()
+                            h_tgt = hashlib.sha256(tgt_bytes).hexdigest()
+                            if h_tgt == source_hash:
+                                try:
+                                    tgt_stat = tgt.stat()
+                                    if tgt_stat.st_mtime != source_stat.st_mtime:
+                                        os.utime(tgt, (source_stat.st_atime, source_stat.st_mtime))
+                                except OSError:
+                                    pass
+                                logger.debug("Skipping redundant defect report sync for %s (SHA-256 match)", tgt)
+                                continue
+                        except Exception as e:
+                            logger.warning("Error inspecting target %s: %s", tgt, e)
+
                         if not self.validate_report_file(tgt):
                             if quarantine_corrupted:
                                 quarantine_corrupted_file(tgt)
-                        else:
-                            try:
-                                h_tgt = hashlib.sha256()
-                                with open(tgt, "rb") as tf_in:
-                                    while chunk := tf_in.read(65536):
-                                        h_tgt.update(chunk)
-                                if h_tgt.hexdigest() == source_hash:
-                                    try:
-                                        tgt_stat = tgt.stat()
-                                        if tgt_stat.st_mtime != source_stat.st_mtime:
-                                            os.utime(tgt, (source_stat.st_atime, source_stat.st_mtime))
-                                    except OSError:
-                                        pass
-                                    logger.debug("Skipping redundant defect report sync for %s (SHA-256 match)", tgt)
-                                    continue
-                            except Exception as e:
-                                logger.warning("Error verifying SHA-256 on target %s: %s", tgt, e)
 
                     temp_name = None
                     try:
                         tgt.parent.mkdir(parents=True, exist_ok=True)
                         with tempfile.NamedTemporaryFile("wb", dir=str(tgt.parent), delete=False, prefix=".tmp_sync_") as tf:
                             temp_name = tf.name
-                            with open(source_path, "rb") as sf:
-                                shutil.copyfileobj(sf, tf)
+                            tf.write(source_bytes)
                             tf.flush()
                             os.fsync(tf.fileno())
                         try:

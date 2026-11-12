@@ -1,7 +1,7 @@
 'use client';
 
-import React, { memo, useCallback, useMemo } from 'react';
-import { RegionEntry, CategoryMetrics } from '@/types/subsidy';
+import React, { memo, useCallback, useMemo, useState, useEffect } from 'react';
+import { RegionEntry, CategoryMetrics, AlertSeverity } from '@/types/subsidy';
 import type { RegionSortOption } from '@/lib/subsidyCalculations';
 import SubsidyBadge, { getStatusLabel } from './SubsidyBadge';
 
@@ -9,14 +9,30 @@ export type CategoryType = 'passenger' | 'commercial' | 'bus';
 export type SortOption = RegionSortOption;
 
 export interface SubsidyTableViewProps {
-  regions: RegionEntry[];
+  regions?: RegionEntry[];
   selectedCategory: CategoryType;
   sortOption: SortOption;
   onSortChange: (newSort: SortOption) => void;
-  expandedRegions: Record<string, boolean>;
+  expandedRegions?: Record<string, boolean>;
   onToggleExpand: (regionId: string) => void;
   onSelectForCalc: (regionId: string) => void;
 }
+
+// Module-level frozen fallbacks (Zero-GC pressure)
+const EMPTY_REGIONS: readonly RegionEntry[] = Object.freeze([]);
+const EMPTY_EXPANDED: Readonly<Record<string, boolean>> = Object.freeze({});
+
+const FALLBACK_CATEGORY_METRICS: Readonly<CategoryMetrics> = Object.freeze({
+  status: 'HEALTHY' as AlertSeverity,
+  announced_units: 0,
+  applied_units: 0,
+  delivered_units: 0,
+  remaining_units: 0,
+  depletion_rate: 0,
+  delivery_rate: 0,
+  max_local_subsidy_krw: 0,
+  max_total_subsidy_krw: 0,
+});
 
 function getSortAria(
   col: 'NAME' | 'REMAINING' | 'DEPLETION' | 'LOCAL_SUBSIDY',
@@ -67,17 +83,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
   onToggleExpand,
   onSelectForCalc,
 }: SubsidyTableRowProps) {
-  const cat: CategoryMetrics = region?.categories?.[selectedCategory] ?? {
-    status: 'HEALTHY',
-    announced_units: 0,
-    applied_units: 0,
-    delivered_units: 0,
-    remaining_units: 0,
-    depletion_rate: 0,
-    delivery_rate: 0,
-    max_local_subsidy_krw: 0,
-    max_total_subsidy_krw: 0,
-  };
+  const cat: CategoryMetrics = region?.categories?.[selectedCategory] ?? FALLBACK_CATEGORY_METRICS;
   const announced = Number.isFinite(cat?.announced_units) ? Math.max(0, cat.announced_units) : 0;
   const applied = Number.isFinite(cat?.applied_units) ? Math.max(0, cat.applied_units) : 0;
   const remaining = Number.isFinite(cat?.remaining_units)
@@ -102,8 +108,28 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
   const categoryLabel = selectedCategory === 'passenger' ? '전기승용' : selectedCategory === 'commercial' ? '전기화물' : '전기승합';
   const isDepleted = (cat?.status || '').toUpperCase() === 'DEPLETED' || depletionRate >= 100;
 
+  // Memoized stable row handlers to prevent recreating closures on every render
+  const handleToggle = useCallback(() => {
+    onToggleExpand(regionId);
+  }, [onToggleExpand, regionId]);
+
+  const handleSelectCalc = useCallback(() => {
+    onSelectForCalc(regionId);
+  }, [onSelectForCalc, regionId]);
+
+  // Performance optimization: Lazy render sub-municipalities once opened.
+  // Maintains persistent DOM element with hidden={!isExpanded} to fulfill W3C ARIA aria-controls contract.
+  const [hasBeenExpanded, setHasBeenExpanded] = useState(isExpanded);
+
+  useEffect(() => {
+    if (isExpanded && !hasBeenExpanded) {
+      setHasBeenExpanded(true);
+    }
+  }, [isExpanded, hasBeenExpanded]);
+
   // Memoized sub-municipalities list to prevent re-mapping
   const renderedMunis = useMemo(() => {
+    if (!hasBeenExpanded) return null;
     return munis.map((muni) => {
       const muniAnnounced = Number.isFinite(muni.announced_units) ? Math.max(0, muni.announced_units) : 0;
       const muniApplied = Number.isFinite(muni.applied_units) ? Math.max(0, muni.applied_units) : 0;
@@ -137,7 +163,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
         </tr>
       );
     });
-  }, [munis, regionId]);
+  }, [hasBeenExpanded, munis, regionId]);
 
   return (
     <React.Fragment>
@@ -225,7 +251,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
           {hasMunis ? (
             <button
               type="button"
-              onClick={() => onToggleExpand(regionId)}
+              onClick={handleToggle}
               aria-expanded={isExpanded}
               aria-controls={'muni-details-' + regionId}
               aria-label={`${regionName} 세부 시·군·구 ${munis.length}개 현황 ${isExpanded ? '접기' : '보기'}`}
@@ -242,7 +268,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
         <td className="p-3.5 text-center whitespace-nowrap">
           <button
             type="button"
-            onClick={() => onSelectForCalc(regionId)}
+            onClick={handleSelectCalc}
             aria-label={`${regionName} 보조금으로 계산기 설정`}
             className="px-3 py-1.5 min-h-[44px] inline-flex items-center justify-center text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
           >
@@ -270,8 +296,12 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
                 tabIndex={0}
                 role="region"
                 aria-label={`${regionName} 세부 시·군·구 보조금 현황 스크롤 영역`}
-                className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="overflow-x-auto table-scroll-container rounded-xl border border-slate-800 bg-slate-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
+                <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-300 bg-slate-900 border-b border-slate-800 select-none" aria-hidden="true">
+                  <span>← 좌우로 밀어서 세부 내역 확인</span>
+                  <span className="text-[10px] text-amber-300 font-semibold">가로 스크롤 ↔</span>
+                </div>
                 <table
                   className="w-full min-w-[500px] text-xs text-left border-collapse"
                   aria-label={`${regionName} 세부 시·군·구 보조금 현황표`}
@@ -312,11 +342,11 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
 });
 
 export const SubsidyTableView = memo(function SubsidyTableView({
-  regions = [],
+  regions = EMPTY_REGIONS as RegionEntry[],
   selectedCategory,
   sortOption,
   onSortChange,
-  expandedRegions = {},
+  expandedRegions = EMPTY_EXPANDED,
   onToggleExpand,
   onSelectForCalc,
 }: SubsidyTableViewProps) {
@@ -338,7 +368,7 @@ export const SubsidyTableView = memo(function SubsidyTableView({
 
   // Performance & Stability: Memoization of filtered/sorted rows to prevent unnecessary DOM mutations
   const renderedRows = useMemo(() => {
-    return (regions || []).map((region) => (
+    return (regions || EMPTY_REGIONS).map((region) => (
       <SubsidyTableRow
         key={region.region_id}
         region={region}
@@ -355,8 +385,14 @@ export const SubsidyTableView = memo(function SubsidyTableView({
       tabIndex={0}
       role="region"
       aria-label="지자체별 보조금 소진율 비교 표 스크롤 영역"
-      className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      className="overflow-x-auto table-scroll-container rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
     >
+      <div className="sm:hidden flex items-center justify-between px-3.5 py-2 text-[11px] font-medium text-slate-300 bg-slate-900 border-b border-slate-800 select-none" aria-hidden="true">
+        <span>← 좌우로 밀어서 17개 지자체 비교</span>
+        <span className="flex items-center gap-1 font-mono text-[10px] text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-500/40">
+          가로 스크롤 ↔
+        </span>
+      </div>
       <table
         className="w-full min-w-[840px] text-left text-xs sm:text-sm border-collapse"
         aria-label="전국 지자체별 전기차 보조금 실시간 소진율 및 잔여 쿼터 비교 표"

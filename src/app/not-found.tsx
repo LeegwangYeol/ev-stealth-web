@@ -25,7 +25,8 @@ export default function NotFound() {
   return (
     <div
       role="region"
-      aria-label="404 페이지 찾을 수 없음 안내"
+      aria-labelledby="not-found-heading"
+      aria-live="polite"
       className="min-h-[70vh] flex items-center justify-center px-4 py-16 outline-none focus:outline-none"
     >
       <div className="max-w-2xl w-full bg-white rounded-3xl p-8 sm:p-12 shadow-xl border border-slate-200 text-center space-y-8">
@@ -39,12 +40,24 @@ export default function NotFound() {
           <div className="text-6xl sm:text-7xl font-black text-slate-900 tracking-tight font-mono">
             404
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+          <h1 id="not-found-heading" className="text-2xl sm:text-3xl font-extrabold text-slate-900">
             요청하신 페이지를 찾을 수 없습니다
           </h1>
           <p className="text-slate-700 text-sm sm:text-base max-w-md mx-auto leading-relaxed">
-            방문하시려는 페이지의 주소가 잘못되었거나 삭제되어 표시할 수 없습니다. 아래 바로가기 메뉴를 통해 핵심 전기차 분석 도구를 이용해 보세요.
+            방문하시려는 페이지의 주소가 잘못되었거나 삭제되어 표시할 수 없습니다. 메인 페이지로 돌아가시거나 아래 바로가기 메뉴를 통해 핵심 전기차 분석 도구를 이용해 보세요.
           </p>
+        </div>
+
+        {/* Primary Recovery Button */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Link
+            href="/"
+            prefetch={false}
+            aria-label="메인 대시보드 홈으로 이동"
+            className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+          >
+            <span aria-hidden="true">🏠</span> 메인 홈으로 이동
+          </Link>
         </div>
 
         {/* Quick Navigation Cards */}

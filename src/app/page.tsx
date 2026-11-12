@@ -16,11 +16,15 @@ const homeJsonLd = {
       "description":
         "특정 모델과 연식별(Model Year) 고질병, 배터리 결함, 실시간 전국 보조금 소진율 및 감가방어율을 완벽 분석하는 글로벌 전기차 데이터 허브.",
       "url": SITE_URL,
+      "inLanguage": "ko-KR",
       "isPartOf": {
         "@type": "WebSite",
         "@id": `${SITE_URL}/#website`,
         "name": "Global EV Hub",
         "url": SITE_URL,
+      },
+      "publisher": {
+        "@id": `${SITE_URL}/#organization`,
       },
       "about": [
         {
@@ -174,6 +178,10 @@ export const metadata: Metadata = {
   ],
   alternates: {
     canonical: "/",
+    languages: {
+      "ko-KR": "/",
+      "x-default": "/",
+    },
   },
   openGraph: {
     title: "글로벌 EV 중고차 연식별 피하기 가이드 | Global EV Hub",

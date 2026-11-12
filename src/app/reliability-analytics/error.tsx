@@ -38,6 +38,7 @@ export default function ReliabilityAnalyticsError({ error, reset }: ReliabilityE
       tabIndex={-1}
       role="alert"
       aria-live="assertive"
+      aria-atomic="true"
       aria-labelledby="reliability-error-heading"
       aria-describedby="reliability-error-description"
       className="min-h-[60vh] flex items-center justify-center px-4 py-12 outline-none focus:outline-none"

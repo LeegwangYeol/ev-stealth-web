@@ -1,6 +1,17 @@
 import type { MetadataRoute } from 'next';
 
-const BASE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://ev-stealth-web.vercel.app').replace(/\/+$/, '');
+export const dynamic = 'force-dynamic';
+export const revalidate = 3600;
+
+function getBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, '');
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`.replace(/\/+$/, '');
+  }
+  return 'https://ev-stealth-web.vercel.app';
+}
 
 /**
  * Next.js App Router sitemap.xml generator.
@@ -8,71 +19,72 @@ const BASE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://ev-stealth-web.ve
  * across all public analysis hubs and interactive calculation tools.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
+  const baseUrl = getBaseUrl();
   const lastModified = new Date();
 
   return [
     {
-      url: `${BASE_URL}`,
+      url: `${baseUrl}`,
       lastModified,
       changeFrequency: 'daily',
       priority: 1.0,
     },
     {
-      url: `${BASE_URL}/subsidy-tracker`,
+      url: `${baseUrl}/subsidy-tracker`,
       lastModified,
       changeFrequency: 'daily',
       priority: 0.9,
     },
     {
-      url: `${BASE_URL}/depreciation-calculator`,
+      url: `${baseUrl}/depreciation-calculator`,
       lastModified,
       changeFrequency: 'weekly',
       priority: 0.9,
     },
     {
-      url: `${BASE_URL}/reliability-analytics`,
+      url: `${baseUrl}/reliability-analytics`,
       lastModified,
       changeFrequency: 'weekly',
       priority: 0.9,
     },
     {
-      url: `${BASE_URL}/recall-portal`,
+      url: `${baseUrl}/recall-portal`,
       lastModified,
       changeFrequency: 'daily',
       priority: 0.9,
     },
     {
-      url: `${BASE_URL}/2026-latest`,
+      url: `${baseUrl}/2026-latest`,
       lastModified,
       changeFrequency: 'weekly',
       priority: 0.8,
     },
     {
-      url: `${BASE_URL}/pdi-checklist`,
+      url: `${baseUrl}/pdi-checklist`,
       lastModified,
       changeFrequency: 'monthly',
       priority: 0.8,
     },
     {
-      url: `${BASE_URL}/hyundai-kia`,
+      url: `${baseUrl}/hyundai-kia`,
       lastModified,
       changeFrequency: 'weekly',
       priority: 0.8,
     },
     {
-      url: `${BASE_URL}/tesla`,
+      url: `${baseUrl}/tesla`,
       lastModified,
       changeFrequency: 'weekly',
       priority: 0.8,
     },
     {
-      url: `${BASE_URL}/byd`,
+      url: `${baseUrl}/byd`,
       lastModified,
       changeFrequency: 'weekly',
       priority: 0.8,
     },
     {
-      url: `${BASE_URL}/global-brands`,
+      url: `${baseUrl}/global-brands`,
       lastModified,
       changeFrequency: 'weekly',
       priority: 0.8,

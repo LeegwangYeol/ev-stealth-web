@@ -8,6 +8,7 @@ const SiteFooter = memo(function SiteFooter() {
       className="bg-slate-900 border-t border-slate-700 text-center py-8 px-4 text-xs text-slate-300 space-y-3 print:hidden"
     >
       <nav
+        role="navigation"
         aria-label="공식 데이터 출처 외부 웹사이트"
         className="flex flex-wrap justify-center items-center gap-x-2 gap-y-1"
       >
@@ -109,10 +110,21 @@ const SiteFooter = memo(function SiteFooter() {
         <span aria-hidden="true" className="text-slate-500">·</span>
         <a
           href="#main-content"
-          className="text-slate-300 hover:text-white underline underline-offset-2 rounded px-2 py-1.5 min-h-[44px] inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 transition-colors"
+          className="text-slate-300 hover:text-white underline underline-offset-2 rounded px-2 py-1.5 min-h-[44px] inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 transition-colors"
           aria-label="본문 맨 위로 바로가기"
         >
-          <span aria-hidden="true">↑</span>
+          <svg
+            className="w-3.5 h-3.5 text-slate-300 shrink-0"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+          </svg>
           <span>본문 맨 위로</span>
         </a>
       </div>

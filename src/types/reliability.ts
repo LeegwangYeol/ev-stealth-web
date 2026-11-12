@@ -12,6 +12,19 @@ export type DefectCategoryKey =
   | 'COLD_WEATHER';
 
 export type ModelYearVerdict = 'BUY_SAFE' | 'CAUTION' | 'AVOID';
+export type OverallReliabilityGrade = 'A+' | 'A' | 'B' | 'C' | 'D' | 'F';
+export type OutOfWarrantyRisk = 'EXTREME' | 'HIGH' | 'MODERATE' | 'LOW';
+export type TrendDirection = 'UP' | 'DOWN' | 'STABLE';
+
+export interface TrendCalculationResult {
+  direction: TrendDirection;
+  percentageChange: number;
+  absoluteChange: number;
+  formattedChange: string;
+  isIncrease: boolean;
+  isDecrease: boolean;
+  isStable: boolean;
+}
 
 export interface YearEvaluation {
   year: number;
@@ -29,7 +42,7 @@ export interface ModelReliability {
   name: string;
   segment: string;
   brand_id: string;
-  overall_grade: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F';
+  overall_grade: OverallReliabilityGrade;
   avg_dsi: number;
   year_evaluations: YearEvaluation[];
   top_category: DefectCategoryKey;
@@ -63,7 +76,7 @@ export interface RepairCostMatrixItem {
   standard_warranty: string;
   high_risk_models?: string[];
   critical_warning?: string;
-  out_of_warranty_risk?: 'EXTREME' | 'HIGH' | 'MODERATE' | 'LOW';
+  out_of_warranty_risk?: OutOfWarrantyRisk;
   representative_models?: string[];
 }
 
@@ -104,7 +117,7 @@ export interface ReliabilityKPIs {
 }
 
 export interface CategoryComplaintItem {
-  category: string;
+  category: DefectCategoryKey | string;
   count: number;
   percentage: number;
 }
@@ -114,7 +127,6 @@ export interface CategoryComplaintInputEntry {
   category_key?: string;
   code?: string;
   defect_category?: string;
-  count?: number | unknown;
-  percentage?: number | unknown;
+  count?: number | string | null;
+  percentage?: number | string | null;
 }
-

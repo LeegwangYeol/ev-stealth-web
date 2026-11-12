@@ -25,6 +25,7 @@ from tracker.atomic_writer import (
     _json_default,
     atomic_write_json,
     atomic_write_json_multiple,
+    atomic_write_text,
     cleanup_stale_lock_files,
     cleanup_stale_temp_files,
     get_lock_path,
@@ -439,6 +440,101 @@ class TestAtomicWriterDurabilityAndResilience(unittest.TestCase):
 
         self.assertEqual(cleaned, 1)
         self.assertTrue(mock_msvcrt.locking.called)
+
+    def test_25_atomic_write_text_durability_and_permissions(self) -> None:
+        """atomic_write_text writes UTF-8 text crash-durably with proper permissions and mode overrides."""
+        target = self.test_dir / "reports" / "summary.md"
+        content = "# 전기차 일일 모니터링 결함 보고서\n- 배터리 화재/충전 결함 사례 분석"
+
+        # Write to non-existent directory and file
+        written = atomic_write_text(content, target)
+        self.assertTrue(written.is_file())
+        self.assertEqual(written.stat().st_mode & 0o777, 0o644)
+        self.assertEqual(written.read_text(encoding="utf-8"), content)
+
+        # Mode override test
+        target_override = self.test_dir / "reports" / "custom_mode.md"
+        atomic_write_text(content, target_override, mode=0o600)
+        self.assertEqual(target_override.stat().st_mode & 0o777, 0o600)
+
+        # Update preserves pre-existing mode
+        atomic_write_text(content + "\n## 업데이트", target_override)
+        self.assertEqual(target_override.stat().st_mode & 0o777, 0o600)
+
+    def test_26_atomic_write_text_lock_cleanup_on_exception(self) -> None:
+        """atomic_write_text releases FileLock and unlinks temp file when write operation fails."""
+        target = self.test_dir / "fail_test.md"
+        lock_path = get_lock_path(target)
+
+        def mock_replace_fail(src: str, dst: str) -> None:
+            raise OSError(errno.EIO, "Simulated I/O failure during rename")
+
+        with mock.patch("os.replace", side_effect=mock_replace_fail):
+            with self.assertRaises(OSError):
+                atomic_write_text("Hello World", target)
+
+        # Verify lock was released and can be acquired immediately
+        lock = FileLock(lock_path, timeout=0.1)
+        with lock:
+            self.assertTrue(lock.is_locked)
+
+        # Verify no orphaned temp files remained
+        temp_files = list(self.test_dir.glob(".tmp_text_*"))
+        self.assertEqual(temp_files, [])
+
+    def test_27_compile_database_atomic_and_lock_safety(self) -> None:
+        """compile_database writes atomically, returns CompiledDatabaseResult, and enforces 0o644."""
+        from scripts.compile_database import compile_database, CompiledDatabaseResult
+        out_file = self.test_dir / "compiled_output.json"
+
+        result = compile_database(output_path=str(out_file))
+        self.assertIsInstance(result, CompiledDatabaseResult)
+        self.assertEqual(str(result), str(out_file))
+        self.assertGreater(len(result), 0)
+        self.assertTrue(out_file.is_file())
+        self.assertEqual(out_file.stat().st_mode & 0o777, 0o644)
+
+        # Validate that JSON content is complete and valid UTF-8
+        with open(out_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertEqual(len(data), len(result))
+
+    def test_28_build_casebook_atomic_write(self) -> None:
+        """build_casebook writes CASEBOOK.md atomically with 0o644 and UTF-8 encoding."""
+        from scripts.build_casebook import build_casebook
+        data_path = Path(__file__).resolve().parent.parent / "data" / "compiled_complaints.json"
+        slang_path = Path(__file__).resolve().parent.parent / "data" / "slang_dict.json"
+        out_casebook = self.test_dir / "CASEBOOK_TEST.md"
+
+        build_casebook(data_path, slang_path, out_casebook)
+        self.assertTrue(out_casebook.is_file())
+        self.assertEqual(out_casebook.stat().st_mode & 0o777, 0o644)
+        text = out_casebook.read_text(encoding="utf-8")
+        self.assertIn("전기차", text)
+
+    def test_29_http_client_cache_atomic_write_and_permissions(self) -> None:
+        """SafeHttpClient writes disk cache files atomically with 0o644 and leaves no temp files."""
+        from utils.http_client import SafeHttpClient
+        cache_dir = self.test_dir / "http_cache"
+        client = SafeHttpClient(cache_dir=str(cache_dir), enable_cache=True)
+
+        url = "https://example.com/api/test_ev"
+        client.set_cached_response(url, 200, "전기차 테스트", b"raw_test_data")
+
+        # Verify cached file exists with 0o644
+        key = client._cache_key(url)
+        cache_file = cache_dir / f"{key}.json"
+        self.assertTrue(cache_file.is_file())
+        self.assertEqual(cache_file.stat().st_mode & 0o777, 0o644)
+
+        # Verify no orphan temp files left
+        temp_files = list(cache_dir.glob(".tmp_cache_*"))
+        self.assertEqual(temp_files, [])
+
+        # Verify retrieval works correctly
+        status, text, raw = client.get_cached_response(url)
+        self.assertEqual(status, 200)
+        self.assertEqual(text, "전기차 테스트")
 
 
 if __name__ == "__main__":

@@ -80,11 +80,13 @@ DEFAULT_ALERT_THRESHOLDS: Dict[str, AlertThresholdConfig] = {
 }
 
 
-def calculate_price_cap_ratio(msrp: int) -> float:
+def calculate_price_cap_ratio(msrp: Union[int, float, str, None]) -> float:
     """Statutory 2026 Korean EV subsidy ratio tiers: 1.0 (<=55M), 0.5 (55M-85M), 0.0 (>85M)."""
     try:
         if msrp is None:
             return 0.0
+        if isinstance(msrp, str):
+            msrp = msrp.strip().replace(",", "")
         f_msrp = float(msrp)
         if math.isnan(f_msrp) or math.isinf(f_msrp):
             return 0.0
@@ -102,33 +104,38 @@ def calculate_price_cap_ratio(msrp: int) -> float:
 
 
 def calculate_net_subsidy(
-    model_national: int,
-    max_national: int,
-    max_local: int,
-    msrp: int,
+    model_national: Union[int, float, str, None],
+    max_national: Union[int, float, str, None],
+    max_local: Union[int, float, str, None],
+    msrp: Union[int, float, str, None],
 ) -> Dict[str, Union[int, float]]:
     """Calculate national subsidy, local subsidy, total subsidy, and net consumer purchase price."""
+    def _clean_val(v: Any) -> Any:
+        if isinstance(v, str):
+            return v.strip().replace(",", "")
+        return v
+
     try:
         if msrp is None:
             safe_msrp = 0
         else:
-            f_msrp = float(msrp)
+            f_msrp = float(_clean_val(msrp))
             safe_msrp = 0 if (math.isnan(f_msrp) or math.isinf(f_msrp)) else int(f_msrp)
     except (ValueError, TypeError, OverflowError):
         safe_msrp = 0
 
     try:
-        safe_model_nat = max(0, int(model_national)) if model_national is not None else 0
+        safe_model_nat = max(0, int(float(_clean_val(model_national)))) if model_national is not None else 0
     except (ValueError, TypeError, OverflowError):
         safe_model_nat = 0
 
     try:
-        safe_max_nat = max(0, int(max_national)) if max_national is not None else 0
+        safe_max_nat = max(0, int(float(_clean_val(max_national)))) if max_national is not None else 0
     except (ValueError, TypeError, OverflowError):
         safe_max_nat = 0
 
     try:
-        safe_max_loc = max(0, int(max_local)) if max_local is not None else 0
+        safe_max_loc = max(0, int(float(_clean_val(max_local)))) if max_local is not None else 0
     except (ValueError, TypeError, OverflowError):
         safe_max_loc = 0
 

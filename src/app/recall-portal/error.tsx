@@ -38,6 +38,7 @@ export default function RecallPortalError({ error, reset }: RecallErrorProps) {
       tabIndex={-1}
       role="alert"
       aria-live="assertive"
+      aria-atomic="true"
       aria-labelledby="recall-error-heading"
       aria-describedby="recall-error-description"
       className="min-h-[60vh] flex items-center justify-center px-4 py-12 outline-none focus:outline-none"
@@ -59,13 +60,13 @@ export default function RecallPortalError({ error, reset }: RecallErrorProps) {
           </h1>
           <p
             id="recall-error-description"
-            className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-md mx-auto"
+            className="text-sm sm:text-base text-slate-700 leading-relaxed max-w-md mx-auto"
           >
             국토교통부 자동차리콜센터 연동 및 배터리 제조사 안전 데이터베이스 검색 중 오류가 발생했습니다.
             아래 &apos;다시 시도&apos; 버튼을 눌러 안전하게 재조회해 주세요.
           </p>
           {error?.digest && (
-            <p className="text-xs text-slate-600 font-mono pt-1">
+            <p className="text-xs text-slate-700 font-mono pt-1">
               오류 참조 코드: <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">{error.digest}</span>
             </p>
           )}

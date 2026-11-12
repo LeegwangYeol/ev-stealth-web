@@ -1,5 +1,39 @@
-"""tracker/models/__init__.py - Modular models package."""
+"""tracker/models/__init__.py - Modular models package.
 
-from tracker.subsidy_models import NationwideSummary
+Provides re-exports for all EV Subsidy domain models, metric containers,
+and summary aggregators.
+"""
 
-__all__ = ["NationwideSummary"]
+from __future__ import annotations
+
+from tracker.subsidy_models import (
+    AlertSeverity,
+    AlertThresholdConfig,
+    CategoryMetrics,
+    HistoricalTrajectoryPoint,
+    MunicipalityMetrics,
+    NationwideSummary,
+    PopularModelEntry,
+    RegionRecord,
+    RegionSubsidy,
+    SubsidyMetadata,
+    SubsidyPayload,
+    SubsidySnapshot,
+    VehicleSubsidy,
+)
+
+__all__ = [
+    "AlertSeverity",
+    "AlertThresholdConfig",
+    "CategoryMetrics",
+    "HistoricalTrajectoryPoint",
+    "MunicipalityMetrics",
+    "NationwideSummary",
+    "PopularModelEntry",
+    "RegionRecord",
+    "RegionSubsidy",
+    "SubsidyMetadata",
+    "SubsidyPayload",
+    "SubsidySnapshot",
+    "VehicleSubsidy",
+]

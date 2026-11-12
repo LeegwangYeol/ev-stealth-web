@@ -1,68 +1,31 @@
 import rawReportData from '../data/daily_reports.json' with { type: 'json' };
 import { sanitizeSafeUrl, sanitizeText, safeJsonParse } from './sanitizeUrl.ts';
 
-export type DefectCategoryCode =
-  | 'BATTERY_CHARGING'
-  | 'DRIVING_POWERTRAIN'
-  | 'BUILD_QUALITY'
-  | 'SOFTWARE_ELECTRONICS'
-  | 'SERVICE_REPAIR_COST'
-  | string;
+import type {
+  DefectCategoryCode,
+  SeverityLevel,
+  DefectReportSource,
+  DsiBreakdown,
+  DefectReportItem,
+  DailyReportStatistics,
+  ReportStatistics,
+  DailyReportData,
+  AdminDefectReportItem,
+  AdminDailyReportData,
+} from '../types/reports.ts';
 
-export type SeverityLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'WARNING' | 'CAUTION' | 'INFO' | string;
-
-export interface DefectReportItem {
-  id: string;
-  source: 'bobaedream' | 'dcinside' | string;
-  url: string;
-  title: string;
-  date: string;
-  created_at?: string;
-  vehicle_model: string;
-  vehicle_brand?: string;
-  target_vehicle?: string;
-  defect_category: DefectCategoryCode;
-  defect_category_ko: string;
-  summary: string;
-  verbatim_quote: string;
-  slang_tags: string[];
-  sentiment_score: number;
-  sentiment_polarity?: number;
-  severity: SeverityLevel;
-  severity_index?: number;
-  author?: string;
-  is_authentic_defect?: boolean;
-  dsi_breakdown?: {
-    safety?: number;
-    functional?: number;
-    economic?: number;
-    social?: number;
-    convenience?: number;
-    [key: string]: number | undefined;
-  };
-}
-
-export interface ReportStatistics {
-  total_scraped: number;
-  total_filtered_defects: number;
-  avg_negativity_score: number;
-  critical_defect_count: number;
-  top_model: string;
-  top_platform: string;
-}
-
-export interface DailyReportData {
-  generated_at: string;
-  pipeline_version: string;
-  statistics: ReportStatistics;
-  total_complaints_today?: number;
-  top_defect_categories?: Array<{
-    category: string;
-    count: number;
-    ratio: number;
-  }>;
-  reports: DefectReportItem[];
-}
+export type {
+  DefectCategoryCode,
+  SeverityLevel,
+  DefectReportSource,
+  DsiBreakdown,
+  DefectReportItem,
+  DailyReportStatistics,
+  ReportStatistics,
+  DailyReportData,
+  AdminDefectReportItem,
+  AdminDailyReportData,
+};
 
 export const CATEGORY_MAP: Record<string, { code: DefectCategoryCode; ko: string }> = {
   // Canonical 5-Pillar Taxonomy
@@ -228,8 +191,9 @@ export function sanitizeReportUrl(rawUrl?: unknown): string {
  * Normalizes and bounds sentiment/negativity scores safely between 0.00 and 1.00.
  */
 export function getSafeSentimentScore(rawScore?: unknown, fallback = 0.85): number {
+  const safeFallback = typeof fallback === 'number' && Number.isFinite(fallback) ? fallback : 0.85;
   if (typeof rawScore !== 'number' || !Number.isFinite(rawScore)) {
-    return fallback;
+    return safeFallback;
   }
   let val = Math.abs(rawScore);
   // If score was provided on a 0-100 scale (e.g. 85), scale down to 0-1
@@ -568,7 +532,7 @@ export function getFallbackMockReportData(): DailyReportData {
     .map(([category, count]) => ({
       category,
       count,
-      ratio: Number((count / reports.length).toFixed(3)),
+      ratio: reports.length > 0 ? Number((count / reports.length).toFixed(3)) : 0,
     }));
 
   return {
@@ -656,7 +620,7 @@ export function getDailyReports(options?: { useMockOnEmpty?: boolean }): DailyRe
         .map(([category, count]) => ({
           category,
           count,
-          ratio: Number((count / reports.length).toFixed(3)),
+          ratio: reports.length > 0 ? Number((count / reports.length).toFixed(3)) : 0,
         }));
     }
 

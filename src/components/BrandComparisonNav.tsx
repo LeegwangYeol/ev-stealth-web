@@ -33,7 +33,7 @@ export const BrandComparisonNav = memo(function BrandComparisonNav({
     <div className="space-y-4 mb-6">
       {/* Top Breadcrumb & Back Nav */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
-        <nav aria-label="브레드크럼 위치 경로" className="text-xs sm:text-sm">
+        <nav role="navigation" aria-label="브레드크럼 위치 경로" className="text-xs sm:text-sm">
           <ol className="flex flex-wrap items-center gap-1.5 text-slate-600">
             <li className="inline-flex items-center gap-1.5">
               <Link
@@ -64,16 +64,27 @@ export const BrandComparisonNav = memo(function BrandComparisonNav({
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs font-semibold transition border border-slate-200/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white min-h-[44px]"
           aria-label="전체 가이드 홈으로 돌아가기"
         >
-          <span aria-hidden="true">&larr;</span> 전체 가이드 홈
+          <svg
+            className="w-3.5 h-3.5 shrink-0 text-slate-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          전체 가이드 홈
         </Link>
       </div>
 
       {/* Brand Switcher Nav Tabs */}
       <nav
+        role="navigation"
         aria-label="제조사별 결함 가이드 빠른 전환"
         className="p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200 shadow-inner"
       >
-        <ul className="flex overflow-x-auto gap-1.5 scrollbar-thin list-none p-0 m-0" role="list">
+        <ul className="flex table-scroll-container gap-1.5 scrollbar-thin list-none p-0 m-0" role="list">
           {BRAND_PAGES.map((brand) => {
             const isActive = brand.key === currentBrand;
             return (
@@ -125,6 +136,7 @@ export const OtherBrandsCrossNav = memo(function OtherBrandsCrossNav({
 
   return (
     <nav
+      role="navigation"
       aria-label="다른 제조사 연식별 가이드 비교"
       className="pt-8 border-t border-slate-200 space-y-4"
     >
@@ -153,7 +165,17 @@ export const OtherBrandsCrossNav = memo(function OtherBrandsCrossNav({
                 </span>
               </div>
               <span className="text-xs text-blue-700 font-semibold group-hover:underline inline-flex items-center gap-1">
-                가이드 보기 <span aria-hidden="true">&rarr;</span>
+                가이드 보기{' '}
+                <svg
+                  className="w-3.5 h-3.5 shrink-0 transition-transform group-hover:translate-x-0.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
               </span>
             </Link>
           </li>

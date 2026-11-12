@@ -7,6 +7,12 @@ import rawTrendsData from '../data/ev_reliability_trends.json' with { type: 'jso
 export type {
   DefectCategoryKey,
   ModelYearVerdict,
+  OverallReliabilityGrade,
+  OutOfWarrantyRisk,
+  TrendDirection,
+  TrendCalculationResult,
+  CategoryComplaintItem,
+  CategoryComplaintInputEntry,
   YearEvaluation,
   ModelReliability,
   BrandReliability,
@@ -20,6 +26,9 @@ export type {
 import type {
   DefectCategoryKey,
   ModelYearVerdict,
+  TrendCalculationResult,
+  CategoryComplaintItem,
+  CategoryComplaintInputEntry,
   YearEvaluation,
   ModelReliability,
   BrandReliability,
@@ -27,24 +36,6 @@ import type {
   EnrichedModelItem,
   ReliabilityKPIs,
 } from '../types/reliability.ts';
-
-export type TrendDirection = 'UP' | 'DOWN' | 'STABLE';
-
-export interface TrendCalculationResult {
-  direction: TrendDirection;
-  percentageChange: number;
-  absoluteChange: number;
-  formattedChange: string;
-  isIncrease: boolean;
-  isDecrease: boolean;
-  isStable: boolean;
-}
-
-export interface CategoryComplaintItem {
-  category: DefectCategoryKey | string;
-  count: number;
-  percentage: number;
-}
 
 // ==========================================
 // 2. RELIABILITY SCORE NORMALIZATION & CALCULATION HELPERS
@@ -84,17 +75,10 @@ export function normalizeReliabilityScore(rawScore: unknown, fallback: number = 
  */
 export function aggregateCategoryComplaintCounts(
   inputs?:
-    | Array<{
-        category?: string | DefectCategoryKey;
-        category_key?: string;
-        code?: string;
-        defect_category?: string;
-        count?: number | unknown;
-        percentage?: number | unknown;
-      } | null | undefined>
+    | Array<CategoryComplaintInputEntry | null | undefined>
     | BrandReliability[]
     | ReliabilityTrendsDatabase
-    | Record<string, { count?: number | unknown; percentage?: number | unknown } | number | unknown>
+    | Record<string, { count?: number | string | null; percentage?: number | string | null } | number | unknown>
     | null
 ): Record<string, { count: number; percentage: number }> {
   if (!inputs) return {};
@@ -311,7 +295,7 @@ export function calculateReliabilityKPIs(data?: ReliabilityTrendsDatabase | null
   const trackedBrandsCount = brands.length;
   let trackedModelsCount = 0;
   for (const b of brands) {
-    if (Array.isArray(b?.models)) {
+    if (b && Array.isArray(b.models)) {
       trackedModelsCount += b.models.length;
     }
   }
@@ -422,15 +406,18 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
 
     const data = rawTrendsData as unknown as ReliabilityTrendsDatabase;
 
+    const rawTotal = Number(data?.metadata?.total_records_analyzed ?? (data?.metadata as unknown as Record<string, unknown>)?.total_analyzed_posts);
+    const total_records_analyzed = Number.isFinite(rawTotal) && rawTotal >= 0 ? Math.floor(rawTotal) : 1280;
+
     const metadata = {
-      version: data.metadata?.version || '1.0.0',
-      updated_at: data.metadata?.updated_at || '2026-09-16T12:00:00Z',
-      total_records_analyzed: Math.max(0, Number(data.metadata?.total_records_analyzed || 1280)),
-      brands_count: Array.isArray(data.brands) ? data.brands.length : 9,
-      models_count: Array.isArray(data.brands)
-        ? data.brands.reduce((acc, b) => acc + (Array.isArray(b.models) ? b.models.length : 0), 0)
+      version: typeof data?.metadata?.version === 'string' ? data.metadata.version : '1.0.0',
+      updated_at: typeof data?.metadata?.updated_at === 'string' ? data.metadata.updated_at : '2026-09-16T12:00:00Z',
+      total_records_analyzed,
+      brands_count: Array.isArray(data?.brands) ? data.brands.length : 9,
+      models_count: Array.isArray(data?.brands)
+        ? data.brands.reduce((acc, b) => acc + (b && Array.isArray(b.models) ? b.models.length : 0), 0)
         : 22,
-      avg_industry_dsi: normalizeReliabilityScore(data.metadata?.avg_industry_dsi, 64.2),
+      avg_industry_dsi: normalizeReliabilityScore(data?.metadata?.avg_industry_dsi, 64.2),
     };
 
     const categories = Array.isArray(data.categories) && data.categories.length > 0

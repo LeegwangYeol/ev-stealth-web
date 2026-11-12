@@ -152,7 +152,11 @@ function getSeverityBadge(severity: string) {
   const sev = String(severity || '').toUpperCase();
   if (sev.includes('CRITICAL')) {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-700 text-white shadow-sm ring-1 ring-rose-600">
+      <span
+        role="status"
+        aria-label="심각도: 치명 (CRITICAL)"
+        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-700 text-white shadow-sm ring-1 ring-rose-600"
+      >
         <svg className="w-3 h-3 animate-pulse motion-reduce:animate-none" width="12" height="12" focusable="false" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
           <path
             fillRule="evenodd"
@@ -166,41 +170,83 @@ function getSeverityBadge(severity: string) {
   }
   if (sev === 'HIGH') {
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-700 text-white shadow-sm ring-1 ring-orange-600">
+      <span
+        role="status"
+        aria-label="심각도: 높음 (HIGH)"
+        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-700 text-white shadow-sm ring-1 ring-orange-600"
+      >
+        <svg className="w-3 h-3" width="12" height="12" focusable="false" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
         높음 (HIGH)
       </span>
     );
   }
   if (sev === 'WARNING') {
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400 text-slate-950 border border-amber-500 shadow-sm">
+      <span
+        role="status"
+        aria-label="심각도: 경고 (WARNING)"
+        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400 text-slate-950 border border-amber-500 shadow-sm"
+      >
+        <svg className="w-3 h-3" width="12" height="12" focusable="false" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+        </svg>
         경고 (WARNING)
       </span>
     );
   }
   if (sev === 'MEDIUM') {
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-950 border border-amber-400 shadow-sm">
+      <span
+        role="status"
+        aria-label="심각도: 주의 (MEDIUM)"
+        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-950 border border-amber-400 shadow-sm"
+      >
+        <svg className="w-3 h-3 text-amber-800" width="12" height="12" focusable="false" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+        </svg>
         주의 (MEDIUM)
       </span>
     );
   }
   if (sev === 'LOW') {
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-950 border border-emerald-300 shadow-sm">
+      <span
+        role="status"
+        aria-label="심각도: 낮음 (LOW)"
+        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-950 border border-emerald-300 shadow-sm"
+      >
+        <svg className="w-3 h-3 text-emerald-800" width="12" height="12" focusable="false" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+        </svg>
         낮음 (LOW)
       </span>
     );
   }
   if (sev === 'INFO') {
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-900 border border-slate-300 shadow-sm">
+      <span
+        role="status"
+        aria-label="심각도: 안정 (INFO)"
+        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-900 border border-slate-300 shadow-sm"
+      >
+        <svg className="w-3 h-3 text-slate-700" width="12" height="12" focusable="false" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
         안정 (INFO)
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-950 border border-amber-300 shadow-sm">
+    <span
+      role="status"
+      aria-label="심각도: 주의 (CAUTION)"
+      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-950 border border-amber-300 shadow-sm"
+    >
+      <svg className="w-3 h-3 text-amber-800" width="12" height="12" focusable="false" aria-hidden="true" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+      </svg>
       주의 (CAUTION)
     </span>
   );
@@ -234,7 +280,7 @@ function getSourceBadge(source: string, url: string) {
       rel="noopener noreferrer"
       title={`${badgeText} 원문 게시물 바로가기 (새 창에서 열림)`}
       aria-label={`${badgeText} 원문 게시물 바로가기 (새 창에서 열림)`}
-      className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${badgeColor}`}
+      className={`inline-flex items-center justify-center gap-1 text-xs px-2.5 py-1.5 min-h-[44px] rounded-md border font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${badgeColor}`}
     >
       <span>{badgeText}</span>
       <span className="sr-only"> (새 창에서 열림)</span>
@@ -685,13 +731,26 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 CONFIDENTIAL · 사내 관리자 전용
               </span>
               {reports.length === 0 ? (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" aria-hidden="true" />
+                <span
+                  role="status"
+                  aria-label="파이프라인 상태: 데이터 동기화 대기 중"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                >
+                  <span className="relative flex h-2 w-2" aria-hidden="true">
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
+                  </span>
                   데이터 동기화 대기 중
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping motion-reduce:animate-none" aria-hidden="true" />
+                <span
+                  role="status"
+                  aria-label="파이프라인 상태: 파이프라인 정상 가동"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                >
+                  <span className="relative flex h-2 w-2" aria-hidden="true">
+                    <span className="animate-ping motion-reduce:animate-none absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+                  </span>
                   파이프라인 정상 가동
                 </span>
               )}
@@ -805,6 +864,18 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               {Math.round(safeScore * 100)}%
             </span>
             <span
+              role="status"
+              aria-label={`부정 감성 평가: ${
+                reports.length === 0
+                  ? '데이터 없음'
+                  : safeScore >= 0.8
+                  ? '극도로 부정적'
+                  : safeScore >= 0.6
+                  ? '부정적 우세'
+                  : safeScore >= 0.4
+                  ? '중립적'
+                  : '안정'
+              }`}
               className={`text-xs font-bold px-2 py-0.5 rounded ${
                 reports.length === 0
                   ? 'bg-slate-100 text-slate-800'
@@ -907,7 +978,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               aria-describedby="admin-defect-search-hint"
               aria-label="전기차 결함 제보 및 은어 검색"
               placeholder="제목, 요약, 실차주 원문 코멘트, 차종, 은어(#ICCU폭탄 등) 실시간 검색..."
-              className="w-full pl-10 pr-10 py-2.5 min-h-[44px] text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition placeholder-slate-600"
+              className="w-full pl-10 pr-10 py-2.5 min-h-[44px] text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition placeholder-slate-600"
             />
             <span id="admin-defect-search-hint" className="sr-only">
               검색어를 입력하면 실시간으로 목록이 필터링됩니다. ESC 키를 누르면 입력한 검색어가 초기화됩니다.
@@ -916,7 +987,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               <button
                 type="button"
                 onClick={handleClearSearch}
-                className="absolute inset-y-0 right-0 pr-3 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-700 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+                className="absolute inset-y-0 right-0 pr-3 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-700 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 rounded-lg"
                 title="검색어 지우기"
                 aria-label="검색어 지우기"
               >
@@ -937,36 +1008,39 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                   type="button"
                   aria-pressed={sortBy === 'critical'}
                   onClick={() => setSortBy('critical')}
-                  className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  className={`px-3 py-1.5 min-h-[44px] inline-flex items-center gap-1.5 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
                     sortBy === 'critical'
-                      ? 'bg-white text-rose-700 font-semibold shadow-sm'
+                      ? 'bg-white text-rose-700 font-bold shadow-sm ring-1 ring-slate-200'
                       : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
+                  {sortBy === 'critical' && <span className="w-1.5 h-1.5 rounded-full bg-rose-600" aria-hidden="true" />}
                   치명도순
                 </button>
                 <button
                   type="button"
                   aria-pressed={sortBy === 'recent'}
                   onClick={() => setSortBy('recent')}
-                  className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  className={`px-3 py-1.5 min-h-[44px] inline-flex items-center gap-1.5 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
                     sortBy === 'recent'
-                      ? 'bg-white text-blue-700 font-semibold shadow-sm'
+                      ? 'bg-white text-blue-700 font-bold shadow-sm ring-1 ring-slate-200'
                       : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
+                  {sortBy === 'recent' && <span className="w-1.5 h-1.5 rounded-full bg-blue-600" aria-hidden="true" />}
                   최신수집순
                 </button>
                 <button
                   type="button"
                   aria-pressed={sortBy === 'negativity'}
                   onClick={() => setSortBy('negativity')}
-                  className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  className={`px-3 py-1.5 min-h-[44px] inline-flex items-center gap-1.5 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
                     sortBy === 'negativity'
-                      ? 'bg-white text-amber-800 shadow-sm'
+                      ? 'bg-white text-amber-800 font-bold shadow-sm ring-1 ring-slate-200'
                       : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
+                  {sortBy === 'negativity' && <span className="w-1.5 h-1.5 rounded-full bg-amber-600" aria-hidden="true" />}
                   부정점수순
                 </button>
               </div>
@@ -981,9 +1055,9 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                   onClick={() => setViewMode('cards')}
                   title="카드 보기 형식으로 전환"
                   aria-label="카드 보기 형식으로 전환"
-                  className={`px-2.5 py-1.5 min-h-[44px] inline-flex items-center gap-1 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  className={`px-2.5 py-1.5 min-h-[44px] inline-flex items-center gap-1 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
                     viewMode === 'cards'
-                      ? 'bg-white text-slate-900 shadow-sm font-bold'
+                      ? 'bg-white text-slate-900 shadow-sm font-bold ring-1 ring-slate-200'
                       : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
@@ -998,9 +1072,9 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                   onClick={() => setViewMode('table')}
                   title="데이터 테이블 보기 형식으로 전환"
                   aria-label="데이터 테이블 보기 형식으로 전환"
-                  className={`px-2.5 py-1.5 min-h-[44px] inline-flex items-center gap-1 rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  className={`px-2.5 py-1.5 min-h-[44px] inline-flex items-center gap-1 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
                     viewMode === 'table'
-                      ? 'bg-white text-slate-900 shadow-sm font-bold'
+                      ? 'bg-white text-slate-900 shadow-sm font-bold ring-1 ring-slate-200'
                       : 'text-slate-700 hover:text-slate-900'
                   }`}
                 >
@@ -1019,7 +1093,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 id="admin-page-size-select"
                 value={pageSize}
                 onChange={(e) => setPageSize(Number(e.target.value))}
-                className="min-h-[44px] px-2 py-1.5 bg-slate-100 text-slate-800 rounded-xl border border-slate-200 font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"
+                className="min-h-[44px] px-2 py-1.5 bg-slate-100 text-slate-800 rounded-xl border border-slate-200 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"
                 aria-label="페이지당 표시 제보 개수 선택"
               >
                 <option value={10}>10개씩</option>
@@ -1044,11 +1118,12 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 role="tab"
                 aria-selected={isSelected}
                 tabIndex={isSelected ? 0 : -1}
+                aria-label={`${tab.label} 카테고리 (${count}건)`}
                 onKeyDown={(e) => handleCategoryKeyDown(e, idx)}
                 onClick={() => setSelectedCategory(tab.code)}
-                className={`px-3 py-2 min-h-[44px] rounded-xl font-semibold whitespace-nowrap transition flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                className={`px-3 py-2 min-h-[44px] rounded-xl font-semibold whitespace-nowrap transition flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                   isSelected
-                    ? 'bg-slate-900 text-white shadow-sm'
+                    ? 'bg-slate-900 text-white shadow-sm ring-1 ring-slate-900'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900'
                 }`}
               >
@@ -1078,10 +1153,11 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                     key={src.id}
                     type="button"
                     aria-pressed={isSelected}
+                    aria-label={`${src.label} 필터 (${count}건)`}
                     onClick={() => setSelectedSource(src.id)}
-                    className={`px-2.5 py-1 min-h-[44px] rounded-lg font-medium transition flex items-center gap-1 border focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    className={`px-2.5 py-1 min-h-[44px] rounded-lg font-medium transition flex items-center gap-1 border focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
                       isSelected
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm font-semibold'
                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                     }`}
                   >
@@ -1113,7 +1189,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 type="button"
                 onClick={handleResetFilters}
                 aria-label="모든 검색 및 카테고리 필터 초기화"
-                className="text-xs text-rose-600 hover:text-rose-700 font-semibold underline min-h-[44px] inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 rounded px-1"
+                className="text-xs text-rose-600 hover:text-rose-700 font-semibold underline min-h-[44px] inline-flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-rose-600 focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-1 rounded-lg px-2"
               >
                 <svg className="w-3 h-3" width="12" height="12" focusable="false" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -1150,8 +1226,11 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         </div>
 
         {/* Screen Reader Accessible Summary Table for Defect Reports (always present for screen readers) */}
-        <div className={viewMode === 'table' ? 'overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm' : 'sr-only'} tabIndex={viewMode === 'table' ? 0 : undefined} role={viewMode === 'table' ? 'region' : undefined} aria-label={viewMode === 'table' ? '결함 제보 요약 데이터 테이블' : undefined}>
-          <table aria-label="수집된 전기차 결함 제보 데이터 요약 표" className="w-full text-left text-xs text-slate-800 border-collapse">
+        <div className={viewMode === 'table' ? 'overflow-x-auto table-scroll-container rounded-2xl border border-slate-200 bg-white shadow-sm' : 'sr-only'} tabIndex={viewMode === 'table' ? 0 : undefined} role={viewMode === 'table' ? 'region' : undefined} aria-label={viewMode === 'table' ? '결함 제보 요약 데이터 테이블' : undefined}>
+          {viewMode === 'table' && (
+            <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-500 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true"><span>← 좌우로 밀어서 전체 제보 내역 확인</span><span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span></div>
+          )}
+          <table aria-label="수집된 전기차 결함 제보 데이터 요약 표" className="w-full min-w-[760px] text-left text-xs text-slate-800 border-collapse">
             <caption>
               {filteredReports.length === 0
                 ? `카테고리: ${CATEGORY_TABS.find((c) => c.code === selectedCategory)?.label || '전체'}, 수집된 결함 제보 없음 (총 0건)`
@@ -1191,12 +1270,12 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                       <td className="px-3 py-3 text-slate-800 whitespace-nowrap font-mono text-xs">{report.date}</td>
                       <td className="px-3 py-3 text-slate-900 font-semibold whitespace-nowrap">{report.vehicle_model}</td>
                       <td className="px-3 py-3 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border ${getCategoryBadgeClass(report.defect_category)}`}>
+                        <span role="status" aria-label={`결함 분류: ${report.defect_category_ko}`} className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border ${getCategoryBadgeClass(report.defect_category)}`}>
                           {report.defect_category_ko}
                         </span>
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap">{getSeverityBadge(report.severity)}</td>
-                      <td className="px-3 py-3 whitespace-nowrap">{getSourceBadge(report.source || 'N/A', report.url)}</td>
+                      <td className="px-3 py-3 whitespace-nowrap">{getSourceBadge(report.source || 'N/A', safeUrl)}</td>
                       <td className="px-3 py-3 text-slate-900 font-medium max-w-xs truncate" title={report.title}>
                         <span>{report.title}</span>
                         {isExt ? (
@@ -1206,7 +1285,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                             rel="noopener noreferrer"
                             aria-label="게시글 원문 보기"
                             title="게시글 원문 보기 (새 창에서 열림)"
-                            className="focus:inline-block focus:px-2 focus:py-0.5 focus:bg-blue-700 focus:text-white focus:rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ml-1 text-blue-700 underline text-xs font-semibold"
+                            className="inline-flex items-center min-h-[44px] px-2 py-1 focus:bg-blue-700 focus:text-white rounded focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 ml-1 text-blue-700 underline text-xs font-semibold"
                           >
                             (원문 링크)
                           </a>
@@ -1217,8 +1296,19 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                       <td className="px-3 py-3 text-slate-800 text-xs max-w-sm truncate" title={report.summary}>
                         {report.summary}
                       </td>
-                      <td className="px-3 py-3 whitespace-nowrap font-mono font-bold text-rose-700 text-xs">
-                        {formatSentimentPercent(report.sentiment_score)}%
+                      <td className="px-3 py-3 whitespace-nowrap text-xs">
+                        <span className="font-mono font-bold text-rose-700" aria-label={`부정 감성 지수: ${formatSentimentPercent(report.sentiment_score)}%`}>
+                          {formatSentimentPercent(report.sentiment_score)}%
+                        </span>
+                        <span className="ml-1 text-[10px] font-semibold px-1 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200" aria-hidden="true">
+                          {formatSentimentPercent(report.sentiment_score) >= 80
+                            ? '극도 부정'
+                            : formatSentimentPercent(report.sentiment_score) >= 60
+                            ? '높음'
+                            : formatSentimentPercent(report.sentiment_score) >= 40
+                            ? '보통'
+                            : '낮음'}
+                        </span>
                       </td>
                       {viewMode === 'table' && (
                         <td className="px-3 py-3 whitespace-nowrap text-right">
@@ -1227,7 +1317,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                             aria-haspopup="dialog"
                             aria-label={`제보 #${overallIdx} (${report.vehicle_model}) 결함 상세 분석 및 DSI 지표 모달 열기`}
                             onClick={(e) => handleOpenModal(report, e.currentTarget)}
-                            className="px-2.5 py-1 min-h-[44px] inline-flex items-center gap-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            className="px-2.5 py-1 min-h-[44px] inline-flex items-center gap-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 transition focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
                           >
                             상세 분석
                           </button>
@@ -1277,7 +1367,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             <button
               type="button"
               onClick={handleResetFilters}
-              className="mt-2 inline-flex items-center gap-1 px-4 py-2 min-h-[44px] rounded-xl text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="mt-2 inline-flex items-center gap-1 px-4 py-2 min-h-[44px] rounded-xl text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 transition focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
             >
               모든 필터 초기화
             </button>
@@ -1315,7 +1405,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={validCurrentPage === 1}
                     aria-label="이전 페이지로 이동"
-                    className="px-3 py-2 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    className="px-3 py-2 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                   >
                     <span aria-hidden="true">&larr;</span>
                     <span className="ml-1">이전</span>
@@ -1336,8 +1426,8 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                         type="button"
                         onClick={() => setCurrentPage(pageNum as number)}
                         aria-current={isCurrent ? 'page' : undefined}
-                        aria-label={`${pageNum}페이지로 이동`}
-                        className={`min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl text-xs font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                        aria-label={isCurrent ? `현재 ${pageNum}페이지` : `${pageNum}페이지로 이동`}
+                        className={`min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                           isCurrent
                             ? 'bg-slate-900 text-white shadow-sm ring-1 ring-slate-800'
                             : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
@@ -1353,7 +1443,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={validCurrentPage === totalPages}
                     aria-label="다음 페이지로 이동"
-                    className="px-3 py-2 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    className="px-3 py-2 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                   >
                     <span className="mr-1">다음</span>
                     <span aria-hidden="true">&rarr;</span>
@@ -1408,7 +1498,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 type="button"
                 onClick={handleCloseModal}
                 aria-label="결함 상세 대화상자 닫기"
-                className="p-2 min-w-[44px] min-h-[44px] rounded-xl text-slate-700 hover:text-slate-900 hover:bg-slate-100 flex items-center justify-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="p-2 min-w-[44px] min-h-[44px] rounded-xl text-slate-700 hover:text-slate-900 hover:bg-slate-100 flex items-center justify-center transition focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
                 <svg className="w-5 h-5" width="20" height="20" focusable="false" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -1486,7 +1576,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               <button
                 type="button"
                 onClick={handleCloseModal}
-                className="px-4 py-2 min-h-[44px] rounded-xl text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="px-4 py-2 min-h-[44px] rounded-xl text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 transition focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
                 닫기 (Esc)
               </button>
@@ -1500,7 +1590,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={`'${activeModalReport.title}' 원문 게시물 바로가기 (새 창에서 열림)`}
-                    className="px-4 py-2 min-h-[44px] inline-flex items-center gap-1.5 rounded-xl text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    className="px-4 py-2 min-h-[44px] inline-flex items-center gap-1.5 rounded-xl text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 transition focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                   >
                     <span>원문 링크 바로가기</span>
                     <span className="sr-only"> (새 창에서 열림)</span>
@@ -1544,6 +1634,8 @@ const DefectReportCard = memo(function DefectReportCard({
         <div className="flex flex-wrap items-center gap-2">
           {/* Category Badge */}
           <span
+            role="status"
+            aria-label={`결함 분류: ${report.defect_category_ko}`}
             className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold border ${getCategoryBadgeClass(
               report.defect_category
             )}`}
@@ -1565,8 +1657,9 @@ const DefectReportCard = memo(function DefectReportCard({
           <button
             type="button"
             aria-haspopup="dialog"
+            aria-label={`제보 #${report.id} (${report.vehicle_model}) 결함 심층 분석 및 DSI 지표 모달 열기`}
             onClick={handleOpenModalClick}
-            className="px-2.5 py-1.5 min-h-[44px] inline-flex items-center gap-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="px-2.5 py-1.5 min-h-[44px] inline-flex items-center gap-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 transition focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
             title="결함 상세 분석 및 DSI 지표 모달 열기"
           >
             <svg className="w-3.5 h-3.5 text-slate-600" width="14" height="14" focusable="false" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1577,7 +1670,7 @@ const DefectReportCard = memo(function DefectReportCard({
           </button>
 
           {/* Community Source Badge with URL Link */}
-          {getSourceBadge(report.source || 'N/A', report.url)}
+          {getSourceBadge(report.source || 'N/A', safeUrl)}
 
           {/* Date */}
           <span className="text-xs text-slate-800 font-mono font-medium">{report.date}</span>
@@ -1630,7 +1723,8 @@ const DefectReportCard = memo(function DefectReportCard({
                   type="button"
                   key={`tag-${idx}-${tagStr}`}
                   onClick={() => onTagClick(tagStr)}
-                  className="px-2.5 py-1 min-h-[44px] inline-flex items-center rounded-full bg-slate-100 text-slate-800 text-[11px] font-semibold border border-slate-200 hover:bg-blue-50 hover:text-blue-800 hover:border-blue-300 transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  aria-label={`'${tagStr}' 키워드로 검색 필터링`}
+                  className="px-2.5 py-1 min-h-[44px] inline-flex items-center rounded-full bg-slate-100 text-slate-800 text-[11px] font-semibold border border-slate-200 hover:bg-blue-50 hover:text-blue-800 hover:border-blue-300 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
                   title={`'${tagStr}' 키워드로 검색 필터링`}
                 >
                   #{tagStr}
@@ -1649,16 +1743,27 @@ const DefectReportCard = memo(function DefectReportCard({
             aria-valuemin={0}
             aria-valuemax={100}
             aria-label={`리포트 ${report.id} 부정 감성 강도`}
-            aria-valuetext={`${safeSentimentPct}%`}
+            aria-valuetext={`${safeSentimentPct}% (${safeSentimentPct >= 80 ? '극도 부정' : safeSentimentPct >= 60 ? '높음' : safeSentimentPct >= 40 ? '보통' : '낮음'})`}
             className="w-24 bg-slate-200 rounded-full h-2 overflow-hidden border border-slate-300"
           >
             <div
-              className="bg-rose-700 h-2 rounded-full"
+              className={`h-2 rounded-full ${
+                safeSentimentPct >= 80
+                  ? 'bg-rose-700'
+                  : safeSentimentPct >= 60
+                  ? 'bg-orange-600'
+                  : safeSentimentPct >= 40
+                  ? 'bg-amber-500'
+                  : 'bg-emerald-600'
+              }`}
               style={{ width: `${safeSentimentPct}%` }}
             />
           </div>
-          <span className="font-bold text-rose-700 font-mono">
+          <span className="font-bold text-rose-700 font-mono" aria-hidden="true">
             {safeSentimentPct}%
+          </span>
+          <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200" aria-hidden="true">
+            {safeSentimentPct >= 80 ? '극도 부정' : safeSentimentPct >= 60 ? '높음' : safeSentimentPct >= 40 ? '보통' : '낮음'}
           </span>
         </div>
       </div>

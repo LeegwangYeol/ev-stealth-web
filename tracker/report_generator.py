@@ -195,7 +195,9 @@ class ReportGenerator:
             name = _get_field(r, 'name_ko', '') or _get_field(r, 'region_id', '') or '지자체'
             rate_val = _safe_float_val(_get_field(r, 'overall_depletion_rate', 0.0))
             rem_units = _get_passenger_remaining(r)
-            status_raw = str(_get_field(r, "overall_status", "")).strip().upper()
+            st_raw = _get_field(r, "overall_status", "")
+            status_val = getattr(st_raw, "value", st_raw)
+            status_raw = str(status_val or "").split(".")[-1].strip().upper()
 
             label = f"{name} ({rate_val}%, 잔여: {rem_units:,}대)"
             if status_raw in ("CRITICAL", "DEPLETED"):

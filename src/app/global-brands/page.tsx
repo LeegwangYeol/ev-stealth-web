@@ -16,6 +16,7 @@ const globalBrandsJsonLd = {
       '@id': `${SITE_URL}/global-brands#article`,
       headline: '글로벌 EV 브랜드 연식별 결함 및 구매 가이드',
       description: '폭스바겐 ID.4, 쉐보레 볼트 EV, 폴스타 2, 벤츠 EQE/EQS 등 유럽/북미 전기차 연식별 결함 및 중고차 구매 가이드',
+      image: [`${SITE_URL}/og-image.png`],
       url: `${SITE_URL}/global-brands`,
       inLanguage: 'ko-KR',
       datePublished: '2026-01-01T00:00:00+09:00',
@@ -30,10 +31,15 @@ const globalBrandsJsonLd = {
         name: 'Global EV Hub',
         logo: {
           '@type': 'ImageObject',
-          url: `${SITE_URL}/favicon.ico`,
+          url: `${SITE_URL}/og-image.png`,
+          width: 1200,
+          height: 630,
         },
       },
-      mainEntityOfPage: `${SITE_URL}/global-brands`,
+      mainEntityOfPage: {
+        '@type': 'WebPage',
+        '@id': `${SITE_URL}/global-brands`,
+      },
     },
     {
       '@type': 'ItemList',
@@ -132,6 +138,10 @@ export const metadata: Metadata = {
   ],
   alternates: {
     canonical: '/global-brands',
+    languages: {
+      'ko-KR': '/global-brands',
+      'x-default': '/global-brands',
+    },
   },
   openGraph: {
     title: '글로벌 EV 브랜드 연식별 결함 및 구매 가이드 | Global EV Hub',
@@ -140,6 +150,8 @@ export const metadata: Metadata = {
     siteName: 'Global EV Hub',
     locale: 'ko_KR',
     type: 'article',
+    authors: ['Global EV Hub'],
+    section: '전기차 결함 및 구매 가이드',
     publishedTime: '2026-01-01T00:00:00+09:00',
     modifiedTime: '2026-11-01T00:00:00+09:00',
     images: [
@@ -167,9 +179,174 @@ export default function GlobalEvPage() {
     <article className="space-y-8 py-6 sm:py-10 max-w-4xl mx-auto">
       <JsonLd data={globalBrandsJsonLd} />
       <BrandComparisonNav currentBrand="global-brands" pageTitle="글로벌 브랜드 구매 가이드" />
-      <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold border-b pb-4 text-slate-900 tracking-tight">
-        유럽 및 북미 EV 연식별 가이드 (폭스바겐, 쉐보레, 볼보/폴스타, 벤츠 등)
-      </h1>
+
+      <header className="border-b pb-4 space-y-2">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
+          유럽 및 북미 EV 연식별 가이드 (폭스바겐, 쉐보레, 볼보/폴스타, 벤츠 등)
+        </h1>
+        <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
+          폭스바겐 ID.4, 쉐보레 볼트 EV, 볼보 EX30/폴스타 2, 메르세데스-벤츠 EQE/EQS 등 유럽·북미 주요 전기차 모델의 고질병(배터리 화재, 주행 중 문 열림, 히터 파손, 배터리 교체비 폭탄)과 연식별 안전 구매 기준을 완벽 분석했습니다.
+        </p>
+      </header>
+
+      {/* 글로벌 브랜드 연식별 판정 요약 표 (WCAG AA Compliance: table headers, caption, overflow container) */}
+      <section aria-labelledby="heading-global-summary" className="space-y-3">
+        <h2 id="heading-global-summary" className="text-xl sm:text-2xl font-bold text-slate-900">
+          글로벌 주요 차종 연식별 판정 요약 표
+        </h2>
+        <div className="overflow-x-auto table-scroll-container rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-500 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true">
+            <span>← 좌우로 밀어서 전체 모델 비교</span>
+            <span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span>
+          </div>
+          <table className="w-full min-w-[640px] text-left border-collapse text-xs sm:text-sm" aria-label="글로벌 주요 모델별 주의 및 추천 연식 요약 표">
+            <caption className="sr-only">유럽·북미 전기차 모델별 주의 연식, 추천 연식, 주요 결함 및 공식 리콜 출처 비교 요약 표</caption>
+            <thead className="bg-slate-900 text-slate-100 uppercase text-[11px] sm:text-xs tracking-wider">
+              <tr>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">차종/모델</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">회피/주의 연식</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">추천 연식 (BUY SAFE)</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100">핵심 결함 및 리스크</th>
+                <th scope="col" className="py-3 px-4 font-semibold text-slate-100 text-center">공식 리콜</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <th scope="row" className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  쉐보레 볼트 EV / EUV
+                </th>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-900">
+                    2017~2022년식 (미교체)
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-900">
+                    리콜 배터리 교체 매물
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  LG 파우치셀 분리막 접힘 및 양극 탭 파손 화재 리콜 (신품 배터리 팩 확인 필수)
+                </td>
+                <td className="py-3 px-4 text-center whitespace-nowrap">
+                  <a
+                    href="https://www.car.go.kr"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="볼트 EV 국토교통부 자동차리콜센터 공식 정보 (새 창에서 열림)"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
+                  >
+                    <span>리콜 조회</span>
+                    <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                  </a>
+                </td>
+              </tr>
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <th scope="row" className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  폭스바겐 ID.4
+                </th>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-900">
+                    2021~2024년식
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-900">
+                    2025년식 이후
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  주행 중 플러시 도어 핸들 침수 터치 오류로 문 열림 리콜 및 CO2 콤프레셔 파손
+                </td>
+                <td className="py-3 px-4 text-center whitespace-nowrap">
+                  <a
+                    href="https://www.car.go.kr"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="ID.4 국토교통부 자동차리콜센터 공식 정보 (새 창에서 열림)"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
+                  >
+                    <span>리콜 조회</span>
+                    <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                  </a>
+                </td>
+              </tr>
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <th scope="row" className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  볼보 EX30 / 폴스타 2
+                </th>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-900">
+                    2021~2024년식
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-900">
+                    2024년식 이후
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  EX30 중앙 속도계 화면 꺼짐 리콜 및 폴스타2 고전압 세라믹 히터(HVCH) 파괴
+                </td>
+                <td className="py-3 px-4 text-center whitespace-nowrap">
+                  <a
+                    href="https://www.car.go.kr"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="볼보/폴스타 국토교통부 자동차리콜센터 공식 정보 (새 창에서 열림)"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
+                  >
+                    <span>리콜 조회</span>
+                    <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                  </a>
+                </td>
+              </tr>
+              <tr className="hover:bg-slate-50/80 transition-colors">
+                <th scope="row" className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  메르세데스-벤츠 EQE / EQS
+                </th>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-900">
+                    2022~2023년식
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-900">
+                    2024년식 이후 (CATL 탑재)
+                  </span>
+                </td>
+                <td className="py-3 px-4 text-slate-700">
+                  파라시스 배터리 화재 리스크, 플러시 도어 모터 파손 및 7,560만 원 배터리 교체비
+                </td>
+                <td className="py-3 px-4 text-center whitespace-nowrap">
+                  <a
+                    href="https://www.car.go.kr"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="벤츠 EQE 국토교통부 자동차리콜센터 공식 정보 (새 창에서 열림)"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
+                  >
+                    <span>리콜 조회</span>
+                    <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    <span className="sr-only"> (새 창에서 열림)</span>
+                  </a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
       
       <section className="space-y-4" aria-labelledby="heading-bolt-ev">
         <h2 id="heading-bolt-ev" className="text-2xl sm:text-3xl font-bold text-slate-800">

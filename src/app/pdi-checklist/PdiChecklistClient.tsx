@@ -307,7 +307,7 @@ export interface PdiItemRowProps {
 export const PdiItemRow = memo(function PdiItemRow({ item, onToggle }: PdiItemRowProps) {
   // WCAG AA Keyboard Navigation: Space and Enter both toggle checklist items
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar' || e.code === 'Space') {
       e.preventDefault();
       onToggle(item.id);
     }
@@ -391,7 +391,10 @@ export default function PdiChecklistClient() {
     saveChecklistToStorage(items);
   }, [items, mounted]);
 
+  const [actionAnnouncement, setActionAnnouncement] = useState<string>('');
+
   const toggleCheck = useCallback((id: string) => {
+    setActionAnnouncement('');
     setItems((prev) =>
       prev.map((item) =>
         item.id === id ? { ...item, checked: !item.checked } : item
@@ -403,6 +406,7 @@ export default function PdiChecklistClient() {
     if (typeof window !== 'undefined' && window.confirm('체크리스트 상태를 초기화하시겠습니까?')) {
       setItems(INITIAL_PDI_ITEMS);
       clearChecklistFromStorage();
+      setActionAnnouncement('체크리스트가 초기화되었습니다. ');
     }
   }, []);
 
@@ -423,6 +427,11 @@ export default function PdiChecklistClient() {
     setItems((prev) => {
       const allChecked = prev.length > 0 && prev.every((i) => i.checked);
       const nextChecked = !allChecked;
+      setActionAnnouncement(
+        nextChecked
+          ? '전체 항목이 선택되었습니다. '
+          : '전체 항목이 해제되었습니다. '
+      );
       return prev.map((item) => ({ ...item, checked: nextChecked }));
     });
   }, []);
@@ -567,9 +576,13 @@ export default function PdiChecklistClient() {
         </div>
         {/* Screen Reader Dynamic Progression Announcement (always in DOM for reliable a11y announcements) */}
         <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-          {mounted
-            ? `신차 검수 진행률 ${progress}%, 총 ${totalItems}개 중 ${checkedCount}개 완료`
-            : '신차 검수 준비 중'}
+          {!mounted
+            ? '신차 검수 준비 중'
+            : `${actionAnnouncement}${
+                progress === 100
+                  ? `신차 검수 완료! 총 ${totalItems}개 중 ${checkedCount}개 항목 점검 완료. 모든 항목을 확인하셨습니다. 이상이 없다면 안심하고 인수증에 서명하세요.`
+                  : `신차 검수 진행률 ${progress}%, 총 ${totalItems}개 중 ${checkedCount}개 완료`
+              }`}
         </div>
       </header>
 

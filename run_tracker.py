@@ -20,9 +20,11 @@ import logging
 import os
 from pathlib import Path
 import shutil
+import signal
 import sys
 import tempfile
-from typing import List, Optional, Set, Tuple, Union
+import threading
+from typing import Any, List, Optional, Set, Tuple, Union
 
 # Ensure repository root and tracker package are on sys.path
 _CURRENT_DIR = Path(__file__).resolve().parent
@@ -49,6 +51,30 @@ from tracker.subsidy_models import SubsidyPayload
 from tracker.subsidy_tracker import SubsidyTracker
 
 logger = logging.getLogger("run_tracker")
+
+_SHUTDOWN_REQUESTED = False
+
+
+def _signal_handler(signum: int, frame: Any) -> None:
+    """Handle termination signals by setting shutdown flag and raising exception for graceful unwind."""
+    global _SHUTDOWN_REQUESTED
+    _SHUTDOWN_REQUESTED = True
+    sig_name = signal.Signals(signum).name if hasattr(signal, "Signals") else f"signal {signum}"
+    logger.warning("Received termination %s. Halting subsidy tracker pipeline gracefully...", sig_name)
+    if signum == signal.SIGINT:
+        raise KeyboardInterrupt(f"Subsidy tracker interrupted by {sig_name}")
+    else:
+        raise SystemExit(128 + signum)
+
+
+def setup_signal_handlers() -> None:
+    """Register graceful termination signal handlers for SIGINT and SIGTERM."""
+    if threading.current_thread() is threading.main_thread():
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                signal.signal(sig, _signal_handler)
+            except (ValueError, OSError, AttributeError):
+                pass
 
 
 def _find_repo_root() -> Path:
@@ -188,6 +214,8 @@ def sync_defect_reports(
     run_crawler: bool = False,
     quarantine_corrupted: bool = True,
     root_dir: Optional[Union[str, Path]] = None,
+    lock_timeout: float = 15.0,
+    stale_timeout: float = 60.0,
 ) -> List[str]:
     """Synchronize defect reports (daily_reports.json) between root data/ and web src/data/.
 
@@ -276,10 +304,12 @@ def sync_defect_reports(
             deduped_public.append(p)
 
     sync_lock_path = root_reports_path.parent / ".sync_defect_reports.lock"
-    cleanup_stale_lock_files(root_reports_path.parent, max_age_seconds=3600.0)
+    cleanup_stale_lock_files(root_reports_path.parent, prefix=(".sync_",), max_age_seconds=stale_timeout)
+    if web_reports_path.parent != root_reports_path.parent and web_reports_path.parent.is_dir():
+        cleanup_stale_lock_files(web_reports_path.parent, prefix=(".sync_",), max_age_seconds=stale_timeout)
     written_paths: List[str] = []
 
-    with FileLock(sync_lock_path):
+    with FileLock(sync_lock_path, timeout=lock_timeout, stale_timeout=stale_timeout):
         if run_crawler:
             try:
                 from run_scraper import ScraperPipeline
@@ -298,15 +328,31 @@ def sync_defect_reports(
                     exc,
                 )
 
-        def _candidate_score(cand_path: Path) -> Tuple[int, int, float]:
+        validation_cache: Dict[str, Tuple[bool, int, float]] = {}
+
+        def _evaluate_candidate(cand_path: Path) -> Tuple[bool, int, float]:
+            key = str(cand_path)
+            if key in validation_cache:
+                return validation_cache[key]
             try:
-                with open(cand_path, "r", encoding="utf-8-sig") as f:
-                    d = json.load(f)
-                r_list = d.get("reports", []) if isinstance(d, dict) else []
-                num_reports = len(r_list)
-                return (1 if num_reports >= 4 else 0, num_reports, cand_path.stat().st_mtime)
+                if is_corrupted_or_quarantined_filename(cand_path) or not cand_path.is_file() or cand_path.stat().st_size == 0:
+                    res = (False, 0, 0.0)
+                else:
+                    with open(cand_path, "r", encoding="utf-8-sig") as f:
+                        d = json.load(f)
+                    if isinstance(d, dict) and "reports" in d and isinstance(d["reports"], list) and all(isinstance(r, dict) for r in d["reports"]):
+                        r_list = d["reports"]
+                        res = (True, len(r_list), cand_path.stat().st_mtime)
+                    else:
+                        res = (False, 0, 0.0)
             except Exception:
-                return (0, 0, 0.0)
+                res = (False, 0, 0.0)
+            validation_cache[key] = res
+            return res
+
+        def _candidate_score(cand_path: Path) -> Tuple[int, int, float]:
+            is_valid, num_reports, mtime = _evaluate_candidate(cand_path)
+            return (1 if (is_valid and num_reports >= 4) else (1 if is_valid else 0), num_reports, mtime)
 
         known_paths: List[Path] = [root_reports_path, web_reports_path] + deduped_public
         candidate_paths: List[Path] = [p for p in known_paths if p.exists()]
@@ -319,7 +365,8 @@ def sync_defect_reports(
         for cand in candidate_paths:
             if is_corrupted_or_quarantined_filename(cand):
                 continue
-            if validate_defect_reports_file(cand):
+            is_valid, _, _ = _evaluate_candidate(cand)
+            if is_valid:
                 source_path = cand
                 break
             elif quarantine_corrupted:
@@ -347,14 +394,11 @@ def sync_defect_reports(
                 seen_target_abs.add(resolved_p)
                 target_paths.append(p)
 
-        if source_path and target_paths and validate_defect_reports_file(source_path):
+        if source_path and target_paths:
             try:
                 source_stat = source_path.stat()
-                h_src = hashlib.sha256()
-                with open(source_path, "rb") as sf:
-                    while chunk := sf.read(65536):
-                        h_src.update(chunk)
-                source_hash = h_src.hexdigest()
+                source_bytes = source_path.read_bytes()
+                source_hash = hashlib.sha256(source_bytes).hexdigest()
             except Exception as e:
                 logger.error("Failed to inspect source defect report %s: %s", source_path, e)
                 return []
@@ -363,34 +407,31 @@ def sync_defect_reports(
                 if tgt.exists():
                     if is_corrupted_or_quarantined_filename(tgt):
                         continue
+                    try:
+                        tgt_bytes = tgt.read_bytes()
+                        h_tgt = hashlib.sha256(tgt_bytes).hexdigest()
+                        if h_tgt == source_hash:
+                            try:
+                                tgt_stat = tgt.stat()
+                                if tgt_stat.st_mtime != source_stat.st_mtime:
+                                    os.utime(tgt, (source_stat.st_atime, source_stat.st_mtime))
+                            except OSError:
+                                pass
+                            logger.debug("Skipping redundant defect report sync for %s (SHA-256 match)", tgt)
+                            continue
+                    except Exception as e:
+                        logger.warning("Error inspecting target %s: %s", tgt, e)
+
                     if not validate_defect_reports_file(tgt):
                         if quarantine_corrupted:
                             quarantine_corrupted_file(tgt)
-                    else:
-                        try:
-                            h_tgt = hashlib.sha256()
-                            with open(tgt, "rb") as tf_in:
-                                while chunk := tf_in.read(65536):
-                                    h_tgt.update(chunk)
-                            if h_tgt.hexdigest() == source_hash:
-                                try:
-                                    tgt_stat = tgt.stat()
-                                    if tgt_stat.st_mtime != source_stat.st_mtime:
-                                        os.utime(tgt, (source_stat.st_atime, source_stat.st_mtime))
-                                except OSError:
-                                    pass
-                                logger.debug("Skipping redundant defect report sync for %s (SHA-256 match)", tgt)
-                                continue
-                        except Exception as e:
-                            logger.warning("Error verifying SHA-256 on target %s: %s", tgt, e)
 
                 temp_name = None
                 try:
                     tgt.parent.mkdir(parents=True, exist_ok=True)
                     with tempfile.NamedTemporaryFile("wb", dir=str(tgt.parent), delete=False, prefix=".tmp_sync_") as tf:
                         temp_name = tf.name
-                        with open(source_path, "rb") as sf:
-                            shutil.copyfileobj(sf, tf)
+                        tf.write(source_bytes)
                         tf.flush()
                         os.fsync(tf.fileno())
                     try:
@@ -444,6 +485,11 @@ def parse_arguments(args: Optional[List[str]] = None) -> argparse.Namespace:
     """Parse CLI flags and parameters."""
     parser = argparse.ArgumentParser(
         description="Autonomous Nationwide EV Subsidy Depletion Tracker"
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="%(prog)s 2.0.0 (EV Subsidy Depletion Tracker)",
     )
     parser.add_argument(
         "--output",
@@ -571,6 +617,7 @@ parse_args = parse_arguments
 
 def main(argv: Optional[List[str]] = None) -> int:
     """Main CLI entrypoint execution loop."""
+    setup_signal_handlers()
     try:
         args = parse_arguments(argv)
         setup_logging(args.verbose)

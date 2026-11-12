@@ -16,6 +16,7 @@ const latest2026JsonLd = {
       '@id': `${SITE_URL}/2026-latest#article`,
       headline: '2026년식 KDM(국내 내수용) EV 초기 품질 리포트',
       description: '올해 출고된 2026년식 최신 전기차(아이오닉5, EV3, 아이오닉9, 모델Y, 시라이언7)의 한국 차주 실제 평가와 초기 결함 분석',
+      image: [`${SITE_URL}/og-image.png`],
       url: `${SITE_URL}/2026-latest`,
       inLanguage: 'ko-KR',
       datePublished: '2026-01-01T00:00:00+09:00',
@@ -30,10 +31,15 @@ const latest2026JsonLd = {
         name: 'Global EV Hub',
         logo: {
           '@type': 'ImageObject',
-          url: `${SITE_URL}/favicon.ico`,
+          url: `${SITE_URL}/og-image.png`,
+          width: 1200,
+          height: 630,
         },
       },
-      mainEntityOfPage: `${SITE_URL}/2026-latest`,
+      mainEntityOfPage: {
+        '@type': 'WebPage',
+        '@id': `${SITE_URL}/2026-latest`,
+      },
     },
     {
       '@type': 'ItemList',
@@ -44,26 +50,31 @@ const latest2026JsonLd = {
           '@type': 'ListItem',
           position: 1,
           name: '기아 EV3 (초기 클러스터 오류, i-Pedal 3.0 회생제동 이질감 및 도어핸들 결빙)',
+          url: `${SITE_URL}/2026-latest#heading-ev3-2026`,
         },
         {
           '@type': 'ListItem',
           position: 2,
           name: '현대 아이오닉 5 2026 (ccNC 내비게이션 무선 업데이트 및 2세대 개선형 ICCU)',
+          url: `${SITE_URL}/2026-latest#heading-ioniq5-2026`,
         },
         {
           '@type': 'ListItem',
           position: 3,
           name: '현대 아이오닉 9 (110.3kWh 대용량 배터리팩 열관리 및 3열 전장 점검)',
+          url: `${SITE_URL}/2026-latest#heading-ioniq9-2026`,
         },
         {
           '@type': 'ListItem',
           position: 4,
           name: '테슬라 모델 Y 2026 주니퍼 (일체형 기가 프레스 다이캐스팅 및 실내 정숙성)',
+          url: `${SITE_URL}/2026-latest#heading-modely-2026`,
         },
         {
           '@type': 'ListItem',
           position: 5,
           name: 'BYD 시라이언 7 (KDM 국내 인증 배터리 사양 및 공식 서비스망 인프라)',
+          url: `${SITE_URL}/2026-latest#heading-sealion7-2026`,
         },
       ],
     },
@@ -133,6 +144,10 @@ export const metadata: Metadata = {
   ],
   alternates: {
     canonical: '/2026-latest',
+    languages: {
+      'ko-KR': '/2026-latest',
+      'x-default': '/2026-latest',
+    },
   },
   openGraph: {
     title: '2026년식 KDM EV 초기 품질 리포트 | Global EV Hub',
@@ -141,6 +156,8 @@ export const metadata: Metadata = {
     siteName: 'Global EV Hub',
     locale: 'ko_KR',
     type: 'article',
+    authors: ['Global EV Hub'],
+    section: '전기차 결함 및 구매 가이드',
     publishedTime: '2026-01-01T00:00:00+09:00',
     modifiedTime: '2026-11-01T00:00:00+09:00',
     images: [
@@ -193,7 +210,11 @@ export default function Latest2026Page() {
         <h2 id="heading-latest-summary" className="text-xl sm:text-2xl font-bold text-slate-900">
           2026년식 신차 초기 결함 및 리콜 판정 요약 표
         </h2>
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto table-scroll-container rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-500 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true">
+            <span>← 좌우로 밀어서 2026 신차 비교</span>
+            <span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span>
+          </div>
           <table className="w-full min-w-[640px] text-left border-collapse text-xs sm:text-sm" aria-label="2026년식 KDM 주요 신차 초기 결함 및 리콜 판정 요약 표">
             <caption className="sr-only">2026년식 기아 EV3, 아이오닉 5 PE, 테슬라 모델 Y 주니퍼, BYD 시라이언 7, 현대 아이오닉 9 초기 결함 및 심각도 비교 표</caption>
             <thead className="bg-slate-900 text-slate-100 uppercase text-[11px] sm:text-xs tracking-wider">
@@ -227,7 +248,7 @@ export default function Latest2026Page() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="기아 EV3 보배드림 커뮤니티 결함 원문 (새 창에서 열림)"
-                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>보배드림</span>
                     <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -258,7 +279,7 @@ export default function Latest2026Page() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="더 뉴 아이오닉 5 페이스리프트 레딧 차주 ICCU 고장 인증글 (새 창에서 열림)"
-                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>레딧 인증</span>
                     <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -289,7 +310,7 @@ export default function Latest2026Page() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="테슬라 모델 Y 주니퍼 보배드림 문 열림 결함 보도 (새 창에서 열림)"
-                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>보배드림</span>
                     <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -320,7 +341,7 @@ export default function Latest2026Page() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="BYD 시라이언 7 보배드림 조기 녹 부식 현상 제보 (새 창에서 열림)"
-                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>보배드림</span>
                     <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -351,7 +372,7 @@ export default function Latest2026Page() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="현대 아이오닉 9 보배드림 배터리 결함 제보 (새 창에서 열림)"
-                    className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>보배드림</span>
                     <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -391,7 +412,7 @@ export default function Latest2026Page() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="기아 EV3 보배드림 커뮤니티 결함 원문 (새 창에서 열림)"
-                className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
               >
                 <span>보배드림 커뮤니티 원문</span>
                 <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -405,7 +426,7 @@ export default function Latest2026Page() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="기아 EV3 오토데일리 리콜 보도 기사 (새 창에서 열림)"
-                className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
               >
                 <span>오토데일리 기사</span>
                 <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -443,7 +464,7 @@ export default function Latest2026Page() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="더 뉴 아이오닉 5 페이스리프트 레딧 차주 ICCU 고장 인증글 (새 창에서 열림)"
-                className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
               >
                 <span>레딧 차주 인증</span>
                 <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -457,7 +478,7 @@ export default function Latest2026Page() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="더 뉴 아이오닉 5 보배드림 출력저하 후기 (새 창에서 열림)"
-                className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
               >
                 <span>보배드림 출력저하 후기</span>
                 <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -495,7 +516,7 @@ export default function Latest2026Page() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="테슬라 모델 Y 주니퍼 보배드림 문 열림 결함 보도 (새 창에서 열림)"
-                className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
               >
                 <span>보배드림 문 열림 결함 보도</span>
                 <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -509,7 +530,7 @@ export default function Latest2026Page() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="테슬라 모델 Y 주니퍼 보배드림 하부 소음 후기 (새 창에서 열림)"
-                className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
               >
                 <span>하부 소음 후기</span>
                 <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -547,7 +568,7 @@ export default function Latest2026Page() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="BYD 시라이언 7 보배드림 조기 녹 부식 현상 제보 (새 창에서 열림)"
-                className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
               >
                 <span>보배드림 조기 녹(부식) 현상</span>
                 <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -561,7 +582,7 @@ export default function Latest2026Page() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="BYD 시라이언 7 보배드림 충전기 호환성 문제 제보 (새 창에서 열림)"
-                className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
               >
                 <span>충전기 호환성 문제</span>
                 <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -599,7 +620,7 @@ export default function Latest2026Page() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="현대 아이오닉 9 보배드림 배터리 결함 제보 (새 창에서 열림)"
-                className="text-blue-700 hover:text-blue-800 hover:underline font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded inline-flex items-center gap-1 py-0.5"
+                className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
               >
                 <span>보배드림 아이오닉9 배터리 결함</span>
                 <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">

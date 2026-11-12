@@ -1,3 +1,7 @@
 'use client';
 
-export { default } from '@/app/depreciation-calculator/DepreciationCalculatorClient';
+export {
+  default,
+  getDefenseTierBadge,
+  getHealthGradeBadge,
+} from '@/app/depreciation-calculator/DepreciationCalculatorClient';

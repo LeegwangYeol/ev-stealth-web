@@ -47,15 +47,31 @@ VEHICLE_PATTERNS = COMMON_VEHICLE_PATTERNS
 class BlindScraper:
     """Scraper and parser for public Blind automotive topic posts and permalinks."""
 
-    def __init__(self, client: Optional[SafeHttpClient] = None, slang_path: Optional[str] = None):
+    def __init__(
+        self,
+        client: Optional[SafeHttpClient] = None,
+        slang_path: Optional[str] = None,
+        timeout: Union[float, Tuple[float, float]] = (5.0, 15.0),
+        connect_timeout: Optional[float] = None,
+        read_timeout: Optional[float] = None,
+    ):
         # Enforce polite delay with randomized jitter (1.5s - 3.5s) and cooldown
-        self.client = client or SafeHttpClient(min_delay=1.5, max_delay=3.5)
+        self.timeout = timeout
+        self.connect_timeout = connect_timeout or (timeout[0] if isinstance(timeout, (tuple, list)) and len(timeout) >= 2 else 5.0)
+        self.read_timeout = read_timeout or (timeout[1] if isinstance(timeout, (tuple, list)) and len(timeout) >= 2 else 15.0)
+        self.client = client or SafeHttpClient(
+            min_delay=1.5,
+            max_delay=3.5,
+            connect_timeout=self.connect_timeout,
+            read_timeout=self.read_timeout,
+        )
         self.min_delay = 1.5
         self.max_delay = 3.5
         self.slang_path = slang_path or os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "slang_dict.json"
         )
         self.slang_dict = self._load_slang_dict()
+        self.post_cache: Dict[str, Dict[str, Any]] = {}
         self._warmed_up = False
 
     def sleep_polite(self):
@@ -105,7 +121,8 @@ class BlindScraper:
             topic_url,
             method="GET",
             referer=BLIND_KR_URL,
-            encoding="utf-8"
+            encoding="utf-8",
+            timeout=self.timeout,
         )
 
         if status == 200 and text:
@@ -175,14 +192,21 @@ class BlindScraper:
             post_url,
             method="GET",
             referer=BLIND_AUTO_TOPIC_URL,
-            encoding="utf-8"
+            encoding="utf-8",
+            timeout=self.timeout,
         )
 
         if status != 200 or not text:
+            if post_url in self.post_cache:
+                logger.warning(f"Failed to fetch Blind post detail for {post_url}; falling back to cached post.")
+                return self.post_cache[post_url]
             logger.warning(f"Failed to fetch Blind post detail: {post_url}")
             return {}
 
-        return self.parse_post_detail(text, post_url)
+        detail = self.parse_post_detail(text, post_url)
+        if detail:
+            self.post_cache[post_url] = detail
+        return detail
 
     def parse_post_detail(self, html_content: str, post_url: str) -> Dict[str, Any]:
         """

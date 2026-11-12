@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, memo } from 'react';
+import React, { useMemo, memo, useSyncExternalStore } from 'react';
 
 export interface ClientTimestampProps {
   isoString?: string | null;
@@ -10,6 +10,19 @@ export interface ClientTimestampProps {
   fallback?: string;
   locale?: string;
   options?: Intl.DateTimeFormatOptions;
+}
+
+const emptySubscribe = () => () => {};
+const getClientSnapshot = () => true;
+const getServerSnapshot = () => false;
+
+/**
+ * Idiomatic React 18 hydration-safe hook for mounted state.
+ * Returns `false` on server and during initial hydration pass to match SSR markup,
+ * then cleanly synchronizes to `true` on client without extra setState or unmounted state leaks.
+ */
+export function useIsMounted(): boolean {
+  return useSyncExternalStore(emptySubscribe, getClientSnapshot, getServerSnapshot);
 }
 
 function areTimestampPropsEqual(
@@ -42,10 +55,9 @@ function areTimestampPropsEqual(
 
 /**
  * An isolated, memoized client component that formats an ISO timestamp string into `ko-KR` locale
- * safely after mounting (`useEffect`), returning an accessible `<time>` element with `dateTime`
+ * safely after mounting via `useSyncExternalStore`, returning an accessible `<time>` element with `dateTime`
  * attribute and fallback unformatted text before mounting.
- * This eliminates the need for parent components to hold a root `mounted` state and completely
- * prevents server-client hydration mismatches.
+ * This completely prevents server-client hydration mismatches and eliminates unmounted setState leaks.
  */
 function ClientTimestampBase({
   isoString,
@@ -56,17 +68,7 @@ function ClientTimestampBase({
   locale = 'ko-KR',
   options,
 }: ClientTimestampProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    let isCurrent = true;
-    if (isCurrent) {
-      setMounted(true);
-    }
-    return () => {
-      isCurrent = false;
-    };
-  }, []);
+  const mounted = useIsMounted();
 
   const effectiveIso = (isoString || timestamp || '').trim();
 
@@ -106,7 +108,7 @@ function ClientTimestampBase({
 
   return (
     <time
-      dateTime={validIso || (effectiveIso || undefined)}
+      dateTime={validIso || undefined}
       title={displayText}
       className={className}
       suppressHydrationWarning

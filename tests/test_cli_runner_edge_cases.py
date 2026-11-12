@@ -220,6 +220,24 @@ class TestCLIRunnerEdgeCases(unittest.TestCase):
         # Reset flag
         run_scraper._SHUTDOWN_REQUESTED = False
 
+    def test_run_tracker_signal_handling(self) -> None:
+        """Verify _signal_handler in run_tracker sets shutdown flag, raises KeyboardInterrupt on SIGINT and SystemExit on SIGTERM."""
+        import signal
+        run_tracker._SHUTDOWN_REQUESTED = False
+
+        # SIGINT raises KeyboardInterrupt
+        with self.assertRaises(KeyboardInterrupt):
+            run_tracker._signal_handler(signal.SIGINT, None)
+        self.assertTrue(run_tracker._SHUTDOWN_REQUESTED)
+
+        # SIGTERM raises SystemExit(143)
+        with self.assertRaises(SystemExit) as cm:
+            run_tracker._signal_handler(signal.SIGTERM, None)
+        self.assertEqual(cm.exception.code, 128 + signal.SIGTERM)
+
+        # Reset flag
+        run_tracker._SHUTDOWN_REQUESTED = False
+
     def test_run_scraper_repo_root_and_paths(self) -> None:
         """Verify _find_repo_root and path resolvers locate project data directories."""
         repo_root = run_scraper._find_repo_root()

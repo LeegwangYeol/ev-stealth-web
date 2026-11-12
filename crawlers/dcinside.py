@@ -315,8 +315,39 @@ class DCInsideCrawler(BaseCrawler):
     using e_s_n_o session tokens.
     """
 
-    def __init__(self, client: Optional[SafeHttpClient] = None):
-        super().__init__(client=client)
+    def __init__(
+        self,
+        client: Optional[SafeHttpClient] = None,
+        min_delay: float = 1.5,
+        max_delay: float = 3.5,
+        max_retries: int = 3,
+        timeout: Union[float, Tuple[float, float]] = 15.0,
+        connect_timeout: Optional[float] = None,
+        read_timeout: Optional[float] = None,
+        enable_cache: bool = True,
+        cache_fallback: bool = True,
+    ):
+        self.min_delay = min_delay
+        self.max_delay = max_delay
+        if client is None:
+            client = SafeHttpClient(
+                min_delay=min_delay,
+                max_delay=max_delay,
+                max_retries=max_retries,
+                timeout=timeout,
+                connect_timeout=connect_timeout,
+                read_timeout=read_timeout,
+                enable_cache=enable_cache,
+                cache_fallback=cache_fallback,
+            )
+        super().__init__(
+            client=client,
+            timeout=timeout,
+            connect_timeout=connect_timeout,
+            read_timeout=read_timeout,
+            enable_cache=enable_cache,
+            cache_fallback=cache_fallback,
+        )
 
     def is_deleted_or_restricted(self, html_content: Optional[str]) -> Tuple[bool, str]:
         """Proxy check for deleted, restricted, or blocked pages."""
@@ -1122,7 +1153,11 @@ class DCInsideCrawler(BaseCrawler):
             url = self.build_list_url(gallery_id, page=page)
             logger.info(f"Crawling DCInside [{gallery_id}] list (Page {page}): {url}")
             try:
-                resp = self.client.get(url, referer=f"{DC_BASE_URL}/")
+                resp = self.client.get(
+                    url,
+                    referer=f"{DC_BASE_URL}/",
+                    timeout=(self.connect_timeout, self.read_timeout),
+                )
                 if not resp or not isinstance(resp, (tuple, list)) or len(resp) < 2:
                     logger.warning(f"Failed to fetch list for DC [{gallery_id}] page {page}")
                     break
@@ -1202,7 +1237,11 @@ class DCInsideCrawler(BaseCrawler):
             url = self.build_search_url(gallery_id, keyword, page=page)
             logger.info(f"Searching DCInside [{gallery_id}] for '{keyword}' (Page {page}): {url}")
             try:
-                resp = self.client.get(url, referer=f"{DC_BASE_URL}/")
+                resp = self.client.get(
+                    url,
+                    referer=f"{DC_BASE_URL}/",
+                    timeout=(self.connect_timeout, self.read_timeout),
+                )
                 if not resp or not isinstance(resp, (tuple, list)) or len(resp) < 2:
                     logger.warning(f"Search request failed for DC [{gallery_id}] keyword '{keyword}' page {page}")
                     break

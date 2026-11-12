@@ -1,11 +1,24 @@
 """Models package for EV Daily Monitor Bot."""
 
 from models.complaint import (
-    RawPost,
-    ComplaintRecord,
-    DailyReportStatistics,
-    DailyReportPayload,
+    CANONICAL_CATEGORIES,
+    CATEGORY_ALIASES,
     DEFECT_CATEGORY_KO_MAP,
+    VALID_BRANDS,
+    VALID_SEVERITY_LEVELS,
+    ComplaintRecord,
+    DSIBreakdown,
+    DailyReportPayload,
+    DailyReportStatistics,
+    RawPost,
+    normalize_category,
+    normalize_severity,
+    parse_date_str,
+    quarantine_entry,
+    sanitize_string,
+    validate_category,
+    validate_report_entry,
+    validate_severity,
 )
 from models.defect_report import DefectReport
 
@@ -16,4 +29,17 @@ __all__ = [
     "DailyReportPayload",
     "DEFECT_CATEGORY_KO_MAP",
     "DefectReport",
+    "DSIBreakdown",
+    "CANONICAL_CATEGORIES",
+    "CATEGORY_ALIASES",
+    "VALID_BRANDS",
+    "VALID_SEVERITY_LEVELS",
+    "validate_category",
+    "normalize_category",
+    "validate_severity",
+    "normalize_severity",
+    "parse_date_str",
+    "validate_report_entry",
+    "quarantine_entry",
+    "sanitize_string",
 ]

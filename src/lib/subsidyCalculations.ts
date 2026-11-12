@@ -11,11 +11,15 @@ import type {
   AlertThresholdConfig,
   CategoryMetrics,
   RegionEntry,
+  RegionTier,
   PopularModelEntry,
   EVSubsidyDataset,
   SubsidyCalculationResult,
   SubsidyCalculatorOptions,
   MunicipalityMetrics,
+  SubsidyStatistics,
+  CriticalRegionInfo,
+  CategoryBreakdownMetrics,
 } from '../types/subsidy.ts';
 
 export type {
@@ -23,11 +27,15 @@ export type {
   AlertThresholdConfig,
   CategoryMetrics,
   RegionEntry,
+  RegionTier,
   PopularModelEntry,
   EVSubsidyDataset,
   SubsidyCalculationResult,
   SubsidyCalculatorOptions,
   MunicipalityMetrics,
+  SubsidyStatistics,
+  CriticalRegionInfo,
+  CategoryBreakdownMetrics,
 };
 
 // ==========================================
@@ -1085,12 +1093,13 @@ export function calculateNetSubsidyPure(
     : calculateRemainingUnits(catApplied, catAnnounced);
 
   let warningNotice: string | undefined;
+  const safeRemainingUnits = Number.isFinite(remainingUnits) ? remainingUnits : 0;
   if (depletionRate >= 95.0) {
     warningNotice = `🚨 ${safeRegion.name_ko}의 승용 보조금 소진율이 ${depletionRate}%로 선착순 마감 직전입니다! 즉시 출고 가능 실재고 매칭이 필요합니다.`;
   } else if (depletionRate >= 80.0) {
     warningNotice = `⚠️ ${safeRegion.name_ko}의 승용 보조금 소진율이 ${depletionRate}%에 달해 조기 마감 위험이 높습니다.`;
   } else {
-    warningNotice = `✅ ${safeRegion.name_ko}의 보조금 잔여량이 비교적 여유롭습니다 (${remainingUnits.toLocaleString()}대 잔여).`;
+    warningNotice = `✅ ${safeRegion.name_ko}의 보조금 잔여량이 비교적 여유롭습니다 (${safeRemainingUnits.toLocaleString()}대 잔여).`;
   }
 
   return {
@@ -1121,28 +1130,6 @@ export function calculateNetSubsidyPure(
 // ==========================================
 // 6. STATISTICAL AGGREGATION UTILITIES
 // ==========================================
-
-export interface SubsidyStatistics {
-  totalAnnouncedUnits: number;
-  totalAppliedUnits: number;
-  totalDeliveredUnits: number;
-  totalRemainingUnits: number;
-  nationalDepletionRate: number;
-  deliveryRate: number;
-  budgetTotalBillionKrw: number;
-  budgetDisbursedBillionKrw: number;
-  budgetExecutionRatePct: number;
-  criticalRegionsCount: number;
-  criticalRegions: Array<{ regionId: string; nameKo: string; depletionRate: number; remainingUnits: number }>;
-  warningRegionsCount: number;
-  cautionRegionsCount: number;
-  healthyRegionsCount: number;
-  categoryBreakdown: {
-    passenger: { announced: number; applied: number; remaining: number; rate: number };
-    commercial: { announced: number; applied: number; remaining: number; rate: number };
-    bus: { announced: number; applied: number; remaining: number; rate: number };
-  };
-}
 
 /**
  * Pure calculation of nationwide subsidy statistics from an EVSubsidyDataset.

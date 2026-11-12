@@ -13,8 +13,10 @@ import html
 import json
 import logging
 import os
+import random
 import re
 import sys
+import time
 import urllib.parse
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -51,15 +53,31 @@ VEHICLE_PATTERNS = COMMON_VEHICLE_PATTERNS
 class CafeForumMiner:
     """Miner and normalizer for Pomppu, Clien, Naver EV Cafes, and YouTube Automotive Channels."""
 
-    def __init__(self, client: Optional[SafeHttpClient] = None, slang_path: Optional[str] = None):
+    def __init__(
+        self,
+        client: Optional[SafeHttpClient] = None,
+        slang_path: Optional[str] = None,
+        timeout: Union[float, Tuple[float, float]] = (5.0, 15.0),
+        connect_timeout: Optional[float] = None,
+        read_timeout: Optional[float] = None,
+    ):
         # Enforce polite delay with randomized jitter (1.5s - 3.5s) and cooldown
-        self.client = client or SafeHttpClient(min_delay=1.5, max_delay=3.5)
+        self.timeout = timeout
+        self.connect_timeout = connect_timeout or (timeout[0] if isinstance(timeout, (tuple, list)) and len(timeout) >= 2 else 5.0)
+        self.read_timeout = read_timeout or (timeout[1] if isinstance(timeout, (tuple, list)) and len(timeout) >= 2 else 15.0)
+        self.client = client or SafeHttpClient(
+            min_delay=1.5,
+            max_delay=3.5,
+            connect_timeout=self.connect_timeout,
+            read_timeout=self.read_timeout,
+        )
         self.min_delay = 1.5
         self.max_delay = 3.5
         self.slang_path = slang_path or os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "slang_dict.json"
         )
         self.slang_dict = self._load_slang_dict()
+        self.post_cache: Dict[str, Dict[str, Any]] = {}
 
     def sleep_polite(self):
         """Randomized sleep with jitter between requests."""
@@ -94,7 +112,8 @@ class CafeForumMiner:
                 search_url,
                 method="GET",
                 referer=f"{POMPPU_BASE_URL}/",
-                encoding="euc-kr"
+                encoding="euc-kr",
+                timeout=self.timeout,
             )
 
             if status != 200 or not text:
@@ -139,7 +158,8 @@ class CafeForumMiner:
                 search_url,
                 method="GET",
                 referer=f"{CLIEN_BASE_URL}/",
-                encoding="utf-8"
+                encoding="utf-8",
+                timeout=self.timeout,
             )
 
             if status != 200 or not text:

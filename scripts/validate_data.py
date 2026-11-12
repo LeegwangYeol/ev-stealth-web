@@ -20,6 +20,7 @@ import shutil
 import sys
 import tempfile
 from typing import Any, Dict, List, Optional, Tuple, Union
+import uuid
 
 def _find_repo_root() -> Path:
     candidates = [
@@ -645,15 +646,17 @@ def validate_data_parity(
             for label, d in dirs_to_check:
                 fp = d / fname
                 if not fp.exists() or hashes.get(label) != auth_hash:
+                    tmp_repair = None
                     try:
                         d.mkdir(parents=True, exist_ok=True)
-                        tmp_repair = d / f".tmp_repair_{fname}_{os.getpid()}"
+                        tmp_repair = d / f".tmp_repair_{fname}_{os.getpid()}_{uuid.uuid4().hex[:8]}"
                         with open(authoritative_path, "rb") as sf, open(tmp_repair, "wb") as df:
                             shutil.copyfileobj(sf, df)
                             df.flush()
                             os.fsync(df.fileno())
                         os.chmod(tmp_repair, 0o644)
                         os.replace(tmp_repair, fp)
+                        tmp_repair = None
                         hashes[label] = auth_hash
                         # Clear matching errors for this repaired file
                         errors = [
@@ -663,6 +666,12 @@ def validate_data_parity(
                         logger.info("Repaired parity for %s in %s", fname, label)
                     except Exception as re_exc:
                         errors.append(f"Failed to repair parity for '{fname}' in {label}: {re_exc}")
+                    finally:
+                        if tmp_repair and tmp_repair.exists():
+                            try:
+                                tmp_repair.unlink(missing_ok=True)
+                            except OSError:
+                                pass
 
         stats["checked_files"][fname] = hashes
         unique_hashes = set(hashes.values())
@@ -831,8 +840,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.output:
             out_path = Path(args.output)
             out_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(out_path, "w", encoding="utf-8") as f:
-                json.dump(result_payload, f, indent=2, ensure_ascii=False)
+            from tracker.atomic_writer import atomic_write_json
+            atomic_write_json(
+                result_payload,
+                out_path,
+                indent=2,
+                ensure_ascii=False,
+                mode=0o644,
+                temp_prefix=".tmp_val_rep_",
+            )
             logger.info("Validation report written to: %s", out_path)
 
         # Output formatting

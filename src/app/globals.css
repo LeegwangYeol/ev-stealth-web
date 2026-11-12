@@ -7,8 +7,21 @@
   --foreground: #0f172a;
 }
 
+.dark,
+[data-theme="dark"] {
+  --background: #020617;
+  --foreground: #f8fafc;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not(.light) {
+    --background: #020617;
+    --foreground: #f8fafc;
+  }
+}
+
 html {
-  overflow-x: clip;
+  overflow-x: hidden;
   scrollbar-gutter: stable;
 }
 
@@ -27,7 +40,7 @@ body {
   font-optical-sizing: auto;
   word-break: keep-all;
   overflow-wrap: break-word;
-  overflow-x: clip;
+  overflow-x: hidden;
   min-height: 100vh;
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
@@ -79,6 +92,35 @@ p, th, td, label, button, a {
     color: #e2e8f0;
   }
 
+  /* Accessible muted foreground utility guaranteeing WCAG AA (>= 4.5:1 on light/dark) */
+  .text-muted,
+  .text-muted-foreground {
+    color: #475569; /* slate-600: 7.24:1 against slate-50 light background */
+  }
+  .dark .text-muted,
+  [data-theme="dark"] .text-muted,
+  .bg-slate-900 .text-muted,
+  .bg-slate-950 .text-muted,
+  .dark .text-muted-foreground,
+  [data-theme="dark"] .text-muted-foreground,
+  .bg-slate-900 .text-muted-foreground,
+  .bg-slate-950 .text-muted-foreground {
+    color: #cbd5e1; /* slate-300: 12.02:1 against slate-900, 13.59:1 against slate-950 */
+  }
+
+  /* Dark background guard: elevate low-contrast slate-500 (3.75:1) to accessible slate-300 (12:1) */
+  .bg-slate-900 .text-slate-500,
+  .bg-slate-950 .text-slate-500 {
+    color: #cbd5e1;
+  }
+
+  /* Light background guard: elevate low-contrast slate-400 (2.45:1) to accessible slate-600 (7.24:1) */
+  .bg-slate-50 .text-slate-400,
+  .bg-slate-100 .text-slate-400,
+  .bg-white .text-slate-400 {
+    color: #475569;
+  }
+
   /* Accessible border ensuring WCAG 1.4.11 Non-text contrast (3:1 minimum) */
   .border-contrast-accessible {
     border-color: #64748b;
@@ -95,9 +137,46 @@ p, th, td, label, button, a {
     min-width: 44px;
     min-height: 44px;
   }
+
+  /* Smooth mobile table and chart horizontal scrolling with touch momentum (WCAG 2.5.8 / Mobile UX) */
+  .table-scroll-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+
+  /* Visible scrollbar cues for mobile & desktop table containers */
+  .table-scroll-container::-webkit-scrollbar {
+    height: 6px;
+  }
+  .table-scroll-container::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.08);
+    border-radius: 9999px;
+  }
+  .table-scroll-container::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, 0.5);
+    border-radius: 9999px;
+  }
+  .dark .table-scroll-container::-webkit-scrollbar-track,
+  .bg-slate-950 .table-scroll-container::-webkit-scrollbar-track,
+  .bg-slate-900 .table-scroll-container::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.6);
+  }
+  .dark .table-scroll-container::-webkit-scrollbar-thumb,
+  .bg-slate-950 .table-scroll-container::-webkit-scrollbar-thumb,
+  .bg-slate-900 .table-scroll-container::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.4);
+  }
 }
 
 @layer base {
+  /* Ensure mobile touch targets for range slider controls meet WCAG 2.5.5 / 2.5.8 */
+  input[type="range"] {
+    min-height: 38px;
+    touch-action: pan-y;
+  }
+
   /* Suppress default outline on pointer clicks while preserving keyboard focus */
   :focus:not(:focus-visible) {
     outline: none;

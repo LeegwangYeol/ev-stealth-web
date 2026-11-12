@@ -34,15 +34,22 @@ from tracker.defect_tracker import DefectTracker
 from tracker.report_generator import ReportGenerator, format_currency_krw, format_percentage
 from tracker.subsidy_tracker import (
     SubsidyTracker,
+    calculate_delivery_rate,
     calculate_depletion_rate,
+    calculate_depletion_velocity,
     calculate_net_subsidy,
+    calculate_pending_deliveries,
     calculate_price_cap_ratio,
     calculate_remaining_units,
+    calculate_waitlist_units,
     classify_alert_tier,
+    classify_region_group,
     get_baseline_dataset,
     get_baseline_models,
     get_baseline_regions,
     get_baseline_thresholds,
+    predict_exhaustion_date,
+    predict_exhaustion_days,
 )
 
 __all__ = [
@@ -87,7 +94,14 @@ __all__ = [
     # Calculation & Logic Functions
     "calculate_depletion_rate",
     "calculate_remaining_units",
+    "calculate_waitlist_units",
+    "calculate_delivery_rate",
+    "calculate_pending_deliveries",
+    "calculate_depletion_velocity",
+    "predict_exhaustion_days",
+    "predict_exhaustion_date",
     "classify_alert_tier",
+    "classify_region_group",
     "calculate_price_cap_ratio",
     "calculate_net_subsidy",
 ]

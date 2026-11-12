@@ -24,12 +24,65 @@ class BaseCrawler(abc.ABC):
     def __init__(
         self,
         client: Optional[SafeHttpClient] = None,
-        timeout: float = 15.0,
+        timeout: Union[float, Tuple[float, float]] = 15.0,
+        connect_timeout: Optional[float] = None,
+        read_timeout: Optional[float] = None,
         base_url: Optional[str] = None,
+        enable_cache: bool = True,
+        cache_fallback: bool = True,
     ):
         self._owns_client = client is None
-        self.default_timeout = float(timeout) if timeout is not None and timeout > 0 else 15.0
-        self.client = client or SafeHttpClient(timeout=self.default_timeout)
+        self.enable_cache = enable_cache
+        self.cache_fallback = cache_fallback
+        self._post_cache: Dict[str, Dict[str, Any]] = {}
+
+        # Resolve explicit connect and read timeouts
+        if connect_timeout is not None:
+            try:
+                self._connect_timeout = float(connect_timeout)
+            except (ValueError, TypeError):
+                self._connect_timeout = 5.0
+        elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
+            try:
+                self._connect_timeout = float(timeout[0])
+            except (ValueError, TypeError):
+                self._connect_timeout = 5.0
+        elif isinstance(timeout, (int, float)) and timeout > 0 and (timeout != 15.0 or client is None):
+            self._connect_timeout = min(5.0, float(timeout))
+        elif client is not None and hasattr(client, "connect_timeout") and isinstance(getattr(client, "connect_timeout", None), (int, float)):
+            self._connect_timeout = float(client.connect_timeout)
+        elif isinstance(timeout, (int, float)) and timeout > 0:
+            self._connect_timeout = min(5.0, float(timeout))
+        else:
+            self._connect_timeout = 5.0
+
+        if read_timeout is not None:
+            try:
+                self._read_timeout = float(read_timeout)
+            except (ValueError, TypeError):
+                self._read_timeout = 15.0
+        elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
+            try:
+                self._read_timeout = float(timeout[1])
+            except (ValueError, TypeError):
+                self._read_timeout = 15.0
+        elif isinstance(timeout, (int, float)) and timeout > 0 and (timeout != 15.0 or client is None):
+            self._read_timeout = float(timeout)
+        elif client is not None and hasattr(client, "read_timeout") and isinstance(getattr(client, "read_timeout", None), (int, float)):
+            self._read_timeout = float(client.read_timeout)
+        elif isinstance(timeout, (int, float)) and timeout > 0:
+            self._read_timeout = float(timeout)
+        else:
+            self._read_timeout = 15.0
+
+        self.default_timeout = self._read_timeout
+        self.client = client or SafeHttpClient(
+            timeout=(self._connect_timeout, self._read_timeout),
+            connect_timeout=self._connect_timeout,
+            read_timeout=self._read_timeout,
+            enable_cache=self.enable_cache,
+            cache_fallback=self.cache_fallback,
+        )
         self.base_url: Optional[str] = base_url or getattr(self, "base_url", None)
         self._warmed_up = False
 
@@ -37,6 +90,26 @@ class BaseCrawler(abc.ABC):
     def timeout(self) -> float:
         """Default network timeout for crawler requests."""
         return self.default_timeout
+
+    @property
+    def connect_timeout(self) -> float:
+        """Connect timeout in seconds."""
+        return self._connect_timeout
+
+    @property
+    def read_timeout(self) -> float:
+        """Read timeout in seconds."""
+        return self._read_timeout
+
+    def get_cached_post(self, post_url: str) -> Optional[Dict[str, Any]]:
+        """Retrieve cached post detail if present."""
+        if not post_url or not isinstance(post_url, str):
+            return None
+        return self._post_cache.get(post_url.strip())
+
+    def clear_post_cache(self) -> None:
+        """Clear cached post details."""
+        self._post_cache.clear()
 
     @property
     def is_warmed_up(self) -> bool:
@@ -185,23 +258,40 @@ class BaseCrawler(abc.ABC):
             logger.warning(f"No HTTP client configured on {self.__class__.__name__}")
             return None
 
-        timeout = kwargs.get("timeout", getattr(self, "default_timeout", getattr(self.client, "timeout", 15.0)))
+        timeout = kwargs.get(
+            "timeout",
+            (
+                kwargs.get("connect_timeout", getattr(self, "connect_timeout", 5.0)),
+                kwargs.get("read_timeout", getattr(self, "read_timeout", 15.0)),
+            ),
+        )
         try:
             resp = self.client.get(eff_url, referer=referer, timeout=timeout)
             if not resp or not isinstance(resp, (tuple, list)) or len(resp) < 2:
                 logger.warning(f"Failed to fetch post: {eff_url} (empty or invalid response)")
+                if self.cache_fallback and eff_url in self._post_cache:
+                    logger.warning(f"Falling back to cached post detail for {eff_url}")
+                    return self._post_cache[eff_url]
                 return None
             status, text = resp[0], resp[1]
         except Exception as e:
             logger.warning(f"Network error fetching post {eff_url}: {e}")
+            if self.cache_fallback and eff_url in self._post_cache:
+                logger.warning(f"Falling back to cached post detail for {eff_url}")
+                return self._post_cache[eff_url]
             return None
 
         if status == 429:
             logger.warning(f"Rate-limited (HTTP 429) fetching post {eff_url}. Degrading gracefully.")
+            if self.cache_fallback and eff_url in self._post_cache:
+                return self._post_cache[eff_url]
             return None
 
         if status != 200 or not text:
             logger.warning(f"Failed to fetch post: {eff_url} (status: {status})")
+            if self.cache_fallback and eff_url in self._post_cache:
+                logger.warning(f"Falling back to cached post detail for {eff_url}")
+                return self._post_cache[eff_url]
             return None
 
         try:
@@ -225,9 +315,13 @@ class BaseCrawler(abc.ABC):
                 )
             ):
                 return None
+            if self.enable_cache:
+                self._post_cache[eff_url] = detail
             return detail
         except Exception as e:
             logger.warning(
                 f"Error parsing post detail for {eff_url} on corrupt HTML: {e}"
             )
+            if self.cache_fallback and eff_url in self._post_cache:
+                return self._post_cache[eff_url]
             return None

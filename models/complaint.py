@@ -8,10 +8,11 @@ Authoritative source:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+import json
 import math
 import re
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 import unicodedata
 
 
@@ -200,6 +201,44 @@ def _safe_clamp(val: Any, min_val: float = -1.0, max_val: float = 1.0, default: 
     return f
 
 
+# Pre-compiled regex for stripping invalid characters: null bytes, non-printable control chars,
+# Trojan Source / Unicode BiDi overrides, unpaired surrogates, BOM, and Unicode non-characters.
+RE_INVALID_CHARS: re.Pattern[str] = re.compile(
+    r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u202a-\u202e\u2066-\u2069\ud800-\udfff\ufeff\ufffe\uffff]"
+)
+
+
+def sanitize_string(val: Any, max_len: int = 50_000) -> str:
+    """Safely coerces input to str, strips null bytes, control chars, BiDi overrides & surrogates,
+    normalizes NFC, and caps length.
+
+    Immune to ReDoS, database insert crash, surrogate encoding error, and memory exhaustion.
+    """
+    if val is None or val is False:
+        return ""
+    if isinstance(val, (bytes, bytearray)):
+        try:
+            val_str = val.decode("utf-8", errors="replace")
+        except Exception:
+            val_str = str(val)
+    elif isinstance(val, str):
+        val_str = val
+    else:
+        try:
+            val_str = str(val)
+        except Exception:
+            return ""
+
+    if not val_str:
+        return ""
+
+    val_str = RE_INVALID_CHARS.sub("", val_str)
+    val_str = val_str.strip()
+    if len(val_str) > max_len:
+        val_str = val_str[:max_len]
+    return unicodedata.normalize("NFC", val_str)
+
+
 # Pre-compiled date parsing regular expressions for high-throughput batch evaluation
 _RE_DATE_KR_4: re.Pattern[str] = re.compile(r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?")
 _RE_DATE_KR_2: re.Pattern[str] = re.compile(r"(?:^|[^\d])(\d{2})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?")
@@ -219,7 +258,7 @@ def parse_date_str(created_at: Any) -> str:
 
     Guarantees calendar validity and never raises uncaught exceptions.
     Handles ISO 8601, Korean formats (4-digit and 2-digit years), dotted (with trailing dot),
-    slashed, compacted (8-digit and 6-digit), and Unix epoch timestamps.
+    slashed, compacted (8-digit and 6-digit), relative Korean dates, and Unix epoch timestamps.
     """
     today_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     if created_at is None:
@@ -258,9 +297,17 @@ def parse_date_str(created_at: Any) -> str:
         except (ValueError, OverflowError, OSError):
             pass
 
-    s = str(created_at).strip()[:128]
+    s = sanitize_string(created_at, max_len=128)
     if not s:
         return today_iso
+
+    # Relative Korean date keywords and time-only stamps
+    if s in ("오늘", "방금") or re.match(r"^\d{1,2}:\d{2}(?::\d{2})?$", s):
+        return today_iso
+    if s == "어제":
+        return (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+    if s in ("그제", "그저께"):
+        return (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%d")
 
     current_year = datetime.now(timezone.utc).year
 
@@ -366,36 +413,28 @@ class RawPost:
         source: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
-        self.platform = unicodedata.normalize("NFC", str(source or platform or "unknown").replace("\x00", "").strip())
-        self.post_id = str(id if id is not None else (post_id if post_id is not None else "")).replace("\x00", "").strip()
-        self.url = str(url or "").replace("\x00", "").strip()[:2048]
-
-        raw_title = str(title or "").replace("\x00", "").strip()
-        if len(raw_title) > 10_000:
-            raw_title = raw_title[:10_000]
-        self.title = unicodedata.normalize("NFC", raw_title)
-
-        raw_content = str(content or "").replace("\x00", "").strip()
-        if len(raw_content) > 100_000:
-            raw_content = raw_content[:100_000]
-        self.content = unicodedata.normalize("NFC", raw_content)
+        self.platform = sanitize_string(str(source or platform or "unknown"), max_len=256)
+        self.post_id = sanitize_string(str(id if id is not None else (post_id if post_id is not None else "")), max_len=256)
+        self.url = sanitize_string(url, max_len=2048)
+        self.title = sanitize_string(title, max_len=10_000)
+        self.content = sanitize_string(content, max_len=100_000)
 
         if isinstance(comments, str):
-            c_clean = unicodedata.normalize("NFC", comments.replace("\x00", "")[:10_000].strip())
+            c_clean = sanitize_string(comments, max_len=10_000)
             self.comments = [c_clean] if c_clean else []
         elif isinstance(comments, (list, tuple, set)):
             safe_c: List[str] = []
             for c in comments:
                 if c is not None:
-                    c_clean = unicodedata.normalize("NFC", str(c).replace("\x00", "")[:10_000].strip())
+                    c_clean = sanitize_string(c, max_len=10_000)
                     if c_clean:
                         safe_c.append(c_clean)
             self.comments = safe_c
         else:
             self.comments = []
 
-        self.created_at = str(created_at or "").replace("\x00", "").strip()[:128]
-        self.author = unicodedata.normalize("NFC", str(author or "").replace("\x00", "").strip()[:256])
+        self.created_at = sanitize_string(created_at, max_len=128)
+        self.author = sanitize_string(author, max_len=256)
 
     @property
     def id(self) -> str:
@@ -459,6 +498,15 @@ class RawPost:
     def from_dict(cls, data: Any) -> RawPost:
         if isinstance(data, cls):
             return data
+        if isinstance(data, (str, bytes, bytearray)):
+            try:
+                parsed = json.loads(data)
+                if isinstance(parsed, dict):
+                    data = parsed
+                else:
+                    return cls()
+            except Exception:
+                return cls()
         if data is None or not isinstance(data, (dict, object)) or isinstance(data, (int, float, bool, list, tuple, set, str, bytes)):
             return cls()
         def _get(k: str, default: Any = "") -> Any:
@@ -559,6 +607,90 @@ class DSIBreakdown:
         return None
 
 
+def validate_report_entry(entry: Any, strict: bool = False) -> Tuple[bool, str]:
+    """Strictly validates a defect report entry dictionary or record object against schema contracts.
+
+    Returns:
+        (is_valid: bool, reason: str)
+    """
+    if entry is None:
+        return False, "Entry is None"
+    if not isinstance(entry, (dict, object)) or isinstance(entry, (int, float, bool, list, tuple, set, str, bytes)):
+        return False, f"Invalid entry type: {type(entry).__name__}, expected dict or mapping"
+
+    def _get(k: str, default: Any = None) -> Any:
+        if isinstance(entry, dict):
+            return entry.get(k, default)
+        return getattr(entry, k, default)
+
+    # 1. Identifier validation (must have non-empty id or post_id)
+    raw_id = _get("id")
+    if raw_id is None or not str(raw_id).strip():
+        raw_id = _get("post_id")
+    if raw_id is None or not str(raw_id).strip():
+        return False, "Missing or empty required field: 'id'"
+
+    # 2. Content validation (must have title, summary, quote, or content)
+    has_text = any(
+        _get(k) is not None and str(_get(k)).strip() != ""
+        for k in ("title", "post_title", "summary", "verbatim_quote", "raw_quote", "content")
+    )
+    if not has_text:
+        return False, "Missing required content: title, summary, or quote cannot all be empty"
+
+    # 3. Numeric bounds validation (no NaN or Inf allowed)
+    for num_key, min_val, max_val in (
+        ("sentiment_polarity", -1.0, 1.0),
+        ("sentiment_score", 0.0, 1.0),
+        ("negativity_score", 0.0, 1.0),
+        ("severity_index", 0.0, 100.0),
+        ("confidence_score", 0.0, 1.0),
+    ):
+        v = _get(num_key)
+        if v is not None:
+            try:
+                fv = float(v)
+                if math.isnan(fv) or math.isinf(fv):
+                    if strict:
+                        return False, f"Numeric field '{num_key}' cannot be NaN or Inf"
+                elif strict and (fv < min_val or fv > max_val):
+                    return False, f"Numeric field '{num_key}' value {fv} out of bounds [{min_val}, {max_val}]"
+            except (ValueError, TypeError, OverflowError):
+                if strict:
+                    return False, f"Non-numeric value for numeric field '{num_key}'"
+
+    # 4. Defect category check if strict=True
+    if strict:
+        cat = _get("defect_category") or _get("category")
+        if cat is not None and str(cat).strip():
+            s_cat = str(cat).strip().upper()
+            if not validate_category(s_cat) and s_cat not in CATEGORY_ALIASES and str(cat).strip() not in CATEGORY_ALIASES:
+                return False, f"Invalid defect_category: '{cat}'"
+
+    return True, ""
+
+
+def quarantine_entry(entry: Any, reason: str = "") -> Dict[str, Any]:
+    """Wraps an invalid report entry into a quarantined record container."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if isinstance(entry, dict):
+        raw_data = dict(entry)
+    elif hasattr(entry, "to_dict") and callable(entry.to_dict):
+        raw_data = entry.to_dict()
+    else:
+        raw_data = {"raw_payload": str(entry)}
+
+    res_reason = reason or "Failed schema validation"
+    return {
+        "quarantine_id": f"quarantine_{int(datetime.now(timezone.utc).timestamp() * 1000)}",
+        "entry": raw_data,
+        "reason": res_reason,
+        "quarantine_reason": res_reason,
+        "quarantined_at": now_iso,
+        "is_quarantined": True,
+    }
+
+
 @dataclass
 class ComplaintRecord:
     """Classified & filtered defect complaint record."""
@@ -584,29 +716,35 @@ class ComplaintRecord:
     confidence_score: float = 0.0
 
     def __post_init__(self) -> None:
-        """Sanitize default factory values, ensure copy resilience, and clamp sentiment bounds."""
+        """Sanitize default factory values, ensure copy resilience, clean corrupted chars, and clamp sentiment bounds."""
         if self.slang_terms_detected is None:
             self.slang_terms_detected = []
         elif not isinstance(self.slang_terms_detected, list):
-            self.slang_terms_detected = list(self.slang_terms_detected)
+            self.slang_terms_detected = [sanitize_string(s, 256) for s in self.slang_terms_detected if s is not None]
+        else:
+            self.slang_terms_detected = [sanitize_string(s, 256) for s in self.slang_terms_detected if s is not None]
 
-        # Sanitize text fields from null bytes and normalize NFC Unicode
-        if self.title:
-            self.title = unicodedata.normalize("NFC", str(self.title).replace("\x00", ""))
-        if self.summary:
-            self.summary = unicodedata.normalize("NFC", str(self.summary).replace("\x00", ""))
-        if self.verbatim_quote:
-            self.verbatim_quote = unicodedata.normalize("NFC", str(self.verbatim_quote).replace("\x00", ""))
-        if self.filter_reason:
-            self.filter_reason = unicodedata.normalize("NFC", str(self.filter_reason).replace("\x00", ""))
+        # Sanitize text fields from null bytes, control chars, BiDi overrides, and surrogates
+        self.id = sanitize_string(self.id, 256)
+        self.source = sanitize_string(self.source, 256)
+        self.url = sanitize_string(self.url, 2048)
+        self.title = sanitize_string(self.title, 10_000)
+        self.author = sanitize_string(self.author, 256)
+        self.created_at = sanitize_string(self.created_at, 128)
+        self.vehicle_brand = sanitize_string(self.vehicle_brand, 256)
+        self.vehicle_model = sanitize_string(self.vehicle_model, 256)
+        self.defect_category = sanitize_string(self.defect_category, 256)
+        self.summary = sanitize_string(self.summary, 10_000)
+        self.verbatim_quote = sanitize_string(self.verbatim_quote, 50_000)
+        self.filter_reason = sanitize_string(self.filter_reason, 10_000)
+        if self.severity is not None:
+            self.severity = sanitize_string(self.severity, 64)
 
-        if self.sentiment_polarity is not None:
-            try:
-                p = float(self.sentiment_polarity)
-                if not (math.isnan(p) or math.isinf(p)):
-                    self.sentiment_polarity = max(-1.0, min(1.0, p))
-            except (ValueError, TypeError, OverflowError):
-                pass
+        # Clamp and sanitize numeric bounds
+        self.sentiment_polarity = _safe_round(_safe_clamp(self.sentiment_polarity, -1.0, 1.0, 0.0), 4)
+        self.negativity_score = _safe_round(_safe_clamp(self.negativity_score, 0.0, 1.0, 0.0), 4)
+        self.severity_index = _safe_round(_safe_clamp(self.severity_index, 0.0, 100.0, 0.0), 2)
+        self.confidence_score = _safe_round(_safe_clamp(self.confidence_score, 0.0, 1.0, 0.0), 4)
 
     @property
     def defect_category_ko(self) -> str:
@@ -736,11 +874,53 @@ class ComplaintRecord:
             res["dsi_breakdown"] = self.dsi_breakdown.to_dict()
         return res
 
+    def validate(self, strict: bool = True) -> Tuple[bool, str]:
+        """Validate this ComplaintRecord instance against schema contracts."""
+        return validate_report_entry(self, strict=strict)
+
     @classmethod
-    def from_dict(cls, data: Any) -> ComplaintRecord:
+    def from_dict(
+        cls,
+        data: Any,
+        strict: bool = False,
+        quarantine: bool = False,
+    ) -> ComplaintRecord:
         """Construct ComplaintRecord from dict or ComplaintRecord instance with aliases and fallbacks."""
         if isinstance(data, cls):
             return data
+
+        if isinstance(data, (str, bytes, bytearray)):
+            try:
+                parsed = json.loads(data)
+                if isinstance(parsed, dict):
+                    data = parsed
+            except Exception as e:
+                if strict:
+                    raise ValueError(f"Failed to parse JSON string: {e}") from e
+                data = {}
+
+        if not isinstance(data, (dict, object)) or data is None or isinstance(data, (int, float, bool, list, tuple, set, str, bytes)):
+            data = {}
+
+        if strict or quarantine:
+            is_valid, reason = validate_report_entry(data, strict=True)
+            if not is_valid:
+                if strict:
+                    raise ValueError(f"Strict validation failed: {reason}")
+                rec = cls._from_dict_internal(data)
+                rec.is_authentic_defect = False
+                rec.filter_reason = f"QUARANTINED: {reason}"
+                return rec
+
+        return cls._from_dict_internal(data)
+
+    @classmethod
+    def from_json(cls, json_str: Union[str, bytes], **kwargs: Any) -> ComplaintRecord:
+        """Parse raw JSON string safely into ComplaintRecord with strict or quarantine options."""
+        return cls.from_dict(json_str, **kwargs)
+
+    @classmethod
+    def _from_dict_internal(cls, data: Any) -> ComplaintRecord:
         if not isinstance(data, (dict, object)) or data is None or isinstance(data, (int, float, bool, list, tuple, set, str, bytes)):
             data = {}
 
@@ -1151,7 +1331,10 @@ def _serialize_report_entry(r: Any) -> Dict[str, Any]:
     if hasattr(r, "to_dict") and callable(r.to_dict):
         return r.to_dict()
     if isinstance(r, dict):
-        return dict(r)
+        return {
+            k: sanitize_string(v) if isinstance(v, str) else v
+            for k, v in r.items()
+        }
     return {}
 
 
@@ -1164,6 +1347,16 @@ class DailyReportPayload:
     reports: List[Dict[str, Any]] = field(default_factory=list)
     total_complaints_today: int = 0
     top_defect_categories: List[Dict[str, Any]] = field(default_factory=list)
+    quarantined_reports: List[Dict[str, Any]] = field(default_factory=list)
+
+    @property
+    def quarantined_count(self) -> int:
+        """Count of quarantined invalid entries."""
+        return len(self.quarantined_reports)
+
+    def quarantine_entry(self, entry: Any, reason: str = "Manual quarantine") -> None:
+        """Gracefully isolate an invalid entry without raising exceptions."""
+        self.quarantined_reports.append(quarantine_entry(entry, reason))
 
     def __getitem__(self, key: str) -> Any:
         if isinstance(key, str) and hasattr(self, key) and not key.startswith("_"):
@@ -1179,7 +1372,7 @@ class DailyReportPayload:
                 return True
         return key in (
             "generated_at", "pipeline_version", "statistics", "reports",
-            "total_complaints_today", "top_defect_categories"
+            "total_complaints_today", "top_defect_categories", "quarantined_reports"
         )
 
     def get(self, key: str, default: Any = None) -> Any:
@@ -1201,7 +1394,7 @@ class DailyReportPayload:
         return len(self.to_dict())
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        res = {
             "generated_at": self.generated_at,
             "pipeline_version": self.pipeline_version,
             "statistics": self.statistics.to_dict() if hasattr(self.statistics, "to_dict") else dict(self.statistics),
@@ -1209,9 +1402,12 @@ class DailyReportPayload:
             "top_defect_categories": [dict(c) for c in self.top_defect_categories if isinstance(c, dict)],
             "reports": [_serialize_report_entry(r) for r in self.reports],
         }
+        if self.quarantined_reports:
+            res["quarantined_reports"] = [dict(q) for q in self.quarantined_reports if isinstance(q, dict)]
+        return res
 
     @classmethod
-    def from_dict(cls, data: Any) -> DailyReportPayload:
+    def from_dict(cls, data: Any, quarantine_invalid: bool = True) -> DailyReportPayload:
         if isinstance(data, cls):
             return cls(
                 generated_at=data.generated_at,
@@ -1220,9 +1416,29 @@ class DailyReportPayload:
                 reports=[_serialize_report_entry(r) for r in data.reports],
                 total_complaints_today=data.total_complaints_today,
                 top_defect_categories=[dict(c) for c in data.top_defect_categories if isinstance(c, dict)],
+                quarantined_reports=[dict(q) for q in data.quarantined_reports if isinstance(q, dict)],
             )
+
+        # Handle raw JSON string or bytes input gracefully
+        if isinstance(data, (str, bytes, bytearray)):
+            try:
+                parsed_data = json.loads(data)
+                if isinstance(parsed_data, dict):
+                    data = parsed_data
+                else:
+                    empty = cls(generated_at=datetime.now(timezone.utc).isoformat())
+                    empty.quarantine_entry(data, f"JSON root must be an object, got {type(parsed_data).__name__}")
+                    return empty
+            except Exception as e:
+                empty = cls(generated_at=datetime.now(timezone.utc).isoformat())
+                empty.quarantine_entry(str(data)[:1000], f"Corrupt JSON payload: {e}")
+                return empty
+
         if not isinstance(data, dict):
-            return cls(generated_at=datetime.now(timezone.utc).isoformat())
+            empty = cls(generated_at=datetime.now(timezone.utc).isoformat())
+            if data is not None:
+                empty.quarantine_entry(data, f"Invalid payload type: {type(data).__name__}")
+            return empty
 
         gen_at = str(data.get("generated_at") or datetime.now(timezone.utc).isoformat())
         pipe_ver = str(data.get("pipeline_version") or "1.0.0")
@@ -1236,21 +1452,70 @@ class DailyReportPayload:
             stats = DailyReportStatistics()
 
         raw_reports = data.get("reports")
-        reports = [_serialize_report_entry(r) for r in raw_reports] if isinstance(raw_reports, (list, tuple)) else []
+        valid_reports: List[Dict[str, Any]] = []
+        quarantined: List[Dict[str, Any]] = []
+
+        # Restore pre-existing quarantined reports if present
+        raw_pre_quarantined = data.get("quarantined_reports")
+        if isinstance(raw_pre_quarantined, (list, tuple)):
+            for q in raw_pre_quarantined:
+                if isinstance(q, dict):
+                    quarantined.append(dict(q))
+
+        if isinstance(raw_reports, (list, tuple)):
+            for r in raw_reports:
+                if quarantine_invalid:
+                    is_valid, reason = validate_report_entry(r)
+                    if is_valid:
+                        valid_reports.append(_serialize_report_entry(r))
+                    else:
+                        quarantined.append(quarantine_entry(r, reason))
+                else:
+                    valid_reports.append(_serialize_report_entry(r))
 
         raw_cats = data.get("top_defect_categories")
         top_cats = [dict(c) for c in raw_cats if isinstance(c, dict)] if isinstance(raw_cats, (list, tuple)) else []
 
-        tot_complaints = _safe_int(data.get("total_complaints_today", len(reports)))
+        tot_complaints = _safe_int(data.get("total_complaints_today", len(valid_reports)))
 
         return cls(
             generated_at=gen_at,
             pipeline_version=pipe_ver,
             statistics=stats,
-            reports=reports,
+            reports=valid_reports,
             total_complaints_today=tot_complaints,
             top_defect_categories=top_cats,
+            quarantined_reports=quarantined,
         )
+
+    @classmethod
+    def from_json(cls, json_str: Union[str, bytes], quarantine_invalid: bool = True) -> DailyReportPayload:
+        """Parse raw JSON string strictly and quarantine invalid entries without crashing."""
+        return cls.from_dict(json_str, quarantine_invalid=quarantine_invalid)
+
+    @classmethod
+    def validate_payload(cls, data: Any) -> Tuple[bool, List[str]]:
+        """Validate an entire daily report JSON payload against strict schema rules."""
+        errors: List[str] = []
+        if isinstance(data, (str, bytes, bytearray)):
+            try:
+                data = json.loads(data)
+            except Exception as e:
+                return False, [f"JSON decode failure: {e}"]
+        if not isinstance(data, dict):
+            return False, [f"Root payload must be an object, got {type(data).__name__}"]
+
+        if "generated_at" not in data or not str(data["generated_at"]).strip():
+            errors.append("Missing required field: 'generated_at'")
+        if "reports" not in data or not isinstance(data["reports"], list):
+            errors.append("Missing or non-list field: 'reports'")
+        else:
+            for idx, entry in enumerate(data["reports"]):
+                is_valid, reason = validate_report_entry(entry, strict=True)
+                if not is_valid:
+                    errors.append(f"Report[{idx}] invalid: {reason}")
+
+        return len(errors) == 0, errors
 
 
 # Backward compatibility alias

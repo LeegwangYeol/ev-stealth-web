@@ -157,6 +157,10 @@ def verify_cache_corruption_scenarios() -> List[Dict[str, Any]]:
             cache_file = Path(tmpdir) / "ev_subsidy_data.json"
             with open(cache_file, "w", encoding="utf-8") as f:
                 f.write(content)
+            try:
+                os.chmod(cache_file, 0o644)
+            except OSError:
+                pass
 
             cmd = [sys.executable, "run_tracker.py", "--output", str(cache_file), "--mock-network", "--dry-run"]
             proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(PROJECT_ROOT))

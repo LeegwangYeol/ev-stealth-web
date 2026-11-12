@@ -16,6 +16,8 @@ from utils.json_writer import (
 )
 from tracker.atomic_writer import (
     FileLock,
+    atomic_write_json,
+    atomic_write_text,
     is_corrupted_or_quarantined_filename,
     quarantine_corrupted_file,
 )
@@ -26,6 +28,8 @@ __all__ = [
     "write_daily_reports",
     "read_daily_reports",
     "FileLock",
+    "atomic_write_json",
+    "atomic_write_text",
     "is_corrupted_or_quarantined_filename",
     "quarantine_corrupted_file",
     "SafeHttpClient",

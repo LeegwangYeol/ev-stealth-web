@@ -5,8 +5,22 @@ import RecallPortalClient, {
   type RecallCardProps,
   BatterySafetyCard,
   type BatterySafetyCardProps,
+  BatterySafetyTableView,
+  type BatterySafetyTableViewProps,
+  RecallTableView,
+  type RecallTableViewProps,
 } from '@/app/recall-portal/RecallPortalClient';
 
-export { RecallCard, BatterySafetyCard };
-export type { RecallCardProps, BatterySafetyCardProps };
+export {
+  RecallCard,
+  BatterySafetyCard,
+  BatterySafetyTableView,
+  RecallTableView,
+};
+export type {
+  RecallCardProps,
+  BatterySafetyCardProps,
+  BatterySafetyTableViewProps,
+  RecallTableViewProps,
+};
 export default RecallPortalClient;

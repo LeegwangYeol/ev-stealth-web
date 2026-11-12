@@ -11,6 +11,12 @@
 export type {
   DefectCategoryKey,
   ModelYearVerdict,
+  OverallReliabilityGrade,
+  OutOfWarrantyRisk,
+  TrendDirection,
+  TrendCalculationResult,
+  CategoryComplaintItem,
+  CategoryComplaintInputEntry,
   YearEvaluation,
   ModelReliability,
   BrandReliability,
@@ -19,35 +25,19 @@ export type {
   ReliabilityTrendsDatabase,
   EnrichedModelItem,
   ReliabilityKPIs,
-} from '@/types/reliability';
+} from '../types/reliability.ts';
 
 import type {
-  DefectCategoryKey,
   ModelYearVerdict,
+  TrendCalculationResult,
+  CategoryComplaintItem,
+  CategoryComplaintInputEntry,
   YearEvaluation,
   BrandReliability,
   ReliabilityTrendsDatabase,
   EnrichedModelItem,
   ReliabilityKPIs,
-} from '@/types/reliability';
-
-export type TrendDirection = 'UP' | 'DOWN' | 'STABLE';
-
-export interface TrendCalculationResult {
-  direction: TrendDirection;
-  percentageChange: number;
-  absoluteChange: number;
-  formattedChange: string;
-  isIncrease: boolean;
-  isDecrease: boolean;
-  isStable: boolean;
-}
-
-export interface CategoryComplaintItem {
-  category: DefectCategoryKey | string;
-  count: number;
-  percentage: number;
-}
+} from '../types/reliability.ts';
 
 // ==========================================
 // 2. RELIABILITY SCORE NORMALIZATION & CALCULATION HELPERS
@@ -87,17 +77,10 @@ export function normalizeReliabilityScore(rawScore: unknown, fallback: number = 
  */
 export function aggregateCategoryComplaintCounts(
   inputs?:
-    | Array<{
-        category?: string | DefectCategoryKey;
-        category_key?: string;
-        code?: string;
-        defect_category?: string;
-        count?: number | unknown;
-        percentage?: number | unknown;
-      } | null | undefined>
+    | Array<CategoryComplaintInputEntry | null | undefined>
     | BrandReliability[]
     | ReliabilityTrendsDatabase
-    | Record<string, { count?: number | unknown; percentage?: number | unknown } | number | unknown>
+    | Record<string, { count?: number | string | null; percentage?: number | string | null } | number | unknown>
     | null
 ): Record<string, { count: number; percentage: number }> {
   if (!inputs) return {};
@@ -314,7 +297,7 @@ export function calculateReliabilityKPIs(data?: ReliabilityTrendsDatabase | null
   const trackedBrandsCount = brands.length;
   let trackedModelsCount = 0;
   for (const b of brands) {
-    if (Array.isArray(b?.models)) {
+    if (b && Array.isArray(b.models)) {
       trackedModelsCount += b.models.length;
     }
   }
@@ -543,7 +526,7 @@ export function getDefectsForModel(
 ): YearEvaluation[] {
   const model = getModelReliabilityById(modelId, data);
   if (!model || !Array.isArray(model.year_evaluations)) return [];
-  return model.year_evaluations.filter((y) => Boolean(y && typeof y === 'object' && y.verdict));
+  return model.year_evaluations.filter((y: YearEvaluation) => Boolean(y && typeof y === 'object' && y.verdict));
 }
 
 /**
@@ -558,7 +541,7 @@ export function getBrandReliabilityById(
   if (!normalized) return undefined;
   const brands = Array.isArray(data?.brands) ? data.brands : [];
   return brands.find(
-    (b) =>
+    (b: BrandReliability) =>
       Boolean(b && typeof b === 'object') &&
       ((b.id && b.id.toLowerCase() === normalized) ||
         (b.name_ko && b.name_ko.toLowerCase().includes(normalized)) ||

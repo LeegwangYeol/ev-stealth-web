@@ -11,6 +11,26 @@ declare global {
 
 export type AlertSeverity = 'HEALTHY' | 'CAUTION' | 'WARNING' | 'CRITICAL' | 'DEPLETED';
 
+export type RegionTier =
+  | 'special_city'
+  | 'metropolitan_city'
+  | 'special_self_governing_city'
+  | 'province'
+  | 'special_self_governing_province';
+
+export type RegionSortOption =
+  | 'depletion_desc'
+  | 'depletion_asc'
+  | 'name_asc'
+  | 'remaining_desc'
+  | 'local_subsidy_desc';
+
+export type ModelSortOption =
+  | 'net_price_asc'
+  | 'subsidy_desc'
+  | 'name_asc'
+  | 'range_desc';
+
 export interface AlertThresholdConfig {
   min_percent: number;
   max_percent: number;
@@ -56,7 +76,7 @@ export interface RegionEntry {
   code?: string;
   name_ko: string;
   name_en: string;
-  tier: 'special_city' | 'metropolitan_city' | 'special_self_governing_city' | 'province' | 'special_self_governing_province' | string;
+  tier: RegionTier;
   overall_depletion_rate: number;
   overall_status: AlertSeverity;
   residency_requirement_days: number;
@@ -168,19 +188,53 @@ export interface SubsidyCalculatorOptions {
   isOldDieselScrappage?: boolean; // +1,000,000 KRW flat incentive
 }
 
-export interface SubsidyStatistics {
+export type RankedRegionEntry = RegionEntry & {
+  rank: number;
+};
+
+export interface CriticalRegionInfo {
+  regionId: string;
+  nameKo: string;
+  depletionRate: number;
+  remainingUnits: number;
+}
+
+export interface CategoryBreakdownMetrics {
   announced: number;
   applied: number;
-  delivered: number;
   remaining: number;
-  depletionRate: number;
+  rate: number;
+}
+
+export interface SubsidyStatistics {
+  totalAnnouncedUnits: number;
+  totalAppliedUnits: number;
+  totalDeliveredUnits: number;
+  totalRemainingUnits: number;
+  nationalDepletionRate: number;
   deliveryRate: number;
-  budgetTotal: number;
-  budgetDisbursed: number;
+  budgetTotalBillionKrw: number;
+  budgetDisbursedBillionKrw: number;
   budgetExecutionRatePct: number;
   criticalRegionsCount: number;
-  depletedRegionsCount: number;
+  criticalRegions: CriticalRegionInfo[];
   warningRegionsCount: number;
+  cautionRegionsCount: number;
+  healthyRegionsCount: number;
+  categoryBreakdown: {
+    passenger: CategoryBreakdownMetrics;
+    commercial: CategoryBreakdownMetrics;
+    bus: CategoryBreakdownMetrics;
+  };
+  // Shorthand compatibility aliases
+  announced?: number;
+  applied?: number;
+  delivered?: number;
+  remaining?: number;
+  depletionRate?: number;
+  budgetTotal?: number;
+  budgetDisbursed?: number;
+  depletedRegionsCount?: number;
 }
 
 /**

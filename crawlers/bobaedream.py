@@ -398,12 +398,33 @@ class BobaeDreamCrawler(BaseCrawler):
         min_delay: float = 1.5,
         max_delay: float = 3.5,
         max_retries: int = 3,
+        timeout: Union[float, Tuple[float, float]] = 15.0,
+        connect_timeout: Optional[float] = None,
+        read_timeout: Optional[float] = None,
+        enable_cache: bool = True,
+        cache_fallback: bool = True,
     ):
-        if client is None:
-            client = SafeHttpClient(min_delay=min_delay, max_delay=max_delay, max_retries=max_retries)
-        super().__init__(client=client)
         self.min_delay = min_delay
         self.max_delay = max_delay
+        if client is None:
+            client = SafeHttpClient(
+                min_delay=min_delay,
+                max_delay=max_delay,
+                max_retries=max_retries,
+                timeout=timeout,
+                connect_timeout=connect_timeout,
+                read_timeout=read_timeout,
+                enable_cache=enable_cache,
+                cache_fallback=cache_fallback,
+            )
+        super().__init__(
+            client=client,
+            timeout=timeout,
+            connect_timeout=connect_timeout,
+            read_timeout=read_timeout,
+            enable_cache=enable_cache,
+            cache_fallback=cache_fallback,
+        )
 
     def sleep_with_jitter(self, min_s: Optional[float] = None, max_s: Optional[float] = None) -> None:
         """Apply polite delay with uniform jitter between crawler requests."""
@@ -939,7 +960,11 @@ class BobaeDreamCrawler(BaseCrawler):
             url = self.build_list_url(board_code, page=page)
             logger.info(f"Crawling BobaeDream [{board_code}] list (Page {page}): {url}")
             try:
-                resp = self.client.get(url, referer=f"{BOBAE_BASE_URL}/")
+                resp = self.client.get(
+                    url,
+                    referer=f"{BOBAE_BASE_URL}/",
+                    timeout=(self.connect_timeout, self.read_timeout),
+                )
                 if not resp or not isinstance(resp, (tuple, list)) or len(resp) < 2:
                     logger.warning(f"Failed to fetch list for {board_code} page {page}")
                     break
@@ -1028,7 +1053,11 @@ class BobaeDreamCrawler(BaseCrawler):
             url = self.build_search_url(board_code, keyword, page=page, s_key=s_key)
             logger.info(f"Searching BobaeDream [{board_code}] for '{keyword}' (Page {page}): {url}")
             try:
-                resp = self.client.get(url, referer=f"{BOBAE_BASE_URL}/")
+                resp = self.client.get(
+                    url,
+                    referer=f"{BOBAE_BASE_URL}/",
+                    timeout=(self.connect_timeout, self.read_timeout),
+                )
                 if not resp or not isinstance(resp, (tuple, list)) or len(resp) < 2:
                     logger.warning(f"Search request failed for {board_code} keyword '{keyword}' page {page}")
                     break
