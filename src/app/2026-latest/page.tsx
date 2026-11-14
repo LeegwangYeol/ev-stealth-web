@@ -210,8 +210,13 @@ export default function Latest2026Page() {
         <h2 id="heading-latest-summary" className="text-xl sm:text-2xl font-bold text-slate-900">
           2026년식 신차 초기 결함 및 리콜 판정 요약 표
         </h2>
-        <div className="overflow-x-auto table-scroll-container rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-500 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true">
+        <div
+          tabIndex={0}
+          role="region"
+          aria-label="가로 스크롤 가능한 2026년식 KDM 주요 신차 초기 결함 및 리콜 판정 요약 표"
+          className="overflow-x-auto table-scroll-container rounded-2xl border border-slate-200 bg-white shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+        >
+          <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-600 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true">
             <span>← 좌우로 밀어서 2026 신차 비교</span>
             <span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span>
           </div>
@@ -648,12 +653,12 @@ export default function Latest2026Page() {
           <Link
             href="/reliability-analytics"
             prefetch={false}
-            aria-label="실차주 결함 통계 및 고질병 랭킹 바로가기"
+            aria-label="스텔스 품질 점수 및 실차주 결함 통계 바로가기"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
           >
             <h3 className="flex items-center gap-2 text-blue-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📊</span>
-              <span>실차주 결함 통계 및 고질병 랭킹 (DSI)</span>
+              <span>스텔스 품질 점수 &amp; 실차주 결함 통계 (DSI)</span>
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
               현대·기아·테슬라 등 브랜드별 결함 심각도 지수(DSI), 다발 결함 부품 랭킹 및 예상 수리비를 확인합니다.
@@ -666,12 +671,12 @@ export default function Latest2026Page() {
           <Link
             href="/recall-portal"
             prefetch={false}
-            aria-label="공식 리콜 및 배터리 제조사 조회 바로가기"
+            aria-label="통합 리콜 현황 및 배터리 제조사 조회 바로가기"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-rose-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
           >
             <h3 className="flex items-center gap-2 text-rose-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">🚨</span>
-              <span>공식 리콜 및 배터리 제조사 조회</span>
+              <span>통합 리콜 현황 &amp; 배터리 제조사 조회</span>
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
               차대번호(VIN) 17자리 또는 모델명으로 국토교통부 공식 리콜 조치 여부 및 탑재 배터리 제조사를 즉시 조회합니다.
@@ -684,12 +689,12 @@ export default function Latest2026Page() {
           <Link
             href="/depreciation-calculator"
             prefetch={true}
-            aria-label="전기차 감가율 및 배터리 수명 시뮬레이터 바로가기"
+            aria-label="전기차 감가상각 시뮬레이터 및 배터리 수명 계산기 바로가기"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
           >
             <h3 className="flex items-center gap-2 text-emerald-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📉</span>
-              <span>전기차 감가율 및 배터리 수명 시뮬레이터</span>
+              <span>전기차 감가상각 시뮬레이터 &amp; 배터리 수명</span>
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
               보조금 수령 후 5년간의 잔존가치, 배터리 잔존성능(SoH), 연차별 총소유비용(TCO)을 정밀 시뮬레이션합니다.

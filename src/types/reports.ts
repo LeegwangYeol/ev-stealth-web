@@ -75,6 +75,8 @@ export interface DailyReportStatistics {
   critical_defect_count: number;
   top_model?: string;
   top_platform?: string;
+  duplicates_removed?: number;
+  is_deduplicated?: boolean;
 }
 
 export type ReportStatistics = DailyReportStatistics;
@@ -100,3 +102,14 @@ export interface AdminDefectReportItem extends DefectReportItem {
 export interface AdminDailyReportData extends Omit<DailyReportData, 'reports'> {
   reports?: AdminDefectReportItem[];
 }
+
+export type ReportSortOption = 'critical' | 'recent' | 'negativity';
+export type ViewMode = 'cards' | 'table';
+
+export interface CategoryTab {
+  code: string;
+  label: string;
+  description: string;
+  icon: string;
+}
+

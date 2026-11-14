@@ -202,7 +202,19 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
         {/* Depletion Rate & Mini Progress Bar */}
         <td className="p-3.5 text-center min-w-[130px]">
           <div className="flex flex-col items-center gap-1">
-            <span className="font-extrabold text-amber-400 font-mono">
+            <span
+              className={`font-extrabold font-mono ${
+                isDepleted
+                  ? 'text-slate-300'
+                  : depletionRate >= 95
+                  ? 'text-rose-400'
+                  : depletionRate >= 80
+                  ? 'text-orange-400'
+                  : depletionRate >= 60
+                  ? 'text-amber-400'
+                  : 'text-emerald-400'
+              }`}
+            >
               {depletionRate.toFixed(1)}%
             </span>
             <div
@@ -491,7 +503,15 @@ export const SubsidyTableView = memo(function SubsidyTableView({
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800">
-          {renderedRows}
+          {renderedRows.length > 0 ? (
+            renderedRows
+          ) : (
+            <tr>
+              <td colSpan={10} className="p-8 text-center text-slate-300">
+                표시할 지자체 데이터가 없습니다.
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>

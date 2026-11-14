@@ -126,6 +126,8 @@ class CafeForumMiner:
 
     def parse_pomppu_list(self, html_content: str) -> List[Dict[str, Any]]:
         """Parse Pomppu forum list HTML."""
+        if not html_content or not isinstance(html_content, str):
+            return []
         items = []
         matches = re.findall(r'<a\s+href="(view\.php\?id=car&no=\d+[^"]*)"[^>]*>(.*?)</a>', html_content, re.IGNORECASE | re.DOTALL)
         for href, raw_title in matches:
@@ -172,6 +174,8 @@ class CafeForumMiner:
 
     def parse_clien_list(self, html_content: str) -> List[Dict[str, Any]]:
         """Parse Clien list HTML."""
+        if not html_content or not isinstance(html_content, str):
+            return []
         items = []
         matches = re.findall(r'<a\s+href="(/service/board/cm_car/\d+[^"]*)"[^>]*class="[^"]*subject_fixed[^"]*"[^>]*>(.*?)</a>', html_content, re.IGNORECASE | re.DOTALL)
         for href, raw_title in matches:
@@ -195,7 +199,9 @@ class CafeForumMiner:
         Normalize and validate a raw complaint record dictionary into ComplaintRecord.
         Auto-generates id, tags slang, validates required fields.
         """
-        raw_quote = raw_data.get("raw_quote", "").strip()
+        if not raw_data or not isinstance(raw_data, dict):
+            return None
+        raw_quote = str(raw_data.get("raw_quote") or "").strip()
         if not raw_quote or len(raw_quote) < 10:
             return None
 

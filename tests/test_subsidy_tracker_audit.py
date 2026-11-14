@@ -287,6 +287,114 @@ class TestSubsidyTrackerAudit(unittest.TestCase):
         self.assertEqual(len(payload.regions), 17)
         self.assertGreater(payload.nationwide_summary.total_announced_units, 0)
 
+    def test_16_regional_grouping_full_korean_and_english_province_names(self) -> None:
+        """Verify full Korean and English romanized province names classify accurately as provinces."""
+        full_provinces_ko = [
+            "충청북도",
+            "충청남도",
+            "전라북도",
+            "전라남도",
+            "경상북도",
+            "경상남도",
+            "경기도",
+            "강원특별자치도",
+            "제주특별자치도",
+        ]
+        for name in full_provinces_ko:
+            with self.subTest(full_name=name):
+                self.assertEqual(classify_region_group(name), REGIONAL_GROUP_PROVINCES)
+                self.assertTrue(is_province(name))
+                self.assertFalse(is_metropolitan_city(name))
+                # Test with dict
+                self.assertEqual(classify_region_group({"name_ko": name}), REGIONAL_GROUP_PROVINCES)
+
+        english_provinces = [
+            "Chungcheongbuk-do",
+            "Chungcheongnam-do",
+            "Jeollanam-do",
+            "Gyeongsangnam-do",
+            "Gyeongsangbuk-do",
+        ]
+        for en in english_provinces:
+            with self.subTest(english_name=en):
+                self.assertEqual(classify_region_group(en), REGIONAL_GROUP_PROVINCES)
+                self.assertTrue(is_province(en))
+
+    @patch("urllib.request.urlopen")
+    def test_17_network_invalid_json_fallback(self, mock_urlopen: MagicMock) -> None:
+        """SubsidyTracker gracefully falls back when live endpoint returns invalid or malformed JSON."""
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = b"<html>502 Bad Gateway: Not a valid JSON payload</html>"
+        mock_resp.__enter__.return_value = mock_resp
+        mock_urlopen.return_value = mock_resp
+
+        tracker = SubsidyTracker(endpoint_url="https://api.example.com/subsidy/live")
+        payload, fallback_used = tracker.execute_tracking_cycle()
+
+        self.assertTrue(fallback_used)
+        self.assertIsInstance(payload, SubsidyPayload)
+        self.assertEqual(len(payload.regions), 17)
+
+    def test_18_compute_nationwide_summary_none_and_empty(self) -> None:
+        """compute_nationwide_summary handles None and empty input gracefully without raising."""
+        summary_none = self.tracker.compute_nationwide_summary(None)  # type: ignore
+        self.assertEqual(summary_none.total_announced_units, 0)
+        self.assertEqual(summary_none.total_applied_units, 0)
+        self.assertEqual(summary_none.nationwide_depletion_rate, 0.0)
+
+        summary_empty = self.tracker.compute_nationwide_summary([])
+        self.assertEqual(summary_empty.total_announced_units, 0)
+        self.assertEqual(summary_empty.total_applied_units, 0)
+
+    def test_19_tracker_timeout_seconds_sanitization(self) -> None:
+        """SubsidyTracker sanitizes negative, zero, and malformed timeout values."""
+        t1 = SubsidyTracker(timeout_seconds=-10.0)
+        self.assertEqual(t1.timeout_seconds, 5.0)
+
+        t2 = SubsidyTracker(timeout_seconds=0.0)
+        self.assertEqual(t2.timeout_seconds, 5.0)
+
+        t3 = SubsidyTracker(timeout_seconds="invalid")  # type: ignore
+        self.assertEqual(t3.timeout_seconds, 5.0)
+
+        t4 = SubsidyTracker(timeout_seconds=12.5)
+        self.assertEqual(t4.timeout_seconds, 12.5)
+
+    def test_20_predict_exhaustion_date_overflow_and_extremes(self) -> None:
+        """predict_exhaustion_date protects against huge dates (OverflowError) and invalid base dates."""
+        from tracker.subsidy_tracker import predict_exhaustion_date
+
+        res_huge = predict_exhaustion_date(remaining_units=100_000_000_000, daily_velocity=0.000001)
+        self.assertTrue(res_huge is None or isinstance(res_huge, str))
+
+        res_invalid_date = predict_exhaustion_date(remaining_units=100, daily_velocity=10, start_date="bad-date")
+        self.assertIsNone(res_invalid_date)
+
+    def test_21_baseline_resilient_to_corrupted_category_metrics(self) -> None:
+        """build_initial_baseline gracefully parses regions with string or corrupt metric counts."""
+        from tracker.subsidy_baseline import build_initial_baseline
+
+        mock_region = {
+            "region_id": "KR-TEST",
+            "name_ko": "테스트시",
+            "overall_status": "HEALTHY",
+            "categories": {
+                "passenger": {
+                    "announced_units": "1,000",
+                    "applied_units": "500",
+                    "delivered_units": 400,
+                    "total_budget_krw": "10000000",
+                    "remaining_budget_krw": "5000000",
+                }
+            },
+        }
+        baseline = build_initial_baseline([mock_region])
+        self.assertIsNotNone(baseline)
+        self.assertEqual(baseline.nationwide_summary.total_announced_units, 1000)
+        self.assertEqual(baseline.nationwide_summary.total_applied_units, 500)
+        self.assertEqual(baseline.nationwide_summary.total_delivered_units, 400)
+
 
 if __name__ == "__main__":
     unittest.main()

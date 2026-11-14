@@ -136,6 +136,7 @@ export interface ManufacturerRecallSummary {
   manufacturer: string;
   totalCampaigns: number;
   activeCampaigns: number;
+  resolvedCampaigns: number;
   fireHazards: number;
   lossOfPower: number;
   affectedUnits: number;

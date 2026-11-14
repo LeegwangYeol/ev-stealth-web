@@ -69,6 +69,8 @@ COMPOUND_DEFECT_RULES: Dict[str, List[str]] = {
         "브레이크 먹통", "제동 불능", "제동 불가", "스펀지 브레이크", "벽돌 페달",
         "브레이크 밀림", "브레이크 꺼짐", "브레이크 작동안함", "브레이크 안 밟힘", "브레이크 고장",
         "페달 먹통", "회생제동 먹통", "회생제동 불능", "회생제동 풀림", "회생제동 털림",
+        "오토홀드 먹통", "오토홀드 오류", "오토홀드 고장", "오토홀드 풀림", "오토홀드 미작동",
+        "가속 페달 먹통", "가속 페달 이상", "가속 먹통",
         # Motor / Reducer noise & vibration (Must override generic '소음'/'잡소리' from build quality!)
         "모터 감속기 소음", "감속기 소음", "모터 소음", "감속기 잡소리", "감속기 이음",
         "감속기 쇠소리", "감속기 갈리는", "모터 고주파", "인버터 고주파", "모터 잡소리",
@@ -188,10 +190,12 @@ _SLANG_TERM_LOWER_PAIRS: Tuple[Tuple[SlangEntry, str, str], ...] = tuple(
 
 
 # Pre-compiled regex for stripping invalid characters: null bytes, non-printable control chars,
-# Trojan Source / Unicode BiDi overrides, unpaired surrogates, BOM, and Unicode non-characters.
+# zero-width spaces, Trojan Source / Unicode BiDi overrides, unpaired surrogates, BOM, and Unicode non-characters.
 RE_INVALID_CHARS: re.Pattern[str] = re.compile(
-    r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u202a-\u202e\u2066-\u2069\ud800-\udfff\ufeff\ufffe\uffff]"
+    r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u200b-\u200d\u202a-\u202e\u2060\u2066-\u2069\ud800-\udfff\ufeff\ufffe\uffff]"
 )
+RE_UNICODE_SPACES: re.Pattern[str] = re.compile(r"[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]")
+FULLWIDTH_TRANS: Dict[int, int] = {i: i - 0xFEE0 for i in range(0xFF01, 0xFF5F)}
 
 
 def sanitize_text(val: Any, max_len: int = MAX_TEXT_LENGTH) -> str:
@@ -215,10 +219,13 @@ def sanitize_text(val: Any, max_len: int = MAX_TEXT_LENGTH) -> str:
     if not val_str:
         return ""
 
-    val_str = RE_INVALID_CHARS.sub("", val_str)
-    val_str = val_str.strip()
     if len(val_str) > max_len:
         val_str = val_str[:max_len]
+
+    val_str = RE_INVALID_CHARS.sub("", val_str)
+    val_str = RE_UNICODE_SPACES.sub(" ", val_str)
+    val_str = val_str.translate(FULLWIDTH_TRANS)
+    val_str = val_str.strip()
 
     return unicodedata.normalize("NFC", val_str)
 
@@ -574,7 +581,7 @@ class DefectClassifier:
                 if phrase in text_lower:
                     category_scores[cat] += 12.0
                     if cat == "DRIVING_POWERTRAIN":
-                        if any(term in phrase for term in ("브레이크", "페달", "제동", "조향")):
+                        if any(term in phrase for term in ("브레이크", "페달", "제동", "조향", "오토홀드", "가속", "동력", "구동")):
                             suppress_software_meoktong = True
                         if any(term in phrase for term in ("감속기", "모터", "인버터")):
                             suppress_build_noise = True

@@ -5,6 +5,10 @@ import {
   sanitizeReportUrl,
   getSafeSentimentScore,
   getFallbackReportData,
+  resolveCategory,
+  deduplicateReports,
+  maskSensitiveData,
+  maskAuthor,
   type DailyReportData,
   type DefectReportItem,
 } from '@/lib/getDailyReports';
@@ -24,8 +28,16 @@ export function parseSafeDate(rawDate?: string): number {
   const trimmed = rawDate.trim();
   if (!trimmed) return 0;
 
+  // Clean Korean date separators (e.g. "2026. 09. 08.", "2026년 9월 8일")
+  const cleaned = trimmed
+    .replace(/년\s*/g, '-')
+    .replace(/월\s*/g, '-')
+    .replace(/일\s*/g, '')
+    .replace(/\s*([./-])\s*/g, '-')
+    .replace(/-+$/, '');
+
   // 1. Cross-browser normalizer: replace dots and slashes with hyphens (e.g. 2026.09.08 -> 2026-09-08)
-  const normalized = trimmed.replace(/\./g, '-').replace(/\//g, '-');
+  const normalized = cleaned.replace(/\./g, '-').replace(/\//g, '-');
 
   // 2. Date-only format "YYYY-MM-DD" -> parse consistently as UTC midnight across all browsers
   if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
@@ -298,7 +310,26 @@ function getSourceBadge(source: string, url: string) {
 
 export default function AdminDashboardClient({ initialData }: AdminDashboardClientProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Debounce search query input (150ms debounce) for buttery smooth typing and low CPU usage
+  useEffect(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 150);
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [searchQuery]);
+
+  const deferredSearchQuery = useDeferredValue(debouncedQuery);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedSource, setSelectedSource] = useState('all');
   const [sortBy, setSortBy] = useState<SortOption>('critical');
@@ -386,6 +417,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         document.body.style.overflow = prevOverflow;
       };
     }
+    return undefined;
   }, [activeModalReport]);
 
   // Keyboard arrow navigation for Category Tabs (WAI-ARIA APG pattern)
@@ -423,15 +455,26 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
       : getFallbackReportData();
   }, [initialData]);
 
-  const reports = useMemo<DefectReportWithTimestamp[]>(() => {
+  // Deduplicate and process reports with high-performance memoization
+  const { dedupedReports, duplicatesRemovedCount } = useMemo(() => {
     const rawList = Array.isArray(safeData?.reports) ? safeData.reports : [];
-    return rawList
+    const dedupResult = deduplicateReports(rawList);
+    const existingDedup = safeData?.statistics?.duplicates_removed ?? 0;
+    return {
+      dedupedReports: dedupResult.reports,
+      duplicatesRemovedCount: Math.max(dedupResult.summary.duplicatesRemoved, existingDedup),
+    };
+  }, [safeData?.reports, safeData?.statistics?.duplicates_removed]);
+
+  const reports = useMemo<DefectReportWithTimestamp[]>(() => {
+    return dedupedReports
       .filter((r): r is AdminDefectReportItem => Boolean(r && typeof r === 'object'))
       .map((r, idx) => {
         const rawDate = r.created_at || r.date;
         const parsed = parseSafeDate(rawDate);
-        const catCode = r.defect_category || 'BATTERY_CHARGING';
-        const catKo = r.defect_category_ko || '기타 결함';
+        const catInfo = resolveCategory(r.defect_category, r.defect_category_ko);
+        const catCode = catInfo.code;
+        const catKo = catInfo.ko;
 
         // Safe JSON parsing for slang tags if stringified
         let rawSlang: unknown = r.slang_tags;
@@ -447,7 +490,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         }
         const slangList = (Array.isArray(rawSlang) ? rawSlang : [])
           .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
-          .map((t) => t.trim());
+          .map((t) => maskSensitiveData(t.trim()));
 
         // Safe JSON parsing for DSI breakdown if stringified
         let rawDsi: unknown = r.dsi_breakdown;
@@ -467,13 +510,18 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             }
           : undefined;
 
+        const maskedTitle = maskSensitiveData(r.title || '전기차 결함 제보');
+        const maskedSummary = maskSensitiveData(r.summary || '결함 상세 내용 요약');
+        const maskedQuote = maskSensitiveData(r.verbatim_quote || '원문 없음');
+        const maskedAuthor = r.author ? maskAuthor(r.author) : '익명 제보자';
+
         const searchTokens = [
-          r.title || '',
-          r.summary || '',
-          r.verbatim_quote || '',
+          maskedTitle,
+          maskedSummary,
+          maskedQuote,
           r.vehicle_model || '',
           r.vehicle_brand || '',
-          r.author || '',
+          maskedAuthor,
           r.id ? String(r.id) : '',
           catKo,
           ...slangList,
@@ -495,9 +543,10 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           defect_category: catCode,
           defect_category_ko: catKo,
           vehicle_model: r.vehicle_model || '미상 모델',
-          title: r.title || '전기차 결함 제보',
-          summary: r.summary || '결함 상세 내용 요약',
-          verbatim_quote: r.verbatim_quote || '원문 없음',
+          title: maskedTitle,
+          summary: maskedSummary,
+          verbatim_quote: maskedQuote,
+          author: maskedAuthor,
           slang_tags: slangList,
           dsi_breakdown: safeDsi,
           sentiment_score: getSafeSentimentScore(r.sentiment_score, 0.85),
@@ -507,7 +556,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           _spacelessIndex: spacelessIndex,
         };
       });
-  }, [safeData?.reports]);
+  }, [dedupedReports]);
 
   const rawStats = safeData?.statistics;
   const statistics = useMemo(() => {
@@ -649,7 +698,10 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           if ((b.sentiment_score || 0) !== (a.sentiment_score || 0)) {
             return (b.sentiment_score || 0) - (a.sentiment_score || 0);
           }
-          return b._timestamp - a._timestamp;
+          if (b._timestamp !== a._timestamp) {
+            return b._timestamp - a._timestamp;
+          }
+          return String(b.id).localeCompare(String(a.id));
         }
 
         if (sortBy === 'recent') {
@@ -661,14 +713,20 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           const weightA = SEVERITY_WEIGHT[sevA] ?? 0;
           const weightB = SEVERITY_WEIGHT[sevB] ?? 0;
           if (weightB !== weightA) return weightB - weightA;
-          return (b.sentiment_score || 0) - (a.sentiment_score || 0);
+          if ((b.sentiment_score || 0) !== (a.sentiment_score || 0)) {
+            return (b.sentiment_score || 0) - (a.sentiment_score || 0);
+          }
+          return String(b.id).localeCompare(String(a.id));
         }
 
         if (sortBy === 'negativity') {
           if ((b.sentiment_score || 0) !== (a.sentiment_score || 0)) {
             return (b.sentiment_score || 0) - (a.sentiment_score || 0);
           }
-          return b._timestamp - a._timestamp;
+          if (b._timestamp !== a._timestamp) {
+            return b._timestamp - a._timestamp;
+          }
+          return String(b.id).localeCompare(String(a.id));
         }
 
         return 0;
@@ -684,8 +742,8 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     setCurrentPage(1);
   }, [selectedCategory, selectedSource, deferredSearchQuery, sortBy, pageSize]);
 
-  // Ensure current page bounds
-  const validCurrentPage = Math.min(currentPage, totalPages);
+  // Ensure current page bounds (strictly bounded between 1 and totalPages)
+  const validCurrentPage = Math.max(1, Math.min(currentPage, totalPages));
 
   const paginatedReports = useMemo(() => {
     const start = (validCurrentPage - 1) * pageSize;
@@ -693,7 +751,9 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
   }, [filteredReports, validCurrentPage, pageSize]);
 
   const handleResetFilters = useCallback(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     setSearchQuery('');
+    setDebouncedQuery('');
     setSelectedCategory('ALL');
     setSelectedSource('all');
     setSortBy('critical');
@@ -702,14 +762,18 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
   }, []);
 
   const handleClearSearch = useCallback(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     setSearchQuery('');
+    setDebouncedQuery('');
     searchInputRef.current?.focus();
   }, []);
 
   const handleTagClick = useCallback((tag: unknown) => {
     if (typeof tag !== 'string') return;
     const clean = tag.replace(/^[#\s]+/, '').trim().slice(0, 50);
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     setSearchQuery(clean);
+    setDebouncedQuery(clean);
   }, []);
 
   return (
@@ -754,6 +818,23 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                   파이프라인 정상 가동
                 </span>
               )}
+              {/* Deduplication Status Badge */}
+              <span
+                role="status"
+                aria-label={`데이터 정제 상태: ${
+                  duplicatesRemovedCount > 0
+                    ? `중복 ${duplicatesRemovedCount}건 정제 완료 (고유성 100%)`
+                    : '중복 0건 (고유 제보 100% 검증)'
+                }`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+              >
+                <svg className="w-3 h-3 text-cyan-300" width="12" height="12" focusable="false" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {duplicatesRemovedCount > 0
+                  ? `중복 ${duplicatesRemovedCount}건 정제 완료`
+                  : '중복 0건 · 고유 제보 100%'}
+              </span>
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
               일일 전기차(EV) 결함 모니터링
@@ -810,6 +891,14 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             <span>스크랩 대상: {statistics.total_scraped}건</span>
             <span className="text-blue-700 font-semibold">
               유효율 {Math.round((statistics.total_filtered_defects / Math.max(statistics.total_scraped || 0, 1)) * 100)}%
+            </span>
+          </div>
+          <div className="mt-1 text-[11px] text-cyan-800 font-medium flex items-center gap-1">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-600" aria-hidden="true" />
+            <span>
+              {duplicatesRemovedCount > 0
+                ? `중복 정제: ${duplicatesRemovedCount}건 제거 (순수 결함 고유 보장)`
+                : '중복 정제 완료 · 100% 고유 결함 검증'}
             </span>
           </div>
         </div>
@@ -1183,6 +1272,11 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               className="text-slate-700 font-medium"
             >
               결과 <strong className="text-slate-900 font-bold">{filteredReports.length}</strong>건
+              {duplicatesRemovedCount > 0 && (
+                <span className="text-[11px] text-cyan-700 ml-1.5 font-semibold">
+                  (중복 {duplicatesRemovedCount}건 필터링 완료)
+                </span>
+              )}
             </span>
             {(searchQuery || selectedCategory !== 'ALL' || selectedSource !== 'all') && (
               <button
@@ -1226,9 +1320,9 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         </div>
 
         {/* Screen Reader Accessible Summary Table for Defect Reports (always present for screen readers) */}
-        <div className={viewMode === 'table' ? 'overflow-x-auto table-scroll-container rounded-2xl border border-slate-200 bg-white shadow-sm' : 'sr-only'} tabIndex={viewMode === 'table' ? 0 : undefined} role={viewMode === 'table' ? 'region' : undefined} aria-label={viewMode === 'table' ? '결함 제보 요약 데이터 테이블' : undefined}>
+        <div className={viewMode === 'table' ? 'overflow-x-auto table-scroll-container rounded-2xl border border-slate-200 bg-white shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2' : 'sr-only'} tabIndex={viewMode === 'table' ? 0 : undefined} role={viewMode === 'table' ? 'region' : undefined} aria-label={viewMode === 'table' ? '결함 제보 요약 데이터 테이블' : undefined}>
           {viewMode === 'table' && (
-            <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-500 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true"><span>← 좌우로 밀어서 전체 제보 내역 확인</span><span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span></div>
+            <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-600 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true"><span>← 좌우로 밀어서 전체 제보 내역 확인</span><span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span></div>
           )}
           <table aria-label="수집된 전기차 결함 제보 데이터 요약 표" className="w-full min-w-[760px] text-left text-xs text-slate-800 border-collapse">
             <caption>
@@ -1400,6 +1494,19 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
               {totalPages > 1 && (
                 <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="페이지 선택">
+                  {totalPages > 5 && (
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(1)}
+                      disabled={validCurrentPage === 1}
+                      aria-label="첫 페이지로 이동"
+                      className="px-2.5 py-2 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                    >
+                      <span aria-hidden="true">&laquo;</span>
+                      <span className="sr-only">첫 페이지로 이동</span>
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
@@ -1448,6 +1555,19 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                     <span className="mr-1">다음</span>
                     <span aria-hidden="true">&rarr;</span>
                   </button>
+
+                  {totalPages > 5 && (
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={validCurrentPage === totalPages}
+                      aria-label="마지막 페이지로 이동"
+                      className="px-2.5 py-2 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                    >
+                      <span className="sr-only">마지막 페이지로 이동</span>
+                      <span aria-hidden="true">&raquo;</span>
+                    </button>
+                  )}
                 </div>
               )}
             </nav>
@@ -1547,7 +1667,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                     <span className="block text-slate-700 text-[11px] font-medium">사회성</span>
                     <span className="font-extrabold text-slate-900 text-sm">{activeModalReport.dsi_breakdown?.social ?? 0}</span>
                   </div>
-                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200 col-span-2 sm:col-span-1">
                     <span className="block text-slate-700 text-[11px] font-medium">편의성</span>
                     <span className="font-extrabold text-slate-900 text-sm">{activeModalReport.dsi_breakdown?.convenience ?? 0}</span>
                   </div>
@@ -1652,7 +1772,7 @@ const DefectReportCard = memo(function DefectReportCard({
           {getSeverityBadge(report.severity)}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Detailed Inspection Modal Trigger */}
           <button
             type="button"

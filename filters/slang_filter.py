@@ -76,8 +76,10 @@ class SlangFilter:
         if term_or_category is None:
             return True
         target = str(term_or_category).strip().upper()
+        if not target:
+            return False
         for e in entries:
-            if e.term == term_or_category or (e.defect_category and e.defect_category.upper() == target):
+            if e.term == term_or_category or e.term.upper() == target or (e.defect_category and e.defect_category.upper() == target):
                 return True
             if e.dimension and e.dimension.upper() == target:
                 return True

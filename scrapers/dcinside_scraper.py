@@ -340,6 +340,8 @@ class DCInsideScraper:
         is_desktop: bool = True
     ) -> Dict[str, Any]:
         """Extract title, metadata, body text, e_s_n_o, and comments from DC Inside HTML."""
+        if not html_content or not isinstance(html_content, str):
+            return {}
         # Title extraction
         title = ""
         title_match = re.search(r'<span class="title_subject"[^>]*>(.*?)</span>', html_content, re.DOTALL)

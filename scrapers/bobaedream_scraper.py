@@ -219,6 +219,8 @@ class BobaedreamScraper:
 
     def parse_search_results(self, html_content: str) -> List[Dict[str, Any]]:
         """Parse search results page HTML and extract post metadata."""
+        if not html_content or not isinstance(html_content, str):
+            return []
         items = []
         pattern = r'<dt[^>]*>\s*<a\s+href="([^"]*view\?[^"]*)"[^>]*>(.*?)</a>'
         matches = re.findall(pattern, html_content, re.IGNORECASE | re.DOTALL)
@@ -262,13 +264,22 @@ class BobaedreamScraper:
             logger.warning(f"Failed to fetch post detail: {post_url}")
             return {}
 
-        detail = self.parse_post_detail(text, post_url)
-        if detail:
-            self.post_cache[post_url] = detail
-        return detail
+        try:
+            detail = self.parse_post_detail(text, post_url)
+            if detail:
+                self.post_cache[post_url] = detail
+            return detail
+        except Exception as e:
+            logger.warning(f"Error parsing Bobaedream post detail ({post_url}): {e}")
+            if post_url in self.post_cache:
+                logger.warning(f"Falling back to cached post for {post_url} after parse error.")
+                return self.post_cache[post_url]
+            return {}
 
     def parse_post_detail(self, html_content: str, post_url: str) -> Dict[str, Any]:
         """Extract title, metadata, body text, and comments from Bobaedream post HTML."""
+        if not html_content or not isinstance(html_content, str):
+            return {}
         # Title extraction
         title = ""
         title_match = re.search(r'<strong class="title"[^>]*>(.*?)</strong>', html_content, re.DOTALL)

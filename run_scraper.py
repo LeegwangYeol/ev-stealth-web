@@ -343,6 +343,19 @@ def create_parser() -> argparse.ArgumentParser:
         help="Custom web directory to sync data files into (overrides default ev-stealth-web/src/data/ or EV_SCRAPER_WEB_DIR).",
     )
     parser.add_argument(
+        "--cache-fallback",
+        action="store_true",
+        dest="cache_fallback",
+        default=True,
+        help="Enable fallback to cached harvest posts and baseline when remote community sources are unreachable.",
+    )
+    parser.add_argument(
+        "--no-cache-fallback",
+        dest="cache_fallback",
+        action="store_false",
+        help="Disable fallback to cached harvest posts.",
+    )
+    parser.add_argument(
         "--dry-run",
         "-d",
         action="store_true",
@@ -708,6 +721,22 @@ class ScraperPipeline:
                 if os.path.exists(p) and os.path.isfile(p) and os.path.getsize(p) > 0:
                     existing_mirror = p
                     break
+            # Fallback to canonical repository baseline mirror if unique target paths do not exist yet
+            if existing_mirror is None:
+                baseline_candidates = [
+                    _resolve_web_reports_path(web_dir),
+                    _resolve_root_reports_path(),
+                    _resolve_public_reports_path(web_dir),
+                    Path(DEFAULT_OUTPUT_PATH),
+                ]
+                for bc in baseline_candidates:
+                    try:
+                        bp = str(bc.resolve()) if hasattr(bc, "resolve") else str(bc)
+                        if os.path.exists(bp) and os.path.isfile(bp) and os.path.getsize(bp) > 0:
+                            existing_mirror = bp
+                            break
+                    except Exception:
+                        pass
 
         for out_path in unique_paths:
             try:
@@ -786,7 +815,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             if dest_p.is_dir():
                 output_dest = str(dest_p / "daily_reports.json")
 
-        with ScraperPipeline() as pipeline:
+        with ScraperPipeline(
+            cache_fallback=getattr(args, "cache_fallback", True),
+        ) as pipeline:
             summary = pipeline.run(
                 sources=args.sources,
                 limit=args.limit,

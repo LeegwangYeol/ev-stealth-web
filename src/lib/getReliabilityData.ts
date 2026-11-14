@@ -21,11 +21,16 @@ export type {
   ReliabilityTrendsDatabase,
   EnrichedModelItem,
   ReliabilityKPIs,
+  StealthScoreWeights,
+  StealthScoreInput,
+  StealthScoreResult,
+  DefectFrequencyOptions,
 } from '../types/reliability.ts';
 
 import type {
   DefectCategoryKey,
   ModelYearVerdict,
+  OverallReliabilityGrade,
   TrendCalculationResult,
   CategoryComplaintItem,
   CategoryComplaintInputEntry,
@@ -35,6 +40,9 @@ import type {
   ReliabilityTrendsDatabase,
   EnrichedModelItem,
   ReliabilityKPIs,
+  StealthScoreWeights,
+  StealthScoreInput,
+  StealthScoreResult,
 } from '../types/reliability.ts';
 
 // ==========================================
@@ -690,4 +698,417 @@ export function getBrandReliabilityById(
         (b.name_ko && b.name_ko.toLowerCase().includes(normalized)) ||
         (b.name_en && b.name_en.toLowerCase().includes(normalized)))
   );
+}
+
+// ==========================================
+// 4. STEALTH SCORE, DEFECT FREQUENCY & CONFIDENCE ALGORITHMS
+// ==========================================
+
+export const DEFAULT_CATEGORY_SEVERITY_WEIGHTS: Readonly<Record<DefectCategoryKey, number>> = Object.freeze({
+  BATTERY_CHARGING: 2.5,
+  DRIVING_POWERTRAIN: 2.0,
+  COLD_WEATHER: 1.4,
+  SERVICE_REPAIR_COST: 1.2,
+  SOFTWARE_ELECTRONICS: 1.0,
+  BUILD_QUALITY: 0.7,
+});
+
+export const DEFAULT_STEALTH_SCORE_WEIGHTS: Readonly<Required<StealthScoreWeights>> = Object.freeze({
+  dsiWeight: 0.50,
+  incidentWeight: 0.30,
+  criticalWeight: 0.20,
+});
+
+/**
+ * Calculates statistical confidence for reliability calculations based on complaint count
+ * and multi-year tracking coverage.
+ */
+export function calculateReliabilityConfidence(
+  complaintCount: unknown,
+  yearsEvaluated?: unknown,
+  minSampleThreshold: number = 50
+): number {
+  if (typeof complaintCount !== 'number' || !Number.isFinite(complaintCount) || complaintCount <= 0) {
+    return 0.0;
+  }
+
+  const safeComplaints = Math.max(0, Math.floor(complaintCount));
+  if (safeComplaints === 0) return 0.0;
+
+  const threshold =
+    typeof minSampleThreshold === 'number' && Number.isFinite(minSampleThreshold) && minSampleThreshold > 0
+      ? minSampleThreshold
+      : 50;
+
+  const sampleConfidence = Math.min(
+    1.0,
+    Math.log(1 + safeComplaints) / Math.log(1 + threshold)
+  );
+
+  let yearFactor = 1.0;
+  if (yearsEvaluated !== undefined && yearsEvaluated !== null) {
+    if (typeof yearsEvaluated === 'number' && Number.isFinite(yearsEvaluated)) {
+      const safeYears = Math.max(0, Math.floor(yearsEvaluated));
+      if (safeYears === 0) yearFactor = 0.0;
+      else if (safeYears === 1) yearFactor = 0.70;
+      else if (safeYears === 2) yearFactor = 0.85;
+      else yearFactor = 1.00;
+    } else {
+      yearFactor = 0.70;
+    }
+  }
+
+  const combined = Math.max(0.0, Math.min(1.0, sampleConfidence * yearFactor));
+  return Math.round(combined * 10000) / 10000;
+}
+
+/**
+ * Normalizes defect complaint counts against vehicle sales, registrations, or fleet size.
+ */
+export function normalizeDefectFrequency(
+  complaintCount: unknown,
+  fleetOrSalesVolume: unknown,
+  baselineScale: number = 1000
+): number {
+  const safeComplaints =
+    typeof complaintCount === 'number' && Number.isFinite(complaintCount)
+      ? Math.max(0, complaintCount)
+      : 0;
+
+  const safeVolume =
+    typeof fleetOrSalesVolume === 'number' && Number.isFinite(fleetOrSalesVolume)
+      ? Math.max(0, fleetOrSalesVolume)
+      : 0;
+
+  if (safeComplaints === 0 || safeVolume === 0) {
+    return 0.0;
+  }
+
+  const safeScale =
+    typeof baselineScale === 'number' && Number.isFinite(baselineScale) && baselineScale > 0
+      ? baselineScale
+      : 1000;
+
+  const frequency = (safeComplaints / safeVolume) * safeScale;
+  return Number.isFinite(frequency) ? Math.round(frequency * 100) / 100 : 0.0;
+}
+
+/**
+ * Calculates a severity-weighted defect frequency across categories.
+ */
+export function calculateWeightedDefectFrequency(
+  categoryInputs?: unknown,
+  totalVolumeOrReports?: unknown,
+  customWeights?: Record<string, number>
+): number {
+  const aggregated = aggregateCategoryComplaintCounts(
+    categoryInputs as Parameters<typeof aggregateCategoryComplaintCounts>[0]
+  );
+
+  let totalComplaints = 0;
+  let weightedSum = 0;
+
+  const weights: Record<string, number> = {
+    ...DEFAULT_CATEGORY_SEVERITY_WEIGHTS,
+    ...(customWeights && typeof customWeights === 'object' ? customWeights : {}),
+  };
+
+  for (const [cat, data] of Object.entries(aggregated)) {
+    const count = data.count || 0;
+    if (count <= 0) continue;
+    totalComplaints += count;
+    const weight =
+      typeof weights[cat] === 'number' && Number.isFinite(weights[cat]) && weights[cat] > 0
+        ? weights[cat]
+        : 1.0;
+    weightedSum += count * weight;
+  }
+
+  if (totalComplaints === 0 || weightedSum === 0) {
+    return 0.0;
+  }
+
+  const volume =
+    typeof totalVolumeOrReports === 'number' && Number.isFinite(totalVolumeOrReports)
+      ? Math.max(0, totalVolumeOrReports)
+      : 0;
+
+  if (volume > 0) {
+    return Math.round((weightedSum / volume) * 100000) / 100;
+  }
+
+  return Math.round((weightedSum / totalComplaints) * 100) / 100;
+}
+
+/**
+ * Derives an overall reliability grade (A+ through F) from a composite stealth score.
+ */
+export function deriveGradeFromStealthScore(score: unknown): OverallReliabilityGrade {
+  const safeScore = normalizeReliabilityScore(score, 50.0);
+  if (safeScore >= 90.0) return 'A+';
+  if (safeScore >= 80.0) return 'A';
+  if (safeScore >= 68.0) return 'B';
+  if (safeScore >= 52.0) return 'C';
+  if (safeScore >= 38.0) return 'D';
+  return 'F';
+}
+
+/**
+ * Derives a purchase recommendation verdict from a composite stealth score and confidence.
+ */
+export function deriveVerdictFromStealthScore(
+  score: unknown,
+  confidenceScore: number = 1.0
+): ModelYearVerdict {
+  const safeScore = normalizeReliabilityScore(score, 50.0);
+  const safeConf =
+    typeof confidenceScore === 'number' && Number.isFinite(confidenceScore)
+      ? Math.max(0, Math.min(1, confidenceScore))
+      : 1.0;
+
+  if (safeConf < 0.25) {
+    return 'CAUTION';
+  }
+  if (safeScore >= 70.0) return 'BUY_SAFE';
+  if (safeScore < 50.0) return 'AVOID';
+  return 'CAUTION';
+}
+
+/**
+ * Evaluates the Stealth Reliability Composite Score using multi-factor weighting.
+ * Defaults baselineIndustryDsi to current master trends dataset if omitted.
+ */
+export function calculateStealthScore(input?: StealthScoreInput | null): StealthScoreResult {
+  const safeDsi = normalizeReliabilityScore(input?.dsi, 50.0);
+  const safeIncidentRate =
+    typeof input?.incidentRate === 'number' && Number.isFinite(input.incidentRate)
+      ? Math.max(0, Math.min(100, input.incidentRate))
+      : 0.0;
+  const safeCriticalRate =
+    typeof input?.criticalIssueRate === 'number' && Number.isFinite(input.criticalIssueRate)
+      ? Math.max(0, Math.min(100, input.criticalIssueRate))
+      : 0.0;
+
+  const rawComplaints = input?.totalComplaints;
+  const safeComplaints =
+    typeof rawComplaints === 'number' && Number.isFinite(rawComplaints)
+      ? Math.max(0, Math.floor(rawComplaints))
+      : 0;
+
+  const safeYears =
+    typeof input?.yearsEvaluated === 'number' && Number.isFinite(input.yearsEvaluated)
+      ? Math.max(0, Math.floor(input.yearsEvaluated))
+      : undefined;
+
+  // Weight validation and normalization
+  let hasInvalidWeight = false;
+  const rawWDsi = input?.weights?.dsiWeight;
+  const rawWInc = input?.weights?.incidentWeight;
+  const rawWCrit = input?.weights?.criticalWeight;
+
+  if (input?.weights && typeof input.weights === 'object') {
+    if (
+      (rawWDsi !== undefined && (!Number.isFinite(rawWDsi) || (rawWDsi as number) < 0)) ||
+      (rawWInc !== undefined && (!Number.isFinite(rawWInc) || (rawWInc as number) < 0)) ||
+      (rawWCrit !== undefined && (!Number.isFinite(rawWCrit) || (rawWCrit as number) < 0))
+    ) {
+      hasInvalidWeight = true;
+    }
+  }
+
+  let wDsi = !hasInvalidWeight && typeof rawWDsi === 'number' && Number.isFinite(rawWDsi) && rawWDsi >= 0
+    ? rawWDsi
+    : DEFAULT_STEALTH_SCORE_WEIGHTS.dsiWeight;
+  let wInc = !hasInvalidWeight && typeof rawWInc === 'number' && Number.isFinite(rawWInc) && rawWInc >= 0
+    ? rawWInc
+    : DEFAULT_STEALTH_SCORE_WEIGHTS.incidentWeight;
+  let wCrit = !hasInvalidWeight && typeof rawWCrit === 'number' && Number.isFinite(rawWCrit) && rawWCrit >= 0
+    ? rawWCrit
+    : DEFAULT_STEALTH_SCORE_WEIGHTS.criticalWeight;
+
+  const totalWeight = wDsi + wInc + wCrit;
+  if (totalWeight <= 0 || hasInvalidWeight) {
+    wDsi = DEFAULT_STEALTH_SCORE_WEIGHTS.dsiWeight;
+    wInc = DEFAULT_STEALTH_SCORE_WEIGHTS.incidentWeight;
+    wCrit = DEFAULT_STEALTH_SCORE_WEIGHTS.criticalWeight;
+  } else {
+    wDsi /= totalWeight;
+    wInc /= totalWeight;
+    wCrit /= totalWeight;
+  }
+
+  const rawDefectPenalty = wDsi * safeDsi + wInc * safeIncidentRate + wCrit * safeCriticalRate;
+  const defectPenalty = Math.max(0, Math.min(100, Math.round(rawDefectPenalty * 10) / 10));
+
+  const rawStealthScore = Math.round((100 - defectPenalty) * 10) / 10;
+  const confidenceScore = calculateReliabilityConfidence(safeComplaints, safeYears);
+
+  let baselineIndustry = input?.baselineIndustryDsi;
+  if (baselineIndustry === undefined || baselineIndustry === null) {
+    try {
+      const db = getReliabilityTrendsData();
+      baselineIndustry = db?.metadata?.avg_industry_dsi ?? 64.2;
+    } catch {
+      baselineIndustry = 64.2;
+    }
+  }
+
+  const baselineDsi = normalizeReliabilityScore(baselineIndustry, 64.2);
+  const baselineStealth = Math.round((100 - baselineDsi) * 10) / 10;
+
+  const smoothedStealth = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round((confidenceScore * rawStealthScore + (1 - confidenceScore) * baselineStealth) * 10) / 10
+    )
+  );
+
+  const normalizedDefectFrequency = normalizeDefectFrequency(safeComplaints, 1000, 1000);
+  const recommendedVerdict = deriveVerdictFromStealthScore(smoothedStealth, confidenceScore);
+  const overallGrade = deriveGradeFromStealthScore(smoothedStealth);
+
+  return {
+    rawStealthScore,
+    stealthScore: smoothedStealth,
+    defectPenalty,
+    confidenceScore,
+    normalizedDefectFrequency,
+    recommendedVerdict,
+    overallGrade,
+    isHighConfidence: confidenceScore >= 0.70,
+  };
+}
+
+// ==========================================
+// 5. BOUNDARY CONDITION HELPERS & SAFE DEFAULTS
+// ==========================================
+
+/**
+ * Returns a specific year evaluation for a model, safely handling missing years,
+ * unknown models, or non-numeric year inputs without throwing.
+ */
+export function getModelYearEvaluation(
+  modelId: string,
+  year: number | string,
+  data?: ReliabilityTrendsDatabase
+): YearEvaluation | undefined {
+  if (!modelId || typeof modelId !== 'string') return undefined;
+  const numYear = typeof year === 'number' ? year : Number(String(year || '').trim());
+  if (!Number.isFinite(numYear)) return undefined;
+
+  const defects = getDefectsForModel(modelId, data);
+  if (!defects || defects.length === 0) return undefined;
+
+  const target = defects.find((y) => y && Number.isFinite(y.year) && Math.floor(y.year) === Math.floor(numYear));
+  if (!target) return undefined;
+
+  return {
+    ...target,
+    year: Math.floor(target.year),
+    dsi_score: normalizeReliabilityScore(target.dsi_score, 50.0),
+    incident_rate:
+      typeof target.incident_rate === 'number' && Number.isFinite(target.incident_rate)
+        ? Math.max(0, Math.min(100, target.incident_rate))
+        : 0,
+    chronic_symptoms: Array.isArray(target.chronic_symptoms) ? target.chronic_symptoms : [],
+    primary_defect: typeof target.primary_defect === 'string' ? target.primary_defect : '',
+    estimated_repair_cost: typeof target.estimated_repair_cost === 'string' ? target.estimated_repair_cost : '',
+    raw_quote: typeof target.raw_quote === 'string' ? target.raw_quote : '',
+  };
+}
+
+/**
+ * Safe fuzzy brand resolver that matches ID, Korean name, English name, or standard alias.
+ */
+export function resolveBrandReliability(
+  brandQuery: string,
+  data?: ReliabilityTrendsDatabase
+): BrandReliability | undefined {
+  if (!brandQuery || typeof brandQuery !== 'string') return undefined;
+  const clean = brandQuery.trim().toLowerCase();
+  if (!clean || clean === 'all') return undefined;
+
+  const db = data || getReliabilityTrendsData();
+  const brands = Array.isArray(db?.brands) ? db.brands : [];
+  if (brands.length === 0) return undefined;
+
+  const exact = brands.find((b) => b?.id?.toLowerCase() === clean);
+  if (exact) return exact;
+
+  const nameExact = brands.find(
+    (b) => (b?.name_en || '').toLowerCase() === clean || (b?.name_ko || '').toLowerCase() === clean
+  );
+  if (nameExact) return nameExact;
+
+  return brands.find((b) => {
+    if (!b) return false;
+    const en = (b.name_en || '').toLowerCase();
+    const ko = (b.name_ko || '').toLowerCase();
+    return (
+      (en.length > 0 && (en.includes(clean) || clean.includes(en))) ||
+      (ko.length > 0 && (ko.includes(clean) || clean.includes(ko)))
+    );
+  });
+}
+
+/**
+ * Returns a robust fallback BrandReliability object for unknown or unlisted brands.
+ */
+export function getSafeDefaultBrandReliability(brandId: string = 'unknown'): BrandReliability {
+  const safeId = typeof brandId === 'string' && brandId.trim() ? brandId.trim().toLowerCase() : 'unknown';
+  return {
+    id: safeId,
+    name_ko: '미확인 브랜드',
+    name_en: 'Unknown Brand',
+    country: 'UNKNOWN',
+    overall_dsi: 50.0,
+    total_reports: 0,
+    critical_issue_rate: 0.0,
+    category_distribution: {
+      BATTERY_CHARGING: { count: 0, percentage: 0.0 },
+      DRIVING_POWERTRAIN: { count: 0, percentage: 0.0 },
+      SOFTWARE_ELECTRONICS: { count: 0, percentage: 0.0 },
+      BUILD_QUALITY: { count: 0, percentage: 0.0 },
+      SERVICE_REPAIR_COST: { count: 0, percentage: 0.0 },
+      COLD_WEATHER: { count: 0, percentage: 0.0 },
+    },
+    models: [],
+  };
+}
+
+/**
+ * Returns a requested brand or safe default fallback if the brand is unknown.
+ */
+export function getBrandWithFallback(
+  brandId: string,
+  fallback?: BrandReliability,
+  data?: ReliabilityTrendsDatabase
+): BrandReliability {
+  const resolved = resolveBrandReliability(brandId, data) || getBrandReliabilityById(brandId, data);
+  if (resolved) return resolved;
+  return fallback || getSafeDefaultBrandReliability(brandId);
+}
+
+/**
+ * Returns a robust fallback EnrichedModelItem object for unknown or unlisted models.
+ */
+export function getSafeDefaultModelReliability(
+  modelId: string = 'unknown_model',
+  brandId: string = 'unknown'
+): EnrichedModelItem {
+  const safeId = typeof modelId === 'string' && modelId.trim() ? modelId.trim().toLowerCase() : 'unknown_model';
+  return {
+    id: safeId,
+    name: '미확인 차종',
+    segment: '미분류',
+    brand_id: brandId || 'unknown',
+    overall_grade: 'C',
+    avg_dsi: 50.0,
+    top_category: 'BATTERY_CHARGING',
+    year_evaluations: [],
+    brand_name_ko: '미확인 브랜드',
+    brand_name_en: 'Unknown Brand',
+    brand_country: 'UNKNOWN',
+  };
 }

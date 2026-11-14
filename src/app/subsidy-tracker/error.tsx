@@ -56,7 +56,7 @@ export default function SubsidyTrackerError({ error, reset }: SubsidyErrorProps)
             id="subsidy-error-heading"
             className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight"
           >
-            보조금 소진율 데이터를 불러올 수 없습니다
+            보조금 실시간 소진율 데이터를 불러올 수 없습니다
           </h1>
           <p
             id="subsidy-error-description"
@@ -76,7 +76,7 @@ export default function SubsidyTrackerError({ error, reset }: SubsidyErrorProps)
           <button
             type="button"
             onClick={handleRetry}
-            aria-label="보조금 추적기 다시 시도"
+            aria-label="보조금 실시간 소진율 다시 시도"
             className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
           >
             <span aria-hidden="true">🔄</span> 다시 시도
@@ -97,21 +97,21 @@ export default function SubsidyTrackerError({ error, reset }: SubsidyErrorProps)
             prefetch={true}
             className="hover:text-amber-300 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
           >
-            <span aria-hidden="true">📉</span> 감가 계산기
+            <span aria-hidden="true">📉</span> 감가상각 시뮬레이터
           </Link>
           <Link
             href="/reliability-analytics"
             prefetch={false}
             className="hover:text-blue-300 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
           >
-            <span aria-hidden="true">📊</span> 결함 분석 포털
+            <span aria-hidden="true">📊</span> 스텔스 품질 점수
           </Link>
           <Link
             href="/recall-portal"
             prefetch={false}
             className="hover:text-rose-300 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
           >
-            <span aria-hidden="true">🚨</span> 리콜 포털
+            <span aria-hidden="true">🚨</span> 통합 리콜 현황
           </Link>
         </div>
       </div>

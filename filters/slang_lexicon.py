@@ -15,6 +15,7 @@ Authoritative reference:
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any, Dict, List, Optional, Tuple, Union
 import unicodedata
 
@@ -1531,6 +1532,12 @@ _SLANG_ENTRY_LOWER_PAIRS: Tuple[Tuple[SlangEntry, str, str], ...] = tuple(
     for entry in _SORTED_SLANG_ENTRIES
 )
 
+_RE_STRIP_CHARS: re.Pattern[str] = re.compile(
+    r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u200b-\u200d\u202a-\u202e\u2060\u2066-\u2069\ud800-\udfff\ufeff\ufffe\uffff]"
+)
+_RE_UNICODE_SPACES: re.Pattern[str] = re.compile(r"[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]")
+_FULLWIDTH_TO_ASCII: Dict[int, int] = {i: i - 0xFEE0 for i in range(0xFF01, 0xFF5F)}
+
 
 def find_matching_slang(text: Any) -> List[SlangEntry]:
     """Identify all slang entries present in the given text.
@@ -1540,7 +1547,9 @@ def find_matching_slang(text: Any) -> List[SlangEntry]:
     - None, empty string, non-string scalars
     - Decomposed Hangul (NFD / NFKD from macOS / iOS / web input)
     - Mixed-case Latin acronyms (ICCU, iccu, BMS, bms, OTA, ota, TCAM, tcam, HUD, hud, V2L, v2l)
-    - Null bytes and oversized payloads (capped to 50,000 characters)
+    - Fullwidth Latin & numerals (ＩＣＣＵ -> ICCU)
+    - Non-breaking spaces (U+00A0 &nbsp;) and zero-width spaces (U+200B)
+    - Null bytes, BiDi overrides, and oversized payloads (capped to 50,000 characters)
     """
     if text is None:
         return []
@@ -1555,12 +1564,19 @@ def find_matching_slang(text: Any) -> List[SlangEntry]:
     if not raw_str or not raw_str.strip():
         return []
 
-    if "\x00" in raw_str:
-        raw_str = raw_str.replace("\x00", "")
-
-    # Truncate oversized text to prevent CPU starvation / ReDoS
+    # Truncate oversized text early to prevent CPU starvation / ReDoS
     if len(raw_str) > 50_000:
         raw_str = raw_str[:50_000]
+
+    # Strip invalid control characters, zero-width spaces, BiDi overrides
+    raw_str = _RE_STRIP_CHARS.sub("", raw_str)
+    if not raw_str or not raw_str.strip():
+        return []
+
+    # Normalize unicode non-breaking / ideographic spaces to standard ASCII space
+    raw_str = _RE_UNICODE_SPACES.sub(" ", raw_str)
+    # Translate fullwidth Latin & numerals to standard ASCII
+    raw_str = raw_str.translate(_FULLWIDTH_TO_ASCII)
 
     # Normalize unicode to precomposed NFC (handles decomposed Hangul syllables)
     text_nfc = unicodedata.normalize("NFC", raw_str)

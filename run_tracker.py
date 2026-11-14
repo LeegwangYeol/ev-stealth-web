@@ -398,6 +398,8 @@ def sync_defect_reports(
             try:
                 source_stat = source_path.stat()
                 source_bytes = source_path.read_bytes()
+                if not source_bytes or not source_bytes.strip():
+                    return []
                 source_hash = hashlib.sha256(source_bytes).hexdigest()
             except Exception as e:
                 logger.error("Failed to inspect source defect report %s: %s", source_path, e)
@@ -444,13 +446,19 @@ def sync_defect_reports(
                         os.utime(tgt, (source_stat.st_atime, source_stat.st_mtime))
                     except OSError:
                         pass
-                    # Directory fsync to commit new target file
+                    # Directory fsync to commit new target file with leak-proof fd lifecycle
+                    dir_fd = -1
                     try:
                         dir_fd = os.open(str(tgt.parent), os.O_RDONLY)
                         os.fsync(dir_fd)
-                        os.close(dir_fd)
                     except OSError:
                         pass
+                    finally:
+                        if dir_fd >= 0:
+                            try:
+                                os.close(dir_fd)
+                            except OSError:
+                                pass
 
                     written_paths.append(str(tgt))
                     logger.info("  ✓ Successfully synchronized defect reports: %s -> %s", source_path, tgt)
@@ -587,8 +595,8 @@ def parse_arguments(args: Optional[List[str]] = None) -> argparse.Namespace:
         raw_out_str = str(parsed.output).strip()
         if not raw_out_str or raw_out_str == ".":
             parsed.output = DEFAULT_PRIMARY_OUTPUT
-        elif parsed.output.is_dir():
-            parsed.output = parsed.output / "ev_subsidy_data.json"
+        elif parsed.output.is_dir() or raw_out_str.endswith(("/", "\\")):
+            parsed.output = Path(raw_out_str) / "ev_subsidy_data.json"
     else:
         parsed.output = DEFAULT_PRIMARY_OUTPUT
 
@@ -655,7 +663,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             destinations: List[Path] = [args.output]
 
             # If writing to default primary output or when syncing with standard filename, also create mirror subsidy_depletion_data.json
-            if args.output.resolve() == DEFAULT_PRIMARY_OUTPUT.resolve():
+            try:
+                is_default_output = (args.output.resolve() == DEFAULT_PRIMARY_OUTPUT.resolve())
+            except (OSError, RuntimeError):
+                is_default_output = (args.output == DEFAULT_PRIMARY_OUTPUT)
+
+            if is_default_output:
                 destinations.append(MIRROR_PRIMARY_OUTPUT)
             elif args.output.name == "ev_subsidy_data.json":
                 destinations.append(args.output.parent / "subsidy_depletion_data.json")

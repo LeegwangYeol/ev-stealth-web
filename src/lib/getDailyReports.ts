@@ -166,7 +166,73 @@ export function resolveCategory(
 }
 
 /**
- * Safely sanitizes external URLs to prevent javascript:, data:, vbscript: or other XSS injections.
+ * Masks internal filesystem paths (e.g. /Users/..., /home/..., /var/..., C:\Users\...)
+ * to prevent sensitive directory structure and username leakage.
+ */
+export function maskInternalPaths(text?: unknown): string {
+  if (!text || typeof text !== 'string') return '';
+  return text
+    // Absolute Unix/Mac paths starting with common internal dirs
+    .replace(/(?:\/(?:Users|home|root|var|etc|opt|tmp|private|srv|usr|app|src)\/[a-zA-Z0-9_\-./]+)/g, '[내부경로_마스킹]')
+    // Windows paths: C:\Users\... or D:\app\...
+    .replace(/(?:[a-zA-Z]:\\(?:Users|Windows|Program Files|inetpub|app|temp)\\[a-zA-Z0-9_\-\\.]+)/gi, '[내부경로_마스킹]');
+}
+
+/**
+ * Masks sensitive tokens, API keys, credentials, and secrets (JWTs, Bearer tokens, GitHub, OpenAI, AWS keys).
+ */
+export function maskSensitiveTokens(text?: unknown): string {
+  if (!text || typeof text !== 'string') return '';
+  return text
+    // JWT tokens (eyJ...)
+    .replace(/eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}/g, '[REDACTED_JWT]')
+    // Bearer authorization tokens
+    .replace(/Bearer\s+[a-zA-Z0-9_\-.~+/]+=*/gi, 'Bearer [REDACTED_TOKEN]')
+    // GitHub personal access tokens
+    .replace(/gh[pousr]_[A-Za-z0-9]{20,}/g, '[REDACTED_TOKEN]')
+    // AWS access keys
+    .replace(/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g, '[REDACTED_AWS_KEY]')
+    // OpenAI / AI secret keys
+    .replace(/\bsk-[a-zA-Z0-9]{20,}\b/g, '[REDACTED_KEY]')
+    // Key-value credential pairs (api_key=..., secret=..., password=...)
+    .replace(/(?<=(?:api[_-]?key|secret|password|passwd|auth[_-]?token|access[_-]?token)\s*[:=]\s*["']?)[a-zA-Z0-9_\-.~+/]{8,}(?=["']?)/gi, '[REDACTED_SECRET]');
+}
+
+/**
+ * Masks sensitive personally identifiable information (PII) from author names,
+ * such as full IPv4 addresses, emails, and phone numbers.
+ */
+export function maskAuthor(author?: unknown): string {
+  if (!author || typeof author !== 'string') return '익명 제보자';
+  const trimmed = sanitizeText(author).trim();
+  if (!trimmed) return '익명 제보자';
+
+  // 1. Mask unmasked full IPv4 addresses (e.g. "123.45.67.89" -> "123.45.*.*")
+  let masked = trimmed.replace(/\b(\d{1,3}\.\d{1,3})\.\d{1,3}\.\d{1,3}\b/g, '$1.*.*');
+
+  // 2. Mask email addresses (e.g. "john.doe@example.com" -> "j***@example.com")
+  masked = masked.replace(/\b([a-zA-Z0-9._%+-])[a-zA-Z0-9._%+-]*@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/g, '$1***@$2');
+
+  // 3. Mask phone numbers (e.g. "010-1234-5678" -> "010-****-5678")
+  masked = masked.replace(/\b(01[016789])-?\d{3,4}-?(\d{4})\b/g, '$1-****-$2');
+
+  // 4. Mask internal paths and tokens if present in author
+  masked = maskSensitiveTokens(maskInternalPaths(masked));
+
+  return masked;
+}
+
+/**
+ * Composite sensitive data sanitizer that masks internal paths and credentials.
+ */
+export function maskSensitiveData(text?: unknown): string {
+  if (!text || typeof text !== 'string') return '';
+  return maskSensitiveTokens(maskInternalPaths(text));
+}
+
+/**
+ * Safely sanitizes external URLs to prevent javascript:, data:, vbscript: or other XSS injections,
+ * blocks internal/private network addresses (SSRF protection), and strips sensitive query parameters.
  */
 export function sanitizeReportUrl(rawUrl?: unknown): string {
   if (!rawUrl || typeof rawUrl !== 'string') return '#';
@@ -184,6 +250,44 @@ export function sanitizeReportUrl(rawUrl?: unknown): string {
   } catch {
     // Malformed URI encoding
   }
+
+  // Block internal hostnames, loopbacks, and RFC 1918 private IP ranges
+  try {
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      const urlObj = new URL(trimmed);
+      const host = urlObj.hostname.toLowerCase();
+      if (
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host === '0.0.0.0' ||
+        host === '::1' ||
+        host.endsWith('.local') ||
+        host.endsWith('.internal') ||
+        host.endsWith('.corp') ||
+        /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+        /^172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host) ||
+        /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host)
+      ) {
+        return '#';
+      }
+
+      // Strip sensitive tokens/credentials from query parameters
+      const sensitiveKeys = ['token', 'access_token', 'auth', 'auth_token', 'api_key', 'apikey', 'key', 'secret', 'password', 'session', 'jwt'];
+      let modified = false;
+      for (const key of sensitiveKeys) {
+        if (urlObj.searchParams.has(key)) {
+          urlObj.searchParams.delete(key);
+          modified = true;
+        }
+      }
+      if (modified) {
+        return sanitizeSafeUrl(urlObj.toString());
+      }
+    }
+  } catch {
+    // Non-standard or relative URL
+  }
+
   return sanitizeSafeUrl(trimmed);
 }
 
@@ -202,6 +306,70 @@ export function getSafeSentimentScore(rawScore?: unknown, fallback = 0.85): numb
   }
   const clamped = Math.min(1.0, Math.max(0.0, val));
   return Number(clamped.toFixed(2));
+}
+
+export interface DeduplicationSummary {
+  totalBefore: number;
+  totalAfter: number;
+  duplicatesRemoved: number;
+  isDeduplicated: boolean;
+}
+
+/**
+ * Deduplicates reports list using deterministic ID, canonical URL, and semantic composite keys.
+ */
+export function deduplicateReports(
+  rawReports: Array<Record<string, unknown> | DefectReportItem>
+): {
+  reports: DefectReportItem[];
+  summary: DeduplicationSummary;
+} {
+  const safeList = Array.isArray(rawReports) ? rawReports : [];
+  const seenKeys = new Set<string>();
+  const deduped: DefectReportItem[] = [];
+  let duplicatesRemoved = 0;
+
+  safeList.forEach((item, idx) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return;
+
+    // Normalize if not already normalized
+    const normalized = 'defect_category' in item && typeof item.defect_category === 'string'
+      ? (item as DefectReportItem)
+      : normalizeReport(item as Record<string, unknown>, idx);
+
+    // Deterministic deduplication key:
+    let key = '';
+    const id = String(normalized.id || '').trim();
+    if (id && !id.startsWith('report_')) {
+      key = `id:${id}`;
+    } else if (normalized.url && normalized.url !== '#') {
+      const normUrl = normalized.url.replace(/^https?:\/\//i, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+      key = `url:${normUrl}`;
+    } else {
+      const model = (normalized.vehicle_model || '').trim().toLowerCase();
+      const cat = (normalized.defect_category || '').trim().toUpperCase();
+      const titleClean = (normalized.title || '').trim().toLowerCase().replace(/[^\w\s가-힣]/g, '').slice(0, 40);
+      key = `fp:${model}:${cat}:${titleClean}`;
+    }
+
+    if (seenKeys.has(key)) {
+      duplicatesRemoved++;
+      return;
+    }
+
+    seenKeys.add(key);
+    deduped.push(normalized);
+  });
+
+  return {
+    reports: deduped,
+    summary: {
+      totalBefore: safeList.length,
+      totalAfter: deduped.length,
+      duplicatesRemoved,
+      isDeduplicated: true,
+    },
+  };
 }
 
 /**
@@ -257,7 +425,7 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
   }
   const slangList = Array.isArray(rawSlang) ? rawSlang : [];
   const slangTags = slangList
-    .map((s: unknown) => sanitizeText(s))
+    .map((s: unknown) => maskSensitiveData(sanitizeText(s)))
     .filter((s): s is string => Boolean(s && s.length > 0));
 
   let rawDsiCandidate = raw.dsi_breakdown;
@@ -295,7 +463,7 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
     id: sanitizeText(raw.id || raw.post_id || `report_${index + 1}`),
     source: sanitizeText(raw.source || raw.platform || 'bobaedream').toLowerCase(),
     url: sanitizeReportUrl(raw.url || raw.post_url || '#'),
-    title: sanitizeText(raw.title || raw.post_title || '전기차 결함 제보'),
+    title: maskSensitiveData(sanitizeText(raw.title || raw.post_title || '전기차 결함 제보')),
     date: safeDate,
     created_at: raw.created_at ? sanitizeText(raw.created_at) : undefined,
     vehicle_model: sanitizeText(raw.vehicle_model || raw.target_vehicle || '미상 모델'),
@@ -303,14 +471,14 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
     target_vehicle: raw.target_vehicle ? sanitizeText(raw.target_vehicle) : undefined,
     defect_category: catInfo.code,
     defect_category_ko: sanitizeText(raw.defect_category_ko || catInfo.ko),
-    summary: sanitizeText(raw.summary || raw.defect_summary || raw.defect_topic || '결함 상세 내용 요약'),
-    verbatim_quote: sanitizeText(raw.verbatim_quote || raw.raw_quote || raw.content || '원문 없음'),
+    summary: maskSensitiveData(sanitizeText(raw.summary || raw.defect_summary || raw.defect_topic || '결함 상세 내용 요약')),
+    verbatim_quote: maskSensitiveData(sanitizeText(raw.verbatim_quote || raw.raw_quote || raw.content || '원문 없음')),
     slang_tags: slangTags,
     sentiment_score: score,
     sentiment_polarity: Number.isFinite(raw.sentiment_polarity) ? Number(raw.sentiment_polarity) : undefined,
     severity,
     severity_index: Number.isFinite(raw.severity_index) ? Number(raw.severity_index) : undefined,
-    author: raw.author ? sanitizeText(raw.author) : undefined,
+    author: raw.author ? maskAuthor(raw.author) : undefined,
     is_authentic_defect: typeof raw.is_authentic_defect === 'boolean' ? raw.is_authentic_defect : true,
     dsi_breakdown: dsiBreakdown,
   };
@@ -397,6 +565,10 @@ export function calculateKPIs(
     top_platform: typeof existingStats?.top_platform === 'string' && existingStats.top_platform.trim()
       ? sanitizeText(existingStats.top_platform)
       : topPlatformDisplay,
+    duplicates_removed: typeof existingStats?.duplicates_removed === 'number' && Number.isFinite(existingStats.duplicates_removed)
+      ? Math.max(0, existingStats.duplicates_removed)
+      : 0,
+    is_deduplicated: existingStats?.is_deduplicated ?? true,
   };
 }
 
@@ -581,11 +753,9 @@ export function getDailyReports(options?: { useMockOnEmpty?: boolean }): DailyRe
       ? (rawData as Record<string, unknown>[])
       : (Array.isArray(rawData?.reports) ? rawData.reports : []);
 
-    const reports: DefectReportItem[] = rawReports
-      .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object' && !Array.isArray(item)))
-      .map((item: Record<string, unknown>, idx: number) =>
-        normalizeReport(item, idx)
-      );
+    const { reports, summary: dedupSummary } = deduplicateReports(
+      rawReports.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object' && !Array.isArray(item)))
+    );
 
     if (reports.length === 0 && options?.useMockOnEmpty) {
       return getFallbackMockReportData();
@@ -594,7 +764,13 @@ export function getDailyReports(options?: { useMockOnEmpty?: boolean }): DailyRe
     const rawStats = rawData?.statistics && typeof rawData.statistics === 'object' && !Array.isArray(rawData.statistics)
       ? rawData.statistics
       : undefined;
-    const statistics = calculateKPIs(reports, rawStats);
+    const statistics = calculateKPIs(reports, {
+      ...rawStats,
+      duplicates_removed: typeof rawStats?.duplicates_removed === 'number' && Number.isFinite(rawStats.duplicates_removed)
+        ? rawStats.duplicates_removed
+        : dedupSummary.duplicatesRemoved,
+      is_deduplicated: true,
+    });
 
     let safeTopCategories = Array.isArray(rawData?.top_defect_categories)
       ? rawData.top_defect_categories

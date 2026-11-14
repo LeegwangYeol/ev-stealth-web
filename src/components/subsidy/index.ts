@@ -1,7 +1,7 @@
 export { default as SubsidyBadge, getBadgeStyle, getStatusLabel } from './SubsidyBadge';
 export type { SubsidyBadgeProps } from './SubsidyBadge';
 
-export { default as SubsidyProgressBar } from './SubsidyProgressBar';
+export { default as SubsidyProgressBar, getDepletionColor } from './SubsidyProgressBar';
 export type { SubsidyProgressBarProps } from './SubsidyProgressBar';
 
 export { default as SubsidyTableView } from './SubsidyTableView';

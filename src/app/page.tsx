@@ -70,13 +70,13 @@ const homeJsonLd = {
         {
           "@type": "ListItem",
           "position": 3,
-          "name": "전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI)",
+          "name": "전기차 모델·연식별 결함 통계 및 스텔스 품질 점수(DSI)",
           "url": `${SITE_URL}/reliability-analytics`,
         },
         {
           "@type": "ListItem",
           "position": 4,
-          "name": "공식 전기차 리콜 & 배터리 화재 안전 포털",
+          "name": "공식 전기차 리콜 & 배터리 화재 안전 포털 (통합 리콜 현황)",
           "url": `${SITE_URL}/recall-portal`,
         },
         {
@@ -142,7 +142,7 @@ const homeJsonLd = {
           "name": "전기차 배터리 잔여수명(SoH)과 중고차 잔존가치는 어떤 관계가 있나요?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "고전압 배터리 팩 교체비는 1,500만~7,500만 원에 달하므로, 배터리 수명(SoH) 85% 이상 유지 차량은 감가 방어율이 탁월합니다. 본 포털의 감가·배터리 계산기에서 주행거리, 급속충전 비율에 따른 5개년 잔존가치와 대기환경보전법 제58조 보조금 환수액을 정밀 시뮬레이션할 수 있습니다.",
+            "text": "고전압 배터리 팩 교체비는 1,500만~7,500만 원에 달하므로, 배터리 수명(SoH) 85% 이상 유지 차량은 감가 방어율이 탁월합니다. 본 포털의 감가상각 시뮬레이터(감가·배터리 계산기)에서 주행거리, 급속충전 비율에 따른 5개년 잔존가치와 대기환경보전법 제58조 보조금 환수액을 정밀 시뮬레이션할 수 있습니다.",
           },
         },
       ],
@@ -225,7 +225,7 @@ export const metadata: Metadata = {
 
 export default function Home() {
   return (
-    <div className="flex flex-col items-center justify-center space-y-12 py-20">
+    <div className="flex flex-col items-center justify-center space-y-8 sm:space-y-12 py-8 sm:py-14 md:py-20">
       <JsonLd data={homeJsonLd} />
       <section aria-labelledby="home-hero-heading" className="text-center space-y-4">
         <h1 id="home-hero-heading" className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900">
@@ -267,7 +267,7 @@ export default function Home() {
 
         <Link href="/depreciation-calculator"
           prefetch={true}
-          aria-label="전기차 감가방어율 및 배터리 수명 계산기 바로가기"
+          aria-label="전기차 감가방어율 & 감가상각 시뮬레이터 (배터리 수명 계산기) 바로가기"
           className="group block p-6 bg-gradient-to-br from-emerald-950 via-slate-900 to-teal-950 text-white border border-emerald-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-emerald-400 transition-all duration-300 md:col-span-2 lg:col-span-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -279,7 +279,7 @@ export default function Home() {
             <span className="text-xs text-emerald-300 font-semibold">대기환경보전법 제58조 보조금 환수율 완벽 반영</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold mb-2 text-white group-hover:text-emerald-300 transition">
-            <span aria-hidden="true">📉 </span>전기차 감가방어율 &amp; 배터리 수명 계산기 <span aria-hidden="true">&rarr;</span>
+            <span aria-hidden="true">📉 </span>전기차 감가방어율 &amp; 감가상각 시뮬레이터 (배터리 수명 계산기) <span aria-hidden="true">&rarr;</span>
           </h2>
           <p className="text-slate-300 leading-relaxed text-sm sm:text-base">
             내 차의 1~5년 차 잔존가치와 <strong>감가 방어율 비교</strong>, 주행거리·급속충전 비율에 따른 <strong>배터리 열화 시뮬레이션</strong>(SoH 잔여수명 및 배터리 교체비용), 2년 의무운행 기간 내 매도 시 <strong>보조금 환수액 계산</strong>, 5년 유지비 총소유비용(<strong>TCO 절감 분석</strong>)까지 원클릭으로 정밀 시뮬레이션하세요.
@@ -294,7 +294,7 @@ export default function Home() {
 
         <Link href="/reliability-analytics"
           prefetch={false}
-          aria-label="전기차 결함 통계 및 내구성(DSI) 분석 대시보드 바로가기"
+          aria-label="전기차 결함 통계 & 스텔스 품질 점수(DSI 내구성 대시보드) 바로가기"
           className="group block p-6 bg-gradient-to-br from-indigo-900 via-slate-900 to-blue-950 text-white border border-indigo-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-indigo-400 transition-all duration-300 md:col-span-2 lg:col-span-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -306,7 +306,7 @@ export default function Home() {
             <span className="text-xs text-indigo-300 font-semibold">1,280건 커뮤니티 빅데이터 기반</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold mb-2 text-white group-hover:text-blue-300 transition">
-            <span aria-hidden="true">📊 </span>전기차 결함 통계 &amp; 내구성(DSI) 분석 대시보드 <span aria-hidden="true">&rarr;</span>
+            <span aria-hidden="true">📊 </span>전기차 결함 통계 &amp; 스텔스 품질 점수(DSI 내구성 대시보드) <span aria-hidden="true">&rarr;</span>
           </h2>
           <p className="text-slate-300 leading-relaxed text-sm sm:text-base">
             아이오닉, EV6, 모델3/Y, BYD, 벤츠 EQE 등 89개 연식별 결함 심각도 지수(DSI), 고질병 랭킹, 연식 리스크 히트맵 및 보증 만료 후 폭탄 수리비 매트릭스를 인터랙티브 차트로 확인하세요.
@@ -315,7 +315,7 @@ export default function Home() {
 
         <Link href="/recall-portal"
           prefetch={false}
-          aria-label="공식 전기차 리콜 및 배터리 화재 안전 포털 바로가기"
+          aria-label="공식 전기차 리콜 & 배터리 화재 안전 포털 (통합 리콜 현황) 바로가기"
           className="group block p-6 bg-gradient-to-br from-rose-950 via-slate-900 to-amber-950 text-white border border-rose-700/50 rounded-2xl shadow-lg hover:shadow-2xl hover:border-rose-400 transition-all duration-300 md:col-span-2 lg:col-span-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -327,7 +327,7 @@ export default function Home() {
             <span className="text-xs text-rose-300 font-semibold">지하주차장 화재 권고안 &amp; 원클릭 예시</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold mb-2 text-white group-hover:text-rose-300 transition">
-            <span aria-hidden="true">🚨 </span>공식 전기차 리콜 &amp; 배터리 화재 안전 포털 <span aria-hidden="true">&rarr;</span>
+            <span aria-hidden="true">🚨 </span>공식 전기차 리콜 &amp; 배터리 화재 안전 포털 (통합 리콜 현황) <span aria-hidden="true">&rarr;</span>
           </h2>
           <p className="text-slate-300 leading-relaxed text-sm sm:text-base">
             내 차의 배터리 제조사(LG에너지솔루션·SK온·삼성SDI·CATL·파라시스) 실명 공개, 국토교통부·NHTSA 공식 리콜 이력 및 지하주차장 화재 안전 권고안을 17자리 차대번호(VIN) 조회 또는 원클릭 예시로 즉시 확인하세요.

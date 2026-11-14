@@ -14,6 +14,7 @@ import {
   decodeVinAndCheckRecalls,
   checkRecallsByModel,
   validateVinString,
+  verifyVinChecksum,
   getDistinctBrands,
   getModelsForBrand,
   DEFAULT_RECALL_METADATA,
@@ -338,6 +339,13 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
   const [selectedSupplierFilter, setSelectedSupplierFilter] = useState<string>('ALL');
   const [selectedFireStatusFilter, setSelectedFireStatusFilter] = useState<string>('ALL');
 
+  // View modes: Card vs Table
+  const [batteryViewMode, setBatteryViewMode] = useState<'card' | 'table'>('card');
+  const [recallViewMode, setRecallViewMode] = useState<'card' | 'table'>('card');
+
+  // Recalls catalog brand filter
+  const [selectedRecallBrandFilter, setSelectedRecallBrandFilter] = useState<string>('ALL');
+
   // Recalls catalog search and filters
   const [recallSearch, setRecallSearch] = useState<string>('');
   const [selectedRiskFilter, setSelectedRiskFilter] = useState<string>('ALL');
@@ -459,6 +467,14 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
   const vinValidation = useMemo(() => {
     if (!deferredVinInput) return { valid: false, normalized: '', error: '' };
     return validateVinString(deferredVinInput);
+  }, [deferredVinInput]);
+
+  // Realtime ISO / US 9th check digit checksum verification
+  const vinChecksum = useMemo(() => {
+    if (!deferredVinInput) return null;
+    const clean = deferredVinInput.trim().toUpperCase().replace(/[\s-]/g, '');
+    if (clean.length !== 17) return null;
+    return verifyVinChecksum(clean);
   }, [deferredVinInput]);
 
   // Debounced input change handler for VIN search
@@ -625,10 +641,12 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
       const model = r.target_model || '';
       const brand = r.brand || '';
       const detail = r.defect_detail || '';
+      const riskKo = r.risk_level_ko || '';
+      const remedyKo = r.remedy_type_ko || '';
 
       let matchesSearch = true;
       if (rawQ) {
-        const combinedRaw = `${campNo} ${brand} ${model} ${title} ${detail}`.toLowerCase();
+        const combinedRaw = `${campNo} ${brand} ${model} ${title} ${detail} ${riskKo} ${remedyKo}`.toLowerCase();
         const combinedNorm = normalizeSearchText(combinedRaw);
 
         const rawMatch = combinedRaw.includes(rawQ);
@@ -642,13 +660,18 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
         matchesSearch = rawMatch || normMatch || tokenMatch;
       }
 
+      const matchesBrand =
+        selectedRecallBrandFilter === 'ALL' ||
+        (brand && brand.toLowerCase().includes(selectedRecallBrandFilter.toLowerCase())) ||
+        (selectedRecallBrandFilter && brand === selectedRecallBrandFilter);
+
       const matchesRisk = selectedRiskFilter === 'ALL' || r.risk_level === selectedRiskFilter;
       const matchesRemedy = selectedRemedyFilter === 'ALL' || r.remedy_type === selectedRemedyFilter;
 
-      return matchesSearch && matchesRisk && matchesRemedy;
+      return matchesSearch && matchesBrand && matchesRisk && matchesRemedy;
     });
     return sortRecallsByDate(filtered, 'desc');
-  }, [recalls, deferredRecallSearch, selectedRiskFilter, selectedRemedyFilter]);
+  }, [recalls, deferredRecallSearch, selectedRecallBrandFilter, selectedRiskFilter, selectedRemedyFilter]);
 
   const displayedRecalls = useMemo(
     () => filteredRecalls.slice(0, visibleRecallCount),
@@ -709,7 +732,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 <span className="text-xs text-slate-300">기준: 2026 최신 개정판</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2.5">
-                <span>전기차 공식 리콜 및 배터리 화재 안전 포털</span>
+                <span>전기차 공식 리콜 및 배터리 화재 안전 포털 (통합 리콜 현황)</span>
               </h1>
               <p className="text-sm text-slate-300 mt-1 max-w-3xl">
                 17자리 차대번호(VIN) 및 차종별 배터리 제조사(파라시스, LG, SK, 삼성, CATL 등), 화재 결함 이력,
@@ -906,6 +929,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
                       유효한 ISO 3779 17자리 차대번호 형식입니다.
+                      {vinChecksum?.isValidCheckDigit && (
+                        <span className="ml-1 text-emerald-300 font-semibold">(북미/ISO 9번째 체크섬 일치)</span>
+                      )}
                     </p>
                   )}
                 </div>
@@ -1406,25 +1432,57 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               </p>
             </div>
 
-            {/* Search Input */}
-            <form role="search" aria-label="배터리 제조사 및 모델 검색" onSubmit={(e) => e.preventDefault()} className="w-full md:w-72">
-              <label htmlFor="battery-search-input" className="sr-only">배터리 제조사 및 모델 검색</label>
-              <input
-                id="battery-search-input"
-                type="search"
-                value={batterySearch}
-                onChange={(e) => setBatterySearch(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape' && batterySearch) {
-                    e.stopPropagation();
-                    setBatterySearch('');
-                  }
-                }}
-                aria-label="배터리 제조사 및 모델 검색"
-                placeholder="모델명, 제조사, 배터리명 검색..."
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 min-h-[44px] text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
-              />
-            </form>
+            {/* View Switcher & Search Input */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div role="group" aria-label="배터리 제원 보기 방식 선택" className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+                <button
+                  type="button"
+                  aria-label="배터리 제원 카드 뷰 보기"
+                  aria-pressed={batteryViewMode === 'card'}
+                  onClick={() => setBatteryViewMode('card')}
+                  className={`px-3 py-1.5 min-h-[44px] rounded-lg text-xs font-semibold transition inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                    batteryViewMode === 'card'
+                      ? 'bg-blue-600 text-white font-bold'
+                      : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <span aria-hidden="true">⊞</span> 카드형
+                </button>
+                <button
+                  type="button"
+                  aria-label="배터리 제원 대장 표 보기"
+                  aria-pressed={batteryViewMode === 'table'}
+                  onClick={() => setBatteryViewMode('table')}
+                  className={`px-3 py-1.5 min-h-[44px] rounded-lg text-xs font-semibold transition inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                    batteryViewMode === 'table'
+                      ? 'bg-blue-600 text-white font-bold'
+                      : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <span aria-hidden="true">☰</span> 테이블형
+                </button>
+              </div>
+
+              {/* Search Input */}
+              <form role="search" aria-label="배터리 제조사 및 모델 검색" onSubmit={(e) => e.preventDefault()} className="w-full sm:w-64 md:w-72">
+                <label htmlFor="battery-search-input" className="sr-only">배터리 제조사 및 모델 검색</label>
+                <input
+                  id="battery-search-input"
+                  type="search"
+                  value={batterySearch}
+                  onChange={(e) => setBatterySearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape' && batterySearch) {
+                      e.stopPropagation();
+                      setBatterySearch('');
+                    }
+                  }}
+                  aria-label="배터리 제조사 및 모델 검색"
+                  placeholder="모델명, 제조사, 배터리명 검색..."
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 min-h-[44px] text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                />
+              </form>
+            </div>
           </div>
 
           {/* Filter Chips: Suppliers & Status */}
@@ -1520,6 +1578,42 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   </button>
                 )}
               </div>
+            ) : batteryViewMode === 'table' ? (
+              <div className="col-span-full space-y-4">
+                <BatterySafetyTableView profiles={displayedBatteryProfiles} />
+                {filteredBatteryProfiles.length > visibleBatteryCount && (
+                  <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setVisibleBatteryCount((prev) => prev + PAGE_SIZE_BATTERIES)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                          e.preventDefault();
+                          setVisibleBatteryCount((prev) => prev + PAGE_SIZE_BATTERIES);
+                        }
+                      }}
+                      aria-label={`배터리 차종 더보기 (현재 ${displayedBatteryProfiles.length}개 / 전체 ${filteredBatteryProfiles.length}개)`}
+                      className="px-5 py-2.5 min-h-[44px] rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-blue-300 border border-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    >
+                      더보기 (+{Math.min(PAGE_SIZE_BATTERIES, filteredBatteryProfiles.length - visibleBatteryCount)}개)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVisibleBatteryCount(filteredBatteryProfiles.length)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                          e.preventDefault();
+                          setVisibleBatteryCount(filteredBatteryProfiles.length);
+                        }
+                      }}
+                      aria-label={`배터리 차종 전체 ${filteredBatteryProfiles.length}개 펼쳐보기`}
+                      className="px-4 py-2.5 min-h-[44px] rounded-xl text-xs font-medium text-slate-300 hover:text-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    >
+                      전체 보기 ({filteredBatteryProfiles.length}개 차종)
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
               <>
                 {displayedBatteryProfiles.map((p) => (
@@ -1589,25 +1683,74 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               </p>
             </div>
 
-            {/* Search Input */}
-            <form role="search" aria-label="전기차 리콜 캠페인 검색" onSubmit={(e) => e.preventDefault()} className="w-full md:w-72">
-              <label htmlFor="recall-catalog-search-input" className="sr-only">전기차 공식 리콜 캠페인 검색</label>
-              <input
-                id="recall-catalog-search-input"
-                type="search"
-                value={recallSearch}
-                onChange={(e) => setRecallSearch(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape' && recallSearch) {
-                    e.stopPropagation();
-                    setRecallSearch('');
-                  }
-                }}
-                aria-label="전기차 공식 리콜 캠페인 검색"
-                placeholder="리콜번호, 제목, 차종 검색..."
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 min-h-[44px] text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
-              />
-            </form>
+            {/* View Switcher & Search Input */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div role="group" aria-label="리콜 캠페인 목록 보기 방식 선택" className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+                <button
+                  type="button"
+                  aria-label="리콜 캠페인 카드 뷰 보기"
+                  aria-pressed={recallViewMode === 'card'}
+                  onClick={() => setRecallViewMode('card')}
+                  className={`px-3 py-1.5 min-h-[44px] rounded-lg text-xs font-semibold transition inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                    recallViewMode === 'card'
+                      ? 'bg-blue-600 text-white font-bold'
+                      : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <span aria-hidden="true">⊞</span> 카드형
+                </button>
+                <button
+                  type="button"
+                  aria-label="리콜 캠페인 대장 표 보기"
+                  aria-pressed={recallViewMode === 'table'}
+                  onClick={() => setRecallViewMode('table')}
+                  className={`px-3 py-1.5 min-h-[44px] rounded-lg text-xs font-semibold transition inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                    recallViewMode === 'table'
+                      ? 'bg-blue-600 text-white font-bold'
+                      : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <span aria-hidden="true">☰</span> 테이블형
+                </button>
+              </div>
+
+              {/* Search Input */}
+              <form role="search" aria-label="전기차 리콜 캠페인 검색" onSubmit={(e) => e.preventDefault()} className="w-full sm:w-64 md:w-72">
+                <label htmlFor="recall-catalog-search-input" className="sr-only">전기차 공식 리콜 캠페인 검색</label>
+                <input
+                  id="recall-catalog-search-input"
+                  type="search"
+                  value={recallSearch}
+                  onChange={(e) => setRecallSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape' && recallSearch) {
+                      e.stopPropagation();
+                      setRecallSearch('');
+                    }
+                  }}
+                  aria-label="전기차 공식 리콜 캠페인 검색"
+                  placeholder="리콜번호, 제목, 차종 검색..."
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 min-h-[44px] text-sm text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                />
+              </form>
+            </div>
+          </div>
+
+          {/* Brand Filter */}
+          <div role="group" aria-label="제조사 브랜드별 리콜 필터" className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-800">
+            <label htmlFor="recall-brand-filter" className="text-xs font-semibold text-slate-300 mr-2">제조사 필터:</label>
+            <select
+              id="recall-brand-filter"
+              aria-label="제조사 브랜드별 리콜 필터"
+              value={selectedRecallBrandFilter}
+              onChange={(e) => setSelectedRecallBrandFilter(e.target.value)}
+              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              <option value="ALL">전체 제조사 (브랜드 전체)</option>
+              {availableBrands.map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
           </div>
 
           {/* Filter Chips: Risk & Remedy */}
@@ -1694,6 +1837,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
                         e.preventDefault();
                         setRecallSearch('');
+                        setSelectedRecallBrandFilter('ALL');
                         setSelectedRiskFilter('ALL');
                         setSelectedRemedyFilter('ALL');
                         document.getElementById('recall-catalog-search-input')?.focus();
@@ -1702,6 +1846,47 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   >
                     필터 및 검색 초기화
                   </button>
+                )}
+              </div>
+            ) : recallViewMode === 'table' ? (
+              <div className="space-y-4 pt-2">
+                <RecallTableView
+                  recalls={displayedRecalls}
+                  expandedRecallIds={expandedRecallIds}
+                  toggleRecallExpansion={toggleRecallExpansion}
+                  panelIdPrefix="campaign-list-detail-"
+                />
+                {filteredRecalls.length > visibleRecallCount && (
+                  <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setVisibleRecallCount((prev) => prev + PAGE_SIZE_RECALLS)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                          e.preventDefault();
+                          setVisibleRecallCount((prev) => prev + PAGE_SIZE_RECALLS);
+                        }
+                      }}
+                      aria-label={`리콜 캠페인 더보기 (현재 ${displayedRecalls.length}건 / 전체 ${filteredRecalls.length}건)`}
+                      className="px-5 py-2.5 min-h-[44px] rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-blue-300 border border-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    >
+                      더보기 (+{Math.min(PAGE_SIZE_RECALLS, filteredRecalls.length - visibleRecallCount)}건)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVisibleRecallCount(filteredRecalls.length)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                          e.preventDefault();
+                          setVisibleRecallCount(filteredRecalls.length);
+                        }
+                      }}
+                      aria-label={`리콜 캠페인 전체 ${filteredRecalls.length}건 펼쳐보기`}
+                      className="px-4 py-2.5 min-h-[44px] rounded-xl text-xs font-medium text-slate-300 hover:text-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                    >
+                      전체 보기 ({filteredRecalls.length}건 리콜)
+                    </button>
+                  </div>
                 )}
               </div>
             ) : (
@@ -2179,20 +2364,43 @@ export const RecallTableView = React.memo(function RecallTableView({
                   <td className="p-3.5 text-center whitespace-nowrap">
                     <button
                       type="button"
+                      id={`table-toggle-${campaign.id}`}
                       aria-expanded={isExpanded}
                       aria-controls={`${panelIdPrefix}${campaign.id}`}
                       aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '상세 펼치기'}`}
                       onClick={() => toggleRecallExpansion(campaign.id)}
-                      className="text-xs text-blue-300 hover:text-blue-200 font-semibold px-2.5 py-1 min-h-[36px] inline-flex items-center justify-center rounded bg-slate-800 border border-slate-700 hover:bg-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape' && isExpanded) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          toggleRecallExpansion(campaign.id);
+                        }
+                      }}
+                      className="text-xs text-blue-300 hover:text-blue-200 font-semibold px-2.5 py-1.5 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded bg-slate-800 border border-slate-700 hover:bg-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     >
                       {isExpanded ? '닫기 ▲' : '상세 ▼'}
                     </button>
                   </td>
                 </tr>
-                {isExpanded && (
-                  <tr id={`${panelIdPrefix}${campaign.id}`} className="bg-slate-900/80">
-                    <td colSpan={8} className="p-4 border-t border-slate-800">
-                      <div className="space-y-3 text-xs">
+                <tr
+                  id={`${panelIdPrefix}${campaign.id}`}
+                  hidden={!isExpanded}
+                  className={`${!isExpanded ? 'hidden ' : ''}bg-slate-900/80`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape' && isExpanded) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleRecallExpansion(campaign.id);
+                      document.getElementById(`table-toggle-${campaign.id}`)?.focus();
+                    }
+                  }}
+                >
+                  <td colSpan={8} className="p-4 border-t border-slate-800">
+                    <div
+                      role="region"
+                      aria-labelledby={`table-toggle-${campaign.id}`}
+                      className="space-y-3 text-xs"
+                    >
                         <div className="flex flex-wrap items-center gap-4 text-slate-300">
                           <div>
                             <span className="font-semibold text-slate-200">생산 기간: </span>
@@ -2223,7 +2431,7 @@ export const RecallTableView = React.memo(function RecallTableView({
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 aria-label={`${campaign.brand} ${campaign.defect_title} 공식 웹사이트 바로가기 (새 창에서 열림)`}
-                                className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 min-h-[36px] px-2 rounded-lg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                                className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 min-h-[44px] px-2 rounded-lg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                               >
                                 공식 웹사이트 바로가기 &rarr;
                                 <span className="sr-only"> (새 창에서 열림)</span>
@@ -2232,7 +2440,7 @@ export const RecallTableView = React.memo(function RecallTableView({
                               <a
                                 href={safeLink}
                                 aria-label={`${campaign.brand} ${campaign.defect_title} 관련 안내 바로가기`}
-                                className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 min-h-[36px] px-2 rounded-lg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                                className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 min-h-[44px] px-2 rounded-lg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                               >
                                 관련 안내 바로가기 &rarr;
                               </a>
@@ -2242,7 +2450,6 @@ export const RecallTableView = React.memo(function RecallTableView({
                       </div>
                     </td>
                   </tr>
-                )}
               </React.Fragment>
             );
           })}

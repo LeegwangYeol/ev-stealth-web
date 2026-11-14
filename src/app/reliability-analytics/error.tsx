@@ -56,7 +56,7 @@ export default function ReliabilityAnalyticsError({ error, reset }: ReliabilityE
             id="reliability-error-heading"
             className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight"
           >
-            결함 통계 데이터를 불러올 수 없습니다
+            스텔스 품질 점수 및 결함 통계 데이터를 불러올 수 없습니다
           </h1>
           <p
             id="reliability-error-description"
@@ -76,7 +76,7 @@ export default function ReliabilityAnalyticsError({ error, reset }: ReliabilityE
           <button
             type="button"
             onClick={handleRetry}
-            aria-label="결함 분석 포털 다시 시도"
+            aria-label="스텔스 품질 점수 대시보드 다시 시도"
             className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">🔄</span> 다시 시도
@@ -97,21 +97,21 @@ export default function ReliabilityAnalyticsError({ error, reset }: ReliabilityE
             prefetch={false}
             className="hover:text-rose-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
           >
-            <span aria-hidden="true">🚨</span> 공식 리콜 포털
+            <span aria-hidden="true">🚨</span> 통합 리콜 현황
           </Link>
           <Link
             href="/subsidy-tracker"
             prefetch={true}
             className="hover:text-amber-800 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
           >
-            <span aria-hidden="true">⚡</span> 보조금 추적기
+            <span aria-hidden="true">⚡</span> 보조금 실시간 소진율
           </Link>
           <Link
             href="/depreciation-calculator"
             prefetch={true}
             className="hover:text-emerald-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
           >
-            <span aria-hidden="true">📉</span> 감가 계산기
+            <span aria-hidden="true">📉</span> 감가상각 시뮬레이터
           </Link>
         </div>
       </div>

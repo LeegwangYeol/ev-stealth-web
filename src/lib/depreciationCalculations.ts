@@ -811,7 +811,8 @@ export function interpolateBaselineResidual(
 ): number {
   const key = basis === 'effective' ? 'residual_pct_effective' : 'residual_pct_msrp';
 
-  if (!Number.isFinite(years) || years <= 0) return 100.0;
+  const numYears = typeof years === 'number' ? years : Number(years);
+  if (!Number.isFinite(numYears) || numYears <= 0) return 100.0;
 
   const getPoint = (val: unknown, fallback: number): number =>
     typeof val === 'number' && Number.isFinite(val) ? clamp(val, 0.0, 100.0) : fallback;
@@ -822,24 +823,24 @@ export function interpolateBaselineResidual(
   const y4 = getPoint(curve?.year_4?.[key], y3);
   const y5 = getPoint(curve?.year_5?.[key], y4 !== 100.0 ? y4 : 50.0);
 
-  if (years <= 1.0) {
-    return clamp(100.0 - years * (100.0 - y1), 0.0, 100.0);
+  if (numYears <= 1.0) {
+    return clamp(100.0 - numYears * (100.0 - y1), 0.0, 100.0);
   }
-  if (years <= 2.0) {
-    return clamp(y1 - (years - 1.0) * (y1 - y2), 0.0, 100.0);
+  if (numYears <= 2.0) {
+    return clamp(y1 - (numYears - 1.0) * (y1 - y2), 0.0, 100.0);
   }
-  if (years <= 3.0) {
-    return clamp(y2 - (years - 2.0) * (y2 - y3), 0.0, 100.0);
+  if (numYears <= 3.0) {
+    return clamp(y2 - (numYears - 2.0) * (y2 - y3), 0.0, 100.0);
   }
-  if (years <= 4.0) {
-    return clamp(y3 - (years - 3.0) * (y3 - y4), 0.0, 100.0);
+  if (numYears <= 4.0) {
+    return clamp(y3 - (numYears - 3.0) * (y3 - y4), 0.0, 100.0);
   }
-  if (years <= 5.0) {
-    return clamp(y4 - (years - 4.0) * (y4 - y5), 0.0, 100.0);
+  if (numYears <= 5.0) {
+    return clamp(y4 - (numYears - 4.0) * (y4 - y5), 0.0, 100.0);
   }
 
   // Beyond 5 years: extrapolate with compounding 8% drop per additional year
-  const excessYears = years - 5.0;
+  const excessYears = numYears - 5.0;
   const extrapolated = y5 * Math.pow(0.92, excessYears);
   const safeExtrapolated = Number.isFinite(extrapolated) ? Math.max(10.0, extrapolated) : 10.0;
   return clamp(safeExtrapolated, 0.0, 100.0);
@@ -867,17 +868,24 @@ export function calculateDepreciation(
   const safeInput = input && typeof input === 'object' ? input : ({} as DepreciationCalculationInput);
   const rawYears = safeInput.years;
   const parsedYears = typeof rawYears === 'number' ? rawYears : Number(rawYears);
-  const years = Number.isFinite(parsedYears) ? Math.max(0, parsedYears) : 0;
+  const years = Number.isFinite(parsedYears) ? clamp(parsedYears, 0, 100) : 0;
 
   const baselineAnnualMileageKm =
     options?.baselineAnnualMileageKm ?? DEFAULT_BASELINE_ANNUAL_MILEAGE_KM;
   const adjustmentFactors =
     options?.adjustmentFactors ?? DEFAULT_ADJUSTMENT_FACTORS;
 
-  const rawMileage = safeInput.mileageKm;
-  const parsedMileage = typeof rawMileage === 'number' ? rawMileage : Number(rawMileage);
+  const rawMileage = safeInput.mileageKm as unknown;
+  const parsedMileage =
+    typeof rawMileage === 'number'
+      ? rawMileage
+      : typeof rawMileage === 'string' && (rawMileage as string).trim() !== ''
+      ? Number((rawMileage as string).trim())
+      : NaN;
   const defaultMileage = years * baselineAnnualMileageKm;
-  const mileageKm = Number.isFinite(parsedMileage) ? Math.max(0, parsedMileage) : defaultMileage;
+  const mileageKm = Number.isFinite(parsedMileage)
+    ? clamp(parsedMileage, 0, 10_000_000)
+    : defaultMileage;
 
   const {
     modelId,
@@ -888,8 +896,13 @@ export function calculateDepreciation(
 
   let model = safeInput.model || options?.model;
   if (!model && options?.models && modelId) {
+    const searchId = modelId.toLowerCase().trim();
+    const searchNorm = searchId.replace(/[-_\s]/g, '');
     model = options.models.find(
-      (m) => m.id.toLowerCase() === modelId.toLowerCase() || m.id === modelId
+      (m) =>
+        m.id.toLowerCase() === searchId ||
+        m.id === modelId ||
+        m.id.toLowerCase().replace(/[-_\s]/g, '') === searchNorm
     );
   }
   if (!model) {
@@ -944,8 +957,9 @@ export function calculateDepreciation(
 
   // 3. Chemistry Aging Adjustment
   const modelChemistry = model?.battery_specs?.chemistry ?? 'NCM_811';
+  const isLfp = normalizeChemistry(modelChemistry) === 'LFP';
   let batteryChemistryBonus = model?.factor_weights?.chemistry_aging ?? 0;
-  if (modelChemistry.includes('LFP')) {
+  if (isLfp) {
     // Smooth monotonic ramp from year 2.0 to 3.0 to ensure discrete chemistry bonuses never invert the depreciation curve
     const lfpBonusRamp = clamp(years - 2.0, 0.0, 1.0);
     batteryChemistryBonus += 0.01 * lfpBonusRamp;
@@ -954,7 +968,7 @@ export function calculateDepreciation(
   // 4. Winter Season Adjustment
   let winterAdjustment = 0;
   if (winterSeason) {
-    if (modelChemistry.includes('LFP')) {
+    if (isLfp) {
       winterAdjustment = -0.035;
     } else {
       winterAdjustment = -0.015;
@@ -1060,7 +1074,6 @@ export function simulateBatteryHealth(
   const {
     chemistry: chemInput,
     modelId,
-    years: rawYears,
     totalKm: inputTotalKm,
     annualKm = 15000,
     dcfcRatio = 0.25,
@@ -1068,8 +1081,13 @@ export function simulateBatteryHealth(
     ambientTempC = 25.0,
     vehicleEfficiencyKmPerKwh = 5.2,
   } = safeParams;
-
-  const parsedYears = typeof rawYears === 'number' ? rawYears : Number(rawYears);
+  const rawYears = safeParams.years as unknown;
+  const parsedYears =
+    typeof rawYears === 'number'
+      ? rawYears
+      : typeof rawYears === 'string' && (rawYears as string).trim() !== ''
+      ? Number((rawYears as string).trim())
+      : NaN;
   const isInvalidYears =
     rawYears === undefined ||
     rawYears === null ||
@@ -1104,7 +1122,7 @@ export function simulateBatteryHealth(
       : typeof safeParams.packCapacityKwh === 'string' && (safeParams.packCapacityKwh as string).trim() !== ''
       ? Number((safeParams.packCapacityKwh as string).trim())
       : (model?.battery_specs?.capacity_kwh ?? 77.4);
-  const packCapacityKwh = Number.isFinite(parsedPackCapacity) && parsedPackCapacity > 0 ? parsedPackCapacity : 77.4;
+  const packCapacityKwh = Number.isFinite(parsedPackCapacity) && parsedPackCapacity > 0 ? clamp(parsedPackCapacity, 10.0, 500.0) : 77.4;
 
   const parsedAnnualKm = typeof annualKm === 'number'
     ? annualKm
@@ -1177,7 +1195,7 @@ export function simulateBatteryHealth(
     : NaN;
   const safeEfficiency =
     Number.isFinite(parsedEfficiency) && parsedEfficiency > 0
-      ? parsedEfficiency
+      ? clamp(parsedEfficiency, 0.5, 30.0)
       : 5.2;
   const safeCapacity =
     Number.isFinite(packCapacityKwh) && packCapacityKwh > 0

@@ -14,7 +14,7 @@ const recallJsonLd = {
     {
       '@type': 'WebApplication',
       '@id': `${SITE_URL}/recall-portal#app`,
-      name: '전기차 공식 리콜 & 배터리 제조사 화재 안전 포털',
+      name: '전기차 공식 리콜 & 배터리 제조사 화재 안전 포털 (통합 리콜 현황)',
       url: `${SITE_URL}/recall-portal`,
       applicationCategory: 'UtilitiesApplication',
       operatingSystem: 'All',
@@ -120,10 +120,11 @@ const recallJsonLd = {
 };
 
 export const metadata: Metadata = {
-  title: '전기차 공식 리콜 & 배터리 제조사 화재 안전 포털',
+  title: '전기차 공식 리콜 & 통합 리콜 현황 (배터리 화재 안전 포털)',
   description:
     '대한민국 국토교통부(MOLIT) 및 미국 NHTSA 공식 전기차 리콜 캠페인 실시간 조회. 17자리 차대번호(VIN) 및 차종별 배터리 셀 제조사(파라시스, LG에너지솔루션, SK온, CATL, 삼성SDI 등), 화재 위험도 및 아파트 지하주차장 충전 안전 가이드 제공.',
   keywords: [
+    '통합 리콜 현황',
     '전기차 리콜 조회',
     '전기차 배터리 제조사',
     '전기차 차대번호 조회',
@@ -139,9 +140,13 @@ export const metadata: Metadata = {
   ],
   alternates: {
     canonical: '/recall-portal',
+    languages: {
+      'ko-KR': '/recall-portal',
+      'x-default': '/recall-portal',
+    },
   },
   openGraph: {
-    title: '전기차 공식 리콜 & 배터리 제조사 화재 안전 포털 | Global EV Hub',
+    title: '전기차 공식 리콜 & 통합 리콜 현황 (배터리 화재 안전 포털) | Global EV Hub',
     description:
       '내 차 배터리 제조사와 공식 리콜을 1초 만에 확인하세요. 국토교통부 공시 데이터 및 지하주차장 안전 가이드 탑재.',
     url: '/recall-portal',
@@ -153,14 +158,14 @@ export const metadata: Metadata = {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: '전기차 공식 리콜 & 배터리 제조사 화재 안전 포털',
+        alt: '전기차 공식 리콜 & 통합 리콜 현황 (배터리 화재 안전 포털)',
         type: 'image/png',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: '전기차 공식 리콜 & 배터리 제조사 화재 안전 포털 | Global EV Hub',
+    title: '전기차 공식 리콜 & 통합 리콜 현황 (배터리 화재 안전 포털) | Global EV Hub',
     description:
       '내 차 배터리 제조사와 공식 리콜을 1초 만에 확인하세요. 국토교통부 공시 데이터 및 지하주차장 안전 가이드 탑재.',
     site: '@GlobalEVHub',

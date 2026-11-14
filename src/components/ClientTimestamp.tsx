@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, memo, useSyncExternalStore } from 'react';
+import React, { useState, useEffect, useMemo, memo } from 'react';
 
 export interface ClientTimestampProps {
   isoString?: string | null;
@@ -12,17 +12,19 @@ export interface ClientTimestampProps {
   options?: Intl.DateTimeFormatOptions;
 }
 
-const emptySubscribe = () => () => {};
-const getClientSnapshot = () => true;
-const getServerSnapshot = () => false;
-
 /**
  * Idiomatic React 18 hydration-safe hook for mounted state.
  * Returns `false` on server and during initial hydration pass to match SSR markup,
- * then cleanly synchronizes to `true` on client without extra setState or unmounted state leaks.
+ * then cleanly sets to `true` on client via useEffect without SSR/CSR hydration mismatches.
  */
 export function useIsMounted(): boolean {
-  return useSyncExternalStore(emptySubscribe, getClientSnapshot, getServerSnapshot);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  return mounted;
 }
 
 function areTimestampPropsEqual(
@@ -55,8 +57,8 @@ function areTimestampPropsEqual(
 
 /**
  * An isolated, memoized client component that formats an ISO timestamp string into `ko-KR` locale
- * safely after mounting via `useSyncExternalStore`, returning an accessible `<time>` element with `dateTime`
- * attribute and fallback unformatted text before mounting.
+ * safely after mounting via `useEffect`, returning an accessible `<time>` element with `dateTime`
+ * attribute, `suppressHydrationWarning`, and fallback unformatted text before mounting.
  * This completely prevents server-client hydration mismatches and eliminates unmounted setState leaks.
  */
 function ClientTimestampBase({
@@ -70,7 +72,8 @@ function ClientTimestampBase({
 }: ClientTimestampProps) {
   const mounted = useIsMounted();
 
-  const effectiveIso = (isoString || timestamp || '').trim();
+  const rawVal = typeof isoString === 'string' ? isoString : typeof timestamp === 'string' ? timestamp : '';
+  const effectiveIso = rawVal.trim();
 
   const fallbackText = useMemo(() => {
     if (!effectiveIso) return fallback;

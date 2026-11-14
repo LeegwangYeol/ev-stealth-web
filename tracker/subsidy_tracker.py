@@ -6,7 +6,7 @@ nationwide aggregations, fallback resilience, and atomic persistence.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import http.client
 import json
 import logging
@@ -140,6 +140,54 @@ PROVINCES: Tuple[str, ...] = (
     "경북",
     "경남",
     "제주",
+)
+
+# Comprehensive Korean Province Matching Patterns (supporting full names e.g. 충청북도, 경상남도)
+PROVINCE_PATTERNS_KO: Tuple[str, ...] = (
+    "경기",
+    "강원",
+    "충북",
+    "충청북",
+    "충남",
+    "충청남",
+    "전북",
+    "전라북",
+    "전남",
+    "전라남",
+    "경북",
+    "경상북",
+    "경남",
+    "경상남",
+    "제주",
+)
+
+METROPOLITAN_PATTERNS_EN: Tuple[str, ...] = (
+    "seoul",
+    "busan",
+    "daegu",
+    "incheon",
+    "gwangju",
+    "daejeon",
+    "ulsan",
+    "sejong",
+)
+
+PROVINCE_PATTERNS_EN: Tuple[str, ...] = (
+    "gyeonggi",
+    "gangwon",
+    "chungbuk",
+    "chungcheongbuk",
+    "chungnam",
+    "chungcheongnam",
+    "jeonbuk",
+    "jeollabuk",
+    "jeonnam",
+    "jeollanam",
+    "gyeongbuk",
+    "gyeongsangbuk",
+    "gyeongnam",
+    "gyeongsangnam",
+    "jeju",
 )
 
 METROPOLITAN_CITY_CODES: Tuple[str, ...] = (
@@ -423,7 +471,6 @@ def predict_exhaustion_date(
     Returns None if burn rate is zero or negative, or if calculation fails.
     Guarantees no ZeroDivisionError or OverflowError.
     """
-    from datetime import timedelta
     days = predict_exhaustion_days(remaining_units, daily_velocity)
     if days is None:
         return None
@@ -467,13 +514,13 @@ def classify_region_group(region: Union[RegionRecord, Dict[str, Any], str, None]
         for city in METROPOLITAN_CITIES:
             if city in ident:
                 return REGIONAL_GROUP_METROPOLITAN
-        for prov in PROVINCES:
+        for prov in PROVINCE_PATTERNS_KO:
             if prov in ident:
                 return REGIONAL_GROUP_PROVINCES
         ident_lower = ident.lower()
-        if any(c in ident_lower for c in ("seoul", "busan", "daegu", "incheon", "gwangju", "daejeon", "ulsan", "sejong")):
+        if any(c in ident_lower for c in METROPOLITAN_PATTERNS_EN):
             return REGIONAL_GROUP_METROPOLITAN
-        if any(p in ident_lower for p in ("gyeonggi", "gangwon", "chungbuk", "chungnam", "jeonbuk", "jeonnam", "gyeongbuk", "gyeongnam", "jeju")):
+        if any(p in ident_lower for p in PROVINCE_PATTERNS_EN):
             return REGIONAL_GROUP_PROVINCES
         return REGIONAL_GROUP_OTHER
 
@@ -488,14 +535,14 @@ def classify_region_group(region: Union[RegionRecord, Dict[str, Any], str, None]
     for city in METROPOLITAN_CITIES:
         if city in name_ko:
             return REGIONAL_GROUP_METROPOLITAN
-    for prov in PROVINCES:
+    for prov in PROVINCE_PATTERNS_KO:
         if prov in name_ko:
             return REGIONAL_GROUP_PROVINCES
 
     name_en = str(_metric_val(region, "name_en", "")).strip().lower()
-    if any(c in name_en for c in ("seoul", "busan", "daegu", "incheon", "gwangju", "daejeon", "ulsan", "sejong")):
+    if any(c in name_en for c in METROPOLITAN_PATTERNS_EN):
         return REGIONAL_GROUP_METROPOLITAN
-    if any(p in name_en for p in ("gyeonggi", "gangwon", "chungbuk", "chungnam", "jeonbuk", "jeonnam", "gyeongbuk", "gyeongnam", "jeju")):
+    if any(p in name_en for p in PROVINCE_PATTERNS_EN):
         return REGIONAL_GROUP_PROVINCES
 
     tier = str(_metric_val(region, "tier", "")).strip().lower()
@@ -678,7 +725,11 @@ class SubsidyTracker:
         report_generator: Optional[ReportGenerator] = None,
     ) -> None:
         self.endpoint_url = endpoint_url
-        self.timeout_seconds = timeout_seconds
+        try:
+            val = float(timeout_seconds) if timeout_seconds is not None else 5.0
+            self.timeout_seconds = val if val > 0 else 5.0
+        except (ValueError, TypeError):
+            self.timeout_seconds = 5.0
         self.cache_fallback_path = Path(cache_fallback_path) if cache_fallback_path else None
         self.validate_cache = validate_cache
         self.quarantine_corrupted = quarantine_corrupted
@@ -821,6 +872,8 @@ class SubsidyTracker:
 
     def compute_nationwide_summary(self, regions: List[Any]) -> NationwideSummary:
         """Aggregate totals across all tracked regions."""
+        if not regions:
+            regions = []
         total_announced = 0
         total_applied = 0
         total_delivered = 0
@@ -1130,11 +1183,12 @@ class SubsidyTracker:
                     seen_dates: Set[str] = set()
                     sorted_pts = sorted(
                         payload.historical_depletion_trajectory,
-                        key=lambda pt: getattr(pt, "date", "") or (pt.get("date", "") if isinstance(pt, dict) else ""),
+                        key=lambda pt: str(getattr(pt, "date", "") or (pt.get("date", "") if isinstance(pt, dict) else "")),
                     )
                     deduped_history = []
                     for pt in sorted_pts:
-                        d = getattr(pt, "date", "") or (pt.get("date", "") if isinstance(pt, dict) else "")
+                        d_val = getattr(pt, "date", "") or (pt.get("date", "") if isinstance(pt, dict) else "")
+                        d = str(d_val).strip() if d_val is not None else ""
                         if d and d not in seen_dates:
                             seen_dates.add(d)
                             deduped_history.append(pt)
@@ -1426,17 +1480,6 @@ class SubsidyTracker:
     def get_fallback_payload(self) -> SubsidyPayload:
         """Return fresh authoritative fallback baseline dataset."""
         return generate_fallback_payload()
-
-
-def generate_fallback_payload() -> SubsidyPayload:
-    """Generate authoritative verified 2026 fallback baseline dataset with updated metrics."""
-    payload = build_initial_baseline()
-    tracker = SubsidyTracker()
-    for idx, r in enumerate(payload.regions):
-        payload.regions[idx] = tracker.update_region_metrics(r)
-    payload.nationwide_summary = tracker.compute_nationwide_summary(payload.regions)
-    payload.metadata.generated_at = datetime.now(timezone.utc).isoformat()
-    return payload
 
 
 def build_comprehensive_models_matrix() -> List[Dict[str, Any]]:

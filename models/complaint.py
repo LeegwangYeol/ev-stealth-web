@@ -202,10 +202,12 @@ def _safe_clamp(val: Any, min_val: float = -1.0, max_val: float = 1.0, default: 
 
 
 # Pre-compiled regex for stripping invalid characters: null bytes, non-printable control chars,
-# Trojan Source / Unicode BiDi overrides, unpaired surrogates, BOM, and Unicode non-characters.
+# zero-width spaces, Trojan Source / Unicode BiDi overrides, unpaired surrogates, BOM, and Unicode non-characters.
 RE_INVALID_CHARS: re.Pattern[str] = re.compile(
-    r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u202a-\u202e\u2066-\u2069\ud800-\udfff\ufeff\ufffe\uffff]"
+    r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u200b-\u200d\u202a-\u202e\u2060\u2066-\u2069\ud800-\udfff\ufeff\ufffe\uffff]"
 )
+RE_UNICODE_SPACES: re.Pattern[str] = re.compile(r"[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]")
+FULLWIDTH_TRANS: Dict[int, int] = {i: i - 0xFEE0 for i in range(0xFF01, 0xFF5F)}
 
 
 def sanitize_string(val: Any, max_len: int = 50_000) -> str:
@@ -232,10 +234,13 @@ def sanitize_string(val: Any, max_len: int = 50_000) -> str:
     if not val_str:
         return ""
 
-    val_str = RE_INVALID_CHARS.sub("", val_str)
-    val_str = val_str.strip()
     if len(val_str) > max_len:
         val_str = val_str[:max_len]
+
+    val_str = RE_INVALID_CHARS.sub("", val_str)
+    val_str = RE_UNICODE_SPACES.sub(" ", val_str)
+    val_str = val_str.translate(FULLWIDTH_TRANS)
+    val_str = val_str.strip()
     return unicodedata.normalize("NFC", val_str)
 
 
@@ -1029,6 +1034,10 @@ class ComplaintRecord:
                 "dolphin": "BYD",
                 "sealion": "BYD",
                 "시라이언": "BYD",
+                "kona": "Hyundai",
+                "코나": "Hyundai",
+                "st1": "Hyundai",
+                "gv90": "Genesis",
                 "gv60": "Genesis",
                 "gv70": "Genesis",
                 "g80": "Genesis",
@@ -1040,6 +1049,17 @@ class ComplaintRecord:
                 "id버즈": "Volkswagen",
                 "lyriq": "Cadillac",
                 "리릭": "Cadillac",
+                "torres": "Other",
+                "토레스": "Other",
+                "eqe": "Other",
+                "eqs": "Other",
+                "i4": "Other",
+                "ix3": "Other",
+                "ix": "Other",
+                "polestar": "Other",
+                "폴스타": "Other",
+                "bolt": "Other",
+                "볼트": "Other",
             }
             parsed_brand = ""
             parsed_model = ""
@@ -1074,6 +1094,71 @@ class ComplaintRecord:
                 brand = parsed_brand
             if not model and parsed_model:
                 model = parsed_model
+
+        # Model and brand inference when only one is provided
+        if not brand and model:
+            m_lower = model.lower()
+            model_brand_map_fallback = {
+                "ioniq": "Hyundai",
+                "아이오닉": "Hyundai",
+                "casper": "Hyundai",
+                "캐스퍼": "Hyundai",
+                "porter": "Hyundai",
+                "포터": "Hyundai",
+                "kona": "Hyundai",
+                "코나": "Hyundai",
+                "st1": "Hyundai",
+                "ev2": "Kia",
+                "ev3": "Kia",
+                "ev4": "Kia",
+                "ev5": "Kia",
+                "ev6": "Kia",
+                "ev9": "Kia",
+                "niro": "Kia",
+                "니로": "Kia",
+                "bongo": "Kia",
+                "봉고": "Kia",
+                "ray": "Kia",
+                "레이": "Kia",
+                "model 3": "Tesla",
+                "model y": "Tesla",
+                "model s": "Tesla",
+                "model x": "Tesla",
+                "cybertruck": "Tesla",
+                "t4k": "BYD",
+                "atto": "BYD",
+                "seal": "BYD",
+                "dolphin": "BYD",
+                "sealion": "BYD",
+                "시라이언": "BYD",
+                "gv90": "Genesis",
+                "gv60": "Genesis",
+                "gv70": "Genesis",
+                "g80": "Genesis",
+                "taycan": "Porsche",
+                "타이칸": "Porsche",
+                "id.4": "Volkswagen",
+                "id4": "Volkswagen",
+                "id.buzz": "Volkswagen",
+                "id버즈": "Volkswagen",
+                "lyriq": "Cadillac",
+                "리릭": "Cadillac",
+                "torres": "Other",
+                "토레스": "Other",
+                "eqe": "Other",
+                "eqs": "Other",
+                "i4": "Other",
+                "ix3": "Other",
+                "ix": "Other",
+                "polestar": "Other",
+                "폴스타": "Other",
+                "bolt": "Other",
+                "볼트": "Other",
+            }
+            for m_key, m_b in model_brand_map_fallback.items():
+                if m_lower == m_key or m_lower.startswith(m_key + " ") or m_lower.startswith(m_key):
+                    brand = m_b
+                    break
 
         # 8. defect_category (support category or Korean category alias)
         defect_cat = _get_str("defect_category", "category")
@@ -1496,6 +1581,8 @@ class DailyReportPayload:
     @classmethod
     def validate_payload(cls, data: Any) -> Tuple[bool, List[str]]:
         """Validate an entire daily report JSON payload against strict schema rules."""
+        if isinstance(data, cls):
+            data = data.to_dict()
         errors: List[str] = []
         if isinstance(data, (str, bytes, bytearray)):
             try:

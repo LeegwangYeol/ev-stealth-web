@@ -80,6 +80,25 @@ DEFAULT_ALERT_THRESHOLDS: Dict[str, AlertThresholdConfig] = {
 }
 
 
+def _safe_int_val(val: Any, default: int = 0) -> int:
+    """Safely convert value to int, catching None, NaN, Inf, ValueError, TypeError, and OverflowError."""
+    if val is None:
+        return default
+    if isinstance(val, int):
+        return val
+    if isinstance(val, str):
+        val = val.strip().replace(",", "")
+        if not val:
+            return default
+    try:
+        f = float(val)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return int(f)
+    except (ValueError, TypeError, OverflowError):
+        return default
+
+
 def calculate_price_cap_ratio(msrp: Union[int, float, str, None]) -> float:
     """Statutory 2026 Korean EV subsidy ratio tiers: 1.0 (<=55M), 0.5 (55M-85M), 0.0 (>85M)."""
     try:
@@ -831,11 +850,11 @@ def build_initial_baseline(regions: Optional[List[Any]] = None) -> SubsidyPayloa
                 cat_applied[c_name] = 0
                 cat_delivered[c_name] = 0
 
-            ann = (c_metric.get("announced_units", 0) if isinstance(c_metric, dict) else getattr(c_metric, "announced_units", 0)) or 0
-            app = (c_metric.get("applied_units", 0) if isinstance(c_metric, dict) else getattr(c_metric, "applied_units", 0)) or 0
-            delivered = (c_metric.get("delivered_units", 0) if isinstance(c_metric, dict) else getattr(c_metric, "delivered_units", 0)) or 0
-            tot_b = (c_metric.get("total_budget_krw", 0) if isinstance(c_metric, dict) else getattr(c_metric, "total_budget_krw", 0)) or 0
-            rem_b = (c_metric.get("remaining_budget_krw", 0) if isinstance(c_metric, dict) else getattr(c_metric, "remaining_budget_krw", 0)) or 0
+            ann = max(0, _safe_int_val(c_metric.get("announced_units", 0) if isinstance(c_metric, dict) else getattr(c_metric, "announced_units", 0)))
+            app = max(0, _safe_int_val(c_metric.get("applied_units", 0) if isinstance(c_metric, dict) else getattr(c_metric, "applied_units", 0)))
+            delivered = max(0, _safe_int_val(c_metric.get("delivered_units", 0) if isinstance(c_metric, dict) else getattr(c_metric, "delivered_units", 0)))
+            tot_b = max(0, _safe_int_val(c_metric.get("total_budget_krw", 0) if isinstance(c_metric, dict) else getattr(c_metric, "total_budget_krw", 0)))
+            rem_b = max(0, _safe_int_val(c_metric.get("remaining_budget_krw", 0) if isinstance(c_metric, dict) else getattr(c_metric, "remaining_budget_krw", 0)))
 
             cat_announced[c_name] += ann
             cat_applied[c_name] += app
@@ -845,7 +864,7 @@ def build_initial_baseline(regions: Optional[List[Any]] = None) -> SubsidyPayloa
             total_applied += app
             total_delivered += delivered
             total_budget_sum += tot_b
-            disbursed_budget_sum += (tot_b - rem_b)
+            disbursed_budget_sum += max(0, tot_b - rem_b)
 
     total_remaining = max(0, total_announced - total_applied)
     nationwide_depletion_rate = (
@@ -882,7 +901,7 @@ def build_initial_baseline(regions: Optional[List[Any]] = None) -> SubsidyPayloa
         total_remaining_units=total_remaining,
         nationwide_depletion_rate=nationwide_depletion_rate,
         total_budget_billion_krw=round(total_budget_sum / 1_000_000_000, 1),
-        disbursed_budget_billion_krw=round(disbursed_budget_sum / 1_000_000_000, 1),
+        disbursed_budget_billion_krw=max(0.0, round(disbursed_budget_sum / 1_000_000_000, 1)),
         category_totals=category_totals,
         alert_region_counts=alert_counts,
     )

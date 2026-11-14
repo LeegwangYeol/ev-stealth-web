@@ -175,6 +175,10 @@ export const metadata: Metadata = {
   ],
   alternates: {
     canonical: '/subsidy-tracker',
+    languages: {
+      'ko-KR': '/subsidy-tracker',
+      'x-default': '/subsidy-tracker',
+    },
   },
   openGraph: {
     title: '전국 지자체별 전기차 실시간 보조금 소진율 추적기 | Global EV Hub',

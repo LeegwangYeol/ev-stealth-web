@@ -268,7 +268,7 @@ export default function TeslaPage() {
           aria-label="가로 스크롤 가능한 테슬라 주요 차종 연식별 판정 요약 표"
           className="overflow-x-auto table-scroll-container rounded-2xl border border-slate-200 bg-white shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
         >
-          <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-500 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true">
+          <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-600 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true">
             <span>← 좌우로 밀어서 전체 모델 비교</span>
             <span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span>
           </div>
@@ -455,12 +455,12 @@ export default function TeslaPage() {
           <Link
             href="/reliability-analytics?brand=tesla"
             prefetch={false}
-            aria-label="테슬라 결함 심층 분석 (DSI) 통계 바로가기"
+            aria-label="테슬라 스텔스 품질 점수 및 결함 심층 분석 바로가기"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
           >
             <h3 className="flex items-center gap-2 text-blue-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📊</span>
-              <span>테슬라 결함 심층 분석 (DSI)</span>
+              <span>테슬라 스텔스 품질 점수 &amp; 결함 심층 분석 (DSI)</span>
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
               히트펌프 옥토밸브 파손, 서스펜션 컨트롤 암 찌그덕 등 연식별 DSI 점수와 수리비 통계를 확인합니다.
@@ -473,12 +473,12 @@ export default function TeslaPage() {
           <Link
             href="/recall-portal?brand=tesla"
             prefetch={false}
-            aria-label="테슬라 VIN 차대번호 및 리콜 조회 바로가기"
+            aria-label="테슬라 VIN 차대번호 및 통합 리콜 현황 조회 바로가기"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-rose-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
           >
             <h3 className="flex items-center gap-2 text-rose-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">🚨</span>
-              <span>테슬라 VIN 차대번호 및 리콜 조회</span>
+              <span>테슬라 VIN 차대번호 및 통합 리콜 현황 조회</span>
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
               차대번호 17자리 프리픽스(5YJ3, LRW 등)로 오토파일럿 ECU, 도어 래치 및 배터리 공급사를 즉시 확인합니다.
@@ -491,12 +491,12 @@ export default function TeslaPage() {
           <Link
             href="/depreciation-calculator"
             prefetch={true}
-            aria-label="테슬라 감가방어율 및 배터리 수명 계산기 바로가기"
+            aria-label="테슬라 감가상각 시뮬레이터 및 배터리 수명 계산기 바로가기"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
           >
             <h3 className="flex items-center gap-2 text-emerald-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📉</span>
-              <span>테슬라 감가방어율 및 배터리 수명(SoH) 계산기</span>
+              <span>테슬라 감가상각 시뮬레이터 &amp; 배터리 수명(SoH) 계산기</span>
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
               LFP 및 삼원계(NCM) 배터리 열화율 곡선과 5년 보유 기간 총 유지비(TCO)를 정밀 시뮬레이션합니다.
@@ -509,12 +509,12 @@ export default function TeslaPage() {
           <Link
             href="/subsidy-tracker"
             prefetch={true}
-            aria-label="모델Y RWD 실시간 보조금 소진율 조회 바로가기"
+            aria-label="모델Y RWD 보조금 실시간 소진율 조회 바로가기"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
           >
             <h3 className="flex items-center gap-2 text-amber-800 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">⚡</span>
-              <span>모델Y RWD 실시간 보조금 소진율</span>
+              <span>모델Y RWD 보조금 실시간 소진율</span>
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
               지자체별 승용 전기차 쿼터 마감 현황과 가격 상한제 기준 테슬라 실구매 체감가를 확인합니다.

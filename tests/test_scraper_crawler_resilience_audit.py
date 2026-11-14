@@ -390,5 +390,112 @@ class TestScraperRuntimeSafety(unittest.TestCase):
         self.assertLess(dur, 0.1)
 
 
+class TestScraperCrawlerMalformedDOMAndBaselineDegradation(unittest.TestCase):
+    """Exhaustive tests for malformed HTML, corrupt DOMs, and baseline graceful degradation."""
+
+    def test_bobaedream_scraper_malformed_and_none_html(self):
+        """BobaedreamScraper handles None and corrupt HTML gracefully without raising exceptions."""
+        scraper = BobaedreamScraper()
+        self.assertEqual(scraper.parse_search_results(None), [])
+        self.assertEqual(scraper.parse_search_results(""), [])
+        self.assertEqual(scraper.parse_search_results("<<<>>>///<div><dt>broken"), [])
+        self.assertEqual(scraper.parse_post_detail(None, "https://example.com/b1"), {})
+        self.assertEqual(scraper.parse_post_detail(12345, "https://example.com/b1"), {})
+
+    def test_bobaedream_scraper_fetch_detail_cache_fallback(self):
+        """BobaedreamScraper falls back to post_cache on network or parse error."""
+        scraper = BobaedreamScraper()
+        test_url = "https://www.bobaedream.co.kr/view?code=national&No=123"
+        cached_post = {"title": "Cached Bobae Post", "body": "Cached Body", "comments": []}
+        scraper.post_cache[test_url] = cached_post
+
+        # Mock client to return 500 error
+        scraper.client.request = MagicMock(return_value=(500, "", b""))
+        res = scraper.fetch_post_detail(test_url)
+        self.assertEqual(res, cached_post)
+
+        # Mock client to return corrupt text that throws during parse
+        scraper.client.request = MagicMock(return_value=(200, "<html>OK</html>", b""))
+        with patch.object(scraper, "parse_post_detail", side_effect=ValueError("Corrupt DOM")):
+            res = scraper.fetch_post_detail(test_url)
+            self.assertEqual(res, cached_post)
+
+    def test_dcinside_scraper_malformed_and_none_html(self):
+        """DCInsideScraper handles None and corrupt HTML gracefully."""
+        scraper = DCInsideScraper()
+        self.assertEqual(scraper.parse_post_detail(None, "https://example.com/d1", "car_new1", "1"), {})
+        self.assertEqual(scraper.parse_post_detail("", "https://example.com/d1", "car_new1", "1"), {})
+        res = scraper.parse_post_detail("<<<tr><td>broken", "https://example.com/d1", "car_new1", "1")
+        self.assertEqual(res.get("post_id"), "1")
+        self.assertEqual(res.get("gallery_id"), "car_new1")
+        self.assertEqual(res.get("title"), "")
+        self.assertEqual(res.get("comments"), [])
+
+    def test_blind_scraper_malformed_and_none_html(self):
+        """BlindScraper handles None and corrupt HTML without raising exceptions."""
+        scraper = BlindScraper()
+        self.assertEqual(scraper.parse_topic_feed(None), [])
+        self.assertEqual(scraper.parse_topic_feed("<<<malformed"), [])
+        self.assertEqual(scraper.parse_post_detail(None, "https://example.com/blind/1"), {})
+
+        # Fallback to post_cache on error
+        test_url = "https://www.teamblind.com/kr/post/ev-123"
+        cached_post = {"title": "Cached Blind Post", "company": "Hyundai"}
+        scraper.post_cache[test_url] = cached_post
+        scraper.client.request = MagicMock(return_value=(503, "", b""))
+        res = scraper.fetch_post_detail(test_url)
+        self.assertEqual(res, cached_post)
+
+    def test_cafe_forum_miner_malformed_html_and_normalize(self):
+        """CafeForumMiner handles None HTML and invalid raw_data gracefully."""
+        miner = CafeForumMiner()
+        self.assertEqual(miner.parse_pomppu_list(None), [])
+        self.assertEqual(miner.parse_clien_list(None), [])
+        self.assertEqual(miner.parse_pomppu_list("<<<broken"), [])
+        self.assertEqual(miner.parse_clien_list("<<<broken"), [])
+
+        # normalize_record with None or malformed dict
+        self.assertIsNone(miner.normalize_record(None))
+        self.assertIsNone(miner.normalize_record({}))
+        self.assertIsNone(miner.normalize_record({"raw_quote": None}))
+        self.assertIsNone(miner.normalize_record({"raw_quote": "short"}))
+
+    def test_run_scraper_cli_cache_fallback_flags(self):
+        """create_parser accepts --cache-fallback and --no-cache-fallback."""
+        import run_scraper
+        parser = run_scraper.create_parser()
+
+        args_default = parser.parse_args([])
+        self.assertTrue(args_default.cache_fallback)
+
+        args_no_cache = parser.parse_args(["--no-cache-fallback"])
+        self.assertFalse(args_no_cache.cache_fallback)
+
+        args_explicit = parser.parse_args(["--cache-fallback"])
+        self.assertTrue(args_explicit.cache_fallback)
+
+    def test_run_scraper_zero_defect_canonical_baseline_replication(self):
+        """When 0 defects are scraped and destination file does not exist, baseline mirror is replicated."""
+        import run_scraper
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            out_dest = str(Path(tmp_dir) / "sub" / "daily_reports.json")
+            pipeline = run_scraper.ScraperPipeline()
+
+            with patch.object(pipeline, "harvest", return_value=([], {"bobaedream": 0, "dcinside": 0})), \
+                 patch.object(pipeline, "filter_defects", return_value=[]):
+                summary = pipeline.run(
+                    output_path=out_dest,
+                    dry_run=False,
+                )
+                self.assertIn(os.path.abspath(out_dest), summary["written_paths"])
+                self.assertTrue(os.path.exists(out_dest))
+                self.assertGreater(os.path.getsize(out_dest), 0)
+                with open(out_dest, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                self.assertIn("reports", data)
+                self.assertTrue("statistics" in data or "metadata" in data)
+
+
+
 if __name__ == "__main__":
     unittest.main()

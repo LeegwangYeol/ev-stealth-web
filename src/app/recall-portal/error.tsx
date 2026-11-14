@@ -56,11 +56,11 @@ export default function RecallPortalError({ error, reset }: RecallErrorProps) {
             id="recall-error-heading"
             className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight"
           >
-            공식 리콜 정보를 불러올 수 없습니다
+            공식 리콜 및 통합 리콜 현황을 불러올 수 없습니다
           </h1>
           <p
             id="recall-error-description"
-            className="text-sm sm:text-base text-slate-700 leading-relaxed max-w-md mx-auto"
+            className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-md mx-auto"
           >
             국토교통부 자동차리콜센터 연동 및 배터리 제조사 안전 데이터베이스 검색 중 오류가 발생했습니다.
             아래 &apos;다시 시도&apos; 버튼을 눌러 안전하게 재조회해 주세요.
@@ -76,7 +76,7 @@ export default function RecallPortalError({ error, reset }: RecallErrorProps) {
           <button
             type="button"
             onClick={handleRetry}
-            aria-label="리콜 포털 다시 시도"
+            aria-label="통합 리콜 현황 다시 시도"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 min-h-[44px] rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">🔄</span> 다시 시도
@@ -97,14 +97,14 @@ export default function RecallPortalError({ error, reset }: RecallErrorProps) {
             prefetch={false}
             className="hover:text-blue-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
-            <span aria-hidden="true">📊</span> 결함 분석 포털
+            <span aria-hidden="true">📊</span> 스텔스 품질 점수
           </Link>
           <Link
             href="/subsidy-tracker"
             prefetch={true}
             className="hover:text-amber-800 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
           >
-            <span aria-hidden="true">⚡</span> 보조금 추적기
+            <span aria-hidden="true">⚡</span> 보조금 실시간 소진율
           </Link>
           <Link
             href="/pdi-checklist"
@@ -118,7 +118,7 @@ export default function RecallPortalError({ error, reset }: RecallErrorProps) {
             prefetch={true}
             className="hover:text-emerald-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
           >
-            <span aria-hidden="true">📉</span> 감가 계산기
+            <span aria-hidden="true">📉</span> 감가상각 시뮬레이터
           </Link>
         </div>
       </div>

@@ -14,7 +14,7 @@ const reliabilityJsonLd = {
     {
       '@type': 'WebApplication',
       '@id': `${SITE_URL}/reliability-analytics#app`,
-      name: '전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI)',
+      name: '전기차 스텔스 품질 점수 & 모델·연식별 결함 통계 (DSI)',
       url: `${SITE_URL}/reliability-analytics`,
       applicationCategory: 'AnalyticsApplication',
       operatingSystem: 'All',
@@ -126,7 +126,7 @@ const reliabilityJsonLd = {
         {
           '@type': 'ListItem',
           position: 2,
-          name: '결함·신뢰성 통계',
+          name: '스텔스 품질 점수 & 결함 통계',
           item: `${SITE_URL}/reliability-analytics`,
         },
       ],
@@ -135,10 +135,11 @@ const reliabilityJsonLd = {
 };
 
 export const metadata: Metadata = {
-  title: '전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI)',
+  title: '전기차 스텔스 품질 점수 & 결함 통계 및 내구성 분석 (DSI)',
   description:
-    '현대, 기아, 테슬라, BYD, 벤츠, BMW 등 9대 브랜드 22개 차종 89개 연식별 결함 심각도 지수(DSI), 고질병 통계, 중고차 구매 시 절대 피해야 할 연식 가이드 및 보증 외 수리비 매트릭스를 제공합니다.',
+    '현대, 기아, 테슬라, BYD, 벤츠, BMW 등 9대 브랜드 22개 차종 89개 연식별 스텔스 품질 점수 및 결함 심각도 지수(DSI), 고질병 통계, 중고차 구매 시 절대 피해야 할 연식 가이드 및 보증 외 수리비 매트릭스를 제공합니다.',
   keywords: [
+    '스텔스 품질 점수',
     '전기차 결함 통계',
     '전기차 내구성 DSI',
     '아이오닉5 ICCU 결함',
@@ -151,11 +152,15 @@ export const metadata: Metadata = {
   ],
   alternates: {
     canonical: '/reliability-analytics',
+    languages: {
+      'ko-KR': '/reliability-analytics',
+      'x-default': '/reliability-analytics',
+    },
   },
   openGraph: {
-    title: '전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI) | Global EV Hub',
+    title: '전기차 스텔스 품질 점수 & 결함 통계 및 내구성 분석 (DSI) | Global EV Hub',
     description:
-      '9대 제조사 22개 모델 89개 연식의 실제 차주 제보 1,280건 심층 분석. 결함 심각도 지수(DSI), 연식별 위험 히트맵, 보증 외 수리비 매트릭스.',
+      '9대 제조사 22개 모델 89개 연식의 실제 차주 제보 1,280건 심층 분석. 스텔스 품질 점수(DSI), 연식별 위험 히트맵, 보증 외 수리비 매트릭스.',
     url: '/reliability-analytics',
     type: 'website',
     locale: 'ko_KR',
@@ -165,14 +170,14 @@ export const metadata: Metadata = {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: '전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI)',
+        alt: '전기차 스텔스 품질 점수 & 결함 통계 및 내구성 분석 (DSI)',
         type: 'image/png',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: '전기차 모델·연식별 결함 통계 및 내구성 분석 (DSI) | Global EV Hub',
+    title: '전기차 스텔스 품질 점수 & 결함 통계 및 내구성 분석 (DSI) | Global EV Hub',
     description:
       '9대 제조사 22개 모델 89개 연식의 실제 차주 제보 1,280건 심층 분석. 결함 심각도 지수(DSI), 연식별 위험 히트맵, 보증 외 수리비 매트릭스.',
     site: '@GlobalEVHub',

@@ -26,6 +26,9 @@ const nextConfig = {
   compress: true,
   swcMinify: true,
   generateEtags: true,
+  httpAgentOptions: {
+    keepAlive: true,
+  },
   images: {
     formats: ['image/avif', 'image/webp'],
     minimumCacheTTL: 86400,
@@ -108,7 +111,20 @@ const nextConfig = {
         ],
       },
       {
-        source: '/:all*\\.(svg|ico|png|jpg|jpeg|webp|avif|woff|woff2|ttf|otf)',
+        source: '/:all*\\.(woff|woff2|ttf|otf)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+          {
+            key: 'Cross-Origin-Resource-Policy',
+            value: 'cross-origin',
+          },
+        ],
+      },
+      {
+        source: '/:all*\\.(svg|ico|png|jpg|jpeg|webp|avif)',
         headers: [
           {
             key: 'Cache-Control',

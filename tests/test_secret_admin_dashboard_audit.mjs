@@ -226,3 +226,119 @@ test('getDailyReports.ts and page.tsx: Safe JSON parsing, empty reports handling
   assert.ok(rawDailyReports.includes('parsedInput'), 'getDailyReports.ts must handle string inputs safely');
 });
 
+// 8. Deduplication Engine & Status Display Audit
+test('getDailyReports.ts and AdminDashboardClient.tsx: Deduplication engine & status display', async () => {
+  const patched = rawDailyReports
+    .replace(/from '\.\/sanitizeUrl(?:\.ts)?';/, "from '../src/lib/sanitizeUrl.ts';")
+    .replace(/from '\.\.\/data\/daily_reports\.json' with \{ type: 'json' \};/, "from '../src/data/daily_reports.json' with { type: 'json' };");
+
+  const tempPath = path.resolve(__dirname, 'temp_test_dedup.ts');
+  fs.writeFileSync(tempPath, patched, 'utf-8');
+
+  let mod;
+  try {
+    mod = await import('./temp_test_dedup.ts');
+  } finally {
+    if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+  }
+
+  const { deduplicateReports } = mod;
+
+  // Duplicate items by ID
+  const duplicateIdReports = [
+    { id: 'rep_101', title: '배터리 이상', vehicle_model: '아이오닉5', defect_category: 'BATTERY_CHARGING' },
+    { id: 'rep_101', title: '배터리 이상 (중복)', vehicle_model: '아이오닉5', defect_category: 'BATTERY_CHARGING' },
+    { id: 'rep_102', title: '모터 소음', vehicle_model: 'EV6', defect_category: 'DRIVING_POWERTRAIN' },
+  ];
+  const res1 = deduplicateReports(duplicateIdReports);
+  assert.strictEqual(res1.reports.length, 2);
+  assert.strictEqual(res1.summary.duplicatesRemoved, 1);
+  assert.strictEqual(res1.summary.isDeduplicated, true);
+
+  // Duplicate items by URL
+  const duplicateUrlReports = [
+    { id: 'report_1', url: 'https://gall.dcinside.com/view/?id=car&no=999', title: '글1' },
+    { id: 'report_2', url: 'https://gall.dcinside.com/view/?id=car&no=999?query=1', title: '글2' },
+  ];
+  const res2 = deduplicateReports(duplicateUrlReports);
+  assert.strictEqual(res2.reports.length, 1);
+  assert.strictEqual(res2.summary.duplicatesRemoved, 1);
+
+  // Re-read current client code
+  const freshClient = fs.readFileSync(dashboardClientPath, 'utf-8');
+  assert.ok(freshClient.includes('deduplicateReports'), 'AdminDashboardClient must use deduplicateReports');
+  assert.ok(freshClient.includes('중복 정제:'), 'AdminDashboardClient must display deduplication status in card or header');
+  assert.ok(freshClient.includes('고유 제보'), 'AdminDashboardClient must indicate authentic unique report count');
+});
+
+// 9. Security Audit: Sensitive Data Leakage Protection
+test('Security Sanitization: Mask internal paths, sensitive tokens, author PII, SSRF loopback URLs', async () => {
+  const patched = rawDailyReports
+    .replace(/from '\.\/sanitizeUrl(?:\.ts)?';/, "from '../src/lib/sanitizeUrl.ts';")
+    .replace(/from '\.\.\/data\/daily_reports\.json' with \{ type: 'json' \};/, "from '../src/data/daily_reports.json' with { type: 'json' };");
+
+  const tempPath = path.resolve(__dirname, 'temp_test_sec.ts');
+  fs.writeFileSync(tempPath, patched, 'utf-8');
+
+  let mod;
+  try {
+    mod = await import('./temp_test_sec.ts');
+  } finally {
+    if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+  }
+
+  const { maskInternalPaths, maskSensitiveTokens, maskAuthor, maskSensitiveData, sanitizeReportUrl } = mod;
+
+  // Internal path masking
+  const leakedPathUnix = '오류 발생: /Users/a7890/my-e-car/secret.key 파일 없음';
+  assert.strictEqual(maskInternalPaths(leakedPathUnix), '오류 발생: [내부경로_마스킹] 파일 없음');
+
+  const leakedPathWin = 'Path: C:\\Users\\Administrator\\AppData\\Local\\temp\\debug.log';
+  assert.strictEqual(maskInternalPaths(leakedPathWin), 'Path: [내부경로_마스킹]');
+
+  // Token masking
+  const leakedJwt = 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.sH4_sampleSignatureTextHere';
+  assert.ok(!maskSensitiveTokens(leakedJwt).includes('eyJhbGci'));
+  assert.ok(maskSensitiveTokens(leakedJwt).includes('[REDACTED_JWT]') || maskSensitiveTokens(leakedJwt).includes('[REDACTED_TOKEN]'));
+
+  const leakedApiKey = 'api_key: sk-1234567890abcdef1234567890';
+  assert.ok(!maskSensitiveTokens(leakedApiKey).includes('sk-1234567890abcdef1234567890'));
+
+  // Author PII masking
+  assert.strictEqual(maskAuthor('홍길동 (211.234.12.34)'), '홍길동 (211.234.*.*)');
+  assert.strictEqual(maskAuthor('user@hyundai.com'), 'u***@hyundai.com');
+  assert.strictEqual(maskAuthor('제보자 010-1234-5678'), '제보자 010-****-5678');
+
+  // SSRF Loopback / Private IP blocking
+  assert.strictEqual(sanitizeReportUrl('http://localhost:3000/api/reports'), '#');
+  assert.strictEqual(sanitizeReportUrl('http://127.0.0.1:8080/admin'), '#');
+  assert.strictEqual(sanitizeReportUrl('http://192.168.1.1/dashboard'), '#');
+  assert.strictEqual(sanitizeReportUrl('http://10.0.0.1/internal'), '#');
+
+  // Sensitive URL query parameter stripping
+  const cleanUrl = sanitizeReportUrl('https://www.bobaedream.co.kr/view?code=national&No=2416882&token=secret123');
+  assert.ok(!cleanUrl.includes('token=secret123'), 'Sensitive query parameter token must be stripped from external URL');
+  assert.ok(cleanUrl.includes('No=2416882'), 'Legitimate query parameter No must be preserved');
+});
+
+// 10. Korean Date Parsing, Search Debounce, and Pagination Audit
+test('AdminDashboardClient.tsx: Korean date parsing, search debounce, and first/last page pagination', () => {
+  const freshClient = fs.readFileSync(dashboardClientPath, 'utf-8');
+
+  // Korean date formatting support in parseSafeDate
+  assert.ok(freshClient.includes('parseSafeDate'), 'parseSafeDate must exist');
+  assert.ok(freshClient.includes("replace(/년\\s*/g, '-')") || freshClient.includes("replace(/\\./g, '-')"), 'Must support Korean date parsing');
+
+  // Debounced search query
+  assert.ok(freshClient.includes('debounceTimerRef'), 'Must use debounceTimerRef for search query input debounce');
+  assert.ok(freshClient.includes('debouncedQuery'), 'Must maintain debouncedQuery state');
+
+  // First & Last Page Pagination Controls
+  assert.ok(freshClient.includes('첫 페이지로 이동'), 'Must have first page navigation button for large page counts');
+  assert.ok(freshClient.includes('마지막 페이지로 이동'), 'Must have last page navigation button for large page counts');
+  assert.ok(freshClient.includes('validCurrentPage = Math.max(1, Math.min(currentPage, totalPages))'), 'validCurrentPage must be strictly bounded');
+
+  // Responsive enhancements
+  assert.ok(freshClient.includes('flex flex-wrap items-center gap-2'), 'Card action bar must use flex-wrap for mobile responsiveness');
+});
+

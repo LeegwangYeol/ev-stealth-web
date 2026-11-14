@@ -114,11 +114,16 @@ p, th, td, label, button, a {
     color: #cbd5e1;
   }
 
-  /* Light background guard: elevate low-contrast slate-400 (2.45:1) to accessible slate-600 (7.24:1) */
+  /* Light background guard: elevate low-contrast slate-400 (2.45:1) and slate-500 (4.49:1) to accessible slate-600/700 (>= 7:1) */
   .bg-slate-50 .text-slate-400,
   .bg-slate-100 .text-slate-400,
   .bg-white .text-slate-400 {
     color: #475569;
+  }
+  .bg-slate-50 .text-slate-500,
+  .bg-slate-100 .text-slate-500,
+  .bg-white .text-slate-500 {
+    color: #334155;
   }
 
   /* Accessible border ensuring WCAG 1.4.11 Non-text contrast (3:1 minimum) */
@@ -173,7 +178,7 @@ p, th, td, label, button, a {
 @layer base {
   /* Ensure mobile touch targets for range slider controls meet WCAG 2.5.5 / 2.5.8 */
   input[type="range"] {
-    min-height: 38px;
+    min-height: 44px;
     touch-action: pan-y;
   }
 
@@ -259,9 +264,14 @@ p, th, td, label, button, a {
 }
 
 @media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
   @page {
     size: A4 portrait;
-    margin: 12mm 15mm;
+    margin: 10mm 12mm;
   }
 
   body {

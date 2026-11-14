@@ -13,7 +13,7 @@ const depreciationJsonLd = {
     {
       '@type': 'WebApplication',
       '@id': `${SITE_URL}/depreciation-calculator#app`,
-      name: '전기차 감가방어율 & 배터리 수명 계산기',
+      name: '전기차 감가상각 시뮬레이터 & 배터리 수명 계산기',
       url: `${SITE_URL}/depreciation-calculator`,
       applicationCategory: 'FinanceApplication',
       operatingSystem: 'All',
@@ -125,7 +125,7 @@ const depreciationJsonLd = {
         {
           '@type': 'ListItem',
           position: 2,
-          name: '감가·배터리 계산기',
+          name: '감가상각 시뮬레이터',
           item: `${SITE_URL}/depreciation-calculator`,
         },
       ],
@@ -134,10 +134,11 @@ const depreciationJsonLd = {
 };
 
 export const metadata: Metadata = {
-  title: '전기차 감가방어율 & 배터리 수명 계산기',
+  title: '전기차 감가상각 시뮬레이터 & 배터리 수명 계산기',
   description:
     '2026년 국내 실거래(엔카·케이카·국토교통부) 기반 전기차 잔존가치, 배터리 잔여수명(SoH), 2년 의무운행 보조금 환수액(대기환경보전법 제58조), 5개년 총소유비용(TCO) 실시간 정밀 시뮬레이터.',
   keywords: [
+    '전기차 감가상각 시뮬레이터',
     '전기차 감가율 계산기',
     '전기차 잔존가치 계산기',
     '배터리 수명 계산기',
@@ -155,9 +156,13 @@ export const metadata: Metadata = {
   ],
   alternates: {
     canonical: '/depreciation-calculator',
+    languages: {
+      'ko-KR': '/depreciation-calculator',
+      'x-default': '/depreciation-calculator',
+    },
   },
   openGraph: {
-    title: '전기차 감가방어율 & 배터리 수명 계산기 (2026 국내 실거래 기반) | Global EV Hub',
+    title: '전기차 감가상각 시뮬레이터 & 배터리 수명 계산기 (2026 국내 실거래 기반) | Global EV Hub',
     description:
       '내 차 5년 뒤 중고 시세와 배터리 수명(SoH)은? 법정 보조금 환수액 및 내연기관 대비 5개년 유지비 절감액을 1초 만에 시뮬레이션하세요.',
     url: '/depreciation-calculator',
@@ -169,14 +174,14 @@ export const metadata: Metadata = {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: '전기차 감가방어율 & 배터리 수명 계산기',
+        alt: '전기차 감가상각 시뮬레이터 & 배터리 수명 계산기',
         type: 'image/png',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: '전기차 감가방어율 & 배터리 수명 계산기 (2026) | Global EV Hub',
+    title: '전기차 감가상각 시뮬레이터 & 배터리 수명 계산기 (2026) | Global EV Hub',
     description:
       '2026년 국내 실거래 기반 잔존가치, 배터리 잔여수명(SoH), 2년 의무운행 보조금 환수율, 5개년 TCO 정밀 계산기.',
     site: '@GlobalEVHub',

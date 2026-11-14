@@ -65,12 +65,12 @@ export default function NotFound() {
           <Link
             href="/subsidy-tracker"
             prefetch={true}
-            aria-label="보조금 소진율 추적기: 전국 17개 지자체 실시간 쿼터 및 소진 마감 긴급 경보"
+            aria-label="보조금 실시간 소진율 추적기: 전국 17개 지자체 실시간 쿼터 및 소진 마감 긴급 경보"
             className="group min-h-[44px] p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-amber-50/60 hover:border-amber-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
           >
             <div className="flex items-center gap-2 font-bold text-slate-900 group-hover:text-amber-800 text-base">
               <span className="text-xl" aria-hidden="true">⚡</span>
-              <span>보조금 소진율 추적기</span>
+              <span>보조금 실시간 소진율</span>
             </div>
             <p className="text-xs text-slate-700 mt-1 leading-relaxed">
               전국 17개 지자체 실시간 쿼터 및 소진 마감 긴급 경보
@@ -80,12 +80,12 @@ export default function NotFound() {
           <Link
             href="/reliability-analytics"
             prefetch={false}
-            aria-label="결함 분석 포털 (DSI): 9대 제조사 22개 차종 연식별 결함 심각도 및 피해야 할 연식"
+            aria-label="스텔스 품질 점수 (DSI): 9대 제조사 22개 차종 연식별 결함 심각도 및 피해야 할 연식"
             className="group min-h-[44px] p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-blue-50/60 hover:border-blue-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
             <div className="flex items-center gap-2 font-bold text-slate-900 group-hover:text-blue-800 text-base">
               <span className="text-xl" aria-hidden="true">📊</span>
-              <span>결함 분석 포털 (DSI)</span>
+              <span>스텔스 품질 점수 (DSI)</span>
             </div>
             <p className="text-xs text-slate-700 mt-1 leading-relaxed">
               9대 제조사 22개 차종 연식별 결함 심각도 및 피해야 할 연식
@@ -95,12 +95,12 @@ export default function NotFound() {
           <Link
             href="/depreciation-calculator"
             prefetch={true}
-            aria-label="감가 계산기: 실구매가·배터리 건강도(SoH) 기반 5년 TCO 및 잔존가치 시뮬레이션"
+            aria-label="감가상각 시뮬레이터: 실구매가·배터리 건강도(SoH) 기반 5년 TCO 및 잔존가치 시뮬레이션"
             className="group min-h-[44px] p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-emerald-50/60 hover:border-emerald-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
           >
             <div className="flex items-center gap-2 font-bold text-slate-900 group-hover:text-emerald-800 text-base">
               <span className="text-xl" aria-hidden="true">📉</span>
-              <span>감가 계산기</span>
+              <span>감가상각 시뮬레이터</span>
             </div>
             <p className="text-xs text-slate-700 mt-1 leading-relaxed">
               실구매가·배터리 건강도(SoH) 기반 5년 TCO 및 잔존가치 시뮬레이션
@@ -110,12 +110,12 @@ export default function NotFound() {
           <Link
             href="/recall-portal"
             prefetch={false}
-            aria-label="공식 리콜 & 화재 포털: 차대번호(VIN) 조회 및 국토부·제조사 배터리 화재·ICCU 리콜 현황"
+            aria-label="통합 리콜 현황: 차대번호(VIN) 조회 및 국토부·제조사 공식 리콜 & 화재 포털"
             className="group min-h-[44px] p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-rose-50/60 hover:border-rose-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2"
           >
             <div className="flex items-center gap-2 font-bold text-slate-900 group-hover:text-rose-800 text-base">
               <span className="text-xl" aria-hidden="true">🚨</span>
-              <span>공식 리콜 &amp; 화재 포털</span>
+              <span>통합 리콜 현황</span>
             </div>
             <p className="text-xs text-slate-700 mt-1 leading-relaxed">
               차대번호(VIN) 조회 및 국토부·제조사 배터리 화재·ICCU 리콜 현황

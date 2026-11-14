@@ -130,3 +130,40 @@ export interface CategoryComplaintInputEntry {
   count?: number | string | null;
   percentage?: number | string | null;
 }
+
+export interface StealthScoreWeights {
+  dsiWeight?: number;
+  incidentWeight?: number;
+  criticalWeight?: number;
+}
+
+export interface StealthScoreInput {
+  dsi?: unknown;
+  incidentRate?: unknown;
+  criticalIssueRate?: unknown;
+  totalComplaints?: unknown;
+  yearsEvaluated?: unknown;
+  baselineIndustryDsi?: unknown;
+  weights?: StealthScoreWeights;
+}
+
+export interface StealthScoreResult {
+  rawStealthScore: number;
+  stealthScore: number;
+  defectPenalty: number;
+  confidenceScore: number;
+  normalizedDefectFrequency: number;
+  recommendedVerdict: ModelYearVerdict;
+  overallGrade: OverallReliabilityGrade;
+  isHighConfidence: boolean;
+}
+
+export interface DefectFrequencyOptions {
+  complaintCount?: unknown;
+  fleetOrSalesVolume?: unknown;
+  baselineScale?: number;
+}
+
+export type ReliabilitySortOption = 'DSI_DESC' | 'DSI_ASC' | 'GRADE' | 'NAME';
+export type ChartTabKey = 'heatmap' | 'brand_ranking' | 'brand_compare' | 'category_share';
+

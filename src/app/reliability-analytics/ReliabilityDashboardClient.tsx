@@ -23,7 +23,7 @@ interface ReliabilityDashboardClientProps {
   initialData: ReliabilityTrendsDatabase;
 }
 
-type ChartTabKey = 'heatmap' | 'brand_ranking' | 'category_share';
+type ChartTabKey = 'heatmap' | 'brand_ranking' | 'brand_compare' | 'category_share';
 export type ReliabilitySortOption = 'DSI_DESC' | 'DSI_ASC' | 'GRADE' | 'NAME';
 
 export const isReliabilitySortOption = (val: string): val is ReliabilitySortOption =>
@@ -32,6 +32,7 @@ export const isReliabilitySortOption = (val: string): val is ReliabilitySortOpti
 const CHART_TABS: { id: ChartTabKey; label: string }[] = [
   { id: 'heatmap', label: '연식 리스크 히트맵' },
   { id: 'brand_ranking', label: '브랜드 결함 심각도(DSI) 랭킹' },
+  { id: 'brand_compare', label: '브랜드 1:1 레이더 비교' },
   { id: 'category_share', label: '부문별 결함 비중' },
 ];
 
@@ -168,6 +169,15 @@ interface HeatmapRowProps {
     },
     triggerEl?: HTMLButtonElement | null
   ) => void;
+  onCellHover?: (
+    preview: {
+      modelName: string;
+      year: number;
+      verdict: ModelYearVerdict;
+      dsi: number;
+      primaryDefect: string;
+    } | null
+  ) => void;
 }
 
 const HeatmapRow = React.memo(function HeatmapRow({
@@ -176,6 +186,7 @@ const HeatmapRow = React.memo(function HeatmapRow({
   heatmapYears,
   selectedCellKey,
   onCellClick,
+  onCellHover,
 }: HeatmapRowProps) {
   return (
     <tr className="group hover:bg-slate-50/80 transition">
@@ -229,6 +240,26 @@ const HeatmapRow = React.memo(function HeatmapRow({
           <td key={yr} className="p-2 text-center">
             <button
               type="button"
+              onMouseEnter={() =>
+                onCellHover?.({
+                  modelName: model.name,
+                  year: evalData.year,
+                  verdict: evalData.verdict,
+                  dsi: safeDsi,
+                  primaryDefect,
+                })
+              }
+              onMouseLeave={() => onCellHover?.(null)}
+              onFocus={() =>
+                onCellHover?.({
+                  modelName: model.name,
+                  year: evalData.year,
+                  verdict: evalData.verdict,
+                  dsi: safeDsi,
+                  primaryDefect,
+                })
+              }
+              onBlur={() => onCellHover?.(null)}
               onClick={(e) =>
                 onCellClick(
                   {
@@ -449,7 +480,18 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
   const [searchQuery, setSearchQuery] = useState<string>('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [sortBy, setSortBy] = useState<'DSI_DESC' | 'DSI_ASC' | 'GRADE' | 'NAME'>('DSI_DESC');
-  const [activeChartTab, setActiveChartTab] = useState<'heatmap' | 'brand_ranking' | 'category_share'>('heatmap');
+  const [activeChartTab, setActiveChartTab] = useState<ChartTabKey>('heatmap');
+  const [compareBrandA, setCompareBrandA] = useState<string>('hyundai');
+  const [compareBrandB, setCompareBrandB] = useState<string>('tesla');
+  const [hoveredRadarCategory, setHoveredRadarCategory] = useState<string | null>(null);
+  const [hoveredSvgBrand, setHoveredSvgBrand] = useState<BrandReliability | null>(null);
+  const [cellPreview, setCellPreview] = useState<{
+    modelName: string;
+    year: number;
+    verdict: ModelYearVerdict;
+    dsi: number;
+    primaryDefect: string;
+  } | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{
     modelName: string;
     brandName: string;
@@ -702,6 +744,126 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     const worstBrand = sortedBrands[sortedBrands.length - 1];
     return `${sortedBrands.length}대 전기차 제조사별 결함 심각도 지수(DSI 0~100점, 낮을수록 우수) 수평 막대 차트입니다. 최저(최우수) DSI는 ${bestBrand?.name_ko || ''}(${bestBrand?.overall_dsi || 0}점), 최고(주의) DSI는 ${worstBrand?.name_ko || ''}(${worstBrand?.overall_dsi || 0}점)입니다. 아래에 전체 브랜드별 스크린 리더용 데이터 표가 제공됩니다.`;
   }, [sortedBrands]);
+
+  // Brand comparison selected objects
+  const brandAObj = useMemo(
+    () => brands.find((b) => b.id === compareBrandA) || brands[0] || null,
+    [brands, compareBrandA]
+  );
+  const brandBObj = useMemo(
+    () => brands.find((b) => b.id === compareBrandB) || brands[1] || brands[0] || null,
+    [brands, compareBrandB]
+  );
+
+  // Radar chart axes and coordinates computation
+  const radarAxes = useMemo(() => {
+    if (!categories.length) return [];
+    const cx = 250;
+    const cy = 230;
+    const radius = 140;
+    const maxVal = 55; // 55% percentage ceiling
+
+    return categories.map((cat, i) => {
+      const angle = (i * 2 * Math.PI) / categories.length - Math.PI / 2;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+
+      const distA = brandAObj?.category_distribution?.[cat.code];
+      const distB = brandBObj?.category_distribution?.[cat.code];
+
+      const shareA = typeof distA === 'object' && distA ? Number(distA.percentage || 0) : 0;
+      const countA = typeof distA === 'object' && distA ? Number(distA.count || 0) : 0;
+
+      const shareB = typeof distB === 'object' && distB ? Number(distB.percentage || 0) : 0;
+      const countB = typeof distB === 'object' && distB ? Number(distB.count || 0) : 0;
+
+      const indShare = Number.isFinite(cat.industry_share_pct) ? cat.industry_share_pct : 0;
+
+      const rA = (Math.min(maxVal, Math.max(0, shareA)) / maxVal) * radius;
+      const rB = (Math.min(maxVal, Math.max(0, shareB)) / maxVal) * radius;
+      const rInd = (Math.min(maxVal, Math.max(0, indShare)) / maxVal) * radius;
+
+      let labelX = cx + (radius + 26) * cos;
+      const labelY = cy + (radius + 20) * sin;
+      let textAnchor: 'start' | 'middle' | 'end' = 'middle';
+      if (cos > 0.3) {
+        textAnchor = 'start';
+        labelX = cx + (radius + 14) * cos;
+      } else if (cos < -0.3) {
+        textAnchor = 'end';
+        labelX = cx + (radius + 14) * cos;
+      }
+
+      return {
+        code: cat.code,
+        label: cat.label_ko,
+        description: cat.description || '',
+        avgCost: cat.avg_repair_cost_range || '',
+        angle,
+        cos,
+        sin,
+        axisX: cx + radius * cos,
+        axisY: cy + radius * sin,
+        labelX,
+        labelY,
+        textAnchor,
+        shareA,
+        countA,
+        shareB,
+        countB,
+        indShare,
+        xA: cx + rA * cos,
+        yA: cy + rA * sin,
+        xB: cx + rB * cos,
+        yB: cy + rB * sin,
+        xInd: cx + rInd * cos,
+        yInd: cy + rInd * sin,
+      };
+    });
+  }, [categories, brandAObj, brandBObj]);
+
+  const radarRings = useMemo(() => {
+    if (!categories.length) return [];
+    const cx = 250;
+    const cy = 230;
+    const radius = 140;
+    const maxVal = 55;
+    const steps = [10, 20, 30, 40, 50];
+
+    return steps.map((pct) => {
+      const r = (pct / maxVal) * radius;
+      const points = categories
+        .map((_, i) => {
+          const angle = (i * 2 * Math.PI) / categories.length - Math.PI / 2;
+          return `${(cx + r * Math.cos(angle)).toFixed(1)},${(cy + r * Math.sin(angle)).toFixed(1)}`;
+        })
+        .join(' ');
+      return { pct, points, r };
+    });
+  }, [categories]);
+
+  const polygonPointsA = useMemo(
+    () => radarAxes.map((a) => `${a.xA.toFixed(1)},${a.yA.toFixed(1)}`).join(' '),
+    [radarAxes]
+  );
+  const polygonPointsB = useMemo(
+    () => radarAxes.map((a) => `${a.xB.toFixed(1)},${a.yB.toFixed(1)}`).join(' '),
+    [radarAxes]
+  );
+  const polygonPointsInd = useMemo(
+    () => radarAxes.map((a) => `${a.xInd.toFixed(1)},${a.yInd.toFixed(1)}`).join(' '),
+    [radarAxes]
+  );
+
+  const activeRadarItem = useMemo(
+    () => radarAxes.find((a) => a.code === hoveredRadarCategory) || null,
+    [radarAxes, hoveredRadarCategory]
+  );
+
+  const radarSvgDesc = useMemo(() => {
+    if (!brandAObj || !brandBObj) return '두 제조사의 6대 결함 부문 레이더 차트 비교입니다.';
+    return `${brandAObj.name_ko}(DSI ${brandAObj.overall_dsi || 0}점, 청색)와 ${brandBObj.name_ko}(DSI ${brandBObj.overall_dsi || 0}점, 적색)의 6대 결함 부문(배터리, 구동계, 소프트웨어, 조립품질, 수리비, 혹한기) 점유율을 회색 산업 평균선과 대조한 방사형 레이더 차트입니다. 아래에 상세 비교 데이터 표가 제공됩니다.`;
+  }, [brandAObj, brandBObj]);
 
   // Stabilized Callback Handlers
   const resetFilters = useCallback(() => {
@@ -1030,7 +1192,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 aria-label="연식별 전기차 신뢰성 및 결함 심각도 매트릭스 표 스크롤 영역"
                 className="overflow-x-auto table-scroll-container border border-slate-200 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
-                <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-500 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true"><span>← 좌우로 밀어서 2017~2026 전 연식 확인</span><span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span></div>
+                <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-600 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true"><span>← 좌우로 밀어서 2017~2026 전 연식 확인</span><span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span></div>
                 <table
                   className="w-full min-w-[680px] text-left text-xs sm:text-sm border-collapse"
                   aria-label="연식별 전기차 신뢰성 및 결함 심각도(DSI) 매트릭스"
@@ -1072,12 +1234,39 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           heatmapYears={heatmapYears}
                           selectedCellKey={hoveredCell ? `${model.name}-${hoveredCell.year}` : null}
                           onCellClick={handleCellClick}
+                          onCellHover={setCellPreview}
                         />
                       ))
                     )}
                   </tbody>
                 </table>
               </div>
+
+              {/* Heatmap Cell Instant Hover Preview Tooltip */}
+              {cellPreview && !hoveredCell && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="p-3 bg-slate-900 text-white rounded-xl border border-slate-700 shadow-md text-xs flex flex-wrap items-center justify-between gap-2 animate-fade-in motion-reduce:animate-none"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-blue-300">{cellPreview.modelName} ({cellPreview.year}년식)</span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                        cellPreview.verdict === 'AVOID'
+                          ? 'bg-rose-500/30 text-rose-200 border border-rose-500/50'
+                          : cellPreview.verdict === 'CAUTION'
+                          ? 'bg-amber-400/30 text-amber-100 border border-amber-400/50'
+                          : 'bg-emerald-500/30 text-emerald-200 border border-emerald-500/50'
+                      }`}
+                    >
+                      {cellPreview.verdict} (DSI {cellPreview.dsi}점)
+                    </span>
+                    <span className="text-slate-300 hidden sm:inline">주요 결함: {cellPreview.primaryDefect}</span>
+                  </div>
+                  <span className="text-[11px] text-blue-400 font-medium">클릭 시 리콜 상세 및 공임 열람 ↵</span>
+                </div>
+              )}
 
               {/* Heatmap Detail Dialog (if selected) */}
               {hoveredCell && (
@@ -1248,7 +1437,24 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           : '#f43f5e';
 
                       return (
-                        <g key={brand.id} className="transition-opacity hover:opacity-90">
+                        <g
+                          key={brand.id}
+                          tabIndex={0}
+                          role="button"
+                          aria-label={`${brand.name_ko} (${brand.name_en}), DSI ${safeDsi}점, 치명 결함율 ${brand.critical_issue_rate || 0}%, 총 ${brand.total_reports || 0}건 제보`}
+                          onMouseEnter={() => setHoveredSvgBrand(brand)}
+                          onMouseLeave={() => setHoveredSvgBrand(null)}
+                          onFocus={() => setHoveredSvgBrand(brand)}
+                          onBlur={() => setHoveredSvgBrand(null)}
+                          onClick={() => handleBrandToggle(brand.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleBrandToggle(brand.id);
+                            }
+                          }}
+                          className="transition-opacity hover:opacity-90 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-400"
+                        >
                           <text
                             x="110"
                             y={y + 13}
@@ -1289,6 +1495,34 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       );
                     })}
                   </svg>
+                  {/* Live SVG Bar Tooltip Card */}
+                  {hoveredSvgBrand && (
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      className="mt-4 p-4 bg-slate-800 text-white rounded-xl border border-slate-700 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-fade-in motion-reduce:animate-none"
+                    >
+                      <div className="space-y-1">
+                        <div className="font-bold text-sm text-blue-300 flex items-center gap-2">
+                          <span>{hoveredSvgBrand.name_ko} ({hoveredSvgBrand.name_en})</span>
+                          <span className="text-[11px] px-2 py-0.5 rounded bg-slate-700 text-slate-200">{hoveredSvgBrand.country}</span>
+                        </div>
+                        <div className="text-slate-300 flex flex-wrap items-center gap-3">
+                          <span>종합 DSI: <strong className="text-white">{hoveredSvgBrand.overall_dsi}점</strong></span>
+                          <span>치명 결함율: <strong className="text-rose-300">{hoveredSvgBrand.critical_issue_rate}%</strong></span>
+                          <span>분석 제보: <strong className="text-white">{(hoveredSvgBrand.total_reports || 0).toLocaleString()}건</strong></span>
+                          <span>모델 수: <strong className="text-white">{(hoveredSvgBrand.models || []).length}개</strong></span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleBrandToggle(hoveredSvgBrand.id)}
+                        className="px-3 py-1.5 min-h-[36px] bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold transition shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                      >
+                        {selectedBrand === hoveredSvgBrand.id ? '필터 해제' : '이 브랜드만 보기'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1338,6 +1572,519 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   />
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* TAB 3: BRAND 1:1 RADAR COMPARISON */}
+          {activeChartTab === 'brand_compare' && (
+            <div className="space-y-6">
+              <div className="text-xs text-slate-700 leading-relaxed">
+                두 제조사의 6대 결함 부문(배터리, 구동계, 소프트웨어, 조립품질, 수리비, 혹한기) 점유율과 DSI 결함 심각도를 방사형 레이더 차트로 정밀 대조합니다.
+              </div>
+
+              {/* Brand Comparison Selectors */}
+              <div className="p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor="compare-brand-a-select" className="block text-xs font-bold text-blue-900">
+                      비교 기준 브랜드 A (청색)
+                    </label>
+                    <select
+                      id="compare-brand-a-select"
+                      value={compareBrandA}
+                      onChange={(e) => setCompareBrandA(e.target.value)}
+                      aria-label="비교 기준 브랜드 A 선택"
+                      className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-3 py-2.5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 min-h-[44px]"
+                    >
+                      {brands.map((b) => (
+                        <option key={`compare-a-${b.id}`} value={b.id}>
+                          {b.name_ko} ({b.name_en}) · DSI {b.overall_dsi}점
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="compare-brand-b-select" className="block text-xs font-bold text-rose-900">
+                      비교 대상 브랜드 B (적색)
+                    </label>
+                    <select
+                      id="compare-brand-b-select"
+                      value={compareBrandB}
+                      onChange={(e) => setCompareBrandB(e.target.value)}
+                      aria-label="비교 대상 브랜드 B 선택"
+                      className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-3 py-2.5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 min-h-[44px]"
+                    >
+                      {brands.map((b) => (
+                        <option key={`compare-b-${b.id}`} value={b.id}>
+                          {b.name_ko} ({b.name_en}) · DSI {b.overall_dsi}점
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCompareBrandA(compareBrandB);
+                      setCompareBrandB(compareBrandA);
+                    }}
+                    className="px-3.5 py-2 min-h-[44px] inline-flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold rounded-xl border border-slate-200 shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    aria-label="비교 브랜드 A와 B 맞바꾸기"
+                  >
+                    <span aria-hidden="true">⇄</span>
+                    <span>두 브랜드 맞바꾸기</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Radar Chart Visual Container */}
+              <div
+                tabIndex={0}
+                role="region"
+                aria-label="브랜드 1:1 결함 프로파일 레이더 비교 차트 스크롤 영역"
+                className="w-full overflow-x-auto table-scroll-container border border-slate-800 rounded-2xl p-4 sm:p-6 bg-slate-900 text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 shadow-inner"
+              >
+                <div className="sm:hidden flex items-center justify-between pb-2 mb-2 text-[11px] font-medium text-slate-400 border-b border-slate-800 select-none" aria-hidden="true">
+                  <span>← 좌우로 밀어서 레이더 차트 확인</span>
+                  <span className="text-[10px] text-blue-400 font-semibold">차트 스크롤 ↔</span>
+                </div>
+
+                {/* Radar Legend */}
+                <ul
+                  aria-label="레이더 차트 브랜드 범례"
+                  className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 pb-4 border-b border-slate-800 text-xs font-semibold list-none m-0 p-0"
+                >
+                  <li className="flex items-center gap-2">
+                    <span className="w-3.5 h-3.5 rounded-full bg-blue-500 inline-block shadow-sm ring-2 ring-white/20" aria-hidden="true" />
+                    <span className="text-blue-300">{brandAObj?.name_ko || '브랜드 A'} (DSI {brandAObj?.overall_dsi || 0}점)</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-3.5 h-3.5 rounded-full bg-rose-500 inline-block shadow-sm ring-2 ring-white/20" aria-hidden="true" />
+                    <span className="text-rose-300">{brandBObj?.name_ko || '브랜드 B'} (DSI {brandBObj?.overall_dsi || 0}점)</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-slate-400">
+                    <span className="w-5 h-0.5 border-t-2 border-dashed border-slate-400 inline-block" aria-hidden="true" />
+                    <span>산업 평균</span>
+                  </li>
+                </ul>
+
+                {/* SVG Radar Chart */}
+                <div
+                  tabIndex={0}
+                  role="region"
+                  aria-label="브랜드 1:1 결함 프로파일 레이더 비교 차트 스크롤 영역"
+                  className="w-full overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                <svg
+                  className="w-full min-w-[460px] max-w-[520px] mx-auto h-auto select-none mt-2"
+                  viewBox="0 0 500 480"
+                  width="500"
+                  height="480"
+                  role="img"
+                  aria-labelledby="radar-brand-svg-title radar-brand-svg-desc"
+                >
+                  <title id="radar-brand-svg-title">
+                    {brandAObj?.name_ko || ''} 대 {brandBObj?.name_ko || ''} 6대 결함 부문 레이더 차트 비교
+                  </title>
+                  <desc id="radar-brand-svg-desc">{radarSvgDesc}</desc>
+
+                  {/* Concentric Hexagon Rings & Scale Marks */}
+                  <g aria-hidden="true">
+                    {radarRings.map((ring) => (
+                      <g key={ring.pct}>
+                        <polygon
+                          points={ring.points}
+                          fill="none"
+                          stroke="#334155"
+                          strokeWidth="1"
+                          strokeDasharray="3 3"
+                        />
+                        <text
+                          x="250"
+                          y={230 - ring.r - 3}
+                          textAnchor="middle"
+                          fill="#94a3b8"
+                          fontSize="9"
+                          fontWeight="bold"
+                        >
+                          {ring.pct}%
+                        </text>
+                      </g>
+                    ))}
+                    {/* Radial Axis Lines */}
+                    {radarAxes.map((axis) => (
+                      <line
+                        key={`line-${axis.code}`}
+                        x1="250"
+                        y1="230"
+                        x2={axis.axisX}
+                        y2={axis.axisY}
+                        stroke="#334155"
+                        strokeWidth="1"
+                      />
+                    ))}
+                  </g>
+
+                  {/* Industry Average Polygon */}
+                  <polygon
+                    points={polygonPointsInd}
+                    fill="none"
+                    stroke="#94a3b8"
+                    strokeWidth="1.5"
+                    strokeDasharray="4 4"
+                  />
+
+                  {/* Brand A Polygon (Blue) */}
+                  <polygon
+                    points={polygonPointsA}
+                    fill="rgba(59, 130, 246, 0.25)"
+                    stroke="#3b82f6"
+                    strokeWidth="2.5"
+                  />
+
+                  {/* Brand B Polygon (Rose) */}
+                  <polygon
+                    points={polygonPointsB}
+                    fill="rgba(244, 63, 94, 0.25)"
+                    stroke="#f43f5e"
+                    strokeWidth="2.5"
+                  />
+
+                  {/* Interactive Vertex Nodes and Labels */}
+                  {radarAxes.map((axis) => {
+                    const isHovered = hoveredRadarCategory === axis.code;
+                    return (
+                      <g key={`nodes-${axis.code}`}>
+                        {/* Category Axis Label */}
+                        <text
+                          x={axis.labelX}
+                          y={axis.labelY}
+                          textAnchor={axis.textAnchor}
+                          fill={isHovered ? '#60a5fa' : '#f8fafc'}
+                          fontSize="11"
+                          fontWeight={isHovered ? 'bold' : '600'}
+                          className="cursor-pointer transition-colors"
+                          onClick={() => setHoveredRadarCategory(isHovered ? null : axis.code)}
+                        >
+                          {axis.label}
+                        </text>
+
+                        {/* Brand A vertex circle */}
+                        <circle
+                          cx={axis.xA}
+                          cy={axis.yA}
+                          r={isHovered ? 7 : 5}
+                          fill="#3b82f6"
+                          stroke="#ffffff"
+                          strokeWidth="1.5"
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`${brandAObj?.name_ko || '브랜드 A'} ${axis.label}: ${axis.shareA.toFixed(1)}%`}
+                          onMouseEnter={() => setHoveredRadarCategory(axis.code)}
+                          onMouseLeave={() => setHoveredRadarCategory(null)}
+                          onFocus={() => setHoveredRadarCategory(axis.code)}
+                          onBlur={() => setHoveredRadarCategory(null)}
+                          onClick={() => setHoveredRadarCategory(isHovered ? null : axis.code)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setHoveredRadarCategory(isHovered ? null : axis.code);
+                            }
+                          }}
+                          className="cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        ></circle>
+
+                        {/* Brand B vertex circle */}
+                        <circle
+                          cx={axis.xB}
+                          cy={axis.yB}
+                          r={isHovered ? 7 : 5}
+                          fill="#f43f5e"
+                          stroke="#ffffff"
+                          strokeWidth="1.5"
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`${brandBObj?.name_ko || '브랜드 B'} ${axis.label}: ${axis.shareB.toFixed(1)}%`}
+                          onMouseEnter={() => setHoveredRadarCategory(axis.code)}
+                          onMouseLeave={() => setHoveredRadarCategory(null)}
+                          onFocus={() => setHoveredRadarCategory(axis.code)}
+                          onBlur={() => setHoveredRadarCategory(null)}
+                          onClick={() => setHoveredRadarCategory(isHovered ? null : axis.code)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setHoveredRadarCategory(isHovered ? null : axis.code);
+                            }
+                          }}
+                          className="cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-rose-400"
+                        ></circle>
+                      </g>
+                    );
+                  })}
+                </svg>
+                </div>
+
+                {/* Interactive Tooltip Popover for Active Category */}
+                {activeRadarItem && (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className="mt-4 p-4 bg-slate-800 text-white rounded-xl border border-slate-700 shadow-xl text-xs space-y-2 animate-fade-in motion-reduce:animate-none"
+                  >
+                    <div className="flex items-center justify-between border-b border-slate-700 pb-2">
+                      <span className="font-bold text-sm text-blue-300">
+                        {activeRadarItem.label} 결함 비중 분석
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        산업 평균: {activeRadarItem.indShare.toFixed(1)}%
+                      </span>
+                    </div>
+                    <p className="text-slate-300 text-xs">{activeRadarItem.description}</p>
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div className="p-2.5 rounded-lg bg-blue-950/60 border border-blue-800">
+                        <div className="font-bold text-blue-300">{brandAObj?.name_ko}</div>
+                        <div className="text-base font-black text-white mt-0.5">
+                          {activeRadarItem.shareA.toFixed(1)}%
+                          <span className="text-xs font-normal text-slate-300 ml-1">({activeRadarItem.countA}건)</span>
+                        </div>
+                      </div>
+                      <div className="p-2.5 rounded-lg bg-rose-950/60 border border-rose-800">
+                        <div className="font-bold text-rose-300">{brandBObj?.name_ko}</div>
+                        <div className="text-base font-black text-white mt-0.5">
+                          {activeRadarItem.shareB.toFixed(1)}%
+                          <span className="text-xs font-normal text-slate-300 ml-1">({activeRadarItem.countB}건)</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-[11px] text-slate-300 pt-1">
+                      {activeRadarItem.shareA < activeRadarItem.shareB ? (
+                        <span className="text-emerald-300 font-semibold">
+                          ✓ {brandAObj?.name_ko}의 해당 결함 비중이 {(activeRadarItem.shareB - activeRadarItem.shareA).toFixed(1)}%p 더 낮아 상대적으로 안전합니다.
+                        </span>
+                      ) : activeRadarItem.shareA > activeRadarItem.shareB ? (
+                        <span className="text-emerald-300 font-semibold">
+                          ✓ {brandBObj?.name_ko}의 해당 결함 비중이 {(activeRadarItem.shareA - activeRadarItem.shareB).toFixed(1)}%p 더 낮아 상대적으로 안전합니다.
+                        </span>
+                      ) : (
+                        <span>양사의 해당 결함 발생 비중이 동일한 수준입니다.</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Screen Reader Accessible Table for Radar Chart */}
+              <div className="sr-only">
+                <table aria-label="브랜드 1:1 결함 부문별 점유율 레이더 비교 데이터 표">
+                  <caption>
+                    {brandAObj?.name_ko}와 {brandBObj?.name_ko}의 6대 결함 부문별 산업 점유율 비교 표
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">결함 부문</th>
+                      <th scope="col">{brandAObj?.name_ko} 점유율</th>
+                      <th scope="col">{brandAObj?.name_ko} 제보 건수</th>
+                      <th scope="col">{brandBObj?.name_ko} 점유율</th>
+                      <th scope="col">{brandBObj?.name_ko} 제보 건수</th>
+                      <th scope="col">산업 전체 평균</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {radarAxes.map((a) => (
+                      <tr key={`radar-sr-${a.code}`}>
+                        <th scope="row">{a.label}</th>
+                        <td>{a.shareA.toFixed(1)}%</td>
+                        <td>{a.countA}건</td>
+                        <td>{a.shareB.toFixed(1)}%</td>
+                        <td>{a.countB}건</td>
+                        <td>{a.indShare.toFixed(1)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Side-by-Side Stealth Score Comparison Meters */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Brand A Score Card */}
+                {brandAObj && (
+                  <div className="bg-slate-50 rounded-2xl p-5 border border-blue-200 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-semibold text-blue-800 uppercase tracking-wider">비교 브랜드 A</span>
+                        <h4 className="text-xl font-extrabold text-slate-900 mt-0.5">
+                          {brandAObj.name_ko} ({brandAObj.name_en})
+                        </h4>
+                        <div className="text-xs text-slate-700 mt-0.5">
+                          {brandAObj.country} · {(brandAObj.models || []).length}개 모델 분석
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-2xl font-black text-slate-900">
+                          {brandAObj.overall_dsi}점
+                        </span>
+                        <div className="text-xs font-bold text-blue-800">종합 DSI</div>
+                      </div>
+                    </div>
+
+                    {/* DSI Meter */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs text-slate-700">
+                        <span>DSI 심각도 지수</span>
+                        <span className="font-bold text-slate-900">{getDsiSeverityLevel(brandAObj.overall_dsi || 0).label}</span>
+                      </div>
+                      <div
+                        role="progressbar"
+                        aria-valuenow={Math.round(brandAObj.overall_dsi || 0)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={`${brandAObj.name_ko} 종합 DSI 지수`}
+                        aria-valuetext={`${brandAObj.overall_dsi}점`}
+                        className="w-full bg-slate-200 rounded-full h-3 overflow-hidden"
+                      >
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${getDsiSeverityLevel(brandAObj.overall_dsi || 0).barBgClass}`}
+                          style={{ width: `${Math.min(100, Math.max(10, brandAObj.overall_dsi || 0))}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Critical Issue Rate Meter */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs text-slate-700">
+                        <span>치명 결함율 (동력상실·화재)</span>
+                        <span className="font-bold text-rose-800">{brandAObj.critical_issue_rate || 0}%</span>
+                      </div>
+                      <div
+                        role="progressbar"
+                        aria-valuenow={Math.round(brandAObj.critical_issue_rate || 0)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={`${brandAObj.name_ko} 치명 결함율`}
+                        aria-valuetext={`${brandAObj.critical_issue_rate || 0}%`}
+                        className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden"
+                      >
+                        <div
+                          className="h-full rounded-full bg-rose-500 transition-all duration-300"
+                          style={{ width: `${Math.min(100, Math.max(5, brandAObj.critical_issue_rate || 0))}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200 text-xs text-slate-700 flex justify-between">
+                      <span>총 실차주 제보: <strong className="text-slate-900">{(brandAObj.total_reports || 0).toLocaleString()}건</strong></span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBrand(brandAObj.id)}
+                        className="font-bold text-blue-800 hover:text-blue-950 transition"
+                      >
+                        모델 목록 필터링 &rarr;
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Brand B Score Card */}
+                {brandBObj && (
+                  <div className="bg-slate-50 rounded-2xl p-5 border border-rose-200 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-semibold text-rose-800 uppercase tracking-wider">비교 브랜드 B</span>
+                        <h4 className="text-xl font-extrabold text-slate-900 mt-0.5">
+                          {brandBObj.name_ko} ({brandBObj.name_en})
+                        </h4>
+                        <div className="text-xs text-slate-700 mt-0.5">
+                          {brandBObj.country} · {(brandBObj.models || []).length}개 모델 분석
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-2xl font-black text-slate-900">
+                          {brandBObj.overall_dsi}점
+                        </span>
+                        <div className="text-xs font-bold text-rose-800">종합 DSI</div>
+                      </div>
+                    </div>
+
+                    {/* DSI Meter */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs text-slate-700">
+                        <span>DSI 심각도 지수</span>
+                        <span className="font-bold text-slate-900">{getDsiSeverityLevel(brandBObj.overall_dsi || 0).label}</span>
+                      </div>
+                      <div
+                        role="progressbar"
+                        aria-valuenow={Math.round(brandBObj.overall_dsi || 0)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={`${brandBObj.name_ko} 종합 DSI 지수`}
+                        aria-valuetext={`${brandBObj.overall_dsi}점`}
+                        className="w-full bg-slate-200 rounded-full h-3 overflow-hidden"
+                      >
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${getDsiSeverityLevel(brandBObj.overall_dsi || 0).barBgClass}`}
+                          style={{ width: `${Math.min(100, Math.max(10, brandBObj.overall_dsi || 0))}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Critical Issue Rate Meter */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs text-slate-700">
+                        <span>치명 결함율 (동력상실·화재)</span>
+                        <span className="font-bold text-rose-800">{brandBObj.critical_issue_rate || 0}%</span>
+                      </div>
+                      <div
+                        role="progressbar"
+                        aria-valuenow={Math.round(brandBObj.critical_issue_rate || 0)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={`${brandBObj.name_ko} 치명 결함율`}
+                        aria-valuetext={`${brandBObj.critical_issue_rate || 0}%`}
+                        className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden"
+                      >
+                        <div
+                          className="h-full rounded-full bg-rose-500 transition-all duration-300"
+                          style={{ width: `${Math.min(100, Math.max(5, brandBObj.critical_issue_rate || 0))}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200 text-xs text-slate-700 flex justify-between">
+                      <span>총 실차주 제보: <strong className="text-slate-900">{(brandBObj.total_reports || 0).toLocaleString()}건</strong></span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBrand(brandBObj.id)}
+                        className="font-bold text-rose-800 hover:text-rose-950 transition"
+                      >
+                        모델 목록 필터링 &rarr;
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Head-to-Head Durability Summary */}
+              {brandAObj && brandBObj && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-100 border border-slate-200 text-xs sm:text-sm text-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="font-bold text-slate-900 mr-2">⚖️ 종합 내구성 판정:</span>
+                    {brandAObj.overall_dsi < brandBObj.overall_dsi ? (
+                      <span>
+                        <strong className="text-blue-800 font-extrabold">{brandAObj.name_ko}</strong>가 {brandBObj.name_ko} 대비 DSI 지수가 <strong className="text-slate-900">{(brandBObj.overall_dsi - brandAObj.overall_dsi).toFixed(1)}점 낮아</strong> 종합 결함 심각도 측면에서 더 우수한 내구성을 보입니다.
+                      </span>
+                    ) : brandAObj.overall_dsi > brandBObj.overall_dsi ? (
+                      <span>
+                        <strong className="text-rose-800 font-extrabold">{brandBObj.name_ko}</strong>가 {brandAObj.name_ko} 대비 DSI 지수가 <strong className="text-slate-900">{(brandAObj.overall_dsi - brandBObj.overall_dsi).toFixed(1)}점 낮아</strong> 종합 결함 심각도 측면에서 더 우수한 내구성을 보입니다.
+                      </span>
+                    ) : (
+                      <span>두 브랜드의 종합 결함 심각도(DSI) 지수가 동일합니다.</span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1543,6 +2290,27 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           </div>
         </div>
 
+        {/* Mobile Brand Selector Dropdown */}
+        <div className="sm:hidden space-y-1">
+          <label htmlFor="mobile-brand-filter-select" className="text-xs font-semibold text-slate-700">
+            제조사 브랜드 빠른 선택
+          </label>
+          <select
+            id="mobile-brand-filter-select"
+            value={selectedBrand}
+            onChange={(e) => setSelectedBrand(e.target.value)}
+            aria-label="제조사 브랜드 필터 선택"
+            className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2.5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 min-h-[44px]"
+          >
+            <option value="ALL">전체 브랜드 ({allModels.length}개 차종)</option>
+            {brands.map((b) => (
+              <option key={`mobile-opt-${b.id}`} value={b.id}>
+                {b.name_ko} ({(b.models || []).length}개 모델) · DSI {b.overall_dsi}점
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Brand Selector Buttons */}
         <div role="group" aria-labelledby="brand-filter-heading" className="space-y-2">
           <div id="brand-filter-heading" className="text-xs font-semibold text-slate-700 uppercase tracking-wider">제조사 브랜드</div>
@@ -1572,7 +2340,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 }`}
               >
                 <span>{brand.name_ko}</span>
-                <span className={`text-[10px] font-semibold ${selectedBrand === brand.id ? 'text-blue-100' : 'text-slate-700'}`}>
+                <span className={`text-[10px] font-semibold ${selectedBrand === brand.id ? 'text-white' : 'text-slate-700'}`}>
                   ({(brand.models || []).length})
                 </span>
               </button>
@@ -1762,7 +2530,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           aria-label="보증 만료 후 부품별 수리비 매트릭스 표 스크롤 영역"
           className="overflow-x-auto table-scroll-container border border-slate-200 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
-          <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-500 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true"><span>← 좌우로 밀어서 부품별 수리비 확인</span><span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span></div>
+          <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-600 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true"><span>← 좌우로 밀어서 부품별 수리비 확인</span><span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span></div>
           <table className="w-full min-w-[700px] text-left text-xs sm:text-sm border-collapse" aria-label="보증 만료 후 폭탄 수리비 및 핵심 부품별 교체 비용 매트릭스">
             <caption className="p-4 text-left font-bold text-slate-900 text-sm sm:text-base border-b border-slate-100 bg-slate-50/50">
               보증 만료 후 폭탄 수리비 및 핵심 부품별 교체 비용 매트릭스

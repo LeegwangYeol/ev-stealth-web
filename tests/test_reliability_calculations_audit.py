@@ -258,6 +258,233 @@ console.log(JSON.stringify(kpis));
         self.assertLessEqual(kpis["industryAvgDsi"], 100)
         self.assertTrue(bool(kpis["topDefectCategory"]))
 
+    def test_06_stealth_score_weighting_and_smoothing(self):
+        """6. Stealth score weighting formula computes weighted defect penalties and smoothing."""
+        code = """
+import * as rel from './ev-stealth-web/src/lib/reliabilityCalculations.ts';
+import * as data from './ev-stealth-web/src/lib/getReliabilityData.ts';
+
+// Model A: Excellent reliability, high sample
+const modelA = rel.calculateStealthScore({
+  dsi: 20,
+  incidentRate: 10,
+  criticalIssueRate: 5,
+  totalComplaints: 100,
+  yearsEvaluated: 3,
+  baselineIndustryDsi: 64.2
+});
+
+// Model B: Severe defects, high sample
+const modelB = rel.calculateStealthScore({
+  dsi: 90,
+  incidentRate: 45,
+  criticalIssueRate: 50,
+  totalComplaints: 80,
+  yearsEvaluated: 3,
+  baselineIndustryDsi: 64.2
+});
+
+// Model C: Custom weights
+const modelC = rel.calculateStealthScore({
+  dsi: 40,
+  incidentRate: 20,
+  criticalIssueRate: 10,
+  totalComplaints: 60,
+  yearsEvaluated: 3,
+  weights: { dsiWeight: 0.70, incidentWeight: 0.20, criticalWeight: 0.10 }
+});
+
+// Model D: Invalid/negative weights fallback
+const modelD = rel.calculateStealthScore({
+  dsi: 50,
+  weights: { dsiWeight: -1, incidentWeight: 0, criticalWeight: 0 }
+});
+
+console.log(JSON.stringify({ modelA, modelB, modelC, modelD }));
+"""
+        res = self._run_node_ts(code)
+        mA = res["modelA"]
+        # defectPenalty = 0.5*20 + 0.3*10 + 0.2*5 = 10 + 3 + 1 = 14
+        self.assertEqual(mA["defectPenalty"], 14.0)
+        self.assertEqual(mA["rawStealthScore"], 86.0)
+        self.assertEqual(mA["stealthScore"], 86.0)
+        self.assertEqual(mA["confidenceScore"], 1.0)
+        self.assertEqual(mA["recommendedVerdict"], "BUY_SAFE")
+        self.assertEqual(mA["overallGrade"], "A")
+        self.assertTrue(mA["isHighConfidence"])
+
+        mB = res["modelB"]
+        # defectPenalty = 0.5*90 + 0.3*45 + 0.2*50 = 45 + 13.5 + 10 = 68.5
+        self.assertEqual(mB["defectPenalty"], 68.5)
+        self.assertEqual(mB["rawStealthScore"], 31.5)
+        self.assertEqual(mB["stealthScore"], 31.5)
+        self.assertEqual(mB["recommendedVerdict"], "AVOID")
+        self.assertEqual(mB["overallGrade"], "F")
+
+        mC = res["modelC"]
+        # custom: 0.70*40 + 0.20*20 + 0.10*10 = 28 + 4 + 1 = 33
+        self.assertEqual(mC["defectPenalty"], 33.0)
+        self.assertEqual(mC["rawStealthScore"], 67.0)
+
+        mD = res["modelD"]
+        # invalid weights fall back to default weights without NaN
+        self.assertEqual(mD["defectPenalty"], 25.0)
+        self.assertEqual(mD["rawStealthScore"], 75.0)
+
+    def test_07_defect_frequency_normalizers(self):
+        """7. Defect frequency normalizers handle zero complaints, zero volume, and category weighting."""
+        code = """
+import * as rel from './ev-stealth-web/src/lib/reliabilityCalculations.ts';
+
+const cases = [
+  rel.normalizeDefectFrequency(0, 1000),      // 0 complaints -> 0.0
+  rel.normalizeDefectFrequency(10, 0),         // 0 volume -> 0.0 (prevents division by zero)
+  rel.normalizeDefectFrequency(10, -500),      // negative volume -> 0.0
+  rel.normalizeDefectFrequency(-5, 1000),      // negative complaints -> 0.0
+  rel.normalizeDefectFrequency(NaN, 1000),     // non-finite complaints -> 0.0
+  rel.normalizeDefectFrequency(25, 5000, 1000),// 25 / 5000 * 1000 = 5.0
+];
+
+const catInputs = [
+  { category: 'BATTERY_CHARGING', count: 10 },  // weight 2.5 -> 25
+  { category: 'BUILD_QUALITY', count: 10 },     // weight 0.7 -> 7
+];
+
+const weightedWithVolume = rel.calculateWeightedDefectFrequency(catInputs, 1000); // (25 + 7) / 1000 * 1000 = 32.0
+const weightedAvgMult = rel.calculateWeightedDefectFrequency(catInputs);          // (25 + 7) / 20 = 1.6
+const weightedZero = rel.calculateWeightedDefectFrequency([]);                    // 0.0
+
+console.log(JSON.stringify({ cases, weightedWithVolume, weightedAvgMult, weightedZero }));
+"""
+        res = self._run_node_ts(code)
+        cases = res["cases"]
+        self.assertEqual(cases[0], 0.0)
+        self.assertEqual(cases[1], 0.0)
+        self.assertEqual(cases[2], 0.0)
+        self.assertEqual(cases[3], 0.0)
+        self.assertEqual(cases[4], 0.0)
+        self.assertEqual(cases[5], 5.0)
+
+        self.assertEqual(res["weightedWithVolume"], 32.0)
+        self.assertEqual(res["weightedAvgMult"], 1.6)
+        self.assertEqual(res["weightedZero"], 0.0)
+
+    def test_08_reliability_confidence_algorithm(self):
+        """8. calculateReliabilityConfidence produces strictly bounded statistical confidence [0, 1]."""
+        code = """
+import * as rel from './ev-stealth-web/src/lib/reliabilityCalculations.ts';
+
+const confs = [
+  rel.calculateReliabilityConfidence(0),          // 0 complaints -> 0.0
+  rel.calculateReliabilityConfidence(-10),        // negative -> 0.0
+  rel.calculateReliabilityConfidence(NaN),        // NaN -> 0.0
+  rel.calculateReliabilityConfidence(null),       // null -> 0.0
+  rel.calculateReliabilityConfidence(50, 3),      // threshold met (50) & 3+ yrs -> 1.0
+  rel.calculateReliabilityConfidence(100, 5),     // high sample -> 1.0
+  rel.calculateReliabilityConfidence(10, 1),      // 10 complaints, 1 yr -> ~0.4273
+  rel.calculateReliabilityConfidence(50, 0),      // 0 years -> 0.0
+];
+
+console.log(JSON.stringify(confs));
+"""
+        confs = self._run_node_ts(code)
+        self.assertEqual(confs[0], 0.0)
+        self.assertEqual(confs[1], 0.0)
+        self.assertEqual(confs[2], 0.0)
+        self.assertEqual(confs[3], 0.0)
+        self.assertEqual(confs[4], 1.0)
+        self.assertEqual(confs[5], 1.0)
+        self.assertGreater(confs[6], 0.3)
+        self.assertLess(confs[6], 0.6)
+        self.assertEqual(confs[7], 0.0)
+
+    def test_09_boundary_conditions_zero_complaints_unknown_brand_missing_year(self):
+        """9. Boundary conditions: 0 complaints anchors to baseline, unknown brand & missing year return safe fallbacks."""
+        code = """
+import * as rel from './ev-stealth-web/src/lib/reliabilityCalculations.ts';
+import * as data from './ev-stealth-web/src/lib/getReliabilityData.ts';
+
+const db = data.getReliabilityTrendsData();
+
+// 1. Zero complaints model: confidence = 0.0, smoothed score anchors safely to industry baseline
+const zeroComplaintsScore = rel.calculateStealthScore({
+  dsi: 10,
+  incidentRate: 0,
+  criticalIssueRate: 0,
+  totalComplaints: 0,
+  baselineIndustryDsi: 64.2
+});
+
+// 2. Unknown brand lookup
+const unknownBrandA = rel.getBrandReliabilityById('nonexistent_brand_xyz', db);
+const unknownBrandB = rel.resolveBrandReliability('unknown_car_maker', db);
+const brandWithFallback = rel.getBrandWithFallback('nonexistent_brand_xyz', undefined, db);
+
+// 3. Missing year data
+const missingYearEval = rel.getModelYearEvaluation('ioniq5', 1980, db); // Year 1980 does not exist
+const validYearEval = rel.getModelYearEvaluation('ioniq5', 2021, db);   // Year 2021 exists
+const unknownModelEval = rel.getModelYearEvaluation('ghost_model', 2023, db);
+const missingDefects = rel.getDefectsForModel('ghost_model', db);
+
+console.log(JSON.stringify({
+  zeroComplaintsScore,
+  unknownBrandA: unknownBrandA || null,
+  unknownBrandB: unknownBrandB || null,
+  brandWithFallbackId: brandWithFallback.id,
+  brandWithFallbackDsi: brandWithFallback.overall_dsi,
+  missingYearEval: missingYearEval || null,
+  validYearEvalExists: Boolean(validYearEval),
+  validYearEvalDsi: validYearEval ? validYearEval.dsi_score : null,
+  unknownModelEval: unknownModelEval || null,
+  missingDefectsLength: missingDefects.length
+}));
+"""
+        res = self._run_node_ts(code)
+        zScore = res["zeroComplaintsScore"]
+        # Raw is 95, but confidence is 0.0, so smoothed score is 35.8 (100 - 64.2)
+        self.assertEqual(zScore["confidenceScore"], 0.0)
+        self.assertEqual(zScore["rawStealthScore"], 95.0)
+        self.assertEqual(zScore["stealthScore"], 35.8)
+        self.assertEqual(zScore["recommendedVerdict"], "CAUTION")
+        self.assertFalse(zScore["isHighConfidence"])
+
+        # Unknown brand safely returns undefined or fallback
+        self.assertIsNone(res["unknownBrandA"])
+        self.assertIsNone(res["unknownBrandB"])
+        self.assertEqual(res["brandWithFallbackId"], "nonexistent_brand_xyz")
+        self.assertEqual(res["brandWithFallbackDsi"], 50.0)
+
+        # Missing year data
+        self.assertIsNone(res["missingYearEval"])
+        self.assertTrue(res["validYearEvalExists"])
+        self.assertEqual(res["validYearEvalDsi"], 88.0)
+        self.assertIsNone(res["unknownModelEval"])
+        self.assertEqual(res["missingDefectsLength"], 0)
+
+    def test_10_safe_default_fallbacks(self):
+        """10. Safe default fallback builders return fully-formed non-throwing domain objects."""
+        code = """
+import * as rel from './ev-stealth-web/src/lib/reliabilityCalculations.ts';
+
+const brand = rel.getSafeDefaultBrandReliability('lucid');
+const model = rel.getSafeDefaultModelReliability('gravity', 'lucid');
+
+console.log(JSON.stringify({ brand, model }));
+"""
+        res = self._run_node_ts(code)
+        brand = res["brand"]
+        self.assertEqual(brand["id"], "lucid")
+        self.assertEqual(brand["total_reports"], 0)
+        self.assertEqual(brand["overall_dsi"], 50.0)
+        self.assertEqual(brand["models"], [])
+        self.assertIn("BATTERY_CHARGING", brand["category_distribution"])
+
+        model = res["model"]
+        self.assertEqual(model["id"], "gravity")
+        self.assertEqual(model["brand_id"], "lucid")
+        self.assertEqual(model["overall_grade"], "C")
+        self.assertEqual(model["year_evaluations"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

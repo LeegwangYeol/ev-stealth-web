@@ -101,6 +101,7 @@ export interface VinCheckResult {
   decodedModel?: string;
   decodedYear?: number;
   decodedCountry?: string;
+  decodedWmi?: string;
   batteryProfile?: BatterySafetyProfile;
   recalls: OfficialRecallCampaign[];
   activeCampaignsCount: number;
@@ -143,7 +144,14 @@ export const EMPTY_RECALL_DATABASE: RecallDatabase = Object.freeze({
 }) as unknown as RecallDatabase;
 
 // Year code mapping according to ISO 3779 standard (Position 10)
+// Supports full 30-year automotive cycle (2010 - 2039)
 export const VIN_YEAR_MAP: Readonly<Record<string, number>> = Object.freeze({
+  A: 2010,
+  B: 2011,
+  C: 2012,
+  D: 2013,
+  E: 2014,
+  F: 2015,
   G: 2016,
   H: 2017,
   J: 2018,
@@ -166,6 +174,9 @@ export const WMI_MAP: Readonly<Record<string, { brand: string; country: string }
   KM8: Object.freeze({ brand: '현대자동차', country: '대한민국' }),
   KMH: Object.freeze({ brand: '제네시스', country: '대한민국' }),
   KND: Object.freeze({ brand: '기아', country: '대한민국' }),
+  KNA: Object.freeze({ brand: '기아', country: '대한민국' }),
+  KNM: Object.freeze({ brand: '르노코리아', country: '대한민국' }),
+  KPT: Object.freeze({ brand: 'KG모빌리티', country: '대한민국' }),
   '5YJ': Object.freeze({ brand: '테슬라', country: '미국 (캘리포니아 프리몬트)' }),
   '7SA': Object.freeze({ brand: '테슬라', country: '미국 (텍사스 오스틴)' }),
   LRW: Object.freeze({ brand: '테슬라', country: '중국 (상하이 기가팩토리)' }),
@@ -175,8 +186,13 @@ export const WMI_MAP: Readonly<Record<string, { brand: string; country: string }
   WBY: Object.freeze({ brand: 'BMW i', country: '독일' }),
   LGX: Object.freeze({ brand: 'BYD', country: '중국' }),
   '1G1': Object.freeze({ brand: '쉐보레', country: '미국' }),
+  KL3: Object.freeze({ brand: '쉐보레', country: '대한민국 (한국지엠)' }),
   LPS: Object.freeze({ brand: '폴스타', country: '중국' }),
   WP0: Object.freeze({ brand: '포르쉐', country: '독일' }),
+  WAU: Object.freeze({ brand: '아우디', country: '독일' }),
+  WVW: Object.freeze({ brand: '폭스바겐', country: '독일' }),
+  WVG: Object.freeze({ brand: '폭스바겐', country: '독일' }),
+  YV1: Object.freeze({ brand: '볼보', country: '스웨덴' }),
 });
 
 // Canonical manufacturer mapping resolving synonyms, casing, and localized brand names
@@ -241,7 +257,272 @@ export const CANONICAL_MANUFACTURER_MAP: Readonly<Record<string, string>> = Obje
   ssangyong: 'KG모빌리티',
   '쌍용': 'KG모빌리티',
   '쌍용자동차': 'KG모빌리티',
+
+  renault: '르노코리아',
+  'renault korea': '르노코리아',
+  '르노': '르노코리아',
+  '르노코리아': '르노코리아',
+  '르노삼성': '르노코리아',
 });
+
+// Valid enum sets for strict schema validation
+export const VALID_RECALL_RISK_LEVELS: ReadonlySet<RecallRiskLevel> = new Set<RecallRiskLevel>([
+  'FIRE_HAZARD',
+  'LOSS_OF_POWER',
+  'BRAKE_STEERING',
+  'SOFTWARE_REGULATION',
+  'STRUCTURAL_DEFECT',
+]);
+
+export const VALID_REMEDY_METHODS: ReadonlySet<RemedyMethod> = new Set<RemedyMethod>([
+  'HARDWARE_REPLACE',
+  'SOFTWARE_UPDATE_SERVICE',
+  'OTA_WIRELESS',
+  'INSPECTION_ONLY',
+]);
+
+export const VALID_FIRE_INCIDENT_STATUSES: ReadonlySet<FireIncidentStatus> = new Set<FireIncidentStatus>([
+  'CRITICAL_MONITORING',
+  'RECALLED_RESOLVED',
+  'VERIFIED_SAFE',
+]);
+
+export interface SchemaValidationResult<T> {
+  valid: boolean;
+  errors: string[];
+  data?: T;
+}
+
+/**
+ * Validates a single OfficialRecallCampaign record against strict domain schema constraints.
+ */
+export function validateOfficialRecallCampaign(
+  raw: unknown,
+  index?: number
+): SchemaValidationResult<OfficialRecallCampaign> {
+  const prefix = index !== undefined ? `Recall[${index}]` : 'Recall';
+  const errors: string[] = [];
+
+  if (!raw || typeof raw !== 'object') {
+    return { valid: false, errors: [`${prefix}: Record must be a non-null object`] };
+  }
+
+  const r = raw as Record<string, unknown>;
+
+  if (typeof r.id !== 'string' || !r.id.trim()) {
+    errors.push(`${prefix}: Missing or empty id`);
+  }
+  if (typeof r.campaign_no !== 'string' || !r.campaign_no.trim()) {
+    errors.push(`${prefix}: Missing or empty campaign_no`);
+  }
+  if (typeof r.brand !== 'string' || !r.brand.trim()) {
+    errors.push(`${prefix}: Missing or empty brand`);
+  }
+  if (typeof r.target_model !== 'string' || !r.target_model.trim()) {
+    errors.push(`${prefix}: Missing or empty target_model`);
+  }
+  if (typeof r.risk_level !== 'string' || !VALID_RECALL_RISK_LEVELS.has(r.risk_level as RecallRiskLevel)) {
+    errors.push(`${prefix}: Invalid risk_level '${r.risk_level}'`);
+  }
+  if (typeof r.remedy_type !== 'string' || !VALID_REMEDY_METHODS.has(r.remedy_type as RemedyMethod)) {
+    errors.push(`${prefix}: Invalid remedy_type '${r.remedy_type}'`);
+  }
+  if (typeof r.status !== 'string' || (r.status !== 'ACTIVE' && r.status !== 'RESOLVED')) {
+    errors.push(`${prefix}: Invalid status '${r.status}' (must be 'ACTIVE' or 'RESOLVED')`);
+  }
+  if (
+    typeof r.affected_kdm_units !== 'number' ||
+    !Number.isFinite(r.affected_kdm_units) ||
+    r.affected_kdm_units < 0
+  ) {
+    errors.push(`${prefix}: Invalid affected_kdm_units '${r.affected_kdm_units}' (must be non-negative finite number)`);
+  }
+
+  const valid = errors.length === 0;
+  return {
+    valid,
+    errors,
+    data: valid ? (r as unknown as OfficialRecallCampaign) : undefined,
+  };
+}
+
+/**
+ * Validates a single BatterySafetyProfile record against strict domain schema constraints.
+ */
+export function validateBatterySafetyProfile(
+  raw: unknown,
+  index?: number
+): SchemaValidationResult<BatterySafetyProfile> {
+  const prefix = index !== undefined ? `BatteryProfile[${index}]` : 'BatteryProfile';
+  const errors: string[] = [];
+
+  if (!raw || typeof raw !== 'object') {
+    return { valid: false, errors: [`${prefix}: Record must be a non-null object`] };
+  }
+
+  const bp = raw as Record<string, unknown>;
+
+  if (typeof bp.model_id !== 'string' || !bp.model_id.trim()) {
+    errors.push(`${prefix}: Missing or empty model_id`);
+  }
+  if (typeof bp.brand !== 'string' || !bp.brand.trim()) {
+    errors.push(`${prefix}: Missing or empty brand`);
+  }
+  if (typeof bp.model_name !== 'string' || !bp.model_name.trim()) {
+    errors.push(`${prefix}: Missing or empty model_name`);
+  }
+  if (typeof bp.cell_supplier !== 'string' || !bp.cell_supplier.trim()) {
+    errors.push(`${prefix}: Missing or empty cell_supplier`);
+  }
+  if (
+    typeof bp.fire_incident_status !== 'string' ||
+    !VALID_FIRE_INCIDENT_STATUSES.has(bp.fire_incident_status as FireIncidentStatus)
+  ) {
+    errors.push(`${prefix}: Invalid fire_incident_status '${bp.fire_incident_status}'`);
+  }
+  if (
+    typeof bp.recommended_soc_limit !== 'number' ||
+    !Number.isFinite(bp.recommended_soc_limit) ||
+    bp.recommended_soc_limit < 50 ||
+    bp.recommended_soc_limit > 100
+  ) {
+    errors.push(`${prefix}: Invalid recommended_soc_limit '${bp.recommended_soc_limit}' (must be 50-100)`);
+  }
+
+  const valid = errors.length === 0;
+  return {
+    valid,
+    errors,
+    data: valid ? (bp as unknown as BatterySafetyProfile) : undefined,
+  };
+}
+
+/**
+ * Validates a single VinPrefixMapping record against strict domain schema constraints.
+ */
+export function validateVinPrefixMapping(
+  raw: unknown,
+  index?: number
+): SchemaValidationResult<VinPrefixMapping> {
+  const prefix = index !== undefined ? `VinPrefix[${index}]` : 'VinPrefix';
+  const errors: string[] = [];
+
+  if (!raw || typeof raw !== 'object') {
+    return { valid: false, errors: [`${prefix}: Record must be a non-null object`] };
+  }
+
+  const vp = raw as Record<string, unknown>;
+
+  if (typeof vp.prefix !== 'string' || !vp.prefix.trim()) {
+    errors.push(`${prefix}: Missing or empty prefix`);
+  }
+  if (typeof vp.brand !== 'string' || !vp.brand.trim()) {
+    errors.push(`${prefix}: Missing or empty brand`);
+  }
+  if (typeof vp.model_name !== 'string' || !vp.model_name.trim()) {
+    errors.push(`${prefix}: Missing or empty model_name`);
+  }
+
+  const valid = errors.length === 0;
+  return {
+    valid,
+    errors,
+    data: valid ? (vp as unknown as VinPrefixMapping) : undefined,
+  };
+}
+
+/**
+ * Validates entire RecallDatabase payload and calculates verified metadata totals.
+ */
+export function validateRecallDatabaseSchema(raw: unknown): {
+  valid: boolean;
+  errors: string[];
+  database?: RecallDatabase;
+} {
+  const errors: string[] = [];
+  if (!raw || typeof raw !== 'object') {
+    return { valid: false, errors: ['Database root must be a non-null object'] };
+  }
+
+  const db = raw as Partial<RecallDatabase>;
+
+  if (!db.metadata || typeof db.metadata !== 'object') {
+    errors.push('Database: Missing metadata object');
+  }
+
+  const validRecalls: OfficialRecallCampaign[] = [];
+  if (!Array.isArray(db.recalls)) {
+    errors.push('Database: Missing recalls array');
+  } else {
+    db.recalls.forEach((r, idx) => {
+      const res = validateOfficialRecallCampaign(r, idx);
+      if (!res.valid) {
+        errors.push(...res.errors);
+      } else if (res.data) {
+        validRecalls.push(res.data);
+      }
+    });
+  }
+
+  const validBatteryProfiles: BatterySafetyProfile[] = [];
+  if (!Array.isArray(db.battery_profiles)) {
+    errors.push('Database: Missing battery_profiles array');
+  } else {
+    db.battery_profiles.forEach((bp, idx) => {
+      const res = validateBatterySafetyProfile(bp, idx);
+      if (!res.valid) {
+        errors.push(...res.errors);
+      } else if (res.data) {
+        validBatteryProfiles.push(res.data);
+      }
+    });
+  }
+
+  const validPrefixes: VinPrefixMapping[] = [];
+  if (!Array.isArray(db.vin_prefixes)) {
+    errors.push('Database: Missing vin_prefixes array');
+  } else {
+    db.vin_prefixes.forEach((vp, idx) => {
+      const res = validateVinPrefixMapping(vp, idx);
+      if (!res.valid) {
+        errors.push(...res.errors);
+      } else if (res.data) {
+        validPrefixes.push(res.data);
+      }
+    });
+  }
+
+  const valid = errors.length === 0;
+  const database: RecallDatabase = {
+    metadata: {
+      version: typeof db.metadata?.version === 'string' ? db.metadata.version : '1.0.0',
+      updated_at: typeof db.metadata?.updated_at === 'string' ? db.metadata.updated_at : new Date().toISOString(),
+      total_campaigns:
+        typeof db.metadata?.total_campaigns === 'number' && Number.isFinite(db.metadata.total_campaigns)
+          ? db.metadata.total_campaigns
+          : validRecalls.length,
+      total_affected_vehicles_kdm:
+        typeof db.metadata?.total_affected_vehicles_kdm === 'number' && Number.isFinite(db.metadata.total_affected_vehicles_kdm)
+          ? db.metadata.total_affected_vehicles_kdm
+          : validRecalls.reduce((sum, r) => sum + (r.affected_kdm_units || 0), 0),
+      active_fire_campaigns:
+        typeof db.metadata?.active_fire_campaigns === 'number' && Number.isFinite(db.metadata.active_fire_campaigns)
+          ? db.metadata.active_fire_campaigns
+          : validRecalls.filter((r) => r.risk_level === 'FIRE_HAZARD' && r.status === 'ACTIVE').length,
+      ota_remedy_rate_pct:
+        typeof db.metadata?.ota_remedy_rate_pct === 'number' && Number.isFinite(db.metadata.ota_remedy_rate_pct)
+          ? db.metadata.ota_remedy_rate_pct
+          : (validRecalls.length > 0
+              ? Math.round((validRecalls.filter((r) => r.remedy_type === 'OTA_WIRELESS').length / validRecalls.length) * 1000) / 10
+              : 0),
+    },
+    vin_prefixes: validPrefixes,
+    battery_profiles: validBatteryProfiles,
+    recalls: validRecalls,
+  };
+
+  return { valid, errors, database };
+}
 
 /**
  * Normalizes manufacturer / brand string to canonical form, handling casing,
@@ -252,7 +533,7 @@ export function normalizeManufacturer(brand?: string | null): string {
   const cleaned = brand.trim();
   if (!cleaned) return '';
 
-  const key = cleaned.toLowerCase().replace(/[\s\-_/()]+/g, '');
+  const key = cleaned.toLowerCase().replace(/[\s\-_/()[\]+.,&]+/g, '');
   if (CANONICAL_MANUFACTURER_MAP[key]) {
     return CANONICAL_MANUFACTURER_MAP[key];
   }
@@ -310,6 +591,57 @@ export function validateVinString(vin: string): { valid: boolean; normalized: st
   return { valid: true, normalized };
 }
 
+/**
+ * Calculates the standard ISO 3779 / US 49 CFR Part 565 9th check digit for a 17-character VIN.
+ * Returns null if VIN is invalid, contains illegal characters (I, O, Q), or is not 17 chars.
+ */
+export function calculateVinCheckDigit(vin: string): string | null {
+  if (!vin || typeof vin !== 'string') return null;
+  const clean = vin.trim().toUpperCase().replace(/[\s-]/g, '');
+  if (clean.length !== 17 || /[IOQ]/i.test(clean)) return null;
+
+  const weights = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2];
+  const transliteration: Record<string, number> = {
+    A: 1, B: 2, C: 3, D: 4, E: 5, F: 6, G: 7, H: 8,
+    J: 1, K: 2, L: 3, M: 4, N: 5, P: 7, R: 9,
+    S: 2, T: 3, U: 4, V: 5, W: 6, X: 7, Y: 8, Z: 9,
+    '0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9,
+  };
+
+  let sum = 0;
+  for (let i = 0; i < 17; i++) {
+    const ch = clean[i];
+    const val = transliteration[ch];
+    if (val === undefined) return null;
+    sum += val * weights[i];
+  }
+  const rem = sum % 11;
+  return rem === 10 ? 'X' : String(rem);
+}
+
+/**
+ * Checks whether the 9th character matches the calculated check digit per ISO 3779 / NHTSA algorithm.
+ * Note: Check digit verification is strictly enforced in North America; in European/Asian domestic markets,
+ * the 9th character can be a vehicle descriptor code (VDS).
+ */
+export function verifyVinChecksum(vin: string): {
+  isValidCheckDigit: boolean;
+  expectedCheckDigit: string | null;
+  actualCheckDigit: string | null;
+} {
+  const expected = calculateVinCheckDigit(vin);
+  if (!expected || typeof vin !== 'string') {
+    return { isValidCheckDigit: false, expectedCheckDigit: null, actualCheckDigit: null };
+  }
+  const clean = vin.trim().toUpperCase().replace(/[\s-]/g, '');
+  const actual = clean.length === 17 ? clean[8] : null;
+  return {
+    isValidCheckDigit: expected === actual,
+    expectedCheckDigit: expected,
+    actualCheckDigit: actual,
+  };
+}
+
 // ==========================================
 // 4. CAMPAIGN MATCHING ALGORITHMS
 // ==========================================
@@ -319,18 +651,33 @@ export function validateVinString(vin: string): { valid: boolean; normalized: st
  * Prevents false-positive collisions across distinct models (e.g. "아이오닉 5" vs "아이오닉 EV", "모델 Y" vs "모델 3").
  */
 export function isModelMatchForCampaign(queryModel: string, campaignTargetModel: string): boolean {
-  if (!queryModel || !campaignTargetModel) return false;
+  if (
+    !queryModel ||
+    !campaignTargetModel ||
+    typeof queryModel !== 'string' ||
+    typeof campaignTargetModel !== 'string'
+  ) {
+    return false;
+  }
 
-  const normalize = (str: string) => str.toLowerCase().replace(/[\s\-_/()]+/g, '');
+  const normalize = (str: string) => str.toLowerCase().replace(/[\s\-_/()[\]+.,&]+/g, '');
   const cleanBase = (name: string) => name.replace(/\s*\([^)]*\)/g, '').trim();
 
   const queryClean = cleanBase(queryModel).toLowerCase();
   const queryNorm = normalize(queryClean);
 
+  // Require query to contain at least one alphanumeric or Korean character
+  if (!queryNorm || !/[a-zA-Z0-9가-힣]/.test(queryNorm)) {
+    return false;
+  }
+
   const targets = campaignTargetModel.split(',').map((t) => cleanBase(t).toLowerCase());
 
   for (const target of targets) {
     const targetNorm = normalize(target);
+    if (!targetNorm || !/[a-zA-Z0-9가-힣]/.test(targetNorm)) {
+      continue;
+    }
 
     // Exact normalized match (e.g. "아이오닉5" === "아이오닉5", "ev6" === "ev6")
     if (queryNorm === targetNorm) return true;
@@ -370,6 +717,9 @@ export function isModelMatchForCampaign(queryModel: string, campaignTargetModel:
     const subTrims = queryModel.split(/[/,]/).map((s) => cleanBase(s).toLowerCase().trim());
     for (const sub of subTrims) {
       const subNorm = normalize(sub);
+      if (!subNorm || !/[a-zA-Z0-9가-힣]/.test(subNorm)) {
+        continue;
+      }
       if (subNorm === targetNorm || targetNorm.includes(subNorm) || subNorm.includes(targetNorm)) {
         const subNums = sub.match(/\d+/g) || [];
         const targetNums = target.match(/\d+/g) || [];
@@ -604,8 +954,11 @@ export function isYearMatchForCampaign(year?: number, targetModelYears?: string)
   if (typeof year !== 'number' || !Number.isFinite(year) || year <= 0) return false;
   if (!targetModelYears || typeof targetModelYears !== 'string' || !targetModelYears.trim()) return true;
 
+  // Clean target string: remove Korean particle "년"
+  const cleanTarget = targetModelYears.replace(/년/g, '').trim();
+
   // Split disjoint segments separated by comma or semicolon
-  const segments = targetModelYears.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+  const segments = cleanTarget.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
   if (segments.length === 0) return true;
 
   let hasValidSegment = false;
@@ -623,8 +976,8 @@ export function isYearMatchForCampaign(year?: number, targetModelYears?: string)
       continue;
     }
 
-    // 2. Open-ended future range: "2022 ~" or "2022 ~ 현재" or "2022년 이후"
-    const openRangeMatch = segment.match(/(\d{4})\s*(?:~|-)\s*(?:현재|present|\+|$)/i);
+    // 2. Open-ended future range: "2022 ~" or "2022 ~ 현재" or "2022 이후"
+    const openRangeMatch = segment.match(/(\d{4})\s*(?:~|-)?\s*(?:현재|present|이후|\+)/i);
     if (openRangeMatch) {
       hasValidSegment = true;
       const start = parseInt(openRangeMatch[1], 10);
@@ -632,7 +985,16 @@ export function isYearMatchForCampaign(year?: number, targetModelYears?: string)
       continue;
     }
 
-    // 3. Single year match: "2022"
+    // 3. Before range: "2022 이전" or "~ 2022"
+    const beforeRangeMatch = segment.match(/(?:~|-)?\s*(\d{4})\s*(?:이전|까지|before)/i);
+    if (beforeRangeMatch) {
+      hasValidSegment = true;
+      const end = parseInt(beforeRangeMatch[1], 10);
+      if (year >= 1990 && year <= end) return true;
+      continue;
+    }
+
+    // 4. Single year match: "2022"
     const singleYearMatch = segment.match(/(\d{4})/);
     if (singleYearMatch) {
       hasValidSegment = true;
@@ -661,7 +1023,7 @@ export function decodeVinAndCheckRecalls(rawVin: string, db?: RecallDatabase): V
   if (!validation.valid) {
     return {
       valid: false,
-      query: rawVin,
+      query: typeof rawVin === 'string' ? rawVin : '',
       mode: 'VIN',
       validationError: validation.error,
       recalls: [],
@@ -674,14 +1036,17 @@ export function decodeVinAndCheckRecalls(rawVin: string, db?: RecallDatabase): V
   }
 
   const vin = validation.normalized;
+  const wmi = vin.substring(0, 3);
 
   // 1. Decode Year from 10th character (index 9)
   const yearChar = vin.charAt(9);
-  const decodedYear = VIN_YEAR_MAP[yearChar];
+  const decodedYear = VIN_YEAR_MAP[yearChar] || VIN_YEAR_MAP[yearChar.toUpperCase()];
 
   // 2. Decode Prefix (WMI + VDS)
-  const sortedPrefixes = [...(activeDb.vin_prefixes || [])].sort((a, b) => b.prefix.length - a.prefix.length);
-  const matchedPrefix = sortedPrefixes.find((p) => vin.startsWith(p.prefix));
+  const sortedPrefixes = [...(activeDb.vin_prefixes || [])]
+    .filter((p) => p && typeof p.prefix === 'string')
+    .sort((a, b) => b.prefix.length - a.prefix.length);
+  const matchedPrefix = sortedPrefixes.find((p) => vin.startsWith(p.prefix.trim().toUpperCase()));
 
   let decodedBrand = matchedPrefix?.brand;
   const decodedModel = matchedPrefix?.model_name;
@@ -689,21 +1054,34 @@ export function decodeVinAndCheckRecalls(rawVin: string, db?: RecallDatabase): V
 
   // Fallback to WMI (first 3 chars)
   if (!decodedBrand) {
-    const wmi = vin.substring(0, 3);
     const wmiMatch = WMI_MAP[wmi];
     if (wmiMatch) {
       decodedBrand = wmiMatch.brand;
-      decodedCountry = wmiMatch.country;
+      decodedCountry = decodedCountry || wmiMatch.country;
     } else {
       decodedBrand = '기타/미확인 브랜드';
-      decodedCountry = '미확인 국가';
     }
+  }
+
+  // Fallback to 1st character of VIN for country if still unknown
+  if (!decodedCountry || decodedCountry === '미확인 국가') {
+    const firstChar = vin.charAt(0);
+    if (firstChar === 'K') decodedCountry = '대한민국';
+    else if (firstChar === 'W') decodedCountry = '독일';
+    else if (firstChar === 'L') decodedCountry = '중국';
+    else if (firstChar === '1' || firstChar === '4' || firstChar === '5') decodedCountry = '미국';
+    else if (firstChar === 'J') decodedCountry = '일본';
+    else if (firstChar === '2') decodedCountry = '캐나다';
+    else if (firstChar === '3') decodedCountry = '멕시코';
+    else if (firstChar === 'S') decodedCountry = '영국';
+    else decodedCountry = '미확인 국가';
   }
 
   // 3. Match Battery Profile
   let matchedBatteryProfile: BatterySafetyProfile | undefined;
   if (decodedModel) {
     matchedBatteryProfile = (activeDb.battery_profiles || []).find((bp) => {
+      if (!bp || typeof bp.model_name !== 'string') return false;
       const pModel = bp.model_name.toLowerCase();
       const dModel = (decodedModel || '').toLowerCase();
       return (
@@ -716,22 +1094,33 @@ export function decodeVinAndCheckRecalls(rawVin: string, db?: RecallDatabase): V
 
   // 4. Match Recall Campaigns
   const matchingRecalls = (activeDb.recalls || []).filter((campaign) => {
+    if (!campaign || typeof campaign !== 'object') return false;
     const decodedBrandLower = (decodedBrand || '').toLowerCase();
     const decodedCanonical = decodedBrand ? normalizeManufacturer(decodedBrand) : '';
     const campCanonical = campaign.brand ? normalizeManufacturer(campaign.brand) : '';
     const campBrandLower = (campaign.brand || '').toLowerCase();
     const campTargetLower = (campaign.target_model || '').toLowerCase();
 
+    // Genesis guard: only match Hyundai recalls if campaign mentions Genesis or matches model
+    const isGenesisOnHyundai =
+      (decodedCanonical === '제네시스' || decodedBrandLower === '제네시스') &&
+      campCanonical === '현대자동차';
+
+    const genesisMatches =
+      isGenesisOnHyundai &&
+      (campTargetLower.includes('제네시스') ||
+        campTargetLower.includes('genesis') ||
+        Boolean(decodedModel && isModelMatchForCampaign(decodedModel, campaign.target_model)));
+
     const brandMatches =
       Boolean(decodedBrand) &&
-      (decodedCanonical === campCanonical ||
+      (genesisMatches ||
+        decodedCanonical === campCanonical ||
         campBrandLower === decodedBrandLower ||
         campBrandLower.includes(decodedBrandLower) ||
         decodedBrandLower.includes(campBrandLower) ||
         (campCanonical && campCanonical.toLowerCase().includes(decodedCanonical.toLowerCase())) ||
         (decodedCanonical && decodedCanonical.toLowerCase().includes(campCanonical.toLowerCase())) ||
-        (decodedCanonical === '제네시스' && campCanonical === '현대자동차') ||
-        (decodedBrand === '제네시스' && campaign.brand === '현대자동차') ||
         campTargetLower.includes(decodedBrandLower) ||
         (decodedCanonical && campTargetLower.includes(decodedCanonical.toLowerCase())));
 
@@ -769,6 +1158,7 @@ export function decodeVinAndCheckRecalls(rawVin: string, db?: RecallDatabase): V
     decodedModel,
     decodedYear,
     decodedCountry,
+    decodedWmi: wmi,
     batteryProfile: matchedBatteryProfile,
     recalls: sortRecallsByDate(matchingRecalls, 'desc'),
     activeCampaignsCount: matchingRecalls.filter((r) => r.status === 'ACTIVE').length,
@@ -792,20 +1182,21 @@ export function checkRecallsByModel(
   year?: number,
   db?: RecallDatabase
 ): VinCheckResult {
+  const cleanBrand = typeof brand === 'string' ? brand.trim() : '';
+  const cleanModel = typeof modelName === 'string' ? modelName.trim() : '';
+
   if (
-    !brand ||
-    typeof brand !== 'string' ||
-    !brand.trim() ||
-    !modelName ||
-    typeof modelName !== 'string' ||
-    !modelName.trim()
+    !cleanBrand ||
+    !cleanModel ||
+    !/[a-zA-Z0-9가-힣]/.test(cleanModel)
   ) {
     return {
       valid: false,
-      query: `${typeof brand === 'string' ? brand : ''} ${typeof modelName === 'string' ? modelName : ''} ${year || ''}`.trim(),
+      query: `${cleanBrand} ${cleanModel} ${year || ''}`.trim(),
       mode: 'MODEL',
-      decodedBrand: typeof brand === 'string' ? brand.trim() || undefined : undefined,
-      decodedModel: typeof modelName === 'string' ? modelName.trim() || undefined : undefined,
+      validationError: '제조사와 유효한 차종명을 모두 입력해 주십시오.',
+      decodedBrand: cleanBrand || undefined,
+      decodedModel: cleanModel || undefined,
       decodedYear: typeof year === 'number' && Number.isFinite(year) ? year : undefined,
       recalls: [],
       activeCampaignsCount: 0,
@@ -816,8 +1207,6 @@ export function checkRecallsByModel(
     };
   }
 
-  const cleanBrand = brand.trim();
-  const cleanModel = modelName.trim();
   const canonicalBrand = normalizeManufacturer(cleanBrand);
   const brandLower = cleanBrand.toLowerCase();
   const canonicalBrandLower = canonicalBrand.toLowerCase();
@@ -850,15 +1239,25 @@ export function checkRecallsByModel(
     const campBrandLower = campaign.brand.toLowerCase();
     const campTargetLower = campaign.target_model.toLowerCase();
 
+    // Genesis guard: only match Hyundai recalls if campaign mentions Genesis or matches model
+    const isGenesisOnHyundai =
+      (canonicalBrand === '제네시스' || cleanBrand === '제네시스') &&
+      campCanonical === '현대자동차';
+
+    const genesisMatches =
+      isGenesisOnHyundai &&
+      (campTargetLower.includes('제네시스') ||
+        campTargetLower.includes('genesis') ||
+        isModelMatchForCampaign(cleanModel, campaign.target_model));
+
     const brandMatches =
+      genesisMatches ||
       campCanonical === canonicalBrand ||
       campBrandLower === brandLower ||
       campBrandLower.includes(brandLower) ||
       brandLower.includes(campBrandLower) ||
       (campCanonical && campCanonical.toLowerCase().includes(canonicalBrandLower)) ||
       (canonicalBrandLower && canonicalBrandLower.includes(campCanonical.toLowerCase())) ||
-      (canonicalBrand === '제네시스' && campCanonical === '현대자동차') ||
-      (cleanBrand === '제네시스' && campaign.brand === '현대자동차') ||
       campTargetLower.includes(brandLower) ||
       (canonicalBrandLower && campTargetLower.includes(canonicalBrandLower));
 
@@ -961,13 +1360,13 @@ export function getModelsForBrand(brand: string, db?: RecallDatabase): string[] 
   };
 
   (activeDb.battery_profiles || [])
-    .filter((bp) => isBrandMatch(bp?.brand))
+    .filter((bp) => bp && isBrandMatch(bp?.brand))
     .forEach((bp) => {
       if (bp?.model_name) models.add(bp.model_name);
     });
 
   (activeDb.vin_prefixes || [])
-    .filter((vp) => isBrandMatch(vp?.brand))
+    .filter((vp) => vp && isBrandMatch(vp?.brand))
     .forEach((vp) => {
       if (vp?.model_name) models.add(vp.model_name);
     });
@@ -976,7 +1375,7 @@ export function getModelsForBrand(brand: string, db?: RecallDatabase): string[] 
   const customVehicles = (activeDb as unknown as Record<string, unknown>)?.vehicles;
   if (Array.isArray(customVehicles)) {
     (customVehicles as Array<{ brand?: string; model_name?: string; model?: string }>)
-      .filter((v) => isBrandMatch(v?.brand))
+      .filter((v) => v && isBrandMatch(v?.brand))
       .forEach((v) => {
         if (v?.model_name) models.add(v.model_name);
         else if (v?.model) models.add(v.model);
@@ -985,12 +1384,21 @@ export function getModelsForBrand(brand: string, db?: RecallDatabase): string[] 
 
   // Include models explicitly tracked in recall campaigns for this brand
   (activeDb.recalls || [])
-    .filter((r) => isBrandMatch(r?.brand))
+    .filter((r) => r && (isBrandMatch(r?.brand) || (canonicalBrand === '제네시스' && r?.brand && normalizeManufacturer(r.brand) === '현대자동차')))
     .forEach((r) => {
       if (r?.target_model) {
         r.target_model.split(',').forEach((tm) => {
           const cleanModel = tm.replace(/\s*\([^)]*\)/g, '').trim();
-          if (cleanModel) models.add(cleanModel);
+          if (cleanModel) {
+            if (canonicalBrand === '제네시스') {
+              if (cleanModel.includes('제네시스') || cleanModel.startsWith('GV') || cleanModel.startsWith('G80') || cleanModel.startsWith('G90')) {
+                models.add(cleanModel.replace(/^제네시스\s*/, ''));
+                models.add(cleanModel);
+              }
+            } else {
+              models.add(cleanModel);
+            }
+          }
         });
       }
     });

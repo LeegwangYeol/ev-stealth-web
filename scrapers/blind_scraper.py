@@ -134,6 +134,8 @@ class BlindScraper:
 
     def parse_topic_feed(self, html_content: str) -> List[Dict[str, Any]]:
         """Parse Blind topic list HTML / Next.js SSR state."""
+        if not html_content or not isinstance(html_content, str):
+            return []
         items = []
 
         # Try extracting Next.js SSR __NEXT_DATA__
@@ -203,16 +205,25 @@ class BlindScraper:
             logger.warning(f"Failed to fetch Blind post detail: {post_url}")
             return {}
 
-        detail = self.parse_post_detail(text, post_url)
-        if detail:
-            self.post_cache[post_url] = detail
-        return detail
+        try:
+            detail = self.parse_post_detail(text, post_url)
+            if detail:
+                self.post_cache[post_url] = detail
+            return detail
+        except Exception as e:
+            logger.warning(f"Error parsing Blind post detail ({post_url}): {e}")
+            if post_url in self.post_cache:
+                logger.warning(f"Falling back to cached post for {post_url} after parse error.")
+                return self.post_cache[post_url]
+            return {}
 
     def parse_post_detail(self, html_content: str, post_url: str) -> Dict[str, Any]:
         """
         Extract title, author company badge, body, and comments from Blind post HTML.
         Prioritizes Next.js __NEXT_DATA__ SSR JSON, with robust DOM fallback.
         """
+        if not html_content or not isinstance(html_content, str):
+            return {}
         # 1. Attempt Next.js SSR JSON Extraction
         next_data_match = re.search(r'<script\s+id="__NEXT_DATA__"\s+type="application/json">(.*?)</script>', html_content, re.DOTALL)
         if next_data_match:

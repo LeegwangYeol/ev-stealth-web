@@ -173,6 +173,75 @@ class TestReliabilityAnalyticsA11yAudit(unittest.TestCase):
         self.assertIn('부문별 결함 비중 데이터가 없습니다.', self.client_source)
         self.assertIn('등록된 보증 외 수리비 매트릭스 데이터가 없습니다.', self.client_source)
 
+    def test_radar_chart_and_brand_comparison_accessibility(self):
+        """8. Radar chart & brand comparison dropdown accessibility: SVG polygons, dropdowns, and semantic table."""
+        # Tab definition
+        self.assertIn("id: 'brand_compare', label: '브랜드 1:1 레이더 비교'", self.client_source)
+
+        # Brand comparison dropdowns with accessible labels
+        self.assertIn('id="compare-brand-a-select"', self.client_source)
+        self.assertIn('htmlFor="compare-brand-a-select"', self.client_source)
+        self.assertIn('id="compare-brand-b-select"', self.client_source)
+        self.assertIn('htmlFor="compare-brand-b-select"', self.client_source)
+
+        # Mobile brand filter dropdown
+        self.assertIn('id="mobile-brand-filter-select"', self.client_source)
+        self.assertIn('htmlFor="mobile-brand-filter-select"', self.client_source)
+
+        # Swap button
+        self.assertIn('aria-label="비교 브랜드 A와 B 맞바꾸기"', self.client_source)
+
+        # Radar chart SVG attributes & description
+        self.assertIn('viewBox="0 0 500 480"', self.client_source)
+        self.assertIn('desc id="radar-brand-svg-desc"', self.client_source)
+        self.assertIn('{radarSvgDesc}', self.client_source)
+
+        # Radar concentric rings & polygons
+        self.assertIn('{radarRings.map', self.client_source)
+        self.assertIn('points={polygonPointsInd}', self.client_source)
+        self.assertIn('points={polygonPointsA}', self.client_source)
+        self.assertIn('points={polygonPointsB}', self.client_source)
+
+        # Interactive focusable vertex buttons
+        self.assertIn('role="button"', self.client_source)
+        self.assertIn('tabIndex={0}', self.client_source)
+
+        # Screen reader accessible data table for radar chart
+        self.assertIn('aria-label="브랜드 1:1 결함 부문별 점유율 레이더 비교 데이터 표"', self.client_source)
+        self.assertIn('6대 결함 부문별 산업 점유율 비교 표', self.client_source)
+
+    def test_stealth_score_meters_and_interactive_tooltips(self):
+        """9. Stealth score meters, interactive tooltips, and live region announcements."""
+        # Side-by-side DSI progressbars
+        self.assertIn('role="progressbar"', self.client_source)
+        self.assertIn('종합 DSI 지수', self.client_source)
+        self.assertIn('치명 결함율', self.client_source)
+
+        # Interactive live region tooltips
+        self.assertIn('role="status"', self.client_source)
+        self.assertIn('aria-live="polite"', self.client_source)
+        self.assertIn('결함 비중 분석', self.client_source)
+
+        # Heatmap cell instant hover preview tooltip
+        self.assertIn('Heatmap Cell Instant Hover Preview Tooltip', self.client_source)
+        self.assertIn('cellPreview', self.client_source)
+        self.assertIn('onCellHover={setCellPreview}', self.client_source)
+
+        # Live SVG bar chart hover card
+        self.assertIn('Live SVG Bar Tooltip Card', self.client_source)
+        self.assertIn('hoveredSvgBrand', self.client_source)
+
+    def test_hardened_wcag_color_contrast_classes(self):
+        """10. Strict WCAG AA contrast compliance: verify no substandard text combinations."""
+        # Brand pill badge contrast: selected state must use text-white (>=5.1:1 on bg-blue-600)
+        self.assertIn("selectedBrand === brand.id ? 'text-white' : 'text-slate-700'", self.client_source)
+        # Must not contain failing low-contrast text-blue-100 on blue-600
+        self.assertNotIn("selectedBrand === brand.id ? 'text-blue-100'", self.client_source)
+
+        # Mobile horizontal scroll indicator banners must use text-slate-600 (>=7.2:1 on bg-slate-50)
+        self.assertIn('text-[11px] font-medium text-slate-600 bg-slate-50', self.client_source)
+        self.assertNotIn('text-[11px] font-medium text-slate-500 bg-slate-50', self.client_source)
+
 
 if __name__ == "__main__":
     unittest.main()

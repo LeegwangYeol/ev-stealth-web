@@ -82,9 +82,9 @@ export const BrandComparisonNav = memo(function BrandComparisonNav({
       <nav
         role="navigation"
         aria-label="제조사별 결함 가이드 빠른 전환"
-        className="p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200 shadow-inner"
+        className="p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200 shadow-inner max-w-full"
       >
-        <ul className="flex table-scroll-container gap-1.5 scrollbar-thin list-none p-0 m-0" role="list">
+        <ul className="flex table-scroll-container gap-1.5 scrollbar-thin list-none p-0 m-0 w-full max-w-full overflow-x-auto" role="list">
           {BRAND_PAGES.map((brand) => {
             const isActive = brand.key === currentBrand;
             return (
@@ -137,11 +137,11 @@ export const OtherBrandsCrossNav = memo(function OtherBrandsCrossNav({
   return (
     <nav
       role="navigation"
-      aria-label="다른 제조사 연식별 가이드 비교"
+      aria-labelledby="heading-other-brands"
       className="pt-8 border-t border-slate-200 space-y-4"
     >
       <div className="space-y-1">
-        <h2 className="text-xl font-bold text-slate-900">
+        <h2 id="heading-other-brands" className="text-xl font-bold text-slate-900">
           다른 제조사 연식별 가이드 비교하기
         </h2>
         <p className="text-xs sm:text-sm text-slate-600">
@@ -149,20 +149,28 @@ export const OtherBrandsCrossNav = memo(function OtherBrandsCrossNav({
         </p>
       </div>
 
-      <ul className="grid grid-cols-2 sm:grid-cols-4 gap-3 list-none p-0 m-0" role="list">
+      <ul className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 list-none p-0 m-0" role="list">
         {otherBrands.map((brand) => (
           <li key={brand.key} className="flex">
             <Link
               href={brand.href}
               prefetch={false}
-              aria-label={`${brand.label} 연식별 결함 가이드 보기`}
-              className="w-full group p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-md transition flex flex-col justify-between gap-2 min-h-[72px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              aria-label={`${brand.label} 연식별 결함 가이드 보기${brand.badge ? ` (${brand.badge})` : ''}`}
+              className="w-full group p-3 sm:p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-md transition flex flex-col justify-between gap-2 min-h-[72px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
             >
-              <div className="flex items-center gap-2">
-                <span className="text-2xl" aria-hidden="true">{brand.icon}</span>
-                <span className="font-bold text-sm text-slate-900 group-hover:text-blue-700 transition">
-                  {brand.label}
-                </span>
+              <div className="flex items-center justify-between gap-1.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-2xl shrink-0" aria-hidden="true">{brand.icon}</span>
+                  <span className="font-bold text-xs sm:text-sm text-slate-900 group-hover:text-blue-700 transition truncate break-keep">
+                    {brand.label}
+                  </span>
+                </div>
+                {brand.badge && (
+                  <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-800 shrink-0">
+                    <span className="sr-only">특징: </span>
+                    {brand.badge}
+                  </span>
+                )}
               </div>
               <span className="text-xs text-blue-700 font-semibold group-hover:underline inline-flex items-center gap-1">
                 가이드 보기{' '}

@@ -93,6 +93,9 @@ def format_daily_report_payload(
     if generated_at is None:
         generated_at = datetime.now(timezone.utc).isoformat()
 
+    if complaints is None or not isinstance(complaints, Iterable) or isinstance(complaints, (str, bytes, bytearray)):
+        complaints = []
+
     report_dicts: List[Dict[str, Any]] = []
     total_negativity: float = 0.0
     critical_count = 0
@@ -242,7 +245,10 @@ def write_daily_reports(
     lock_file = get_lock_path(dest_path)
 
     with FileLock(lock_file):
-        items_to_write: List[Union[ComplaintRecord, Dict[str, Any]]] = list(complaints)
+        if complaints is None or not isinstance(complaints, Iterable) or isinstance(complaints, (str, bytes, bytearray)):
+            items_to_write: List[Union[ComplaintRecord, Dict[str, Any]]] = []
+        else:
+            items_to_write = list(complaints)
 
         existing_reports: List[Dict[str, Any]] = []
         existing_total_scraped = 0

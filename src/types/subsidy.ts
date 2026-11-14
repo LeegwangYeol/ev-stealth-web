@@ -19,6 +19,14 @@ export type RegionTier =
   | 'special_self_governing_province';
 
 export type RegionSortOption =
+  | 'DEPLETION_DESC'
+  | 'DEPLETION_ASC'
+  | 'REMAINING_ASC'
+  | 'REMAINING_DESC'
+  | 'LOCAL_SUBSIDY_DESC'
+  | 'LOCAL_SUBSIDY_ASC'
+  | 'NAME_ASC'
+  | 'NAME_DESC'
   | 'depletion_desc'
   | 'depletion_asc'
   | 'name_asc'
@@ -26,6 +34,11 @@ export type RegionSortOption =
   | 'local_subsidy_desc';
 
 export type ModelSortOption =
+  | 'PRICE_ASC'
+  | 'PRICE_DESC'
+  | 'SUBSIDY_DESC'
+  | 'RANGE_DESC'
+  | 'NAME_ASC'
   | 'net_price_asc'
   | 'subsidy_desc'
   | 'name_asc'
@@ -188,9 +201,20 @@ export interface SubsidyCalculatorOptions {
   isOldDieselScrappage?: boolean; // +1,000,000 KRW flat incentive
 }
 
-export type RankedRegionEntry = RegionEntry & {
+export interface RankedRegionEntry {
   rank: number;
-};
+  regionId: string;
+  nameKo: string;
+  depletionRate: number;
+  remainingUnits: number;
+  status: AlertSeverity;
+  region: RegionEntry;
+  // Shorthand backward-compatibility properties if accessed directly
+  region_id?: string;
+  name_ko?: string;
+  overall_depletion_rate?: number;
+  overall_status?: AlertSeverity;
+}
 
 export interface CriticalRegionInfo {
   regionId: string;

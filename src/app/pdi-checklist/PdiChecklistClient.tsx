@@ -13,15 +13,37 @@ export type ChecklistItem = {
 };
 
 export const INITIAL_PDI_ITEMS: ChecklistItem[] = [
-  { id: '1', category: '외관 (도장 및 단차)', task: '앞/뒤 범퍼와 펜더 사이의 단차(벌어짐) 확인', warning: '테슬라와 초기형 현기차에서 빈번함', checked: false },
-  { id: '2', category: '외관 (도장 및 단차)', task: '충전구 덮개가 꽉 닫히는지, 유격은 없는지 확인', checked: false },
-  { id: '3', category: '외관 (도장 및 단차)', task: '하부 배터리팩 케이스 긁힘 및 찍힘 흔적 확인', warning: '인수 후 발견 시 차주 과실로 배터리 교환 불가(전손 위험)', checked: false },
-  { id: '4', category: '실내 (시트 및 마감)', task: '시트 가죽 울음, 찢김, 박음질 불량 확인', checked: false },
-  { id: '5', category: '실내 (시트 및 마감)', task: '전 좌석 안전벨트 체결 및 버튼 동작 정상 여부', checked: false },
-  { id: '6', category: '시스템 (소프트웨어)', task: '메인 디스플레이 터치 먹통 및 재부팅 여부 확인', checked: false },
-  { id: '7', category: '시스템 (소프트웨어)', task: '스마트폰 무선 충전 패드 작동 및 발열 체크', checked: false },
-  { id: '8', category: '주행 및 하체', task: '핸들(스티어링 휠) 좌우 끝까지 돌릴 때 찌그덕/뚝 소음 확인', warning: '모델Y 컨트롤 암 부싱, 현기 전기차 등 고질병', checked: false },
-  { id: '9', category: '주행 및 하체', task: '에어컨 및 히터 최대 가동 시 이음(백색가루/소음) 확인', warning: 'BYD 돌핀 백색가루, 테슬라 히트펌프 불량', checked: false },
+  // 1. 외관 단차 (Exterior Panel Gaps & Flush Alignment)
+  { id: '1', category: '외관 단차', task: '앞/뒤 범퍼와 펜더 사이의 단차(벌어짐) 및 조립 유격 확인 (단차 3mm 초과 여부)', warning: '테슬라와 초기형 현기차에서 빈번함', checked: false },
+  { id: '10', category: '외관 단차', task: '보닛(프렁크) 및 테일게이트(트렁크) 닫힘 시 좌우 단차 및 수평 유격 확인', warning: '전동 트렁크 간섭 시 모터 파손 위험', checked: false },
+  { id: '11', category: '외관 단차', task: '4개 도어 상하/좌우 단차 및 플러시 도어 핸들 전동 팝업/수납 작동 확인', checked: false },
+  { id: '12', category: '외관 단차', task: '헤드램프·테일램프 조립 단차 및 윈도우 글래스 웨더스트립(고무 몰딩) 밀림 확인', warning: '고무 몰딩 들뜸 시 고속 주행 풍절음 유발', checked: false },
+
+  // 2. 도장 불량 (Paint Finish, Coating & Glass)
+  { id: '13', category: '도장 불량', task: '외관 도장면 티끌(먼지 갇힘), 도장 뭉침/흘러내림 및 칠 까짐(칩핑) 전수 확인', warning: '자연광 또는 스마트폰 플래시로 비스듬히 비추어 점검', checked: false },
+  { id: '14', category: '도장 불량', task: '도어, 펜더, 범퍼 간 도색 색상 차이(이색 현상) 및 오렌지필/광택 불균일 확인', checked: false },
+  { id: '15', category: '도장 불량', task: '전면/후면/루프(글래스루프) 유리 미세 스크래치, 기포 및 크랙 점검', checked: false },
+  { id: '16', category: '도장 불량', task: '휠 림(알로이/에어로 휠커버) 스크래치 및 타이어 4본 사이드월 찍힘/공기압 확인', checked: false },
+
+  // 3. 배터리 충전구 (EV Charging Port & High-Voltage Inlet)
+  { id: '2', category: '배터리 충전구', task: '충전구 전동 도어 개폐(터치/리모컨/실내) 작동 및 덮개 닫힘 밀폐·유격 확인', checked: false },
+  { id: '17', category: '배터리 충전구', task: '완속(AC 5핀/7핀) 및 급속(DC 콤보/NACS) 포트 내부 충전 핀 휨·파손 및 방수 고무 패킹 확인', warning: '핀 손상 시 충전 불가 및 충전 중 화재 리스크', checked: false },
+  { id: '18', category: '배터리 충전구', task: '충전 케이블 결합 시 전자식 잠금(Lock) 핀 정상 잠김 및 비상 수동 해제 레버 위치 확인', checked: false },
+  { id: '19', category: '배터리 충전구', task: '실외 V2L 커넥터 체결 시 220V 가전제품 정상 통전 작동 확인 (V2L 지원 차종)', checked: false },
+
+  // 4. 실내 전자기기 (Interior Electronics, Displays & HVAC)
+  { id: '6', category: '실내 전자기기', task: '메인 디스플레이 터치 먹통 및 재부팅 여부 확인', checked: false },
+  { id: '20', category: '실내 전자기기', task: '헤드업 디스플레이(HUD) 투영 초점 및 서라운드뷰/후방 카메라 왜곡·노이즈 확인', checked: false },
+  { id: '9', category: '실내 전자기기', task: '에어컨 및 히터 최대 가동 시 이음(백색가루/소음) 확인', warning: 'BYD 돌핀 백색가루, 테슬라 히트펌프 불량', checked: false },
+  { id: '7', category: '실내 전자기기', task: '스마트폰 무선 충전 패드 작동 및 발열 체크', checked: false },
+  { id: '4', category: '실내 전자기기', task: '시트 가죽 울음, 찢김, 박음질 불량 확인', checked: false },
+  { id: '5', category: '실내 전자기기', task: '전 좌석 안전벨트 체결 및 버튼 동작 정상 여부', checked: false },
+
+  // 5. 하부 점검 (Underbody & High-Voltage Battery Pack)
+  { id: '3', category: '하부 점검', task: '하부 배터리팩 케이스 긁힘 및 찍힘 흔적 확인', warning: '인수 후 발견 시 차주 과실로 배터리 교환 불가(전손 위험)', checked: false },
+  { id: '21', category: '하부 점검', task: '전/후륜 언더커버 체결 상태 및 배터리 보호 플레이트 볼트 누락/손상 확인', checked: false },
+  { id: '8', category: '하부 점검', task: '핸들(스티어링 휠) 좌우 끝까지 돌릴 때 찌그덕/뚝 소음 확인', warning: '모델Y 컨트롤 암 부싱, 현기 전기차 등 고질병', checked: false },
+  { id: '22', category: '하부 점검', task: '고전압 배터리 전용 절연 냉각수 누수 흔적 및 하부 오일 누유 여부 확인', warning: '냉각수 누수 시 배터리 단락 및 열폭주 위험', checked: false },
 ];
 
 export const STORAGE_KEY = 'ev_pdi_checklist_state_v1';
@@ -53,9 +75,11 @@ export function parseStoredChecklistState(
     if (Array.isArray(parsed)) {
       if (parsed.length === 0) return defaultItems;
 
-      // Check if elements are primitive IDs (e.g. ['1', '3'] or [1, 3])
-      const isIdArray = parsed.some((p) => typeof p === 'string' || typeof p === 'number');
-      if (isIdArray) {
+      // Check if elements are purely primitive IDs (e.g. ['1', '3'] or [1, 3])
+      const isPureIdArray = parsed.every(
+        (p) => p === null || p === undefined || typeof p === 'string' || typeof p === 'number'
+      );
+      if (isPureIdArray) {
         const checkedIdSet = new Set(
           parsed
             .filter((p) => p !== null && p !== undefined)
@@ -547,11 +571,18 @@ export default function PdiChecklistClient() {
           )}
         </div>
         {/* Print-only inspection meta box for physical delivery inspection */}
-        <div className="hidden print:grid print:grid-cols-2 print:gap-3 print:my-4 print:p-3 print:border print:border-gray-300 print:rounded-lg print:text-xs print:text-black">
-          <div><span className="font-semibold">차량 모델 / 트림:</span> __________________________</div>
-          <div><span className="font-semibold">차대번호 (VIN):</span> __________________________</div>
-          <div><span className="font-semibold">인수 점검 일시:</span> __________________________</div>
-          <div><span className="font-semibold">인수 점검자 (서명):</span> __________________________</div>
+        <div className="hidden print:block print:my-4 print:p-4 print:border-2 print:border-black print:rounded-lg print:text-xs print:text-black print:break-inside-avoid">
+          <div className="text-center font-bold text-sm mb-3 pb-1 border-b border-black">
+            전기차 신차 탁송 인수(PDI) 현장 점검 확인서
+          </div>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+            <div><span className="font-semibold">차량 모델 / 트림:</span> __________________________</div>
+            <div><span className="font-semibold">차대번호 (VIN):</span> __________________________</div>
+            <div><span className="font-semibold">탁송 기사 성명 / 연락처:</span> __________________________</div>
+            <div><span className="font-semibold">탁송 차량(캐리어) 번호:</span> __________________________</div>
+            <div><span className="font-semibold">인수 점검 일시:</span> __________________________</div>
+            <div><span className="font-semibold">인수 장소 (출고장):</span> __________________________</div>
+          </div>
         </div>
         <div className="mt-3 flex items-center gap-2 text-xs text-slate-700 print:hidden">
           <span
@@ -741,6 +772,33 @@ export default function PdiChecklistClient() {
         </section>
       )}
 
+      {/* Print-only delivery sign-off and defect notes box */}
+      <div className="hidden print:block print:mt-6 print:border-2 print:border-black print:rounded-lg print:p-4 print:text-xs print:text-black print:break-inside-avoid">
+        <div className="font-bold text-sm mb-2 pb-1 border-b border-black">
+          현장 특이사항 및 결함 기재란 (인수증 서명 전 기재 필수)
+        </div>
+        <div className="h-16 border border-gray-300 rounded p-2 mb-3 text-gray-700">
+          ※ 발견된 외관 단차, 도장 티끌/스크래치, 충전구 유격, 실내 전자기기 이상, 하부 배터리팩 스크래치 등을 상세히 기재하십시오.
+        </div>
+        <div className="font-bold mb-2">최종 인수 판정:</div>
+        <div className="flex gap-6 mb-4 text-xs font-semibold">
+          <div>[ &nbsp; ] 정상 인수 (특이사항 없음)</div>
+          <div>[ &nbsp; ] 조건부 인수 (하자 비고 기재 및 제조사 무상 AS 조치 확약)</div>
+          <div>[ &nbsp; ] 인수 거부 및 회차 (하부 배터리 찍힘 등 중대 결함)</div>
+        </div>
+        <div className="grid grid-cols-2 gap-6 pt-3 border-t border-black text-xs">
+          <div>
+            <span className="font-semibold">탁송 기사 확인 (서명):</span> ____________________
+          </div>
+          <div>
+            <span className="font-semibold">인수 점검자 / 차주 (서명):</span> ____________________
+          </div>
+        </div>
+        <p className="mt-2 text-[10px] text-gray-700 leading-tight">
+          ※ 주의: 전기차는 인수증 서명 후 하부 배터리팩 찍힘/도장 손상이 발견될 경우 차주 과실로 처리되어 제조사 무상보증 수리가 거부될 수 있습니다. 반드시 서명 전에 차량 하부 및 단차를 확인하십시오.
+        </p>
+      </div>
+
       {/* 💡 신차 인수 후 추천 서비스 (Recommended EV Services) */}
       <section aria-labelledby="heading-recommended-services" className="pt-8 border-t border-gray-200 print:hidden">
         <div className="mb-6">
@@ -777,7 +835,7 @@ export default function PdiChecklistClient() {
           >
             <div className="flex items-center gap-2 text-emerald-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📉</span>
-              <span>전기차 감가율 및 배터리 수명 시뮬레이터</span>
+              <span>전기차 감가상각 시뮬레이터 &amp; 배터리 수명</span>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed">
               보조금 수령 후 5년간의 예상 잔존가치, 배터리 잔존성능(SoH), 연차별 총소유비용(TCO)을 정밀 계산합니다.
@@ -794,7 +852,7 @@ export default function PdiChecklistClient() {
           >
             <div className="flex items-center gap-2 text-blue-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📊</span>
-              <span>실차주 결함 통계 및 고질병 랭킹</span>
+              <span>스텔스 품질 점수 &amp; 결함 통계 랭킹</span>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed">
               실제 차주들의 결함 신고 데이터와 고질병 위험도 랭킹, 부품별 수리비 통계를 분석합니다.
@@ -811,7 +869,7 @@ export default function PdiChecklistClient() {
           >
             <div className="flex items-center gap-2 text-rose-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">🚨</span>
-              <span>공식 리콜 및 배터리 제조사 조회</span>
+              <span>통합 리콜 현황 &amp; 배터리 제조사 조회</span>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed">
               차대번호(VIN) 17자리 또는 모델명으로 국토교통부 공식 리콜 조치 여부 및 탑재 배터리 제조사를 즉시 조회합니다.

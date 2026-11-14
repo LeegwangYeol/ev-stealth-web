@@ -132,6 +132,29 @@ class TestBrandComparisonPagesAudit(unittest.TestCase):
             self.assertIn("reset()", content)
             self.assertIn("href=\"/\"", content)
 
+    def test_brand_pages_table_keyboard_accessibility(self):
+        """All brand summary tables must have keyboard-scrollable containers (WCAG 2.1.1 & 2.4.7)."""
+        for route in self.brand_routes:
+            page_path = os.path.join(self.app_dir, route, "page.tsx")
+            with open(page_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            self.assertIn("tabIndex={0}", content, f"{route} table container missing tabIndex={{0}} for keyboard scrollability")
+            self.assertIn('role="region"', content, f"{route} table container missing role=\"region\"")
+            self.assertIn("focus-visible:", content, f"{route} table container missing focus-visible outline indicator")
+            self.assertIn("table-scroll-container", content, f"{route} missing table-scroll-container class")
+
+    def test_brand_comparison_nav_cross_nav_accessibility_and_badges(self):
+        """BrandComparisonNav must maintain accessible headings and render brand badges in cross-nav."""
+        nav_path = os.path.join(os.path.dirname(self.app_dir), "components", "BrandComparisonNav.tsx")
+        self.assertTrue(os.path.isfile(nav_path), f"BrandComparisonNav not found at {nav_path}")
+        with open(nav_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        self.assertIn('id="heading-other-brands"', content, "OtherBrandsCrossNav missing id for heading")
+        self.assertIn('aria-labelledby="heading-other-brands"', content, "OtherBrandsCrossNav missing aria-labelledby linking heading")
+        self.assertIn("brand.badge", content, "OtherBrandsCrossNav must render brand badges")
+
 
 if __name__ == "__main__":
     unittest.main()

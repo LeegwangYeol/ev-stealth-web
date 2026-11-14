@@ -6,6 +6,106 @@
 - **Working Directory**: `/Users/a7890/src/my-e-car/ev-stealth-web`
 - **Integrity Mode**: Benchmark / Infinite Evolution (zero stubs, zero lint errors/warnings, 100% test pass rate, empirical verification)
 
+
+## Current Execution Status: RESPONSIVE DESIGN & MOBILE LAYOUT AUDIT COMPLETED (Cycle 26: 2026-11-15)
+- **Subsystem**: Responsive Design & Mobile Layout Audit (`/Users/a7890/src/my-e-car/ev-stealth-web/src`)
+- **Key Objectives & Audits Performed**:
+  1. **Mobile Viewports (320px to 480px, tablets 768px, desktops 1024px+)**:
+     - Verified root `<meta name="viewport">` has `width: device-width`, `initialScale: 1`, `maximumScale: 5` (allows user pinch-to-zoom under WCAG 1.4.4).
+     - Verified `<main id="main-content">` constraint `w-full max-w-6xl mx-auto p-4 sm:p-6 min-h-[100dvh]`.
+     - Verified responsive typography scaling (`text-3xl sm:text-4xl md:text-5xl` on Home, `text-2xl sm:text-3xl md:text-4xl` on brand pages).
+     - Verified mobile navigation drawer constraints: `max-w-[calc(100vw-2rem)]`, `max-h-[calc(100dvh-5rem)]`, `overflow-y-auto`.
+  2. **Horizontal Scrollbars & Overflow Prevention**:
+     - Verified `html` and `body` in `src/app/globals.css` enforce `overflow-x: hidden`.
+     - Enforced `.table-scroll-container` (`overflow-x: auto`, `-webkit-overflow-scrolling: touch`, `overscroll-behavior-x: contain`).
+     - Verified all visual `<table>` elements across all pages are wrapped in `overflow-x-auto table-scroll-container` with mobile visual cues (`가로 스크롤 ↔`).
+  3. **Touch Targets (WCAG 2.5.5 / 2.5.8 >= 44x44px)**:
+     - Upgraded `input[type="range"]` in `src/app/globals.css` from `min-height: 38px` to `min-height: 44px; touch-action: pan-y;`.
+     - Upgraded range sliders in `DepreciationCalculatorClient.tsx` from `h-9` to `min-h-[44px] h-11 py-2`.
+     - Upgraded recall catalog detail toggle button in `RecallPortalClient.tsx` from `min-h-[36px]` to `min-h-[44px] min-w-[44px]`.
+     - Upgraded recall campaign action links in `RecallPortalClient.tsx` from `min-h-[36px]` to `min-h-[44px]`.
+     - Upgraded custom MSRP toggle checkbox `<label>` in `SubsidyTrackerClient.tsx` with `min-h-[44px]` and `w-5 h-5` checkbox.
+     - Upgraded custom MSRP number `<input>` in `SubsidyTrackerClient.tsx` with `min-h-[44px]`.
+     - Upgraded model and region `<select>` in `SubsidyTrackerClient.tsx` with `min-h-[44px]`.
+  4. **Responsive Navigation in BrandComparisonNav.tsx & Layout**:
+     - Upgraded `BrandComparisonNav.tsx` nav tab list with `table-scroll-container`, `w-full max-w-full overflow-x-auto`.
+     - Upgraded `OtherBrandsCrossNav` grid with responsive padding `p-3 sm:p-4`, `gap-2.5 sm:gap-3`, and `truncate break-keep` for narrow mobile screens (320px).
+     - Verified `GlobalNavListener.tsx` provides Escape key handler, Tab focus trapping inside open mobile drawer, and >= 768px resize auto-close.
+  5. **Verification & Tests**:
+     - Added comprehensive test suite `tests/test_responsive_mobile_layout_audit.py` (15/15 PASS).
+     - Retained full compatibility with `tests/test_mobile_responsive_w3.py` (12/12 PASS).
+     - Total mobile responsive suite: 27/27 tests PASS (100%).
+
+## Current Execution Status: RELIABILITY ANALYTICS CALCULATIONS AUDIT & FORMULA HARDENING (Cycle 26: 2026-11-15)
+- **Components Audited & Hardened**:
+  - `ev-stealth-web/src/lib/reliabilityCalculations.ts`
+  - `ev-stealth-web/src/lib/getReliabilityData.ts`
+  - `ev-stealth-web/src/types/reliability.ts`
+  - `ev-stealth-web/src/data/ev_reliability_trends.json` (and all 5 repository mirrors)
+  - `tests/test_reliability_calculations_audit.py` and `ev-stealth-web/tests/test_reliability_calculations_audit.py`
+- **Audit Findings & Key Remediations**:
+  1. **Stealth Score Multi-Factor Weighting Formula**:
+     - Implemented `calculateStealthScore(input?: StealthScoreInput | null): StealthScoreResult`.
+     - Weight distribution: Defect Severity Index (DSI 50%), Fleet Incident Rate (30%), Critical Issue Rate (20%).
+     - Normalized weights automatically if custom weights are passed; if any weight is corrupted (negative or non-finite), automatically falls back to default weights.
+     - Raw Defect Penalty strictly bounded in [0, 100], and Raw Stealth Score = 100 - DefectPenalty.
+     - Bayesian smoothing using `confidenceScore`:
+       $StealthScore = Confidence \cdot RawStealthScore + (1 - Confidence) \cdot BaselineStealth$
+       (prevents 0-complaint or untested models from falsely claiming 100% perfection!).
+     - Implemented helper mappings: `deriveGradeFromStealthScore` (A+ through F) and `deriveVerdictFromStealthScore` (BUY_SAFE, CAUTION, AVOID).
+  2. **Defect Frequency Normalizers**:
+     - Implemented `normalizeDefectFrequency(complaintCount, fleetOrSalesVolume, baselineScale)`.
+     - Defensively handles 0 complaints, 0 fleet volume, negative inputs, non-finite values (returns clean 0.0, zero division-by-zero risk, zero Infinity, zero NaN).
+     - Implemented `calculateWeightedDefectFrequency` weighting categories by risk severity (Battery 2.5x, Powertrain 2.0x, Cold Weather 1.4x, Service/Repair 1.2x, Software 1.0x, Build Quality 0.7x).
+  3. **Statistical Confidence Score Algorithm**:
+     - Implemented `calculateReliabilityConfidence(complaintCount, yearsEvaluated, minSampleThreshold)`.
+     - Logarithmic saturation curve: $C_{sample} = \min(1.0, \ln(1 + complaints) / \ln(1 + threshold))$.
+     - Multiplied by multi-year tracking coverage factor (0 yr: 0.0, 1 yr: 0.70, 2 yrs: 0.85, 3+ yrs: 1.00).
+     - Boundary condition: strictly returns 0.0 for 0 complaints or non-numeric/negative inputs.
+  4. **Boundary Condition Fallbacks & Resolution**:
+     - 0 complaints: confidence = 0.0, smoothed score anchors to baseline (35.8), verdict defaults to 'CAUTION'.
+     - Unknown brand: `getBrandReliabilityById` and `resolveBrandReliability` return `undefined` cleanly without throwing; `getBrandWithFallback` and `getSafeDefaultBrandReliability` provide complete, valid non-null domain objects.
+     - Missing year data: `getModelYearEvaluation` returns `undefined` gracefully for non-existent years or models without throwing; `getSafeDefaultModelReliability` provides complete fallback.
+  5. **Data & Test Suite Mirror Parity**:
+     - `ev_reliability_trends.json`: 100% bitwise parity verified across all 5 mirror locations (SHA256 `21c41fec732ac843ed1303da92e57fe7c5b273630eba56b7828ab43eee4da9e1`).
+     - Added unit & boundary tests (`test_06` through `test_10`) in `tests/test_reliability_calculations_audit.py` and `ev-stealth-web/tests/test_reliability_calculations_audit.py`.
+     - 10/10 tests PASS (2.05s).
+     - Test tree mirror parity confirmed 100%.
+
+## Current Execution Status: BRAND COMPARISON & DEDICATED MODEL PAGES AUDIT COMPLETED (Cycle 26: 2026-11-15)
+- **Target Subsystems & Files**:
+  - `src/app/byd/page.tsx`
+  - `src/app/tesla/page.tsx`
+  - `src/app/hyundai-kia/page.tsx`
+  - `src/app/global-brands/page.tsx`
+  - `src/app/2026-latest/page.tsx`
+  - `src/components/BrandComparisonNav.tsx`
+  - `tests/test_brand_comparison_pages_audit.py`
+- **Audit Findings & Key Remediations**:
+  1. **Keyboard Accessibility for Horizontal Overflow Tables (WCAG 2.1.1 & 2.4.7 AA)**:
+     - Identified that `tesla/page.tsx` had `tabIndex={0}`, `role="region"`, `aria-label`, and `focus-visible` styling, but `byd/page.tsx`, `hyundai-kia/page.tsx`, `global-brands/page.tsx`, and `2026-latest/page.tsx` lacked keyboard focusability.
+     - Added `tabIndex={0}`, `role="region"`, accessible descriptive labels (`aria-label="가로 스크롤 가능한 [브랜드명] 주요 차종 연식별 판정 요약 표"`), and visible focus rings (`focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2`) across all 4 pages.
+     - Upgraded mobile swipe cue text from low-contrast `text-slate-500` to `text-slate-600` for WCAG AA text contrast ratio (> 4.5:1).
+  2. **Color Contrast & Screen Reader Accessibility in Tables**:
+     - Remediated low-contrast text `text-slate-400` in `hyundai-kia/page.tsx` EV9 AVOID row (`-`) to `text-slate-500 font-medium` with `<span className="sr-only">해당 사항 없음 </span>-`.
+  3. **BrandComparisonNav & OtherBrandsCrossNav Enhancement**:
+     - Linked `<nav role="navigation" aria-labelledby="heading-other-brands">` to `<h2 id="heading-other-brands">`.
+     - Added `brand.badge` rendering (e.g. `신차` for `2026-latest`) in `OtherBrandsCrossNav` cards, harmonizing brand parity between the top switcher tab bar and bottom comparison cards.
+  4. **Cross-Links & Parameter Synchronization**:
+     - Verified all internal routes (`/`, `/tesla`, `/byd`, `/hyundai-kia`, `/global-brands`, `/2026-latest`, `/reliability-analytics`, `/recall-portal`, `/depreciation-calculator`, `/subsidy-tracker`).
+     - Verified that query parameters (`?brand=byd`, `?brand=tesla`, `?brand=hyundai`) are natively parsed by `ReliabilityDashboardClient` and `RecallPortalClient`.
+  5. **Metadata, Heading Hierarchy & Schema.org**:
+     - Confirmed exactly 1 `<h1>` per page with well-formed `<h2>` and `<h3>` heading structure without skipped levels.
+     - Confirmed structured data with valid schema: `Article`, `ItemList` (linking to anchor IDs), `FAQPage`, and `BreadcrumbList`.
+  6. **Automated Regression Test Suite**:
+     - Extended `tests/test_brand_comparison_pages_audit.py` with `test_brand_pages_table_keyboard_accessibility` and `test_brand_comparison_nav_cross_nav_accessibility_and_badges`.
+     - Verified 8/8 tests pass in `test_brand_comparison_pages_audit.py`.
+     - Verified 101/101 tests pass in `test_frontend_a11y_wcag.py`.
+     - Verified 12/12 tests pass in `test_mobile_responsive_w3.py`.
+     - Verified `test_wcag_color_contrast_audit.mjs` 100% pass.
+     - Zero TypeScript typecheck errors (`tsc --noEmit`).
+     - Zero ESLint errors or warnings on audited pages.
+
 ## Current Execution Status: RELIABILITY CALCULATIONS & TRENDS DEEP AUDIT COMPLETED (Cycle 25: 2026-11-04)
 - **Components**:
   - `ev-stealth-web/src/lib/reliabilityCalculations.ts`
@@ -1224,3 +1324,71 @@
      - Added comprehensive test suite `tests/test_subsidy_calculations_audit.py` (13 tests, 100% passing).
      - Bitwise SHA-256 parity maintained between root `tests/test_subsidy_calculations_audit.py` and `ev-stealth-web/tests/test_subsidy_calculations_audit.py` (`3d235bfafffcbf90199fbe18ce3571879e9012bbd31284d3bdbe563326161501`).
      - Subsidy test suite regression check: 125/125 tests passed in 19.5s.
+
+
+## EV Depreciation Calculator & Frontend Component Deep Audit (Specialist Swarm)
+- **Status**: Completed & 100% Passing (2026-11-15).
+- **Inspected Files**:
+  - `ev-stealth-web/src/app/depreciation-calculator/DepreciationCalculatorClient.tsx`
+  - `ev-stealth-web/src/components/DepreciationCalculatorClient.tsx`
+  - `ev-stealth-web/src/lib/depreciationCalculations.ts`
+  - `tests/test_coordinator_depreciation_audit.mjs` (and mirror `ev-stealth-web/tests/test_coordinator_depreciation_audit.mjs`)
+  - `tests/test_depreciation_calculator_audit.mjs`
+  - `tests/test_adversarial_depreciation_extremes.mjs`
+  - `tests/test_depreciation_calc_a11y_hardening.py`
+  - `tests/test_frontend_a11y_wcag.py`
+- **Key Findings & Verification Results**:
+  1. **All 15 Vehicle Models & 1-10 Years Holding Period**:
+     - Verified all 15 models (Tesla Model 3/Y, Hyundai Ioniq 5/6, Kia EV6/EV9, Genesis GV60/Electrified G80, BYD Atto 3/Seal, Mercedes EQE/EQS, BMW i4/iX3, Polestar 2) across 1,140 model-year-mileage combinations.
+     - Confirmed calculation engines (`calculateDepreciation`, `simulateBatteryHealth`, `calculateTcoComparison`) handle 1-10 holding years with continuous residual rate decay, proper asymptotes (5.0% floor), and zero division / NaN immunity.
+     - Verified UI holding years slider operates at 1-5 years with strict 0.5 step increments, matching the 5-year empirical depreciation curve and WAI-ARIA slider specifications (`aria-valuemin={1}`, `aria-valuemax={5}`).
+  2. **Initial Purchase Price Adjustments & Input Sanitization**:
+     - Tested both Effective (subsidized) and MSRP price bases, custom numerical inputs, 0 KRW handling, 10B KRW ceiling clamp, and negative/NaN input rejection with fallback to baseline MSRP.
+     - Screen-reader accessible live error alerts (`role="alert"`, `aria-invalid`) verified for bounds violations.
+  3. **Battery Warranty Status Transitions & Rapid Charging Impacts**:
+     - Audited automatic state transitions across 3 warranty stages: Safe (>2 years & >25k km remaining, 0% penalty), Approaching Cliff (within 2 years or 25k km, -6% penalty), and Expired (past warranty limit, -14% penalty).
+     - Confirmed DCFC rapid charging ratio (0% to 100%) correctly scales cyclic degradation in Arrhenius electrochemical simulation, with LFP showing high resilience and NCM 811 reflecting higher degradation rates under heavy DCFC.
+  4. **WAI-ARIA Sliders, Mobile Touch & Responsive Layouts**:
+     - All 4 interactive range sliders implement `aria-valuenow`, `aria-valuemin`, `aria-valuemax`, `aria-valuetext`, `aria-orientation="horizontal"`, and full keyboard navigation (Arrows, Home, End, PageUp, PageDown).
+     - SOH radial progressbar implements `role="progressbar"` with live accessible text.
+     - Responsive SVG projection chart features `viewBox="0 0 700 280"`, horizontal table scroll container, mobile swipe guidance hints (`sm:hidden`), and an accessible data table fallback (`aria-label="연차별 잔존가치 프로젝션 데이터 표"`).
+  5. **Re-export Forwarder Parity Fix**:
+     - Fixed `src/components/DepreciationCalculatorClient.tsx` to maintain exact single-line forwarder export parity required by contract tests: `export { default } from '@/app/depreciation-calculator/DepreciationCalculatorClient';`.
+     - Verified `npm run typecheck`, `npm run lint`, and `npm run build` compiled 16/16 static pages with 0 errors.
+
+
+## EV Recall Data Loading & Calculation Deep Audit (Specialist Swarm)
+- **Status**: Completed & 100% Passing (2026-11-15).
+- **Inspected Files**:
+  - `ev-stealth-web/src/lib/recallCalculations.ts`
+  - `ev-stealth-web/src/lib/getRecallData.ts`
+  - `ev-stealth-web/src/data/ev_recall_database.json` (and all 5 mirrored copies)
+  - `tests/test_recall_audit_edge_cases.mjs` (and `ev-stealth-web/tests/test_recall_audit_edge_cases.mjs`)
+  - `tests/test_adversarial_vin_edge_cases.mjs`
+  - `tests/test_recall_portal_audit.mjs`
+  - `tests/test_recall_portal_frontend_audit.mjs`
+- **Key Findings & Hardening Implemented**:
+  1. **Schema Validation & Database Integrity**:
+     - Added strict schema validator functions: `validateOfficialRecallCampaign`, `validateBatterySafetyProfile`, `validateVinPrefixMapping`, and `validateRecallDatabaseSchema`.
+     - Validated all campaigns against mandatory fields (`campaign_id`, `manufacturer`, `target_models`, `recall_year`, `risk_level`, `remedy_method`, etc.).
+     - Enforced typed sets `VALID_RECALL_RISK_LEVELS`, `VALID_REMEDY_METHODS`, and `VALID_FIRE_INCIDENT_STATUSES`.
+     - Ensured SHA-256 bitwise identical synchronization across all 5 copies of `ev_recall_database.json` (`e9c40e3f76787fcaa6d70a5adc59a11e0953c43137b3ce58ed50fa7b49467840`).
+  2. **Filtering Functions Resiliency & Regex Special Characters**:
+     - Fixed `isModelMatchForCampaign` and `checkRecallsByModel`: previously punctuation-only strings (`"/"`, `"-"`, `","`, `" () "`) reduced to empty string `""` which matched all campaigns. Added strict guard `!/[a-zA-Z0-9가-힣]/.test(queryNorm)`.
+     - Fixed Korean particle handling in `isYearMatchForCampaign`: strips `"년"` before range matching, and robustly handles `"2022년 이후"`, `"2021년 이전"`, etc.
+     - Fixed Genesis vs Hyundai cross-brand false-positive matching: Genesis VINs only match Hyundai-filed recalls if the campaign explicitly mentions Genesis or the model matches, preventing false matches to Kona Electric fire recalls.
+  3. **VIN Normalization, Decoding & Check Digit**:
+     - Extended `VIN_YEAR_MAP` to cover 2010–2039 (including 2010–2015 `A`–`F`).
+     - Expanded `WMI_MAP` with `KNA` (기아), `KNM` (르노코리아), `KPT` (KG모빌리티), `WAU` (아우디), `WVW`/`WVG` (폭스바겐), `YV1` (볼보), `KL3` (한국지엠).
+     - Added country fallback based on 1st VIN character (`K`->대한민국, `W`->독일, `L`->중국, `1`/`4`/`5`->미국, `J`->일본, `2`->캐나다, `3`->멕시코, `S`->영국).
+     - Standardized VIN normalization removing hyphens, spaces, and converting to uppercase.
+  4. **Verification & Regression Checks**:
+     - `node tests/test_recall_audit_edge_cases.mjs`: 24/24 PASS
+     - `node tests/test_adversarial_vin_edge_cases.mjs`: 154/154 PASS
+     - `npx tsx tests/test_challenger_client_edge_cases.ts`: 203/203 PASS
+     - `npx tsx tests/test_challenger_fuzz_all.ts`: 395/395 PASS
+     - `node tests/test_recall_portal_audit.mjs`: PASS
+     - `node tests/test_recall_portal_frontend_audit.mjs`: 14/14 PASS
+     - `python3 -m unittest tests/test_cycle19_hardening.py`: 28/28 PASS
+     - `python3 -m unittest tests/test_frontend_a11y_wcag.py`: 101/101 PASS
+     - `npm run build`: 16/16 static pages compiled cleanly with 0 errors.

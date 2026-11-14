@@ -872,11 +872,21 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
           <div
             role="status"
             aria-live="polite"
-            className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-300"
+            className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-300 space-y-3"
           >
-            <div className="text-3xl mb-2" aria-hidden="true">🔍</div>
+            <div className="text-3xl" aria-hidden="true">🔍</div>
             <div className="text-base font-semibold text-slate-200">검색 및 필터 조건에 일치하는 지자체가 없습니다.</div>
-            <p className="text-xs text-slate-300 mt-1">검색어를 변경하거나 필터를 초기화해 보세요.</p>
+            <p className="text-xs text-slate-300">검색어를 변경하거나 필터를 초기화해 보세요.</p>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                aria-label="적용된 전체 필터 초기화하고 전체 지자체 보기"
+                className="px-4 py-2 min-h-[44px] inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              >
+                전체 필터 초기화
+              </button>
+            </div>
           </div>
         ) : viewMode === 'table' ? (
           <SubsidyTableView
@@ -1326,7 +1336,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               aria-label="차량 모델 선택"
               value={activeModel?.model_id || selectedModelId}
               onChange={handleModelSelectChange}
-              className="w-full py-3 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
+              className="w-full py-3 px-3.5 min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
             >
               {models.map((model) => (
                 <option key={model.model_id} value={model.model_id}>
@@ -1379,7 +1389,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               value={activeRegionForCalc?.region_id || selectedRegionId}
               onChange={handleRegionSelectChange}
               aria-describedby="region-residency-note"
-              className="w-full py-3 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
+              className="w-full py-3 px-3.5 min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
             >
               {regions.map((reg) => (
                 <option key={reg.region_id} value={reg.region_id}>
@@ -1395,14 +1405,14 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
           {/* 3. Custom MSRP Option */}
           <div className="space-y-3 p-4 bg-slate-950 border border-slate-800 rounded-2xl">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <label htmlFor="custom-msrp-toggle-checkbox" className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-300 uppercase tracking-wider">
+              <label htmlFor="custom-msrp-toggle-checkbox" className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-300 uppercase tracking-wider min-h-[44px]">
                 <input
                   id="custom-msrp-toggle-checkbox"
                   type="checkbox"
                   aria-label="옵션 포함 출고가 직접 입력 (커스텀 MSRP)"
                   checked={isCustomMsrp}
                   onChange={handleToggleCustomMsrp}
-                  className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                  className="w-5 h-5 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 />
                 <span>옵션 포함 출고가 직접 입력 (커스텀 MSRP)</span>
               </label>
@@ -1425,7 +1435,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                     value={customMsrpInput && Number.isFinite(parseInt(customMsrpInput, 10)) ? parseInt(customMsrpInput, 10).toLocaleString('ko-KR') : ''}
                     onChange={handleCustomMsrpChange}
                     placeholder="원 단위 출고가 입력 (예: 54,900,000)"
-                    className="w-full py-2.5 px-3.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 pr-12"
+                    className="w-full py-2.5 px-3.5 min-h-[44px] rounded-xl bg-slate-900 border border-slate-700 text-white text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 pr-12"
                   />
                   <span aria-hidden="true" className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-300 text-xs font-semibold">
                     원

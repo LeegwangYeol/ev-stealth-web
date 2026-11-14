@@ -132,10 +132,14 @@ assert(!Number.isNaN(emptyProgress), 'Empty items progress is strictly not NaN')
 // ---------------------------------------------------------
 console.log('[TEST GROUP 3] Category grouping integrity...');
 const categories = Array.from(new Set(INITIAL_PDI_ITEMS.map((i) => i.category)));
-assert(categories.length === 4, `Expected 4 distinct categories, got ${categories.length}`, categories);
+assert(categories.length === 5, `Expected 5 distinct categories, got ${categories.length}`, categories);
+const expectedCategories = ['외관 단차', '도장 불량', '배터리 충전구', '실내 전자기기', '하부 점검'];
+for (const expCat of expectedCategories) {
+  assert(categories.includes(expCat), `Expected category "${expCat}" is present`);
+}
 for (const cat of categories) {
   const catItems = INITIAL_PDI_ITEMS.filter(i => i.category === cat);
-  assert(catItems.length >= 2, `Category "${cat}" has at least 2 items`, { count: catItems.length });
+  assert(catItems.length >= 4, `Category "${cat}" has at least 4 items`, { count: catItems.length });
 }
 
 // ---------------------------------------------------------
@@ -155,8 +159,10 @@ function parseStoredChecklistState(raw, defaultItems) {
     // Case 1: Array of items or IDs
     if (Array.isArray(parsed)) {
       if (parsed.length === 0) return defaultItems;
-      const isIdArray = parsed.some((p) => typeof p === 'string' || typeof p === 'number');
-      if (isIdArray) {
+      const isPureIdArray = parsed.every(
+        (p) => p === null || p === undefined || typeof p === 'string' || typeof p === 'number'
+      );
+      if (isPureIdArray) {
         const checkedIdSet = new Set(
           parsed.filter((p) => p !== null && p !== undefined).map((p) => String(p))
         );

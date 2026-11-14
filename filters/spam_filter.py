@@ -38,10 +38,12 @@ MAX_TEXT_LENGTH: int = 50_000
 MAX_URL_LENGTH: int = 2_048
 
 # Pre-compiled regex for stripping invalid characters: null bytes, non-printable control chars,
-# Trojan Source / Unicode BiDi overrides, unpaired surrogates, BOM, and Unicode non-characters.
+# zero-width spaces, Trojan Source / Unicode BiDi overrides, unpaired surrogates, BOM, and Unicode non-characters.
 RE_INVALID_CHARS: re.Pattern[str] = re.compile(
-    r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u202a-\u202e\u2066-\u2069\ud800-\udfff\ufeff\ufffe\uffff]"
+    r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u200b-\u200d\u202a-\u202e\u2060\u2066-\u2069\ud800-\udfff\ufeff\ufffe\uffff]"
 )
+RE_UNICODE_SPACES: re.Pattern[str] = re.compile(r"[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]")
+FULLWIDTH_TRANS: Dict[int, int] = {i: i - 0xFEE0 for i in range(0xFF01, 0xFF5F)}
 
 
 def sanitize_input(val: Any, max_len: int = MAX_TEXT_LENGTH) -> str:
@@ -68,10 +70,13 @@ def sanitize_input(val: Any, max_len: int = MAX_TEXT_LENGTH) -> str:
     if not val_str:
         return ""
 
-    val_str = RE_INVALID_CHARS.sub("", val_str)
-    val_str = val_str.strip()
     if len(val_str) > max_len:
         val_str = val_str[:max_len]
+
+    val_str = RE_INVALID_CHARS.sub("", val_str)
+    val_str = RE_UNICODE_SPACES.sub(" ", val_str)
+    val_str = val_str.translate(FULLWIDTH_TRANS)
+    val_str = val_str.strip()
 
     return unicodedata.normalize("NFC", val_str)
 
@@ -106,12 +111,25 @@ NEWS_DOMAINS: Tuple[str, ...] = (
     "yna.co.kr",
     "newsis.com",
     "news1.kr",
+    "chosun.com",
+    "donga.com",
+    "joongang.co.kr",
+    "hankyung.com",
+    "mk.co.kr",
+    "sedaily.com",
+    "etnews.com",
+    "zdnet.co.kr",
+    "top-rider.com",
 )
 
 # Commercial spam / illegal advertisement keywords (retained and expanded for full backward compatibility)
 COMMERCIAL_SPAM_KEYWORDS: Tuple[str, ...] = (
     "카톡 상담",
+    "카톡상담",
     "카톡 문의",
+    "카톡문의",
+    "오픈카톡",
+    "오픈채팅",
     "텔레그램",
     "선물옵션",
     "바카라",
@@ -119,9 +137,13 @@ COMMERCIAL_SPAM_KEYWORDS: Tuple[str, ...] = (
     "카지노",
     "사설토토",
     "무직자 대출",
+    "무직자대출",
     "당일 대출",
+    "당일대출",
     "텔레 문의",
+    "텔레문의",
     "라인 아이디",
+    "라인아이디",
     # Additional illicit / scam terms
     "홀덤",
     "파워볼",
@@ -137,11 +159,17 @@ COMMERCIAL_SPAM_KEYWORDS: Tuple[str, ...] = (
     "조건만남",
     "애인대행",
     "주식 리딩방",
+    "주식리딩방",
     "코인 리딩방",
+    "코인리딩방",
     "원금 보장",
+    "원금보장",
     "수익률 100%",
+    "수익률100%",
     "리퍼럴 코드",
+    "리퍼럴코드",
     "추천인 코드",
+    "추천인코드",
 )
 
 # Affiliate / referral codes and links

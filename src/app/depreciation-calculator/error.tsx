@@ -56,7 +56,7 @@ export default function DepreciationCalculatorError({ error, reset }: Depreciati
             id="depreciation-error-heading"
             className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight"
           >
-            감가율 시뮬레이션 계산 중 오류가 발생했습니다
+            감가상각 시뮬레이터 계산 중 오류가 발생했습니다
           </h1>
           <p
             id="depreciation-error-description"
@@ -76,7 +76,7 @@ export default function DepreciationCalculatorError({ error, reset }: Depreciati
           <button
             type="button"
             onClick={handleRetry}
-            aria-label="감가 계산기 다시 시도"
+            aria-label="감가상각 시뮬레이터 다시 시도"
             className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">🔄</span> 다시 시도

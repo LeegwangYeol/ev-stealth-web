@@ -202,14 +202,14 @@ export default function RootLayout({
               <Link href="/subsidy-tracker" prefetch={true} aria-label="보조금 실시간 소진율 (전국 지자체 추적기)" className="text-amber-400 hover:text-white font-semibold transition flex items-center gap-1 min-h-[44px] px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
                 <span aria-hidden="true">⚡</span> 보조금 실시간 소진율
               </Link>
-              <Link href="/depreciation-calculator" prefetch={true} aria-label="감가·배터리 계산기 (잔존가치 및 열화 시뮬레이션)" className="text-emerald-400 hover:text-white font-semibold transition flex items-center gap-1 min-h-[44px] px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
-                <span aria-hidden="true">📉</span> 감가·배터리 계산기
+              <Link href="/depreciation-calculator" prefetch={true} aria-label="감가상각 시뮬레이터 (잔존가치 및 배터리 수명 계산기)" className="text-emerald-400 hover:text-white font-semibold transition flex items-center gap-1 min-h-[44px] px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
+                <span aria-hidden="true">📉</span> 감가상각 시뮬레이터
               </Link>
-              <Link href="/reliability-analytics" prefetch={false} aria-label="결함·신뢰성 통계 (DSI 내구성 지수 분석)" className="text-blue-300 hover:text-white font-semibold transition flex items-center gap-1 min-h-[44px] px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
-                <span aria-hidden="true">📊</span> 결함·신뢰성 통계
+              <Link href="/reliability-analytics" prefetch={false} aria-label="스텔스 품질 점수 (DSI 결함 및 신뢰성 분석)" className="text-blue-300 hover:text-white font-semibold transition flex items-center gap-1 min-h-[44px] px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
+                <span aria-hidden="true">📊</span> 스텔스 품질 점수
               </Link>
-              <Link href="/recall-portal" prefetch={false} aria-label="공식 리콜 포털 (국토부·NHTSA 공인 연동)" className="text-slate-200 hover:text-white font-medium transition flex items-center gap-1 min-h-[44px] px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
-                <span aria-hidden="true">🚨</span> 공식 리콜 포털
+              <Link href="/recall-portal" prefetch={false} aria-label="통합 리콜 현황 (국토부·NHTSA 공인 리콜 포털)" className="text-slate-200 hover:text-white font-medium transition flex items-center gap-1 min-h-[44px] px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
+                <span aria-hidden="true">🚨</span> 통합 리콜 현황
               </Link>
               <Link href="/2026-latest" prefetch={false} aria-label="2026 최신 결함 분석" className="text-slate-200 hover:text-white font-medium transition min-h-[44px] inline-flex items-center px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
                 2026 최신 결함
@@ -265,40 +265,40 @@ export default function RootLayout({
                 <Link
                   href="/subsidy-tracker"
                   prefetch={true}
-                  aria-label="전국 보조금 소진율 추적기 실시간 확인"
+                  aria-label="보조금 실시간 소진율 (전국 지자체 추적기)"
                   className="px-3 py-2 min-h-[44px] rounded-lg bg-amber-950/60 border border-amber-500/50 text-amber-300 hover:text-white font-semibold transition flex items-center justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <span className="flex items-center gap-2">
-                    <span aria-hidden="true">⚡</span> [실시간] 전국 보조금 소진율 추적기
+                    <span aria-hidden="true">⚡</span> [실시간] 보조금 실시간 소진율
                   </span>
                   <span className="text-[10px] bg-amber-400 text-slate-950 font-extrabold px-1.5 py-0.5 rounded">LIVE</span>
                 </Link>
                 <Link
                   href="/depreciation-calculator"
                   prefetch={true}
-                  aria-label="감가·배터리 계산기 (잔존가치 및 열화 시뮬레이션)"
+                  aria-label="감가상각 시뮬레이터 (잔존가치 및 배터리 수명 계산기)"
                   className="px-3 py-2 min-h-[44px] rounded-lg bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 hover:text-white font-semibold transition flex items-center justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
                   <span className="flex items-center gap-2">
-                    <span aria-hidden="true">📉</span> 감가·배터리 계산기
+                    <span aria-hidden="true">📉</span> 감가상각 시뮬레이터
                   </span>
                   <span className="text-[10px] bg-emerald-400 text-slate-950 font-extrabold px-1.5 py-0.5 rounded">신규</span>
                 </Link>
                 <Link
                   href="/reliability-analytics"
                   prefetch={false}
-                  aria-label="신뢰성 통계 및 결함(DSI) 분석 대시보드"
+                  aria-label="스텔스 품질 점수 (DSI 결함 및 신뢰성 분석)"
                   className="px-3 py-2 min-h-[44px] rounded-lg hover:bg-slate-800 text-blue-300 hover:text-white font-semibold transition flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
-                  <span aria-hidden="true">📊</span> 신뢰성 통계
+                  <span aria-hidden="true">📊</span> 스텔스 품질 점수
                 </Link>
                 <Link
                   href="/recall-portal"
                   prefetch={false}
-                  aria-label="공식 전기차 리콜 포털 (국토부·NHTSA 공인)"
+                  aria-label="통합 리콜 현황 (국토부·NHTSA 공인 리콜 포털)"
                   className="px-3 py-2 min-h-[44px] rounded-lg hover:bg-slate-800 text-slate-200 hover:text-white font-medium transition flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
-                  <span aria-hidden="true">🚨</span> 리콜 포털
+                  <span aria-hidden="true">🚨</span> 통합 리콜 현황
                 </Link>
                 <Link
                   href="/2026-latest"

@@ -194,8 +194,13 @@ export default function GlobalEvPage() {
         <h2 id="heading-global-summary" className="text-xl sm:text-2xl font-bold text-slate-900">
           글로벌 주요 차종 연식별 판정 요약 표
         </h2>
-        <div className="overflow-x-auto table-scroll-container rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-500 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true">
+        <div
+          tabIndex={0}
+          role="region"
+          aria-label="가로 스크롤 가능한 글로벌 주요 차종 연식별 판정 요약 표"
+          className="overflow-x-auto table-scroll-container rounded-2xl border border-slate-200 bg-white shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+        >
+          <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-600 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true">
             <span>← 좌우로 밀어서 전체 모델 비교</span>
             <span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span>
           </div>
@@ -455,12 +460,12 @@ export default function GlobalEvPage() {
           <Link
             href="/reliability-analytics"
             prefetch={false}
-            aria-label="글로벌 9대 브랜드 DSI 비교 랭킹 바로가기"
+            aria-label="글로벌 9대 브랜드 스텔스 품질 점수 및 DSI 비교 바로가기"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
           >
             <h3 className="flex items-center gap-2 text-blue-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📊</span>
-              <span>글로벌 9대 브랜드 DSI 비교 랭킹</span>
+              <span>글로벌 9대 브랜드 스텔스 품질 점수(DSI) 비교</span>
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
               벤츠, BMW, 폭스바겐, 볼보, 폴스타의 결함 심각도 지수와 보증 외 고전압 배터리 교체비 매트릭스를 확인합니다.
@@ -473,12 +478,12 @@ export default function GlobalEvPage() {
           <Link
             href="/recall-portal"
             prefetch={false}
-            aria-label="수입차 VIN 및 배터리 공급사 조회 바로가기"
+            aria-label="수입차 VIN 및 통합 리콜 현황 조회 바로가기"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-rose-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
           >
             <h3 className="flex items-center gap-2 text-rose-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">🚨</span>
-              <span>수입차 VIN 및 배터리 공급사 조회</span>
+              <span>수입차 VIN 및 통합 리콜 현황 조회</span>
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
               17자리 차대번호로 파라시스, CATL, LG에너지솔루션 등 실제 탑재 배터리 제조사와 국토부 공식 리콜을 조회합니다.
@@ -491,12 +496,12 @@ export default function GlobalEvPage() {
           <Link
             href="/depreciation-calculator"
             prefetch={true}
-            aria-label="수입 EV 감가율 및 배터리 잔존가치 계산기 바로가기"
+            aria-label="수입 EV 감가상각 시뮬레이터 및 배터리 잔존가치 계산기 바로가기"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
           >
             <h3 className="flex items-center gap-2 text-emerald-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📉</span>
-              <span>수입 EV 감가율 및 배터리 잔존가치</span>
+              <span>수입 EV 감가상각 시뮬레이터 &amp; 배터리 잔존가치</span>
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
               독일 프리미엄 브랜드의 급격한 중고차 감가 곡선과 보증 만료 후 5년 TCO 유지비를 정밀 산출합니다.
@@ -509,12 +514,12 @@ export default function GlobalEvPage() {
           <Link
             href="/subsidy-tracker"
             prefetch={true}
-            aria-label="수입 전기차 보조금 상한제 시뮬레이터 바로가기"
+            aria-label="수입 전기차 보조금 실시간 소진율 및 상한제 시뮬레이터 바로가기"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
           >
             <h3 className="flex items-center gap-2 text-amber-800 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">⚡</span>
-              <span>수입 전기차 보조금 상한제 시뮬레이터</span>
+              <span>수입 전기차 보조금 실시간 소진율</span>
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
               출고가 5,500만 원(100%), 8,500만 원(50%), 8,500만 원 초과(0%) 기준 실질 지자체 보조금을 비교합니다.

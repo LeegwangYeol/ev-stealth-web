@@ -15,6 +15,51 @@ export interface SubsidyProgressBarProps {
   showDetails?: boolean;
 }
 
+/**
+ * Pure Helper: WCAG AA compliant color-coding thresholds for depletion rates:
+ * - Depleted (>= 100% or 'DEPLETED'): slate-300 text, bg-slate-500 bar
+ * - Critical (>= 95% or 'CRITICAL'): rose-400 text, bg-rose-500 bar
+ * - Warning (80% ~ 94.9% or 'WARNING'): orange-400 text, bg-orange-500 bar
+ * - Caution (60% ~ 79.9% or 'CAUTION'): amber-400 text, bg-amber-400 bar
+ * - Healthy (< 60% or 'HEALTHY' / 'AVAILABLE'): emerald-400 text, bg-emerald-500 bar
+ */
+export const getDepletionColor = (rate: number, status?: string) => {
+  const norm = (status || '').toUpperCase();
+  if (norm === 'DEPLETED' || rate >= 100) {
+    return {
+      text: 'text-slate-300',
+      bar: 'bg-slate-500',
+      dot: 'bg-slate-500',
+    };
+  }
+  if (norm === 'CRITICAL' || rate >= 95) {
+    return {
+      text: 'text-rose-400',
+      bar: 'bg-rose-500',
+      dot: 'bg-rose-500',
+    };
+  }
+  if (norm === 'WARNING' || rate >= 80) {
+    return {
+      text: 'text-orange-400',
+      bar: 'bg-orange-500',
+      dot: 'bg-orange-500',
+    };
+  }
+  if (norm === 'CAUTION' || rate >= 60) {
+    return {
+      text: 'text-amber-400',
+      bar: 'bg-amber-400',
+      dot: 'bg-amber-400',
+    };
+  }
+  return {
+    text: 'text-emerald-400',
+    bar: 'bg-emerald-500',
+    dot: 'bg-emerald-500',
+  };
+};
+
 export const SubsidyProgressBar = memo(function SubsidyProgressBar({
   depletionRate,
   deliveredUnits,
@@ -47,13 +92,14 @@ export const SubsidyProgressBar = memo(function SubsidyProgressBar({
   const pendingPct = Number.isFinite(rawPendingPct) ? Math.max(0, Math.min(100 - deliveredPct, rawPendingPct)) : 0;
   const remainingPct = Math.max(0, 100 - (deliveredPct + pendingPct));
   const pendingCount = Math.max(0, safeApplied - safeDelivered);
+  const colorScheme = getDepletionColor(safeDepletion, status);
 
   return (
     <div className="space-y-1.5 pt-1">
       {showDetails && (
         <div className="flex justify-between items-center text-xs">
           <span className="font-semibold text-slate-300">
-            소진율 <strong className="text-amber-400 text-sm">{safeDepletion.toFixed(1)}%</strong>
+            소진율 <strong className={`${colorScheme.text} text-sm`}>{safeDepletion.toFixed(1)}%</strong>
           </span>
           <span className="text-slate-300 text-[11px] font-medium">
             잔여 <strong className="text-emerald-400 font-bold">{safeRemaining.toLocaleString()}</strong> / {displayAnnounced.toLocaleString()}대
@@ -69,7 +115,7 @@ export const SubsidyProgressBar = memo(function SubsidyProgressBar({
         aria-valuemax={100}
         aria-label={`${safeRegionName} ${safeCategoryLabel} 보조금 소진율`}
         aria-valuetext={`소진율 ${safeDepletion.toFixed(1)}% (${getStatusLabel(status)}), 잔여 ${safeRemaining.toLocaleString()}대`}
-        className="w-full bg-slate-950 rounded-full h-3.5 overflow-hidden flex relative border border-slate-600 border-slate-500"
+        className="w-full bg-slate-950 rounded-full h-3.5 overflow-hidden flex relative border border-slate-600"
       >
         {/* Layer 1: Confirmed Delivered */}
         {deliveredPct > 0 && (
@@ -80,11 +126,11 @@ export const SubsidyProgressBar = memo(function SubsidyProgressBar({
             aria-hidden="true"
           />
         )}
-        {/* Layer 2: Pending Applications */}
+        {/* Layer 2: Pending Applications with Alert Threshold Color Coding */}
         {pendingPct > 0 && (
           <div
             style={{ width: `${pendingPct}%` }}
-            className="bg-amber-400 h-full border-r border-slate-950 transition-all duration-500"
+            className={`${colorScheme.bar} h-full border-r border-slate-950 transition-all duration-500`}
             title={`접수 대기: ${pendingCount.toLocaleString()}대 (${pendingPct.toFixed(1)}%)`}
             aria-hidden="true"
           />
@@ -107,7 +153,7 @@ export const SubsidyProgressBar = memo(function SubsidyProgressBar({
             출고 {safeDelivered.toLocaleString()}대
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" aria-hidden="true" />
+            <span className={`w-2 h-2 rounded-full ${colorScheme.dot} inline-block`} aria-hidden="true" />
             심사중 {pendingCount.toLocaleString()}대
           </span>
           <span className="flex items-center gap-1">

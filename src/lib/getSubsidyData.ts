@@ -20,6 +20,15 @@ import {
   rankRegionsByDepletion,
   compareModels,
   sortModels,
+  getPriceSubsidyRatio,
+  calculateNetSubsidyPure,
+  calculateSubsidyStatistics,
+  formatCurrencyKrw,
+  formatManwon,
+  formatBillionKrw,
+  formatDepletionRate,
+  getDepletionBadgeStyle,
+  REGION_ALIAS_MAP,
   type DepletionRateOptions,
   type ParseSubsidyNumberOptions,
   type ParsedModelSubsidy,
@@ -42,6 +51,15 @@ export {
   rankRegionsByDepletion,
   compareModels,
   sortModels,
+  getPriceSubsidyRatio,
+  calculateNetSubsidyPure,
+  calculateSubsidyStatistics,
+  formatCurrencyKrw,
+  formatManwon,
+  formatBillionKrw,
+  formatDepletionRate,
+  getDepletionBadgeStyle,
+  REGION_ALIAS_MAP,
   type DepletionRateOptions,
   type ParseSubsidyNumberOptions,
   type ParsedModelSubsidy,
@@ -201,72 +219,6 @@ export function getAllRegions(): RegionEntry[] {
 }
 
 /**
- * Canonical alias map resolving colloquial city/province names, 2-letter abbreviations,
- * and ISO codes to database region IDs.
- */
-export const REGION_ALIAS_MAP: Record<string, string> = {
-  // Special City / Metropolitan Cities
-  '서울': 'KR-11',
-  '서울특별시': 'KR-11',
-  'seoul': 'KR-11',
-  '부산': 'KR-26',
-  '부산광역시': 'KR-26',
-  'busan': 'KR-26',
-  '대구': 'KR-27',
-  '대구광역시': 'KR-27',
-  'daegu': 'KR-27',
-  '인천': 'KR-28',
-  '인천광역시': 'KR-28',
-  'incheon': 'KR-28',
-  '광주': 'KR-29',
-  '광주광역시': 'KR-29',
-  'gwangju': 'KR-29',
-  '대전': 'KR-30',
-  '대전광역시': 'KR-30',
-  'daejeon': 'KR-30',
-  '울산': 'KR-31',
-  '울산광역시': 'KR-31',
-  'ulsan': 'KR-31',
-  // Special Self-Governing City (supports both CleanSys KR-36 and ISO KR-50)
-  '세종': 'KR-36',
-  '세종특별자치시': 'KR-36',
-  'sejong': 'KR-36',
-  'kr-50': 'KR-36',
-  'kr-36': 'KR-36',
-  // Provinces
-  '경기': 'KR-41',
-  '경기도': 'KR-41',
-  'gyeonggi': 'KR-41',
-  '강원': 'KR-42',
-  '강원도': 'KR-42',
-  '강원특별자치도': 'KR-42',
-  'gangwon': 'KR-42',
-  '충북': 'KR-43',
-  '충청북도': 'KR-43',
-  'chungbuk': 'KR-43',
-  '충남': 'KR-44',
-  '충청남도': 'KR-44',
-  'chungnam': 'KR-44',
-  '전북': 'KR-45',
-  '전라북도': 'KR-45',
-  '전북특별자치도': 'KR-45',
-  'jeonbuk': 'KR-45',
-  '전남': 'KR-46',
-  '전라남도': 'KR-46',
-  'jeonnam': 'KR-46',
-  '경북': 'KR-47',
-  '경상북도': 'KR-47',
-  'gyeongbuk': 'KR-47',
-  '경남': 'KR-48',
-  '경상남도': 'KR-48',
-  'gyeongnam': 'KR-48',
-  '제주': 'KR-49',
-  '제주도': 'KR-49',
-  '제주특별자치도': 'KR-49',
-  'jeju': 'KR-49',
-};
-
-/**
  * Finds a specific region by region_id, iso_code, Korean name, or colloquial alias.
  * Guards against null elements and missing string properties.
  */
@@ -374,28 +326,11 @@ export function getModelById(modelId: string): PopularModelEntry | undefined {
   });
 }
 
-/**
- * Calculates national subsidy multiplier based on 2026 MOE statutory price caps:
- * - MSRP <= 55,000,000 KRW: 1.0 (100% eligibility)
- * - 55,000,000 < MSRP <= 85,000,000 KRW: 0.5 (50% eligibility)
- * - MSRP > 85,000,000 KRW: 0.0 (0% luxury vehicle exclusion)
- */
-export function getPriceSubsidyRatio(msrpKrw: number): number {
-  if (!Number.isFinite(msrpKrw) || msrpKrw <= 0) {
-    return 0.0;
-  }
-  if (msrpKrw <= 55_000_000) {
-    return 1.0;
-  }
-  if (msrpKrw <= 85_000_000) {
-    return 0.5;
-  }
-  return 0.0;
-}
 
 /**
  * Calculates the comprehensive net subsidy and out-of-pocket purchase price
  * for a chosen vehicle model in a designated administrative region.
+ * Automatically resolves model and region IDs and delegates to pure calculation engine.
  */
 export function calculateNetSubsidy(
   modelId: string,
@@ -405,8 +340,6 @@ export function calculateNetSubsidy(
 ): SubsidyCalculationResult {
   const models = getAllModels();
   const regions = getAllRegions();
-
-  // 1. Resolve vehicle model
   const defaultModel: PopularModelEntry = models[0] || {
     model_id: 'ioniq-5-2026',
     name_ko: '현대 아이오닉 5 롱레인지 2WD (2026)',
@@ -418,186 +351,16 @@ export function calculateNetSubsidy(
     price_subsidy_ratio: 1.0,
     national_subsidy_krw: 6500000,
   };
+  const defaultRegion: RegionEntry = regions.find(r => r.region_id === 'KR-11') || regions[0] || {
+    region_id: 'KR-11',
+    name_ko: '서울특별시',
+    residency_requirement_days: 30,
+    announced_date: '2026-02-15',
+  };
 
   const model = getModelById(modelId) || defaultModel;
-
-  // 2. Resolve region
-  const defaultPassengerCategory = {
-    announced_units: 11500,
-    applied_units: 9890,
-    delivered_units: 8900,
-    remaining_units: 1610,
-    depletion_rate: 86.0,
-    delivery_rate: 77.4,
-    status: 'WARNING' as const,
-    max_local_subsidy_krw: 1500000,
-    max_total_subsidy_krw: 8000000,
-  };
-
-  const defaultRegion: RegionEntry = {
-    region_id: regions[0]?.region_id || 'KR-11',
-    iso_code: regions[0]?.iso_code || 'KR-11',
-    name_ko: regions[0]?.name_ko || '서울특별시',
-    name_en: regions[0]?.name_en || 'Seoul',
-    tier: regions[0]?.tier || 'special_city',
-    overall_depletion_rate: regions[0]?.overall_depletion_rate ?? 87.8,
-    overall_status: regions[0]?.overall_status || 'WARNING',
-    residency_requirement_days: regions[0]?.residency_requirement_days ?? 30,
-    supplementary_budget_added: regions[0]?.supplementary_budget_added ?? false,
-    categories: {
-      passenger: regions[0]?.categories?.passenger || defaultPassengerCategory,
-      commercial: regions[0]?.categories?.commercial || {
-        announced_units: 2800,
-        applied_units: 2660,
-        delivered_units: 2450,
-        remaining_units: 140,
-        depletion_rate: 95.0,
-        delivery_rate: 87.5,
-        status: 'CRITICAL',
-        max_local_subsidy_krw: 4000000,
-        max_total_subsidy_krw: 14500000,
-      },
-      bus: regions[0]?.categories?.bus || {
-        announced_units: 450,
-        applied_units: 396,
-        delivered_units: 360,
-        remaining_units: 54,
-        depletion_rate: 88.0,
-        delivery_rate: 80.0,
-        status: 'WARNING',
-        max_local_subsidy_krw: 35000000,
-        max_total_subsidy_krw: 105000000,
-      },
-    },
-    notes: regions[0]?.notes || '서울시 보조금 잔여 소진 임박',
-  };
-
   const region = getRegionById(regionId) || defaultRegion;
-  const passengerCategory = region.categories?.passenger ?? defaultRegion.categories.passenger;
-
-  // 3. Resolve MSRP and price cap ratio
-  const safeModelPrice = parseSubsidyNumber(model?.base_price_krw, {
-    defaultKrw: 54_100_000,
-    maxKrw: 10_000_000_000,
-  });
-
-  let activeMsrp: number;
-  if (customMsrp === Infinity) {
-    activeMsrp = 10_000_000_000;
-  } else if (customMsrp !== undefined && customMsrp !== null) {
-    const parsed = parseSubsidyNumber(customMsrp, { maxKrw: 10_000_000_000 });
-    activeMsrp = parsed > 0 ? parsed : safeModelPrice;
-  } else {
-    activeMsrp = safeModelPrice;
-  }
-
-  const ratio = getPriceSubsidyRatio(activeMsrp);
-
-  let priceCapTierText = '100% 전액 지원 (5,500만 원 이하)';
-  if (ratio === 0.5) {
-    priceCapTierText = '50% 감액 지원 (5,500만 원 초과 ~ 8,500만 원 이하)';
-  } else if (ratio === 0.0) {
-    priceCapTierText = '보조금 지급 대상 제외 (8,500만 원 초과)';
-  }
-
-  // 4. Calculate National Subsidy
-  const validNationalSubsidy = parseSubsidyNumber(model.national_subsidy_krw, { defaultKrw: 0 });
-  let nationalSubsidyKrw = 0;
-  if (ratio > 0) {
-    const parsedCustom = customMsrp !== undefined && customMsrp !== null ? parseSubsidyNumber(customMsrp) : 0;
-    if (parsedCustom > 0) {
-      // Re-evaluate model un-scaled baseline
-      const baseRatio = Number.isFinite(model.price_subsidy_ratio) && model.price_subsidy_ratio > 0
-        ? model.price_subsidy_ratio
-        : 1.0;
-      const unscaledNational = Math.round(validNationalSubsidy / baseRatio);
-      nationalSubsidyKrw = Math.min(6_500_000, Math.round(unscaledNational * ratio));
-    } else {
-      nationalSubsidyKrw = validNationalSubsidy;
-    }
-  }
-
-  // 5. Additional Grants / Subsidies
-  let additionalGrantsKrw = 0;
-  if (nationalSubsidyKrw > 0 && options) {
-    if (options.isYouthFirstTimeBuyer) {
-      // Youth 1st time buyer: +20% national subsidy
-      additionalGrantsKrw += Math.round(nationalSubsidyKrw * 0.2);
-    }
-    if (options.isSmallBusinessOrTaxi) {
-      // Small business / taxi: +30% national subsidy
-      additionalGrantsKrw += Math.round(nationalSubsidyKrw * 0.3);
-    }
-    if (options.isMultiChildFamily) {
-      // Multi-child family: +10% national subsidy
-      additionalGrantsKrw += Math.round(nationalSubsidyKrw * 0.1);
-    }
-    if (options.isOldDieselScrappage) {
-      // Scrappage bonus: flat 1,000,000 KRW
-      additionalGrantsKrw += 1_000_000;
-    }
-  }
-
-  // 6. Calculate Local Municipal Matching Subsidy
-  // Formula: S_local = S_local_max * (S_nat / 6,500,000)
-  const maxLocal = parseSubsidyNumber(passengerCategory?.max_local_subsidy_krw, { defaultKrw: 0 });
-  let localSubsidyKrw = 0;
-  if (nationalSubsidyKrw > 0 && maxLocal > 0) {
-    const calculated = Math.round(maxLocal * (nationalSubsidyKrw / 6_500_000));
-    // Round to nearest 10,000 KRW and cap to statutory maxLocal
-    localSubsidyKrw = Math.min(maxLocal, Math.round(calculated / 10_000) * 10_000);
-  }
-
-  // 7. Calculate Combined Total & Out-of-pocket Net Price
-  const totalSubsidyKrw = nationalSubsidyKrw + localSubsidyKrw + additionalGrantsKrw;
-  const rawNetPrice = activeMsrp - totalSubsidyKrw;
-  const netPurchasePriceKrw = Number.isFinite(rawNetPrice) ? Math.max(0, rawNetPrice) : 0;
-
-  // 8. Depletion Risk & Warning Analysis
-  const pAnnounced = parseSubsidyNumber(passengerCategory?.announced_units, { defaultKrw: 0 });
-  const pApplied = parseSubsidyNumber(passengerCategory?.applied_units, { defaultKrw: 0 });
-  const depletionRate = typeof passengerCategory?.depletion_rate === 'number' && Number.isFinite(passengerCategory.depletion_rate)
-    ? passengerCategory.depletion_rate
-    : calculateDepletionRate(pApplied, pAnnounced);
-  const isHighDepletionRisk = depletionRate >= 80.0;
-  const depletionStatus: AlertSeverity = passengerCategory?.status || (depletionRate >= 100 ? 'DEPLETED' : depletionRate >= 95 ? 'CRITICAL' : depletionRate >= 80 ? 'WARNING' : depletionRate >= 60 ? 'CAUTION' : 'HEALTHY');
-  const remainingUnits = typeof passengerCategory?.remaining_units === 'number' && Number.isFinite(passengerCategory.remaining_units)
-    ? passengerCategory.remaining_units
-    : calculateRemainingUnits(pApplied, pAnnounced);
-
-  let warningNotice: string | undefined;
-  const safeRemainingUnits = Number.isFinite(remainingUnits) ? remainingUnits : 0;
-  if (depletionRate >= 95.0) {
-    warningNotice = `🚨 ${region.name_ko}의 승용 보조금 소진율이 ${depletionRate}%로 선착순 마감 직전입니다! 즉시 출고 가능 실재고 매칭이 필요합니다.`;
-  } else if (depletionRate >= 80.0) {
-    warningNotice = `⚠️ ${region.name_ko}의 승용 보조금 소진율이 ${depletionRate}%에 달해 조기 마감 위험이 높습니다.`;
-  } else {
-    warningNotice = `✅ ${region.name_ko}의 보조금 잔여량이 비교적 여유롭습니다 (${safeRemainingUnits.toLocaleString()}대 잔여).`;
-  }
-
-  return {
-    modelId: model.model_id,
-    modelName: model.name_ko,
-    manufacturer: model.manufacturer,
-    batteryType: model.battery_type,
-    batteryCapacityKwh: model.battery_capacity_kwh,
-    ratedRangeKm: model.rated_range_km,
-    regionId: region.region_id,
-    regionName: region.name_ko,
-    msrpKrw: activeMsrp,
-    priceSubsidyRatio: ratio,
-    nationalSubsidyKrw,
-    localSubsidyKrw,
-    additionalGrantsKrw,
-    totalSubsidyKrw,
-    netPurchasePriceKrw,
-    isHighDepletionRisk,
-    depletionRate,
-    depletionStatus,
-    residencyRequirementDays: region.residency_requirement_days,
-    warningNotice,
-    priceCapTierText,
-  };
+  return calculateNetSubsidyPure(model, region, customMsrp, options);
 }
 
 /**
@@ -620,8 +383,12 @@ export function getCategoryDepletion(
   let region: RegionEntry | undefined;
   if (typeof regionOrId === 'string') {
     region = getRegionById(regionOrId);
-  } else if (regionOrId && typeof regionOrId === 'object' && 'categories' in regionOrId) {
-    region = regionOrId as RegionEntry;
+  } else if (regionOrId && typeof regionOrId === 'object') {
+    if ('categories' in regionOrId && regionOrId.categories) {
+      region = regionOrId as RegionEntry;
+    } else if ('region_id' in regionOrId && typeof regionOrId.region_id === 'string') {
+      region = getRegionById(regionOrId.region_id);
+    }
   }
 
   const category = region?.categories?.[categoryKey];
@@ -630,7 +397,7 @@ export function getCategoryDepletion(
   const remaining = typeof category?.remaining_units === 'number' && Number.isFinite(category.remaining_units) && category.remaining_units >= 0
     ? category.remaining_units
     : calculateRemainingUnits(applied, announced);
-  const rate = typeof category?.depletion_rate === 'number' && Number.isFinite(category.depletion_rate)
+  const rate = typeof category?.depletion_rate === 'number' && Number.isFinite(category.depletion_rate) && category.depletion_rate >= 0
     ? category.depletion_rate
     : calculateDepletionRate(applied, announced);
   const status: AlertSeverity = category?.status || (rate >= 100.0 ? 'DEPLETED' : rate >= 95.0 ? 'CRITICAL' : rate >= 80.0 ? 'WARNING' : rate >= 60.0 ? 'CAUTION' : 'HEALTHY');

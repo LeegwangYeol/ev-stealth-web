@@ -767,7 +767,7 @@ export default function DepreciationCalculatorClient({
               2026 KOREA EV MARKET INTELLIGENCE
             </div>
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white">
-              전기차 감가방어율 & 배터리 수명 계산기
+              전기차 감가상각 시뮬레이터 & 배터리 수명 계산기
             </h1>
             <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
               엔카·케이카 실거래 시세, 국토교통부 등록 데이터, 화학 구조별(LFP·삼원계) 전기화학 열화 모델,
@@ -980,14 +980,14 @@ export default function DepreciationCalculatorClient({
                 onChange={(e) => setWinterSeason(e.target.checked)}
                 aria-describedby="winter-season-hint"
                 className="w-5 h-5 rounded text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 cursor-pointer"
-                aria-label="❄️ 혹한기(-5℃) 저온 패널티 반영"
+                aria-label="❄️ 혹한기(-5℃) 저온 페널티 반영"
               />
               <label htmlFor="winter-season-checkbox" className="text-xs font-semibold text-slate-700 cursor-pointer">
-                ❄️ 혹한기(-5℃) 저온 패널티 반영
+                ❄️ 혹한기(-5℃) 저온 페널티 반영
               </label>
             </div>
             <span id="winter-season-hint" className="sr-only">
-              혹한기(-5도) 저온 패널티 반영 시 겨울철 배터리 열화율 및 감가율이 추가 계산됩니다.
+              혹한기(-5도) 저온 페널티 반영 시 겨울철 배터리 열화율 및 감가율이 추가 계산됩니다.
             </span>
           </div>
         </div>
@@ -1015,7 +1015,7 @@ export default function DepreciationCalculatorClient({
                 const val = parseFloat(e.target.value);
                 if (Number.isFinite(val)) handleYearsChange(val);
               }}
-              className="w-full h-9 py-2 accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
+              className="w-full min-h-[44px] h-11 py-2 accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="보유 기간 설정 (1년에서 5년)"
               aria-orientation="horizontal"
               aria-describedby="holding-years-hint"
@@ -1073,7 +1073,7 @@ export default function DepreciationCalculatorClient({
                 const val = parseInt(e.target.value, 10);
                 if (Number.isFinite(val)) setAnnualMileageKm(Math.max(1000, Math.min(100000, val)));
               }}
-              className="w-full h-9 py-2 accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
+              className="w-full min-h-[44px] h-11 py-2 accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="연간 주행거리 설정 (5,000km에서 50,000km)"
               aria-orientation="horizontal"
               aria-describedby="annual-mileage-hint"
@@ -1121,7 +1121,7 @@ export default function DepreciationCalculatorClient({
                 const val = parseInt(e.target.value, 10);
                 if (Number.isFinite(val)) setDcfcRatio(Math.max(0, Math.min(100, val)));
               }}
-              className="w-full h-9 py-2 accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
+              className="w-full min-h-[44px] h-11 py-2 accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="급속 충전(DCFC) 비율 설정 (0%에서 100%)"
               aria-orientation="horizontal"
               aria-describedby="dcfc-ratio-hint"
@@ -1390,6 +1390,7 @@ export default function DepreciationCalculatorClient({
           {/* SVG Chart */}
           <div
             tabIndex={0}
+            role="region"
             aria-label="연차별 잔존가치 프로젝션 비교 차트 스크롤 영역"
             className="w-full overflow-x-auto table-scroll-container rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
@@ -1489,7 +1490,7 @@ export default function DepreciationCalculatorClient({
                       fill={isSelectedYear ? '#3b82f6' : '#2563eb'}
                       className="transition-all duration-300 hover:opacity-90"
                     >
-                      <title>{`${selectedModel.model_name} ${pt.year}년차: ${chartViewMode === 'price' ? `${Math.round(pt.evResidualPriceKrw / 10000)}만원` : `${pt.evResidualPct.toFixed(0)}%`}`}</title>
+                      <title>{`${selectedModel.model_name} ${pt.year}년차: ${chartViewMode === 'price' ? `${Math.round(pt.evResidualPriceKrw / 10000).toLocaleString()}만 원` : `${pt.evResidualPct.toFixed(0)}%`}`}</title>
                     </rect>
                     <text
                       x={groupX - 19}
@@ -1500,7 +1501,7 @@ export default function DepreciationCalculatorClient({
                       fontWeight="bold"
                     >
                       {chartViewMode === 'price'
-                        ? `${Math.round(pt.evResidualPriceKrw / 10000)}`
+                        ? `${Math.round(pt.evResidualPriceKrw / 10000).toLocaleString()}`
                         : `${pt.evResidualPct.toFixed(0)}%`}
                     </text>
 
@@ -1514,7 +1515,7 @@ export default function DepreciationCalculatorClient({
                       fill="#10b981"
                       className="transition-all duration-300 hover:opacity-90"
                     >
-                      <title>{`${pt.year}년차 전기차 전체 평균: ${chartViewMode === 'price' ? `${Math.round(pt.evClassAvgPrice / 10000)}만원` : `${pt.evClassAvgPct.toFixed(0)}%`}`}</title>
+                      <title>{`${pt.year}년차 전기차 전체 평균: ${chartViewMode === 'price' ? `${Math.round(pt.evClassAvgPrice / 10000).toLocaleString()}만 원` : `${pt.evClassAvgPct.toFixed(0)}%`}`}</title>
                     </rect>
 
                     {/* Bar 3: ICE Benchmark */}
@@ -1527,7 +1528,7 @@ export default function DepreciationCalculatorClient({
                       fill="#94a3b8"
                       className="transition-all duration-300 hover:opacity-90"
                     >
-                      <title>{`${pt.year}년차 동급 내연기관(가솔린): ${chartViewMode === 'price' ? `${Math.round(pt.iceBenchmarkPrice / 10000)}만원` : `${pt.iceBenchmarkPct.toFixed(0)}%`}`}</title>
+                      <title>{`${pt.year}년차 동급 내연기관(가솔린): ${chartViewMode === 'price' ? `${Math.round(pt.iceBenchmarkPrice / 10000).toLocaleString()}만 원` : `${pt.iceBenchmarkPct.toFixed(0)}%`}`}</title>
                     </rect>
 
                     {/* X-axis Year Label */}
@@ -1951,7 +1952,7 @@ export default function DepreciationCalculatorClient({
                   setHeldMonths(val);
                 }
               }}
-              className="w-full h-9 py-2 accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
+              className="w-full min-h-[44px] h-11 py-2 accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="실운행 보유 개월 수 설정 (0개월에서 36개월)"
               aria-orientation="horizontal"
               aria-describedby="held-months-hint"
@@ -2125,10 +2126,11 @@ export default function DepreciationCalculatorClient({
             </summary>
             <div
               tabIndex={0}
+              role="region"
               aria-label="8단계 법정 의무운행기간 보조금 회수요율표 스크롤 영역"
               className="mt-3 overflow-x-auto table-scroll-container rounded-xl border border-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
-              <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-500 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true"><span>← 좌우로 밀어서 법정 환수율 확인</span><span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span></div>
+              <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-600 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true"><span>← 좌우로 밀어서 법정 환수율 확인</span><span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span></div>
               <table className="w-full min-w-[480px] text-left border-collapse" aria-label="8단계 법정 의무운행기간 보조금 회수요율표">
                 <caption className="sr-only">대기환경보전법 시행규칙 8단계 의무운행 회수요율표</caption>
                 <thead>
@@ -2280,10 +2282,11 @@ export default function DepreciationCalculatorClient({
         {/* Yearly Running Cost Breakdown Table */}
         <div
           tabIndex={0}
+          role="region"
           aria-label="5개년 총소유비용(TCO) 및 유지비 절감 내역 표 스크롤 영역"
           className="overflow-x-auto table-scroll-container rounded-xl border border-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
-          <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-500 bg-slate-100 border-b border-slate-200 select-none" aria-hidden="true"><span>← 좌우로 밀어서 5개년 누적 비용 확인</span><span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span></div>
+          <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-600 bg-slate-100 border-b border-slate-200 select-none" aria-hidden="true"><span>← 좌우로 밀어서 5개년 누적 비용 확인</span><span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span></div>
           <table className="w-full min-w-[640px] text-xs text-left border-collapse" aria-label="5개년 총소유비용(TCO) 및 유지비 절감 내역">
             <caption className="sr-only">5개년 총소유비용(TCO) 및 내연기관 대비 유지비 절감 내역</caption>
             <thead>
@@ -2342,7 +2345,7 @@ export default function DepreciationCalculatorClient({
           </div>
 
           <div className="bg-white px-4 py-2 rounded-lg border border-slate-300 font-extrabold text-slate-900 text-sm whitespace-normal sm:whitespace-nowrap break-keep text-center sm:text-right">
-            순 경제적 이점: <span className="text-blue-700">{tcoResult.totalCumulativeSavingsKrw >= 0 ? '+' : ''}{(tcoResult.totalCumulativeSavingsKrw / 10000).toLocaleString()}만 원</span>
+            순 경제적 이점: <span className="text-blue-700">{tcoResult.totalCumulativeSavingsKrw >= 0 ? '+' : ''}{Math.round(tcoResult.totalCumulativeSavingsKrw / 10000).toLocaleString()}만 원</span>
           </div>
         </div>
       </section>

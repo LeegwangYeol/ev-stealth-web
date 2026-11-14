@@ -82,7 +82,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
               아래 &apos;다시 시도&apos; 버튼 또는 &apos;새로고침&apos;을 눌러 복구해 주세요.
             </p>
             {error?.digest && (
-              <p className="text-xs text-slate-400 font-mono pt-1">
+              <p className="text-xs text-slate-300 font-mono pt-1">
                 오류 참조 코드: <span className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">{error.digest}</span>
               </p>
             )}

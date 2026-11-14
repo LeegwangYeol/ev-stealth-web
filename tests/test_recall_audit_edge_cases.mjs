@@ -400,11 +400,242 @@ runTest('getRecallData exports all new functions with identical behavior', () =>
   assert.equal(typeof getRecall.calculateRecallCompletionRate, 'function');
   assert.equal(typeof getRecall.calculateCampaignResolutionRate, 'function');
   assert.equal(typeof getRecall.aggregateRecallsByManufacturer, 'function');
+  assert.equal(typeof getRecall.validateRecallDatabaseSchema, 'function');
+  assert.equal(typeof getRecall.validateOfficialRecallCampaign, 'function');
+  assert.equal(typeof getRecall.validateBatterySafetyProfile, 'function');
+  assert.equal(typeof getRecall.validateVinPrefixMapping, 'function');
 
   // Functional equivalence test
   assert.equal(getRecall.normalizeManufacturer('Hyundai'), recallCalc.normalizeManufacturer('Hyundai'));
   assert.equal(getRecall.calculateRecallCompletionRate(50, 0), recallCalc.calculateRecallCompletionRate(50, 0));
   assert.equal(getRecall.isYearMatchForCampaign(NaN, '2021 ~ 2024'), recallCalc.isYearMatchForCampaign(NaN, '2021 ~ 2024'));
+});
+
+// ============================================================================
+// 5. SCHEMA VALIDATION: RECALL CAMPAIGNS, BATTERY PROFILES, PREFIXES & DB
+// ============================================================================
+console.log('\n--- [5. Schema Validation: Campaigns, Battery Profiles, Prefixes & DB] ---');
+
+runTest('validateOfficialRecallCampaign validates valid campaigns and flags invalid fields', () => {
+  const validCampaign = {
+    id: 'RC-TEST-01',
+    campaign_no: 'MOLIT-2024-TEST',
+    agency: 'MOLIT',
+    agency_ko: '국토교통부',
+    brand: '현대자동차',
+    target_model: '아이오닉 5',
+    target_model_years: '2021 ~ 2024',
+    production_date_range: '2021.01.01 ~ 2024.01.01',
+    affected_kdm_units: 5000,
+    defect_title: 'ICCU 소프트웨어 결함',
+    risk_level: 'LOSS_OF_POWER',
+    risk_level_ko: '동력 상실',
+    defect_detail: 'ICCU 과전류 제어 로직 오류',
+    remedy_type: 'SOFTWARE_UPDATE_SERVICE',
+    remedy_type_ko: '소프트웨어 업데이트',
+    remedy_action: '업데이트 조치',
+    consumer_emergency_guide: '경고등 점등 시 서행',
+    service_center_contact: '080-600-6000',
+    official_link: 'https://www.car.go.kr',
+    status: 'ACTIVE',
+  };
+
+  const res1 = recallCalc.validateOfficialRecallCampaign(validCampaign);
+  assert.equal(res1.valid, true);
+  assert.equal(res1.errors.length, 0);
+
+  // Invalid risk_level and invalid remedy_type
+  const badCampaign = {
+    ...validCampaign,
+    risk_level: 'UNKNOWN_RISK',
+    remedy_type: 'MAGIC_FIX',
+    status: 'PENDING',
+    affected_kdm_units: -100,
+  };
+  const res2 = recallCalc.validateOfficialRecallCampaign(badCampaign);
+  assert.equal(res2.valid, false);
+  assert.ok(res2.errors.some((e) => e.includes('Invalid risk_level')));
+  assert.ok(res2.errors.some((e) => e.includes('Invalid remedy_type')));
+  assert.ok(res2.errors.some((e) => e.includes('Invalid status')));
+  assert.ok(res2.errors.some((e) => e.includes('Invalid affected_kdm_units')));
+});
+
+runTest('validateBatterySafetyProfile enforces valid SOC limits and fire safety statuses', () => {
+  const validProfile = {
+    model_id: 'test-ev-01',
+    brand: '기아',
+    model_name: 'EV6',
+    years: '2021 ~ 2024',
+    cell_supplier: 'SK온',
+    cell_chemistry: 'NCM811',
+    fire_incident_status: 'VERIFIED_SAFE',
+    fire_incident_status_ko: '안전 검증',
+    recommended_soc_limit: 90,
+    underground_parking_advisory: '지하주차장 충전 가능',
+    bms_safety_features: '실시간 모니터링',
+  };
+
+  const res1 = recallCalc.validateBatterySafetyProfile(validProfile);
+  assert.equal(res1.valid, true);
+
+  // Invalid fire_incident_status and out-of-bound SOC limit
+  const badProfile = {
+    ...validProfile,
+    fire_incident_status: 'EXPLODED',
+    recommended_soc_limit: 120, // out of 50-100 bounds
+  };
+  const res2 = recallCalc.validateBatterySafetyProfile(badProfile);
+  assert.equal(res2.valid, false);
+  assert.ok(res2.errors.some((e) => e.includes('Invalid fire_incident_status')));
+  assert.ok(res2.errors.some((e) => e.includes('Invalid recommended_soc_limit')));
+});
+
+runTest('validateRecallDatabaseSchema verifies production ev_recall_database.json integrity', () => {
+  const db = getRecall.getRecallDatabase();
+  const res = recallCalc.validateRecallDatabaseSchema(db);
+  assert.equal(res.valid, true, `Database schema errors: ${res.errors.join(', ')}`);
+  assert.equal(res.errors.length, 0);
+  assert.ok(res.database.recalls.length >= 12);
+  assert.ok(res.database.battery_profiles.length >= 14);
+  assert.ok(res.database.vin_prefixes.length >= 14);
+});
+
+// ============================================================================
+// 6. FILTERING FUNCTIONS: EMPTY QUERY, SPECIAL CHARACTERS & REGEX RESILIENCE
+// ============================================================================
+console.log('\n--- [6. Filtering Functions: Empty Query, Special Chars & Regex Resilience] ---');
+
+runTest('isModelMatchForCampaign strictly rejects empty, whitespace, and punctuation queries', () => {
+  const target = '아이오닉 5, 아이오닉 6, 제네시스 GV60';
+
+  // Empty, whitespace, punctuation must NEVER match
+  assert.equal(recallCalc.isModelMatchForCampaign('', target), false);
+  assert.equal(recallCalc.isModelMatchForCampaign('   ', target), false);
+  assert.equal(recallCalc.isModelMatchForCampaign('/', target), false);
+  assert.equal(recallCalc.isModelMatchForCampaign('-', target), false);
+  assert.equal(recallCalc.isModelMatchForCampaign(',', target), false);
+  assert.equal(recallCalc.isModelMatchForCampaign(' () ', target), false);
+  assert.equal(recallCalc.isModelMatchForCampaign(' . ', target), false);
+  assert.equal(recallCalc.isModelMatchForCampaign(' / , - ', target), false);
+
+  // Valid models must match accurately
+  assert.equal(recallCalc.isModelMatchForCampaign('아이오닉 5', target), true);
+  assert.equal(recallCalc.isModelMatchForCampaign('아이오닉 6', target), true);
+  assert.equal(recallCalc.isModelMatchForCampaign('GV60', target), true);
+
+  // Distinct numbered models must NOT collide
+  assert.equal(recallCalc.isModelMatchForCampaign('아이오닉 5', '아이오닉 6'), false);
+  assert.equal(recallCalc.isModelMatchForCampaign('EV6', 'EV9'), false);
+  assert.equal(recallCalc.isModelMatchForCampaign('모델 Y', '모델 3'), false);
+});
+
+runTest('checkRecallsByModel validates model query and rejects punctuation-only model input', () => {
+  const db = getRecall.getRecallDatabase();
+
+  const punctRes = recallCalc.checkRecallsByModel('현대자동차', ' - ', 2022, db);
+  assert.equal(punctRes.valid, false);
+  assert.equal(punctRes.recalls.length, 0);
+  assert.ok(punctRes.validationError.includes('유효한 차종명'));
+
+  const slashRes = recallCalc.checkRecallsByModel('기아', '/', 2022, db);
+  assert.equal(slashRes.valid, false);
+  assert.equal(slashRes.recalls.length, 0);
+
+  const emptyRes = recallCalc.checkRecallsByModel('현대자동차', '  ', 2022, db);
+  assert.equal(emptyRes.valid, false);
+
+  const validRes = recallCalc.checkRecallsByModel('현대자동차', '아이오닉 5', 2022, db);
+  assert.equal(validRes.valid, true);
+  assert.ok(validRes.recalls.length >= 1);
+});
+
+// ============================================================================
+// 7. VIN HANDLING: LOWERCASE, DELIMITERS, CHECK DIGIT & COUNTRY DECODING
+// ============================================================================
+console.log('\n--- [7. VIN Handling: Lowercase, Delimiters, Check Digit & Country Decoding] ---');
+
+runTest('validateVinString normalizes lowercase, spaces, and hyphens', () => {
+  const raw = '  km8-kn4-26-5-n-u-012345  ';
+  const res = recallCalc.validateVinString(raw);
+  assert.equal(res.valid, true);
+  assert.equal(res.normalized, 'KM8KN4265NU012345');
+
+  // Valid 17-char lowercase VIN
+  const fullRaw = 'km8kn4265nu012345';
+  const fullRes = recallCalc.validateVinString(fullRaw);
+  assert.equal(fullRes.valid, true);
+  assert.equal(fullRes.normalized, 'KM8KN4265NU012345');
+});
+
+runTest('decodeVinAndCheckRecalls returns decodedWmi and resilient country fallbacks', () => {
+  const db = getRecall.getRecallDatabase();
+
+  // Hyundai Korea VIN (lowercase)
+  const res1 = recallCalc.decodeVinAndCheckRecalls('km8kn4265nu012345', db);
+  assert.equal(res1.valid, true);
+  assert.equal(res1.decodedBrand, '현대자동차');
+  assert.equal(res1.decodedCountry, '대한민국');
+  assert.equal(res1.decodedWmi, 'KM8');
+  assert.equal(res1.decodedYear, 2022);
+
+  // Tesla Fremont VIN (5YJ)
+  const res2 = recallCalc.decodeVinAndCheckRecalls('5yj3e1eb8nf123456', db);
+  assert.equal(res2.valid, true);
+  assert.equal(res2.decodedBrand, '테슬라');
+  assert.equal(res2.decodedWmi, '5YJ');
+  assert.ok(res2.decodedCountry.includes('미국'));
+
+  // Unknown WMI starting with 'K' falls back to 대한민국
+  const res3 = recallCalc.decodeVinAndCheckRecalls('k99kn4265nu012345', db);
+  assert.equal(res3.valid, true);
+  assert.equal(res3.decodedCountry, '대한민국');
+  assert.equal(res3.decodedWmi, 'K99');
+
+  // Unknown WMI starting with 'W' falls back to 독일
+  const res4 = recallCalc.decodeVinAndCheckRecalls('w99kn4265nu012345', db);
+  assert.equal(res4.valid, true);
+  assert.equal(res4.decodedCountry, '독일');
+  assert.equal(res4.decodedWmi, 'W99');
+});
+
+// ============================================================================
+// 8. KOREAN YEAR PARTICLES & CROSS-BRAND COLLISION PROTECTIONS
+// ============================================================================
+console.log('\n--- [8. Korean Year Particles & Cross-Brand Collision Protections] ---');
+
+runTest('isYearMatchForCampaign handles Korean particles 년, 이후, and 이전 seamlessly', () => {
+  // Closed range with "년"
+  assert.equal(recallCalc.isYearMatchForCampaign(2022, '2021년 ~ 2024년'), true);
+  assert.equal(recallCalc.isYearMatchForCampaign(2022, '2021년~2024년'), true);
+  assert.equal(recallCalc.isYearMatchForCampaign(2025, '2021년 ~ 2024년'), false);
+
+  // Open-ended future range with "년 이후"
+  assert.equal(recallCalc.isYearMatchForCampaign(2023, '2022년 이후'), true);
+  assert.equal(recallCalc.isYearMatchForCampaign(2021, '2022년 이후'), false);
+
+  // Before range with "년 이전"
+  assert.equal(recallCalc.isYearMatchForCampaign(2021, '2022년 이전'), true);
+  assert.equal(recallCalc.isYearMatchForCampaign(2025, '2022년 이전'), false);
+});
+
+runTest('Genesis VIN prevents false-positive matching to purely Hyundai-only recalls', () => {
+  const db = getRecall.getRecallDatabase();
+
+  // Genesis 2020 VIN where model is not defined (fallback to generic Genesis WMI KMH)
+  // Must NOT match Kona Electric fire recall (RC-2021-HYUNDAI-KONA-FIRE)
+  const genesis2020 = recallCalc.decodeVinAndCheckRecalls('KMH999999LU012345', db);
+  assert.equal(genesis2020.valid, true);
+  assert.equal(genesis2020.decodedBrand, '제네시스');
+  const matchedKona = genesis2020.recalls.some((r) => r.id === 'RC-2021-HYUNDAI-KONA-FIRE');
+  assert.equal(matchedKona, false, 'Genesis VIN must never match Hyundai Kona Electric fire recall');
+
+  // Genesis GV60 VIN (KMHGM4) must match ICCU recall which explicitly includes GV60
+  const genesisGv60 = recallCalc.decodeVinAndCheckRecalls('KMHGM4265PU012345', db);
+  assert.equal(genesisGv60.valid, true);
+  assert.equal(genesisGv60.decodedBrand, '제네시스');
+  assert.equal(genesisGv60.decodedModel, 'GV60');
+  const matchedIccu = genesisGv60.recalls.some((r) => r.id === 'RC-2024-HYUNDAI-ICCU');
+  assert.equal(matchedIccu, true, 'Genesis GV60 must match ICCU recall');
 });
 
 console.log('\n================================================================');

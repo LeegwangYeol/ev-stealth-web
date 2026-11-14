@@ -113,28 +113,28 @@ export default function ErrorBoundary({ error, reset }: ErrorProps) {
             prefetch={true}
             className="hover:text-amber-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
           >
-            <span aria-hidden="true">⚡</span> 보조금 추적기
+            <span aria-hidden="true">⚡</span> 보조금 실시간 소진율
           </Link>
           <Link
             href="/reliability-analytics"
             prefetch={false}
             className="hover:text-blue-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
-            <span aria-hidden="true">📊</span> 결함 분석 포털
+            <span aria-hidden="true">📊</span> 스텔스 품질 점수
           </Link>
           <Link
             href="/depreciation-calculator"
             prefetch={true}
             className="hover:text-emerald-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
           >
-            <span aria-hidden="true">📉</span> 감가 계산기
+            <span aria-hidden="true">📉</span> 감가상각 시뮬레이터
           </Link>
           <Link
             href="/recall-portal"
             prefetch={false}
             className="hover:text-rose-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
           >
-            <span aria-hidden="true">🚨</span> 공식 리콜
+            <span aria-hidden="true">🚨</span> 통합 리콜 현황
           </Link>
         </div>
       </div>
