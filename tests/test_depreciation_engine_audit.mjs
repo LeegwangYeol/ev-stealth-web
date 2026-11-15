@@ -10,8 +10,8 @@
  */
 
 import assert from 'node:assert/strict';
-import * as depCalc from '../ev-stealth-web/src/lib/depreciationCalculations.ts';
-import * as depData from '../ev-stealth-web/src/lib/getDepreciationData.ts';
+import * as depCalc from '../src/lib/depreciationCalculations.ts';
+import * as depData from '../src/lib/getDepreciationData.ts';
 
 console.log('=== AUDITING DEPRECIATION ENGINES (depreciationCalculations.ts & getDepreciationData.ts) ===\n');
 

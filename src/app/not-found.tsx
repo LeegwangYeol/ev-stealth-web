@@ -14,6 +14,23 @@ export const metadata: Metadata = {
     siteName: 'Global EV Hub',
     locale: 'ko_KR',
     type: 'website',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'Global EV Hub 404 Not Found',
+        type: 'image/png',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: '페이지를 찾을 수 없습니다 (404) | Global EV Hub',
+    description: '요청하신 페이지가 존재하지 않거나 주소가 변경되었습니다.',
+    site: '@GlobalEVHub',
+    creator: '@lolollol2379',
+    images: ['/og-image.png'],
   },
 };
 

@@ -1,21 +1,72 @@
 'use client';
 
 import { useEffect, memo } from 'react';
+import { usePathname } from 'next/navigation';
+
+/**
+ * Normalizes a URL path for strict route comparison:
+ * strips query parameters, hash fragments, and trailing slashes.
+ */
+function normalizePath(raw: string | null | undefined): string {
+  if (!raw) return '/';
+  const clean = raw.split('?')[0].split('#')[0];
+  if (clean.length > 1 && clean.endsWith('/')) {
+    return clean.slice(0, -1);
+  }
+  return clean || '/';
+}
 
 /**
  * GlobalNavListener encapsulates global event listeners for navigation interactions:
- * 1. Auto-closing the mobile navigation drawer when an internal link is clicked.
+ * 1. Auto-closing the mobile navigation drawer when an internal link is clicked or pathname changes.
  * 2. Closing the drawer and returning focus to summary on Escape key press.
  * 3. Ensuring root navigation links and logo have clean focus-visible:ring-2 styles under WCAG 2.4.7.
  * 4. Keyboard focus trapping within the mobile navigation drawer when open (WCAG 2.1.2 & 2.4.3).
  * 5. Synchronizing aria-expanded attribute on the summary toggle.
  * 6. Closing the mobile drawer automatically when viewport resizes to desktop (>= 768px).
  * 7. Closing the mobile drawer when navigating via browser history (popstate).
+ * 8. Synchronizing aria-current="page" attributes on desktop navigation, mobile drawer, and logo links.
+ * 9. Cross-browser programmatic focus transfer for skip-to-content accessibility link (href="#main-content").
  *
  * All global event listeners registered on document, window, and drawer element are explicitly
  * cleaned up via removeEventListener on component unmount to guarantee zero memory leaks.
  */
 export const GlobalNavListener = memo(function GlobalNavListener() {
+  const pathname = usePathname();
+
+  // Route change synchronization: update aria-current="page" and auto-close mobile drawer
+  useEffect(() => {
+    const currentPath = normalizePath(pathname);
+    const header = document.querySelector('header');
+    if (header) {
+      const allNavLinks = header.querySelectorAll<HTMLAnchorElement>(
+        'nav a, #mobile-nav-panel a, a[aria-label*="Global EV Hub"]'
+      );
+      allNavLinks.forEach((link) => {
+        const href = link.getAttribute('href');
+        if (!href) return;
+        const linkPath = normalizePath(href);
+        const isCurrent = linkPath === '/' ? currentPath === '/' : currentPath === linkPath;
+
+        if (isCurrent) {
+          link.setAttribute('aria-current', 'page');
+        } else {
+          link.removeAttribute('aria-current');
+        }
+      });
+    }
+
+    // Auto-close mobile drawer when route changes
+    const drawer = document.getElementById('mobile-nav-drawer') as HTMLDetailsElement | null;
+    if (drawer && drawer.hasAttribute('open')) {
+      drawer.removeAttribute('open');
+      const summary = drawer.querySelector('summary');
+      if (summary) {
+        summary.setAttribute('aria-expanded', 'false');
+      }
+    }
+  }, [pathname]);
+
   useEffect(() => {
     // Ensure root navigation links and logo have clean focus-visible:ring-2 styles
     const header = document.querySelector('header');
@@ -87,6 +138,17 @@ export const GlobalNavListener = memo(function GlobalNavListener() {
       }
     };
 
+    // Cross-browser programmatic focus transfer for skip-to-content links
+    const handleSkipLink = (e: MouseEvent) => {
+      const target = (e.target as Element | null)?.closest?.('a[href="#main-content"]');
+      if (target) {
+        const main = document.getElementById('main-content');
+        if (main) {
+          main.focus();
+        }
+      }
+    };
+
     const handleKeydown = (e: KeyboardEvent) => {
       const drawer = getDrawer();
       if (!drawer || !drawer.hasAttribute('open')) return;
@@ -154,6 +216,7 @@ export const GlobalNavListener = memo(function GlobalNavListener() {
     };
 
     document.addEventListener('click', handleClick);
+    document.addEventListener('click', handleSkipLink);
     document.addEventListener('keydown', handleKeydown);
     window.addEventListener('resize', handleResize);
     window.addEventListener('popstate', handlePopState);
@@ -167,6 +230,7 @@ export const GlobalNavListener = memo(function GlobalNavListener() {
         currentDrawer.removeEventListener('toggle', syncAriaExpanded);
       }
       document.removeEventListener('click', handleClick);
+      document.removeEventListener('click', handleSkipLink);
       document.removeEventListener('keydown', handleKeydown);
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('popstate', handlePopState);

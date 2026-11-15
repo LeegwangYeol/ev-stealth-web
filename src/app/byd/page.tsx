@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import JsonLd from '@/components/JsonLd';
 import BrandComparisonNav, { OtherBrandsCrossNav } from '@/components/BrandComparisonNav';
+import ModelSpecWarrantyCard from '@/components/ModelSpecWarrantyCard';
 
 export const dynamic = 'force-static';
 export const revalidate = false;
@@ -40,6 +41,105 @@ const bydJsonLd = {
         '@type': 'WebPage',
         '@id': `${SITE_URL}/byd`,
       },
+    },
+    {
+      '@type': 'Vehicle',
+      '@id': `${SITE_URL}/byd#vehicle-dolphin`,
+      name: 'BYD 돌핀 (BYD Dolphin)',
+      image: `${SITE_URL}/og-image.png`,
+      url: `${SITE_URL}/byd#heading-byd-dolphin`,
+      brand: {
+        '@type': 'Brand',
+        name: 'BYD',
+      },
+      manufacturer: {
+        '@type': 'Organization',
+        name: 'BYD Auto',
+      },
+      model: 'Dolphin',
+      vehicleModelDate: '2021-2025',
+      vehicleTransmission: '1단 고정 기어 (전기 모터)',
+      fuelType: 'https://schema.org/Electric',
+      description: 'e-Platform 3.0 기반 도심형 해치백 EV. 60.48kWh 블레이드 LFP 배터리 탑재.',
+      additionalProperty: [
+        {
+          '@type': 'PropertyValue',
+          name: 'Battery Chemistry',
+          value: 'FinDreams 블레이드 LFP 60.48 kWh',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Warranty',
+          value: '배터리 8년 / 160,000 km, 차체 6년 / 150,000 km',
+        },
+      ],
+    },
+    {
+      '@type': 'Vehicle',
+      '@id': `${SITE_URL}/byd#vehicle-sealion`,
+      name: 'BYD 시라이언 07 (BYD Sealion 07)',
+      image: `${SITE_URL}/og-image.png`,
+      url: `${SITE_URL}/byd#heading-byd-sealion`,
+      brand: {
+        '@type': 'Brand',
+        name: 'BYD',
+      },
+      manufacturer: {
+        '@type': 'Organization',
+        name: 'BYD Auto',
+      },
+      model: 'Sealion 07',
+      vehicleModelDate: '2024-2026',
+      vehicleTransmission: '1단 고정 기어 (12-in-1 모터)',
+      fuelType: 'https://schema.org/Electric',
+      description: 'e-Platform 3.0 Evo 기반 중형 쿠페형 SUV. CTB(Cell-to-Body) 일체형 블레이드 배터리 탑재.',
+      additionalProperty: [
+        {
+          '@type': 'PropertyValue',
+          name: 'Battery Chemistry',
+          value: 'FinDreams 블레이드 LFP 80.64 kWh (CTB)',
+        },
+      ],
+    },
+    {
+      '@type': 'Vehicle',
+      '@id': `${SITE_URL}/byd#vehicle-seal`,
+      name: 'BYD 씰 (BYD Seal)',
+      image: `${SITE_URL}/og-image.png`,
+      url: `${SITE_URL}/byd#heading-byd-seal`,
+      brand: {
+        '@type': 'Brand',
+        name: 'BYD',
+      },
+      manufacturer: {
+        '@type': 'Organization',
+        name: 'BYD Auto',
+      },
+      model: 'Seal',
+      vehicleModelDate: '2022-2025',
+      vehicleTransmission: '1단 고정 기어',
+      fuelType: 'https://schema.org/Electric',
+      description: '중형 스포츠 세단 EV. 82.5kWh 블레이드 LFP 및 CTB 일체형 섀시 구조 적용.',
+    },
+    {
+      '@type': 'Vehicle',
+      '@id': `${SITE_URL}/byd#vehicle-atto3`,
+      name: 'BYD 아토 3 (BYD Atto 3)',
+      image: `${SITE_URL}/og-image.png`,
+      url: `${SITE_URL}/byd#heading-byd-atto3`,
+      brand: {
+        '@type': 'Brand',
+        name: 'BYD',
+      },
+      manufacturer: {
+        '@type': 'Organization',
+        name: 'BYD Auto',
+      },
+      model: 'Atto 3',
+      vehicleModelDate: '2022-2025',
+      vehicleTransmission: '1단 고정 기어',
+      fuelType: 'https://schema.org/Electric',
+      description: '글로벌 콤팩트 크로스오버 EV. 60.48kWh 블레이드 LFP 배터리 탑재.',
     },
     {
       '@type': 'ItemList',
@@ -358,6 +458,26 @@ export default function BydPage() {
         <h2 id="heading-byd-dolphin" className="text-2xl sm:text-3xl font-bold text-slate-800">
           돌핀 (Dolphin)
         </h2>
+
+        <ModelSpecWarrantyCard
+          modelName="BYD 돌핀 (BYD Dolphin)"
+          badge="도심형 엔트리 EV"
+          msrpRange="2,600만 ~ 3,200만 원 (출시 예상)"
+          effectivePriceRange="약 2,100만 ~ 2,500만 원"
+          usedPriceRange="1,900만 ~ 2,400만 원"
+          batterySpecs={{
+            capacity: "44.9 kWh / 60.48 kWh",
+            chemistry: "FinDreams 블레이드 LFP",
+            voltage: "400V e-Platform 3.0",
+            range: "340km ~ 427km (WLTP 기준)",
+          }}
+          warranty={{
+            batteryYearsKm: "8년 / 160,000 km",
+            batteryGuaranteeSoh: "잔존용량(SoH) 70% 보증",
+            generalYearsKm: "6년 / 150,000 km (국내 공식)",
+            outOfWarrantyRisk: "배터리 교체비 약 900만 원(저렴), 조향 CEPS 모듈 교체 확인 필요",
+          }}
+        />
         
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="BYD 돌핀 주의 연식 가이드">
           <h3 className="text-lg sm:text-xl font-bold text-amber-900">
@@ -383,6 +503,26 @@ export default function BydPage() {
         <h2 id="heading-byd-sealion" className="text-2xl sm:text-3xl font-bold text-slate-800">
           시라이언 07 (Sealion 07)
         </h2>
+
+        <ModelSpecWarrantyCard
+          modelName="BYD 시라이언 07 (Sealion 07)"
+          badge="중형 쿠페형 SUV"
+          msrpRange="4,300만 ~ 5,200만 원 (출시 예상)"
+          effectivePriceRange="약 3,700만 ~ 4,500만 원"
+          usedPriceRange="3,500만 ~ 4,300만 원"
+          batterySpecs={{
+            capacity: "71.8 kWh / 80.64 kWh",
+            chemistry: "FinDreams 블레이드 LFP (CTB 일체형)",
+            voltage: "e-Platform 3.0 Evo (12-in-1 모터)",
+            range: "550km ~ 610km (CLTC 기준)",
+          }}
+          warranty={{
+            batteryYearsKm: "8년 / 160,000 km",
+            batteryGuaranteeSoh: "구동모듈(12-in-1) 8년/150,000km",
+            generalYearsKm: "6년 / 150,000 km",
+            outOfWarrantyRisk: "CTB 하부 충격 긁힘 시 전손 판정(1,400만 원), 12-in-1 통교체 600만 원",
+          }}
+        />
         
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="BYD 시라이언 07 주의 연식 가이드">
           <h3 className="text-lg sm:text-xl font-bold text-amber-900">
@@ -408,6 +548,26 @@ export default function BydPage() {
         <h2 id="heading-byd-seal" className="text-2xl sm:text-3xl font-bold text-slate-800">
           씰 (Seal)
         </h2>
+
+        <ModelSpecWarrantyCard
+          modelName="BYD 씰 (BYD Seal)"
+          badge="스포츠 중형 세단"
+          msrpRange="4,500만 ~ 5,300만 원 (출시 예상)"
+          effectivePriceRange="약 3,900만 ~ 4,600만 원"
+          usedPriceRange="3,600만 ~ 4,400만 원"
+          batterySpecs={{
+            capacity: "82.5 kWh 블레이드 배터리",
+            chemistry: "FinDreams LFP (CTB 바디 통합)",
+            voltage: "400V e-Platform 3.0",
+            range: "570km (WLTP 기준)",
+          }}
+          warranty={{
+            batteryYearsKm: "8년 / 160,000 km",
+            batteryGuaranteeSoh: "잔존용량(SoH) 70% 보증",
+            generalYearsKm: "6년 / 150,000 km",
+            outOfWarrantyRisk: "겨울철 SoC 급락 리스크, 하체 체결 볼트 방청 개선품 확인 필수",
+          }}
+        />
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="BYD 씰 주의 연식 가이드">
           <h3 className="text-lg sm:text-xl font-bold text-amber-900">
             <span aria-hidden="true">⚠️ </span>2022~2023년식: 주의 요망 (CAUTION)
@@ -431,6 +591,26 @@ export default function BydPage() {
         <h2 id="heading-byd-atto3" className="text-2xl sm:text-3xl font-bold text-slate-800">
           아토 3 (Atto 3)
         </h2>
+
+        <ModelSpecWarrantyCard
+          modelName="BYD 아토 3 (BYD Atto 3)"
+          badge="글로벌 베스트셀러 CUV"
+          msrpRange="3,600만 ~ 4,100만 원 (출시 예상)"
+          effectivePriceRange="약 3,000만 ~ 3,400만 원"
+          usedPriceRange="2,500만 ~ 3,200만 원"
+          batterySpecs={{
+            capacity: "60.48 kWh 블레이드 배터리",
+            chemistry: "FinDreams LFP (셀투팩 CTP)",
+            voltage: "400V e-Platform 3.0",
+            range: "420km (WLTP 기준)",
+          }}
+          warranty={{
+            batteryYearsKm: "8년 / 160,000 km",
+            batteryGuaranteeSoh: "잔존용량(SoH) 70% 보증",
+            generalYearsKm: "6년 / 150,000 km",
+            outOfWarrantyRisk: "공조기 에바포레이터 코팅 불량 곰팡이 냄새, 앞 댐퍼 조기 노후화",
+          }}
+        />
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="BYD 아토 3 주의 연식 가이드">
           <h3 className="text-lg sm:text-xl font-bold text-amber-900">
             <span aria-hidden="true">⚠️ </span>2022~2024년식: 주의 요망 (CAUTION)

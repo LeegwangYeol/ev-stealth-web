@@ -39,6 +39,7 @@ const subsidyJsonLd = {
         '환경부 무공해차 통합누리집 연계 전국 17개 광역시도 73개 지자체의 전기승용 및 전기화물 보조금 공고대수, 접수대수, 출고대수, 실시간 소진율 및 차종별 매칭 보조금 데이터셋.',
       url: `${SITE_URL}/subsidy-tracker`,
       isAccessibleForFree: true,
+      license: 'https://creativecommons.org/licenses/by/4.0/',
       creator: {
         '@type': 'Organization',
         name: 'Global EV Hub Research Team',
@@ -54,6 +55,33 @@ const subsidyJsonLd = {
         '@type': 'Place',
         name: '대한민국 (South Korea)',
       },
+      distribution: [
+        {
+          '@type': 'DataDownload',
+          encodingFormat: 'application/json',
+          contentUrl: `${SITE_URL}/data/subsidy_depletion_data.json`,
+        },
+        {
+          '@type': 'DataDownload',
+          encodingFormat: 'application/json',
+          contentUrl: `${SITE_URL}/data/models_subsidy_matrix.json`,
+        },
+      ],
+      variableMeasured: [
+        '전국 지자체별 전기차 보조금 실시간 소진율(%)',
+        '지자체별 공고대수, 접수대수, 출고대수, 잔여 쿼터',
+        '환경부 국비 보조금 및 17개 시도 지방비 보조금 지원액',
+        '5,500만/8,500만 원 슬라이딩 가격상한제 차종별 실구매가',
+        '5단계 긴급 소진 경보(원활·주의·경고·위험·마감)',
+      ],
+      keywords: [
+        '전기차 보조금',
+        '2026 전기차 보조금',
+        '보조금 소진율',
+        '환경부 무공해차 통합누리집',
+        '지자체 보조금 잔여대수',
+        '전기차 실구매가',
+      ],
     },
     {
       '@type': 'ItemList',

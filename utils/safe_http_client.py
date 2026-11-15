@@ -9,15 +9,23 @@ from utils.http_client import (
     MAX_COOKIEJAR_ENTRIES,
     MAX_RESPONSE_BYTES,
     USER_AGENT_POOL,
+    CircuitBreaker,
+    CircuitBreakerState,
     SafeHttpClient,
     clean_html_text,
     encode_euc_kr_query,
     robust_decode,
+    safe_extract_html_text,
+    safe_soup_parse,
 )
 
 __all__ = [
     "SafeHttpClient",
+    "CircuitBreaker",
+    "CircuitBreakerState",
     "clean_html_text",
+    "safe_extract_html_text",
+    "safe_soup_parse",
     "encode_euc_kr_query",
     "robust_decode",
     "USER_AGENT_POOL",

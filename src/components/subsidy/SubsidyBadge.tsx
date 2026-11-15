@@ -23,8 +23,13 @@ export const getBadgeStyle = (status?: AlertSeverity | string | null): string =>
     case 'WARNING':
       return 'bg-orange-950 text-orange-200 border-orange-400';
     case 'CRITICAL':
+    case 'DANGER':
+    case 'EMERGENCY':
       return 'bg-rose-950 text-rose-200 border-rose-400 animate-pulse motion-reduce:animate-none';
     case 'DEPLETED':
+    case 'EXHAUSTED':
+    case 'CLOSED':
+    case 'END':
       return 'bg-slate-950 text-slate-100 border-slate-400';
     default:
       return 'bg-emerald-950 text-emerald-200 border-emerald-400';
@@ -45,8 +50,13 @@ export const getStatusLabel = (status?: AlertSeverity | string | null): string =
     case 'WARNING':
       return '🟠 경고';
     case 'CRITICAL':
+    case 'DANGER':
+    case 'EMERGENCY':
       return '🔴 마감임박';
     case 'DEPLETED':
+    case 'EXHAUSTED':
+    case 'CLOSED':
+    case 'END':
       return '🔒 소진';
     default:
       return '🟢 안정';
@@ -61,14 +71,15 @@ export const SubsidyBadge = React.memo(function SubsidyBadge({
   const label = getStatusLabel(status);
   const style = getBadgeStyle(status);
   const cleanLabel = label.replace(/^[^a-zA-Z0-9가-힣]+\s*/, '');
+  const emoji = label.match(/^[^a-zA-Z0-9가-힣]+/)?.[0]?.trim() || '';
 
   return (
     <span
-      role="status"
-      aria-label={`보조금 상태: ${cleanLabel}`}
       className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold border whitespace-nowrap shrink-0 ${style} ${className}`}
     >
-      {showIcon ? label : cleanLabel}
+      <span className="sr-only">보조금 상태: </span>
+      {showIcon && emoji && <span aria-hidden="true">{emoji} </span>}
+      <span>{cleanLabel}</span>
     </span>
   );
 });

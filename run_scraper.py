@@ -592,6 +592,53 @@ class ScraperPipeline:
         except Exception as e:
             logger.debug(f"Failed to save harvest cache: {e}")
 
+    def _load_seed_fallback(self) -> List[Dict[str, Any]]:
+        """Load fallback records from seed datasets in data/ if live harvest is unavailable."""
+        seed_posts: List[Dict[str, Any]] = []
+        seed_filenames = [
+            "raw_bobae_emerging.json",
+            "raw_dcinside_emerging.json",
+            "raw_blind_emerging.json",
+            "raw_cafe_emerging.json",
+            "compiled_complaints.json",
+        ]
+        search_dirs = [
+            REPO_ROOT / "data",
+            CURRENT_DIR / "data",
+            CURRENT_DIR.parent / "data",
+        ]
+        seen_ids: Set[str] = set()
+        for s_dir in search_dirs:
+            if not s_dir.is_dir():
+                continue
+            for s_name in seed_filenames:
+                s_file = s_dir / s_name
+                if s_file.is_file():
+                    try:
+                        with open(s_file, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                        if isinstance(data, list):
+                            for item in data:
+                                if isinstance(item, dict):
+                                    pid = str(item.get("id") or item.get("post_id") or "")
+                                    if pid and pid in seen_ids:
+                                        continue
+                                    if pid:
+                                        seen_ids.add(pid)
+                                    norm_item = dict(item)
+                                    if "post_title" in norm_item and "title" not in norm_item:
+                                        norm_item["title"] = norm_item["post_title"]
+                                    if "post_url" in norm_item and "url" not in norm_item:
+                                        norm_item["url"] = norm_item["post_url"]
+                                    if "raw_quote" in norm_item and "content" not in norm_item:
+                                        norm_item["content"] = norm_item["raw_quote"]
+                                    seed_posts.append(norm_item)
+                    except Exception as e:
+                        logger.debug(f"Failed reading seed file {s_file}: {e}")
+            if seed_posts:
+                break
+        return seed_posts
+
     def _load_harvest_cache(self) -> List[Dict[str, Any]]:
         if not self.enable_cache:
             return []
@@ -600,10 +647,12 @@ class ScraperPipeline:
             if cache_file.is_file():
                 with open(cache_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                if isinstance(data, list):
+                if isinstance(data, list) and len(data) > 0:
                     return data
         except Exception as e:
             logger.debug(f"Failed to load harvest cache: {e}")
+        if self.cache_fallback:
+            return self._load_seed_fallback()
         return []
 
     def filter_defects(self, raw_post_dicts: Optional[Iterable[Any]]) -> List[ComplaintRecord]:
@@ -681,6 +730,10 @@ class ScraperPipeline:
             target_paths.append(os.path.abspath(str(resolved_public_path)))
             resolved_root_path = _resolve_root_reports_path()
             target_paths.append(os.path.abspath(str(resolved_root_path)))
+            if (REPO_ROOT / "ev-stealth-web" / "data").is_dir():
+                target_paths.append(os.path.abspath(str(REPO_ROOT / "ev-stealth-web" / "data" / "daily_reports.json")))
+            if (REPO_ROOT / "public" / "data").is_dir():
+                target_paths.append(os.path.abspath(str(REPO_ROOT / "public" / "data" / "daily_reports.json")))
         if not target_paths:
             target_paths.append(os.path.abspath(DEFAULT_OUTPUT_PATH))
 
@@ -727,6 +780,8 @@ class ScraperPipeline:
                     _resolve_web_reports_path(web_dir),
                     _resolve_root_reports_path(),
                     _resolve_public_reports_path(web_dir),
+                    REPO_ROOT / "ev-stealth-web" / "data" / "daily_reports.json",
+                    REPO_ROOT / "public" / "data" / "daily_reports.json",
                     Path(DEFAULT_OUTPUT_PATH),
                 ]
                 for bc in baseline_candidates:

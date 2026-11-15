@@ -229,6 +229,62 @@ class TestSeoMetadataSitemapRobots(unittest.TestCase):
         not_found_content = not_found_page.read_text(encoding="utf-8")
         self.assertIn("index: false", not_found_content)
         self.assertIn("follow: false", not_found_content)
+        self.assertIn("twitter:", not_found_content)
+        self.assertIn("summary_large_image", not_found_content)
+
+    def test_vehicle_structured_data_across_brand_hubs(self) -> None:
+        """All EV brand and latest model hubs must define Schema.org Vehicle structured data."""
+        vehicle_hubs = ["tesla", "hyundai-kia", "byd", "global-brands", "2026-latest"]
+        for hub in vehicle_hubs:
+            hub_page = APP_DIR / hub / "page.tsx"
+            self.assertTrue(hub_page.exists(), f"Hub page missing: {hub_page}")
+            content = hub_page.read_text(encoding="utf-8")
+            self.assertIn("'@type': 'Vehicle'", content, f"Hub {hub} missing Schema.org Vehicle type")
+            self.assertIn("fuelType: 'https://schema.org/Electric'", content, f"Hub {hub} Vehicle missing Electric fuelType")
+            self.assertIn("additionalProperty:", content, f"Hub {hub} Vehicle missing additionalProperty specs")
+
+    def test_google_dataset_search_compliance(self) -> None:
+        """Subsidy, depreciation, reliability, and recall hubs must provide Google Dataset Search compliant schemas."""
+        datasets = [
+            ("subsidy-tracker", "subsidy_depletion_data.json"),
+            ("depreciation-calculator", "ev_depreciation_data.json"),
+            ("reliability-analytics", "ev_reliability_trends.json"),
+            ("recall-portal", "ev_recall_database.json"),
+        ]
+        for folder, datafile in datasets:
+            page = APP_DIR / folder / "page.tsx"
+            content = page.read_text(encoding="utf-8")
+            self.assertIn("'@type': 'Dataset'", content, f"Dataset schema missing in {folder}")
+            self.assertIn("license:", content, f"Dataset license missing in {folder}")
+            self.assertIn("distribution:", content, f"Dataset distribution missing in {folder}")
+            self.assertIn(datafile, content, f"Dataset distribution missing {datafile} in {folder}")
+            self.assertIn("variableMeasured:", content, f"Dataset variableMeasured missing in {folder}")
+            self.assertIn("keywords:", content, f"Dataset keywords missing in {folder}")
+
+    def test_manifest_ts_file_and_runtime_output(self) -> None:
+        """manifest.ts must exist and return standard Web App Manifest (PWA) configuration."""
+        manifest_file = APP_DIR / "manifest.ts"
+        self.assertTrue(manifest_file.exists(), f"Missing manifest.ts at {manifest_file}")
+        content = manifest_file.read_text(encoding="utf-8")
+        self.assertIn("export default function manifest", content)
+        self.assertIn("standalone", content)
+
+        # Execute manifest.ts with Node to verify runtime output contract
+        cmd = [
+            "node",
+            "--experimental-strip-types",
+            "-e",
+            f'import manifest from "{manifest_file}"; console.log(JSON.stringify(manifest()));',
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, f"manifest.ts execution failed: {result.stderr}")
+
+        output_lines = [line.strip() for line in result.stdout.strip().split("\n") if line.strip()]
+        self.assertTrue(len(output_lines) > 0)
+        data = json.loads(output_lines[-1])
+        self.assertEqual(data.get("display"), "standalone")
+        self.assertEqual(data.get("theme_color"), "#0f172a")
+        self.assertIn("Global EV Hub", data.get("name", ""))
 
 
 if __name__ == "__main__":

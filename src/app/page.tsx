@@ -228,7 +228,7 @@ export default function Home() {
     <div className="flex flex-col items-center justify-center space-y-8 sm:space-y-12 py-8 sm:py-14 md:py-20">
       <JsonLd data={homeJsonLd} />
       <section aria-labelledby="home-hero-heading" className="text-center space-y-4">
-        <h1 id="home-hero-heading" className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900">
+        <h1 id="home-hero-heading" className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900 break-keep">
           글로벌 EV 중고차 연식별 피하기 가이드
         </h1>
         <p className="text-xl text-slate-700 max-w-2xl mx-auto">

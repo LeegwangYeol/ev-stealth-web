@@ -32,6 +32,12 @@ export default function SecretAdminReportsError({ error, reset }: AdminErrorProp
     }
   };
 
+  const handleReload = () => {
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+    }
+  };
+
   return (
     <div
       ref={containerRef}
@@ -80,6 +86,14 @@ export default function SecretAdminReportsError({ error, reset }: AdminErrorProp
             className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
           >
             <span aria-hidden="true">🔄</span> 다시 시도
+          </button>
+          <button
+            type="button"
+            onClick={handleReload}
+            aria-label="페이지 새로고침"
+            className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold border border-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+          >
+            <span aria-hidden="true">🔃</span> 새로고침
           </button>
           <Link
             href="/"

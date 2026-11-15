@@ -590,6 +590,7 @@ def validate_data_parity(
     web_public_dir: Optional[Union[str, Path]] = None,
     target_files: Optional[List[str]] = None,
     repair: bool = False,
+    extra_dirs: Optional[List[Tuple[str, Path]]] = None,
 ) -> Tuple[bool, List[str], Dict[str, Any]]:
     """
     Validate byte-for-byte SHA-256 parity and schema parity between data directories.
@@ -605,11 +606,17 @@ def validate_data_parity(
             "subsidy_depletion_data.json",
             "models_subsidy_matrix.json",
             "daily_reports.json",
+            "ev_recall_database.json",
+            "ev_reliability_trends.json",
+            "ev_depreciation_data.json",
         ]
 
     dirs_to_check = [("root", Path(root_dir)), ("web_src", Path(web_src_dir))]
     if web_public_dir:
         dirs_to_check.append(("web_public", Path(web_public_dir)))
+    if extra_dirs:
+        for label, d in extra_dirs:
+            dirs_to_check.append((label, Path(d)))
 
     stats["directories"] = [f"{label}: {str(p)}" for label, p in dirs_to_check]
 
@@ -624,22 +631,28 @@ def validate_data_parity(
         hashes: Dict[str, str] = {}
         authoritative_path: Optional[Path] = None
         auth_hash: Optional[str] = None
+        best_candidate: Optional[Tuple[int, float, Path, str]] = None
 
         for label, d in dirs_to_check:
             fp = d / fname
             if fp.is_file() and fp.stat().st_size > 0:
                 try:
                     content = fp.read_bytes()
+                    json.loads(content.decode("utf-8-sig"))
                     h = hashlib.sha256(content).hexdigest()
                     hashes[label] = h
-                    if authoritative_path is None:
-                        authoritative_path = fp
-                        auth_hash = h
+                    score = (1, fp.stat().st_mtime)
+                    if best_candidate is None or score > (best_candidate[0], best_candidate[1]):
+                        best_candidate = (score[0], score[1], fp, h)
                 except Exception as exc:
-                    errors.append(f"Failed to read {label} ({fp}): {exc}")
+                    errors.append(f"Failed to read/validate {label} ({fp}): {exc}")
             else:
                 if not fp.exists():
                     errors.append(f"File '{fname}' missing from {label} ({fp})")
+
+        if best_candidate is not None:
+            authoritative_path = best_candidate[2]
+            auth_hash = best_candidate[3]
 
         # Automatic mirror repair if requested and authoritative file exists
         if repair and authoritative_path is not None and auth_hash is not None:
@@ -735,11 +748,20 @@ def validate_all_datasets(
     all_errors.extend(e5)
 
     # 6. Triple Directory Mirror Parity
+    extra_dirs = []
+    web_data = root / "ev-stealth-web" / "data"
+    if web_data.is_dir():
+        extra_dirs.append(("web_data", web_data))
+    root_public = root / "public" / "data"
+    if root_public.is_dir():
+        extra_dirs.append(("root_public", root_public))
+
     v6, e6, s6 = validate_data_parity(
         root_data,
         web_src_data,
         web_pub_data,
         repair=(sync_web and not dry_run),
+        extra_dirs=extra_dirs,
     )
     summary_stats["parity"] = s6
     all_errors.extend(e6)

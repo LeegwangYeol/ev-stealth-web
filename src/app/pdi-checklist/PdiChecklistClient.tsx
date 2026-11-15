@@ -97,7 +97,10 @@ export function parseStoredChecklistState(
           (p: unknown): p is Partial<ChecklistItem> =>
             Boolean(p && typeof p === 'object' && 'id' in p && String((p as { id: unknown }).id) === String(item.id))
         );
-        return match ? { ...item, checked: Boolean(match.checked) } : item;
+        const rawChecked = match ? (match.checked as unknown) : false;
+        const isChecked =
+          rawChecked === true || rawChecked === 'true' || rawChecked === 1 || rawChecked === '1';
+        return match ? { ...item, checked: Boolean(isChecked) } : item;
       });
     }
 
@@ -124,7 +127,8 @@ export function parseStoredChecklistState(
       if (hasIdKey) {
         return defaultItems.map((item) => {
           const val = obj[item.id] ?? obj[String(item.id)];
-          return val !== undefined ? { ...item, checked: Boolean(val) } : item;
+          const isChecked = val === true || val === 'true' || val === 1 || val === '1';
+          return val !== undefined ? { ...item, checked: isChecked } : item;
         });
       }
     }
@@ -248,6 +252,12 @@ export function loadChecklistFromStorage(defaultItems: ChecklistItem[]): Checkli
 export function saveChecklistToStorage(items: ChecklistItem[]): boolean {
   if (typeof window === 'undefined') return false;
 
+  // If every item is unchecked, clean storage to conserve quota and avoid stale persistence
+  if (items.length > 0 && items.every((i) => !i.checked)) {
+    clearChecklistFromStorage();
+    return true;
+  }
+
   const serialized = JSON.stringify(items);
 
   // 1. Try localStorage
@@ -340,7 +350,7 @@ export const PdiItemRow = memo(function PdiItemRow({ item, onToggle }: PdiItemRo
   return (
     <label
       htmlFor={`pdi-task-${item.id}`}
-      className="flex items-start min-h-[48px] p-4 hover:bg-slate-50 cursor-pointer transition-colors rounded-xl focus-within:ring-2 focus-within:ring-blue-500 print:py-2 print:hover:bg-transparent print:break-inside-avoid"
+      className="flex items-start min-h-[48px] p-4 hover:bg-slate-50 cursor-pointer transition-colors rounded-xl focus-within:ring-2 focus-within:ring-blue-500 print:min-h-0 print:py-2 print:px-2 print:hover:bg-transparent print:rounded-none print:break-inside-avoid"
     >
       <input
         id={`pdi-task-${item.id}`}
@@ -378,6 +388,7 @@ export default function PdiChecklistClient() {
   const [items, setItems] = useState<ChecklistItem[]>(INITIAL_PDI_ITEMS);
   const [mounted, setMounted] = useState(false);
   const [storageType, setStorageType] = useState<'localStorage' | 'sessionStorage' | 'memory'>('localStorage');
+  const isSyncingRef = React.useRef(false);
 
   // Safe client mounting check: hydrate from localStorage after mount with schema migration
   useEffect(() => {
@@ -392,6 +403,7 @@ export default function PdiChecklistClient() {
     if (typeof window === 'undefined') return;
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === STORAGE_KEY) {
+        isSyncingRef.current = true;
         if (!e.newValue) {
           // Another tab cleared or reset storage -> synchronize to initial defaults
           setItems(INITIAL_PDI_ITEMS);
@@ -412,6 +424,10 @@ export default function PdiChecklistClient() {
   // Save changes to localStorage after mounted
   useEffect(() => {
     if (!mounted) return;
+    if (isSyncingRef.current) {
+      isSyncingRef.current = false;
+      return;
+    }
     saveChecklistToStorage(items);
   }, [items, mounted]);
 
@@ -465,7 +481,7 @@ export default function PdiChecklistClient() {
   const checkedCount = useMemo(() => items.filter((i) => i.checked).length, [items]);
   const totalItems = items.length;
 
-  // Guard against division by zero (items.length === 0 ? 0 : Math.round((checkedCount / items.length) * 100))
+  // Guard against division by zero and clamp strictly to [0, 100]
   const progress = useMemo(() => {
     return items.length === 0 ? 0 : Math.round((checkedCount / items.length) * 100);
   }, [checkedCount, items.length]);
@@ -608,7 +624,7 @@ export default function PdiChecklistClient() {
         {/* Screen Reader Dynamic Progression Announcement (always in DOM for reliable a11y announcements) */}
         <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
           {!mounted
-            ? '신차 검수 준비 중'
+            ? ''
             : `${actionAnnouncement}${
                 progress === 100
                   ? `신차 검수 완료! 총 ${totalItems}개 중 ${checkedCount}개 항목 점검 완료. 모든 항목을 확인하셨습니다. 이상이 없다면 안심하고 인수증에 서명하세요.`
@@ -704,7 +720,7 @@ export default function PdiChecklistClient() {
         role="tabpanel"
         aria-labelledby={`pdi-tab-${Math.max(0, allCategories.indexOf(selectedCategory))}`}
         tabIndex={0}
-        className="space-y-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
+        className="space-y-6 print:space-y-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
       >
         {categories.map((category, idx) => {
           const isCategoryActive = selectedCategory === 'ALL' || selectedCategory === category;
@@ -715,7 +731,7 @@ export default function PdiChecklistClient() {
             <fieldset
               key={category}
               aria-labelledby={`pdi-cat-${category}`}
-              className={`${isCategoryActive ? 'block' : 'hidden print:block'} bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:border-gray-300 print:shadow-none print:break-inside-avoid`}
+              className={`${isCategoryActive ? 'block' : 'hidden print:block'} bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden print:border-gray-300 print:shadow-none print:break-inside-avoid print:rounded-lg`}
             >
               <legend className="sr-only">{category} 신차 출고 전 점검(PDI) 항목</legend>
               <h2
@@ -727,8 +743,8 @@ export default function PdiChecklistClient() {
                   onClick={() => toggleCategoryCollapse(category)}
                   aria-expanded={!isCollapsed}
                   aria-controls={contentId}
-                  aria-label={`${category} 점검 항목 ${!isCollapsed ? '접기' : '펼치기'}`}
-                  className="w-full p-4 flex items-center justify-between text-left text-slate-800 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-t-2xl transition print:p-2 print:hover:text-black"
+                  aria-label={`${category} (${categoryStats[category]?.checked || 0}/${categoryStats[category]?.total || 0} 완료)`}
+                  className="w-full p-4 flex items-center justify-between text-left text-slate-800 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-t-2xl transition print:p-2 print:hover:text-black print:cursor-default"
                 >
                   <span>{category}</span>
                   <span className="flex items-center gap-2 text-xs font-normal text-slate-600 print:hidden">
@@ -762,8 +778,6 @@ export default function PdiChecklistClient() {
 
       {progress === 100 && (
         <section
-          role="status"
-          aria-live="polite"
           aria-labelledby="pdi-completion-title"
           className="bg-emerald-50 border border-emerald-300 text-emerald-950 p-6 rounded-2xl text-center shadow-sm animate-pulse motion-reduce:animate-none print:bg-white print:border-black print:text-black print:animate-none"
         >

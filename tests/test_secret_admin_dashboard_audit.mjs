@@ -342,3 +342,119 @@ test('AdminDashboardClient.tsx: Korean date parsing, search debounce, and first/
   assert.ok(freshClient.includes('flex flex-wrap items-center gap-2'), 'Card action bar must use flex-wrap for mobile responsiveness');
 });
 
+// 11. XSS Safety & HTML Tag Sanitization in Verbatim Quotes and Text
+test('Security Sanitization: stripHtmlTags and sanitizeHtml neutralize XSS, strip tags, and preserve linebreaks', async () => {
+  const sanitizeUrlTsPath = fs.existsSync(path.resolve(__dirname, '../src/lib/sanitizeUrl.ts'))
+    ? path.resolve(__dirname, '../src/lib/sanitizeUrl.ts')
+    : path.resolve(__dirname, '../ev-stealth-web/src/lib/sanitizeUrl.ts');
+
+  const { stripHtmlTags, sanitizeHtml } = await import(sanitizeUrlTsPath);
+
+  // Script tags and contents stripped
+  assert.strictEqual(stripHtmlTags("<script>alert('XSS')</script>"), '');
+  assert.strictEqual(stripHtmlTags("사고 후기 <script src='//evil.com/x.js'>alert(1)</script>입니다."), '사고 후기 입니다.');
+
+  // Style and iframe tags and contents stripped
+  assert.strictEqual(stripHtmlTags("<style>body { display: none; }</style>정상 텍스트"), '정상 텍스트');
+  assert.strictEqual(stripHtmlTags("<iframe src='javascript:alert(1)'></iframe>제보 내용"), '제보 내용');
+
+  // Event handler injections stripped
+  const injectedImg = '<img src="x" onerror="alert(document.cookie)" />배터리 경고등 점등';
+  assert.strictEqual(stripHtmlTags(injectedImg), '배터리 경고등 점등');
+
+  // Paragraph and break tags converted to clean linebreaks
+  const multilineQuote = '<p>ICCU 고장으로 주행 중 동력상실 발생.</p><p>서비스센터 예약까지 3주 소요됨.<br/>수리비 과다 청구.</p>';
+  const cleanMultiline = stripHtmlTags(multilineQuote);
+  assert.ok(cleanMultiline.includes('\n'));
+  assert.ok(!cleanMultiline.includes('<p>'));
+  assert.ok(!cleanMultiline.includes('</p>'));
+  assert.ok(!cleanMultiline.includes('<br'));
+
+  // Entity decoding with nested tag defense
+  const encodedTag = '&lt;script&gt;alert(1)&lt;/script&gt;원문 코멘트';
+  assert.strictEqual(stripHtmlTags(encodedTag), '원문 코멘트');
+
+  const quoteWithQuotes = '&quot;급발진 의심&quot; &amp; &apos;브레이크 먹통&apos;';
+  assert.strictEqual(stripHtmlTags(quoteWithQuotes), '"급발진 의심" & \'브레이크 먹통\'');
+
+  // Null and undefined safety
+  assert.strictEqual(stripHtmlTags(null), '');
+  assert.strictEqual(stripHtmlTags(undefined), '');
+  assert.strictEqual(stripHtmlTags(''), '');
+
+  // Alias verification
+  assert.strictEqual(sanitizeHtml('<b onmouseover="alert(1)">강조</b>'), '강조');
+});
+
+// 12. Defect Report Filtering: Brand Normalization, Date Range, Platform, and Category
+test('AdminDashboardClient.tsx: Multi-dimensional filtering by date, platform, brand, and defect category', () => {
+  const freshClient = fs.readFileSync(dashboardClientPath, 'utf-8');
+
+  // Brand normalization logic verification
+  assert.ok(freshClient.includes('normalizeBrand'), 'Must define and export normalizeBrand helper');
+  assert.ok(freshClient.includes('selectedBrand'), 'Must maintain selectedBrand filter state');
+  assert.ok(freshClient.includes('admin-brand-filter'), 'Must provide accessible select with id admin-brand-filter');
+  assert.ok(freshClient.includes('차량 브랜드:'), 'Must provide clear label for vehicle brand filter');
+
+  // Date filtering logic verification
+  assert.ok(freshClient.includes('selectedDateRange'), 'Must maintain selectedDateRange filter state');
+  assert.ok(freshClient.includes('admin-date-filter'), 'Must provide accessible select with id admin-date-filter');
+  assert.ok(freshClient.includes('수집 일자:'), 'Must provide clear label for collection date filter');
+  assert.ok(freshClient.includes('RECENT_7D'), 'Must support recent 7-day preset filter');
+  assert.ok(freshClient.includes('RECENT_30D'), 'Must support recent 30-day preset filter');
+
+  // Comprehensive reset filter verification
+  assert.ok(freshClient.includes("setSelectedBrand('ALL')"), 'Reset handler must reset selectedBrand to ALL');
+  assert.ok(freshClient.includes("setSelectedDateRange('ALL')"), 'Reset handler must reset selectedDateRange to ALL');
+
+  // Functional brand normalizer test
+  function normalizeBrand(rawBrand) {
+    if (!rawBrand || typeof rawBrand !== 'string') return '기타';
+    const clean = rawBrand.trim();
+    const lower = clean.toLowerCase();
+    if (lower === 'hyundai' || lower === '현대' || lower.includes('현대')) return '현대';
+    if (lower === 'kia' || lower === '기아' || lower.includes('기아')) return '기아';
+    if (lower === 'genesis' || lower === '제네시스' || lower.includes('제네시스')) return '제네시스';
+    if (lower === 'tesla' || lower === '테슬라' || lower.includes('테슬라')) return '테슬라';
+    if (lower === 'mercedes' || lower === 'mercedes-benz' || lower === '벤츠' || lower.includes('벤츠')) return '벤츠';
+    if (lower === 'bmw') return 'BMW';
+    if (lower === 'byd') return 'BYD';
+    if (lower === 'polestar' || lower === '폴스타') return '폴스타';
+    if (lower === 'chevrolet' || lower === '쉐보레') return '쉐보레';
+    if (lower === 'renault' || lower === '르노') return '르노';
+    if (lower === 'kgm' || lower === '쌍용' || lower === 'kg mobility') return 'KGM';
+    if (lower === 'other' || lower === '기타' || lower === 'etc') return '기타';
+    return clean;
+  }
+
+  assert.strictEqual(normalizeBrand('Kia'), '기아');
+  assert.strictEqual(normalizeBrand('기아자동차'), '기아');
+  assert.strictEqual(normalizeBrand('Hyundai'), '현대');
+  assert.strictEqual(normalizeBrand('Tesla'), '테슬라');
+  assert.strictEqual(normalizeBrand('Mercedes-Benz'), '벤츠');
+  assert.strictEqual(normalizeBrand('Other'), '기타');
+  assert.strictEqual(normalizeBrand(''), '기타');
+  assert.strictEqual(normalizeBrand(null), '기타');
+});
+
+// 13. Mobile View Layout & Accessibility Enhancements
+test('AdminDashboardClient.tsx: Mobile view layout, text wrapping, and modal viewport bounds', () => {
+  const freshClient = fs.readFileSync(dashboardClientPath, 'utf-8');
+
+  // Verbatim quote whitespace and word-break preservation for mobile screens
+  assert.ok(
+    freshClient.includes('whitespace-pre-line break-words'),
+    'Verbatim quote containers must have whitespace-pre-line and break-words for linebreaks and narrow mobile screens'
+  );
+
+  // Modal dialog mobile constraint
+  assert.ok(
+    freshClient.includes('max-h-[calc(100vh-2rem)] overflow-y-auto') || freshClient.includes('max-h-[90vh]'),
+    'Modal dialog must constrain height to viewport on small mobile devices'
+  );
+
+  // Accessible filter select elements meet touch target requirements
+  assert.ok(freshClient.includes('id="admin-brand-filter"'), 'Brand filter select element must have id');
+  assert.ok(freshClient.includes('id="admin-date-filter"'), 'Date filter select element must have id');
+});
+

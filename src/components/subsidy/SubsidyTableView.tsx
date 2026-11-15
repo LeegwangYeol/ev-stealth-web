@@ -128,8 +128,9 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
   }, [isExpanded, hasBeenExpanded]);
 
   // Memoized sub-municipalities list to prevent re-mapping
+  const shouldRenderMunis = isExpanded || hasBeenExpanded;
   const renderedMunis = useMemo(() => {
-    if (!hasBeenExpanded) return null;
+    if (!shouldRenderMunis) return null;
     return munis.map((muni) => {
       const muniAnnounced = Number.isFinite(muni.announced_units) ? Math.max(0, muni.announced_units) : 0;
       const muniApplied = Number.isFinite(muni.applied_units) ? Math.max(0, muni.applied_units) : 0;
@@ -145,7 +146,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
 
       return (
         <tr key={muni.muni_id || `${regionId}-${muni.name_ko}`} className="hover:bg-slate-900/50">
-          <th scope="row" className="p-2 font-medium text-slate-200">
+          <th scope="row" className="p-2 font-medium text-slate-200 sticky left-0 bg-slate-950 z-10 border-r border-slate-800">
             {muni.name_ko}
           </th>
           <td className="p-2 text-right font-mono text-slate-300">
@@ -163,7 +164,9 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
         </tr>
       );
     });
-  }, [hasBeenExpanded, munis, regionId]);
+  }, [shouldRenderMunis, munis, regionId]);
+
+  const cleanStatus = getStatusLabel(cat?.status || 'available').replace(/^[^a-zA-Z0-9가-힣]+\s*/, '');
 
   return (
     <React.Fragment>
@@ -171,7 +174,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
         {/* Row Header with scope="row" */}
         <th
           scope="row"
-          className="p-3.5 font-semibold text-white whitespace-nowrap sticky left-0 bg-slate-950 group-hover:bg-slate-900 z-10 border-r border-slate-800"
+          className="p-3.5 font-semibold text-white whitespace-nowrap sticky left-0 bg-slate-950 group-hover:bg-slate-900 z-10 border-r border-slate-800 shadow-[2px_0_8px_rgba(0,0,0,0.4)]"
         >
           <div className="flex items-center gap-2">
             <span>{regionName}</span>
@@ -223,7 +226,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
               aria-valuemin={0}
               aria-valuemax={100}
               aria-label={`${regionName} ${categoryLabel} 소진율`}
-              aria-valuetext={`소진율 ${depletionRate.toFixed(1)}% (${getStatusLabel(cat?.status || 'available')}), 잔여 ${remaining.toLocaleString()}대`}
+              aria-valuetext={`소진율 ${depletionRate.toFixed(1)}% (${cleanStatus}), 잔여 ${remaining.toLocaleString()}대`}
               className="w-24 bg-slate-900 rounded-full h-2 overflow-hidden flex border border-slate-600"
             >
               <div
@@ -265,7 +268,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
               type="button"
               onClick={handleToggle}
               aria-expanded={isExpanded}
-              aria-controls={'muni-details-' + regionId}
+              aria-controls={'muni-details-table-' + regionId}
               aria-label={`${regionName} 세부 시·군·구 ${munis.length}개 현황 ${isExpanded ? '접기' : '보기'}`}
               className="px-2.5 py-1.5 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium border border-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
@@ -294,7 +297,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
         <tr hidden={!isExpanded} className={!isExpanded ? 'hidden' : ''}>
           <td colSpan={10} className="p-0 bg-slate-900/90 border-b border-slate-800">
             <div
-              id={'muni-details-' + regionId}
+              id={'muni-details-table-' + regionId}
               className="p-4 space-y-2"
             >
               <div className="flex items-center justify-between text-xs text-slate-300 font-bold mb-2">
@@ -323,7 +326,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
                   </caption>
                   <thead>
                     <tr className="bg-slate-900 border-b border-slate-800 text-slate-300 text-[11px]">
-                      <th scope="col" className="p-2 font-semibold">
+                      <th scope="col" className="p-2 font-semibold sticky left-0 bg-slate-900 z-10 border-r border-slate-800">
                         시·군·구명
                       </th>
                       <th scope="col" className="p-2 font-semibold text-right">
@@ -399,7 +402,7 @@ export const SubsidyTableView = memo(function SubsidyTableView({
       aria-label="지자체별 보조금 소진율 비교 표 스크롤 영역"
       className="overflow-x-auto table-scroll-container rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
     >
-      <div className="sm:hidden flex items-center justify-between px-3.5 py-2 text-[11px] font-medium text-slate-300 bg-slate-900 border-b border-slate-800 select-none" aria-hidden="true">
+      <div className="md:hidden flex items-center justify-between px-3.5 py-2 text-[11px] font-medium text-slate-300 bg-slate-900 border-b border-slate-800 select-none" aria-hidden="true">
         <span>← 좌우로 밀어서 17개 지자체 비교</span>
         <span className="flex items-center gap-1 font-mono text-[10px] text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-500/40">
           가로 스크롤 ↔
@@ -417,7 +420,7 @@ export const SubsidyTableView = memo(function SubsidyTableView({
             <th
               scope="col"
               aria-sort={getSortAria('NAME', sortOption)}
-              className="p-3.5 font-bold whitespace-nowrap sticky left-0 bg-slate-900 z-10"
+              className="p-3.5 font-bold whitespace-nowrap sticky left-0 bg-slate-900 z-10 border-r border-slate-800 shadow-[2px_0_8px_rgba(0,0,0,0.4)]"
             >
               <button
                 type="button"

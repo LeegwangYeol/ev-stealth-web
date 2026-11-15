@@ -232,7 +232,7 @@ const ModelGridCard = memo(function ModelGridCard({
       aria-pressed={isSelected}
       aria-label={`${model.brand_name_ko} ${model.model_name}, ${model.segment}, 배터리 ${model.battery_specs?.chemistry ?? 'NCM'}, 잔존가치 방어 Tier ${model.resale_defense_tier}, 실구매가 ${netManWon.toLocaleString()}만 원`}
       onClick={() => onSelect(model)}
-      className={`text-left p-3.5 rounded-xl border transition relative flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+      className={`text-left p-3.5 min-h-[44px] rounded-xl border transition relative flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
         isSelected
           ? 'border-blue-600 bg-blue-50/60 ring-2 ring-blue-500/20 shadow-sm'
           : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
@@ -1989,9 +1989,9 @@ export default function DepreciationCalculatorClient({
             <legend className="text-xs font-bold text-slate-700 block mb-1">이전 / 매매 유형 선택</legend>
             <div className="space-y-1.5" role="radiogroup" aria-label="이전 및 매매 유형 선택">
               {TRANSFER_OPTIONS.map((item) => (
-                <div
+                <label
                   key={item.id}
-                  onClick={() => setTransferType(item.id)}
+                  htmlFor={`transfer-type-radio-${item.id}`}
                   className={`flex items-start gap-2 p-2 min-h-[44px] rounded-lg border cursor-pointer text-xs transition has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500 ${
                     transferType === item.id
                       ? 'bg-blue-50 border-blue-500 text-blue-950 font-semibold'
@@ -2008,12 +2008,12 @@ export default function DepreciationCalculatorClient({
                     className="mt-0.5 text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"
                   />
                   <div>
-                    <label htmlFor={`transfer-type-radio-${item.id}`} className="font-bold block cursor-pointer">
+                    <span className="font-bold block cursor-pointer">
                       {item.title}
-                    </label>
+                    </span>
                     <div id={`transfer-desc-${item.id}`} className="text-[11px] text-slate-700">{item.desc}</div>
                   </div>
-                </div>
+                </label>
               ))}
             </div>
           </fieldset>
@@ -2121,7 +2121,7 @@ export default function DepreciationCalculatorClient({
         {/* 8-Tier Statutory Schedule Table */}
         <div className="pt-2">
           <details className="text-xs text-slate-600 bg-slate-50 rounded-xl border border-slate-200 p-3">
-            <summary className="font-bold text-slate-800 cursor-pointer hover:text-blue-700 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded p-1">
+            <summary className="font-bold text-slate-800 cursor-pointer hover:text-blue-700 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded px-2 min-h-[44px] flex items-center">
               📋 대기환경보전법 시행규칙 [별표 21의2] 8단계 의무운행 회수요율표 보기
             </summary>
             <div

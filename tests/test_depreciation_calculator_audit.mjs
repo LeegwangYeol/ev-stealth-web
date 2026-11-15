@@ -222,6 +222,25 @@ assert.ok(
   forwarderCode.includes("export { default } from '@/app/depreciation-calculator/DepreciationCalculatorClient';"),
   'Forwarder component must export default from app/depreciation-calculator'
 );
-console.log('  ✓ Forwarder component cleanly re-exports DepreciationCalculatorClient');
+assert.ok(
+  forwarderCode.includes('getChemistryBadge'),
+  'Forwarder component must re-export getChemistryBadge'
+);
+assert.ok(
+  forwarderCode.includes('getDefenseTierBadge'),
+  'Forwarder component must re-export getDefenseTierBadge'
+);
+assert.ok(
+  forwarderCode.includes('getHealthGradeBadge'),
+  'Forwarder component must re-export getHealthGradeBadge'
+);
+console.log('  ✓ Forwarder component cleanly re-exports DepreciationCalculatorClient and all badges');
+
+// 5.6 Touch target verification
+assert.ok(
+  clientCode.includes('<summary className="font-bold text-slate-800 cursor-pointer hover:text-blue-700 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded px-2 min-h-[44px] flex items-center">'),
+  'Details summary must declare min-h-[44px] touch target'
+);
+console.log('  ✓ Interactive details summary meets WCAG AA 44px minimum touch target');
 
 console.log('\n=== ALL 14 AUDIT & INTEGRITY VERIFICATIONS PASSED (100%) ===\n');

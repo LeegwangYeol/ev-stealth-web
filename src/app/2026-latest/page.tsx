@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import JsonLd from '@/components/JsonLd';
 import BrandComparisonNav, { OtherBrandsCrossNav } from '@/components/BrandComparisonNav';
+import ModelSpecWarrantyCard from '@/components/ModelSpecWarrantyCard';
 
 export const dynamic = 'force-static';
 export const revalidate = false;
@@ -40,6 +41,166 @@ const latest2026JsonLd = {
         '@type': 'WebPage',
         '@id': `${SITE_URL}/2026-latest`,
       },
+    },
+    {
+      '@type': 'Vehicle',
+      '@id': `${SITE_URL}/2026-latest#vehicle-ev3-2026`,
+      name: '기아 EV3 2026 (Kia EV3)',
+      image: `${SITE_URL}/og-image.png`,
+      url: `${SITE_URL}/2026-latest#heading-ev3-2026`,
+      brand: {
+        '@type': 'Brand',
+        name: 'Kia',
+      },
+      manufacturer: {
+        '@type': 'Organization',
+        name: '기아(주)',
+      },
+      model: 'EV3',
+      vehicleModelDate: '2025-2026',
+      vehicleTransmission: '1단 감속기 (전륜 전용 싱글 모터)',
+      fuelType: 'https://schema.org/Electric',
+      description: 'E-GMP 기반 400V 콤팩트 SUV EV. 81.4kWh 4세대 대용량 배터리 및 i-Pedal 3.0, ccNC 인포테인먼트 탑재.',
+      additionalProperty: [
+        {
+          '@type': 'PropertyValue',
+          name: 'Battery Chemistry',
+          value: 'LG에너지솔루션 NCM 81.4 kWh (롱레인지)',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Powertrain Warranty',
+          value: '10년 / 160,000 km',
+        },
+      ],
+    },
+    {
+      '@type': 'Vehicle',
+      '@id': `${SITE_URL}/2026-latest#vehicle-ioniq5-2026`,
+      name: '현대 더 뉴 아이오닉 5 2026 (Hyundai The New Ioniq 5)',
+      image: `${SITE_URL}/og-image.png`,
+      url: `${SITE_URL}/2026-latest#heading-ioniq5-2026`,
+      brand: {
+        '@type': 'Brand',
+        name: 'Hyundai',
+      },
+      manufacturer: {
+        '@type': 'Organization',
+        name: '현대자동차(주)',
+      },
+      model: 'The New Ioniq 5',
+      vehicleModelDate: '2025-2026',
+      vehicleTransmission: '1단 감속기 (E-GMP 800V)',
+      fuelType: 'https://schema.org/Electric',
+      description: '페이스리프트 800V 초고속 충전 CUV. 84.0kWh 4세대 배터리 및 개선형 2세대 ICCU 탑재로 동력상실 이슈 완전 해결.',
+      additionalProperty: [
+        {
+          '@type': 'PropertyValue',
+          name: 'Battery Chemistry',
+          value: 'SK온 NCM 84.0 kWh',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Powertrain Warranty',
+          value: '10년 / 160,000 km',
+        },
+      ],
+    },
+    {
+      '@type': 'Vehicle',
+      '@id': `${SITE_URL}/2026-latest#vehicle-ioniq9-2026`,
+      name: '현대 아이오닉 9 (Hyundai Ioniq 9)',
+      image: `${SITE_URL}/og-image.png`,
+      url: `${SITE_URL}/2026-latest#heading-ioniq9-2026`,
+      brand: {
+        '@type': 'Brand',
+        name: 'Hyundai',
+      },
+      manufacturer: {
+        '@type': 'Organization',
+        name: '현대자동차(주)',
+      },
+      model: 'Ioniq 9',
+      vehicleModelDate: '2025-2026',
+      vehicleTransmission: '1단 감속기 (싱글/듀얼 모터)',
+      fuelType: 'https://schema.org/Electric',
+      description: 'E-GMP 기반 플래그십 3열 대형 전기 SUV. 110.3kWh 대용량 배터리팩 및 800V 초고속 충전 지원.',
+      additionalProperty: [
+        {
+          '@type': 'PropertyValue',
+          name: 'Battery Chemistry',
+          value: 'SK온 NCM 110.3 kWh',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Powertrain Warranty',
+          value: '10년 / 160,000 km',
+        },
+      ],
+    },
+    {
+      '@type': 'Vehicle',
+      '@id': `${SITE_URL}/2026-latest#vehicle-modely-2026`,
+      name: '테슬라 모델 Y 주니퍼 2026 (Tesla Model Y Juniper)',
+      image: `${SITE_URL}/og-image.png`,
+      url: `${SITE_URL}/2026-latest#heading-modely-2026`,
+      brand: {
+        '@type': 'Brand',
+        name: 'Tesla',
+      },
+      manufacturer: {
+        '@type': 'Organization',
+        name: 'Tesla, Inc.',
+      },
+      model: 'Model Y Juniper',
+      vehicleModelDate: '2025-2026',
+      vehicleTransmission: '1단 고정 기어 (전기 모터)',
+      fuelType: 'https://schema.org/Electric',
+      description: '페이스리프트 중형 크로스오버 EV. 일체형 기가 프레스 다이캐스팅 섀시, HW4.0 및 전좌석 이중접합 차음 유리 적용.',
+      additionalProperty: [
+        {
+          '@type': 'PropertyValue',
+          name: 'Battery Chemistry',
+          value: 'CATL LFP 60 kWh / LG에너지솔루션 NCMA 81.6 kWh',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Powertrain Warranty',
+          value: '8년 / 160,000 km (RWD) 또는 8년 / 192,000 km (Long Range)',
+        },
+      ],
+    },
+    {
+      '@type': 'Vehicle',
+      '@id': `${SITE_URL}/2026-latest#vehicle-sealion7-2026`,
+      name: 'BYD 시라이언 7 2026 (BYD Sealion 7)',
+      image: `${SITE_URL}/og-image.png`,
+      url: `${SITE_URL}/2026-latest#heading-sealion7-2026`,
+      brand: {
+        '@type': 'Brand',
+        name: 'BYD',
+      },
+      manufacturer: {
+        '@type': 'Organization',
+        name: 'BYD Auto',
+      },
+      model: 'Sealion 7',
+      vehicleModelDate: '2025-2026',
+      vehicleTransmission: '1단 고정 기어 (12-in-1 모터)',
+      fuelType: 'https://schema.org/Electric',
+      description: 'e-Platform 3.0 Evo 기반 중형 전기 SUV. 80.64kWh 블레이드 LFP 및 CTB 일체형 구조 적용.',
+      additionalProperty: [
+        {
+          '@type': 'PropertyValue',
+          name: 'Battery Chemistry',
+          value: 'FinDreams 블레이드 LFP 80.64 kWh',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Powertrain Warranty',
+          value: '배터리 8년 / 160,000 km, 12-in-1 구동모터 8년 / 150,000 km',
+        },
+      ],
     },
     {
       '@type': 'ItemList',
@@ -397,13 +558,32 @@ export default function Latest2026Page() {
         <h2 id="heading-ev3-2026" className="text-2xl sm:text-3xl font-bold text-slate-800">
           1. 기아 EV3 (Kia EV3 2026)
         </h2>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-          <div className="bg-red-50 border-l-4 border-red-500 p-3.5 rounded-r-xl" role="region" aria-label="기아 EV3 초기 결함 경고">
-            <h3 className="text-base sm:text-lg font-bold text-red-900">
-              <span aria-hidden="true">🚫 </span>신차 초기 결함: 주행 중 동력 상실 및 시동 꺼짐 리콜 (AVOID)
-            </h3>
-          </div>
-          <ul className="list-disc pl-6 space-y-2 text-slate-700 text-sm sm:text-base leading-relaxed">
+
+        <ModelSpecWarrantyCard
+          modelName="기아 EV3 (Kia EV3 2026)"
+          badge="2026 가성비 소형 CUV"
+          msrpRange="3,995만 ~ 4,415만 원"
+          effectivePriceRange="약 3,200만 ~ 3,600만 원 (보조금 100%)"
+          usedPriceRange="3,100만 ~ 3,700만 원"
+          batterySpecs={{
+            capacity: "58.3 kWh (스탠다드) / 81.4 kWh (롱레인지)",
+            chemistry: "LG에너지솔루션 NCM 삼원계",
+            voltage: "400V 고전압 시스템 (i-Pedal 3.0)",
+            range: "501km (롱레인지 17인치 복합)",
+          }}
+          warranty={{
+            batteryYearsKm: "10년 / 160,000 km",
+            batteryGuaranteeSoh: "EV 핵심부품 10년 통합 보증",
+            generalYearsKm: "3년 / 60,000 km",
+            outOfWarrantyRisk: "초기 MCU 통신 오류 및 동절기 플러시 도어핸들 결빙 점검",
+          }}
+        />
+
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl" role="region" aria-label="기아 EV3 초기 결함 경고">
+          <h3 className="text-base sm:text-lg font-bold text-red-900">
+            <span aria-hidden="true">🚫 </span>신차 초기 결함: 주행 중 동력 상실 및 시동 꺼짐 리콜 (AVOID)
+          </h3>
+          <ul className="list-disc pl-6 mt-2 space-y-2 text-slate-700 text-sm sm:text-base leading-relaxed">
             <li>
               <strong>초기 결함:</strong> 주행 중 계기판에 &quot;전기차 시스템을 점검하십시오&quot; 문구가 뜨며 시동이 꺼지고 동력이 차단되는 결함(MCU 통신 오류). 한국교통안전공단 무상수리 및 리콜 실시.
             </li>
@@ -425,7 +605,7 @@ export default function Latest2026Page() {
                 </svg>
                 <span className="sr-only"> (새 창에서 열림)</span>
               </a>
-              <span aria-hidden="true" className="mx-1.5 text-slate-400">|</span>
+              <span aria-hidden="true" className="mx-1.5 text-slate-500">|</span>
               <a
                 href="https://www.autodaily.co.kr/news/articleView.html?idxno=535684"
                 target="_blank"
@@ -449,13 +629,32 @@ export default function Latest2026Page() {
         <h2 id="heading-ioniq5-2026" className="text-2xl sm:text-3xl font-bold text-slate-800">
           2. 더 뉴 아이오닉 5 페이스리프트 (Ioniq 5 PE 2026)
         </h2>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-          <div className="bg-yellow-50 border-l-4 border-yellow-500 p-3.5 rounded-r-xl" role="region" aria-label="아이오닉 5 페이스리프트 주의 요망">
-            <h3 className="text-base sm:text-lg font-bold text-amber-900">
-              <span aria-hidden="true">⚠️ </span>초기 결함 주의: 페이스리프트 후에도 여전한 ICCU 고장 및 출력 제한 (CAUTION)
-            </h3>
-          </div>
-          <ul className="list-disc pl-6 space-y-2 text-slate-700 text-sm sm:text-base leading-relaxed">
+
+        <ModelSpecWarrantyCard
+          modelName="현대 더 뉴 아이오닉 5 (2026 PE)"
+          badge="84kWh 4세대 배터리"
+          msrpRange="5,240만 ~ 6,120만 원"
+          effectivePriceRange="약 4,500만 ~ 5,300만 원"
+          usedPriceRange="4,400만 ~ 5,300만 원"
+          batterySpecs={{
+            capacity: "84.0 kWh (가용 80.0 kWh)",
+            chemistry: "SK온 NCM 고에너지밀도",
+            voltage: "800V 초고속 (10%→80% 18분)",
+            range: "485km (2WD 19인치 복합)",
+          }}
+          warranty={{
+            batteryYearsKm: "10년 / 160,000 km",
+            batteryGuaranteeSoh: "2세대 개선형 ICCU 하드웨어 적용",
+            generalYearsKm: "3년 / 60,000 km",
+            outOfWarrantyRisk: "ccNC 최신 펌웨어 업데이트 확인 및 완속 충전 전류 점검",
+          }}
+        />
+
+        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="아이오닉 5 페이스리프트 주의 요망">
+          <h3 className="text-base sm:text-lg font-bold text-amber-900">
+            <span aria-hidden="true">⚠️ </span>초기 결함 주의: 페이스리프트 후에도 여전한 ICCU 고장 및 출력 제한 (CAUTION)
+          </h3>
+          <ul className="list-disc pl-6 mt-2 space-y-2 text-slate-700 text-sm sm:text-base leading-relaxed">
             <li>
               <strong>초기 결함:</strong> 이전 연식의 고질병인 ICCU(통합충전제어장치) 고장으로 주행 중 거북이 모드(출력 제한) 발생 및 완속/급속 충전 불능 상태 돌입. 신규 ccNC 인포테인먼트 무선 카플레이 멈춤 버그.
             </li>
@@ -477,7 +676,7 @@ export default function Latest2026Page() {
                 </svg>
                 <span className="sr-only"> (새 창에서 열림)</span>
               </a>
-              <span aria-hidden="true" className="mx-1.5 text-slate-400">|</span>
+              <span aria-hidden="true" className="mx-1.5 text-slate-500">|</span>
               <a
                 href="https://m.bobaedream.co.kr/board/bbs_view/national/2317279"
                 target="_blank"
@@ -501,13 +700,32 @@ export default function Latest2026Page() {
         <h2 id="heading-modely-2026" className="text-2xl sm:text-3xl font-bold text-slate-800">
           3. 테슬라 모델 Y (Tesla Model Y 2026 주니퍼)
         </h2>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-          <div className="bg-yellow-50 border-l-4 border-yellow-500 p-3.5 rounded-r-xl" role="region" aria-label="테슬라 모델 Y 주니퍼 주의 요망">
-            <h3 className="text-base sm:text-lg font-bold text-amber-900">
-              <span aria-hidden="true">⚠️ </span>초기 결함 주의: 동절기 플러시 도어 동결 및 컨트롤 암 소음 (CAUTION)
-            </h3>
-          </div>
-          <ul className="list-disc pl-6 space-y-2 text-slate-700 text-sm sm:text-base leading-relaxed">
+
+        <ModelSpecWarrantyCard
+          modelName="테슬라 모델 Y 주니퍼 (2026)"
+          badge="페이스리프트 주니퍼"
+          msrpRange="5,399만 ~ 6,299만 원 (예상)"
+          effectivePriceRange="약 4,900만 ~ 5,800만 원"
+          usedPriceRange="신차 출고 초기 단계"
+          batterySpecs={{
+            capacity: "60.0 kWh (RWD) / 81.6 kWh (LR)",
+            chemistry: "CATL LFP / LG NCMA",
+            voltage: "400V (HW4.0 전용 컴퓨터)",
+            range: "370km (RWD) ~ 490km (LR 예상)",
+          }}
+          warranty={{
+            batteryYearsKm: "8년 / 160,000 km (RWD) / 192,000 km (LR)",
+            batteryGuaranteeSoh: "잔존용량(SoH) 70% 보증",
+            generalYearsKm: "4년 / 80,000 km",
+            outOfWarrantyRisk: "혹한기 12V 저전압 배터리 전력 부족 및 플러시 도어 핸들 결빙",
+          }}
+        />
+
+        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="테슬라 모델 Y 주니퍼 주의 요망">
+          <h3 className="text-base sm:text-lg font-bold text-amber-900">
+            <span aria-hidden="true">⚠️ </span>초기 결함 주의: 동절기 플러시 도어 동결 및 컨트롤 암 소음 (CAUTION)
+          </h3>
+          <ul className="list-disc pl-6 mt-2 space-y-2 text-slate-700 text-sm sm:text-base leading-relaxed">
             <li>
               <strong>초기 결함:</strong> 동절기 12V 저전압 배터리 전력 부족 시 플러시 도어 핸들이 얼거나 래치가 열리지 않아 탑승 불가. 컨트롤 암 부싱 조기 마모로 방지턱 통과 시 덜컹거림 찌걱 소음 발생.
             </li>
@@ -529,7 +747,7 @@ export default function Latest2026Page() {
                 </svg>
                 <span className="sr-only"> (새 창에서 열림)</span>
               </a>
-              <span aria-hidden="true" className="mx-1.5 text-slate-400">|</span>
+              <span aria-hidden="true" className="mx-1.5 text-slate-500">|</span>
               <a
                 href="https://m.bobaedream.co.kr/board/bbs_view/best/927611/2/2?cmt=1"
                 target="_blank"
@@ -553,13 +771,32 @@ export default function Latest2026Page() {
         <h2 id="heading-sealion7-2026" className="text-2xl sm:text-3xl font-bold text-slate-800">
           4. BYD 시라이언 7 (BYD Sealion 7 2026)
         </h2>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-          <div className="bg-yellow-50 border-l-4 border-yellow-500 p-3.5 rounded-r-xl" role="region" aria-label="BYD 시라이언 7 주의 요망">
-            <h3 className="text-base sm:text-lg font-bold text-amber-900">
-              <span aria-hidden="true">⚠️ </span>초기 결함 주의: 하체 서브프레임 조기 부식 및 충전기 통신 에러 (CAUTION)
-            </h3>
-          </div>
-          <ul className="list-disc pl-6 space-y-2 text-slate-700 text-sm sm:text-base leading-relaxed">
+
+        <ModelSpecWarrantyCard
+          modelName="BYD 시라이언 7 (Sealion 7 2026)"
+          badge="국내 공식 진출 모델"
+          msrpRange="4,500만 ~ 5,200만 원 (출시 예상)"
+          effectivePriceRange="약 3,800만 ~ 4,500만 원"
+          usedPriceRange="신차 출고 초기 단계"
+          batterySpecs={{
+            capacity: "80.64 kWh 블레이드 LFP",
+            chemistry: "FinDreams 블레이드 셀 (CTB 구조)",
+            voltage: "e-Platform 3.0 Evo 12-in-1 모터",
+            range: "450km (국내 환경부 인증 예상)",
+          }}
+          warranty={{
+            batteryYearsKm: "8년 / 160,000 km",
+            batteryGuaranteeSoh: "구동모듈(12-in-1) 8년/150,000km",
+            generalYearsKm: "6년 / 150,000 km",
+            outOfWarrantyRisk: "하체 서브프레임 조기 부식 방청 점검 및 급속 충전 프로토콜 확인",
+          }}
+        />
+
+        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="BYD 시라이언 7 주의 요망">
+          <h3 className="text-base sm:text-lg font-bold text-amber-900">
+            <span aria-hidden="true">⚠️ </span>초기 결함 주의: 하체 서브프레임 조기 부식 및 충전기 통신 에러 (CAUTION)
+          </h3>
+          <ul className="list-disc pl-6 mt-2 space-y-2 text-slate-700 text-sm sm:text-base leading-relaxed">
             <li>
               <strong>초기 결함:</strong> 섀시 하부 서브프레임 접합부 및 휠 하우스 안쪽 용접 부위 조기 부식(녹) 현상 발견. DiLink 인포테인먼트의 어색한 한글 번역 및 공공 급속 충전기(E-pit 등) 충전 타임아웃 오류.
             </li>
@@ -581,7 +818,7 @@ export default function Latest2026Page() {
                 </svg>
                 <span className="sr-only"> (새 창에서 열림)</span>
               </a>
-              <span aria-hidden="true" className="mx-1.5 text-slate-400">|</span>
+              <span aria-hidden="true" className="mx-1.5 text-slate-500">|</span>
               <a
                 href="https://m.bobaedream.co.kr/board/bbs_view/cnews/595"
                 target="_blank"
@@ -605,13 +842,32 @@ export default function Latest2026Page() {
         <h2 id="heading-ioniq9-2026" className="text-2xl sm:text-3xl font-bold text-slate-800">
           5. 현대 아이오닉 9 (Hyundai Ioniq 9 2026)
         </h2>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-          <div className="bg-red-50 border-l-4 border-red-500 p-3.5 rounded-r-xl" role="region" aria-label="아이오닉 9 신차 치명적 결함 경고">
-            <h3 className="text-base sm:text-lg font-bold text-red-900">
-              <span aria-hidden="true">🚫 </span>신차 치명적 결함: 출고 즉시 고전압 배터리팩 소손 판정 (AVOID)
-            </h3>
-          </div>
-          <ul className="list-disc pl-6 space-y-2 text-slate-700 text-sm sm:text-base leading-relaxed">
+
+        <ModelSpecWarrantyCard
+          modelName="현대 아이오닉 9 (Ioniq 9 2026)"
+          badge="110.3kWh 플래그십 3열 SUV"
+          msrpRange="7,800만 ~ 9,500만 원"
+          effectivePriceRange="약 7,300만 ~ 9,000만 원 (50% 보조금)"
+          usedPriceRange="신차 출고 초기 단계"
+          batterySpecs={{
+            capacity: "110.3 kWh 초대용량 배터리팩",
+            chemistry: "SK온 NCM 하이니켈 삼원계",
+            voltage: "800V E-GMP 아키텍처",
+            range: "532km (2WD 19인치 복합)",
+          }}
+          warranty={{
+            batteryYearsKm: "10년 / 160,000 km",
+            batteryGuaranteeSoh: "EV 전용부품 10년 통합 보증",
+            generalYearsKm: "3년 / 60,000 km",
+            outOfWarrantyRisk: "초대용량 110.3kWh 배터리 교체비 3,500만 원 이상, PDI 배터리 점검 필수",
+          }}
+        />
+
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl" role="region" aria-label="아이오닉 9 신차 치명적 결함 경고">
+          <h3 className="text-base sm:text-lg font-bold text-red-900">
+            <span aria-hidden="true">🚫 </span>신차 치명적 결함: 출고 즉시 고전압 배터리팩 소손 판정 (AVOID)
+          </h3>
+          <ul className="list-disc pl-6 mt-2 space-y-2 text-slate-700 text-sm sm:text-base leading-relaxed">
             <li>
               <strong>초기 결함:</strong> 주행거리 389km 만에 배터리 제어 시스템 경고등 점등 및 고전압 배터리팩 내부 PCB 기판 소손 판정으로 배터리 분해 수리. 2열 도어와 쿼터 글라스 몰딩 간격 유격 불량.
             </li>

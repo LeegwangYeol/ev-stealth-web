@@ -9,6 +9,7 @@ import {
   deduplicateReports,
   maskSensitiveData,
   maskAuthor,
+  stripHtmlTags,
   type DailyReportData,
   type DefectReportItem,
 } from '@/lib/getDailyReports';
@@ -18,6 +19,28 @@ import ClientTimestamp from '@/components/ClientTimestamp';
 export function formatSentimentPercent(score: unknown): number {
   const safe = getSafeSentimentScore(score, 0);
   return Math.min(100, Math.max(0, Math.round(safe * 100)));
+}
+
+/**
+ * Normalizes vehicle brand name to standard canonical Korean representation.
+ */
+export function normalizeBrand(rawBrand?: string): string {
+  if (!rawBrand || typeof rawBrand !== 'string') return '기타';
+  const clean = rawBrand.trim();
+  const lower = clean.toLowerCase();
+  if (lower === 'hyundai' || lower === '현대' || lower.includes('현대')) return '현대';
+  if (lower === 'kia' || lower === '기아' || lower.includes('기아')) return '기아';
+  if (lower === 'genesis' || lower === '제네시스' || lower.includes('제네시스')) return '제네시스';
+  if (lower === 'tesla' || lower === '테슬라' || lower.includes('테슬라')) return '테슬라';
+  if (lower === 'mercedes' || lower === 'mercedes-benz' || lower === '벤츠' || lower.includes('벤츠')) return '벤츠';
+  if (lower === 'bmw') return 'BMW';
+  if (lower === 'byd') return 'BYD';
+  if (lower === 'polestar' || lower === '폴스타') return '폴스타';
+  if (lower === 'chevrolet' || lower === '쉐보레') return '쉐보레';
+  if (lower === 'renault' || lower === '르노') return '르노';
+  if (lower === 'kgm' || lower === '쌍용' || lower === 'kg mobility') return 'KGM';
+  if (lower === 'other' || lower === '기타' || lower === 'etc') return '기타';
+  return clean;
 }
 
 /**
@@ -124,6 +147,7 @@ interface DefectReportWithTimestamp extends AdminDefectReportItem {
   _timestamp: number;
   _searchIndex: string;
   _spacelessIndex: string;
+  _normalizedBrand: string;
 }
 
 const CATEGORY_TABS: CategoryTab[] = [
@@ -332,6 +356,8 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
   const deferredSearchQuery = useDeferredValue(debouncedQuery);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedSource, setSelectedSource] = useState('all');
+  const [selectedBrand, setSelectedBrand] = useState('ALL');
+  const [selectedDateRange, setSelectedDateRange] = useState('ALL');
   const [sortBy, setSortBy] = useState<SortOption>('critical');
   const [viewMode, setViewMode] = useState<ViewMode>('cards');
   const [pageSize, setPageSize] = useState<number>(10);
@@ -510,10 +536,11 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             }
           : undefined;
 
-        const maskedTitle = maskSensitiveData(r.title || '전기차 결함 제보');
-        const maskedSummary = maskSensitiveData(r.summary || '결함 상세 내용 요약');
-        const maskedQuote = maskSensitiveData(r.verbatim_quote || '원문 없음');
-        const maskedAuthor = r.author ? maskAuthor(r.author) : '익명 제보자';
+        const maskedTitle = maskSensitiveData(stripHtmlTags(r.title || '전기차 결함 제보'));
+        const maskedSummary = maskSensitiveData(stripHtmlTags(r.summary || '결함 상세 내용 요약'));
+        const maskedQuote = maskSensitiveData(stripHtmlTags(r.verbatim_quote || '원문 없음'));
+        const maskedAuthor = r.author ? maskAuthor(stripHtmlTags(r.author)) : '익명 제보자';
+        const normBrand = normalizeBrand(r.vehicle_brand);
 
         const searchTokens = [
           maskedTitle,
@@ -521,6 +548,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           maskedQuote,
           r.vehicle_model || '',
           r.vehicle_brand || '',
+          normBrand,
           maskedAuthor,
           r.id ? String(r.id) : '',
           catKo,
@@ -543,6 +571,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           defect_category: catCode,
           defect_category_ko: catKo,
           vehicle_model: r.vehicle_model || '미상 모델',
+          vehicle_brand: r.vehicle_brand || normBrand,
           title: maskedTitle,
           summary: maskedSummary,
           verbatim_quote: maskedQuote,
@@ -554,6 +583,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           _timestamp: Number.isFinite(parsed) ? parsed : 0,
           _searchIndex: searchIndex,
           _spacelessIndex: spacelessIndex,
+          _normalizedBrand: normBrand,
         };
       });
   }, [dedupedReports]);
@@ -624,6 +654,50 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     return { categoryCounts: catCounts, sourceCounts: srcCounts };
   }, [reports]);
 
+  // Dynamic brand aggregation with normalized naming and counts
+  const { availableBrands, brandCounts } = useMemo(() => {
+    const counts: Record<string, number> = { ALL: reports.length };
+    for (const r of reports) {
+      const b = r._normalizedBrand;
+      counts[b] = (counts[b] || 0) + 1;
+    }
+    const brandOrder = ['현대', '기아', '제네시스', '테슬라', '벤츠', 'BMW', 'BYD', '폴스타', '기타'];
+    const existing = Object.keys(counts).filter((k) => k !== 'ALL');
+    existing.sort((a, b) => {
+      const idxA = brandOrder.indexOf(a);
+      const idxB = brandOrder.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+    return { availableBrands: existing, brandCounts: counts };
+  }, [reports]);
+
+  // Dynamic date aggregation with presets (최근 7일, 최근 30일) and specific dates
+  const { availableDates, dateCounts, maxReportTimestamp } = useMemo(() => {
+    const counts: Record<string, number> = { ALL: reports.length, RECENT_7D: 0, RECENT_30D: 0 };
+    let maxTs = 0;
+    for (const r of reports) {
+      if (r._timestamp > maxTs) maxTs = r._timestamp;
+      const d = r.date;
+      if (d) counts[d] = (counts[d] || 0) + 1;
+    }
+
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+    for (const r of reports) {
+      if (maxTs > 0 && r._timestamp >= maxTs - sevenDaysMs) counts.RECENT_7D++;
+      if (maxTs > 0 && r._timestamp >= maxTs - thirtyDaysMs) counts.RECENT_30D++;
+    }
+
+    const dates = Object.keys(counts)
+      .filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k))
+      .sort((a, b) => b.localeCompare(a));
+
+    return { availableDates: dates, dateCounts: counts, maxReportTimestamp: maxTs };
+  }, [reports]);
+
   // Filtered and sorted reports with fast precomputed index and optimized tokenization
   const filteredReports = useMemo(() => {
     const rawQuery = deferredSearchQuery.trim().toLowerCase().slice(0, 200);
@@ -655,6 +729,26 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         if (selectedSource !== 'all') {
           if ((report.source || '').toLowerCase() !== selectedSource.toLowerCase()) {
             return false;
+          }
+        }
+
+        // Brand filter
+        if (selectedBrand !== 'ALL') {
+          if (report._normalizedBrand !== selectedBrand) {
+            return false;
+          }
+        }
+
+        // Date filter
+        if (selectedDateRange !== 'ALL') {
+          if (selectedDateRange === 'RECENT_7D') {
+            const cutoff = maxReportTimestamp - 7 * 24 * 60 * 60 * 1000;
+            if (report._timestamp < cutoff) return false;
+          } else if (selectedDateRange === 'RECENT_30D') {
+            const cutoff = maxReportTimestamp - 30 * 24 * 60 * 60 * 1000;
+            if (report._timestamp < cutoff) return false;
+          } else {
+            if (report.date !== selectedDateRange) return false;
           }
         }
 
@@ -731,7 +825,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
         return 0;
       });
-  }, [reports, selectedCategory, selectedSource, deferredSearchQuery, sortBy]);
+  }, [reports, selectedCategory, selectedSource, selectedBrand, selectedDateRange, maxReportTimestamp, deferredSearchQuery, sortBy]);
 
   // Pagination State (WCAG AA Compliant Navigation)
   const [currentPage, setCurrentPage] = useState(1);
@@ -740,7 +834,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
   // Auto-reset to first page when filtering, sorting, or page size changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedCategory, selectedSource, deferredSearchQuery, sortBy, pageSize]);
+  }, [selectedCategory, selectedSource, selectedBrand, selectedDateRange, deferredSearchQuery, sortBy, pageSize]);
 
   // Ensure current page bounds (strictly bounded between 1 and totalPages)
   const validCurrentPage = Math.max(1, Math.min(currentPage, totalPages));
@@ -756,6 +850,8 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     setDebouncedQuery('');
     setSelectedCategory('ALL');
     setSelectedSource('all');
+    setSelectedBrand('ALL');
+    setSelectedDateRange('ALL');
     setSortBy('critical');
     setCurrentPage(1);
     searchInputRef.current?.focus();
@@ -1229,38 +1325,87 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           })}
         </div>
 
-        {/* Community Source Selector Badges */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
-          <div role="group" aria-label="출처 플랫폼 필터" className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-slate-700">출처 플랫폼:</span>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {SOURCE_OPTIONS.map((src) => {
-                const isSelected = selectedSource === src.id;
-                const count = sourceCounts[src.id] || 0;
-                return (
-                  <button
-                    key={src.id}
-                    type="button"
-                    aria-pressed={isSelected}
-                    aria-label={`${src.label} 필터 (${count}건)`}
-                    onClick={() => setSelectedSource(src.id)}
-                    className={`px-2.5 py-1 min-h-[44px] rounded-lg font-medium transition flex items-center gap-1 border focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
-                      isSelected
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm font-semibold'
-                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>{src.label}</span>
-                    <span
-                      className={`text-[10px] px-1 rounded ${
-                        isSelected ? 'bg-blue-700 text-blue-100' : 'bg-slate-100 text-slate-700'
+        {/* Community Source, Brand, and Date Selector Controls */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100 text-xs">
+          <div className="flex flex-wrap items-center gap-3 md:gap-4">
+            {/* Source Platform Filter */}
+            <div role="group" aria-label="출처 플랫폼 필터" className="flex flex-wrap items-center gap-1.5">
+              <span className="font-semibold text-slate-700 whitespace-nowrap">출처 플랫폼:</span>
+              <div className="flex flex-wrap items-center gap-1">
+                {SOURCE_OPTIONS.map((src) => {
+                  const isSelected = selectedSource === src.id;
+                  const count = sourceCounts[src.id] || 0;
+                  return (
+                    <button
+                      key={src.id}
+                      type="button"
+                      aria-pressed={isSelected}
+                      aria-label={`${src.label} 필터 (${count}건)`}
+                      onClick={() => setSelectedSource(src.id)}
+                      className={`px-2.5 py-1 min-h-[44px] rounded-lg font-medium transition flex items-center gap-1 border focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
+                        isSelected
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm font-semibold'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                       }`}
                     >
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
+                      <span>{src.label}</span>
+                      <span
+                        className={`text-[10px] px-1 rounded ${
+                          isSelected ? 'bg-blue-700 text-blue-100' : 'bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Vehicle Brand Filter */}
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="admin-brand-filter" className="font-semibold text-slate-700 whitespace-nowrap">
+                차량 브랜드:
+              </label>
+              <select
+                id="admin-brand-filter"
+                value={selectedBrand}
+                onChange={(e) => setSelectedBrand(e.target.value)}
+                aria-label="차량 브랜드 필터 선택"
+                className="min-h-[44px] px-2.5 py-1.5 bg-slate-100 text-slate-800 rounded-xl border border-slate-200 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"
+              >
+                <option value="ALL">전체 브랜드 ({reports.length}건)</option>
+                {availableBrands.map((brand) => (
+                  <option key={brand} value={brand}>
+                    {brand} ({brandCounts[brand] || 0}건)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Collection Date Filter */}
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="admin-date-filter" className="font-semibold text-slate-700 whitespace-nowrap">
+                수집 일자:
+              </label>
+              <select
+                id="admin-date-filter"
+                value={selectedDateRange}
+                onChange={(e) => setSelectedDateRange(e.target.value)}
+                aria-label="수집 일자 필터 선택"
+                className="min-h-[44px] px-2.5 py-1.5 bg-slate-100 text-slate-800 rounded-xl border border-slate-200 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"
+              >
+                <option value="ALL">전체 기간 ({reports.length}건)</option>
+                <option value="RECENT_7D">최근 7일 ({dateCounts['RECENT_7D'] || 0}건)</option>
+                <option value="RECENT_30D">최근 30일 ({dateCounts['RECENT_30D'] || 0}건)</option>
+                <optgroup label="특정 수집 일자">
+                  {availableDates.map((d) => (
+                    <option key={d} value={d}>
+                      {d} ({dateCounts[d] || 0}건)
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
             </div>
           </div>
 
@@ -1278,7 +1423,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 </span>
               )}
             </span>
-            {(searchQuery || selectedCategory !== 'ALL' || selectedSource !== 'all') && (
+            {(searchQuery || selectedCategory !== 'ALL' || selectedSource !== 'all' || selectedBrand !== 'ALL' || selectedDateRange !== 'ALL') && (
               <button
                 type="button"
                 onClick={handleResetFilters}
@@ -1589,7 +1734,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             ref={modalRef}
             onKeyDown={handleModalKeyDown}
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-6 relative focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 my-8"
+            className="bg-white rounded-3xl max-w-2xl w-full max-h-[calc(100vh-2rem)] overflow-y-auto p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-6 relative focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 my-4 sm:my-8"
             tabIndex={-1}
           >
             {/* Modal Header */}
@@ -1608,7 +1753,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                   </span>
                   {getSeverityBadge(activeModalReport.severity)}
                 </div>
-                <h2 id="defect-modal-title" className="text-xl font-extrabold text-slate-900 mt-2">
+                <h2 id="defect-modal-title" className="text-xl font-extrabold text-slate-900 mt-2 break-words">
                   {activeModalReport.title}
                 </h2>
               </div>
@@ -1630,14 +1775,14 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             <div id="defect-modal-desc" className="space-y-4">
               <div>
                 <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">결함 상세 요약</h3>
-                <p className="text-sm text-slate-800 leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                <p className="text-sm text-slate-800 leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-200 break-words">
                   {activeModalReport.summary}
                 </p>
               </div>
 
               <div>
                 <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">실차주 원문 코멘트</h3>
-                <blockquote className="text-xs text-slate-700 italic border-l-2 border-slate-300 pl-3 py-1 bg-slate-50/50 rounded-r-xl">
+                <blockquote className="text-xs text-slate-700 italic border-l-2 border-slate-300 pl-3 py-1 bg-slate-50/50 rounded-r-xl whitespace-pre-line break-words">
                   &ldquo;{activeModalReport.verbatim_quote}&rdquo;
                 </blockquote>
               </div>
@@ -1799,13 +1944,13 @@ const DefectReportCard = memo(function DefectReportCard({
 
       {/* Title */}
       <div>
-        <h3 className="text-base md:text-lg font-extrabold text-slate-900 transition">
+        <h3 className="text-base md:text-lg font-extrabold text-slate-900 transition break-words">
           {isExternal ? (
             <a
               href={safeUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:underline hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+              className="hover:underline hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded inline-block py-1.5 min-h-[44px]"
             >
               {report.title}
               <span className="sr-only"> (새 창에서 열림)</span>
@@ -1817,12 +1962,12 @@ const DefectReportCard = memo(function DefectReportCard({
       </div>
 
       {/* Defect Summary */}
-      <p className="text-sm text-slate-800 leading-relaxed font-medium bg-slate-50/70 p-3.5 rounded-xl border border-slate-200">
+      <p className="text-sm text-slate-800 leading-relaxed font-medium bg-slate-50/70 p-3.5 rounded-xl border border-slate-200 break-words">
         {report.summary}
       </p>
 
       {/* Verbatim Quote */}
-      <div className="relative pl-4 border-l-2 border-slate-400 text-xs text-slate-800 italic">
+      <div className="relative pl-4 border-l-2 border-slate-400 text-xs text-slate-800 italic whitespace-pre-line break-words">
         <span className="text-slate-800 font-serif text-sm mr-1">&ldquo;</span>
         {report.verbatim_quote}
         <span className="text-slate-800 font-serif text-sm ml-1">&rdquo;</span>

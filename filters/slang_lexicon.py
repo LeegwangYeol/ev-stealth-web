@@ -1208,6 +1208,74 @@ RAW_SLANG_ENTRIES: List[SlangEntry] = [
         safety_impact=9.8,
         example="고속도로 1차로에서 갑자기 멈춰서 레알 황천길 갈 뻔했다.",
     ),
+    SlangEntry(
+        term="DSM 블랙아웃",
+        dimension="SOFTWARE_ELECTRONICS",
+        defect_category="SOFTWARE_ELECTRONICS",
+        meaning="디지털 사이드 미러 화면 꺼짐 및 지연으로 후측방 시야 상실",
+        severity_weight=5,
+        default_polarity=-0.95,
+        safety_impact=9.8,
+        functional_impact=9.5,
+        convenience_impact=8.5,
+        example="주행 중 디지털 사이드미러 DSM 블랙아웃 돼서 차선 변경 불가.",
+    ),
+    SlangEntry(
+        term="디지털 사이드미러 먹통",
+        dimension="SOFTWARE_ELECTRONICS",
+        defect_category="SOFTWARE_ELECTRONICS",
+        meaning="디지털 사이드 미러 카메라/디스플레이 먹통",
+        severity_weight=5,
+        default_polarity=-0.95,
+        safety_impact=9.8,
+        functional_impact=9.5,
+        example="폭우 오는데 디지털 사이드미러 먹통 돼서 갓길 비상정차함.",
+    ),
+    SlangEntry(
+        term="충전 튕김",
+        dimension="BATTERY_CHARGING",
+        defect_category="BATTERY_CHARGING",
+        meaning="충전 시작 후 수분 내 오류 경고와 함께 충전이 일방적으로 중단되는 결함",
+        severity_weight=4,
+        default_polarity=-0.85,
+        functional_impact=8.5,
+        convenience_impact=9.0,
+        example="급속 충전기만 물리면 5분 만에 충전 튕김 발생해서 충전 불가.",
+    ),
+    SlangEntry(
+        term="충전 끊김",
+        dimension="BATTERY_CHARGING",
+        defect_category="BATTERY_CHARGING",
+        meaning="충전 도중 통신 오류 또는 인렛 과열로 충전이 끊김",
+        severity_weight=4,
+        default_polarity=-0.80,
+        functional_impact=8.0,
+        convenience_impact=8.5,
+        example="충전 끊김 현상 반복돼서 밤새 완속 물려도 20%밖에 안 참.",
+    ),
+    SlangEntry(
+        term="절연 저항 이상",
+        dimension="BATTERY_CHARGING",
+        defect_category="BATTERY_CHARGING",
+        meaning="고전압 배터리 팩 또는 구동계 절연 파괴 경고등 점등 및 시동 차단",
+        severity_weight=5,
+        default_polarity=-0.95,
+        safety_impact=9.5,
+        functional_impact=9.5,
+        economic_impact=8.5,
+        example="세차하고 시동 거니 절연 저항 이상 경고등 뜨며 주행 불가.",
+    ),
+    SlangEntry(
+        term="원페달 먹통",
+        dimension="DRIVING_DYNAMICS",
+        defect_category="DRIVING_POWERTRAIN",
+        meaning="원페달 드라이빙(i-Pedal) 감속 기능이 돌연 해제되어 급가속 위험 체감",
+        severity_weight=5,
+        default_polarity=-0.95,
+        safety_impact=9.8,
+        functional_impact=9.0,
+        example="신호등 앞에서 감속하는데 원페달 먹통 돼서 급브레이크 겨우 밟음.",
+    ),
 ]
 
 # Fast lookup dictionary for slang catalog by term
@@ -1348,8 +1416,8 @@ NEWS_PATTERNS: List[str] = [
     r"\[속보\]",
     r"\[단독\]",
     r"\[기사\]",
-    r"기자\s*$",
-    r"기자\b",
+    r"(?<![가-힣])기자\s*$",
+    r"(?<![가-힣])기자\b",
     r"연합뉴스",
     r"뉴시스",
     r"뉴스1",
@@ -1457,6 +1525,13 @@ OWNERSHIP_ANCHORS: List[str] = [
     "주행 중",
     "주행하는데",
     "신호대기 중",
+    "회전교차로",
+    "회전교차로에서",
+    "교차로",
+    "갓길",
+    "갓길에",
+    "골목길",
+    "유턴",
 ]
 
 SYMPTOM_PREDICATES: List[str] = [
@@ -1513,6 +1588,11 @@ SYMPTOM_PREDICATES: List[str] = [
     "고장코드",
     "전원공급장치 점검",
     "전원공급장치",
+    "충전 튕김",
+    "충전 끊김",
+    "절연 저항",
+    "DSM 블랙아웃",
+    "원페달 먹통",
     # Economic / Depreciation
     "감가",
     "손해",
@@ -1537,6 +1617,14 @@ _RE_STRIP_CHARS: re.Pattern[str] = re.compile(
 )
 _RE_UNICODE_SPACES: re.Pattern[str] = re.compile(r"[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]")
 _FULLWIDTH_TO_ASCII: Dict[int, int] = {i: i - 0xFEE0 for i in range(0xFF01, 0xFF5F)}
+
+_RE_BYD_SEAL: re.Pattern[str] = re.compile(
+    r"(?:byd|비야디)\s*(?:의\s*)?(?:신차\s*|전기차\s*|세단\s*)?씰"
+    r"|(?<!도어\s)(?<!도어)(?<!오일\s)(?<!오일)(?<!고무\s)(?<!고무)(?<!웨더스트립\s)(?<!웨더스트립)(?<!유리\s)(?<!유리)(?<!윈도우\s)(?<!윈도우)(?<!트렁크\s)(?<!트렁크)(?<!방수\s)(?<!방수)(?<!엔진\s)(?<!엔진)(?<!모터\s)(?<!모터)(?<!문짝\s)(?<!문짝)(?<!실리콘\s)(?<!실리콘)"
+    r"(?:byd\s*)?씰\s*(?:ev|전기차|세단|오너|차주|출고|시승|인도|사전계약)",
+    re.IGNORECASE,
+)
+_RE_RICE_COOKER_APP: re.Pattern[str] = re.compile(r"(?:전기|쿠쿠|쿠첸|압력|미니|캠핑용)\s*밥솥")
 
 
 def find_matching_slang(text: Any) -> List[SlangEntry]:
@@ -1585,6 +1673,19 @@ def find_matching_slang(text: Any) -> List[SlangEntry]:
     matches: List[SlangEntry] = []
     # Match longer terms first (e.g. 'ICCU 폭탄' before 'ICCU')
     for entry, term_nfc, term_lower in _SLANG_ENTRY_LOWER_PAIRS:
-        if term_nfc in text_nfc or term_lower in text_lower:
+        if entry.term == "씰":
+            # Protect against false-positive matching of rubber door seals / weatherstrip / silicone sealing
+            if "씰링" in text_nfc or not _RE_BYD_SEAL.search(text_nfc):
+                continue
+            matches.append(entry)
+        elif entry.term == "밥솥":
+            # Protect against literal kitchen electric rice cookers in camping/V2L contexts
+            if _RE_RICE_COOKER_APP.search(text_nfc) and not any(
+                w in text_nfc for w in ("소리", "취사소리", "이음", "고주파", "모터", "인버터", "잡소리")
+            ):
+                continue
+            if term_nfc in text_nfc or term_lower in text_lower:
+                matches.append(entry)
+        elif term_nfc in text_nfc or term_lower in text_lower:
             matches.append(entry)
     return matches

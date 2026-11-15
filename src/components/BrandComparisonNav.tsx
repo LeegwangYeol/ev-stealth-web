@@ -40,15 +40,15 @@ export const BrandComparisonNav = memo(function BrandComparisonNav({
                 href="/"
                 prefetch={false}
                 aria-label="홈 (메인 가이드 목록으로 이동)"
-                className="hover:text-blue-700 transition flex items-center gap-1 font-medium text-slate-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded py-1 px-1.5 min-h-[44px]"
+                className="hover:text-blue-700 transition inline-flex items-center justify-center gap-1 font-medium text-slate-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded py-1 px-2 min-h-[44px] min-w-[44px]"
               >
                 <span aria-hidden="true">🏠</span> 홈
               </Link>
-              <span aria-hidden="true" className="text-slate-400">/</span>
+              <span aria-hidden="true" className="text-slate-500">/</span>
             </li>
             <li className="hidden sm:inline-flex items-center gap-1.5">
               <span className="text-slate-600">브랜드별 가이드</span>
-              <span aria-hidden="true" className="text-slate-400">/</span>
+              <span aria-hidden="true" className="text-slate-500">/</span>
             </li>
             <li className="inline-flex items-center">
               <span className="text-slate-900 font-semibold truncate max-w-[200px] sm:max-w-none" aria-current="page">

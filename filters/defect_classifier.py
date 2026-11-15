@@ -35,6 +35,8 @@ from filters.slang_lexicon import (
     SUPER_INTENSIFIERS,
     SYMPTOM_PREDICATES,
     SlangEntry,
+    _RE_BYD_SEAL,
+    _RE_RICE_COOKER_APP,
     find_matching_slang,
 )
 from filters.spam_filter import (
@@ -62,7 +64,8 @@ COMPOUND_DEFECT_RULES: Dict[str, List[str]] = {
         "bms 오작동", "bms 오류", "bms 에러", "bms 경고등", "bms 벽돌", "bms 업데이트",
         "배터리 관리 시스템", "배터리관리시스템", "bms",
         "12v 방전", "12v 배터리 방전", "완속 충전 불량", "급속 충전 중단", "완속 충전 불가",
-        "급속 충전 불가", "충전구 안 열림", "v2l 오류", "전원공급장치 점검", "전원공급장치"
+        "급속 충전 불가", "충전구 안 열림", "v2l 오류", "전원공급장치 점검", "전원공급장치",
+        "충전 튕김", "충전 끊김", "절연 저항", "절연 파괴", "냉각수 누수"
     ],
     "DRIVING_POWERTRAIN": [
         # Brake / Deceleration failures (Must override generic '먹통' from software!)
@@ -81,7 +84,8 @@ COMPOUND_DEFECT_RULES: Dict[str, List[str]] = {
         "조향 장치 이상", "조향 불능", "조향 먹통", "조향 이상", "조향각",
         "핸들 잠김", "핸들 쏠림", "핸들 털림", "핸들 조향", "mdps 결함", "mdps 이상", "오토스티어 풀림",
         # Powertrain sudden failures
-        "동력 상실", "동력상실", "구동력 상실", "급발진", "롤백", "출력 저하"
+        "동력 상실", "동력상실", "구동력 상실", "급발진", "롤백", "출력 저하",
+        "원페달 먹통", "아이페달 풀림", "원페달 풀림"
     ],
     "BUILD_QUALITY": [
         # Electronic door catch failures (Must override generic '먹통' from software!)
@@ -98,7 +102,7 @@ COMPOUND_DEFECT_RULES: Dict[str, List[str]] = {
         "화면 꺼짐", "디스플레이 먹통", "내비 먹통", "네비 먹통", "클러스터 먹통",
         "ota 벽돌", "업데이트 벽돌", "티캠 먹통", "tcam 먹통", "티캠", "tcam",
         "ccnc", "ccic", "avnt", "헤드업 디스플레이 먹통", "hud 먹통", "어라운드뷰 왜곡",
-        "블랙아웃"
+        "블랙아웃", "dsm 블랙아웃", "dsm 먹통", "dsm", "디지털 사이드미러 먹통", "디지털 사이드미러", "디지털 사이드 미러"
     ],
     "SERVICE_REPAIR_COST": [
         "수리비 폭탄", "전손 처리", "전손", "통교체", "감가상각", "보험료 할증",
@@ -115,10 +119,19 @@ POSITIVE_LEXICON: Dict[str, float] = {
     "좋다": 0.70,
     "좋네": 0.70,
     "좋음": 0.75,
+    "좋습니다": 0.75,
+    "좋네요": 0.70,
+    "좋아요": 0.70,
+    "좋은": 0.65,
+    "신세계": 0.90,
     "조용": 0.60,
     "조용하고": 0.60,
     "부드럽": 0.65,
     "편하": 0.65,
+    "편리": 0.75,
+    "쾌적": 0.80,
+    "꿀기능": 0.80,
+    "개꿀": 0.80,
     "추천": 0.75,
     "강추": 0.90,
     "극찬": 0.90,
@@ -157,6 +170,13 @@ RE_CLAUSE_SPLIT: re.Pattern[str] = re.compile(r"[,;.\n]+")
 RE_TOKENS: re.Pattern[str] = re.compile(r"[\w가-힣]+")
 RE_HANGUL: re.Pattern[str] = re.compile(r"[가-힣]")
 RE_AS_KEYWORD: re.Pattern[str] = re.compile(r"(?:\b|[^a-zA-Z])(?:as|a/s)(?:\b|[^a-zA-Z])", re.IGNORECASE)
+
+# Malfunction cues that disambiguate neutral EV features from actual defect complaints
+MALFUNCTION_CUES: Tuple[str, ...] = (
+    "오류", "차단", "과열", "먹통", "방전", "고장", "안 됨", "안됨", "에러",
+    "경고등", "중단", "안 켜", "미작동", "소리 안", "소리도 안", "소리안", "버튼식",
+    "불량", "버그", "안 나", "꺼지", "꺼짐", "꺼졌"
+)
 
 # Pre-sorted immutable collections for zero-overhead inner loop evaluation
 _SORTED_COMPOUND_RULES: Dict[str, Tuple[str, ...]] = {
@@ -277,29 +297,43 @@ class DefectClassifier:
 
         operational_anchors = [
             "시동", "시동 걸", "시동 켰", "시동 켜", "주행 중", "주행하", "주행했",
-            "운전 중", "운전하", "운전했", "차를 몰", "몰았", "충전기 꽂", "충전 중", "충전하"
+            "운전 중", "운전하", "운전했", "차를 몰", "몰았", "충전기 꽂", "충전 중", "충전하",
+            "회전교차로", "교차로", "갓길", "골목길", "유턴"
         ]
         has_anchor = any(anchor in text_str for anchor in OWNERSHIP_ANCHORS) or any(op in text_str for op in operational_anchors)
-        has_symptom = any(symptom in text_str for symptom in SYMPTOM_PREDICATES)
+        
+        text_lower = text_str.lower()
+        if "깜빡이" in text_str and not any(mc in text_lower for mc in MALFUNCTION_CUES):
+            has_symptom = any(symptom in text_str for symptom in SYMPTOM_PREDICATES if symptom != "깜빡이")
+        else:
+            has_symptom = any(symptom in text_str for symptom in SYMPTOM_PREDICATES)
 
         # If text explicitly mentions defect slang or defect nouns, treat symptom as verified
         matched_slang = find_matching_slang(text_str)
-        if any(e.defect_category is not None for e in matched_slang):
-            has_symptom = True
+        feature_terms = {"v2l", "깜빡이", "웨더스트립"}
+        for e in matched_slang:
+            if e.defect_category is not None:
+                if e.term.lower() in feature_terms:
+                    if any(mc in text_lower for mc in MALFUNCTION_CUES):
+                        has_symptom = True
+                        break
+                else:
+                    has_symptom = True
+                    break
 
         defect_keywords = [
             "고장", "결함", "오작동", "버그", "불량", "하자", "긁", "안 닦",
             "튕김", "에러", "불통", "누수", "화재", "멈춤", "물이 흥건", "물 고이",
             "물 차", "물 새", "워터파크", "동력 상실", "경고등",
             "소음", "잡소리", "이음", "떨림", "흔들림", "진동", "단차",
-            "iccu", "bms", "피시테일", "피쉬테일", "fishtail", "도어캐치", "스펀지 브레이크", "열폭주"
+            "iccu", "bms", "피시테일", "피쉬테일", "fishtail", "도어캐치", "스펀지 브레이크", "열폭주",
+            "꺼지", "꺼짐", "소리도 안"
         ]
-        text_lower = text_str.lower()
         if any(dk in text_lower for dk in defect_keywords):
             has_symptom = True
 
         # Check for bystander / third-person trolling without genuine owner experience
-        bystander_targets = ["흉기충들", "개슬람들", "테슬람들", "짱깨들", "호구들"]
+        bystander_targets = ["흉기충들", "개슬람들", "테슬람들", "짱깨들", "호구들", "흉기충", "개슬람", "테슬람", "짱깨", "호구"]
         bystander_wishes = ["봐야 정신", "정신차리", "멸망", "꼴좋다", "꼴 좋다", "못한 놈", "꼬라지", "멈춰봐야", "터져봐야", "불타봐야", "당해봐야"]
         if any(bt in text_str for bt in bystander_targets) and any(bw in text_str for bw in bystander_wishes):
             return False, "Missing ownership anchor: bystander flame war / trolling without owner experience"
@@ -395,10 +429,20 @@ class DefectClassifier:
                     "나오고", "나와", "나옴", "나온다",
                     "돌아가고", "돌아가", "돌아감", "돌아간다",
                     "작동하고", "작동해", "작동함", "작동된다", "작동",
+                    "잡히고", "잡혀", "잡힘", "잡힌다", "잡히",
+                    "고쳐지고", "고쳐져", "고쳐짐", "고쳐진다", "고쳐",
+                    "해결되고", "해결돼", "해결됨", "해결된다", "해결",
+                    "사라지고", "사라져", "사라짐", "사라진다",
+                    "없어지고", "없어져", "없어짐", "없어진다",
+                    "풀리고", "풀려", "풀림", "풀린다", "풀리",
+                    "줄어들고", "줄어들어", "줄어듦", "줄어든다", "줄어",
+                    "멈추고", "멈춰", "멈춤", "멈춘다",
                 )
-                if j + 1 < len(window) and any(window[j + 1].startswith(mv) for mv in malfunction_verbs):
-                    continue
-                return True
+                if j + 1 < len(window):
+                    if any(window[j + 1].startswith(mv) for mv in malfunction_verbs):
+                        continue
+                    return True
+                continue
 
             # 1. Any inflection of '없다' (e.g. 없다, 없고, 없음, 없네, 없습니다, 없네요, 없어서, 없더군요, 없더라고요, 없었던, 없었어요, 없는, 없으므로)
             if w_strip.startswith("없"):
@@ -433,16 +477,19 @@ class DefectClassifier:
             text_str = " ".join(tokens)
 
         negated: List[str] = []
+        non_negatable_terms = {"깜빡이", "v2l", "dsm", "mcu", "tcam", "hud", "아이오닉", "이븨", "이브이", "모델와이"}
         affirmative_occurrences = (
-            "돼서", "됐다", "됨", "터져서", "터짐", "났음", "났다", "생겨서", "생김", "심해서", "심함", "터져", "터졌"
+            "돼서", "됐다", "됨", "터져서", "터짐", "났음", "났다", "생겨서", "생김", "생겼", "심해서", "심함", "터져", "터졌",
+            "발생", "발생해", "발생함", "발생했다", "나타나", "나타남", "나타났다", "시작", "시작됨"
         )
 
         for dw in _SINGLE_PART_DEFECT_TERMS:
-            if dw not in text_str:
+            if dw.lower() in non_negatable_terms or dw not in text_str:
                 continue
             for i, tok in enumerate(tokens):
                 if dw in tok or tok.startswith(dw):
-                    if i + 1 < len(tokens) and any(tokens[i + 1].startswith(aff) for aff in affirmative_occurrences):
+                    after_slice = tokens[i + 1:min(len(tokens), i + 4)]
+                    if any(any(t.startswith(aff) for aff in affirmative_occurrences) for t in after_slice):
                         continue
                     window_end = min(len(tokens), i + 5)
                     window = tokens[i:window_end]
@@ -451,7 +498,7 @@ class DefectClassifier:
                         break
 
         for parts, dw in _MULTI_PART_DEFECT_TERMS:
-            if parts[0] not in text_str:
+            if dw.lower() in non_negatable_terms or parts[0] not in text_str:
                 continue
             m = len(parts)
             for i in range(len(tokens) - m + 1):
@@ -459,9 +506,10 @@ class DefectClassifier:
                     tokens[i + k].startswith(parts[k]) or parts[k] in tokens[i + k]
                     for k in range(1, m)
                 ):
-                    if i + m < len(tokens) and any(tokens[i + m].startswith(aff) for aff in affirmative_occurrences):
+                    after_slice = tokens[i + m:min(len(tokens), i + m + 4)]
+                    if any(any(t.startswith(aff) for aff in affirmative_occurrences) for t in after_slice):
                         continue
-                    window_end = min(len(tokens), i + m + 4)
+                    window_end = min(len(tokens), i + m + 5)
                     window = tokens[i:window_end]
                     if self._is_negator_in_window(window):
                         negated.append(dw)
@@ -499,6 +547,17 @@ class DefectClassifier:
             clause_lower = clause.lower()
 
             for slang_entry, slang_nfc, slang_lower in _SLANG_TERM_LOWER_PAIRS:
+                if slang_entry.term == "씰":
+                    if "씰링" in clause or not _RE_BYD_SEAL.search(clause):
+                        continue
+                if slang_entry.term == "밥솥":
+                    if _RE_RICE_COOKER_APP.search(clause) and not any(
+                        w in clause for w in ("소리", "취사소리", "이음", "고주파", "모터", "인버터", "잡소리")
+                    ):
+                        continue
+                if slang_entry.term.lower() in ("v2l", "깜빡이", "웨더스트립"):
+                    if not any(mc in clause_lower for mc in MALFUNCTION_CUES):
+                        continue
                 if slang_nfc in clause or slang_lower in clause_lower:
                     is_term_negated = any(dw in slang_entry.term or slang_entry.term in dw for dw in negated_defects)
                     if is_term_negated:
@@ -597,6 +656,9 @@ class DefectClassifier:
                 continue
             if entry.term in ("잡소리", "소음", "찌걱") and suppress_build_noise:
                 continue
+            if entry.term.lower() in ("v2l", "깜빡이", "웨더스트립"):
+                if not any(mc in text_lower for mc in MALFUNCTION_CUES):
+                    continue
             category_scores[entry.defect_category] += entry.severity_weight * 2.5
 
         # 3. Category keyword map with word boundary and suppression awareness
@@ -655,7 +717,15 @@ class DefectClassifier:
         confidence = 0.0
 
         # 1. Technical component keyword from category map
-        has_comp_kw = any(kw.lower() in text_lower for kw in CATEGORY_KEYWORD_MAP.get(category, []))
+        has_comp_kw = False
+        for kw in CATEGORY_KEYWORD_MAP.get(category, []):
+            if category == "SERVICE_REPAIR_COST" and kw == "as":
+                if RE_AS_KEYWORD.search(text_lower):
+                    has_comp_kw = True
+                    break
+            elif kw.lower() in text_lower:
+                has_comp_kw = True
+                break
         if has_comp_kw:
             confidence += 0.20
 
@@ -672,7 +742,7 @@ class DefectClassifier:
 
         # 4. Ownership anchor
         has_owner = any(anchor in text_str for anchor in OWNERSHIP_ANCHORS) or any(
-            op in text_str for op in ("시동", "주행 중", "운전 중", "충전 중")
+            op in text_str for op in ("시동", "주행 중", "운전 중", "충전 중", "회전교차로", "교차로", "갓길")
         )
         if has_owner:
             confidence += 0.15

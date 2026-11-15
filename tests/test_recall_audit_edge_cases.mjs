@@ -638,6 +638,129 @@ runTest('Genesis VIN prevents false-positive matching to purely Hyundai-only rec
   assert.equal(matchedIccu, true, 'Genesis GV60 must match ICCU recall');
 });
 
+// ============================================================================
+// 9. RE-DOS & REGEX BACKTRACKING RESILIENCE & DRIVETRAIN MODEL MATCHING
+// ============================================================================
+console.log('\n--- [9. ReDoS Resilience, Drivetrain & Generation Edge Cases] ---');
+
+runTest('isYearMatchForCampaign executes without polynomial catastrophic backtracking', () => {
+  const adversaryString = '2024' + ' '.repeat(50000) + 'X';
+  const start = performance.now();
+  const res = recallCalc.isYearMatchForCampaign(2024, adversaryString);
+  const duration = performance.now() - start;
+
+  assert.equal(typeof res, 'boolean');
+  assert(duration < 50, `Year matching on 50,000 char adversarial string took ${duration.toFixed(2)}ms (must be < 50ms)`);
+});
+
+runTest('isModelMatchForCampaign correctly handles drivetrains, generations, and years without false negative drops', () => {
+  // Drivetrain specs: 2WD, 4WD, AWD, RWD
+  assert.equal(recallCalc.isModelMatchForCampaign('아이오닉 5 2024', '아이오닉 5'), true, '아이오닉 5 with year');
+  assert.equal(recallCalc.isModelMatchForCampaign('EV6 2WD', 'EV6'), true, 'EV6 2WD');
+  assert.equal(recallCalc.isModelMatchForCampaign('EV6 GT 4WD', 'EV6'), true, 'EV6 GT 4WD');
+  assert.equal(recallCalc.isModelMatchForCampaign('아이오닉 5 (2WD)', '아이오닉 5'), true, '아이오닉 5 (2WD)');
+
+  // Generation suffixes: 1세대, 2세대
+  assert.equal(recallCalc.isModelMatchForCampaign('코나 일렉트릭 2024', '코나 일렉트릭'), true, '코나 일렉트릭 with year');
+  assert.equal(recallCalc.isModelMatchForCampaign('니로 EV 2세대', '니로 EV'), true, '니로 EV 2세대');
+
+  // Collision guards remain 100% intact
+  assert.equal(recallCalc.isModelMatchForCampaign('아이오닉 5', '아이오닉 6'), false);
+  assert.equal(recallCalc.isModelMatchForCampaign('EV6', 'EV9'), false);
+  assert.equal(recallCalc.isModelMatchForCampaign('아이오닉 5', '아이오닉 EV'), false);
+  assert.equal(recallCalc.isModelMatchForCampaign('아이오닉 EV', '아이오닉 5'), false);
+  assert.equal(recallCalc.isModelMatchForCampaign('모델 Y', '모델 3'), false);
+  assert.equal(recallCalc.isModelMatchForCampaign('GV60', 'GV70'), false);
+  assert.equal(recallCalc.isModelMatchForCampaign('EQE 350', 'EQE 500'), false);
+});
+
+runTest('isYearMatchForCampaign correctly matches open-ended and leading tilde ranges', () => {
+  // Open-ended future ranges: "2022 ~", "2022~"
+  assert.equal(recallCalc.isYearMatchForCampaign(2024, '2022 ~'), true, '2022 ~ matches 2024');
+  assert.equal(recallCalc.isYearMatchForCampaign(2024, '2022~'), true, '2022~ matches 2024');
+  assert.equal(recallCalc.isYearMatchForCampaign(2021, '2022 ~'), false, '2022 ~ rejects 2021');
+
+  // Before ranges with leading tilde: "~ 2022", "~2022"
+  assert.equal(recallCalc.isYearMatchForCampaign(2021, '~ 2022'), true, '~ 2022 matches 2021');
+  assert.equal(recallCalc.isYearMatchForCampaign(2021, '~2022'), true, '~2022 matches 2021');
+  assert.equal(recallCalc.isYearMatchForCampaign(2025, '~ 2022'), false, '~ 2022 rejects 2025');
+});
+
+// ============================================================================
+// 10. DATE ROLLOVER, ACTIVE FIRE HAZARDS & WMI EXTENSIONS
+// ============================================================================
+console.log('\n--- [10. Date Rollover, Active Fire Hazards & Extended WMI] ---');
+
+runTest('parseRecallDate handles Korean notation and rejects calendar rollover dates', () => {
+  // Korean official date notation
+  const krDate = recallCalc.parseRecallDate('2024년 3월 18일');
+  assert(krDate !== null, 'Korean date notation must parse');
+  assert.equal(krDate.getUTCFullYear(), 2024);
+  assert.equal(krDate.getUTCMonth(), 2);
+  assert.equal(krDate.getUTCDate(), 18);
+
+  // Calendar rollover prevention (Feb 31 does not exist)
+  assert.equal(recallCalc.parseRecallDate('2024-02-31'), null, 'Feb 31 must be rejected');
+  assert.equal(recallCalc.parseRecallDate('2023.04.31'), null, 'April 31 must be rejected');
+});
+
+runTest('calculateRecallKPIs accurately segregates activeFireHazards from total fireHazardCampaigns', () => {
+  const db = getRecall.getRecallDatabase();
+  const kpis = recallCalc.calculateRecallKPIs(db);
+
+  assert.equal(kpis.fireHazardCampaigns, 4, 'Total fire hazard campaigns should be 4');
+  assert.equal(kpis.activeFireHazards, 2, 'Active fire hazards should be exactly 2');
+  assert(kpis.activeFireHazards <= kpis.fireHazardCampaigns, 'Active fire hazards must not exceed total fire campaigns');
+});
+
+runTest('normalizeManufacturer handles stripped brand keys without punctuation', () => {
+  assert.equal(recallCalc.normalizeManufacturer('MERCEDESBENZ'), '메르세데스-벤츠');
+  assert.equal(recallCalc.normalizeManufacturer('KGMOBILITY'), 'KG모빌리티');
+  assert.equal(recallCalc.normalizeManufacturer('RENAULTKOREA'), '르노코리아');
+  assert.equal(recallCalc.normalizeManufacturer('kiamotors'), '기아');
+  assert.equal(recallCalc.normalizeManufacturer('teslamotors'), '테슬라');
+});
+
+runTest('WMI_MAP and decodeVinAndCheckRecalls support extended commercial and imported EV WMIs', () => {
+  const db = getRecall.getRecallDatabase();
+
+  // Hyundai Porter II Electric (KMF)
+  const porterVin = recallCalc.decodeVinAndCheckRecalls('KMF999999NU123456', db);
+  assert.equal(porterVin.valid, true);
+  assert.equal(porterVin.decodedBrand, '현대자동차');
+  assert(porterVin.decodedCountry.includes('대한민국'));
+
+  // Kia Bongo III EV (KNC)
+  const bongoVin = recallCalc.decodeVinAndCheckRecalls('KNC999999PU123456', db);
+  assert.equal(bongoVin.valid, true);
+  assert.equal(bongoVin.decodedBrand, '기아');
+
+  // Berlin Tesla Model Y (XP7)
+  const teslaBerlin = recallCalc.decodeVinAndCheckRecalls('XP7999999RU123456', db);
+  assert.equal(teslaBerlin.valid, true);
+  assert.equal(teslaBerlin.decodedBrand, '테슬라');
+  assert(teslaBerlin.decodedCountry.includes('독일'));
+});
+
+runTest('getRecallData exports badge styling helpers with full parity', () => {
+  assert.equal(typeof getRecall.getRiskLevelBadgeStyle, 'function');
+  assert.equal(typeof getRecall.getFireStatusBadgeStyle, 'function');
+  assert.equal(typeof getRecall.getRemedyTypeBadgeStyle, 'function');
+
+  assert.deepEqual(
+    getRecall.getRiskLevelBadgeStyle('FIRE_HAZARD'),
+    recallCalc.getRiskLevelBadgeStyle('FIRE_HAZARD')
+  );
+  assert.deepEqual(
+    getRecall.getFireStatusBadgeStyle('CRITICAL_MONITORING'),
+    recallCalc.getFireStatusBadgeStyle('CRITICAL_MONITORING')
+  );
+  assert.deepEqual(
+    getRecall.getRemedyTypeBadgeStyle('OTA_WIRELESS'),
+    recallCalc.getRemedyTypeBadgeStyle('OTA_WIRELESS')
+  );
+});
+
 console.log('\n================================================================');
 console.log(`🏁 RECALL AUDIT SUITE FINISHED: ${passedTests}/${totalTests} PASSED`);
 console.log('================================================================\n');

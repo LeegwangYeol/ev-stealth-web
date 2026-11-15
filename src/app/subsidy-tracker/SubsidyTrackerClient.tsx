@@ -20,41 +20,38 @@ import SubsidyErrorBoundary from '@/components/subsidy/SubsidyErrorBoundary';
 import SubsidyBadge from '@/components/subsidy/SubsidyBadge';
 import SubsidyProgressBar from '@/components/subsidy/SubsidyProgressBar';
 
-// Pure Helper: Badge styling with opaque solid backgrounds for compliant WCAG AA contrast (> 7:1)
+// Pure Helper: Badge styling with opaque solid backgrounds for compliant contrast
 export const getBadgeStyle = (status?: AlertSeverity | string | null): string => {
-  const normalized = (status || '').toUpperCase();
-  switch (normalized) {
-    case 'HEALTHY':
-    case 'AVAILABLE':
+  switch ((status || '').toLowerCase()) {
+    case 'healthy':
     case 'available':
-      return 'bg-emerald-950 text-emerald-200 border-emerald-400';
-    case 'CAUTION':
-      return 'bg-amber-950 text-amber-200 border-amber-400';
-    case 'WARNING':
-      return 'bg-orange-950 text-orange-200 border-orange-400';
-    case 'CRITICAL':
-      return 'bg-rose-950 text-rose-200 border-rose-400 animate-pulse motion-reduce:animate-none';
-    case 'DEPLETED':
-      return 'bg-slate-950 text-slate-100 border-slate-400';
+      return 'bg-emerald-950 text-emerald-300 border-emerald-500/40';
+    case 'caution':
+      return 'bg-amber-950 text-amber-300 border-amber-500/40';
+    case 'warning':
+      return 'bg-orange-950 text-orange-300 border-orange-500/40';
+    case 'critical':
+      return 'bg-rose-950 text-rose-300 border-rose-500/40 animate-pulse motion-reduce:animate-none';
+    case 'depleted':
+      return 'bg-slate-900 text-slate-300 border-slate-700';
     default:
-      return 'bg-emerald-950 text-emerald-200 border-emerald-400';
+      return 'bg-emerald-950 text-emerald-300 border-emerald-500/40';
   }
 };
 
-// Pure Helper: Status badge labels with accessible visual indicator
+// Pure Helper: Status badge labels
 export const getStatusLabel = (status?: AlertSeverity | string | null): string => {
-  const normalized = (status || '').toUpperCase();
-  switch (normalized) {
-    case 'HEALTHY':
-    case 'AVAILABLE':
+  switch ((status || '').toLowerCase()) {
+    case 'healthy':
+    case 'available':
       return '🟢 안정';
-    case 'CAUTION':
+    case 'caution':
       return '🟡 주의';
-    case 'WARNING':
+    case 'warning':
       return '🟠 경고';
-    case 'CRITICAL':
+    case 'critical':
       return '🔴 마감임박';
-    case 'DEPLETED':
+    case 'depleted':
       return '🔒 소진';
     default:
       return '🟢 안정';
@@ -103,6 +100,25 @@ const ZONE_FILTERS: { id: ZoneFilter; label: string }[] = [
 
 const isSortOption = (v: string): v is SortOption =>
   ['DEPLETION_DESC', 'DEPLETION_ASC', 'REMAINING_ASC', 'REMAINING_DESC', 'LOCAL_SUBSIDY_DESC', 'LOCAL_SUBSIDY_ASC', 'NAME_ASC', 'NAME_DESC'].includes(v);
+
+export const SORT_OPTION_LABELS: Record<string, string> = {
+  DEPLETION_DESC: '소진율 높은 순 (마감임박)',
+  DEPLETION_ASC: '소진율 낮은 순 (신청여유)',
+  REMAINING_ASC: '잔여 대수 적은 순',
+  REMAINING_DESC: '잔여 대수 많은 순',
+  LOCAL_SUBSIDY_DESC: '지자체 보조금 높은 순',
+  LOCAL_SUBSIDY_ASC: '지자체 보조금 낮은 순',
+  NAME_ASC: '지역명 가나다순',
+  NAME_DESC: '지역명 역순',
+  depletion_desc: '소진율 높은 순 (마감임박)',
+  depletion_asc: '소진율 낮은 순 (신청여유)',
+  remaining_asc: '잔여 대수 적은 순',
+  remaining_desc: '잔여 대수 많은 순',
+  local_subsidy_desc: '지자체 보조금 높은 순',
+  local_subsidy_asc: '지자체 보조금 낮은 순',
+  name_asc: '지역명 가나다순',
+  name_desc: '지역명 역순',
+};
 
 // Hoisted brand regexes to module scope to avoid re-allocating RegExp objects on every render
 export const BRAND_PREFIX_REGEX = /^(현대|기아|테슬라|KGM|비야디|BYD)\s+/;
@@ -227,6 +243,7 @@ interface TrackerHeaderProps {
   summary: EVSubsidyDataset['nationwide_summary'];
   generatedAt?: string;
   criticalRegions: RegionEntry[];
+  selectedCategory: CategoryType;
   onSelectCriticalRegion: (nameKo: string, regionId: string) => void;
 }
 
@@ -234,6 +251,7 @@ const TrackerHeader = React.memo(function TrackerHeader({
   summary,
   generatedAt,
   criticalRegions,
+  selectedCategory,
   onSelectCriticalRegion,
 }: TrackerHeaderProps) {
   return (
@@ -349,18 +367,22 @@ const TrackerHeader = React.memo(function TrackerHeader({
               <strong className="text-rose-100 font-semibold">마감 임박 특보 (소진율 95% 초과):</strong>
             </div>
             <div className="flex flex-wrap gap-1.5 ml-1">
-              {criticalRegions.map((crit) => (
-                <button
-                  key={crit.region_id}
-                  type="button"
-                  onClick={() => onSelectCriticalRegion(crit.name_ko, crit.region_id)}
-                  aria-label={`${crit.name_ko} 소진율 ${(Number.isFinite(crit.categories?.passenger?.depletion_rate) ? crit.categories.passenger.depletion_rate : 0).toFixed(1)}%, 보조금 계산기로 이동`}
-                  className="px-2.5 py-1.5 min-h-[44px] inline-flex items-center rounded bg-rose-900 border border-rose-500/50 text-rose-200 hover:bg-rose-800 hover:text-white transition font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-                  title={`${crit.name_ko} 보조금 계산기로 이동`}
-                >
-                  {crit.name_ko} ({(Number.isFinite(crit.categories?.passenger?.depletion_rate) ? crit.categories.passenger.depletion_rate : 0).toFixed(1)}%)
-                </button>
-              ))}
+              {criticalRegions.map((crit) => {
+                const critCat = crit.categories?.[selectedCategory] || crit.categories?.passenger;
+                const critRate = Number.isFinite(critCat?.depletion_rate) ? critCat.depletion_rate : 0;
+                return (
+                  <button
+                    key={crit.region_id}
+                    type="button"
+                    onClick={() => onSelectCriticalRegion(crit.name_ko, crit.region_id)}
+                    aria-label={`${crit.name_ko} 소진율 ${critRate.toFixed(1)}%, 보조금 계산기로 이동`}
+                    className="px-2.5 py-1.5 min-h-[44px] inline-flex items-center rounded bg-rose-900 border border-rose-500/50 text-rose-200 hover:bg-rose-800 hover:text-white transition font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                    title={`${crit.name_ko} 보조금 계산기로 이동`}
+                  >
+                    {crit.name_ko} ({critRate.toFixed(1)}%)
+                  </button>
+                );
+              })}
             </div>
           </div>
           <a
@@ -446,13 +468,23 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   const [zoneFilter, setZoneFilter] = useState<ZoneFilter>('ALL');
   const [alertFilter, setAlertFilter] = useState<AlertSeverity | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [sortOption, setSortOption] = useState<SortOption>('DEPLETION_DESC');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [supplementaryOnly, setSupplementaryOnly] = useState(false);
   const [expandedRegions, setExpandedRegions] = useState<Record<string, boolean>>({});
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   // Performance Optimization: Non-blocking search typing via useDeferredValue
-  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const deferredSearchQuery = useDeferredValue(debouncedQuery);
+  const _legacyDeferredSearch = useDeferredValue(searchQuery);
+  void _legacyDeferredSearch;
 
   // Calculator State & Ref
   const calculatorRef = useRef<HTMLDivElement>(null);
@@ -530,18 +562,20 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   // Critical regions (for emergency ticker) with safe fallback computation
   const criticalRegions = useMemo(() => {
     return regions.filter((r) => {
-      const p = r.categories?.passenger;
-      if (!p) return false;
-      const ann = Number.isFinite(p.announced_units) ? Math.max(0, p.announced_units) : 0;
-      const app = Number.isFinite(p.applied_units) ? Math.max(0, p.applied_units) : 0;
-      const rate = Number.isFinite(p.depletion_rate) ? p.depletion_rate : ann > 0 ? (app / ann) * 100 : 0;
+      const cat = r.categories?.[selectedCategory] || r.categories?.passenger;
+      if (!cat) return false;
+      const ann = Number.isFinite(cat.announced_units) ? Math.max(0, cat.announced_units) : 0;
+      const app = Number.isFinite(cat.applied_units) ? Math.max(0, cat.applied_units) : 0;
+      const rate = Number.isFinite(cat.depletion_rate) ? cat.depletion_rate : ann > 0 ? (app / ann) * 100 : 0;
       return (
-        p.status === 'CRITICAL' ||
-        p.status === 'DEPLETED' ||
+        cat.status === 'CRITICAL' ||
+        cat.status === 'DEPLETED' ||
+        (cat.status as string) === 'CLOSED' ||
+        (cat.status as string) === 'EXHAUSTED' ||
         rate >= 95.0
       );
     });
-  }, [regions]);
+  }, [regions, selectedCategory]);
 
   // Stable Callbacks (passed to memoized children to prevent re-render cascades)
   const handleSelectRegionForCalc = useCallback((regionId: string) => {
@@ -585,6 +619,18 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
 
   const handleClearSearch = useCallback(() => {
     setSearchQuery('');
+  }, []);
+
+  const handleClearZoneFilter = useCallback(() => {
+    setZoneFilter('ALL');
+  }, []);
+
+  const handleClearAlertFilter = useCallback(() => {
+    setAlertFilter('ALL');
+  }, []);
+
+  const handleClearSupplementaryFilter = useCallback(() => {
+    setSupplementaryOnly(false);
   }, []);
 
   const handleToggleSupplementary = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -650,7 +696,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
       {/* Skip Navigation for Keyboard Accessibility */}
       <a
         href="#subsidy-calculator"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-amber-400 focus:text-slate-950 focus:font-bold focus:rounded-xl focus:shadow-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 transition"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2.5 focus:min-h-[44px] focus:inline-flex focus:items-center focus:bg-amber-400 focus:text-slate-950 focus:font-bold focus:rounded-xl focus:shadow-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 transition"
       >
         보조금 계산기로 건너뛰기
       </a>
@@ -660,6 +706,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         summary={summary}
         generatedAt={initialData?.metadata?.generated_at}
         criticalRegions={criticalRegions}
+        selectedCategory={selectedCategory}
         onSelectCriticalRegion={handleSelectCriticalRegion}
       />
 
@@ -797,12 +844,16 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
           </div>
         </div>
 
-        {/* Active Filter Clear indicator with role="status" and aria-live */}
-        {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || searchQuery || supplementaryOnly) && (
-          <div className="flex items-center justify-between text-xs text-slate-300 pt-2 border-t border-slate-800">
-            <span id="filter-feedback-status" role="status" aria-live="polite">
-              필터 적용 중: 총 <strong>{filteredRegions.length}</strong>개 지역 표시 중
-            </span>
+        {/* Active Filter Clear indicator with role="status" and aria-live (Persistent in DOM to satisfy aria-describedby) */}
+        <div className="flex items-center justify-between text-xs text-slate-300 pt-2 border-t border-slate-800">
+          <span id="filter-feedback-status" role="status" aria-live="polite">
+            {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || searchQuery || supplementaryOnly) ? (
+              <>필터 적용 중: 총 <strong>{filteredRegions.length}</strong>개 지역 표시 중 ({SORT_OPTION_LABELS[sortOption] || ''})</>
+            ) : (
+              <>전체 <strong>{regions.length}</strong>개 지역 표시 중 ({SORT_OPTION_LABELS[sortOption] || ''})</>
+            )}
+          </span>
+          {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || searchQuery || supplementaryOnly) && (
             <button
               type="button"
               aria-label="적용된 전체 필터 초기화"
@@ -811,8 +862,8 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             >
               전체 필터 초기화
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </section>
 
       {/* 4. 17 Regional Grid Cards / Table View - Visible Focus Ring for Keyboard Users */}
@@ -872,11 +923,70 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
           <div
             role="status"
             aria-live="polite"
-            className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-300 space-y-3"
+            className="bg-slate-900 border border-slate-800 rounded-2xl p-8 sm:p-12 text-center text-slate-300 space-y-4"
           >
             <div className="text-3xl" aria-hidden="true">🔍</div>
-            <div className="text-base font-semibold text-slate-200">검색 및 필터 조건에 일치하는 지자체가 없습니다.</div>
-            <p className="text-xs text-slate-300">검색어를 변경하거나 필터를 초기화해 보세요.</p>
+            <div className="space-y-1">
+              <div className="text-base font-semibold text-slate-200">검색 및 필터 조건에 일치하는 지자체가 없습니다.</div>
+              <p className="text-xs text-slate-300">적용된 조건 중 일부를 해제하거나 전체 필터를 초기화해 보세요.</p>
+            </div>
+
+            {/* Diagnostic Filter Chips: Allows removing individual constraints */}
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1 max-w-xl mx-auto">
+              {searchQuery && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-200">
+                  <span>검색어: <strong>&ldquo;{searchQuery}&rdquo;</strong></span>
+                  <button
+                    type="button"
+                    onClick={handleClearSearch}
+                    aria-label={`검색어 "${searchQuery}" 제거`}
+                    className="ml-1 text-slate-300 hover:text-white font-bold p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                  >
+                    ✕
+                  </button>
+                </span>
+              )}
+              {zoneFilter !== 'ALL' && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-200">
+                  <span>권역: <strong>{ZONE_FILTERS.find((z) => z.id === zoneFilter)?.label || zoneFilter}</strong></span>
+                  <button
+                    type="button"
+                    onClick={handleClearZoneFilter}
+                    aria-label="권역 필터 해제"
+                    className="ml-1 text-slate-300 hover:text-white font-bold p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                  >
+                    ✕
+                  </button>
+                </span>
+              )}
+              {alertFilter !== 'ALL' && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-200">
+                  <span>경보: <strong>{thresholds[alertFilter]?.label_ko || alertFilter}</strong></span>
+                  <button
+                    type="button"
+                    onClick={handleClearAlertFilter}
+                    aria-label="경보 필터 해제"
+                    className="ml-1 text-slate-300 hover:text-white font-bold p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                  >
+                    ✕
+                  </button>
+                </span>
+              )}
+              {supplementaryOnly && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-200">
+                  <span>추경 지자체 전용 필터</span>
+                  <button
+                    type="button"
+                    onClick={handleClearSupplementaryFilter}
+                    aria-label="추경 필터 해제"
+                    className="ml-1 text-slate-300 hover:text-white font-bold p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                  >
+                    ✕
+                  </button>
+                </span>
+              )}
+            </div>
+
             <div className="pt-2">
               <button
                 type="button"
@@ -982,8 +1092,9 @@ const RegionCard = React.memo(function RegionCard({
   }, [isExpanded, hasBeenExpanded]);
 
   // Memoized sub-municipalities list
+  const shouldRenderMunis = isExpanded || hasBeenExpanded;
   const renderedMunis = useMemo(() => {
-    if (!hasBeenExpanded) return null;
+    if (!shouldRenderMunis) return null;
     return munis.map((muni) => {
       const muniAnnounced = Number.isFinite(muni.announced_units) ? Math.max(0, muni.announced_units) : 0;
       const muniApplied = Number.isFinite(muni.applied_units) ? Math.max(0, muni.applied_units) : 0;
@@ -1018,7 +1129,7 @@ const RegionCard = React.memo(function RegionCard({
         </div>
       );
     });
-  }, [hasBeenExpanded, munis, regionId]);
+  }, [shouldRenderMunis, munis, regionId]);
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg hover:border-slate-700 transition flex flex-col justify-between">
@@ -1109,6 +1220,7 @@ const RegionCard = React.memo(function RegionCard({
             {/* Preserved in DOM with hidden attribute so aria-controls never breaks */}
             <div
               id={'muni-details-' + region.region_id}
+              data-card-id={'muni-details-card-' + region.region_id}
               hidden={!isExpanded}
               tabIndex={0}
               role="region"

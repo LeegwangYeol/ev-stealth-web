@@ -143,6 +143,12 @@ def _resolve_default_paths():
         web_pub_data / "ev_subsidy_data.json",
         web_pub_data / "subsidy_depletion_data.json",
     ]
+    web_data = repo_root / "ev-stealth-web" / "data"
+    if web_data.parent.exists() and web_data.exists():
+        external_sync_targets.extend([
+            web_data / "ev_subsidy_data.json",
+            web_data / "subsidy_depletion_data.json",
+        ])
     if root_pub_data.parent.exists() or root_pub_data.exists():
         external_sync_targets.extend([
             root_pub_data / "ev_subsidy_data.json",
@@ -282,14 +288,20 @@ def sync_defect_reports(
             repo_root / "ev-stealth-web" / "public" / "data" / "daily_reports.json",
             repo_root / "public" / "data" / "daily_reports.json",
         ]
+        if (repo_root / "ev-stealth-web" / "data").exists():
+            public_reports_paths.append(repo_root / "ev-stealth-web" / "data" / "daily_reports.json")
         if (_CURRENT_DIR / "ev-stealth-web" / "public" / "data").exists():
             public_reports_paths.append(_CURRENT_DIR / "ev-stealth-web" / "public" / "data" / "daily_reports.json")
         if (_CURRENT_DIR / "public" / "data").exists():
             public_reports_paths.append(_CURRENT_DIR / "public" / "data" / "daily_reports.json")
+        if (_CURRENT_DIR / "ev-stealth-web" / "data").exists():
+            public_reports_paths.append(_CURRENT_DIR / "ev-stealth-web" / "data" / "daily_reports.json")
         if (_CURRENT_DIR.parent / "ev-stealth-web" / "public" / "data").exists():
             public_reports_paths.append(_CURRENT_DIR.parent / "ev-stealth-web" / "public" / "data" / "daily_reports.json")
         if (_CURRENT_DIR.parent / "public" / "data").exists():
             public_reports_paths.append(_CURRENT_DIR.parent / "public" / "data" / "daily_reports.json")
+        if (_CURRENT_DIR.parent / "ev-stealth-web" / "data").exists():
+            public_reports_paths.append(_CURRENT_DIR.parent / "ev-stealth-web" / "data" / "daily_reports.json")
 
     # Deduplicate public paths preserving order
     seen_pub = set()
@@ -477,6 +489,80 @@ def sync_defect_reports(
             deduped_written.append(p_str)
 
     return deduped_written
+
+
+def auto_heal_mirrored_parity(repo_root: Optional[Path] = None) -> List[str]:
+    """Scan all canonical mirrored JSON datasets across data/, src/data/, public/data/ and heal any disparities.
+
+    Ensures 100% bitwise parity and schema consistency across:
+    - ev_subsidy_data.json
+    - subsidy_depletion_data.json
+    - models_subsidy_matrix.json
+    - daily_reports.json
+    - ev_recall_database.json
+    - ev_reliability_trends.json
+    - ev_depreciation_data.json
+    """
+    root = repo_root or _find_repo_root()
+    active_dirs = [
+        root / "data",
+        root / "ev-stealth-web" / "src" / "data",
+        root / "ev-stealth-web" / "public" / "data",
+    ]
+    web_data = root / "ev-stealth-web" / "data"
+    if web_data.is_dir():
+        active_dirs.append(web_data)
+    root_public = root / "public" / "data"
+    if root_public.is_dir():
+        active_dirs.append(root_public)
+
+    target_files = [
+        "ev_subsidy_data.json",
+        "subsidy_depletion_data.json",
+        "models_subsidy_matrix.json",
+        "daily_reports.json",
+        "ev_recall_database.json",
+        "ev_reliability_trends.json",
+        "ev_depreciation_data.json",
+    ]
+
+    repaired = []
+    for fname in target_files:
+        best_cand: Optional[Tuple[int, float, Path, str, bytes]] = None
+        hashes: Dict[Path, str] = {}
+        for d in active_dirs:
+            fp = d / fname
+            if fp.is_file() and fp.stat().st_size > 0:
+                try:
+                    content = fp.read_bytes()
+                    json.loads(content.decode("utf-8-sig"))
+                    h = hashlib.sha256(content).hexdigest()
+                    hashes[fp] = h
+                    score = (1, fp.stat().st_mtime)
+                    if best_cand is None or score > (best_cand[0], best_cand[1]):
+                        best_cand = (score[0], score[1], fp, h, content)
+                except Exception:
+                    pass
+
+        if best_cand is not None:
+            auth_path, auth_hash, auth_bytes = best_cand[2], best_cand[3], best_cand[4]
+            for d in active_dirs:
+                fp = d / fname
+                if not fp.exists() or hashes.get(fp) != auth_hash:
+                    try:
+                        d.mkdir(parents=True, exist_ok=True)
+                        tmp_p = d / f".tmp_heal_{fname}_{os.getpid()}"
+                        tmp_p.write_bytes(auth_bytes)
+                        try:
+                            os.chmod(tmp_p, 0o644)
+                        except OSError:
+                            pass
+                        os.replace(tmp_p, fp)
+                        repaired.append(f"{fname} -> {fp}")
+                        logger.info("Auto-healed mirror parity for %s in %s", fname, d)
+                    except Exception as e:
+                        logger.warning("Failed to auto-heal %s in %s: %s", fname, d, e)
+    return repaired
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -775,6 +861,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                         run_crawler=bool(args.sync_defects is True),
                         quarantine_corrupted=getattr(args, "quarantine_corrupted", True),
                     )
+
+            if args.sync_web or auto_bidirectional:
+                healed = auto_heal_mirrored_parity(_find_repo_root())
+                if healed:
+                    logger.info("Auto-healed %d dataset parity disparities across mirrors: %s", len(healed), healed)
         else:
             logger.info("Dry-run requested: skipping file persistence.")
             both_exist = (

@@ -145,6 +145,10 @@ export interface StealthScoreInput {
   yearsEvaluated?: unknown;
   baselineIndustryDsi?: unknown;
   weights?: StealthScoreWeights;
+  fleetOrSalesVolume?: unknown;
+  fleetVolume?: unknown;
+  salesVolume?: unknown;
+  baselineScale?: number;
 }
 
 export interface StealthScoreResult {
@@ -162,6 +166,77 @@ export interface DefectFrequencyOptions {
   complaintCount?: unknown;
   fleetOrSalesVolume?: unknown;
   baselineScale?: number;
+}
+
+export type TrajectoryVerdict =
+  | 'RAPIDLY_IMPROVING'
+  | 'IMPROVING'
+  | 'STABLE'
+  | 'DEGRADING'
+  | 'CRITICALLY_DEGRADING';
+
+export interface PeriodicDefectInput {
+  date?: string | Date;
+  year?: number | string;
+  quarter?: number | string;
+  month?: number | string;
+  category?: DefectCategoryKey | string;
+  defectCategory?: string;
+  count?: number | string | null;
+  dsiScore?: number | string | null;
+  modelId?: string;
+  brandId?: string;
+}
+
+export interface QuarterlyDefectBreakdown {
+  periodKey: string;
+  year: number;
+  quarter: 1 | 2 | 3 | 4;
+  totalComplaints: number;
+  percentage: number;
+  avgDsi: number;
+  topCategory: DefectCategoryKey | string;
+  categoryDistribution: Record<string, { count: number; percentage: number }>;
+  trendFromPrevious: TrendCalculationResult;
+  movingAverage3Q: number;
+}
+
+export interface MonthlyDefectBreakdown {
+  periodKey: string;
+  year: number;
+  month: number;
+  monthLabel: string;
+  totalComplaints: number;
+  percentage: number;
+  avgDsi: number;
+  topCategory: DefectCategoryKey | string;
+  categoryDistribution: Record<string, { count: number; percentage: number }>;
+  trendFromPrevious: TrendCalculationResult;
+  movingAverage3M: number;
+}
+
+export interface ModelYearTrajectory {
+  modelId: string;
+  modelName: string;
+  brandName?: string;
+  trackedYears: number[];
+  initialDsi: number;
+  latestDsi: number;
+  overallDsiChange: TrendCalculationResult;
+  trajectoryVerdict: TrajectoryVerdict;
+  peakRiskYear: number | null;
+  peakRiskDsi: number;
+  safestYear: number | null;
+  safestDsi: number;
+  chronicCategories: string[];
+  yearOverYearProgression: Array<{
+    year: number;
+    dsi: number;
+    verdict: ModelYearVerdict;
+    incidentRate: number;
+    primaryDefect: string;
+    trendFromPreviousYear: TrendCalculationResult;
+  }>;
 }
 
 export type ReliabilitySortOption = 'DSI_DESC' | 'DSI_ASC' | 'GRADE' | 'NAME';

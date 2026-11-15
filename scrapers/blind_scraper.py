@@ -54,16 +54,22 @@ class BlindScraper:
         timeout: Union[float, Tuple[float, float]] = (5.0, 15.0),
         connect_timeout: Optional[float] = None,
         read_timeout: Optional[float] = None,
+        enable_cache: bool = True,
+        cache_fallback: bool = True,
     ):
         # Enforce polite delay with randomized jitter (1.5s - 3.5s) and cooldown
         self.timeout = timeout
         self.connect_timeout = connect_timeout or (timeout[0] if isinstance(timeout, (tuple, list)) and len(timeout) >= 2 else 5.0)
         self.read_timeout = read_timeout or (timeout[1] if isinstance(timeout, (tuple, list)) and len(timeout) >= 2 else 15.0)
+        self.enable_cache = enable_cache
+        self.cache_fallback = cache_fallback
         self.client = client or SafeHttpClient(
             min_delay=1.5,
             max_delay=3.5,
             connect_timeout=self.connect_timeout,
             read_timeout=self.read_timeout,
+            enable_cache=self.enable_cache,
+            cache_fallback=self.cache_fallback,
         )
         self.min_delay = 1.5
         self.max_delay = 3.5
@@ -422,6 +428,57 @@ class BlindScraper:
 
         return records
 
+    def load_seed_records(self, limit: Optional[int] = None) -> List[ComplaintRecord]:
+        """Load fallback records from seed dataset when live scraping is unavailable or restricted."""
+        records: List[ComplaintRecord] = []
+        seed_filenames = ["raw_blind_emerging.json", "compiled_complaints.json"]
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        search_dirs = [
+            os.path.join(base_dir, "data"),
+            os.path.join(os.path.dirname(base_dir), "data"),
+            os.path.join(os.getcwd(), "data"),
+        ]
+        seen_ids = set()
+        for s_dir in search_dirs:
+            if not os.path.isdir(s_dir):
+                continue
+            for s_name in seed_filenames:
+                s_file = os.path.join(s_dir, s_name)
+                if os.path.isfile(s_file):
+                    try:
+                        with open(s_file, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                        if isinstance(data, list):
+                            for item in data:
+                                if isinstance(item, dict) and item.get("platform") == "blind":
+                                    pid = str(item.get("id") or item.get("post_id") or "")
+                                    if pid and pid in seen_ids:
+                                        continue
+                                    if pid:
+                                        seen_ids.add(pid)
+                                    records.append(ComplaintRecord(
+                                        id=pid,
+                                        platform=item.get("platform", "blind"),
+                                        board_name=item.get("board_name", "블라인드"),
+                                        post_url=item.get("post_url") or item.get("url") or "",
+                                        post_title=item.get("post_title") or item.get("title") or "",
+                                        target_vehicle=item.get("target_vehicle", "Unknown"),
+                                        category=item.get("category", "convenience"),
+                                        defect_topic=item.get("defect_topic", ""),
+                                        raw_quote=item.get("raw_quote") or item.get("content") or "",
+                                        slang_terms=item.get("slang_terms", []),
+                                        severity=item.get("severity", "convenience_issue"),
+                                        platform_metadata=item.get("platform_metadata", {}),
+                                        collected_at=str(item.get("collected_at") or ""),
+                                    ))
+                                    if limit and len(records) >= limit:
+                                        return records
+                    except Exception as e:
+                        logger.debug(f"Failed to load seed records from {s_file}: {e}")
+            if records:
+                break
+        return records[:limit] if limit else records
+
     @staticmethod
     def _determine_severity(category: str, text: str) -> str:
         """Heuristic severity assessment."""
@@ -506,6 +563,10 @@ def main():
         if post_data:
             records = scraper.extract_complaint_records(post_data)
             all_records.extend(records)
+
+    if not all_records and scraper.cache_fallback:
+        logger.warning("No records harvested from live Blind topic. Falling back to seed datasets.")
+        all_records = scraper.load_seed_records(limit=10)
 
     save_complaints_json(all_records, args.output)
     print(f"Collected {len(all_records)} records from Blind.")

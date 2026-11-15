@@ -38,6 +38,7 @@ const depreciationJsonLd = {
         '국내 주요 15개 전기차 모델의 1~5년 차 잔존가치, 연간 감가율, 배터리 충·방전 사이클별 SoH 열화도 및 TCO 비교 분석 데이터셋.',
       url: `${SITE_URL}/depreciation-calculator`,
       isAccessibleForFree: true,
+      license: 'https://creativecommons.org/licenses/by/4.0/',
       creator: {
         '@type': 'Organization',
         name: 'Global EV Hub Research Team',
@@ -49,6 +50,32 @@ const depreciationJsonLd = {
         url: SITE_URL,
       },
       temporalCoverage: '2021/2026',
+      spatialCoverage: {
+        '@type': 'Place',
+        name: '대한민국 (South Korea)',
+      },
+      distribution: [
+        {
+          '@type': 'DataDownload',
+          encodingFormat: 'application/json',
+          contentUrl: `${SITE_URL}/data/ev_depreciation_data.json`,
+        },
+      ],
+      variableMeasured: [
+        '전기차 연차별 잔존가치율(1~5년 차)',
+        '연간 감가율 및 감가방어율 점수',
+        '배터리 완속/급속 충방전 사이클별 SoH 열화도',
+        '대기환경보전법 제58조 2년 의무운행기간 보조금 환수액',
+        '5개년 TCO 총소유비용 및 내연기관 대비 유류비 절감액',
+      ],
+      keywords: [
+        '전기차 감가율',
+        '전기차 잔존가치',
+        '배터리 SoH',
+        '보조금 환수율',
+        '전기차 TCO',
+        '대기환경보전법 제58조',
+      ],
     },
     {
       '@type': 'ItemList',

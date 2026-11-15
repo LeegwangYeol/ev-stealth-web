@@ -518,7 +518,8 @@ class RawPost:
             if isinstance(data, dict):
                 return data.get(k, default)
             return getattr(data, k, default)
-        raw_comments = _get("comments")
+
+        raw_comments = _get("comments") or _get("comment_list")
         comments = (
             [str(c) for c in raw_comments if c is not None]
             if isinstance(raw_comments, (list, tuple, set))
@@ -526,18 +527,41 @@ class RawPost:
         )
         pid = _get("post_id", None)
         if pid is None or (isinstance(pid, str) and not pid.strip()):
-            pid = _get("id", None)
+            for k in ("id", "postId", "article_id", "doc_id"):
+                cand = _get(k, None)
+                if cand is not None and not (isinstance(cand, str) and not cand.strip()):
+                    pid = cand
+                    break
         post_id = str(pid) if pid is not None else ""
+
+        meta = _get("platform_metadata")
+        meta_dict = meta if isinstance(meta, dict) else {}
+
+        title = str(_get("title") or _get("post_title") or _get("subject") or "")
+        url = str(_get("url") or _get("post_url") or _get("link") or "")
+        content = str(_get("content") or _get("raw_quote") or _get("body") or _get("text") or _get("defect_topic") or "")
+        author = str(_get("author") or _get("author_badge") or meta_dict.get("author_badge") or meta_dict.get("author") or "")
+        created_at = str(
+            _get("created_at")
+            or _get("created_at=")
+            or _get("collected_at")
+            or _get("post_date")
+            or _get("published_at")
+            or meta_dict.get("post_date")
+            or meta_dict.get("published_at")
+            or meta_dict.get("created_at")
+            or ""
+        )
 
         return cls(
             platform=str(_get("source") or _get("platform") or "unknown"),
             post_id=post_id,
-            url=str(_get("url") or ""),
-            title=str(_get("title") or ""),
-            content=str(_get("content") or ""),
+            url=url,
+            title=title,
+            content=content,
             comments=comments,
-            created_at=str(_get("created_at") or _get("created_at=") or ""),
-            author=str(_get("author") or ""),
+            created_at=created_at,
+            author=author,
         )
 
 

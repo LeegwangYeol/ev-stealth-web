@@ -256,6 +256,219 @@ class ResilientHTTPSHandler(urllib.request.HTTPSHandler):
         return self.do_open(_factory, req)
 
 
+class CircuitBreakerState:
+    CLOSED = "CLOSED"
+    OPEN = "OPEN"
+    HALF_OPEN = "HALF_OPEN"
+
+
+class CircuitBreaker:
+    """
+    Host-level Circuit Breaker preventing aggressive hammer on target sites
+    returning HTTP 403 (Forbidden/WAF), 429 (Rate Limit), 503 (Service Unavailable),
+    or consecutive connection drops.
+    """
+
+    def __init__(
+        self,
+        failure_threshold: int = 3,
+        cooldown_seconds: float = 30.0,
+        half_open_max_probes: int = 1,
+    ):
+        self.failure_threshold = max(1, int(failure_threshold))
+        self.cooldown_seconds = max(0.01, float(cooldown_seconds))
+        self.half_open_max_probes = max(1, int(half_open_max_probes))
+        self._lock = threading.Lock()
+        self._hosts: Dict[str, Dict[str, Any]] = {}
+
+    def _extract_host(self, url_or_host: str) -> str:
+        if not url_or_host:
+            return ""
+        s = str(url_or_host).strip()
+        if "://" in s:
+            try:
+                parsed = urllib.parse.urlparse(s)
+                return (parsed.netloc or "").lower().split(":")[0]
+            except Exception:
+                pass
+        return s.lower().split(":")[0].split("/")[0]
+
+    def is_available(self, url_or_host: str) -> bool:
+        """Returns True if requests can be dispatched to this host."""
+        host = self._extract_host(url_or_host)
+        if not host:
+            return True
+        with self._lock:
+            info = self._hosts.get(host)
+            if not info:
+                return True
+            state = info.get("state", CircuitBreakerState.CLOSED)
+            if state == CircuitBreakerState.CLOSED:
+                return True
+            now = time.time()
+            if state == CircuitBreakerState.OPEN:
+                if now >= info.get("tripped_until", 0.0):
+                    info["state"] = CircuitBreakerState.HALF_OPEN
+                    info["probe_count"] = 0
+                    return True
+                return False
+            if state == CircuitBreakerState.HALF_OPEN:
+                return info.get("probe_count", 0) < self.half_open_max_probes
+            return True
+
+    def is_open(self, url_or_host: str) -> bool:
+        """Returns True if the circuit breaker is OPEN for this host."""
+        return not self.is_available(url_or_host)
+
+    def can_request(self, url_or_host: str) -> bool:
+        """Returns True if requests can be dispatched to this host (alias for is_available)."""
+        return self.is_available(url_or_host)
+
+    def record_success(self, url_or_host: str) -> None:
+        """Record successful response, resetting circuit to CLOSED."""
+        host = self._extract_host(url_or_host)
+        if not host:
+            return
+        with self._lock:
+            info = self._hosts.get(host)
+            if info:
+                info["state"] = CircuitBreakerState.CLOSED
+                info["failure_count"] = 0
+                info["probe_count"] = 0
+
+    def record_failure(
+        self,
+        url_or_host: str,
+        status_code: Optional[int] = None,
+        retry_after: Optional[float] = None,
+    ) -> bool:
+        """
+        Record failure for host. If status_code is in (403, 429, 503) or network failure,
+        increments failure count and trips circuit if threshold exceeded.
+        Returns True if circuit was tripped to OPEN.
+        """
+        host = self._extract_host(url_or_host)
+        if not host:
+            return False
+        with self._lock:
+            if host not in self._hosts:
+                self._hosts[host] = {
+                    "state": CircuitBreakerState.CLOSED,
+                    "failure_count": 0,
+                    "tripped_until": 0.0,
+                    "probe_count": 0,
+                }
+            info = self._hosts[host]
+            info["failure_count"] = info.get("failure_count", 0) + 1
+            tripped = False
+
+            cooldown = self.cooldown_seconds
+            if retry_after is not None and retry_after > 0:
+                cooldown = max(cooldown, float(retry_after))
+
+            now = time.time()
+            if info.get("state") == CircuitBreakerState.HALF_OPEN:
+                # Canary probe failed; re-trip circuit
+                info["state"] = CircuitBreakerState.OPEN
+                info["tripped_until"] = now + cooldown
+                tripped = True
+            elif info["failure_count"] >= self.failure_threshold:
+                info["state"] = CircuitBreakerState.OPEN
+                info["tripped_until"] = now + cooldown
+                tripped = True
+
+            return tripped
+
+    def get_state(self, url_or_host: str) -> str:
+        host = self._extract_host(url_or_host)
+        with self._lock:
+            info = self._hosts.get(host)
+            if not info:
+                return CircuitBreakerState.CLOSED
+            state = info.get("state", CircuitBreakerState.CLOSED)
+            if state == CircuitBreakerState.OPEN and time.time() >= info.get("tripped_until", 0.0):
+                info["state"] = CircuitBreakerState.HALF_OPEN
+                info["probe_count"] = 0
+                return CircuitBreakerState.HALF_OPEN
+            return state
+
+    def reset(self, url_or_host: Optional[str] = None) -> None:
+        with self._lock:
+            if url_or_host:
+                host = self._extract_host(url_or_host)
+                if host in self._hosts:
+                    del self._hosts[host]
+            else:
+                self._hosts.clear()
+
+
+try:
+    from bs4 import BeautifulSoup, FeatureNotFound  # type: ignore
+    BS4_AVAILABLE = True
+except ImportError:
+    BeautifulSoup = None  # type: ignore
+    FeatureNotFound = Exception  # type: ignore
+    BS4_AVAILABLE = False
+
+
+def safe_soup_parse(markup: Union[str, bytes, Any], preferred_parser: str = "html.parser") -> Any:
+    """
+    Safely parse HTML markup using BeautifulSoup if installed,
+    with comprehensive error handling for FeatureNotFound, ParserRejectedMarkup,
+    RecursionError, AttributeError, TypeError, and malformed HTML.
+    Returns BeautifulSoup instance if available and successfully parsed, else None.
+    """
+    if markup is None or not BS4_AVAILABLE or BeautifulSoup is None:
+        return None
+
+    if isinstance(markup, bytes):
+        text = robust_decode(markup)
+    elif isinstance(markup, str):
+        text = markup
+    else:
+        return None
+
+    if not text.strip():
+        return None
+
+    sanitized = text.replace("\x00", " ")
+
+    parsers_to_try = [preferred_parser, "html.parser", "lxml", "html5lib"]
+    seen = set()
+    for parser in parsers_to_try:
+        if parser in seen:
+            continue
+        seen.add(parser)
+        try:
+            return BeautifulSoup(sanitized, parser)
+        except Exception as e:
+            logger.debug(f"BeautifulSoup parser '{parser}' notice: {e}")
+            continue
+
+    return None
+
+
+def safe_extract_html_text(markup: Union[str, bytes, Any]) -> str:
+    """
+    Extract visible text from HTML markup, attempting BeautifulSoup first if available,
+    falling back to clean_html_text on any exception or if bs4 is uninstalled.
+    """
+    if markup is None:
+        return ""
+    soup = safe_soup_parse(markup)
+    if soup is not None:
+        try:
+            for s in soup(["script", "style", "noscript"]):
+                s.decompose()
+            text = soup.get_text(separator="\n", strip=True)
+            if text:
+                return text
+        except Exception as e:
+            logger.debug(f"Failed extracting text via BeautifulSoup: {e}")
+
+    return clean_html_text(markup)
+
+
 class SafeHttpClient:
     """
     Safe and polite HTTP client designed to avoid anti-bot detection and handle rate limits.
@@ -294,6 +507,10 @@ class SafeHttpClient:
         enable_cache: bool = True,
         cache_fallback: bool = True,
         cache_dir: Optional[str] = None,
+        failure_threshold: int = 3,
+        circuit_cooldown: float = 30.0,
+        cooldown_seconds: Optional[float] = None,
+        circuit_breaker: Optional[CircuitBreaker] = None,
     ):
         self.min_delay = min_delay
         self.max_delay = max_delay
@@ -315,6 +532,11 @@ class SafeHttpClient:
         self._rate_limited_until = 0.0
         self.last_response_from_cache = False
         self._memory_cache: Dict[str, Dict[str, Any]] = {}
+        eff_cooldown = cooldown_seconds if cooldown_seconds is not None else circuit_cooldown
+        self.circuit_breaker = circuit_breaker or CircuitBreaker(
+            failure_threshold=failure_threshold,
+            cooldown_seconds=eff_cooldown,
+        )
 
         # Resolve explicit connect and read timeouts
         if connect_timeout is not None:
@@ -538,6 +760,18 @@ class SafeHttpClient:
                     except Exception:
                         pass
 
+    def is_circuit_open(self, url_or_host: str) -> bool:
+        """Check if circuit breaker is open for the given url or host."""
+        return not self.circuit_breaker.is_available(url_or_host)
+
+    def get_circuit_state(self, url_or_host: str) -> str:
+        """Return circuit breaker state ('CLOSED', 'OPEN', 'HALF_OPEN') for host."""
+        return self.circuit_breaker.get_state(url_or_host)
+
+    def reset_circuit_breaker(self, url_or_host: Optional[str] = None) -> None:
+        """Reset circuit breaker failure counts and state."""
+        self.circuit_breaker.reset(url_or_host)
+
     def __del__(self) -> None:
         """Safely release underlying resources on garbage collection."""
         try:
@@ -656,6 +890,22 @@ class SafeHttpClient:
         if not (norm_url.startswith("http://") or norm_url.startswith("https://")):
             logger.warning(f"Unsupported URL scheme: {norm_url!r}")
             return 0, "", b""
+
+        # Host-level Circuit Breaker guard
+        if not self.circuit_breaker.is_available(norm_url):
+            logger.warning(
+                f"Circuit breaker is OPEN for {norm_url} (tripped due to repeated 403/429/503 errors). "
+                f"Fast-failing request."
+            )
+            if self.cache_fallback:
+                cached = self.get_cached_response(norm_url)
+                if cached is not None:
+                    logger.warning(
+                        f"Circuit breaker OPEN for {norm_url}. Falling back to cached response."
+                    )
+                    self.last_response_from_cache = True
+                    return cached
+            return 503, "", b""
 
         self.last_response_from_cache = False
         self._sleep_with_jitter()
@@ -803,8 +1053,10 @@ class SafeHttpClient:
                     detected_encoding = encoding or self._detect_encoding(content_type, raw_bytes)
                     decoded_text = robust_decode(raw_bytes, declared_encoding=detected_encoding)
 
-                    if status_code == 200 and decoded_text:
-                        self.set_cached_response(norm_url, status_code, decoded_text, raw_bytes)
+                    if status_code == 200:
+                        self.circuit_breaker.record_success(norm_url)
+                        if decoded_text:
+                            self.set_cached_response(norm_url, status_code, decoded_text, raw_bytes)
 
                     return status_code, decoded_text, raw_bytes
                 finally:
@@ -838,12 +1090,20 @@ class SafeHttpClient:
                         logger.info(f"Backing off for {backoff:.2f}s before retry (status {he.code})...")
                         time.sleep(backoff)
                     else:
+                        retry_after = self._parse_retry_after(he) if he.code in (429, 503) else None
                         if he.code == 429:
-                            retry_after = self._parse_retry_after(he)
                             backoff = self._calc_backoff(attempt, retry_after=retry_after)
                             self._rate_limited_until = time.time() + backoff
-                        # On 5xx server error exhaustion, fallback to cached response if available
-                        if he.code in [500, 502, 503, 504, 520, 521, 522, 523, 524] and self.cache_fallback:
+                        if he.code in (403, 429, 503):
+                            tripped = self.circuit_breaker.record_failure(
+                                norm_url, status_code=he.code, retry_after=retry_after
+                            )
+                            if tripped:
+                                logger.warning(
+                                    f"Circuit breaker tripped OPEN for {norm_url} on HTTP {he.code}."
+                                )
+                        # On 403, 429, or 5xx server error exhaustion, fallback to cached response if available
+                        if he.code in [403, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524] and self.cache_fallback:
                             cached = self.get_cached_response(norm_url)
                             if cached is not None:
                                 logger.warning(
@@ -953,6 +1213,7 @@ class SafeHttpClient:
                     logger.info(f"Backing off for {backoff:.2f}s before retry...")
                     time.sleep(backoff)
                 else:
+                    self.circuit_breaker.record_failure(norm_url)
                     if self.cache_fallback:
                         cached = self.get_cached_response(norm_url)
                         if cached is not None:

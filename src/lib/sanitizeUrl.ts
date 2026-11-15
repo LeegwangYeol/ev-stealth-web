@@ -689,6 +689,63 @@ export function sanitizeText(text?: unknown): string {
 }
 
 /**
+ * Sanitizes and strips HTML tags from untrusted text (verbatim quotes, forum posts, defect titles, and summaries),
+ * eliminating XSS injection vectors, neutralizing executable script/style/iframe blocks, decoding HTML entities,
+ * and converting paragraph and break tags into clean, human-readable line breaks.
+ */
+export function stripHtmlTags(input?: unknown): string {
+  if (input === null || input === undefined) return '';
+  let str = String(input);
+  if (!str) return '';
+
+  // 1. Remove dangerous control characters and unicode bidi overrides
+  str = sanitizeText(str);
+
+  // 2. Strip executable and container elements including their inner content
+  str = str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  str = str.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+  str = str.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '');
+  str = str.replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '');
+  str = str.replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '');
+  str = str.replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '');
+  str = str.replace(/<template\b[^<]*(?:(?!<\/template>)<[^<]*)*<\/template>/gi, '');
+
+  // 3. Convert breaks and block-closing tags to clean newlines
+  str = str.replace(/<br\s*\/?>/gi, '\n');
+  str = str.replace(/<\/(?:p|div|tr|li|h[1-6]|blockquote)>/gi, '\n');
+
+  // 4. Strip all remaining HTML tags
+  str = str.replace(/<[^>]+>/g, '');
+
+  // 5. Decode common HTML entities (&quot;, &apos;, &amp;, &lt;, &gt;, &nbsp;, decimal, and hex entities)
+  str = decodeHtmlEntities(str);
+
+  // 6. Second pass: in case decoding entities revealed newly formed tags (e.g., &lt;script&gt;)
+  if (str.includes('<') && str.includes('>')) {
+    str = str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    str = str.replace(/<[^>]+>/g, '');
+  }
+
+  // 7. Neutralize any stray event handler attributes (e.g., onmouseover=, onerror=, onload=) or javascript: schemes
+  str = str.replace(/\b(?:on\w+)\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '');
+  str = str.replace(/\bjavascript:\s*/gi, '');
+
+  // 8. Normalize whitespace while preserving linebreaks (max 2 consecutive newlines)
+  str = str
+    .replace(/[ \t\f\v]+/g, ' ')
+    .replace(/\r\n|\r/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  return str;
+}
+
+/**
+ * Standard alias for stripHtmlTags.
+ */
+export const sanitizeHtml = stripHtmlTags;
+
+/**
  * Safely parses JSON strings while stripping dangerous prototype pollution keys
  * (__proto__, constructor, prototype).
  */

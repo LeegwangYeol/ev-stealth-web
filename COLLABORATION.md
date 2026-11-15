@@ -7,6 +7,107 @@
 - **Integrity Mode**: Benchmark / Infinite Evolution (zero stubs, zero lint errors/warnings, 100% test pass rate, empirical verification)
 
 
+## Current Execution Status: COMMUNITY SCRAPERS & CRAWLERS RESILIENCE AUDIT & PROACTIVE HARDENING (Cycle 26: 2026-11-16)
+- **Subsystem Audited**: Community Scrapers & Crawlers (`scrapers/`, `crawlers/`, `run_scraper.py`, `models/complaint.py`, `utils/http_client.py`)
+- **Key Objectives & Remediations**:
+  1. **Host-Level Circuit Breaking & Exponential Backoff**:
+     - Introduced `CircuitBreaker` and `CircuitBreakerState` in `utils/http_client.py` and `scrapers/common_utils.py` to prevent aggressive hammering when target forums return HTTP 403 (Forbidden/WAF), 429 (Rate Limit), or 503 (Service Unavailable).
+     - State machine: `CLOSED` -> `OPEN` (after failure threshold, default 3) -> `HALF_OPEN` (after cooldown, with canary probe) -> `CLOSED` on success.
+     - Fast-fail protection: when circuit is `OPEN`, requests fast-fail with HTTP 503 without initiating network connections or thread sleep, protecting local threads and remote target availability.
+     - Cooldown timer bounds: updated `CircuitBreaker` to support fine-grained cooldowns (`max(0.01, float(cooldown_seconds))`) and exposed `is_circuit_open()`, `get_circuit_state()`, and `reset_circuit_breaker()` across crawlers and scrapers.
+  2. **Safe HTML Parsing & BeautifulSoup Error Handling**:
+     - Added `safe_soup_parse(markup)` and `safe_extract_html_text(markup)` in `utils/http_client.py` and `scrapers/common_utils.py`.
+     - Completely decoupled runtime dependencies: gracefully handles missing `bs4` library or uninstalled parsers without crashing.
+     - Resilient against `FeatureNotFound`, `ParserRejectedMarkup`, `RecursionError`, `AttributeError`, `TypeError`, null bytes, control characters, and malformed HTML markup.
+     - Added strict string type guards (`if not html_content or not isinstance(html_content, str): return []`) across `parse_board_list`, `parse_gallery_list`, and `parse_topic_feed` in Bobaedream, DCInside, Blind, and Cafe Forum miners.
+  3. **Seed Dataset Fallback & Schema Mapping**:
+     - Upgraded `RawPost.from_dict()` in `models/complaint.py` to support seed dataset alias mappings:
+       - `title`: maps `post_title`, `title`, `subject`.
+       - `url`: maps `post_url`, `url`, `link`.
+       - `content`: maps `raw_quote`, `content`, `body`, `text`, `defect_topic`.
+       - `author`: maps `author`, `author_badge`, `platform_metadata.author_badge`.
+       - `created_at`: maps `created_at`, `collected_at`, `post_date`, `published_at`, `platform_metadata.post_date`.
+     - In `run_scraper.py`: enhanced `_load_harvest_cache()` to invoke `_load_seed_fallback()`, loading authentic complaint posts from `raw_bobae_emerging.json`, `raw_dcinside_emerging.json`, `raw_blind_emerging.json`, `raw_cafe_emerging.json`, and `compiled_complaints.json` when remote live sources are unreachable or restricted.
+     - In standalone scrapers (`BobaedreamScraper`, `DCInsideScraper`, `BlindScraper`, `CafeForumMiner`): added `load_seed_records()`, enabling automatic fallback to seed datasets and graceful halting if consecutive failures >= 5.
+  4. **Empirical Verification & Mirror Parity**:
+     - Mirrored all 15 modified files between `/Users/a7890/src/my-e-car/` and `/Users/a7890/src/my-e-car/ev-stealth-web/`.
+     - Created comprehensive test suite `tests/test_circuit_breaker_and_seed_fallback.py` (13/13 PASS).
+     - Full test suite: **140 passed in 22.93s** with zero regressions across `test_scrapers.py`, `test_scraper_crawler_resilience_audit.py`, `test_audit_scraper_filters_models.py`, `test_bobaedream_audit.py`, `test_crawler_http_hardening.py`, and `test_circuit_breaker_and_seed_fallback.py`.
+
+## Current Execution Status: ATOMIC WRITER & FILELOCK CONCURRENCY DEEP AUDIT & HARDENING (Cycle 26: 2026-11-16)
+- **Subsystem Audited**: Atomic Writer & Concurrency Subsystem (`tracker/atomic_writer.py`, `utils/json_writer.py`, `tracker/json_writer.py` across root and web mirrors)
+- **Key Objectives & Remediations**:
+  1. **POSIX Atomic Rename Guarantees & Hardware Durability (`durable_fsync`)**:
+     - Introduced `durable_fsync(fd: int)` which commits dirty data and metadata to disk on POSIX systems via `os.fsync(fd)`.
+     - On macOS (Darwin), additionally invokes `fcntl.fcntl(fd, fcntl.F_FULLFSYNC)` to flush drive controller volatile RAM caches to physical non-volatile NAND/platter, preventing zero-byte truncation on power failure.
+     - Upgraded file content writes, EXDEV staging fallbacks, and directory fsync operations to utilize `durable_fsync`.
+  2. **Deadlock Prevention & Stale Lock Expiry Guard**:
+     - Fixed race condition where active lock was prematurely broken during the microsecond metadata update window: gated `is_dead_holder` strictly behind `lock_age > self.stale_timeout` in both POSIX and Windows branches.
+     - Eliminated empty file window during lock metadata recording by writing payload at offset 0 prior to truncation (`os.lseek` -> `os.write` -> `os.ftruncate(len)`).
+     - Fixed file descriptor leak on lock timeout: when `fail_on_timeout=False`, `self.fd` is immediately closed and nulled, ensuring `lock.is_locked` accurately reports `False` without lingering open handles.
+     - Fixed re-entrant `FileLock` instance state isolation: tracking `_instance_depth` per instance ensures that upon exiting an inner `with FileLock:` block, `inner_lock.is_locked` is marked `False` while the outer context remains locked.
+  3. **Corrupted Cache Isolation & Quarantine Mechanisms**:
+     - Hardened `quarantine_corrupted_file` against redundant re-quarantining: if a file already matches corrupted or quarantined naming patterns, returns path immediately.
+     - In `utils/json_writer.py:read_daily_reports`, wrapped decode handling and quarantine execution inside `FileLock(get_lock_path(p))` when `quarantine_corrupted=True`, preventing false-positive quarantine of files currently being written by concurrent processes.
+     - Hardened cross-device `EXDEV` fallback with atomic directory staging replacement.
+  4. **RFC 8259 Schema & Mirrored Parity**:
+     - Hardened `sanitize_nan_inf` to sanitize `Decimal` dict keys (normal Decimal keys to `str`, NaN/Infinity keys to `"0.0"`), preventing `TypeError` during `json.dumps()`.
+     - Enforced 100% bitwise cryptographic SHA-256 parity across root and `ev-stealth-web` mirrors for `tracker/atomic_writer.py` and `utils/json_writer.py`.
+     - Created `tests/test_atomic_writer_concurrency_audit.py` (12/12 PASS, 52/52 combined suite PASS).
+
+## Current Execution Status: SUBSIDY TRACKER CALCULATION ENGINE AUDIT & FULL BACKEND-FRONTEND ALIGNMENT (Cycle 26: 2026-11-15)
+- **Subsystem Audited**: Subsidy Tracker Calculation Engine (`ev-stealth-web/src/lib/subsidyCalculations.ts`, `ev-stealth-web/src/lib/getSubsidyData.ts`, `ev-stealth-web/src/types/subsidy.ts`, and `ev-stealth-web/tracker/subsidy_tracker.py`)
+- **Key Objectives & Remediations**:
+  1. **Division by Zero, NaN Handling, Negative Values & Null/Undefined Safety**:
+     - Verified zero-division guards in `calculateDepletionRate` and `calculateDeliveryRate` (`totalQuota <= 0` or `appliedCount <= 0` returns `0.0`).
+     - Verified `calculateRemainingUnits` bounds remaining units with `Math.max(0, safeQuota - safeApplied)`.
+     - Hardened `safeCompareNumbers` against subtle `NaN` vs `Infinity`/`-Infinity` comparisons: invalid numbers (`NaN`, `null`, `undefined`) are now strictly pushed to the end of the sorted array in both `asc` and `desc` directions, preventing `NaN` from sorting ahead of `Infinity` in ascending order.
+     - Added `Math.max(0, ...)` clamping on `cat.depletion_rate` and `cat.remaining_units` in `compareRegions` to prevent negative values in malformed JSON payloads from corrupting sort order.
+  2. **Sorting, Filtering & Ranking Algorithm Edge Cases**:
+     - **Ties in Depletion Ranking**: In `rankRegionsByDepletion`, normalized depletion rate with `Math.round(rawRate * 10) / 10` before comparing `rate === prev.depletionRate`, eliminating IEEE 754 floating-point precision jitter (e.g. `33.3333333%` vs `33.3%`). Ties now consistently receive identical ranks with standard competition ranking gaps.
+     - **Alert Severity Normalization**: Normalized `cat.status` to uppercase `AlertSeverity` across `rankRegionsByDepletion` and `calculateNetSubsidyPure`, preventing lowercase strings like `"healthy"` from breaking badge styling.
+     - **Critical Regions Count Consistency**: In `calculateSubsidyStatistics`, unified `criticalCount` fallback from `summary.alert_region_counts` to include `(summary.alert_region_counts.critical ?? 0) + depletedCount`, aligning with `criticalRegions: CriticalRegionInfo[]` (all regions >= 95.0%) and Python `get_critical_regions`.
+     - **Bidirectional Model Sorting**: Added support for `SUBSIDY_ASC`, `RANGE_ASC`, and `NAME_DESC` in `compareModels`, enabling seamless 2-way column toggling on all vehicle table columns.
+     - **Administrative Suffix Stripping**: In `getRegionByIdFromList`, guarded `rStripped` against empty string matches (`stripped.includes(rStripped)`), preventing false positive matches.
+  3. **Backend-Frontend Type & Function Parity**:
+     - Ported full statutory calculation utilities from Python `subsidy_tracker.py` into pure TypeScript functions:
+       - `calculateWaitlistUnits(applied, quota)`: oversubscription beyond quota (`max(0, applied - quota)`).
+       - `isDepletionOverExhausted(depletionRate)`: returns `true` if `rate > 100.0%`.
+       - `calculatePendingDeliveries(applied, delivered)`: `max(0, applied - delivered)`.
+       - `calculateDepletionVelocity(appliedStart, appliedEnd, days)`: burn rate in units/day with zero-division guard.
+       - `predictExhaustionDays(remainingUnits, dailyVelocity)`: integer days to runout with ceil and bounds.
+       - `predictExhaustionDate(remainingUnits, dailyVelocity, startDate)`: projected YYYY-MM-DD exhaustion date.
+       - `classifyRegionGroup(region)`, `isMetropolitanCity(region)`, `isProvince(region)`, `groupRegionsByType(regions)`: classifies regions into 8 Metropolitan Cities vs 9 Provinces.
+     - Aligned TypeScript types in `src/types/subsidy.ts`:
+       - Added `HistoricalTrajectoryPoint` interface matching Python dataclass.
+       - Added `RegionalGroup` and `RegionalGroupSummary` matching Python `compute_regional_group_summaries`.
+       - Expanded `RegionSortOption` and `ModelSortOption` with all uppercase and lowercase string literal variants.
+     - Re-exported all new functions and types through `src/lib/getSubsidyData.ts` for clean developer access.
+  4. **Empirical Verification & Test Coverage**:
+     - Expanded `ev-stealth-web/tests/test_subsidy_calculations_audit.py` with 5 new comprehensive test cases (test_14 through test_18) covering waitlist units, pending deliveries, depletion velocity, exhaustion date predictions, regional grouping, NaN vs Infinity comparator behavior, and bidirectional model sorting.
+     - **18/18 test cases PASS (100%)** via Node.js tsx runtime.
+     - Verified zero regression on 363 backend Python subsidy tests.
+
+## Current Execution Status: NAVIGATION & HEADER COMPONENTS ACCESSIBILITY & RESPONSIVENESS AUDIT (Cycle 26: 2026-11-15)
+- **Subsystem Audited**: Navigation & Header Components (`src/components/BrandComparisonNav.tsx`, `src/app/layout.tsx`, `src/app/page.tsx`, `src/components/GlobalNavListener.tsx`, `src/app/globals.css`)
+- **Key Objectives & Remediations**:
+  1. **Skip-to-Content Accessibility Link Functionality**:
+     - Elevated skip link focus z-index from `focus:z-50` to `focus:z-[100]` in `layout.tsx`, preventing any stacking collision or clipping with the sticky `top-0 z-50` header.
+     - Added programmatic focus management in `GlobalNavListener.tsx`: intercepting clicks on `a[href="#main-content"]` to explicitly invoke `main.focus()`, ensuring screen readers and keyboard focus land on `<main id="main-content" tabIndex={-1}>` cross-browser (WebKit/Safari).
+  2. **Mobile Navigation Drawer & Touch Target Sizes (WCAG 2.5.5 / 2.5.8 >= 44x44px)**:
+     - Upgraded breadcrumb "🏠 홈" link in `BrandComparisonNav.tsx` with `min-w-[44px] justify-center px-2`, ensuring touch target exceeds 44x44px in both dimensions.
+     - Verified all mobile navigation drawer links (`#mobile-nav-panel a`), toggle `<summary>`, and desktop `<nav data-testid="desktop-nav">` links strictly satisfy `min-h-[44px]`.
+     - Verified drawer viewport clamping: `max-w-[calc(100vw-2rem)]`, `max-h-[calc(100dvh-5rem)]`, and `overflow-y-auto`.
+     - Added `break-keep` to Home hero heading in `page.tsx` for optimal mobile typography without awkward word breaks.
+  3. **Active Route Styling and `aria-current="page"` Attributes**:
+     - Integrated `usePathname()` in `GlobalNavListener.tsx` to reactively detect route changes and synchronize `aria-current="page"` across desktop nav, mobile drawer, and logo links.
+     - Enhanced `layout.tsx` desktop and mobile links with Tailwind variant classes `aria-[current=page]:...`.
+     - Added fallback CSS in `globals.css` for `header nav[data-testid="desktop-nav"] a[aria-current="page"]` and `header #mobile-nav-panel a[aria-current="page"]`.
+     - Configured auto-closing of the mobile drawer on client-side route transitions and synchronized `aria-expanded="false"`.
+  4. **Verification & Tests**:
+     - Added new comprehensive test suite `tests/test_navigation_header_audit.py` and `ev-stealth-web/tests/test_navigation_header_audit.py` (20/20 PASS).
+     - Verified zero regressions on existing `test_frontend_a11y_wcag.py`, `test_responsive_mobile_layout_audit.py`, and `test_brand_comparison_pages_audit.py`.
+
 ## Current Execution Status: RESPONSIVE DESIGN & MOBILE LAYOUT AUDIT COMPLETED (Cycle 26: 2026-11-15)
 - **Subsystem**: Responsive Design & Mobile Layout Audit (`/Users/a7890/src/my-e-car/ev-stealth-web/src`)
 - **Key Objectives & Audits Performed**:

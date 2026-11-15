@@ -60,16 +60,22 @@ class CafeForumMiner:
         timeout: Union[float, Tuple[float, float]] = (5.0, 15.0),
         connect_timeout: Optional[float] = None,
         read_timeout: Optional[float] = None,
+        enable_cache: bool = True,
+        cache_fallback: bool = True,
     ):
         # Enforce polite delay with randomized jitter (1.5s - 3.5s) and cooldown
         self.timeout = timeout
         self.connect_timeout = connect_timeout or (timeout[0] if isinstance(timeout, (tuple, list)) and len(timeout) >= 2 else 5.0)
         self.read_timeout = read_timeout or (timeout[1] if isinstance(timeout, (tuple, list)) and len(timeout) >= 2 else 15.0)
+        self.enable_cache = enable_cache
+        self.cache_fallback = cache_fallback
         self.client = client or SafeHttpClient(
             min_delay=1.5,
             max_delay=3.5,
             connect_timeout=self.connect_timeout,
             read_timeout=self.read_timeout,
+            enable_cache=self.enable_cache,
+            cache_fallback=self.cache_fallback,
         )
         self.min_delay = 1.5
         self.max_delay = 3.5
@@ -261,6 +267,57 @@ class CafeForumMiner:
 
         return record
 
+    def load_seed_records(self, limit: Optional[int] = None) -> List[ComplaintRecord]:
+        """Load fallback records from seed dataset when live scraping is unavailable or restricted."""
+        records: List[ComplaintRecord] = []
+        seed_filenames = ["raw_cafe_emerging.json", "compiled_complaints.json"]
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        search_dirs = [
+            os.path.join(base_dir, "data"),
+            os.path.join(os.path.dirname(base_dir), "data"),
+            os.path.join(os.getcwd(), "data"),
+        ]
+        seen_ids = set()
+        for s_dir in search_dirs:
+            if not os.path.isdir(s_dir):
+                continue
+            for s_name in seed_filenames:
+                s_file = os.path.join(s_dir, s_name)
+                if os.path.isfile(s_file):
+                    try:
+                        with open(s_file, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                        if isinstance(data, list):
+                            for item in data:
+                                if isinstance(item, dict) and item.get("platform") in ("naver_cafe", "pomppu", "clien"):
+                                    pid = str(item.get("id") or item.get("post_id") or "")
+                                    if pid and pid in seen_ids:
+                                        continue
+                                    if pid:
+                                        seen_ids.add(pid)
+                                    records.append(ComplaintRecord(
+                                        id=pid,
+                                        platform=item.get("platform", "naver_cafe"),
+                                        board_name=item.get("board_name", "전기차 카페"),
+                                        post_url=item.get("post_url") or item.get("url") or "",
+                                        post_title=item.get("post_title") or item.get("title") or "",
+                                        target_vehicle=item.get("target_vehicle", "Unknown"),
+                                        category=item.get("category", "convenience"),
+                                        defect_topic=item.get("defect_topic", ""),
+                                        raw_quote=item.get("raw_quote") or item.get("content") or "",
+                                        slang_terms=item.get("slang_terms", []),
+                                        severity=item.get("severity", "convenience_issue"),
+                                        platform_metadata=item.get("platform_metadata", {}),
+                                        collected_at=str(item.get("collected_at") or ""),
+                                    ))
+                                    if limit and len(records) >= limit:
+                                        return records
+                    except Exception as e:
+                        logger.debug(f"Failed to load seed records from {s_file}: {e}")
+            if records:
+                break
+        return records[:limit] if limit else records
+
     def _detect_category(self, text: str) -> Optional[str]:
         text_lower = text.lower()
         scores = {cat: 0 for cat in CATEGORY_KEYWORDS}
@@ -334,10 +391,24 @@ def main():
 
     miner = CafeForumMiner()
     pomppu_items = []
+    consecutive_failures = 0
     for kw in args.keywords:
-        pomppu_items.extend(miner.mine_pomppu(kw, max_pages=1))
+        if consecutive_failures >= 5:
+            logger.warning("Halting Pomppu mining due to consecutive network failures / circuit trips.")
+            break
+        items = miner.mine_pomppu(kw, max_pages=1)
+        if not items:
+            consecutive_failures += 1
+        else:
+            consecutive_failures = 0
+        pomppu_items.extend(items)
 
-    print(f"Mined {len(pomppu_items)} raw items from Pomppu.")
+    if not pomppu_items and miner.cache_fallback:
+        logger.warning("No items mined from live forums. Falling back to seed datasets.")
+        fallback_records = miner.load_seed_records(limit=10)
+        print(f"Loaded {len(fallback_records)} fallback records from seed datasets.")
+    else:
+        print(f"Mined {len(pomppu_items)} raw items from Pomppu.")
 
 
 if __name__ == "__main__":

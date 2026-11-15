@@ -872,8 +872,36 @@ export function calculateDepreciation(
 
   const baselineAnnualMileageKm =
     options?.baselineAnnualMileageKm ?? DEFAULT_BASELINE_ANNUAL_MILEAGE_KM;
-  const adjustmentFactors =
-    options?.adjustmentFactors ?? DEFAULT_ADJUSTMENT_FACTORS;
+  const rawFactors = options?.adjustmentFactors;
+  const defaultHw = DEFAULT_ADJUSTMENT_FACTORS.hardware_platform;
+  const adjustmentFactors: AdjustmentFactors = {
+    warranty_cliff: {
+      ...DEFAULT_ADJUSTMENT_FACTORS.warranty_cliff,
+      ...(rawFactors?.warranty_cliff || {}),
+    },
+    battery_chemistry: {
+      ...DEFAULT_ADJUSTMENT_FACTORS.battery_chemistry,
+      ...(rawFactors?.battery_chemistry || {}),
+    },
+    mileage_sensitivity: {
+      ...DEFAULT_ADJUSTMENT_FACTORS.mileage_sensitivity,
+      ...(rawFactors?.mileage_sensitivity || {}),
+    },
+    hardware_platform: rawFactors?.hardware_platform && defaultHw
+      ? {
+          architecture_800v_bonus:
+            rawFactors.hardware_platform.architecture_800v_bonus ??
+            defaultHw.architecture_800v_bonus,
+          architecture_400v_penalty:
+            rawFactors.hardware_platform.architecture_400v_penalty ??
+            defaultHw.architecture_400v_penalty,
+          description:
+            rawFactors.hardware_platform.description ??
+            defaultHw.description,
+        }
+      : defaultHw,
+    software_ota: rawFactors?.software_ota ?? DEFAULT_ADJUSTMENT_FACTORS.software_ota,
+  };
 
   const rawMileage = safeInput.mileageKm as unknown;
   const parsedMileage =
@@ -958,7 +986,9 @@ export function calculateDepreciation(
   // 3. Chemistry Aging Adjustment
   const modelChemistry = model?.battery_specs?.chemistry ?? 'NCM_811';
   const isLfp = normalizeChemistry(modelChemistry) === 'LFP';
-  let batteryChemistryBonus = model?.factor_weights?.chemistry_aging ?? 0;
+  const rawChemBonus = model?.factor_weights?.chemistry_aging;
+  let batteryChemistryBonus =
+    typeof rawChemBonus === 'number' && Number.isFinite(rawChemBonus) ? rawChemBonus : 0;
   if (isLfp) {
     // Smooth monotonic ramp from year 2.0 to 3.0 to ensure discrete chemistry bonuses never invert the depreciation curve
     const lfpBonusRamp = clamp(years - 2.0, 0.0, 1.0);
@@ -976,8 +1006,12 @@ export function calculateDepreciation(
   }
 
   // 5. Hardware Architecture & OTA
-  const architectureAdjustment = model?.factor_weights?.architecture_800v ?? 0;
-  const otaAdjustment = model?.factor_weights?.ota_maturity ?? 0;
+  const rawArchAdj = model?.factor_weights?.architecture_800v;
+  const architectureAdjustment =
+    typeof rawArchAdj === 'number' && Number.isFinite(rawArchAdj) ? rawArchAdj : 0;
+  const rawOtaAdj = model?.factor_weights?.ota_maturity;
+  const otaAdjustment =
+    typeof rawOtaAdj === 'number' && Number.isFinite(rawOtaAdj) ? rawOtaAdj : 0;
 
   // Combine Total Adjustments
   const totalAdjustmentPct =
@@ -1183,9 +1217,9 @@ export function simulateBatteryHealth(
     socFactor;
   const calendarTimeExp = chemProfile.calendar_time_exponent_z ?? 0.5;
   const qLossCal =
-    safeYears === 0
-      ? 0
-      : kCal * Math.pow(Math.max(0.1, safeYears), calendarTimeExp);
+    safeYears > 0
+      ? kCal * Math.pow(safeYears, calendarTimeExp)
+      : 0;
 
   // B. Cyclic Aging via Mechanical Strain & DCFC Factor
   const parsedEfficiency = typeof vehicleEfficiencyKmPerKwh === 'number'
@@ -1258,8 +1292,8 @@ export function simulateBatteryHealth(
     grade = 'CRITICAL';
     gradeLabel = 'Critical (수명 만료 / 교체 대상)';
     badgeColor = 'red';
-    failureRiskPct = 42.0;
-    winterRangeRetentionPct = 36;
+    failureRiskPct = Math.min(99.9, Math.round((42.0 + (70.0 - sohPct) * 0.8) * 10) / 10);
+    winterRangeRetentionPct = Math.max(0, Math.round(36 * (sohPct / 70.0)));
     usedMarketValuationFactor = 0.3;
     usedMarketValuationText = '-60% ~ -80% 시세 폭락 (폐차/전손 기준 가치)';
     actionRecommendation =
@@ -1312,9 +1346,9 @@ export function simulateBatteryHealth(
     years: safeYears,
     totalKm: safeMileage,
     equivalentFullCycles: Math.round(safeCycles),
-    calendarLossPct: Math.round(safeQLossCal * 1000) / 10,
-    cyclicLossPct: Math.round(safeQLossCyc * 1000) / 10,
-    totalLossPct: Math.round(finiteQLossTotal * 1000) / 10,
+    calendarLossPct: clamp(Math.round(safeQLossCal * 1000) / 10, 0.0, 100.0),
+    cyclicLossPct: clamp(Math.round(safeQLossCyc * 1000) / 10, 0.0, 100.0),
+    totalLossPct: clamp(Math.round(finiteQLossTotal * 1000) / 10, 0.0, 100.0),
     sohPct,
     grade,
     gradeLabel,
@@ -1591,6 +1625,7 @@ export function calculateTcoComparison(
     : typeof years === 'string' && (years as string).trim() !== ''
     ? Number((years as string).trim())
     : NaN;
+
   const rawYears = Math.min(30, Number.isFinite(parsedYears) && parsedYears > 0 ? parsedYears : 1);
   const safeYears = Math.max(1, Math.round(rawYears));
   const fullYears = Math.floor(rawYears);

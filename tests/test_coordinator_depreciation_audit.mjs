@@ -9,14 +9,16 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   calculateDepreciation,
   simulateBatteryHealth,
   calculateSubsidyClawback,
   calculateTcoComparison,
-} from '../ev-stealth-web/src/lib/depreciationCalculations.ts';
+} from '../src/lib/depreciationCalculations.ts';
 
-const dbPath = path.resolve(process.cwd(), 'ev-stealth-web/src/data/ev_depreciation_data.json');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const dbPath = path.resolve(__dirname, '../src/data/ev_depreciation_data.json');
 const db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
 
 console.log('=== STARTING DEPRECIATION CALCULATOR SPECIALIST AUDIT ===\n');
@@ -134,7 +136,7 @@ console.log('  ✓ Battery warranty state transitions (Safe -> Cliff -> Expired)
 // -------------------------------------------------------------
 console.log('[AUDIT 4] Auditing ARIA sliders, input validation, and responsive layouts...');
 
-const clientPath = path.resolve(process.cwd(), 'ev-stealth-web/src/app/depreciation-calculator/DepreciationCalculatorClient.tsx');
+const clientPath = path.resolve(__dirname, '../src/app/depreciation-calculator/DepreciationCalculatorClient.tsx');
 const clientSource = fs.readFileSync(clientPath, 'utf8');
 
 // 4.1 ARIA Sliders

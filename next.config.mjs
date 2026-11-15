@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+import withBundleAnalyzer from '@next/bundle-analyzer';
+
 const isProd = process.env.NODE_ENV === 'production';
 
 // Dynamic Content Security Policy supporting local development and hardened production
@@ -10,6 +12,8 @@ const cspDirectives = [
   "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net",
   `connect-src 'self'${isProd ? '' : ' ws: wss:'}`,
   "worker-src 'self' blob:",
+  "child-src 'self' blob:",
+  "frame-src 'none'",
   "manifest-src 'self'",
   "media-src 'self' blob: data:",
   "object-src 'none'",
@@ -40,6 +44,16 @@ const nextConfig = {
         }
       : false,
   },
+  typescript: {
+    // Explicitly enforce full typechecking during production builds
+    // Never allow type errors to silently deploy to production
+    ignoreBuildErrors: false,
+  },
+  eslint: {
+    // Explicitly enforce ESLint verification on all source files during builds
+    ignoreDuringBuilds: false,
+    dirs: ['src'],
+  },
   async headers() {
     return [
       {
@@ -60,7 +74,7 @@ const nextConfig = {
           {
             key: 'Permissions-Policy',
             value:
-              'camera=(), microphone=(), geolocation=(), browsing-topics=(), interest-cohort=(), payment=(), usb=(), bluetooth=(), accelerometer=(), autoplay=(), encrypted-media=(), gyroscope=(), magnetometer=(), midi=(), screen-wake-lock=(), xr-spatial-tracking=(), display-capture=(), sync-xhr=()',
+              'camera=(), microphone=(), geolocation=(), browsing-topics=(), interest-cohort=(), payment=(), usb=(), bluetooth=(), accelerometer=(), autoplay=(), encrypted-media=(), gyroscope=(), magnetometer=(), midi=(), screen-wake-lock=(), xr-spatial-tracking=(), display-capture=(), sync-xhr=(), clipboard-read=(), clipboard-write=(), web-share=(), serial=(), window-management=(), identity-credentials-get=(), otp-credentials=(), publickey-credentials-get=(), idle-detection=(), fullscreen=(self)',
           },
           {
             key: 'X-XSS-Protection',
@@ -97,7 +111,7 @@ const nextConfig = {
         headers: [
           {
             key: 'X-Robots-Tag',
-            value: 'noindex, nofollow, noarchive',
+            value: 'noindex, nofollow, noarchive, nosnippet, noimageindex',
           },
         ],
       },
@@ -153,4 +167,9 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+const withBundleReport = withBundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+  openAnalyzer: process.env.OPEN_ANALYZER === 'true',
+});
+
+export default process.env.ANALYZE === 'true' ? withBundleReport(nextConfig) : nextConfig;

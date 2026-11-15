@@ -29,20 +29,34 @@ export type RegionSortOption =
   | 'NAME_DESC'
   | 'depletion_desc'
   | 'depletion_asc'
-  | 'name_asc'
+  | 'remaining_asc'
   | 'remaining_desc'
-  | 'local_subsidy_desc';
+  | 'local_subsidy_asc'
+  | 'local_subsidy_desc'
+  | 'name_asc'
+  | 'name_desc';
 
 export type ModelSortOption =
   | 'PRICE_ASC'
   | 'PRICE_DESC'
+  | 'NET_PRICE_ASC'
+  | 'NET_PRICE_DESC'
+  | 'SUBSIDY_ASC'
   | 'SUBSIDY_DESC'
+  | 'RANGE_ASC'
   | 'RANGE_DESC'
   | 'NAME_ASC'
+  | 'NAME_DESC'
+  | 'price_asc'
+  | 'price_desc'
   | 'net_price_asc'
+  | 'net_price_desc'
+  | 'subsidy_asc'
   | 'subsidy_desc'
+  | 'range_asc'
+  | 'range_desc'
   | 'name_asc'
-  | 'range_desc';
+  | 'name_desc';
 
 export interface AlertThresholdConfig {
   min_percent: number;
@@ -125,6 +139,29 @@ export interface PopularModelEntry {
   >;
 }
 
+export interface HistoricalTrajectoryPoint {
+  date: string;
+  passenger_rate: number;
+  commercial_rate: number;
+  overall_rate: number;
+}
+
+export type RegionalGroup = 'metropolitan_cities' | 'provinces' | 'other';
+
+export interface RegionalGroupSummary {
+  region_count: number;
+  total_announced_units: number;
+  total_applied_units: number;
+  total_delivered_units: number;
+  total_remaining_units: number;
+  total_pending_deliveries: number;
+  total_waitlist_units: number;
+  depletion_rate: number;
+  delivery_rate: number;
+  status: AlertSeverity;
+  regions: string[];
+}
+
 export interface EVSubsidyDataset {
   metadata: {
     version: string;
@@ -161,12 +198,7 @@ export interface EVSubsidyDataset {
   };
   regions: RegionEntry[];
   popular_models_matrix: PopularModelEntry[];
-  historical_depletion_trajectory?: Array<{
-    date: string;
-    passenger_rate: number;
-    commercial_rate: number;
-    overall_rate: number;
-  }>;
+  historical_depletion_trajectory?: HistoricalTrajectoryPoint[];
 }
 
 export interface SubsidyCalculationResult {

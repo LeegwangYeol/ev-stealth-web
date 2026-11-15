@@ -173,26 +173,34 @@ export const VIN_YEAR_MAP: Readonly<Record<string, number>> = Object.freeze({
 export const WMI_MAP: Readonly<Record<string, { brand: string; country: string }>> = Object.freeze({
   KM8: Object.freeze({ brand: '현대자동차', country: '대한민국' }),
   KMH: Object.freeze({ brand: '제네시스', country: '대한민국' }),
+  KMF: Object.freeze({ brand: '현대자동차', country: '대한민국 (상용/포터 EV)' }),
   KND: Object.freeze({ brand: '기아', country: '대한민국' }),
   KNA: Object.freeze({ brand: '기아', country: '대한민국' }),
+  KNC: Object.freeze({ brand: '기아', country: '대한민국 (상용/봉고 EV)' }),
   KNM: Object.freeze({ brand: '르노코리아', country: '대한민국' }),
   KPT: Object.freeze({ brand: 'KG모빌리티', country: '대한민국' }),
   '5YJ': Object.freeze({ brand: '테슬라', country: '미국 (캘리포니아 프리몬트)' }),
   '7SA': Object.freeze({ brand: '테슬라', country: '미국 (텍사스 오스틴)' }),
   LRW: Object.freeze({ brand: '테슬라', country: '중국 (상하이 기가팩토리)' }),
+  XP7: Object.freeze({ brand: '테슬라', country: '독일 (베를린 기가팩토리)' }),
   W1K: Object.freeze({ brand: '메르세데스-벤츠', country: '독일' }),
   WDD: Object.freeze({ brand: '메르세데스-벤츠', country: '독일' }),
+  WDC: Object.freeze({ brand: '메르세데스-벤츠', country: '독일' }),
+  '4JG': Object.freeze({ brand: '메르세데스-벤츠', country: '미국 (앨라배마 터스컬루사)' }),
   WBA: Object.freeze({ brand: 'BMW', country: '독일' }),
   WBY: Object.freeze({ brand: 'BMW i', country: '독일' }),
+  WBX: Object.freeze({ brand: 'BMW', country: '독일' }),
   LGX: Object.freeze({ brand: 'BYD', country: '중국' }),
   '1G1': Object.freeze({ brand: '쉐보레', country: '미국' }),
   KL3: Object.freeze({ brand: '쉐보레', country: '대한민국 (한국지엠)' }),
   LPS: Object.freeze({ brand: '폴스타', country: '중국' }),
   WP0: Object.freeze({ brand: '포르쉐', country: '독일' }),
   WAU: Object.freeze({ brand: '아우디', country: '독일' }),
+  WA1: Object.freeze({ brand: '아우디', country: '독일' }),
   WVW: Object.freeze({ brand: '폭스바겐', country: '독일' }),
   WVG: Object.freeze({ brand: '폭스바겐', country: '독일' }),
   YV1: Object.freeze({ brand: '볼보', country: '스웨덴' }),
+  YV4: Object.freeze({ brand: '볼보', country: '스웨덴' }),
 });
 
 // Canonical manufacturer mapping resolving synonyms, casing, and localized brand names
@@ -201,20 +209,28 @@ export const CANONICAL_MANUFACTURER_MAP: Readonly<Record<string, string>> = Obje
   '현대': '현대자동차',
   '현대차': '현대자동차',
   '현대자동차': '현대자동차',
+  hyundaimotor: '현대자동차',
+  hyundaimotors: '현대자동차',
+  'hyundai motor': '현대자동차',
   hmc: '현대자동차',
 
   kia: '기아',
   '기아': '기아',
   '기아자동차': '기아',
+  kiamotors: '기아',
+  'kia motors': '기아',
 
   genesis: '제네시스',
   '제네시스': '제네시스',
 
   tesla: '테슬라',
   '테슬라': '테슬라',
+  teslamotors: '테슬라',
+  'tesla motors': '테슬라',
 
   mercedes: '메르세데스-벤츠',
   benz: '메르세데스-벤츠',
+  mercedesbenz: '메르세데스-벤츠',
   'mercedes-benz': '메르세데스-벤츠',
   'mercedes benz': '메르세데스-벤츠',
   '메르세데스': '메르세데스-벤츠',
@@ -225,6 +241,8 @@ export const CANONICAL_MANUFACTURER_MAP: Readonly<Record<string, string>> = Obje
   bmw: 'BMW',
   'bmw i': 'BMW',
   bmwi: 'BMW',
+  bmwkorea: 'BMW',
+  'bmw korea': 'BMW',
 
   byd: 'BYD',
   '비야디': 'BYD',
@@ -232,6 +250,8 @@ export const CANONICAL_MANUFACTURER_MAP: Readonly<Record<string, string>> = Obje
   chevrolet: '쉐보레',
   chevy: '쉐보레',
   gm: '쉐보레',
+  generalmotors: '쉐보레',
+  'general motors': '쉐보레',
   '쉐보레': '쉐보레',
   '한국지엠': '쉐보레',
 
@@ -252,6 +272,7 @@ export const CANONICAL_MANUFACTURER_MAP: Readonly<Record<string, string>> = Obje
   '볼보': '볼보',
 
   kgm: 'KG모빌리티',
+  kgmobility: 'KG모빌리티',
   'kg mobility': 'KG모빌리티',
   'kg모빌리티': 'KG모빌리티',
   ssangyong: 'KG모빌리티',
@@ -259,6 +280,7 @@ export const CANONICAL_MANUFACTURER_MAP: Readonly<Record<string, string>> = Obje
   '쌍용자동차': 'KG모빌리티',
 
   renault: '르노코리아',
+  renaultkorea: '르노코리아',
   'renault korea': '르노코리아',
   '르노': '르노코리아',
   '르노코리아': '르노코리아',
@@ -671,6 +693,18 @@ export function isModelMatchForCampaign(queryModel: string, campaignTargetModel:
     return false;
   }
 
+  // Safely extracts model designation digits while ignoring drivetrains (2WD/4WD),
+  // generation counters (1세대, 2세대), 4-digit years (2020-2030), and battery capacities (77.4kWh)
+  const extractModelDigits = (str: string): string[] => {
+    const stripped = str
+      .replace(/\b(?:19|20)\d{2}\b/g, '')
+      .replace(/\b[24]wd\b/gi, '')
+      .replace(/\b\d+세대\b/g, '')
+      .replace(/\b\d+(?:\.\d+)?\s*kwh\b/gi, '');
+    return stripped.match(/\d+/g) || [];
+  };
+
+  const queryNums = extractModelDigits(queryClean);
   const targets = campaignTargetModel.split(',').map((t) => cleanBase(t).toLowerCase());
 
   for (const target of targets) {
@@ -685,8 +719,7 @@ export function isModelMatchForCampaign(queryModel: string, campaignTargetModel:
     // Check containment while guarding against collisions
     if (targetNorm.includes(queryNorm) || queryNorm.includes(targetNorm)) {
       // 1. Number collision check: e.g. "아이오닉 5" vs "아이오닉 6", "EV6" vs "EV9"
-      const queryNums = queryClean.match(/\d+/g) || [];
-      const targetNums = target.match(/\d+/g) || [];
+      const targetNums = extractModelDigits(target);
       if (queryNums.length > 0 && targetNums.length > 0) {
         if (queryNums.join('') !== targetNums.join('')) {
           continue;
@@ -696,10 +729,10 @@ export function isModelMatchForCampaign(queryModel: string, campaignTargetModel:
       // 2. EV / Electric vs Numbered EV check (e.g. "아이오닉 EV" vs "아이오닉 5")
       const queryHasEv = /\bev\b|일렉트릭/i.test(queryClean);
       const targetHasEv = /\bev\b|일렉트릭/i.test(target);
-      if (queryNums.length > 0 && !targetNums.length && targetHasEv) {
+      if (!queryHasEv && queryNums.length > 0 && !targetNums.length && targetHasEv) {
         continue;
       }
-      if (targetNums.length > 0 && !queryNums.length && queryHasEv) {
+      if (!targetHasEv && targetNums.length > 0 && !queryNums.length && queryHasEv) {
         continue;
       }
 
@@ -721,8 +754,8 @@ export function isModelMatchForCampaign(queryModel: string, campaignTargetModel:
         continue;
       }
       if (subNorm === targetNorm || targetNorm.includes(subNorm) || subNorm.includes(targetNorm)) {
-        const subNums = sub.match(/\d+/g) || [];
-        const targetNums = target.match(/\d+/g) || [];
+        const subNums = extractModelDigits(sub);
+        const targetNums = extractModelDigits(target);
         if (subNums.length > 0 && targetNums.length > 0 && subNums.join('') !== targetNums.join('')) {
           continue;
         }
@@ -763,10 +796,33 @@ export function parseRecallDate(dateStr?: string | null): Date | null {
 
     const d = new Date(Date.UTC(year, month - 1, day));
     if (isNaN(d.getTime())) return null;
+    // Strict calendar rollover guard (e.g. 2024-02-31 rolling over to March)
+    if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) {
+      return null;
+    }
     return d;
   }
 
-  // 2. Try YYYYMMDD compact format
+  // 2. Try Korean date notation: YYYY년 MM월 DD일
+  const koreanDateMatch = clean.match(/^(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일/);
+  if (koreanDateMatch) {
+    const year = parseInt(koreanDateMatch[1], 10);
+    const month = parseInt(koreanDateMatch[2], 10);
+    const day = parseInt(koreanDateMatch[3], 10);
+
+    if (year < 1990 || year > 2040 || month < 1 || month > 12 || day < 1 || day > 31) {
+      return null;
+    }
+
+    const d = new Date(Date.UTC(year, month - 1, day));
+    if (isNaN(d.getTime())) return null;
+    if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) {
+      return null;
+    }
+    return d;
+  }
+
+  // 3. Try YYYYMMDD compact format
   const compactMatch = clean.match(/^(\d{4})(\d{2})(\d{2})$/);
   if (compactMatch) {
     const year = parseInt(compactMatch[1], 10);
@@ -779,10 +835,13 @@ export function parseRecallDate(dateStr?: string | null): Date | null {
 
     const d = new Date(Date.UTC(year, month - 1, day));
     if (isNaN(d.getTime())) return null;
+    if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) {
+      return null;
+    }
     return d;
   }
 
-  // 3. Fallback to standard Date.parse
+  // 4. Fallback to standard Date.parse
   const timestamp = Date.parse(clean);
   if (isNaN(timestamp)) return null;
 
@@ -914,9 +973,9 @@ export function sortRecallsByDate(
       }
     }
 
-    // 3. End date of production_date_range (e.g. "2021.03.08 ~ 2024.03.04")
+    // 3. End date of production_date_range (e.g. "2021.03.08 ~ 2024.03.04" or "2021-03-08 - 2024-03-04")
     if (typeof c.production_date_range === 'string') {
-      const rangeParts = c.production_date_range.split('~');
+      const rangeParts = c.production_date_range.split(/[~–—]|\s+-\s+/);
       const endDateStr = (rangeParts[1] || rangeParts[0]).trim();
       const parsed = parseRecallDate(endDateStr);
       if (parsed) return parsed.getTime();
@@ -976,20 +1035,21 @@ export function isYearMatchForCampaign(year?: number, targetModelYears?: string)
       continue;
     }
 
-    // 2. Open-ended future range: "2022 ~" or "2022 ~ 현재" or "2022 이후"
-    const openRangeMatch = segment.match(/(\d{4})\s*(?:~|-)?\s*(?:현재|present|이후|\+)/i);
+    // 2. Open-ended future range: "2022 ~", "2022~", "2022 ~ 현재", "2022 이후", "2022+"
+    // Structured without adjacent unbounded quantifiers to prevent catastrophic backtracking (ReDoS)
+    const openRangeMatch = segment.match(/(\d{4})(?:\s*[~-])?\s*(?:현재|present|이후|\+)|(\d{4})\s*[~-]\s*$/i);
     if (openRangeMatch) {
       hasValidSegment = true;
-      const start = parseInt(openRangeMatch[1], 10);
+      const start = parseInt(openRangeMatch[1] || openRangeMatch[2], 10);
       if (year >= start && year <= 2040) return true;
       continue;
     }
 
-    // 3. Before range: "2022 이전" or "~ 2022"
-    const beforeRangeMatch = segment.match(/(?:~|-)?\s*(\d{4})\s*(?:이전|까지|before)/i);
+    // 3. Before range: "2022 이전", "~ 2022", "~2022"
+    const beforeRangeMatch = segment.match(/(?:^\s*[~-]\s*(\d{4}))|(?:(\d{4})\s*(?:이전|까지|before))/i);
     if (beforeRangeMatch) {
       hasValidSegment = true;
-      const end = parseInt(beforeRangeMatch[1], 10);
+      const end = parseInt(beforeRangeMatch[1] || beforeRangeMatch[2], 10);
       if (year >= 1990 && year <= end) return true;
       continue;
     }
@@ -1161,7 +1221,7 @@ export function decodeVinAndCheckRecalls(rawVin: string, db?: RecallDatabase): V
     decodedWmi: wmi,
     batteryProfile: matchedBatteryProfile,
     recalls: sortRecallsByDate(matchingRecalls, 'desc'),
-    activeCampaignsCount: matchingRecalls.filter((r) => r.status === 'ACTIVE').length,
+    activeCampaignsCount: matchingRecalls.filter((r) => typeof r.status === 'string' && r.status.trim().toUpperCase() === 'ACTIVE').length,
     hasFireRisk,
     hasPowerLoss,
     overallRiskGrade,
@@ -1305,7 +1365,7 @@ export function checkRecallsByModel(
         : undefined,
     batteryProfile: matchedBatteryProfile,
     recalls: sortRecallsByDate(matchingRecalls, 'desc'),
-    activeCampaignsCount: matchingRecalls.filter((r) => r.status === 'ACTIVE').length,
+    activeCampaignsCount: matchingRecalls.filter((r) => typeof r.status === 'string' && r.status.trim().toUpperCase() === 'ACTIVE').length,
     hasFireRisk,
     hasPowerLoss,
     overallRiskGrade,
@@ -1512,9 +1572,10 @@ export function aggregateRecallsByManufacturer(
 
     const group = result[manufacturer];
     group.totalCampaigns++;
-    if (campaign.status === 'ACTIVE') {
+    const statusUpper = typeof campaign.status === 'string' ? campaign.status.trim().toUpperCase() : '';
+    if (statusUpper === 'ACTIVE') {
       group.activeCampaigns++;
-    } else if (campaign.status === 'RESOLVED') {
+    } else if (statusUpper === 'RESOLVED') {
       group.resolvedCampaigns++;
     }
 
@@ -1552,6 +1613,7 @@ export function calculateRecallKPIs(db?: RecallDatabase): RecallKPIs {
   let resolvedCampaigns = 0;
   let totalAffectedVehicles = 0;
   let fireHazards = 0;
+  let activeFireHazards = 0;
   let lossOfPower = 0;
   let otaRemedies = 0;
 
@@ -1575,14 +1637,16 @@ export function calculateRecallKPIs(db?: RecallDatabase): RecallKPIs {
   for (const campaign of recalls) {
     if (!campaign || typeof campaign !== 'object') continue;
 
-    if (campaign.status === 'ACTIVE') activeCampaigns++;
-    else if (campaign.status === 'RESOLVED') resolvedCampaigns++;
+    const statusUpper = typeof campaign.status === 'string' ? campaign.status.trim().toUpperCase() : '';
+    if (statusUpper === 'ACTIVE') activeCampaigns++;
+    else if (statusUpper === 'RESOLVED') resolvedCampaigns++;
 
     if (Number.isFinite(campaign.affected_kdm_units) && campaign.affected_kdm_units > 0) {
       totalAffectedVehicles += campaign.affected_kdm_units;
     }
     if (campaign.risk_level === 'FIRE_HAZARD') {
       fireHazards++;
+      if (statusUpper === 'ACTIVE') activeFireHazards++;
       if (campaign.brand) fireRiskBrands.add(normalizeManufacturer(campaign.brand));
     }
     if (campaign.risk_level === 'LOSS_OF_POWER') lossOfPower++;
@@ -1631,7 +1695,7 @@ export function calculateRecallKPIs(db?: RecallDatabase): RecallKPIs {
     riskLevelDistribution,
     remedyTypeDistribution,
     totalAffectedVehicles,
-    activeFireHazards: fireHazards,
+    activeFireHazards,
     otaRemedyRate: otaRemedyRatePct,
     fireRiskBrandCount: fireRiskBrands.size,
     totalBatteryProfiles: batteryProfiles.length,

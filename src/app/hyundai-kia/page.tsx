@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import JsonLd from '@/components/JsonLd';
 import BrandComparisonNav, { OtherBrandsCrossNav } from '@/components/BrandComparisonNav';
+import ModelSpecWarrantyCard from '@/components/ModelSpecWarrantyCard';
 
 export const dynamic = 'force-static';
 export const revalidate = false;
@@ -40,6 +41,107 @@ const hyundaiKiaJsonLd = {
         '@type': 'WebPage',
         '@id': `${SITE_URL}/hyundai-kia`,
       },
+    },
+    {
+      '@type': 'Vehicle',
+      '@id': `${SITE_URL}/hyundai-kia#vehicle-ioniq5`,
+      name: '현대 아이오닉 5 (Hyundai Ioniq 5)',
+      image: `${SITE_URL}/og-image.png`,
+      url: `${SITE_URL}/hyundai-kia#heading-ioniq5`,
+      brand: {
+        '@type': 'Brand',
+        name: 'Hyundai',
+      },
+      manufacturer: {
+        '@type': 'Organization',
+        name: '현대자동차(주)',
+      },
+      model: 'Ioniq 5',
+      vehicleModelDate: '2021-2026',
+      vehicleTransmission: '1단 감속기 (전기 모터)',
+      fuelType: 'https://schema.org/Electric',
+      description: 'E-GMP 기반 800V 초고속 충전 준중형 CUV. 84.0kWh 4세대 배터리 및 개선형 2세대 ICCU 탑재.',
+      additionalProperty: [
+        {
+          '@type': 'PropertyValue',
+          name: 'Battery Chemistry',
+          value: 'NCM 삼원계 (SK온 / LG에너지솔루션) 84.0 kWh',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Charging Voltage Architecture',
+          value: '800V E-GMP 초고속 충전 (10%->80% 18분)',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Powertrain Warranty',
+          value: '10년 / 160,000 km (EV 전용 부품 및 고전압 배터리)',
+        },
+      ],
+    },
+    {
+      '@type': 'Vehicle',
+      '@id': `${SITE_URL}/hyundai-kia#vehicle-ev6`,
+      name: '기아 EV6 (Kia EV6)',
+      image: `${SITE_URL}/og-image.png`,
+      url: `${SITE_URL}/hyundai-kia#heading-ev6`,
+      brand: {
+        '@type': 'Brand',
+        name: 'Kia',
+      },
+      manufacturer: {
+        '@type': 'Organization',
+        name: '기아(주)',
+      },
+      model: 'EV6',
+      vehicleModelDate: '2021-2026',
+      vehicleTransmission: '1단 감속기 (전기 모터)',
+      fuelType: 'https://schema.org/Electric',
+      description: 'E-GMP 기반 800V 크로스오버 전기차. 84.0kWh 대용량 배터리 및 개선형 서스펜션 세팅.',
+      additionalProperty: [
+        {
+          '@type': 'PropertyValue',
+          name: 'Battery Chemistry',
+          value: 'NCM 삼원계 (SK온) 84.0 kWh',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Powertrain Warranty',
+          value: '10년 / 160,000 km',
+        },
+      ],
+    },
+    {
+      '@type': 'Vehicle',
+      '@id': `${SITE_URL}/hyundai-kia#vehicle-ev9`,
+      name: '기아 EV9 (Kia EV9)',
+      image: `${SITE_URL}/og-image.png`,
+      url: `${SITE_URL}/hyundai-kia#heading-ev9`,
+      brand: {
+        '@type': 'Brand',
+        name: 'Kia',
+      },
+      manufacturer: {
+        '@type': 'Organization',
+        name: '기아(주)',
+      },
+      model: 'EV9',
+      vehicleModelDate: '2023-2026',
+      vehicleTransmission: '1단 감속기 (전기 모터)',
+      fuelType: 'https://schema.org/Electric',
+      description: 'E-GMP 기반 플래그십 3열 대형 전기 SUV. 99.8kWh 대용량 배터리 및 V2L 양방향 충전.',
+      additionalProperty: [
+        {
+          '@type': 'PropertyValue',
+          name: 'Battery Chemistry',
+          value: 'NCM 삼원계 (SK온) 99.8 kWh',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Powertrain Warranty',
+          value: '10년 / 160,000 km',
+        },
+      ],
     },
     {
       '@type': 'ItemList',
@@ -334,6 +436,26 @@ export default function HyundaiKiaPage() {
         <h2 id="heading-ioniq5" className="text-2xl sm:text-3xl font-bold text-slate-800">
           아이오닉 5 (Ioniq 5)
         </h2>
+
+        <ModelSpecWarrantyCard
+          modelName="현대 아이오닉 5 (Ioniq 5)"
+          badge="E-GMP 대표 CUV"
+          msrpRange="5,240만 ~ 6,120만 원"
+          effectivePriceRange="약 4,500만 ~ 5,300만 원"
+          usedPriceRange="2,700만 ~ 4,400만 원"
+          batterySpecs={{
+            capacity: "84.0 kWh (신형) / 77.4 kWh (구형)",
+            chemistry: "SK온 / LG NCM 삼원계",
+            voltage: "800V 초고속 (18분 10→80%)",
+            range: "485km (2WD 19인치 기준)",
+          }}
+          warranty={{
+            batteryYearsKm: "10년 / 160,000 km",
+            batteryGuaranteeSoh: "EV 전용부품(모터/인버터/ICCU) 10년 보증",
+            generalYearsKm: "3년 / 60,000 km",
+            outOfWarrantyRisk: "보증 만료 후 ICCU 교체 520만~690만 원, 배터리 팩 2,300만 원",
+          }}
+        />
         
         <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl" role="region" aria-label="현대 아이오닉 5 구매 회피 연식 경고">
           <h3 className="text-lg sm:text-xl font-bold text-red-900">
@@ -371,6 +493,26 @@ export default function HyundaiKiaPage() {
         <h2 id="heading-ev6" className="text-2xl sm:text-3xl font-bold text-slate-800">
           기아 EV6 (Kia EV6)
         </h2>
+
+        <ModelSpecWarrantyCard
+          modelName="기아 EV6 (Kia EV6)"
+          badge="페이스리프트 개선형"
+          msrpRange="5,260만 ~ 6,230만 원"
+          effectivePriceRange="약 4,550만 ~ 5,400만 원"
+          usedPriceRange="2,800만 ~ 4,500만 원"
+          batterySpecs={{
+            capacity: "84.0 kWh (PE) / 77.4 kWh (구형)",
+            chemistry: "SK온 NCM 삼원계",
+            voltage: "800V E-GMP 아키텍처",
+            range: "494km (2WD 19인치 기준)",
+          }}
+          warranty={{
+            batteryYearsKm: "10년 / 160,000 km",
+            batteryGuaranteeSoh: "EV 핵심부품 10년/16만km 통합 보증",
+            generalYearsKm: "3년 / 60,000 km",
+            outOfWarrantyRisk: "후륜 구동축 스플라인 파손 및 오디오 앰프 100만 원 유상수리",
+          }}
+        />
         
         <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl" role="region" aria-label="기아 EV6 구매 회피 연식 경고">
           <h3 className="text-lg sm:text-xl font-bold text-red-900">
@@ -405,6 +547,26 @@ export default function HyundaiKiaPage() {
         <h2 id="heading-ev9" className="text-2xl sm:text-3xl font-bold text-slate-800">
           기아 EV9 (Kia EV9)
         </h2>
+
+        <ModelSpecWarrantyCard
+          modelName="기아 EV9 (Kia EV9)"
+          badge="플래그십 3열 대형 SUV"
+          msrpRange="7,337만 ~ 8,767만 원"
+          effectivePriceRange="약 6,900만 ~ 8,300만 원 (50% 보조금)"
+          usedPriceRange="5,800만 ~ 7,200만 원"
+          batterySpecs={{
+            capacity: "99.8 kWh 대용량 배터리팩",
+            chemistry: "SK온 NCM 고밀도 삼원계",
+            voltage: "800V E-GMP 아키텍처",
+            range: "501km (2WD 19인치 기준)",
+          }}
+          warranty={{
+            batteryYearsKm: "10년 / 160,000 km",
+            batteryGuaranteeSoh: "EV 핵심부품 10년/16만km 통합 보증",
+            generalYearsKm: "3년 / 60,000 km",
+            outOfWarrantyRisk: "99.8kWh 대용량 배터리 교체비 3,200만 원, 12V 저전압 배터리 암전류",
+          }}
+        />
         
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="기아 EV9 주의 연식 가이드">
           <h3 className="text-lg sm:text-xl font-bold text-amber-900">

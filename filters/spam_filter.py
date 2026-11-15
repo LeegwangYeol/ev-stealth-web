@@ -89,11 +89,12 @@ NEWS_REGEXES: List[re.Pattern[str]] = [
 # Pre-compiled journalistic wire agency and reporter markers (cached for high throughput)
 JOURNALISTIC_WIRE_REGEXES: Tuple[re.Pattern[str], ...] = (
     re.compile(r"\[(?:속보|단독|기사)\]"),
-    re.compile(r"기자\b"),
+    re.compile(r"(?<![가-힣])기자\b"),
     re.compile(r"에 따르면"),
     re.compile(r"(?:밝혔다|전했다|보도했다|배포했다)\b"),
     re.compile(r"연합뉴스|뉴시스|뉴스1"),
 )
+RE_AS_KEYWORD: re.Pattern[str] = re.compile(r"(?:\b|[^a-zA-Z])(?:as|a/s)(?:\b|[^a-zA-Z])", re.IGNORECASE)
 
 # Pre-compiled inquiry patterns
 INQUIRY_REGEXES: List[re.Pattern[str]] = [
@@ -414,9 +415,16 @@ class SpamFilter:
         text_lower = text_str.lower()
 
         has_component = False
-        for cats in CATEGORY_KEYWORD_MAP.values():
-            if any(k.lower() in text_lower for k in cats):
-                has_component = True
+        for cat, cats in CATEGORY_KEYWORD_MAP.items():
+            for k in cats:
+                if cat == "SERVICE_REPAIR_COST" and k == "as":
+                    if RE_AS_KEYWORD.search(text_lower):
+                        has_component = True
+                        break
+                elif k.lower() in text_lower:
+                    has_component = True
+                    break
+            if has_component:
                 break
 
         has_defect_keyword = any(dk in text_lower for dk in DEFECT_QUESTION_KEYWORDS)
@@ -478,11 +486,11 @@ class SpamFilter:
 
         for pattern in self.news_regexes:
             if pattern.search(text_str):
-                # Protect owner reports that mention reporting/filing to government agencies
+                # Protect owner reports that mention reporting/filing to government agencies or recall announcements
                 # unless strong journalistic wire markers appear
-                if pattern.pattern in (r"국토부", r"국토교통부", r"산업부"):
+                if pattern.pattern in (r"국토부", r"국토교통부", r"산업부", r"리콜 발표"):
                     has_journalistic_wire = any(p.search(text_str) for p in JOURNALISTIC_WIRE_REGEXES)
-                    if not has_journalistic_wire and (has_ownership_anchor or "신고" in text_str or "접수" in text_str or "민원" in text_str):
+                    if not has_journalistic_wire and (has_ownership_anchor or "신고" in text_str or "접수" in text_str or "민원" in text_str or has_defect_symptom):
                         continue
 
                 return True, f"Journalistic pattern matched: {pattern.pattern}"

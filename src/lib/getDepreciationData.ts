@@ -971,7 +971,9 @@ export function calculateDepreciation(input: DepreciationCalculationInput): Depr
   // 3. Chemistry Aging Adjustment
   const modelChemistry = model?.battery_specs?.chemistry ?? 'NCM_811';
   const isLfp = normalizeChemistry(modelChemistry) === 'LFP';
-  let batteryChemistryBonus = model?.factor_weights?.chemistry_aging ?? 0;
+  const rawChemBonus = model?.factor_weights?.chemistry_aging;
+  let batteryChemistryBonus =
+    typeof rawChemBonus === 'number' && Number.isFinite(rawChemBonus) ? rawChemBonus : 0;
   if (isLfp) {
     // Smooth monotonic ramp from year 2.0 to 3.0 to ensure discrete chemistry bonuses never invert the depreciation curve
     const lfpBonusRamp = clamp(years - 2.0, 0.0, 1.0);
@@ -989,8 +991,12 @@ export function calculateDepreciation(input: DepreciationCalculationInput): Depr
   }
 
   // 5. Hardware Architecture & OTA
-  const architectureAdjustment = model?.factor_weights?.architecture_800v ?? 0;
-  const otaAdjustment = model?.factor_weights?.ota_maturity ?? 0;
+  const rawArchAdj = model?.factor_weights?.architecture_800v;
+  const architectureAdjustment =
+    typeof rawArchAdj === 'number' && Number.isFinite(rawArchAdj) ? rawArchAdj : 0;
+  const rawOtaAdj = model?.factor_weights?.ota_maturity;
+  const otaAdjustment =
+    typeof rawOtaAdj === 'number' && Number.isFinite(rawOtaAdj) ? rawOtaAdj : 0;
 
   // Combine Total Adjustments
   const totalAdjustmentPct =
@@ -1186,9 +1192,9 @@ export function simulateBatteryHealth(
   const kCal = (baselineAnnualLoss / 100.0) * arrheniusFactor * socFactor;
   const calendarTimeExp = chemProfile.calendar_time_exponent_z ?? 0.5;
   const qLossCal =
-    safeYears === 0
-      ? 0
-      : kCal * Math.pow(Math.max(0.1, safeYears), calendarTimeExp);
+    safeYears > 0
+      ? kCal * Math.pow(safeYears, calendarTimeExp)
+      : 0;
 
   // B. Cyclic Aging via Mechanical Strain & DCFC Factor
   const parsedEfficiency = typeof vehicleEfficiencyKmPerKwh === 'number'
@@ -1260,8 +1266,8 @@ export function simulateBatteryHealth(
     grade = 'CRITICAL';
     gradeLabel = 'Critical (수명 만료 / 교체 대상)';
     badgeColor = 'red';
-    failureRiskPct = 42.0;
-    winterRangeRetentionPct = 36;
+    failureRiskPct = Math.min(99.9, Math.round((42.0 + (70.0 - sohPct) * 0.8) * 10) / 10);
+    winterRangeRetentionPct = Math.max(0, Math.round(36 * (sohPct / 70.0)));
     usedMarketValuationFactor = 0.30;
     usedMarketValuationText = '-60% ~ -80% 시세 폭락 (폐차/전손 기준 가치)';
     actionRecommendation =
@@ -1313,9 +1319,9 @@ export function simulateBatteryHealth(
     years: safeYears,
     totalKm: safeMileage,
     equivalentFullCycles: Math.round(safeCycles),
-    calendarLossPct: Math.round(safeQLossCal * 1000) / 10,
-    cyclicLossPct: Math.round(safeQLossCyc * 1000) / 10,
-    totalLossPct: Math.round(finiteQLossTotal * 1000) / 10,
+    calendarLossPct: clamp(Math.round(safeQLossCal * 1000) / 10, 0.0, 100.0),
+    cyclicLossPct: clamp(Math.round(safeQLossCyc * 1000) / 10, 0.0, 100.0),
+    totalLossPct: clamp(Math.round(finiteQLossTotal * 1000) / 10, 0.0, 100.0),
     sohPct,
     grade,
     gradeLabel,
@@ -1582,6 +1588,32 @@ export function calculateTcoComparison(
     : typeof years === 'string' && (years as string).trim() !== ''
     ? Number((years as string).trim())
     : NaN;
+
+  if (parsedYears === 0) {
+    return {
+      annualKm: safeAnnualKm,
+      years: 0,
+      totalKm: 0,
+      evEfficiencyKmPerKwh: safeEvEff,
+      iceFuelEconomyKmPerLiter: safeIceEff,
+      blendedElectricityTariffKrwPerKwh: Math.round(blendedTariff * 100) / 100,
+      gasolinePriceKrwPerLiter: fuelTariffs.ice_gasoline_krw_per_liter,
+      evFuelCostPerKm: Math.round(evCostPerKm * 100) / 100,
+      iceFuelCostPerKm: Math.round(iceCostPerKm * 100) / 100,
+      evTotalFuelCostKrw: 0,
+      iceTotalFuelCostKrw: 0,
+      fuelSavingsKrw: 0,
+      evTotalTaxKrw: 0,
+      iceTotalTaxKrw: 0,
+      taxSavingsKrw: 0,
+      tollSavingsKrw: 0,
+      parkingSavingsKrw: 0,
+      maintenanceSavingsKrw: 0,
+      totalAuxiliarySavingsKrw: 0,
+      totalCumulativeSavingsKrw: 0,
+      yearlyBreakdown: [],
+    };
+  }
   const rawYears = Math.min(30, Number.isFinite(parsedYears) && parsedYears > 0 ? parsedYears : 1);
   const safeYears = Math.max(1, Math.round(rawYears));
   const fullYears = Math.floor(rawYears);

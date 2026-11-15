@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import JsonLd from '@/components/JsonLd';
 import BrandComparisonNav, { OtherBrandsCrossNav } from '@/components/BrandComparisonNav';
+import ModelSpecWarrantyCard from '@/components/ModelSpecWarrantyCard';
 
 export const dynamic = 'force-static';
 export const revalidate = false;
@@ -40,6 +41,134 @@ const globalBrandsJsonLd = {
         '@type': 'WebPage',
         '@id': `${SITE_URL}/global-brands`,
       },
+    },
+    {
+      '@type': 'Vehicle',
+      '@id': `${SITE_URL}/global-brands#vehicle-bolt-ev`,
+      name: '쉐보레 볼트 EV / EUV (Chevrolet Bolt EV / EUV)',
+      image: `${SITE_URL}/og-image.png`,
+      url: `${SITE_URL}/global-brands#heading-bolt-ev`,
+      brand: {
+        '@type': 'Brand',
+        name: 'Chevrolet',
+      },
+      manufacturer: {
+        '@type': 'Organization',
+        name: 'General Motors',
+      },
+      model: 'Bolt EV',
+      vehicleModelDate: '2017-2023',
+      vehicleTransmission: '1단 감속기 (전기 모터)',
+      fuelType: 'https://schema.org/Electric',
+      description: '도심형 소형 CUV EV. LG 파우치형 삼원계 66kWh 배터리 탑재, 국토교통부 신품 교체 리콜 대상.',
+      additionalProperty: [
+        {
+          '@type': 'PropertyValue',
+          name: 'Battery Chemistry',
+          value: 'LG에너지솔루션 NCM 66.0 kWh (리콜 신품 교체 기준)',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Powertrain Warranty',
+          value: '배터리 리콜 교체 시점부터 8년 / 160,000 km 신규 보증 리셋',
+        },
+      ],
+    },
+    {
+      '@type': 'Vehicle',
+      '@id': `${SITE_URL}/global-brands#vehicle-id4`,
+      name: '폭스바겐 ID.4 (Volkswagen ID.4)',
+      image: `${SITE_URL}/og-image.png`,
+      url: `${SITE_URL}/global-brands#heading-id4`,
+      brand: {
+        '@type': 'Brand',
+        name: 'Volkswagen',
+      },
+      manufacturer: {
+        '@type': 'Organization',
+        name: 'Volkswagen AG',
+      },
+      model: 'ID.4',
+      vehicleModelDate: '2021-2026',
+      vehicleTransmission: '1단 감속기 (APP550 구동 모터)',
+      fuelType: 'https://schema.org/Electric',
+      description: 'MEB 전용 플랫폼 기반 준중형 SUV EV. 82.0kWh 삼원계 배터리 및 개선형 도어 래치 적용.',
+      additionalProperty: [
+        {
+          '@type': 'PropertyValue',
+          name: 'Battery Chemistry',
+          value: 'LG에너지솔루션 / SK온 NCM 82.0 kWh (가용 77.0 kWh)',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Powertrain Warranty',
+          value: '8년 / 160,000 km (보증 잔여용량 70%)',
+        },
+      ],
+    },
+    {
+      '@type': 'Vehicle',
+      '@id': `${SITE_URL}/global-brands#vehicle-benz-eqe`,
+      name: '메르세데스-벤츠 EQE 350+ (Mercedes-Benz EQE 350+)',
+      image: `${SITE_URL}/og-image.png`,
+      url: `${SITE_URL}/global-brands#heading-benz-eqe`,
+      brand: {
+        '@type': 'Brand',
+        name: 'Mercedes-Benz',
+      },
+      manufacturer: {
+        '@type': 'Organization',
+        name: 'Mercedes-Benz Group AG',
+      },
+      model: 'EQE 350+',
+      vehicleModelDate: '2022-2026',
+      vehicleTransmission: '1단 감속기 (전기 모터)',
+      fuelType: 'https://schema.org/Electric',
+      description: 'EVA2 전용 플랫폼 프리미엄 비즈니스 세단 EV. 90.6kWh 배터리(CATL / 파라시스) 탑재.',
+      additionalProperty: [
+        {
+          '@type': 'PropertyValue',
+          name: 'Battery Chemistry',
+          value: 'NCM 삼원계 (CATL 또는 파라시스) 90.6 kWh',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Powertrain Warranty',
+          value: '10년 / 250,000 km 배터리 보증서(배터리 인증서 발급)',
+        },
+      ],
+    },
+    {
+      '@type': 'Vehicle',
+      '@id': `${SITE_URL}/global-brands#vehicle-polestar2`,
+      name: '폴스타 2 (Polestar 2)',
+      image: `${SITE_URL}/og-image.png`,
+      url: `${SITE_URL}/global-brands#heading-volvo-polestar`,
+      brand: {
+        '@type': 'Brand',
+        name: 'Polestar',
+      },
+      manufacturer: {
+        '@type': 'Organization',
+        name: 'Polestar Performance AB',
+      },
+      model: 'Polestar 2',
+      vehicleModelDate: '2021-2026',
+      vehicleTransmission: '1단 감속기 (싱글/듀얼 모터)',
+      fuelType: 'https://schema.org/Electric',
+      description: 'CMA 플랫폼 기반 5도어 패스트백 크로스오버 EV. 78.0kWh 삼원계 배터리 및 안드로이드 오토모티브 OS 탑재.',
+      additionalProperty: [
+        {
+          '@type': 'PropertyValue',
+          name: 'Battery Chemistry',
+          value: 'LG에너지솔루션 NCM 78.0 kWh',
+        },
+        {
+          '@type': 'PropertyValue',
+          name: 'Powertrain Warranty',
+          value: '8년 / 160,000 km',
+        },
+      ],
     },
     {
       '@type': 'ItemList',
@@ -357,6 +486,26 @@ export default function GlobalEvPage() {
         <h2 id="heading-bolt-ev" className="text-2xl sm:text-3xl font-bold text-slate-800">
           쉐보레 볼트 EV / EUV
         </h2>
+
+        <ModelSpecWarrantyCard
+          modelName="쉐보레 볼트 EV / EUV"
+          badge="배터리 리콜 완료 추천"
+          msrpRange="신차 단종 / 4,130만 ~ 4,490만 원"
+          effectivePriceRange="약 3,300만 원 (출고 당시)"
+          usedPriceRange="1,700만 ~ 2,350만 원"
+          batterySpecs={{
+            capacity: "66.0 kWh (신품 개선 배터리)",
+            chemistry: "LG에너지솔루션 NCM622 파우치",
+            voltage: "400V 고전압 시스템",
+            range: "403km ~ 414km (복합)",
+          }}
+          warranty={{
+            batteryYearsKm: "신품 교체 후 8년 / 160,000 km (리셋)",
+            batteryGuaranteeSoh: "신품 팩 교체 시 보증 기간 신규 적용",
+            generalYearsKm: "일반 부품 만료 (중고차 기준)",
+            outOfWarrantyRisk: "리콜 미교체 차량 구매 절대 금지, 배터리 자비 교체 2,200만 원",
+          }}
+        />
         <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl" role="region" aria-label="쉐보레 볼트 EV 구매 회피 연식 경고">
           <h3 className="text-lg sm:text-xl font-bold text-red-900">
             <span aria-hidden="true">🚫 </span>2017~2022년식: 구매 회피 (AVOID - 배터리 화재 위험)
@@ -380,6 +529,26 @@ export default function GlobalEvPage() {
         <h2 id="heading-id4" className="text-2xl sm:text-3xl font-bold text-slate-800">
           폭스바겐 ID.4
         </h2>
+
+        <ModelSpecWarrantyCard
+          modelName="폭스바겐 ID.4 (Volkswagen ID.4)"
+          badge="MEB 플랫폼 준중형 SUV"
+          msrpRange="5,490만 ~ 5,990만 원"
+          effectivePriceRange="약 4,800만 ~ 5,300만 원 (보조금 100%)"
+          usedPriceRange="3,100만 ~ 4,100만 원"
+          batterySpecs={{
+            capacity: "82.0 kWh (가용 77.0 kWh)",
+            chemistry: "LG엔솔 / SK온 NCM712 삼원계",
+            voltage: "400V (최대 135kW 급속)",
+            range: "421km ~ 440km (복합)",
+          }}
+          warranty={{
+            batteryYearsKm: "8년 / 160,000 km",
+            batteryGuaranteeSoh: "잔존용량(SoH) 70% 보증",
+            generalYearsKm: "3년 / 100,000 km",
+            outOfWarrantyRisk: "CO2 히트펌프 콤프레셔 파손 550만 원, 도어 핸들 센서 침수 주의",
+          }}
+        />
         <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl" role="region" aria-label="폭스바겐 ID.4 구매 회피 연식 경고">
           <h3 className="text-lg sm:text-xl font-bold text-red-900">
             <span aria-hidden="true">🚫 </span>2021~2024년식: 구매 회피 (AVOID - 주행 중 문 열림 결함)
@@ -403,6 +572,26 @@ export default function GlobalEvPage() {
         <h2 id="heading-volvo-polestar" className="text-2xl sm:text-3xl font-bold text-slate-800">
           볼보 EX30 / 폴스타 2
         </h2>
+
+        <ModelSpecWarrantyCard
+          modelName="볼보 EX30 & 폴스타 2"
+          badge="스웨디시 프리미엄 EV"
+          msrpRange="4,945만 ~ 6,090만 원"
+          effectivePriceRange="약 4,400만 ~ 5,400만 원"
+          usedPriceRange="3,000만 ~ 4,200만 원"
+          batterySpecs={{
+            capacity: "69.0 kWh (EX30) / 82.0 kWh (폴스타2)",
+            chemistry: "CATL / LG 삼원계 NMC",
+            voltage: "400V (최대 153~205kW 급속)",
+            range: "404km (EX30) / 449km (폴스타2)",
+          }}
+          warranty={{
+            batteryYearsKm: "8년 / 160,000 km",
+            batteryGuaranteeSoh: "잔존용량(SoH) 70% 보증",
+            generalYearsKm: "5년 / 100,000 km (수입차 최장급)",
+            outOfWarrantyRisk: "폴스타2 고전압 히터(HVCH) 270만 원, EX30 중앙 속도계 OTA 필수",
+          }}
+        />
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="볼보 EX30 및 폴스타 2 주의 연식 가이드">
           <h3 className="text-lg sm:text-xl font-bold text-amber-900">
             <span aria-hidden="true">⚠️ </span>2021~2024년식: 주의 요망 (CAUTION - 소프트웨어 및 히터 결함)
@@ -426,6 +615,26 @@ export default function GlobalEvPage() {
         <h2 id="heading-benz-eqe" className="text-2xl sm:text-3xl font-bold text-slate-800">
           메르세데스-벤츠 EQE / EQS
         </h2>
+
+        <ModelSpecWarrantyCard
+          modelName="메르세데스-벤츠 EQE / EQS"
+          badge="럭셔리 대형 전기 세단"
+          msrpRange="1억 300만 ~ 2억 1,000만 원"
+          effectivePriceRange="보조금 0% (8,500만 원 초과)"
+          usedPriceRange="5,100만 ~ 1억 1,000만 원 (감가율 극대)"
+          batterySpecs={{
+            capacity: "88.8~90.6 kWh (EQE) / 118.0 kWh (EQS)",
+            chemistry: "파라시스(초기) / CATL(개선형)",
+            voltage: "400V EVA2 플랫폼",
+            range: "471km (EQE) / 478km (EQS)",
+          }}
+          warranty={{
+            batteryYearsKm: "10년 / 250,000 km (EQS), 10년 / 16만km (EQE)",
+            batteryGuaranteeSoh: "잔존용량(SoH) 70% 보증",
+            generalYearsKm: "2년 / 무제한 (워런티 플러스 권장)",
+            outOfWarrantyRisk: "EQS 배터리팩 교체비 약 7,560만 원 (전손 리스크), 파라시스 셀 기피",
+          }}
+        />
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-xl" role="region" aria-label="메르세데스-벤츠 EQE 및 EQS 주의 연식 가이드">
           <h3 className="text-lg sm:text-xl font-bold text-amber-900">
             <span aria-hidden="true">⚠️ </span>2022~2023년식: 주의 요망 (CAUTION - 수리비 주의)

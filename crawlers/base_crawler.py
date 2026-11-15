@@ -6,8 +6,11 @@ for community forum web scrapers (BobaeDream, DCInside, etc.).
 from __future__ import annotations
 
 import abc
+import json
 import logging
-from typing import Any, Dict, List, Optional, Union
+import os
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from utils.http_client import SafeHttpClient
 
@@ -159,6 +162,78 @@ class BaseCrawler(abc.ABC):
             except Exception as e:
                 logger.warning(f"Error clearing cookies: {e}")
         self._warmed_up = False
+
+    def is_circuit_open(self, url_or_host: Optional[str] = None) -> bool:
+        """Check if circuit breaker is OPEN for the target crawler host."""
+        if hasattr(self.client, "is_circuit_open"):
+            target = url_or_host or self.base_url or ""
+            return bool(self.client.is_circuit_open(target))
+        return False
+
+    def get_circuit_state(self, url_or_host: Optional[str] = None) -> str:
+        """Return the circuit breaker state (CLOSED, OPEN, HALF_OPEN) for this host."""
+        if hasattr(self.client, "get_circuit_state"):
+            target = url_or_host or self.base_url or ""
+            return str(self.client.get_circuit_state(target))
+        return "CLOSED"
+
+    def load_seed_fallback(
+        self,
+        platform_name: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """Load fallback records from seed datasets in data/ if live crawl is unavailable."""
+        seed_posts: List[Dict[str, Any]] = []
+        target_platform = (platform_name or getattr(self, "platform", "") or "").lower().strip()
+        seed_files = [
+            f"raw_{target_platform}_emerging.json" if target_platform else "",
+            "compiled_complaints.json",
+        ]
+        curr_p = Path(__file__).resolve().parent
+        search_dirs = [
+            curr_p.parent / "data",
+            curr_p.parent.parent / "data",
+            Path.cwd() / "data",
+            Path.cwd() / "ev-stealth-web" / "data",
+        ]
+        seen_ids = set()
+        for s_dir in search_dirs:
+            if not s_dir.is_dir():
+                continue
+            for s_name in seed_files:
+                if not s_name:
+                    continue
+                s_file = s_dir / s_name
+                if s_file.is_file():
+                    try:
+                        with open(s_file, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                        if isinstance(data, list):
+                            for item in data:
+                                if isinstance(item, dict):
+                                    item_plat = str(item.get("platform") or "").lower()
+                                    if target_platform and item_plat and item_plat != target_platform:
+                                        continue
+                                    pid = str(item.get("id") or item.get("post_id") or "")
+                                    if pid and pid in seen_ids:
+                                        continue
+                                    if pid:
+                                        seen_ids.add(pid)
+                                    norm_item = dict(item)
+                                    if "post_title" in norm_item and "title" not in norm_item:
+                                        norm_item["title"] = norm_item["post_title"]
+                                    if "post_url" in norm_item and "url" not in norm_item:
+                                        norm_item["url"] = norm_item["post_url"]
+                                    if "raw_quote" in norm_item and "content" not in norm_item:
+                                        norm_item["content"] = norm_item["raw_quote"]
+                                    seed_posts.append(norm_item)
+                                    if limit and len(seed_posts) >= limit:
+                                        return seed_posts
+                    except Exception as e:
+                        logger.debug(f"Failed reading seed file {s_file}: {e}")
+            if seed_posts:
+                break
+        return seed_posts[:limit] if limit else seed_posts
 
     def reset_session(self) -> None:
         """Alias for clear_session() to reinitialize session state."""

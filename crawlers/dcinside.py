@@ -348,6 +348,11 @@ class DCInsideCrawler(BaseCrawler):
             enable_cache=enable_cache,
             cache_fallback=cache_fallback,
         )
+        self.platform = "dcinside"
+
+    def load_seed_posts(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Load fallback records for DCInside from seed data files."""
+        return self.load_seed_fallback(platform_name="dcinside", limit=limit)
 
     def is_deleted_or_restricted(self, html_content: Optional[str]) -> Tuple[bool, str]:
         """Proxy check for deleted, restricted, or blocked pages."""

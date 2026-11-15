@@ -86,6 +86,21 @@ def read_lock_metadata(lock_path: Union[str, Path]) -> Tuple[Optional[int], Opti
         return None, None
 
 
+def durable_fsync(fd: int) -> None:
+    """Flush file descriptor buffers to disk physical storage crash-durably.
+
+    Invokes os.fsync(fd) to commit kernel dirty pages and filesystem metadata.
+    On macOS (Darwin), additionally invokes fcntl(fd, F_FULLFSYNC) to guarantee
+    that hardware drive controller caches are committed to physical non-volatile media.
+    """
+    os.fsync(fd)
+    if fcntl is not None and hasattr(fcntl, "F_FULLFSYNC"):
+        try:
+            fcntl.fcntl(fd, fcntl.F_FULLFSYNC)
+        except OSError:
+            pass
+
+
 class FileLock:
     """Re-entrant cross-process and thread-safe advisory file lock with timeout, stale lock breaking, and backoff."""
 
@@ -111,6 +126,7 @@ class FileLock:
         self.fd: Optional[int] = None
         self.acquired: bool = False
         self._thread_locked: bool = False
+        self._instance_depth: int = 0
         with self._meta_lock:
             if self.lock_path not in self._process_locks:
                 self._process_locks[self.lock_path] = threading.RLock()
@@ -147,6 +163,7 @@ class FileLock:
                 self._local.depths[self.lock_path] = depth + 1
                 self.fd = self._local.fds.get(self.lock_path)
                 self.acquired = True
+                self._instance_depth += 1
                 return self
 
             os.makedirs(os.path.dirname(self.lock_path), exist_ok=True)
@@ -185,10 +202,10 @@ class FileLock:
                             continue
                         self.acquired = True
                         try:
-                            os.ftruncate(self.fd, 0)
                             os.lseek(self.fd, 0, os.SEEK_SET)
                             meta_bytes = f"pid={os.getpid()}\ntime={time.time()}\n".encode("utf-8")
                             os.write(self.fd, meta_bytes)
+                            os.ftruncate(self.fd, len(meta_bytes))
                         except OSError:
                             pass
                         break
@@ -200,7 +217,7 @@ class FileLock:
                         holder_pid, holder_ts = read_lock_metadata(self.lock_path)
                         now = time.time()
                         try:
-                            mtime_age = now - os.path.getmtime(self.lock_path)
+                            mtime_age = max(0.0, now - os.path.getmtime(self.lock_path))
                         except OSError:
                             mtime_age = 0.0
 
@@ -209,10 +226,10 @@ class FileLock:
                             (holder_ts is not None and (now - holder_ts) > self.stale_timeout)
                             or (holder_ts is None and mtime_age > self.stale_timeout)
                         )
-                        lock_age = max(mtime_age, (now - holder_ts) if holder_ts is not None else mtime_age)
+                        lock_age = max(0.0, mtime_age, (now - holder_ts) if holder_ts is not None else mtime_age)
 
                         if (
-                            is_dead_holder
+                            (is_dead_holder and lock_age > self.stale_timeout)
                             or (is_expired_holder and lock_age > self.stale_timeout)
                             or (holder_pid is None and holder_ts is None and lock_age > self.stale_timeout)
                         ):
@@ -247,6 +264,12 @@ class FileLock:
                                 self.lock_path,
                             )
                             self.acquired = False
+                            if self.fd is not None:
+                                try:
+                                    os.close(self.fd)
+                                except OSError:
+                                    pass
+                                self.fd = None
                             break
                         time.sleep(self.poll_interval)
             elif msvcrt is not None:
@@ -257,10 +280,9 @@ class FileLock:
                         msvcrt.locking(self.fd, msvcrt.LK_NBLCK, 1)
                         self.acquired = True
                         try:
-                            os.ftruncate(self.fd, 0)
-                            os.lseek(self.fd, 0, os.SEEK_SET)
                             meta_bytes = f"pid={os.getpid()}\ntime={time.time()}\n".encode("utf-8")
                             os.write(self.fd, meta_bytes)
+                            os.ftruncate(self.fd, len(meta_bytes))
                         except OSError:
                             pass
                         break
@@ -270,7 +292,7 @@ class FileLock:
                         holder_pid, holder_ts = read_lock_metadata(self.lock_path)
                         now = time.time()
                         try:
-                            mtime_age = now - os.path.getmtime(self.lock_path)
+                            mtime_age = max(0.0, now - os.path.getmtime(self.lock_path))
                         except OSError:
                             mtime_age = 0.0
 
@@ -280,10 +302,10 @@ class FileLock:
                             or (holder_ts is None and mtime_age > self.stale_timeout)
                         )
 
-                        lock_age = max(mtime_age, (now - holder_ts) if holder_ts is not None else mtime_age)
+                        lock_age = max(0.0, mtime_age, (now - holder_ts) if holder_ts is not None else mtime_age)
 
                         if (
-                            is_dead_holder
+                            (is_dead_holder and lock_age > self.stale_timeout)
                             or (is_expired_holder and lock_age > self.stale_timeout)
                             or (holder_pid is None and holder_ts is None and lock_age > self.stale_timeout)
                         ):
@@ -317,6 +339,12 @@ class FileLock:
                                 self.lock_path,
                             )
                             self.acquired = False
+                            if self.fd is not None:
+                                try:
+                                    os.close(self.fd)
+                                except OSError:
+                                    pass
+                                self.fd = None
                             break
                         time.sleep(self.poll_interval)
             else:
@@ -325,6 +353,7 @@ class FileLock:
             if self.acquired:
                 self._local.depths[self.lock_path] = 1
                 self._local.fds[self.lock_path] = self.fd
+                self._instance_depth = 1
             return self
         except BaseException:
             if self.fd is not None:
@@ -362,6 +391,11 @@ class FileLock:
             depth = getattr(self._local, "depths", {}).get(self.lock_path, 0)
             if depth > 1:
                 self._local.depths[self.lock_path] = depth - 1
+                if self._instance_depth > 0:
+                    self._instance_depth -= 1
+                    if self._instance_depth == 0:
+                        self.acquired = False
+                        self.fd = None
                 return
             if hasattr(self._local, "depths") and self.lock_path in self._local.depths:
                 del self._local.depths[self.lock_path]
@@ -390,6 +424,7 @@ class FileLock:
                     pass
             self.fd = None
             self.acquired = False
+            self._instance_depth = 0
         finally:
             if getattr(self, "_thread_locked", False):
                 self._thread_locked = False
@@ -464,7 +499,7 @@ def cleanup_stale_lock_files(
                 continue
             try:
                 st = entry.stat()
-                age = now - st.st_mtime
+                age = max(0.0, now - st.st_mtime)
                 holder_pid, holder_ts = read_lock_metadata(entry)
                 is_dead_holder = holder_pid is not None and not is_pid_alive(holder_pid)
                 is_expired_holder = (
@@ -576,6 +611,8 @@ def quarantine_corrupted_file(
     p = Path(file_path).resolve()
     if not p.exists() or p.is_dir():
         return None
+    if is_corrupted_or_quarantined_filename(p):
+        return p
     try:
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
         if suffix:
@@ -610,16 +647,43 @@ def quarantine_corrupted_file(
                     # Concurrent worker or thread already moved/quarantined the file
                     return None
                 if exc.errno == errno.EXDEV:
-                    shutil.copyfile(str(p), str(quarantine_path))
+                    staging_path = None
                     try:
-                        with open(quarantine_path, "a+b") as qf:
-                            os.fsync(qf.fileno())
+                        with tempfile.NamedTemporaryFile(
+                            mode="wb",
+                            dir=str(quarantine_path.parent),
+                            delete=False,
+                            prefix=".tmp_quarantine_",
+                            suffix=".stage",
+                        ) as qsf:
+                            staging_path = Path(qsf.name)
+                            shutil.copyfile(str(p), str(staging_path))
+                            qsf.flush()
+                            durable_fsync(qsf.fileno())
+                        os.chmod(str(staging_path), 0o644)
+                        os.replace(str(staging_path), str(quarantine_path))
+                        staging_path = None
+                        try:
+                            os.unlink(str(p))
+                        except OSError:
+                            pass
                     except OSError:
-                        pass
-                    try:
-                        os.unlink(str(p))
-                    except OSError:
-                        pass
+                        shutil.copyfile(str(p), str(quarantine_path))
+                        try:
+                            with open(quarantine_path, "a+b") as qf:
+                                durable_fsync(qf.fileno())
+                        except OSError:
+                            pass
+                        try:
+                            os.unlink(str(p))
+                        except OSError:
+                            pass
+                    finally:
+                        if staging_path and staging_path.exists():
+                            try:
+                                staging_path.unlink()
+                            except OSError:
+                                pass
                     break
                 if (
                     exc.errno in (errno.EACCES, errno.EPERM, getattr(errno, "EBUSY", 16))
@@ -642,7 +706,7 @@ def quarantine_corrupted_file(
             try:
                 dir_fd = os.open(str(p.parent), dir_flags)
                 try:
-                    os.fsync(dir_fd)
+                    durable_fsync(dir_fd)
                 finally:
                     os.close(dir_fd)
             except OSError:
@@ -696,6 +760,8 @@ def sanitize_nan_inf(obj: Any, seen: Optional[set[int]] = None) -> Any:
             for k, v in obj.items():
                 if isinstance(k, float) and (math.isnan(k) or math.isinf(k)):
                     sanitized_k = "0.0"
+                elif isinstance(k, Decimal):
+                    sanitized_k = "0.0" if (k.is_nan() or k.is_infinite()) else str(k)
                 elif isinstance(k, (date, datetime)):
                     sanitized_k = k.isoformat()
                 elif isinstance(k, Enum):
@@ -878,7 +944,7 @@ def atomic_write_json(
                     temp_name = tf.name
                     tf.write(_pre_encoded_content)
                     tf.flush()
-                    os.fsync(tf.fileno())
+                    durable_fsync(tf.fileno())
             else:
                 with tempfile.NamedTemporaryFile(
                     mode="w",
@@ -891,7 +957,7 @@ def atomic_write_json(
                     temp_name = tf.name
                     json.dump(payload, tf, ensure_ascii=ensure_ascii, indent=indent, default=serializer, allow_nan=False)
                     tf.flush()
-                    os.fsync(tf.fileno())
+                    durable_fsync(tf.fileno())
 
             try:
                 os.chmod(temp_name, target_mode)
@@ -916,17 +982,40 @@ def atomic_write_json(
                     break
                 except OSError as exc:
                     if exc.errno == errno.EXDEV:
-                        # Fallback for cross-device or overlayfs filesystems
-                        shutil.copyfile(temp_name, str(dest))
+                        staging_name = None
                         try:
-                            with open(dest, "a+b") as df:
-                                os.fsync(df.fileno())
+                            with tempfile.NamedTemporaryFile(
+                                mode="wb",
+                                dir=str(dest_dir),
+                                delete=False,
+                                prefix=temp_prefix,
+                                suffix=".stage",
+                            ) as sf:
+                                staging_name = sf.name
+                                shutil.copyfile(temp_name, staging_name)
+                                sf.flush()
+                                durable_fsync(sf.fileno())
+                            os.chmod(staging_name, target_mode)
+                            os.replace(staging_name, dest)
+                            staging_name = None
                         except OSError:
-                            pass
-                        try:
-                            os.unlink(temp_name)
-                        except OSError:
-                            pass
+                            # Direct copy fallback if directory does not permit temporary replacement
+                            shutil.copyfile(temp_name, str(dest))
+                            try:
+                                with open(dest, "a+b") as df:
+                                    durable_fsync(df.fileno())
+                            except OSError:
+                                pass
+                        finally:
+                            if staging_name and os.path.exists(staging_name):
+                                try:
+                                    os.unlink(staging_name)
+                                except OSError:
+                                    pass
+                            try:
+                                os.unlink(temp_name)
+                            except OSError:
+                                pass
                         break
                     if (
                         exc.errno in (errno.EACCES, errno.EPERM, getattr(errno, "EBUSY", 16))
@@ -952,7 +1041,7 @@ def atomic_write_json(
                 try:
                     dir_fd = os.open(str(dest_dir), dir_flags)
                     try:
-                        os.fsync(dir_fd)
+                        durable_fsync(dir_fd)
                     finally:
                         os.close(dir_fd)
                 except OSError:
@@ -1124,7 +1213,7 @@ def atomic_write_text(
                 temp_name = tf.name
                 tf.write(content)
                 tf.flush()
-                os.fsync(tf.fileno())
+                durable_fsync(tf.fileno())
 
             try:
                 os.chmod(temp_name, target_mode)
@@ -1149,16 +1238,40 @@ def atomic_write_text(
                     break
                 except OSError as exc:
                     if exc.errno == errno.EXDEV:
-                        shutil.copyfile(temp_name, str(dest))
+                        staging_name = None
                         try:
-                            with open(dest, "a+b") as df:
-                                os.fsync(df.fileno())
+                            with tempfile.NamedTemporaryFile(
+                                mode="w",
+                                dir=str(dest_dir),
+                                delete=False,
+                                encoding=encoding,
+                                prefix=temp_prefix,
+                                suffix=".stage",
+                            ) as sf:
+                                staging_name = sf.name
+                                shutil.copyfile(temp_name, staging_name)
+                                sf.flush()
+                                durable_fsync(sf.fileno())
+                            os.chmod(staging_name, target_mode)
+                            os.replace(staging_name, dest)
+                            staging_name = None
                         except OSError:
-                            pass
-                        try:
-                            os.unlink(temp_name)
-                        except OSError:
-                            pass
+                            shutil.copyfile(temp_name, str(dest))
+                            try:
+                                with open(dest, "a+b") as df:
+                                    durable_fsync(df.fileno())
+                            except OSError:
+                                pass
+                        finally:
+                            if staging_name and os.path.exists(staging_name):
+                                try:
+                                    os.unlink(staging_name)
+                                except OSError:
+                                    pass
+                            try:
+                                os.unlink(temp_name)
+                            except OSError:
+                                pass
                         break
                     if (
                         exc.errno in (errno.EACCES, errno.EPERM, getattr(errno, "EBUSY", 16))
@@ -1183,7 +1296,7 @@ def atomic_write_text(
                 try:
                     dir_fd = os.open(str(dest_dir), dir_flags)
                     try:
-                        os.fsync(dir_fd)
+                        durable_fsync(dir_fd)
                     finally:
                         os.close(dir_fd)
                 except OSError:

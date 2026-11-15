@@ -156,7 +156,7 @@ interface HeatmapRowProps {
   model: EnrichedModelItem;
   evalMap?: Map<number, YearEvaluation>;
   heatmapYears: number[];
-  selectedCellKey?: string | null;
+  selectedYear?: number | null;
   onCellClick: (
     cell: {
       modelName: string;
@@ -184,7 +184,7 @@ const HeatmapRow = React.memo(function HeatmapRow({
   model,
   evalMap,
   heatmapYears,
-  selectedCellKey,
+  selectedYear,
   onCellClick,
   onCellHover,
 }: HeatmapRowProps) {
@@ -234,7 +234,7 @@ const HeatmapRow = React.memo(function HeatmapRow({
             ? '주의 요망 (CAUTION)'
             : '안심 추천 (BUY SAFE)';
 
-        const isCellSelected = selectedCellKey === `${model.name}-${evalData.year}`;
+        const isCellSelected = selectedYear === evalData.year;
 
         return (
           <td key={yr} className="p-2 text-center">
@@ -1130,7 +1130,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   type="button"
                   role="tab"
                   aria-selected={isSelected}
-                  aria-controls={`chart-tabpanel-${tab.id}`}
+                  aria-controls="chart-tabpanel"
                   tabIndex={isSelected ? 0 : -1}
                   onKeyDown={(e) => handleChartTabKeyDown(e, idx)}
                   onClick={() => setActiveChartTab(tab.id)}
@@ -1148,7 +1148,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
         </div>
 
         <div
-          id={`chart-tabpanel-${activeChartTab}`}
+          id="chart-tabpanel"
           role="tabpanel"
           aria-labelledby={`chart-tab-${activeChartTab}`}
           tabIndex={0}
@@ -1232,7 +1232,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           model={model}
                           evalMap={modelEvalMaps.get(model.id)}
                           heatmapYears={heatmapYears}
-                          selectedCellKey={hoveredCell ? `${model.name}-${hoveredCell.year}` : null}
+                          selectedYear={hoveredCell?.modelName === model.name ? hoveredCell.year : null}
                           onCellClick={handleCellClick}
                           onCellHover={setCellPreview}
                         />
@@ -1517,7 +1517,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       <button
                         type="button"
                         onClick={() => handleBrandToggle(hoveredSvgBrand.id)}
-                        className="px-3 py-1.5 min-h-[36px] bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold transition shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                        className="px-3.5 py-2 min-h-[44px] inline-flex items-center justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold transition shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                       >
                         {selectedBrand === hoveredSvgBrand.id ? '필터 해제' : '이 브랜드만 보기'}
                       </button>
@@ -1766,8 +1766,17 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           fill={isHovered ? '#60a5fa' : '#f8fafc'}
                           fontSize="11"
                           fontWeight={isHovered ? 'bold' : '600'}
-                          className="cursor-pointer transition-colors"
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`${axis.label} 결함 비중 비교 상세 보기`}
+                          className="cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
                           onClick={() => setHoveredRadarCategory(isHovered ? null : axis.code)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setHoveredRadarCategory(isHovered ? null : axis.code);
+                            }
+                          }}
                         >
                           {axis.label}
                         </text>
@@ -1974,12 +1983,12 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       </div>
                     </div>
 
-                    <div className="pt-2 border-t border-slate-200 text-xs text-slate-700 flex justify-between">
+                    <div className="pt-2 border-t border-slate-200 text-xs text-slate-700 flex items-center justify-between">
                       <span>총 실차주 제보: <strong className="text-slate-900">{(brandAObj.total_reports || 0).toLocaleString()}건</strong></span>
                       <button
                         type="button"
                         onClick={() => setSelectedBrand(brandAObj.id)}
-                        className="font-bold text-blue-800 hover:text-blue-950 transition"
+                        className="font-bold text-blue-800 hover:text-blue-950 transition min-h-[44px] inline-flex items-center px-2.5 py-1.5 rounded-lg hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
                       >
                         모델 목록 필터링 &rarr;
                       </button>
@@ -2052,12 +2061,12 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       </div>
                     </div>
 
-                    <div className="pt-2 border-t border-slate-200 text-xs text-slate-700 flex justify-between">
+                    <div className="pt-2 border-t border-slate-200 text-xs text-slate-700 flex items-center justify-between">
                       <span>총 실차주 제보: <strong className="text-slate-900">{(brandBObj.total_reports || 0).toLocaleString()}건</strong></span>
                       <button
                         type="button"
                         onClick={() => setSelectedBrand(brandBObj.id)}
-                        className="font-bold text-rose-800 hover:text-rose-950 transition"
+                        className="font-bold text-rose-800 hover:text-rose-950 transition min-h-[44px] inline-flex items-center px-2.5 py-1.5 rounded-lg hover:bg-rose-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
                       >
                         모델 목록 필터링 &rarr;
                       </button>
@@ -2067,24 +2076,30 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               </div>
 
               {/* Head-to-Head Durability Summary */}
-              {brandAObj && brandBObj && (
-                <div className="p-4 sm:p-5 rounded-2xl bg-slate-100 border border-slate-200 text-xs sm:text-sm text-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <div>
-                    <span className="font-bold text-slate-900 mr-2">⚖️ 종합 내구성 판정:</span>
-                    {brandAObj.overall_dsi < brandBObj.overall_dsi ? (
-                      <span>
-                        <strong className="text-blue-800 font-extrabold">{brandAObj.name_ko}</strong>가 {brandBObj.name_ko} 대비 DSI 지수가 <strong className="text-slate-900">{(brandBObj.overall_dsi - brandAObj.overall_dsi).toFixed(1)}점 낮아</strong> 종합 결함 심각도 측면에서 더 우수한 내구성을 보입니다.
-                      </span>
-                    ) : brandAObj.overall_dsi > brandBObj.overall_dsi ? (
-                      <span>
-                        <strong className="text-rose-800 font-extrabold">{brandBObj.name_ko}</strong>가 {brandAObj.name_ko} 대비 DSI 지수가 <strong className="text-slate-900">{(brandAObj.overall_dsi - brandBObj.overall_dsi).toFixed(1)}점 낮아</strong> 종합 결함 심각도 측면에서 더 우수한 내구성을 보입니다.
-                      </span>
-                    ) : (
-                      <span>두 브랜드의 종합 결함 심각도(DSI) 지수가 동일합니다.</span>
-                    )}
+              {brandAObj && brandBObj && (() => {
+                const safeDsiA = Number.isFinite(brandAObj.overall_dsi) ? brandAObj.overall_dsi : 0;
+                const safeDsiB = Number.isFinite(brandBObj.overall_dsi) ? brandBObj.overall_dsi : 0;
+                const dsiDiff = Math.abs(safeDsiB - safeDsiA).toFixed(1);
+
+                return (
+                  <div className="p-4 sm:p-5 rounded-2xl bg-slate-100 border border-slate-200 text-xs sm:text-sm text-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div>
+                      <span className="font-bold text-slate-900 mr-2">⚖️ 종합 내구성 판정:</span>
+                      {safeDsiA < safeDsiB ? (
+                        <span>
+                          <strong className="text-blue-800 font-extrabold">{brandAObj.name_ko}</strong>가 {brandBObj.name_ko} 대비 DSI 지수가 <strong className="text-slate-900">{dsiDiff}점 낮아</strong> 종합 결함 심각도 측면에서 더 우수한 내구성을 보입니다.
+                        </span>
+                      ) : safeDsiA > safeDsiB ? (
+                        <span>
+                          <strong className="text-rose-800 font-extrabold">{brandBObj.name_ko}</strong>가 {brandAObj.name_ko} 대비 DSI 지수가 <strong className="text-slate-900">{dsiDiff}점 낮아</strong> 종합 결함 심각도 측면에서 더 우수한 내구성을 보입니다.
+                        </span>
+                      ) : (
+                        <span>두 브랜드의 종합 결함 심각도(DSI) 지수가 동일합니다.</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
 

@@ -467,6 +467,209 @@ class TestSubsidyNumberParsingAndMissingProperties(unittest.TestCase):
         self.assertEqual(res["ratio2"], 1.0)
         self.assertTrue(res["same"])
 
+    def test_14_waitlist_and_pending_deliveries(self) -> None:
+        """calculateWaitlistUnits, isDepletionOverExhausted, and calculatePendingDeliveries calculations."""
+        script = """
+        import {
+            calculateWaitlistUnits,
+            isDepletionOverExhausted,
+            calculatePendingDeliveries,
+        } from './src/lib/subsidyCalculations';
+
+        console.log(JSON.stringify({
+            // Waitlist calculations
+            waitlist_normal: calculateWaitlistUnits(80, 100),
+            waitlist_exact: calculateWaitlistUnits(100, 100),
+            waitlist_over: calculateWaitlistUnits(125, 100),
+            waitlist_zero_quota: calculateWaitlistUnits(50, 0),
+            waitlist_null: calculateWaitlistUnits(null, 100),
+            waitlist_nan: calculateWaitlistUnits(NaN, 100),
+
+            // Over-exhaustion detection (> 100.0%)
+            over_normal: isDepletionOverExhausted(89.4),
+            over_exact: isDepletionOverExhausted(100.0),
+            over_exceeded: isDepletionOverExhausted(100.1),
+            over_null: isDepletionOverExhausted(null),
+            over_nan: isDepletionOverExhausted(NaN),
+
+            // Pending deliveries (applied - delivered)
+            pending_normal: calculatePendingDeliveries(100, 70),
+            pending_delivered_exceeds: calculatePendingDeliveries(50, 60),
+            pending_null: calculatePendingDeliveries(null, 50),
+            pending_zero: calculatePendingDeliveries(0, 0),
+        }));
+        """
+        res = _eval_ts_node(script)
+        self.assertEqual(res["waitlist_normal"], 0)
+        self.assertEqual(res["waitlist_exact"], 0)
+        self.assertEqual(res["waitlist_over"], 25)
+        self.assertEqual(res["waitlist_zero_quota"], 0)
+        self.assertEqual(res["waitlist_null"], 0)
+        self.assertEqual(res["waitlist_nan"], 0)
+
+        self.assertFalse(res["over_normal"])
+        self.assertFalse(res["over_exact"])
+        self.assertTrue(res["over_exceeded"])
+        self.assertFalse(res["over_null"])
+        self.assertFalse(res["over_nan"])
+
+        self.assertEqual(res["pending_normal"], 30)
+        self.assertEqual(res["pending_delivered_exceeds"], 0)
+        self.assertEqual(res["pending_null"], 0)
+        self.assertEqual(res["pending_zero"], 0)
+
+    def test_15_velocity_and_exhaustion_predictions(self) -> None:
+        """calculateDepletionVelocity, predictExhaustionDays, and predictExhaustionDate zero division & bounds."""
+        script = """
+        import {
+            calculateDepletionVelocity,
+            predictExhaustionDays,
+            predictExhaustionDate,
+        } from './src/lib/subsidyCalculations';
+
+        console.log(JSON.stringify({
+            // Velocity
+            vel_normal: calculateDepletionVelocity(0, 300, 30),
+            vel_zero_days: calculateDepletionVelocity(0, 300, 0),
+            vel_neg_days: calculateDepletionVelocity(0, 300, -10),
+            vel_null: calculateDepletionVelocity(null, 300, 30),
+            vel_nan: calculateDepletionVelocity(NaN, 300, 30),
+            vel_start_gt_end: calculateDepletionVelocity(500, 300, 30),
+
+            // Exhaustion Days
+            days_normal: predictExhaustionDays(100, 10),
+            days_fractional: predictExhaustionDays(95, 10),
+            days_zero_rem: predictExhaustionDays(0, 10),
+            days_neg_rem: predictExhaustionDays(-20, 10),
+            days_zero_vel: predictExhaustionDays(100, 0),
+            days_neg_vel: predictExhaustionDays(100, -5),
+            days_null: predictExhaustionDays(null, 10),
+
+            // Exhaustion Date
+            date_normal: predictExhaustionDate(100, 10, '2026-03-01'),
+            date_zero_vel: predictExhaustionDate(100, 0, '2026-03-01'),
+        }));
+        """
+        res = _eval_ts_node(script)
+        self.assertEqual(res["vel_normal"], 10.0)
+        self.assertEqual(res["vel_zero_days"], 0.0)
+        self.assertEqual(res["vel_neg_days"], 0.0)
+        self.assertEqual(res["vel_null"], 0.0)
+        self.assertEqual(res["vel_nan"], 0.0)
+        self.assertEqual(res["vel_start_gt_end"], 0.0)
+
+        self.assertEqual(res["days_normal"], 10)
+        self.assertEqual(res["days_fractional"], 10)
+        self.assertEqual(res["days_zero_rem"], 0)
+        self.assertEqual(res["days_neg_rem"], 0)
+        self.assertIsNone(res["days_zero_vel"])
+        self.assertIsNone(res["days_neg_vel"])
+        self.assertIsNone(res["days_null"])
+
+        self.assertEqual(res["date_normal"], "2026-03-11")
+        self.assertIsNone(res["date_zero_vel"])
+
+    def test_16_regional_grouping_classification(self) -> None:
+        """classifyRegionGroup, isMetropolitanCity, isProvince, and groupRegionsByType."""
+        script = """
+        import {
+            classifyRegionGroup,
+            isMetropolitanCity,
+            isProvince,
+            groupRegionsByType,
+        } from './src/lib/subsidyCalculations';
+
+        const sampleRegions = [
+            { region_id: 'KR-11', name_ko: '서울특별시', tier: 'special_city' },
+            { region_id: 'KR-41', name_ko: '경기도', tier: 'province' },
+            { region_id: 'KR-36', name_ko: '세종특별자치시', tier: 'special_self_governing_city' },
+            { region_id: 'KR-49', name_ko: '제주특별자치도', tier: 'special_self_governing_province' },
+        ];
+
+        const grouped = groupRegionsByType(sampleRegions);
+
+        console.log(JSON.stringify({
+            seoul_grp: classifyRegionGroup('KR-11'),
+            seoul_is_metro: isMetropolitanCity('서울'),
+            seoul_is_prov: isProvince('서울'),
+            gyeonggi_grp: classifyRegionGroup('KR-41'),
+            gyeonggi_is_metro: isMetropolitanCity('경기'),
+            gyeonggi_is_prov: isProvince('경기'),
+            metro_count: grouped.metropolitan_cities.length,
+            prov_count: grouped.provinces.length,
+            null_grp: classifyRegionGroup(null),
+        }));
+        """
+        res = _eval_ts_node(script)
+        self.assertEqual(res["seoul_grp"], "metropolitan_cities")
+        self.assertTrue(res["seoul_is_metro"])
+        self.assertFalse(res["seoul_is_prov"])
+        self.assertEqual(res["gyeonggi_grp"], "provinces")
+        self.assertFalse(res["gyeonggi_is_metro"])
+        self.assertTrue(res["gyeonggi_is_prov"])
+        self.assertEqual(res["metro_count"], 2)
+        self.assertEqual(res["prov_count"], 2)
+        self.assertEqual(res["null_grp"], "other")
+
+    def test_17_safe_compare_numbers_nan_vs_infinities(self) -> None:
+        """safeCompareNumbers guarantees NaN is sorted to the end even when compared to Infinity/-Infinity."""
+        script = """
+        import { safeCompareNumbers } from './src/lib/subsidyCalculations';
+
+        console.log(JSON.stringify({
+            inf_vs_nan_asc: safeCompareNumbers(Infinity, NaN, 'asc') < 0,
+            nan_vs_inf_asc: safeCompareNumbers(NaN, Infinity, 'asc') > 0,
+            inf_vs_nan_desc: safeCompareNumbers(Infinity, NaN, 'desc') < 0,
+            nan_vs_inf_desc: safeCompareNumbers(NaN, Infinity, 'desc') > 0,
+            neginf_vs_nan_asc: safeCompareNumbers(-Infinity, NaN, 'asc') < 0,
+            nan_vs_neginf_asc: safeCompareNumbers(NaN, -Infinity, 'asc') > 0,
+        }));
+        """
+        res = _eval_ts_node(script)
+        for key, val in res.items():
+            self.assertTrue(val, f"Assertion failed: {key}")
+
+    def test_18_bidirectional_model_sort_and_tie_breaking(self) -> None:
+        """compareModels supports SUBSIDY_ASC, RANGE_ASC, NAME_DESC and handles ranking ties gracefully."""
+        script = """
+        import { sortModels, rankRegionsByDepletion } from './src/lib/subsidyCalculations';
+
+        const models = [
+            { model_id: 'M-A', name_ko: '가 모델', national_subsidy_krw: 6500000, rated_range_km: 500, base_price_krw: 50000000 },
+            { model_id: 'M-B', name_ko: '나 모델', national_subsidy_krw: 3000000, rated_range_km: 300, base_price_krw: 40000000 },
+        ];
+
+        const sortedSubsidyAsc = sortModels(models, 'SUBSIDY_ASC').map(m => m.model_id);
+        const sortedRangeAsc = sortModels(models, 'RANGE_ASC').map(m => m.model_id);
+        const sortedNameDesc = sortModels(models, 'NAME_DESC').map(m => m.model_id);
+
+        // Ties in ranking
+        const tiedRegions = [
+            { region_id: 'R-1', name_ko: '지역A', categories: { passenger: { depletion_rate: 85.0 } } },
+            { region_id: 'R-2', name_ko: '지역B', categories: { passenger: { depletion_rate: 85.0 } } },
+            { region_id: 'R-3', name_ko: '지역C', categories: { passenger: { depletion_rate: 70.0 } } },
+        ];
+
+        const ranked = rankRegionsByDepletion(tiedRegions, 'passenger');
+
+        console.log(JSON.stringify({
+            subAscFirst: sortedSubsidyAsc[0],
+            rangeAscFirst: sortedRangeAsc[0],
+            nameDescFirst: sortedNameDesc[0],
+            rank1: ranked[0].rank,
+            rank2: ranked[1].rank,
+            rank3: ranked[2].rank,
+        }));
+        """
+        res = _eval_ts_node(script)
+        self.assertEqual(res["subAscFirst"], "M-B")
+        self.assertEqual(res["rangeAscFirst"], "M-B")
+        self.assertEqual(res["nameDescFirst"], "M-B")
+        # Standard competition ranking: ties receive same rank, next rank skips
+        self.assertEqual(res["rank1"], 1)
+        self.assertEqual(res["rank2"], 1)
+        self.assertEqual(res["rank3"], 3)
+
 
 if __name__ == "__main__":
     unittest.main()

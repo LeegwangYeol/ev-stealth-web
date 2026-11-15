@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import JsonLd from '@/components/JsonLd';
 import BrandComparisonNav, { OtherBrandsCrossNav } from '@/components/BrandComparisonNav';
+import ModelSpecWarrantyCard from '@/components/ModelSpecWarrantyCard';
 
 export const dynamic = 'force-static';
 export const revalidate = false;
@@ -371,6 +372,26 @@ export default function TeslaPage() {
         <h2 id="heading-tesla-model3" className="text-2xl sm:text-3xl font-bold text-slate-800">
           모델 3 (Model 3)
         </h2>
+
+        <ModelSpecWarrantyCard
+          modelName="모델 3 (Model 3)"
+          badge="하이랜드 페이스리프트"
+          msrpRange="5,199만 ~ 5,999만 원"
+          effectivePriceRange="약 4,700만 ~ 5,500만 원"
+          usedPriceRange="2,800만 ~ 5,300만 원"
+          batterySpecs={{
+            capacity: "60.0 kWh (RWD) / 81.6 kWh (LR)",
+            chemistry: "CATL LFP / LG NCMA",
+            voltage: "400V (V3 슈퍼차저 250kW)",
+            range: "382km (RWD) / 488km (LR)",
+          }}
+          warranty={{
+            batteryYearsKm: "8년 / 16만km (RWD), 19.2만km (LR)",
+            batteryGuaranteeSoh: "잔존용량(SoH) 70% 보증",
+            generalYearsKm: "4년 / 80,000 km",
+            outOfWarrantyRisk: "보증 만료 후 배터리 팩 교체 약 2,500만~3,000만 원, 옥토밸브 320만~510만 원",
+          }}
+        />
         
         <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl" role="region" aria-label="테슬라 모델 3 구매 회피 연식 경고">
           <h3 className="text-lg sm:text-xl font-bold text-red-900">
@@ -408,6 +429,26 @@ export default function TeslaPage() {
         <h2 id="heading-tesla-modely" className="text-2xl sm:text-3xl font-bold text-slate-800">
           모델 Y (Model Y)
         </h2>
+
+        <ModelSpecWarrantyCard
+          modelName="모델 Y (Model Y)"
+          badge="국내 최다 판매 수입 EV"
+          msrpRange="5,299만 ~ 6,099만 원"
+          effectivePriceRange="약 4,800만 ~ 5,600만 원"
+          usedPriceRange="3,500만 ~ 5,400만 원"
+          batterySpecs={{
+            capacity: "60.0 kWh (RWD) / 81.6 kWh (LR)",
+            chemistry: "CATL LFP / LG NCMA",
+            voltage: "400V (V3 슈퍼차저 250kW)",
+            range: "350km (RWD) / 468km (LR)",
+          }}
+          warranty={{
+            batteryYearsKm: "8년 / 16만km (RWD), 19.2만km (LR)",
+            batteryGuaranteeSoh: "잔존용량(SoH) 70% 보증",
+            generalYearsKm: "4년 / 80,000 km",
+            outOfWarrantyRisk: "보증 외 배터리 교체비 2,500만~3,200만 원, 1세대 옥토밸브 파손 주의",
+          }}
+        />
 
         <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl" role="region" aria-label="테슬라 모델 Y 구매 회피 연식 경고">
           <h3 className="text-lg sm:text-xl font-bold text-red-900">

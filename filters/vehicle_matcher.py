@@ -281,18 +281,25 @@ def _find_and_resolve_candidates(text: str) -> Optional[Tuple[str, str]]:
     if not raw_candidates:
         return None
 
-    # Filter out subsumed spans (e.g., '아이오닉5' strictly inside '아이오닉5 N')
+    # Cap to earliest matches if repetitive / adversarial input
+    if len(raw_candidates) > 100:
+        raw_candidates.sort(key=lambda x: (x.start, -(x.end - x.start)))
+        raw_candidates = raw_candidates[:100]
+    else:
+        raw_candidates.sort(key=lambda x: (x.start, -(x.end - x.start)))
+
+    # Filter out subsumed spans (e.g., '아이오닉5' strictly inside '아이오닉5 N') via sweep-line
     surviving: List[_MatchCandidate] = []
+    active: List[_MatchCandidate] = []
     for c in raw_candidates:
-        is_subsumed = False
-        for other in raw_candidates:
-            if other is c:
-                continue
-            if other.start <= c.start and other.end >= c.end and (other.end - other.start) > (c.end - c.start):
-                is_subsumed = True
-                break
+        active = [x for x in active if x.end > c.start]
+        is_subsumed = any(
+            other.end >= c.end and (other.end - other.start) > (c.end - c.start)
+            for other in active
+        )
         if not is_subsumed:
             surviving.append(c)
+            active.append(c)
 
     if not surviving:
         surviving = raw_candidates

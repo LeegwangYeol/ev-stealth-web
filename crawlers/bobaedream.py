@@ -425,6 +425,11 @@ class BobaeDreamCrawler(BaseCrawler):
             enable_cache=enable_cache,
             cache_fallback=cache_fallback,
         )
+        self.platform = "bobaedream"
+
+    def load_seed_posts(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Load fallback records for BobaeDream from seed data files."""
+        return self.load_seed_fallback(platform_name="bobaedream", limit=limit)
 
     def sleep_with_jitter(self, min_s: Optional[float] = None, max_s: Optional[float] = None) -> None:
         """Apply polite delay with uniform jitter between crawler requests."""

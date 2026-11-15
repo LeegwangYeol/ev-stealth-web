@@ -23,6 +23,9 @@ import type {
   RegionSortOption,
   ModelSortOption,
   RankedRegionEntry,
+  HistoricalTrajectoryPoint,
+  RegionalGroup,
+  RegionalGroupSummary,
 } from '../types/subsidy.ts';
 
 export type {
@@ -42,6 +45,9 @@ export type {
   RegionSortOption,
   ModelSortOption,
   RankedRegionEntry,
+  HistoricalTrajectoryPoint,
+  RegionalGroup,
+  RegionalGroupSummary,
 };
 
 // ==========================================
@@ -316,10 +322,10 @@ export function getRegionByIdFromList(
     return validRegions.find((r) => {
       if (!r.name_ko || typeof r.name_ko !== 'string') return false;
       const rStripped = r.name_ko.toLowerCase().replace(/(특별시|광역시|특별자치시|특별자치도|도)$/, '');
-      return (
-        rStripped === stripped ||
+      return Boolean(
+        (rStripped && rStripped === stripped) ||
         r.name_ko.toLowerCase().includes(stripped) ||
-        stripped.includes(rStripped)
+        (rStripped && stripped.length >= 2 && stripped.includes(rStripped))
       );
     });
   }
@@ -455,6 +461,147 @@ export function calculateRemainingUnits(
   }
   const safeApplied = Math.floor(appliedCount);
   return Math.max(0, safeQuota - safeApplied);
+}
+
+/**
+ * Calculates waitlisted / over-subscribed EV subsidy units beyond announced quota: max(0, applied - quota).
+ */
+export function calculateWaitlistUnits(
+  appliedCount?: number | null,
+  totalQuota?: number | null
+): number {
+  if (
+    totalQuota === null ||
+    totalQuota === undefined ||
+    !Number.isFinite(totalQuota) ||
+    totalQuota <= 0
+  ) {
+    return 0;
+  }
+  if (
+    appliedCount === null ||
+    appliedCount === undefined ||
+    !Number.isFinite(appliedCount) ||
+    appliedCount <= 0
+  ) {
+    return 0;
+  }
+  const safeQuota = Math.floor(totalQuota);
+  const safeApplied = Math.floor(appliedCount);
+  return Math.max(0, safeApplied - safeQuota);
+}
+
+/**
+ * Returns true if depletion rate strictly exceeds 100.0% (over-exhaustion / waitlisted status).
+ */
+export function isDepletionOverExhausted(depletionRate?: number | null): boolean {
+  if (depletionRate === null || depletionRate === undefined || !Number.isFinite(depletionRate)) {
+    return false;
+  }
+  return depletionRate > 100.0;
+}
+
+/**
+ * Calculates pending vehicle deliveries (applied - delivered) clamped at zero.
+ */
+export function calculatePendingDeliveries(
+  appliedCount?: number | null,
+  deliveredCount?: number | null
+): number {
+  if (
+    appliedCount === null ||
+    appliedCount === undefined ||
+    !Number.isFinite(appliedCount) ||
+    appliedCount <= 0
+  ) {
+    return 0;
+  }
+  const safeApplied = Math.floor(appliedCount);
+  const safeDelivered =
+    deliveredCount !== null && deliveredCount !== undefined && Number.isFinite(deliveredCount)
+      ? Math.max(0, Math.floor(deliveredCount))
+      : 0;
+  return Math.max(0, safeApplied - safeDelivered);
+}
+
+/**
+ * Calculates daily subsidy application burn rate velocity (units/day) with zero-division protection.
+ */
+export function calculateDepletionVelocity(
+  appliedStart: number | null | undefined,
+  appliedEnd: number | null | undefined,
+  days: number | null | undefined
+): number {
+  if (
+    appliedStart === null ||
+    appliedStart === undefined ||
+    !Number.isFinite(appliedStart) ||
+    appliedEnd === null ||
+    appliedEnd === undefined ||
+    !Number.isFinite(appliedEnd) ||
+    days === null ||
+    days === undefined ||
+    !Number.isFinite(days) ||
+    days <= 0
+  ) {
+    return 0.0;
+  }
+  const diff = Math.max(0, appliedEnd - appliedStart);
+  const velocity = Math.round((diff / days) * 100) / 100;
+  return Number.isFinite(velocity) && velocity >= 0 ? velocity : 0.0;
+}
+
+/**
+ * Predicts number of calendar days until subsidy quota exhaustion based on daily velocity.
+ * Returns 0 if remainingUnits <= 0, or null if velocity <= 0 or invalid.
+ */
+export function predictExhaustionDays(
+  remainingUnits: number | null | undefined,
+  dailyVelocity: number | null | undefined
+): number | null {
+  if (
+    remainingUnits === null ||
+    remainingUnits === undefined ||
+    !Number.isFinite(remainingUnits) ||
+    dailyVelocity === null ||
+    dailyVelocity === undefined ||
+    !Number.isFinite(dailyVelocity)
+  ) {
+    return null;
+  }
+  if (remainingUnits <= 0) return 0;
+  if (dailyVelocity <= 0) return null;
+  const days = Math.ceil(remainingUnits / dailyVelocity);
+  return Number.isFinite(days) && days >= 0 ? days : null;
+}
+
+/**
+ * Predicts estimated calendar date (YYYY-MM-DD) of subsidy exhaustion.
+ */
+export function predictExhaustionDate(
+  remainingUnits: number | null | undefined,
+  dailyVelocity: number | null | undefined,
+  startDate?: Date | string | null
+): string | null {
+  const days = predictExhaustionDays(remainingUnits, dailyVelocity);
+  if (days === null) return null;
+  try {
+    let baseDt: Date;
+    if (!startDate) {
+      baseDt = new Date();
+    } else if (startDate instanceof Date) {
+      baseDt = new Date(startDate.getTime());
+    } else {
+      baseDt = new Date(startDate);
+    }
+    if (Number.isNaN(baseDt.getTime())) {
+      baseDt = new Date();
+    }
+    baseDt.setDate(baseDt.getDate() + days);
+    return baseDt.toISOString().slice(0, 10);
+  } catch {
+    return null;
+  }
 }
 
 // ==========================================
@@ -723,11 +870,19 @@ export function safeCompareNumbers(
   b: number | null | undefined,
   direction: 'asc' | 'desc' = 'asc'
 ): number {
-  const isFiniteA = typeof a === 'number' && Number.isFinite(a);
-  const isFiniteB = typeof b === 'number' && Number.isFinite(b);
+  const isValidA = typeof a === 'number' && !Number.isNaN(a);
+  const isValidB = typeof b === 'number' && !Number.isNaN(b);
+
+  if (!isValidA && !isValidB) return 0;
+  if (!isValidA) return 1; // Invalid values always sorted to the end
+  if (!isValidB) return -1;
+
+  if (a === b) return 0;
+
+  const isFiniteA = Number.isFinite(a);
+  const isFiniteB = Number.isFinite(b);
 
   if (isFiniteA && isFiniteB) {
-    if (a === b) return 0;
     return direction === 'asc' ? (a as number) - (b as number) : (b as number) - (a as number);
   }
 
@@ -745,11 +900,7 @@ export function safeCompareNumbers(
   if (isNegInfA) return direction === 'asc' ? -1 : 1;
   if (isNegInfB) return direction === 'asc' ? 1 : -1;
 
-  // Both are invalid (NaN, null, undefined)
-  if (!isFiniteA && !isFiniteB) return 0;
-
-  // Invalid values pushed to the end
-  return !isFiniteA ? 1 : -1;
+  return 0;
 }
 
 
@@ -776,40 +927,40 @@ export function compareRegions(
   switch (normalizedSort) {
     case 'DEPLETION_DESC': {
       const rateA = typeof catA?.depletion_rate === 'number' && !Number.isNaN(catA.depletion_rate)
-        ? catA.depletion_rate
+        ? Math.max(0, catA.depletion_rate)
         : calculateDepletionRate(catA?.applied_units, catA?.announced_units);
       const rateB = typeof catB?.depletion_rate === 'number' && !Number.isNaN(catB.depletion_rate)
-        ? catB.depletion_rate
+        ? Math.max(0, catB.depletion_rate)
         : calculateDepletionRate(catB?.applied_units, catB?.announced_units);
       cmp = safeCompareNumbers(rateA, rateB, 'desc');
       break;
     }
     case 'DEPLETION_ASC': {
       const rateA = typeof catA?.depletion_rate === 'number' && !Number.isNaN(catA.depletion_rate)
-        ? catA.depletion_rate
+        ? Math.max(0, catA.depletion_rate)
         : calculateDepletionRate(catA?.applied_units, catA?.announced_units);
       const rateB = typeof catB?.depletion_rate === 'number' && !Number.isNaN(catB.depletion_rate)
-        ? catB.depletion_rate
+        ? Math.max(0, catB.depletion_rate)
         : calculateDepletionRate(catB?.applied_units, catB?.announced_units);
       cmp = safeCompareNumbers(rateA, rateB, 'asc');
       break;
     }
     case 'REMAINING_ASC': {
       const remA = typeof catA?.remaining_units === 'number' && !Number.isNaN(catA.remaining_units)
-        ? catA.remaining_units
+        ? Math.max(0, catA.remaining_units)
         : calculateRemainingUnits(catA?.applied_units, catA?.announced_units);
       const remB = typeof catB?.remaining_units === 'number' && !Number.isNaN(catB.remaining_units)
-        ? catB.remaining_units
+        ? Math.max(0, catB.remaining_units)
         : calculateRemainingUnits(catB?.applied_units, catB?.announced_units);
       cmp = safeCompareNumbers(remA, remB, 'asc');
       break;
     }
     case 'REMAINING_DESC': {
       const remA = typeof catA?.remaining_units === 'number' && !Number.isNaN(catA.remaining_units)
-        ? catA.remaining_units
+        ? Math.max(0, catA.remaining_units)
         : calculateRemainingUnits(catA?.applied_units, catA?.announced_units);
       const remB = typeof catB?.remaining_units === 'number' && !Number.isNaN(catB.remaining_units)
-        ? catB.remaining_units
+        ? Math.max(0, catB.remaining_units)
         : calculateRemainingUnits(catB?.applied_units, catB?.announced_units);
       cmp = safeCompareNumbers(remA, remB, 'desc');
       break;
@@ -877,13 +1028,18 @@ export function rankRegionsByDepletion(
   for (let i = 0; i < sorted.length; i++) {
     const r = sorted[i];
     const cat = r.categories?.[categoryKey];
-    const rate = typeof cat?.depletion_rate === 'number' && !Number.isNaN(cat.depletion_rate)
-      ? cat.depletion_rate
+    const rawRate = typeof cat?.depletion_rate === 'number' && !Number.isNaN(cat.depletion_rate)
+      ? Math.max(0, cat.depletion_rate)
       : calculateDepletionRate(cat?.applied_units, cat?.announced_units);
+    const rate = Math.round(rawRate * 10) / 10;
     const rem = typeof cat?.remaining_units === 'number' && !Number.isNaN(cat.remaining_units)
-      ? cat.remaining_units
+      ? Math.max(0, cat.remaining_units)
       : calculateRemainingUnits(cat?.applied_units, cat?.announced_units);
-    const status: AlertSeverity = cat?.status || (rate >= 100 ? 'DEPLETED' : rate >= 95 ? 'CRITICAL' : rate >= 80 ? 'WARNING' : rate >= 60 ? 'CAUTION' : 'HEALTHY');
+
+    const rawStatus = typeof cat?.status === 'string' ? cat.status.toUpperCase() : '';
+    const status: AlertSeverity = ['HEALTHY', 'CAUTION', 'WARNING', 'CRITICAL', 'DEPLETED'].includes(rawStatus)
+      ? (rawStatus as AlertSeverity)
+      : (rate >= 100 ? 'DEPLETED' : rate >= 95 ? 'CRITICAL' : rate >= 80 ? 'WARNING' : rate >= 60 ? 'CAUTION' : 'HEALTHY');
 
     if (i > 0) {
       const prev = ranked[i - 1];
@@ -947,14 +1103,30 @@ export function compareModels(
       cmp = safeCompareNumbers(subA, subB, 'desc');
       break;
     }
+    case 'SUBSIDY_ASC': {
+      const subA = parseSubsidyNumber(a.national_subsidy_krw, { defaultKrw: 0 });
+      const subB = parseSubsidyNumber(b.national_subsidy_krw, { defaultKrw: 0 });
+      cmp = safeCompareNumbers(subA, subB, 'asc');
+      break;
+    }
     case 'RANGE_DESC': {
       const rangeA = typeof a.rated_range_km === 'number' && Number.isFinite(a.rated_range_km) ? a.rated_range_km : 0;
       const rangeB = typeof b.rated_range_km === 'number' && Number.isFinite(b.rated_range_km) ? b.rated_range_km : 0;
       cmp = safeCompareNumbers(rangeA, rangeB, 'desc');
       break;
     }
+    case 'RANGE_ASC': {
+      const rangeA = typeof a.rated_range_km === 'number' && Number.isFinite(a.rated_range_km) ? a.rated_range_km : 0;
+      const rangeB = typeof b.rated_range_km === 'number' && Number.isFinite(b.rated_range_km) ? b.rated_range_km : 0;
+      cmp = safeCompareNumbers(rangeA, rangeB, 'asc');
+      break;
+    }
     case 'NAME_ASC': {
       cmp = (a.name_ko || '').localeCompare(b.name_ko || '', 'ko');
+      break;
+    }
+    case 'NAME_DESC': {
+      cmp = (b.name_ko || '').localeCompare(a.name_ko || '', 'ko');
       break;
     }
     default:
@@ -1139,9 +1311,11 @@ export function calculateNetSubsidyPure(
     : calculateDepletionRate(catApplied, catAnnounced);
 
   const isHighDepletionRisk = depletionRate >= 80.0;
+  const rawDepStatus = typeof passengerCategory?.status === 'string' ? passengerCategory.status.toUpperCase() : '';
   const depletionStatus: AlertSeverity =
-    passengerCategory?.status ||
-    (depletionRate >= 100 ? 'DEPLETED' : depletionRate >= 95 ? 'CRITICAL' : depletionRate >= 80 ? 'WARNING' : depletionRate >= 60 ? 'CAUTION' : 'HEALTHY');
+    ['HEALTHY', 'CAUTION', 'WARNING', 'CRITICAL', 'DEPLETED'].includes(rawDepStatus)
+      ? (rawDepStatus as AlertSeverity)
+      : (depletionRate >= 100 ? 'DEPLETED' : depletionRate >= 95 ? 'CRITICAL' : depletionRate >= 80 ? 'WARNING' : depletionRate >= 60 ? 'CAUTION' : 'HEALTHY');
 
   const remainingUnits = typeof passengerCategory?.remaining_units === 'number' && Number.isFinite(passengerCategory.remaining_units) && passengerCategory.remaining_units >= 0
     ? passengerCategory.remaining_units
@@ -1275,8 +1449,8 @@ export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> |
       }
     }
   } else if (summary?.alert_region_counts) {
-    criticalCount = summary.alert_region_counts.critical ?? 0;
     depletedCount = summary.alert_region_counts.depleted ?? 0;
+    criticalCount = (summary.alert_region_counts.critical ?? 0) + depletedCount;
     warningCount = summary.alert_region_counts.warning ?? 0;
     cautionCount = summary.alert_region_counts.caution ?? 0;
     healthyCount = summary.alert_region_counts.healthy ?? 0;
@@ -1421,4 +1595,133 @@ export function getDepletionBadgeStyle(rate: number): {
     badgeClass: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
     labelKo: '원활 (신청 여유)',
   };
+}
+
+// ==========================================
+// 8. REGIONAL GROUPING UTILITIES
+// ==========================================
+
+export const METROPOLITAN_CITIES = Object.freeze([
+  '서울',
+  '부산',
+  '대구',
+  '인천',
+  '광주',
+  '대전',
+  '울산',
+  '세종',
+] as const);
+
+export const PROVINCES = Object.freeze([
+  '경기',
+  '강원',
+  '충북',
+  '충남',
+  '전북',
+  '전남',
+  '경북',
+  '경남',
+  '제주',
+] as const);
+
+export const METROPOLITAN_CITY_CODES = Object.freeze([
+  'KR-11',
+  'KR-26',
+  'KR-27',
+  'KR-28',
+  'KR-29',
+  'KR-30',
+  'KR-31',
+  'KR-36',
+] as const);
+
+export const PROVINCE_CODES = Object.freeze([
+  'KR-41',
+  'KR-42',
+  'KR-43',
+  'KR-44',
+  'KR-45',
+  'KR-46',
+  'KR-47',
+  'KR-48',
+  'KR-49',
+] as const);
+
+export function classifyRegionGroup(
+  region: RegionEntry | string | null | undefined
+): RegionalGroup {
+  if (!region) return 'other';
+
+  if (typeof region === 'string') {
+    const ident = region.trim();
+    if (!ident) return 'other';
+    const upper = ident.toUpperCase();
+    if ((METROPOLITAN_CITY_CODES as readonly string[]).includes(upper)) return 'metropolitan_cities';
+    if ((PROVINCE_CODES as readonly string[]).includes(upper)) return 'provinces';
+    for (const city of METROPOLITAN_CITIES) {
+      if (ident.includes(city)) return 'metropolitan_cities';
+    }
+    for (const prov of PROVINCES) {
+      if (ident.includes(prov)) return 'provinces';
+    }
+    return 'other';
+  }
+
+  const code = (region.iso_code || region.region_id || region.code || '').trim().toUpperCase();
+  if ((METROPOLITAN_CITY_CODES as readonly string[]).includes(code)) return 'metropolitan_cities';
+  if ((PROVINCE_CODES as readonly string[]).includes(code)) return 'provinces';
+
+  const nameKo = region.name_ko || '';
+  for (const city of METROPOLITAN_CITIES) {
+    if (nameKo.includes(city)) return 'metropolitan_cities';
+  }
+  for (const prov of PROVINCES) {
+    if (nameKo.includes(prov)) return 'provinces';
+  }
+
+  if (
+    region.tier === 'special_city' ||
+    region.tier === 'metropolitan_city' ||
+    region.tier === 'special_self_governing_city'
+  ) {
+    return 'metropolitan_cities';
+  }
+  if (
+    region.tier === 'province' ||
+    region.tier === 'special_self_governing_province'
+  ) {
+    return 'provinces';
+  }
+
+  return 'other';
+}
+
+export function isMetropolitanCity(
+  region: RegionEntry | string | null | undefined
+): boolean {
+  return classifyRegionGroup(region) === 'metropolitan_cities';
+}
+
+export function isProvince(
+  region: RegionEntry | string | null | undefined
+): boolean {
+  return classifyRegionGroup(region) === 'provinces';
+}
+
+export function groupRegionsByType<T extends RegionEntry>(
+  regions: readonly T[] | null | undefined
+): { metropolitan_cities: T[]; provinces: T[]; other: T[] } {
+  const result: { metropolitan_cities: T[]; provinces: T[]; other: T[] } = {
+    metropolitan_cities: [],
+    provinces: [],
+    other: [],
+  };
+  if (!Array.isArray(regions)) return result;
+
+  for (const r of regions) {
+    if (!r || typeof r !== 'object') continue;
+    const grp = classifyRegionGroup(r);
+    result[grp].push(r);
+  }
+  return result;
 }

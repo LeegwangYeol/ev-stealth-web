@@ -43,7 +43,7 @@ export default function DepreciationCalculatorLoading() {
           <div className="lg:col-span-2 p-6 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-5">
             <div className="h-5 bg-slate-200 rounded w-48" />
             <div className="h-64 bg-slate-100 rounded-2xl flex items-center justify-center">
-              <div className="w-12 h-12 rounded-full border-4 border-slate-200 border-t-emerald-500 animate-spin" />
+              <div className="w-12 h-12 rounded-full border-4 border-slate-200 border-t-emerald-500 animate-spin motion-reduce:animate-none" />
             </div>
           </div>
         </div>

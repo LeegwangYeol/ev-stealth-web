@@ -28,6 +28,12 @@ export default function BydGuideError({ error, reset }: ErrorProps) {
     }
   };
 
+  const handleReload = () => {
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+    }
+  };
+
   return (
     <div
       ref={containerRef}
@@ -76,6 +82,14 @@ export default function BydGuideError({ error, reset }: ErrorProps) {
             className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">🔄</span> 다시 시도
+          </button>
+          <button
+            type="button"
+            onClick={handleReload}
+            aria-label="페이지 새로고침"
+            className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+          >
+            <span aria-hidden="true">🔃</span> 새로고침
           </button>
           <Link
             href="/"

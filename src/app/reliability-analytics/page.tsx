@@ -34,6 +34,7 @@ const reliabilityJsonLd = {
         '9대 글로벌 완성차 제조사 22개 차종 89개 연식의 실제 차주 제보 1,280건 및 리콜 데이터 기반 결함 심각도 지수(DSI) 및 연식 리스크 매트릭스 데이터셋.',
       url: `${SITE_URL}/reliability-analytics`,
       isAccessibleForFree: true,
+      license: 'https://creativecommons.org/licenses/by/4.0/',
       creator: {
         '@type': 'Organization',
         name: 'Global EV Hub Research Team',
@@ -45,6 +46,32 @@ const reliabilityJsonLd = {
         url: SITE_URL,
       },
       temporalCoverage: '2021/2026',
+      spatialCoverage: {
+        '@type': 'Place',
+        name: '대한민국, 미국, 유럽 (Global KDM, US, EU)',
+      },
+      distribution: [
+        {
+          '@type': 'DataDownload',
+          encodingFormat: 'application/json',
+          contentUrl: `${SITE_URL}/data/ev_reliability_trends.json`,
+        },
+      ],
+      variableMeasured: [
+        '전기차 결함 심각도 지수 (DSI, Defect Severity Index)',
+        '주행 안전 위협도 및 화재 위험 가중 점수',
+        '주행거리별 결함 발생률 (0~15만 km)',
+        '보증 외 고전압 배터리팩 교체 실비 매트릭스',
+        '연식별 구매 회피/주의/안심 리스크 히트맵',
+      ],
+      keywords: [
+        '스텔스 품질 점수',
+        'DSI 결함 지수',
+        '전기차 내구성',
+        '배터리 교체비용',
+        '중고 전기차 피해야할 연식',
+        'ICCU 결함',
+      ],
     },
     {
       '@type': 'ItemList',

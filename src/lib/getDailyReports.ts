@@ -1,5 +1,7 @@
 import rawReportData from '../data/daily_reports.json' with { type: 'json' };
-import { sanitizeSafeUrl, sanitizeText, safeJsonParse } from './sanitizeUrl.ts';
+import { sanitizeSafeUrl, sanitizeText, stripHtmlTags, sanitizeHtml, safeJsonParse } from './sanitizeUrl.ts';
+
+export { stripHtmlTags, sanitizeHtml };
 
 import type {
   DefectCategoryCode,

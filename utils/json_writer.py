@@ -41,7 +41,15 @@ DEFAULT_OUTPUT_PATH = str(
 
 def _safe_float(val: Any, default: float = 0.0) -> float:
     """Safely convert value to float, returning default on None, ValueError, TypeError, NaN, or Inf."""
-    safe_default = 0.0 if (isinstance(default, (int, float)) and (math.isnan(default) or math.isinf(default))) else default
+    from decimal import Decimal
+    safe_default = (
+        0.0
+        if (
+            (isinstance(default, (int, float)) and (math.isnan(default) or math.isinf(default)))
+            or (isinstance(default, Decimal) and (default.is_nan() or default.is_infinite()))
+        )
+        else (float(default) if isinstance(default, Decimal) else default)
+    )
     if val is None:
         return safe_default
     try:
@@ -252,7 +260,7 @@ def write_daily_reports(
 
         existing_reports: List[Dict[str, Any]] = []
         existing_total_scraped = 0
-        if merge_existing and os.path.exists(output_path):
+        if merge_existing and dest_path.exists():
             try:
                 existing_data = read_daily_reports(
                     output_path,
@@ -362,20 +370,26 @@ def read_daily_reports(
 
     If quarantine_corrupted is True and the file exists but has corrupt JSON or schema,
     quarantines the file to .corrupt_<timestamp>.json and returns empty data dict.
+    Protected by advisory FileLock to prevent race conditions during concurrent sync.
     """
     if not path or not str(path).strip():
         return {"reports": [], "statistics": {}}
 
-    p = Path(path)
+    p = Path(path).resolve()
     if not p.exists() or p.is_dir():
         return {"reports": [], "statistics": {}}
 
-    from tracker.atomic_writer import is_corrupted_or_quarantined_filename, quarantine_corrupted_file
+    from tracker.atomic_writer import (
+        FileLock,
+        get_lock_path,
+        is_corrupted_or_quarantined_filename,
+        quarantine_corrupted_file,
+    )
 
     if is_corrupted_or_quarantined_filename(p):
         return {"reports": [], "statistics": {}}
 
-    try:
+    def _read_data() -> Dict[str, Any]:
         with open(p, "r", encoding="utf-8-sig") as f:
             data = json.load(f)
         if not isinstance(data, dict):
@@ -383,7 +397,19 @@ def read_daily_reports(
         if "reports" in data and not isinstance(data["reports"], list):
             raise ValueError("Invalid schema: 'reports' must be a list")
         return data
-    except (json.JSONDecodeError, OSError, ValueError):
-        if quarantine_corrupted:
-            quarantine_corrupted_file(p)
-        return {"reports": [], "statistics": {}}
+
+    if quarantine_corrupted:
+        lock_file = get_lock_path(p)
+        with FileLock(lock_file, timeout=5.0, fail_on_timeout=False):
+            if not p.exists() or p.is_dir():
+                return {"reports": [], "statistics": {}}
+            try:
+                return _read_data()
+            except (json.JSONDecodeError, OSError, ValueError):
+                quarantine_corrupted_file(p)
+                return {"reports": [], "statistics": {}}
+    else:
+        try:
+            return _read_data()
+        except (json.JSONDecodeError, OSError, ValueError):
+            return {"reports": [], "statistics": {}}
