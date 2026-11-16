@@ -11,6 +11,7 @@ Authoritative source:
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -42,18 +43,20 @@ DEFAULT_OUTPUT_PATH = str(
 def _safe_float(val: Any, default: float = 0.0) -> float:
     """Safely convert value to float, returning default on None, ValueError, TypeError, NaN, or Inf."""
     from decimal import Decimal
-    safe_default = (
-        0.0
-        if (
-            (isinstance(default, (int, float)) and (math.isnan(default) or math.isinf(default)))
-            or (isinstance(default, Decimal) and (default.is_nan() or default.is_infinite()))
-        )
-        else (float(default) if isinstance(default, Decimal) else default)
-    )
+    try:
+        if isinstance(default, Decimal):
+            safe_default = 0.0 if (default.is_nan() or default.is_infinite()) else float(default)
+        else:
+            f_def = float(default)
+            safe_default = 0.0 if (math.isnan(f_def) or math.isinf(f_def)) else f_def
+    except (ValueError, TypeError, OverflowError):
+        safe_default = 0.0
+
     if val is None:
         return safe_default
     try:
-        f_val = float(val)
+        clean_val = val.strip().replace(",", "") if isinstance(val, str) else val
+        f_val = float(clean_val)
         if math.isnan(f_val) or math.isinf(f_val):
             return safe_default
         return f_val
@@ -65,8 +68,10 @@ _DATE_4DIGIT_RE = re.compile(r"(\d{4})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})
 _DATE_2DIGIT_RE = re.compile(r"(?:^|[^\d])(\d{2})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})")
 
 
-def _extract_record_date(record: Dict[str, Any]) -> str:
+def _extract_record_date(record: Optional[Dict[str, Any]]) -> str:
     """Extract normalized YYYY-MM-DD date string from a complaint record dict."""
+    if not isinstance(record, (dict, Mapping)):
+        return ""
     for field in ("date", "created_at", "timestamp"):
         val = record.get(field)
         if not val:
@@ -155,7 +160,7 @@ def format_daily_report_payload(
         category_counts[category] += 1
 
     total_filtered = len(report_dicts)
-    computed_total_scraped = total_scraped if total_scraped is not None else total_filtered
+    computed_total_scraped = int(max(0, _safe_float(total_scraped, total_filtered))) if total_scraped is not None else total_filtered
     avg_neg = (total_negativity / total_filtered) if total_filtered > 0 else 0.0
 
     # Build category breakdown

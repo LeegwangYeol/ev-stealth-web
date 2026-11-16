@@ -66,7 +66,7 @@ export default function RecallPortalError({ error, reset }: RecallErrorProps) {
           </h1>
           <p
             id="recall-error-description"
-            className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-md mx-auto"
+            className="text-sm sm:text-base text-slate-700 leading-relaxed max-w-md mx-auto"
           >
             국토교통부 자동차리콜센터 연동 및 배터리 제조사 안전 데이터베이스 검색 중 오류가 발생했습니다.
             아래 &apos;다시 시도&apos; 버튼을 눌러 안전하게 재조회해 주세요.

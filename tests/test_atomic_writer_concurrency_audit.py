@@ -212,8 +212,12 @@ class TestAtomicWriterConcurrencyAudit(unittest.TestCase):
 
     def test_12_mirrored_files_exact_parity(self) -> None:
         """tracker/atomic_writer.py and utils/json_writer.py match root bitwise identically."""
-        root_dir = Path(__file__).resolve().parent.parent.parent
-        web_dir = Path(__file__).resolve().parent.parent
+        repo_root = next(
+            (p for p in [Path(__file__).resolve().parent.parent, Path(__file__).resolve().parent.parent.parent] if (p / "ev-stealth-web").is_dir()),
+            Path(__file__).resolve().parent.parent,
+        )
+        root_dir = repo_root
+        web_dir = repo_root / "ev-stealth-web"
 
         pairs = [
             (root_dir / "tracker" / "atomic_writer.py", web_dir / "tracker" / "atomic_writer.py"),
@@ -226,6 +230,122 @@ class TestAtomicWriterConcurrencyAudit(unittest.TestCase):
             h_root = hashlib.sha256(p_root.read_bytes()).hexdigest()
             h_web = hashlib.sha256(p_web.read_bytes()).hexdigest()
             self.assertEqual(h_root, h_web, f"Bitwise mismatch on {p_root.name}!")
+
+    def test_13_time_nan_in_lock_metadata_does_not_defeat_stale_lock_breaking(self) -> None:
+        """Lock file with corrupted time=nan is treated safely and broken when stale."""
+        lock_path = self.test_dir / "corrupted_time.lock"
+        old_time = time.time() - 400.0
+        lock_path.write_text("pid=9999999\ntime=nan\n", encoding="utf-8")
+        os.utime(lock_path, (old_time, old_time))
+
+        pid, ts = read_lock_metadata(lock_path)
+        self.assertEqual(pid, 9999999)
+        self.assertIsNone(ts, "NaN timestamp must be sanitized to None")
+
+        lock = FileLock(lock_path, timeout=0.5, stale_timeout=300.0)
+        with lock:
+            self.assertTrue(lock.acquired)
+            new_pid, new_ts = read_lock_metadata(lock_path)
+            self.assertEqual(new_pid, os.getpid())
+            self.assertIsNotNone(new_ts)
+
+    def test_14_is_pid_alive_handles_none_and_invalid_types(self) -> None:
+        """is_pid_alive returns False cleanly without TypeError on invalid input types."""
+        self.assertFalse(is_pid_alive(None))
+        self.assertFalse(is_pid_alive("invalid_pid"))
+        self.assertFalse(is_pid_alive(-100))
+        self.assertFalse(is_pid_alive(0))
+        self.assertTrue(is_pid_alive(os.getpid()))
+
+    def test_15_directory_rejection_in_atomic_writers(self) -> None:
+        """atomic_write_json, atomic_write_text, and atomic_write_json_multiple reject existing dirs."""
+        dir_target = self.test_dir / "sub_dir"
+        dir_target.mkdir()
+
+        with self.assertRaises(IsADirectoryError):
+            atomic_write_json({"a": 1}, dir_target)
+
+        with self.assertRaises(IsADirectoryError):
+            atomic_write_text("hello", dir_target)
+
+        with self.assertRaises(IsADirectoryError):
+            atomic_write_json_multiple({"a": 1}, [dir_target])
+
+    def test_16_safe_float_with_invalid_string_and_none_default(self) -> None:
+        """_safe_float handles invalid string and None default values gracefully."""
+        self.assertEqual(_safe_float("invalid", default="bad"), 0.0)
+        self.assertEqual(_safe_float(None, default=None), 0.0)
+        self.assertEqual(_safe_float(None, default="12.5"), 12.5)
+
+    def test_17_extract_record_date_handles_none_and_non_dict(self) -> None:
+        """_extract_record_date returns empty string for None and non-dict inputs."""
+        from utils.json_writer import _extract_record_date
+        self.assertEqual(_extract_record_date(None), "")
+        self.assertEqual(_extract_record_date("not a dict"), "")
+        self.assertEqual(_extract_record_date([]), "")
+
+    def test_18_dict_with_complex_and_tuple_keys(self) -> None:
+        """atomic_write_json serializes dicts with complex and tuple keys without TypeError."""
+        target = self.test_dir / "tuple_keys.json"
+        data = {
+            (1, 2): "tuple_key_val",
+            complex(1.0, 2.0): "complex_key_val",
+        }
+        written = atomic_write_json(data, target)
+        self.assertTrue(written.is_file())
+        with open(written, "r", encoding="utf-8") as f:
+            loaded = json.load(f)
+        self.assertIn("(1, 2)", loaded)
+        self.assertEqual(loaded["(1, 2)"], "tuple_key_val")
+
+    def test_19_cleanup_stale_temp_files_cleans_broken_symlinks(self) -> None:
+        """cleanup_stale_temp_files removes broken .tmp_ symlinks older than max_age_seconds."""
+        broken_target = self.test_dir / "nonexistent_target_123"
+        symlink_path = self.test_dir / ".tmp_broken_symlink.json"
+        symlink_path.symlink_to(broken_target)
+
+        old_time = time.time() - 7200
+        os.utime(symlink_path, (old_time, old_time), follow_symlinks=False)
+
+        cleaned = cleanup_stale_temp_files(self.test_dir, max_age_seconds=3600.0)
+        self.assertEqual(cleaned, 1)
+        self.assertFalse(symlink_path.exists(follow_symlinks=False))
+
+    def test_20_concurrent_multi_thread_atomic_writers_stress(self) -> None:
+        """Multi-threaded stress test: 20 threads writing concurrently produces valid JSON and 0 leaks."""
+        import threading
+        target = self.test_dir / "concurrent_stress.json"
+        errors: list[Exception] = []
+
+        def worker(thread_idx: int) -> None:
+            try:
+                for step in range(10):
+                    payload = {
+                        "thread_id": thread_idx,
+                        "step": step,
+                        "timestamp": time.time(),
+                        "items": list(range(20)),
+                    }
+                    atomic_write_json(payload, target, temp_prefix=f".tmp_th_{thread_idx}_")
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        self.assertEqual(errors, [], f"Encountered thread errors: {errors}")
+        self.assertTrue(target.is_file())
+        with open(target, "r", encoding="utf-8") as f:
+            final_data = json.load(f)
+        self.assertIn("thread_id", final_data)
+        self.assertIn("step", final_data)
+
+        # Confirm zero orphaned scratch files left behind
+        temp_files = list(self.test_dir.glob(".tmp_th_*"))
+        self.assertEqual(temp_files, [], "No orphaned temp files must remain after concurrent stress")
 
 
 if __name__ == "__main__":

@@ -11,14 +11,19 @@ export default function manifest(): MetadataRoute.Manifest {
     description:
       '글로벌 전기차 결함, 리콜 정보, 실시간 보조금 소진율 및 감가방어율 종합 분석 포털',
     start_url: '/',
+    scope: '/',
+    id: '/',
+    lang: 'ko',
     display: 'standalone',
     background_color: '#0f172a',
     theme_color: '#0f172a',
+    categories: ['utilities', 'automotive'],
     icons: [
       {
         src: '/favicon.ico',
         sizes: 'any',
         type: 'image/x-icon',
+        purpose: 'maskable',
       },
     ],
   };

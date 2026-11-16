@@ -1342,7 +1342,7 @@ export function simulateBatteryHealth(
 
   return {
     chemistry: chemistryKey,
-    chemistryName: chemProfile.name,
+    chemistryName: chemProfile?.name || chemistryKey || '전기차 배터리',
     years: safeYears,
     totalKm: safeMileage,
     equivalentFullCycles: Math.round(safeCycles),
@@ -1456,7 +1456,10 @@ export function calculateSubsidyClawback(
     }
   }
 
-  const statutoryRate = matchedTier.clawback_rate;
+  const rawStatutoryRate = matchedTier?.clawback_rate;
+  const statutoryRate = typeof rawStatutoryRate === 'number' && Number.isFinite(rawStatutoryRate)
+    ? clamp(rawStatutoryRate, 0.0, 1.0)
+    : 0.0;
   let effectiveRate = 0;
   let localClawbackKrw = 0;
   let nationalClawbackKrw = 0;
@@ -1531,10 +1534,57 @@ export function calculateTcoComparison(
   customParams?: TcoParameters
 ): TcoResult {
   const params = customParams || DEFAULT_TCO_PARAMETERS;
-  const fuelTariffs = params?.fuel_tariffs ?? DEFAULT_TCO_PARAMETERS.fuel_tariffs;
+  const fuelTariffs = {
+    ev_slow_charging_krw_per_kwh:
+      typeof params?.fuel_tariffs?.ev_slow_charging_krw_per_kwh === 'number' &&
+      Number.isFinite(params.fuel_tariffs.ev_slow_charging_krw_per_kwh)
+        ? params.fuel_tariffs.ev_slow_charging_krw_per_kwh
+        : DEFAULT_TCO_PARAMETERS.fuel_tariffs.ev_slow_charging_krw_per_kwh,
+    ev_fast_charging_krw_per_kwh:
+      typeof params?.fuel_tariffs?.ev_fast_charging_krw_per_kwh === 'number' &&
+      Number.isFinite(params.fuel_tariffs.ev_fast_charging_krw_per_kwh)
+        ? params.fuel_tariffs.ev_fast_charging_krw_per_kwh
+        : DEFAULT_TCO_PARAMETERS.fuel_tariffs.ev_fast_charging_krw_per_kwh,
+    ice_gasoline_krw_per_liter:
+      typeof params?.fuel_tariffs?.ice_gasoline_krw_per_liter === 'number' &&
+      Number.isFinite(params.fuel_tariffs.ice_gasoline_krw_per_liter)
+        ? params.fuel_tariffs.ice_gasoline_krw_per_liter
+        : DEFAULT_TCO_PARAMETERS.fuel_tariffs.ice_gasoline_krw_per_liter,
+    ice_diesel_krw_per_liter:
+      typeof params?.fuel_tariffs?.ice_diesel_krw_per_liter === 'number' &&
+      Number.isFinite(params.fuel_tariffs.ice_diesel_krw_per_liter)
+        ? params.fuel_tariffs.ice_diesel_krw_per_liter
+        : DEFAULT_TCO_PARAMETERS.fuel_tariffs.ice_diesel_krw_per_liter,
+  };
   const efficiencyBaselines = params?.efficiency_baselines ?? DEFAULT_TCO_PARAMETERS.efficiency_baselines;
   const taxParameters = params?.tax_parameters ?? DEFAULT_TCO_PARAMETERS.tax_parameters;
-  const auxiliaryBenefits = params?.auxiliary_benefits ?? DEFAULT_TCO_PARAMETERS.auxiliary_benefits;
+  const auxiliaryBenefits = {
+    expressway_toll_discount_rate:
+      typeof params?.auxiliary_benefits?.expressway_toll_discount_rate === 'number' &&
+      Number.isFinite(params.auxiliary_benefits.expressway_toll_discount_rate)
+        ? params.auxiliary_benefits.expressway_toll_discount_rate
+        : DEFAULT_TCO_PARAMETERS.auxiliary_benefits.expressway_toll_discount_rate,
+    annual_toll_savings_krw:
+      typeof params?.auxiliary_benefits?.annual_toll_savings_krw === 'number' &&
+      Number.isFinite(params.auxiliary_benefits.annual_toll_savings_krw)
+        ? params.auxiliary_benefits.annual_toll_savings_krw
+        : DEFAULT_TCO_PARAMETERS.auxiliary_benefits.annual_toll_savings_krw,
+    public_parking_discount_rate:
+      typeof params?.auxiliary_benefits?.public_parking_discount_rate === 'number' &&
+      Number.isFinite(params.auxiliary_benefits.public_parking_discount_rate)
+        ? params.auxiliary_benefits.public_parking_discount_rate
+        : DEFAULT_TCO_PARAMETERS.auxiliary_benefits.public_parking_discount_rate,
+    annual_parking_savings_krw:
+      typeof params?.auxiliary_benefits?.annual_parking_savings_krw === 'number' &&
+      Number.isFinite(params.auxiliary_benefits.annual_parking_savings_krw)
+        ? params.auxiliary_benefits.annual_parking_savings_krw
+        : DEFAULT_TCO_PARAMETERS.auxiliary_benefits.annual_parking_savings_krw,
+    maintenance_annual_savings_krw:
+      typeof params?.auxiliary_benefits?.maintenance_annual_savings_krw === 'number' &&
+      Number.isFinite(params.auxiliary_benefits.maintenance_annual_savings_krw)
+        ? params.auxiliary_benefits.maintenance_annual_savings_krw
+        : DEFAULT_TCO_PARAMETERS.auxiliary_benefits.maintenance_annual_savings_krw,
+  };
 
   const parsedSlowRatio = typeof slowChargingRatio === 'number'
     ? slowChargingRatio

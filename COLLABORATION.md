@@ -7,6 +7,80 @@
 - **Integrity Mode**: Benchmark / Infinite Evolution (zero stubs, zero lint errors/warnings, 100% test pass rate, empirical verification)
 
 
+## Current Execution Status: DEFECT CLASSIFICATION, SLANG LEXICON & FILTER AUDIT (Cycle 26: 2026-11-17)
+- **Subsystem Audited**: Defect Classifier, Korean Slang Lexicon, Spam Filter & Vehicle Matcher (`filters/defect_classifier.py`, `filters/slang_lexicon.py`, `filters/spam_filter.py`, `filters/vehicle_matcher.py` across root and `ev-stealth-web` mirrors)
+- **Key Objectives & Remediations**:
+  1. **Commercial Spam Regex Refinement & Owner False-Positive Prevention (`spam_filter.py`)**:
+     - Hardened phone contact pattern: updated `CONTACT_SPAM_REGEXES` from naive prefix matching (`010-... (문의|상담|연락|문자)`) to require explicit solicitation suffixes (`주세요|바랍니다|환영|신청|대기|부탁|남겨|요망|가능`) or explicit header labels (`(?:문의|상담|연락처|상담처)\s*[:：]`).
+     - Fixed false positive where first-person owner reports mentioning phone interactions (`"~로 연락했습니다"`, `"~로 문자 보냈더니"`, `"~로 문의했더니"`) were falsely dropped as commercial advertisement spam.
+     - Replaced bare `"텔레그램"` in `COMMERCIAL_SPAM_KEYWORDS` with explicit commercial solicitation phrases (`"텔레그램 상담"`, `"텔레그램 문의"`, `"텔레그램 리딩방"`), allowing legitimate owners to discuss Telegram defect/recall class action channels without rejection.
+  2. **Korean Rhetorical Negation & Hearsay Contrastive Defect Classification (`defect_classifier.py`)**:
+     - Addressed rhetorical reversals where owners emphasize severe defects (`"단차 없기는 개뿔 진짜 심해요"`, `"잡소리 없기는커녕 귀신소리 오지네요"`, `"도장 불량 없기는 무슨"`): excluded `없기는`, `없긴`, and following rhetorical tokens (`개뿔`, `커녕`, `무슨`, `개뿔이`) from negator triggering.
+     - Addressed hearsay/reported contrastive reports (`"잡소리 없다더니 고속도로 올리자마자 찌걱찌걱 난리남"`, `"잡소리 안 난다더니 주행 중 고주파음 미치겠네요"`, `"단차 없다고 들었는데 실제로 보니 엄청 심함"`): excluded `없다더니`, `없다는데`, `안 난다더니`, `없다고 들었는데` from praise inversion.
+     - Excluded brand pejoratives and car nicknames (`defect_category is None`, e.g. `현기충`, `테슬람`, `비야디`, `씰`) from `_ALL_DEFECT_TERMS_LIST`, preventing phrases like `"현기충 없어서 좋네요"` from creating bogus `negated_defects`.
+     - Added `"심함"`, `"심각"`, `"개판"`, `"개뿔"` to `NEGATIVE_LEXICON` and added `"심하"`, `"심해요"`, `"심한"`, `"개심함"`, `"개판"`, `"난리"`, `"오지"`, `"폭발"` to `affirmative_occurrences`.
+  3. **Vehicle Matcher Ambiguity & Boundary Hardening (`vehicle_matcher.py`, `slang_lexicon.py`)**:
+     - Added boundary lookahead `(?![a-zA-Z0-9])` to `highland`, eliminating false-positive collision with `Toyota Highlander` (`"Toyota Highlander hybrid defect"` now properly maps to `BRAND_OTHER`).
+     - Added boundary and network exclusions to `juniper` (`(?!\s*(?:네트웍스|networks|라우터|router|스위치|switch))`), preventing false matching of Juniper Networks hardware.
+     - Added Microsoft software/cloud exclusions to bare `ms` and media/DNS exclusions to bare `mx`, eliminating false-positive Tesla matches for `"MS 워드"`, `"MS 애저"`, `"MX 레코드"`, `"MX 플레이어"`.
+     - Added canonical matching rule for `Kia Soul EV` (`"쏘울 EV"`, `"쏘울 전기차"`) and expanded imported/alternative brands (`르노`, `renault`, `푸조`, `peugeot`, `지프`, `jeep`) in `BRAND_OTHER`.
+     - Added `"인수"`, `"인수받"`, `"인수했"`, `"신차 인수"`, `"인수 후"`, `"인수 거부"` to `OWNERSHIP_ANCHORS` in `slang_lexicon.py`.
+  4. **Empirical Verification & Mirror Parity**:
+     - Enforced 100% bitwise parity across `./filters/` and `./ev-stealth-web/filters/`.
+     - Created `tests/test_defect_classification_slang_lexicon_audit.py` (9/9 PASS, 100%).
+     - Verified zero regression across all 162 filter and classification unit tests in 1.15s.
+
+
+
+## Current Execution Status: BUILD PERFORMANCE & BUNDLE OPTIMIZATION DEEP AUDIT & ENHANCEMENT (Cycle 26: 2026-11-16)
+- **Subsystem Audited**: Next.js Build Performance, Bundle Analyzer, Chunk Splitting, HTTP Caching Headers & Image Optimization (`next.config.mjs`, `package.json`, `src/lib/`, `src/app/`)
+- **Key Findings & Remediations**:
+  1. **Client Bundle JSON De-duplication & 77KB Chunk Reduction**:
+     - **Discovery**: In `/subsidy-tracker`, `SubsidyTrackerClient.tsx` was directly importing `getModelById` and `getRegionById` from `src/lib/getSubsidyData.ts`. Because `getSubsidyData.ts` imports `data/ev_subsidy_data.json` at top-level, Webpack bundled the entire 77 KB JSON database into the client-side JavaScript chunk (`page-*.js`), even though the dataset was already statically serialized and passed via server component props.
+     - **Remediation**: Switched `SubsidyTrackerClient.tsx` to use pure resolver functions `getModelByIdFromList` and `getRegionByIdFromList` from `@/lib/subsidyCalculations`, querying the client's already-present props.
+     - **Impact**: Reduced `/subsidy-tracker` route bundle size from **29.3 kB to 20.8 kB** (First Load JS dropped from 117 kB to 108 kB; ~77 KB raw uncompressed JSON completely eliminated from client payload).
+  2. **Modular Architecture Parity for Daily Reports (`reportCalculations.ts`)**:
+     - **Discovery**: `AdminDashboardClient.tsx` was importing sanitization and calculation functions from `src/lib/getDailyReports.ts`, which had `import rawReportData from '../data/daily_reports.json'` at the top.
+     - **Remediation**: Created `src/lib/reportCalculations.ts` containing pure normalization and KPI calculation logic, matching the architectural separation in `subsidyCalculations.ts`, `recallCalculations.ts`, `reliabilityCalculations.ts`, and `depreciationCalculations.ts`. `getDailyReports.ts` now imports from `reportCalculations.ts` and handles only the server data loader, re-exporting all pure helpers for 100% backward compatibility.
+  3. **Multi-Agent Build Concurrency & Swarm Isolation (`NEXT_DIST_DIR`)**:
+     - **Discovery**: During parallel multi-agent swarm operations, multiple agents running `next build` concurrently in the same directory could stomp on `.next/server/pages-manifest.json` during webpack asset emission.
+     - **Remediation**: Added `distDir: process.env.NEXT_DIST_DIR || '.next'` in `next.config.mjs`. Swarm workers, bundle analyzer runs, and test harnesses can now execute in dedicated isolated output directories (e.g., `NEXT_DIST_DIR=.next-isolated`) with zero race collisions.
+  4. **HTTP Caching, Security Headers & Image Optimization Verification**:
+     - Verified strict caching headers: `_next/static/:path*` (1-year immutable cache `max-age=31536000, immutable`), font assets (`.woff|.woff2|.ttf|.otf` immutable), static icons/images (`max-age=86400, stale-while-revalidate=604800`), `/data/:path*` (`s-maxage=3600, stale-while-revalidate=86400`).
+     - Verified security headers: Strict CSP with dynamic production/development policies, HSTS (`max-age=63072000; includeSubDomains; preload`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Permissions-Policy`, and strict noindex robots headers on `/secret-admin-reports/:path*`.
+     - Verified image configuration: Modern next-gen image formats `image/avif` and `image/webp` enabled with `minimumCacheTTL: 86400`.
+  5. **Empirical Verification**:
+     - Verified `npm run typecheck` (`tsc --noEmit`): 0 errors.
+     - Verified `npm run lint` (`next lint`): 0 errors, 0 warnings.
+     - Verified `npm run build`: 17/17 static pages generated cleanly. Shared First Load JS: 87.3 kB (only ~28 kB compressed).
+     - Added comprehensive test suite `tests/test_build_performance_and_bundle_optimization.py` (4/4 PASS on both root and web mirrors).
+
+## Current Execution Status: E2E GIT SYNC READINESS, PACKAGE DEPENDENCIES & VERCEL PREFLIGHT AUDIT (Cycle 26: 2026-11-16)
+- **Subsystem Audited**: Git Sync Readiness, Package Dependencies, Vercel Preflight Build & Mirror Parity
+- **Key Objectives & Verifications**:
+  1. **End-to-End Git Sync Readiness & Mirror Parity**:
+     - Verified working directory `ev-stealth-web` tracking branch `origin/main` on `https://github.com/LeegwangYeol/ev-stealth-web.git`.
+     - Zero untracked files in git workspace.
+     - Resolved mirror test divergence: synchronized `tests/test_challenger_extreme_scenarios.mjs` and `tests/test_subsidy_ui_audit.mjs` between root `tests/` and `ev-stealth-web/tests/`, ensuring 100% bitwise parity.
+     - Verified architectural decoupling: extracted `getBadgeStyle` and `getStatusLabel` into `src/lib/subsidyCalculations.ts` with transparent re-export from `src/components/subsidy/SubsidyBadge.tsx`, allowing pure Node/ESM imports in tests without JSX transpilation.
+  2. **Package Dependencies Health & Runtime Compatibility**:
+     - Verified engine specification (`"node": ">=18.17.0"`) against current environment (Node `v26.3.0`, npm `11.16.0`).
+     - Dependency tree validated: Next.js `14.2.35`, React `18.3.1`, ReactDOM `18.3.1`, TailwindCSS `3.4.19`, TypeScript `5.9.3`, ESLint `8.57.1`, `@next/bundle-analyzer` `14.2.35`. Zero missing dependencies, zero peer dependency conflicts.
+     - Both `npm run typecheck` (`tsc --noEmit`) and `npm run lint` (`next lint`) pass with 0 errors and 0 warnings.
+  3. **Strict 4-Step Vercel Deployment Preflight Checks**:
+     - Verified clean local production build (`npm run build`): all 17 static and dynamic routes compiled successfully (15 SSG routes, 2 dynamic metadata routes `/robots.txt` and `/sitemap.xml`).
+     - First load JS shared by all routes: `87.3 kB` (well below performance budget).
+     - Verified build-time zero-error enforcement in `next.config.mjs`: `typescript.ignoreBuildErrors = false` and `eslint.ignoreDuringBuilds = false`.
+     - Hardened Next.js `next.config.mjs` with dynamic CSP, nosniff, frame denial, and private cache-control headers on `/secret-admin-reports/:path*` (`no-store, no-cache, must-revalidate, max-age=0`).
+     - Aligned PWA manifest types in `src/app/manifest.ts` (`purpose: 'maskable'`) with Next.js `MetadataRoute.Manifest` schema.
+  4. **Empirical Challenger & Adversarial Fuzzing Results**:
+     - `node tests/test_challenger_extreme_scenarios.mjs`: 1,133 / 1,133 assertions PASS (100%).
+     - `npx tsx tests/test_challenger_client_edge_cases.ts`: 203 / 203 assertions PASS (100%).
+     - `npx tsx tests/test_challenger_fuzz_all.ts`: 395 / 395 assertions PASS (100%).
+     - `node tests/adversarial_security_fuzz_cycle23.mjs`: 48,485 / 48,485 assertions PASS (100%, 0 leaks, 0 crashes).
+     - `node tests/test_wcag_color_contrast_audit.mjs`: All color pairs exceed WCAG AA/AAA (> 7:1) PASS.
+     - Python unit tests (`test_frontend_a11y_wcag.py`, `test_subsidy_calculations_audit.py`, `test_seo_metadata_sitemap_robots.py`, `test_infra_integrity.py`): 133 / 133 tests PASS (100%).
+
 ## Current Execution Status: COMMUNITY SCRAPERS & CRAWLERS RESILIENCE AUDIT & PROACTIVE HARDENING (Cycle 26: 2026-11-16)
 - **Subsystem Audited**: Community Scrapers & Crawlers (`scrapers/`, `crawlers/`, `run_scraper.py`, `models/complaint.py`, `utils/http_client.py`)
 - **Key Objectives & Remediations**:
@@ -1493,3 +1567,42 @@
      - `python3 -m unittest tests/test_cycle19_hardening.py`: 28/28 PASS
      - `python3 -m unittest tests/test_frontend_a11y_wcag.py`: 101/101 PASS
      - `npm run build`: 16/16 static pages compiled cleanly with 0 errors.
+
+## EV Depreciation Calculator Engine Audit (Specialist Swarm)
+- **Status**: Completed & 100% Passing (2026-11-17).
+- **Inspected Files**:
+  - `ev-stealth-web/src/lib/depreciationCalculations.ts`
+  - `ev-stealth-web/src/lib/getDepreciationData.ts`
+  - `ev-stealth-web/src/app/depreciation-calculator/DepreciationCalculatorClient.tsx`
+  - `tests/test_depreciation_engine_audit.mjs`
+  - `tests/test_adversarial_depreciation_engine.py`
+  - `tests/adversarial_security_fuzz_cycle23.mjs`
+- **Audit Findings & Hardening Implemented**:
+  1. **Zero Division Guards**:
+     - Verified all division operators across mathematical models in both modules.
+     - In `simulateBatteryHealth`, ensured `energyThroughputKwh = safeMileage / Math.max(1.0, safeEfficiency)` and `equivalentFullCycles = energyThroughputKwh / Math.max(10.0, safeCapacity)` have strictly positive non-zero divisors.
+     - In Arrhenius calendar degradation, temperature divisor `tempK = Math.max(1.0, safeTempC + 273.15)` is clamped to [-60°C, 85°C], preventing zero division or floating point exponent overflow.
+     - In `calculateTcoComparison`, protected per-km cost calculation with `Math.max(1.0, safeEvEff)` and `Math.max(1.0, safeIceEff)`.
+  2. **TCO Calculation Partial customParams NaN Immunity**:
+     - Fixed vulnerability where passing partial or empty `customParams` (e.g., `{ fuel_tariffs: {} }` or `{ auxiliary_benefits: {} }`) caused shallow fallback failure, producing `safeSlowRatio * undefined = NaN` and corrupting the entire multi-year breakdown table and total cumulative savings with `NaN`.
+     - Hardened `calculateTcoComparison` in both `depreciationCalculations.ts` and `getDepreciationData.ts` with deep individual property fallbacks and `Number.isFinite` guards for `ev_slow_charging_krw_per_kwh`, `ev_fast_charging_krw_per_kwh`, `ice_gasoline_krw_per_liter`, `ice_diesel_krw_per_liter`, and all auxiliary benefit savings fields.
+  3. **Corrupted Database Resilience in getDepreciationData.ts**:
+     - In `getDepreciationData.ts`, `calculateDepreciation` previously accessed `DATABASE.adjustment_factors.mileage_sensitivity` directly, which would throw an unhandled `TypeError` if `DATABASE.adjustment_factors` was undefined or incomplete.
+     - Added safe chaining with fallback to `DEFAULT_FALLBACK_DEPRECIATION_DATABASE.adjustment_factors` for `mileage_sensitivity` and `warranty_cliff`.
+  4. **API Symmetry & Custom Profile Fallbacks**:
+     - Added optional 4th parameter `options?: { models?: EvModelDepreciation[]; model?: EvModelDepreciation }` to `simulateBatteryHealth` in `getDepreciationData.ts`, achieving 100% parameter signature symmetry with `depreciationCalculations.ts`.
+     - Added fallback `chemistryName: chemProfile?.name || chemistryKey || '전기차 배터리'` in both modules to prevent undefined chemistry names when custom partial chemistry profiles are passed.
+     - Added `clamp(rawStatutoryRate, 0.0, 1.0)` in `calculateSubsidyClawback` to guarantee finite non-NaN clawback rates even if custom tiers contain `NaN` rates.
+  5. **WCAG 2.1 AA & Accessibility Verification**:
+     - Verified `DepreciationCalculatorClient.tsx` enforces minimum touch target sizes (`min-h-[44px]`), visible focus rings (`focus-visible:ring-2 focus-visible:ring-blue-500`), WCAG-compliant color contrast (text-slate-700/800/900 on white/slate-50), ARIA landmarks, `role="tablist"`/`role="tab"`/`role="tabpanel"` relationships with roving tabindex and Arrow key navigation, and screen reader announcements.
+  6. **Empirical Verification & Quality Gates**:
+     - `npx tsx tests/test_depreciation_engine_audit.mjs`: 201/201 assertions passed (up from 185).
+     - `npx tsx tests/adversarial_security_fuzz_cycle23.mjs`: 48,485/48,485 assertions passed (0 failures, 0 crashes, 0 NaN leaks).
+     - `python3 -m unittest tests/test_adversarial_depreciation_engine.py`: 10/10 tests passed in 30.8s.
+     - `python3 tests/test_depreciation_calc_a11y_hardening.py`: 9/9 tests passed.
+     - `python3 tests/test_fuzz_all_calculators.py`: 10/10 tests passed.
+     - `pytest tests/test_depreciation.py`: 46/46 passed.
+     - `npx tsx tests/test_wave3_frontend_empirical_challenger.mjs`: 367/367 passed.
+     - `npx tsx tests/test_challenger_fuzz_all.ts`: 395/395 passed.
+     - `npm run typecheck`: 0 TypeScript errors.
+     - `npm run build`: 17/17 static pages compiled cleanly with 0 errors.

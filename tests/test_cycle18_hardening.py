@@ -710,7 +710,7 @@ class TestCycle18FrontendRemediationsAndContracts(unittest.TestCase):
         """Verifies (원문 링크) in AdminDashboardClient.tsx does not hide from assistive tech."""
         admin_src = (APP_DIR / "secret-admin-reports" / "AdminDashboardClient.tsx").read_text(encoding="utf-8")
         # Ensure anchor tag with (원문 링크) does not have tabIndex={-1} or aria-hidden="true"
-        match = re.search(r'<a\s+[^>]*href=\{report\.url\}[^>]*>\s*\(원문 링크\)\s*</a>', admin_src)
+        match = re.search(r'<a\s+[^>]*href=\{(?:safeUrl|report\.url)\}[^>]*>\s*\(원문 링크\)\s*</a>', admin_src)
         self.assertIsNotNone(match, "Anchor link with (원문 링크) must exist")
         tag_html = match.group(0)
         self.assertNotIn("tabIndex={-1}", tag_html)

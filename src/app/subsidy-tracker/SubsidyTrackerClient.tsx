@@ -12,8 +12,12 @@ import {
   RegionEntry,
   PopularModelEntry,
 } from '@/types/subsidy';
-import { getRegionById, getModelById } from '@/lib/getSubsidyData';
-import { sortRegions, calculateNetSubsidyPure } from '@/lib/subsidyCalculations';
+import {
+  sortRegions,
+  calculateNetSubsidyPure,
+  getModelByIdFromList,
+  getRegionByIdFromList,
+} from '@/lib/subsidyCalculations';
 import type { RegionSortOption } from '@/lib/subsidyCalculations';
 import ClientTimestamp from '@/components/ClientTimestamp';
 import SubsidyErrorBoundary from '@/components/subsidy/SubsidyErrorBoundary';
@@ -499,14 +503,14 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   // Sync selectedModelId and selectedRegionId on query param navigation
   useEffect(() => {
     if (urlModel) {
-      const canonical = getModelById(urlModel)?.model_id;
+      const canonical = getModelByIdFromList(initialData?.popular_models_matrix, urlModel)?.model_id;
       setSelectedModelId(canonical || urlModel);
     }
     if (urlRegion) {
-      const canonical = getRegionById(urlRegion)?.region_id;
+      const canonical = getRegionByIdFromList(initialData?.regions, urlRegion)?.region_id;
       setSelectedRegionId(canonical || urlRegion);
     }
-  }, [urlModel, urlRegion]);
+  }, [urlModel, urlRegion, initialData?.popular_models_matrix, initialData?.regions]);
 
   const regions = useMemo(() => (Array.isArray(initialData?.regions) ? initialData.regions : []), [initialData?.regions]);
   const models = useMemo(() => (Array.isArray(initialData?.popular_models_matrix) ? initialData.popular_models_matrix : []), [initialData?.popular_models_matrix]);
@@ -940,7 +944,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                     type="button"
                     onClick={handleClearSearch}
                     aria-label={`검색어 "${searchQuery}" 제거`}
-                    className="ml-1 text-slate-300 hover:text-white font-bold p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                    className="ml-1 text-slate-300 hover:text-white font-bold p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                   >
                     ✕
                   </button>
@@ -953,7 +957,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                     type="button"
                     onClick={handleClearZoneFilter}
                     aria-label="권역 필터 해제"
-                    className="ml-1 text-slate-300 hover:text-white font-bold p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                    className="ml-1 text-slate-300 hover:text-white font-bold p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                   >
                     ✕
                   </button>
@@ -966,7 +970,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                     type="button"
                     onClick={handleClearAlertFilter}
                     aria-label="경보 필터 해제"
-                    className="ml-1 text-slate-300 hover:text-white font-bold p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                    className="ml-1 text-slate-300 hover:text-white font-bold p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                   >
                     ✕
                   </button>
@@ -979,7 +983,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                     type="button"
                     onClick={handleClearSupplementaryFilter}
                     aria-label="추경 필터 해제"
-                    className="ml-1 text-slate-300 hover:text-white font-bold p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                    className="ml-1 text-slate-300 hover:text-white font-bold p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                   >
                     ✕
                   </button>
@@ -1341,6 +1345,9 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
     return map;
   }, [regions]);
 
+  const getModelById = useCallback((id: string) => getModelByIdFromList(models, id), [models]);
+  const getRegionById = useCallback((id: string) => getRegionByIdFromList(regions, id), [regions]);
+
   const activeModel = useMemo(() => {
     const q = (selectedModelId || '').trim().toLowerCase();
     if (modelsMap.has(q)) {
@@ -1359,7 +1366,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
           m.name_ko.toLowerCase().includes(q)
       ) || models[0] || undefined
     );
-  }, [models, modelsMap, selectedModelId]);
+  }, [models, modelsMap, selectedModelId, getModelById]);
 
   const activeRegionForCalc = useMemo(() => {
     const q = (selectedRegionId || '').trim().toLowerCase();
@@ -1382,7 +1389,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
           r.name_en.toLowerCase() === q
       ) || regions[0] || undefined
     );
-  }, [regions, regionsMap, selectedRegionId]);
+  }, [regions, regionsMap, selectedRegionId, getRegionById]);
 
   const handleToggleCustomMsrp = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const checked = e.target.checked;

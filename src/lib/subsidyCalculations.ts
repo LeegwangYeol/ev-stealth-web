@@ -1725,3 +1725,57 @@ export function groupRegionsByType<T extends RegionEntry>(
   }
   return result;
 }
+
+/**
+ * Pure Helper: Badge styling with opaque solid backgrounds for compliant WCAG AA contrast (> 7:1)
+ */
+export const getBadgeStyle = (status?: AlertSeverity | string | null): string => {
+  const normalized = (status || '').toUpperCase();
+  switch (normalized) {
+    case 'HEALTHY':
+    case 'AVAILABLE':
+      return 'bg-emerald-950 text-emerald-200 border-emerald-400';
+    case 'CAUTION':
+      return 'bg-amber-950 text-amber-200 border-amber-400';
+    case 'WARNING':
+      return 'bg-orange-950 text-orange-200 border-orange-400';
+    case 'CRITICAL':
+    case 'DANGER':
+    case 'EMERGENCY':
+      return 'bg-rose-950 text-rose-200 border-rose-400 animate-pulse motion-reduce:animate-none';
+    case 'DEPLETED':
+    case 'EXHAUSTED':
+    case 'CLOSED':
+    case 'END':
+      return 'bg-slate-950 text-slate-100 border-slate-400';
+    default:
+      return 'bg-emerald-950 text-emerald-200 border-emerald-400';
+  }
+};
+
+/**
+ * Pure Helper: Status badge labels with accessible visual indicator
+ */
+export const getStatusLabel = (status?: AlertSeverity | string | null): string => {
+  const normalized = (status || '').toUpperCase();
+  switch (normalized) {
+    case 'HEALTHY':
+    case 'AVAILABLE':
+      return '🟢 안정';
+    case 'CAUTION':
+      return '🟡 주의';
+    case 'WARNING':
+      return '🟠 경고';
+    case 'CRITICAL':
+    case 'DANGER':
+    case 'EMERGENCY':
+      return '🔴 마감임박';
+    case 'DEPLETED':
+    case 'EXHAUSTED':
+    case 'CLOSED':
+    case 'END':
+      return '🔒 소진';
+    default:
+      return '🟢 안정';
+  }
+};

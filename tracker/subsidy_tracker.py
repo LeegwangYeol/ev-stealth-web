@@ -698,13 +698,13 @@ def _metric_val(metric: Any, key: str, default: Any = 0) -> Any:
 
 
 def _safe_int_metric(val: Any, default: int = 0) -> int:
-    """Safely cast value to int, gracefully handling NaN, Inf, None, float strings, and invalid types."""
+    """Safely cast value to int, gracefully handling NaN, Inf, None, float strings, commas, and invalid types."""
     if type(val) is int:
         return val
     if val is None:
         return default
     try:
-        f = float(val)
+        f = float(_clean_num(val))
         if math.isnan(f) or math.isinf(f):
             return default
         return int(f)

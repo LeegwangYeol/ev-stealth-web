@@ -12,6 +12,7 @@ import hashlib
 import html
 import http.client
 import http.cookiejar
+import ipaddress
 import json
 import logging
 import os
@@ -27,7 +28,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 # Set up dedicated logger
 logger = logging.getLogger("SafeHttpClient")
@@ -66,6 +67,146 @@ USER_AGENT_POOL = [
 # Safe memory bounds to prevent memory leaks and out-of-memory crashes
 MAX_RESPONSE_BYTES: int = 10 * 1024 * 1024  # 10MB per HTTP response
 MAX_COOKIEJAR_ENTRIES: int = 500  # Prune cookie jar beyond 500 entries
+
+# SSRF Defense constants
+DISALLOWED_HOSTS: Set[str] = {
+    "localhost",
+    "metadata.google.internal",
+    "metadata",
+    "instance-data",
+}
+DISALLOWED_HOST_SUFFIXES: Tuple[str, ...] = (
+    ".localhost",
+    ".local",
+    ".internal",
+    ".lan",
+    ".localdomain",
+    ".intranet",
+)
+STANDARD_SAFE_PORTS: Set[int] = {80, 443, 8080, 8443, 8000, 8888}
+DEFAULT_FALLBACK_USER_AGENT: str = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+)
+
+
+def is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
+    """Check if an IP address is publicly routable and safe from SSRF."""
+    if (
+        ip.is_loopback
+        or ip.is_private
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    ):
+        return False
+    # Check IPv4-mapped IPv6 addresses (e.g. ::ffff:127.0.0.1 or ::ffff:169.254.169.254)
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        mapped = ip.ipv4_mapped
+        if (
+            mapped.is_loopback
+            or mapped.is_private
+            or mapped.is_link_local
+            or mapped.is_multicast
+            or mapped.is_reserved
+            or mapped.is_unspecified
+        ):
+            return False
+    # Cloud metadata IPs (AWS / GCP / Azure / Alibaba)
+    if str(ip) in ("169.254.169.254", "100.100.100.200"):
+        return False
+    return True
+
+
+def is_safe_url(
+    url: str,
+    allow_private_ips: bool = False,
+    allowed_ports: Optional[Set[int]] = None,
+) -> Tuple[bool, str]:
+    """Verify URL against SSRF attacks (private subnets, cloud metadata, non-HTTP schemes).
+
+    Returns:
+        Tuple[bool, str]: (is_safe, failure_reason)
+    """
+    if not url or not isinstance(url, str):
+        return False, "Empty or invalid URL"
+
+    url_str = url.strip()
+    if not url_str:
+        return False, "Empty URL"
+
+    try:
+        parsed = urllib.parse.urlsplit(url_str)
+    except Exception as e:
+        return False, f"URL parsing error: {e}"
+
+    # 1. Scheme validation: strictly http or https
+    scheme = (parsed.scheme or "").lower()
+    if scheme not in ("http", "https"):
+        return False, f"Disallowed URL scheme: {scheme!r} (only http/https allowed)"
+
+    # 2. Hostname extraction
+    hostname = parsed.hostname
+    if not hostname:
+        return False, "Missing hostname in URL"
+
+    host_lower = hostname.lower().strip()
+
+    if allow_private_ips:
+        return True, "Private IPs allowed by configuration"
+
+    # 3. Check disallowed hostnames & suffixes
+    if host_lower in DISALLOWED_HOSTS:
+        return False, f"SSRF blocked: Disallowed hostname '{host_lower}'"
+
+    for suffix in DISALLOWED_HOST_SUFFIXES:
+        if host_lower.endswith(suffix):
+            return False, f"SSRF blocked: Hostname '{host_lower}' matches disallowed internal suffix '{suffix}'"
+
+    # 4. Port validation
+    ports_set = allowed_ports if allowed_ports is not None else STANDARD_SAFE_PORTS
+    if parsed.port is not None and parsed.port not in ports_set:
+        return False, f"SSRF blocked: Disallowed port {parsed.port}"
+
+    # 5. IP Address Check (literal IP, octal/hex/decimal representations)
+    try:
+        ip = ipaddress.ip_address(host_lower)
+        if not is_safe_ip(ip):
+            return False, f"SSRF blocked: Unsafe IP address {ip}"
+        return True, "Safe public IP"
+    except ValueError:
+        pass
+
+    # Socket aton for octal/hex/decimal encoded IPv4 (e.g. 0177.0.0.1, 2130706433, 0x7f000001)
+    try:
+        packed = socket.inet_aton(host_lower)
+        ip4 = ipaddress.IPv4Address(packed)
+        if not is_safe_ip(ip4):
+            return False, f"SSRF blocked: Unsafe encoded IP address {ip4}"
+        return True, "Safe public IP"
+    except (OSError, ValueError):
+        pass
+
+    # 6. DNS Resolution validation (prevent DNS rebinding or custom domains pointing to private IPs)
+    try:
+        addr_info = socket.getaddrinfo(host_lower, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        if addr_info:
+            for family, socktype, proto, canonname, sockaddr in addr_info:
+                ip_str = sockaddr[0]
+                try:
+                    resolved_ip = ipaddress.ip_address(ip_str)
+                    if not is_safe_ip(resolved_ip):
+                        return False, f"SSRF blocked: Domain '{host_lower}' resolves to unsafe IP {resolved_ip}"
+                except ValueError:
+                    continue
+    except socket.gaierror:
+        # Domain cannot be resolved via DNS (e.g. offline CI test environment).
+        # Allow domain name to proceed to opener/socket handler.
+        pass
+    except Exception as e:
+        logger.debug(f"DNS check notice for {host_lower}: {e}")
+
+    return True, "Safe URL"
 
 
 def robust_decode(raw_bytes: Union[bytes, str], declared_encoding: Optional[str] = None) -> str:
@@ -213,20 +354,49 @@ class ResilientHTTPSConnection(http.client.HTTPSConnection):
         self.sock = self._context.wrap_socket(self.sock, server_hostname=server_hostname)
 
 
+class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """HTTP redirect handler that validates target URLs against SSRF before following."""
+
+    def __init__(
+        self,
+        allow_private_ips: bool = False,
+        allowed_ports: Optional[Set[int]] = None,
+    ):
+        super().__init__()
+        self.allow_private_ips = allow_private_ips
+        self.allowed_ports = allowed_ports
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        is_safe, reason = is_safe_url(
+            newurl,
+            allow_private_ips=self.allow_private_ips,
+            allowed_ports=self.allowed_ports,
+        )
+        if not is_safe:
+            logger.warning(f"SSRF defense blocked redirect from {req.full_url} to {newurl}: {reason}")
+            raise urllib.error.HTTPError(
+                newurl, 403, f"SSRF Blocked: Unsafe redirect target ({reason})", headers, fp
+            )
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 class ResilientHTTPHandler(urllib.request.HTTPHandler):
     """HTTP handler injecting ResilientHTTPConnection with explicit timeouts."""
 
     def __init__(self, connect_timeout: float = 5.0, read_timeout: float = 15.0, **kwargs):
         super().__init__(**kwargs)
-        self._connect_timeout = connect_timeout
-        self._read_timeout = read_timeout
+        self._connect_timeout = float(connect_timeout) if connect_timeout is not None and connect_timeout > 0 else 5.0
+        self._read_timeout = float(read_timeout) if read_timeout is not None and read_timeout > 0 else 15.0
 
     def http_open(self, req):
+        conn_to = getattr(req, "_connect_timeout", self._connect_timeout)
+        read_to = getattr(req, "_read_timeout", self._read_timeout)
+
         def _factory(host, **kwargs):
             return ResilientHTTPConnection(
                 host,
-                connect_timeout=self._connect_timeout,
-                read_timeout=self._read_timeout,
+                connect_timeout=conn_to,
+                read_timeout=read_to,
                 **kwargs,
             )
         return self.do_open(_factory, req)
@@ -237,10 +407,13 @@ class ResilientHTTPSHandler(urllib.request.HTTPSHandler):
 
     def __init__(self, connect_timeout: float = 5.0, read_timeout: float = 15.0, context=None, **kwargs):
         super().__init__(context=context, **kwargs)
-        self._connect_timeout = connect_timeout
-        self._read_timeout = read_timeout
+        self._connect_timeout = float(connect_timeout) if connect_timeout is not None and connect_timeout > 0 else 5.0
+        self._read_timeout = float(read_timeout) if read_timeout is not None and read_timeout > 0 else 15.0
 
     def https_open(self, req):
+        conn_to = getattr(req, "_connect_timeout", self._connect_timeout)
+        read_to = getattr(req, "_read_timeout", self._read_timeout)
+
         def _factory(host, **kwargs):
             ctx = getattr(self, "_context", None)
             if ctx is not None:
@@ -249,8 +422,8 @@ class ResilientHTTPSHandler(urllib.request.HTTPSHandler):
                 kwargs.setdefault("check_hostname", getattr(self, "_check_hostname"))
             return ResilientHTTPSConnection(
                 host,
-                connect_timeout=self._connect_timeout,
-                read_timeout=self._read_timeout,
+                connect_timeout=conn_to,
+                read_timeout=read_to,
                 **kwargs,
             )
         return self.do_open(_factory, req)
@@ -287,11 +460,28 @@ class CircuitBreaker:
         s = str(url_or_host).strip()
         if "://" in s:
             try:
-                parsed = urllib.parse.urlparse(s)
-                return (parsed.netloc or "").lower().split(":")[0]
+                parsed = urllib.parse.urlsplit(s)
+                if parsed.hostname:
+                    return parsed.hostname.lower()
             except Exception:
                 pass
+        try:
+            parsed = urllib.parse.urlsplit("//" + s)
+            if parsed.hostname:
+                return parsed.hostname.lower()
+        except Exception:
+            pass
         return s.lower().split(":")[0].split("/")[0]
+
+    def record_probe(self, url_or_host: str) -> None:
+        """Record that a canary probe is in-flight for this host during HALF_OPEN state."""
+        host = self._extract_host(url_or_host)
+        if not host:
+            return
+        with self._lock:
+            info = self._hosts.get(host)
+            if info and info.get("state") == CircuitBreakerState.HALF_OPEN:
+                info["probe_count"] = info.get("probe_count", 0) + 1
 
     def is_available(self, url_or_host: str) -> bool:
         """Returns True if requests can be dispatched to this host."""
@@ -511,6 +701,8 @@ class SafeHttpClient:
         circuit_cooldown: float = 30.0,
         cooldown_seconds: Optional[float] = None,
         circuit_breaker: Optional[CircuitBreaker] = None,
+        allow_private_ips: bool = False,
+        allowed_ports: Optional[Set[int]] = None,
     ):
         self.min_delay = min_delay
         self.max_delay = max_delay
@@ -527,6 +719,8 @@ class SafeHttpClient:
         self.verify_ssl = verify_ssl
         self.enable_cache = enable_cache
         self.cache_fallback = cache_fallback
+        self.allow_private_ips = bool(allow_private_ips)
+        self.allowed_ports = set(allowed_ports) if allowed_ports is not None else None
         self.request_count = 0
         self.last_request_time = 0.0
         self._rate_limited_until = 0.0
@@ -587,6 +781,10 @@ class SafeHttpClient:
             self.opener = opener
         else:
             cookie_processor = urllib.request.HTTPCookieProcessor(self.cookie_jar)
+            redirect_handler = SafeRedirectHandler(
+                allow_private_ips=self.allow_private_ips,
+                allowed_ports=self.allowed_ports,
+            )
             if not self.verify_ssl:
                 ssl_ctx = ssl.create_default_context()
                 ssl_ctx.check_hostname = False
@@ -605,7 +803,9 @@ class SafeHttpClient:
                 connect_timeout=self._connect_timeout,
                 read_timeout=self._read_timeout,
             )
-            self.opener = urllib.request.build_opener(cookie_processor, http_handler, https_handler)
+            self.opener = urllib.request.build_opener(
+                cookie_processor, redirect_handler, http_handler, https_handler
+            )
 
     @property
     def connect_timeout(self) -> float:
@@ -788,11 +988,12 @@ class SafeHttpClient:
 
     def get_random_user_agent(self, exclude: Optional[str] = None) -> str:
         """Pick a modern browser User-Agent from pool, optionally excluding the specified UA."""
-        if exclude and len(USER_AGENT_POOL) > 1:
-            candidates = [ua for ua in USER_AGENT_POOL if ua != exclude]
+        pool = USER_AGENT_POOL if USER_AGENT_POOL else [DEFAULT_FALLBACK_USER_AGENT]
+        if exclude and len(pool) > 1:
+            candidates = [ua for ua in pool if ua != exclude]
             if candidates:
                 return random.choice(candidates)
-        return random.choice(USER_AGENT_POOL)
+        return random.choice(pool)
 
     def _sleep_with_jitter(self):
         """Perform polite delay with randomized jitter between requests."""
@@ -887,8 +1088,15 @@ class SafeHttpClient:
             return 0, "", b""
 
         norm_url = url.strip()
-        if not (norm_url.startswith("http://") or norm_url.startswith("https://")):
-            logger.warning(f"Unsupported URL scheme: {norm_url!r}")
+
+        # SSRF Protection: validate scheme, hostname, IP address, and port
+        is_safe, reason = is_safe_url(
+            norm_url,
+            allow_private_ips=self.allow_private_ips,
+            allowed_ports=self.allowed_ports,
+        )
+        if not is_safe:
+            logger.warning(f"SSRF defense blocked request to {norm_url}: {reason}")
             return 0, "", b""
 
         # Host-level Circuit Breaker guard
@@ -906,6 +1114,10 @@ class SafeHttpClient:
                     self.last_response_from_cache = True
                     return cached
             return 503, "", b""
+
+        # Record in-flight probe if in HALF_OPEN state
+        if self.circuit_breaker.get_state(norm_url) == CircuitBreakerState.HALF_OPEN:
+            self.circuit_breaker.record_probe(norm_url)
 
         self.last_response_from_cache = False
         self._sleep_with_jitter()
@@ -1001,6 +1213,8 @@ class SafeHttpClient:
                     headers=req_headers,
                     method=method.upper(),
                 )
+                req._connect_timeout = eff_connect_timeout
+                req._read_timeout = eff_read_timeout
                 resp = self.opener.open(req, timeout=req_timeout)
                 try:
                     status_code = resp.getcode()
@@ -1014,7 +1228,14 @@ class SafeHttpClient:
                     # Stream-read up to max_response_size to prevent memory exhaustion
                     chunks = []
                     bytes_read = 0
+                    start_stream_time = time.time()
+                    max_stream_duration = max(30.0, eff_read_timeout * 3.0)
                     while True:
+                        if time.time() - start_stream_time > max_stream_duration:
+                            logger.warning(
+                                f"Response stream from {norm_url} exceeded wall-clock deadline ({max_stream_duration}s). Truncating."
+                            )
+                            break
                         try:
                             chunk = resp.read(65536)
                         except TypeError:

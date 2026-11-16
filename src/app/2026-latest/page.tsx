@@ -222,20 +222,20 @@ const latest2026JsonLd = {
         {
           '@type': 'ListItem',
           position: 3,
-          name: '현대 아이오닉 9 (110.3kWh 대용량 배터리팩 열관리 및 3열 전장 점검)',
-          url: `${SITE_URL}/2026-latest#heading-ioniq9-2026`,
-        },
-        {
-          '@type': 'ListItem',
-          position: 4,
           name: '테슬라 모델 Y 2026 주니퍼 (일체형 기가 프레스 다이캐스팅 및 실내 정숙성)',
           url: `${SITE_URL}/2026-latest#heading-modely-2026`,
         },
         {
           '@type': 'ListItem',
-          position: 5,
+          position: 4,
           name: 'BYD 시라이언 7 (KDM 국내 인증 배터리 사양 및 공식 서비스망 인프라)',
           url: `${SITE_URL}/2026-latest#heading-sealion7-2026`,
+        },
+        {
+          '@type': 'ListItem',
+          position: 5,
+          name: '현대 아이오닉 9 (110.3kWh 대용량 배터리팩 열관리 및 3열 전장 점검)',
+          url: `${SITE_URL}/2026-latest#heading-ioniq9-2026`,
         },
       ],
     },

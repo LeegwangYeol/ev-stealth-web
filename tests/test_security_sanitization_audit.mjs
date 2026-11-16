@@ -39,6 +39,7 @@ const {
   isSafeUrl,
   isExternalUrl,
   sanitizeText,
+  stripHtmlTags,
   safeJsonParse,
   serializeJsonLd,
   decodeHtmlEntities,
@@ -552,6 +553,7 @@ test('getDailyReports correctly loads and sanitizes raw report items', async () 
   const sourcePath = path.resolve(__dirname, '../src/lib/getDailyReports.ts');
   const rawSource = fs.readFileSync(sourcePath, 'utf-8');
   const patched = rawSource
+    .replace(/from '\.\/reportCalculations(?:\.ts)?';/, "from '../src/lib/reportCalculations.ts';")
     .replace(/from '\.\/sanitizeUrl(?:\.ts)?';/, "from '../src/lib/sanitizeUrl.ts';")
     .replace(/from '\.\.\/data\/daily_reports\.json' with \{ type: 'json' \};/, "from '../src/data/daily_reports.json' with { type: 'json' };");
   
@@ -1099,6 +1101,72 @@ test('sanitizeWhitelistedUrl allows trusted domains and blocks untrusted destina
   assert.strictEqual(sanitizeWhitelistedUrl(govUrl, ['government']), govUrl);
   assert.strictEqual(sanitizeWhitelistedUrl(mfgUrl, ['government']), '#');
   assert.strictEqual(sanitizeWhitelistedUrl(commUrl, ['government']), '#');
+});
+
+// -------------------------------------------------------------
+// 17. ADVANCED SSRF, DEFENSIVE RESILIENCE & CODEBASE AUDIT TESTS
+// -------------------------------------------------------------
+console.log('\n--- [17. Advanced SSRF, Defensive Resilience & Codebase Audit Tests] ---');
+
+test('Defensive resilience: handles null, undefined, and non-string inputs safely without throwing', () => {
+  assert.strictEqual(decodeHtmlEntities(null), '');
+  assert.strictEqual(decodeHtmlEntities(undefined), '');
+  assert.strictEqual(decodeHtmlEntities(123), '');
+
+  assert.strictEqual(safeDecodePercent(null), '');
+  assert.strictEqual(safeDecodePercent(undefined), '');
+
+  assert.strictEqual(extractAndNormalizeScheme(null), '');
+  assert.strictEqual(extractAndNormalizeScheme(undefined), '');
+
+  assert.strictEqual(isOpenRedirect(null), false);
+  assert.strictEqual(isOpenRedirect(undefined), false);
+
+  assert.strictEqual(isPrototypePollutionKey(null), false);
+  assert.strictEqual(isPrototypePollutionKey(undefined), false);
+
+  assert.strictEqual(stripPrototypePollutionQueryParams(null), '');
+  assert.strictEqual(stripPrototypePollutionQueryParams(undefined), '');
+
+  assert.strictEqual(matchDomain(null, 'example.com'), false);
+  assert.strictEqual(matchDomain('example.com', null), false);
+});
+
+test('parseSafeQueryParams cleanly isolates search parameters from fragment queries', () => {
+  // Query parameters before hash are extracted
+  const res1 = parseSafeQueryParams('https://example.com/path?foo=1&bar=2#section');
+  assert.strictEqual(res1.foo, '1');
+  assert.strictEqual(res1.bar, '2');
+
+  // Fragment queries without URL query string are not treated as searchParams
+  const res2 = parseSafeQueryParams('https://example.com/path#section?evil=1');
+  assert.strictEqual(res2.evil, undefined);
+
+  // Prototype pollution keys in URL query params are discarded
+  const res3 = parseSafeQueryParams('?model=ev6&__proto__[polluted]=true&Object.prototype.isAdmin=1');
+  assert.strictEqual(res3.model, 'ev6');
+  assert.strictEqual(res3['__proto__[polluted]'], undefined);
+  assert.strictEqual(res3['Object.prototype.isAdmin'], undefined);
+});
+
+test('stripHtmlTags removes multi-pass, nested, and unclosed tags', () => {
+  const nested = '<<SCRIPT>alert("nested")//<</SCRIPT>';
+  assert.strictEqual(stripHtmlTags(nested).includes('<script'), false);
+
+  const entityEncoded = '&lt;iframe src="javascript:alert(1)"&gt;dangerous&lt;/iframe&gt;';
+  assert.strictEqual(stripHtmlTags(entityEncoded).includes('<iframe'), false);
+
+  const unclosed = '<img src=x onerror=alert(1)';
+  const sanitizedUnclosed = stripHtmlTags(unclosed);
+  assert.strictEqual(sanitizedUnclosed.includes('onerror='), false);
+  assert.strictEqual(sanitizedUnclosed.includes('<img'), false);
+});
+
+test('Codebase audit: AdminDashboardClient.tsx does not leak raw report.url into href attributes', () => {
+  const adminClientPath = path.resolve(__dirname, '../src/app/secret-admin-reports/AdminDashboardClient.tsx');
+  const content = fs.readFileSync(adminClientPath, 'utf-8');
+  // Confirm that href={report.url} is NEVER present
+  assert.strictEqual(content.includes('href={report.url}'), false, 'Found un-sanitized href={report.url} in AdminDashboardClient.tsx');
 });
 
 console.log('\n======================================================');

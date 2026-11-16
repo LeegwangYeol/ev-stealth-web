@@ -934,12 +934,16 @@ export function calculateDepreciation(input: DepreciationCalculationInput): Depr
   const baselineResidualPct = interpolateBaselineResidual(model.depreciation_curve, years, priceBasis);
 
   // 1. Mileage Adjustment
+  const adjFactors = DATABASE?.adjustment_factors ?? DEFAULT_FALLBACK_DEPRECIATION_DATABASE.adjustment_factors;
+  const mileageSens = adjFactors?.mileage_sensitivity ?? DEFAULT_FALLBACK_DEPRECIATION_DATABASE.adjustment_factors.mileage_sensitivity;
+  const warrantyCliff = adjFactors?.warranty_cliff ?? DEFAULT_FALLBACK_DEPRECIATION_DATABASE.adjustment_factors.warranty_cliff;
+
   const expectedMileage = years * baselineAnnualMileage;
   const deltaMileage = mileageKm - expectedMileage;
   let mileageAdjustment = 0;
   if (deltaMileage > 0) {
-    const rawPenalty = (deltaMileage / 10000) * DATABASE.adjustment_factors.mileage_sensitivity.penalty_per_10000km_excess;
-    const maxDiscountCap = DATABASE.adjustment_factors.mileage_sensitivity.max_mileage_discount_cap ?? -0.15;
+    const rawPenalty = (deltaMileage / 10000) * (mileageSens?.penalty_per_10000km_excess ?? -0.018);
+    const maxDiscountCap = mileageSens?.max_mileage_discount_cap ?? -0.15;
     if (mileageKm >= 500000) {
       mileageAdjustment = rawPenalty;
     } else if (mileageKm > 300000) {
@@ -949,7 +953,7 @@ export function calculateDepreciation(input: DepreciationCalculationInput): Depr
       mileageAdjustment = Math.max(maxDiscountCap, rawPenalty);
     }
   } else {
-    const bonusRate = DATABASE.adjustment_factors.mileage_sensitivity.bonus_per_10000km_deficit;
+    const bonusRate = mileageSens?.bonus_per_10000km_deficit ?? 0.012;
     mileageAdjustment = Math.min(0.06, (Math.abs(deltaMileage) / 10000) * bonusRate);
   }
 
@@ -963,9 +967,9 @@ export function calculateDepreciation(input: DepreciationCalculationInput): Depr
 
   let warrantyCliffPenalty = 0;
   if (isExpired) {
-    warrantyCliffPenalty = DATABASE.adjustment_factors.warranty_cliff.expired_warranty_penalty;
+    warrantyCliffPenalty = warrantyCliff?.expired_warranty_penalty ?? -0.14;
   } else if (isApproachingCliff) {
-    warrantyCliffPenalty = DATABASE.adjustment_factors.warranty_cliff.approaching_cliff_1_2_years_penalty;
+    warrantyCliffPenalty = warrantyCliff?.approaching_cliff_1_2_years_penalty ?? -0.06;
   }
 
   // 3. Chemistry Aging Adjustment
@@ -1086,7 +1090,8 @@ export function calculateDepreciation(input: DepreciationCalculationInput): Depr
 export function simulateBatteryHealth(
   params: BatterySimulationInput,
   customChemistries?: Record<string, BatteryChemistryProfile>,
-  customReplacementCosts?: BatteryReplacementTier[]
+  customReplacementCosts?: BatteryReplacementTier[],
+  options?: { models?: EvModelDepreciation[]; model?: EvModelDepreciation }
 ): BatteryHealthResult {
   const safeParams = params && typeof params === 'object' ? params : ({} as BatterySimulationInput);
   const {
@@ -1114,7 +1119,12 @@ export function simulateBatteryHealth(
     parsedYears < 0;
   const safeYears = isInvalidYears ? 3 : clamp(parsedYears, 0, 100);
 
-  let model: EvModelDepreciation | undefined = safeParams.model;
+  let model: EvModelDepreciation | undefined = safeParams.model || options?.model;
+  if (!model && options?.models && modelId) {
+    model = options.models.find(
+      (m) => m.id.toLowerCase() === modelId.toLowerCase() || m.id === modelId
+    );
+  }
   if (!model && modelId) {
     model = getModelById(modelId);
   }
@@ -1315,7 +1325,7 @@ export function simulateBatteryHealth(
 
   return {
     chemistry: chemistryKey,
-    chemistryName: chemProfile.name,
+    chemistryName: chemProfile?.name || chemistryKey || '전기차 배터리',
     years: safeYears,
     totalKm: safeMileage,
     equivalentFullCycles: Math.round(safeCycles),
@@ -1427,7 +1437,10 @@ export function calculateSubsidyClawback(
     }
   }
 
-  const statutoryRate = matchedTier.clawback_rate;
+  const rawStatutoryRate = matchedTier?.clawback_rate;
+  const statutoryRate = typeof rawStatutoryRate === 'number' && Number.isFinite(rawStatutoryRate)
+    ? clamp(rawStatutoryRate, 0.0, 1.0)
+    : 0.0;
   let effectiveRate = 0;
   let localClawbackKrw = 0;
   let nationalClawbackKrw = 0;
@@ -1498,11 +1511,59 @@ export function calculateTcoComparison(
   iceDisplacementCc: number = 1998,
   customParams?: TcoParameters
 ): TcoResult {
-  const params = customParams || DATABASE?.tco_parameters || DEFAULT_FALLBACK_DEPRECIATION_DATABASE.tco_parameters;
-  const fuelTariffs = params?.fuel_tariffs ?? DEFAULT_FALLBACK_DEPRECIATION_DATABASE.tco_parameters.fuel_tariffs;
-  const efficiencyBaselines = params?.efficiency_baselines ?? DEFAULT_FALLBACK_DEPRECIATION_DATABASE.tco_parameters.efficiency_baselines;
-  const taxParameters = params?.tax_parameters ?? DEFAULT_FALLBACK_DEPRECIATION_DATABASE.tco_parameters.tax_parameters;
-  const auxiliaryBenefits = params?.auxiliary_benefits ?? DEFAULT_FALLBACK_DEPRECIATION_DATABASE.tco_parameters.auxiliary_benefits;
+  const fallbackTco = DATABASE?.tco_parameters ?? DEFAULT_FALLBACK_DEPRECIATION_DATABASE.tco_parameters;
+  const params = customParams || fallbackTco;
+  const fuelTariffs = {
+    ev_slow_charging_krw_per_kwh:
+      typeof params?.fuel_tariffs?.ev_slow_charging_krw_per_kwh === 'number' &&
+      Number.isFinite(params.fuel_tariffs.ev_slow_charging_krw_per_kwh)
+        ? params.fuel_tariffs.ev_slow_charging_krw_per_kwh
+        : fallbackTco.fuel_tariffs.ev_slow_charging_krw_per_kwh,
+    ev_fast_charging_krw_per_kwh:
+      typeof params?.fuel_tariffs?.ev_fast_charging_krw_per_kwh === 'number' &&
+      Number.isFinite(params.fuel_tariffs.ev_fast_charging_krw_per_kwh)
+        ? params.fuel_tariffs.ev_fast_charging_krw_per_kwh
+        : fallbackTco.fuel_tariffs.ev_fast_charging_krw_per_kwh,
+    ice_gasoline_krw_per_liter:
+      typeof params?.fuel_tariffs?.ice_gasoline_krw_per_liter === 'number' &&
+      Number.isFinite(params.fuel_tariffs.ice_gasoline_krw_per_liter)
+        ? params.fuel_tariffs.ice_gasoline_krw_per_liter
+        : fallbackTco.fuel_tariffs.ice_gasoline_krw_per_liter,
+    ice_diesel_krw_per_liter:
+      typeof params?.fuel_tariffs?.ice_diesel_krw_per_liter === 'number' &&
+      Number.isFinite(params.fuel_tariffs.ice_diesel_krw_per_liter)
+        ? params.fuel_tariffs.ice_diesel_krw_per_liter
+        : fallbackTco.fuel_tariffs.ice_diesel_krw_per_liter,
+  };
+  const efficiencyBaselines = params?.efficiency_baselines ?? fallbackTco.efficiency_baselines;
+  const taxParameters = params?.tax_parameters ?? fallbackTco.tax_parameters;
+  const auxiliaryBenefits = {
+    expressway_toll_discount_rate:
+      typeof params?.auxiliary_benefits?.expressway_toll_discount_rate === 'number' &&
+      Number.isFinite(params.auxiliary_benefits.expressway_toll_discount_rate)
+        ? params.auxiliary_benefits.expressway_toll_discount_rate
+        : fallbackTco.auxiliary_benefits.expressway_toll_discount_rate,
+    annual_toll_savings_krw:
+      typeof params?.auxiliary_benefits?.annual_toll_savings_krw === 'number' &&
+      Number.isFinite(params.auxiliary_benefits.annual_toll_savings_krw)
+        ? params.auxiliary_benefits.annual_toll_savings_krw
+        : fallbackTco.auxiliary_benefits.annual_toll_savings_krw,
+    public_parking_discount_rate:
+      typeof params?.auxiliary_benefits?.public_parking_discount_rate === 'number' &&
+      Number.isFinite(params.auxiliary_benefits.public_parking_discount_rate)
+        ? params.auxiliary_benefits.public_parking_discount_rate
+        : fallbackTco.auxiliary_benefits.public_parking_discount_rate,
+    annual_parking_savings_krw:
+      typeof params?.auxiliary_benefits?.annual_parking_savings_krw === 'number' &&
+      Number.isFinite(params.auxiliary_benefits.annual_parking_savings_krw)
+        ? params.auxiliary_benefits.annual_parking_savings_krw
+        : fallbackTco.auxiliary_benefits.annual_parking_savings_krw,
+    maintenance_annual_savings_krw:
+      typeof params?.auxiliary_benefits?.maintenance_annual_savings_krw === 'number' &&
+      Number.isFinite(params.auxiliary_benefits.maintenance_annual_savings_krw)
+        ? params.auxiliary_benefits.maintenance_annual_savings_krw
+        : fallbackTco.auxiliary_benefits.maintenance_annual_savings_krw,
+  };
 
   const parsedSlowRatio = typeof slowChargingRatio === 'number'
     ? slowChargingRatio
@@ -1589,31 +1650,6 @@ export function calculateTcoComparison(
     ? Number((years as string).trim())
     : NaN;
 
-  if (parsedYears === 0) {
-    return {
-      annualKm: safeAnnualKm,
-      years: 0,
-      totalKm: 0,
-      evEfficiencyKmPerKwh: safeEvEff,
-      iceFuelEconomyKmPerLiter: safeIceEff,
-      blendedElectricityTariffKrwPerKwh: Math.round(blendedTariff * 100) / 100,
-      gasolinePriceKrwPerLiter: fuelTariffs.ice_gasoline_krw_per_liter,
-      evFuelCostPerKm: Math.round(evCostPerKm * 100) / 100,
-      iceFuelCostPerKm: Math.round(iceCostPerKm * 100) / 100,
-      evTotalFuelCostKrw: 0,
-      iceTotalFuelCostKrw: 0,
-      fuelSavingsKrw: 0,
-      evTotalTaxKrw: 0,
-      iceTotalTaxKrw: 0,
-      taxSavingsKrw: 0,
-      tollSavingsKrw: 0,
-      parkingSavingsKrw: 0,
-      maintenanceSavingsKrw: 0,
-      totalAuxiliarySavingsKrw: 0,
-      totalCumulativeSavingsKrw: 0,
-      yearlyBreakdown: [],
-    };
-  }
   const rawYears = Math.min(30, Number.isFinite(parsedYears) && parsedYears > 0 ? parsedYears : 1);
   const safeYears = Math.max(1, Math.round(rawYears));
   const fullYears = Math.floor(rawYears);

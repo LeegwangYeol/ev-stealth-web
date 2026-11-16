@@ -208,6 +208,23 @@ for (const { name, mod } of engines) {
   check(tco20.yearlyBreakdown.length === 20, '20 year breakdown has 20 rows');
   check(tco20.totalCumulativeSavingsKrw > 0, '20 year cumulative savings positive');
 
+  // 5.5 TCO with partial customParams (empty fuel_tariffs / auxiliary_benefits)
+  const tcoPartial = mod.calculateTcoComparison(15000, 5, 5.2, 0.7, 1998, { fuel_tariffs: {}, auxiliary_benefits: {} });
+  check(Number.isFinite(tcoPartial.totalCumulativeSavingsKrw), 'Partial customParams TCO cumulative savings must be finite');
+  check(!Number.isNaN(tcoPartial.evTotalFuelCostKrw), 'Partial customParams EV fuel cost must not be NaN');
+  check(!Number.isNaN(tcoPartial.tollSavingsKrw), 'Partial customParams toll savings must not be NaN');
+  check(tcoPartial.totalCumulativeSavingsKrw > 0, 'Partial customParams total savings remains positive');
+
+  // 5.6 Subsidy clawback with NaN custom clawback_rate
+  const cbNan = mod.calculateSubsidyClawback(1, 4000000, 'inter', 6500000, [{ min_months: 0, max_months_exclusive: 10, clawback_rate: NaN, label_ko: 'test' }]);
+  check(Number.isFinite(cbNan.totalClawbackKrw), 'NaN custom tier rate must produce finite clawback');
+  check(cbNan.statutoryClawbackRate === 0, 'NaN custom rate clamped to 0');
+
+  // 5.7 Battery health simulation with partial custom chemistry
+  const batPartialChem = mod.simulateBatteryHealth({ years: 3, totalKm: 45000 }, { NCM_811: {} });
+  check(typeof batPartialChem.chemistryName === 'string' && batPartialChem.chemistryName.length > 0, 'Partial custom chem has valid name');
+  check(Number.isFinite(batPartialChem.sohPct), 'Partial custom chem SOH is finite');
+
   console.log(`  ✓ All tests passed for ${name}\n`);
 }
 

@@ -227,6 +227,19 @@ def _atomic_copy_file(src_path: Union[str, Path], dest_path: Union[str, Path]) -
                 pass
 
 
+def _is_valid_daily_report(path: Union[str, Path]) -> bool:
+    """Validate that path points to an uncorrupted daily reports JSON file with 'reports' list."""
+    try:
+        p = Path(path)
+        if not p.is_file() or p.stat().st_size == 0:
+            return False
+        with open(p, "r", encoding="utf-8-sig") as f:
+            d = json.load(f)
+        return isinstance(d, dict) and "reports" in d and isinstance(d["reports"], list)
+    except Exception:
+        return False
+
+
 _TARGET_DATE_RE = re.compile(r"^(\d{4})[./\-](\d{1,2})[./\-](\d{1,2})$")
 
 
@@ -387,8 +400,16 @@ class ScraperPipeline:
         cache_fallback: bool = False,
         cache_dir: Optional[Union[str, Path]] = None,
     ):
-        self.connect_timeout = float(connect_timeout) if connect_timeout > 0 else 5.0
-        self.read_timeout = float(read_timeout) if read_timeout > 0 else 15.0
+        try:
+            val_conn = float(connect_timeout) if connect_timeout is not None else 5.0
+            self.connect_timeout = val_conn if val_conn > 0 else 5.0
+        except (ValueError, TypeError):
+            self.connect_timeout = 5.0
+        try:
+            val_read = float(read_timeout) if read_timeout is not None else 15.0
+            self.read_timeout = val_read if val_read > 0 else 15.0
+        except (ValueError, TypeError):
+            self.read_timeout = 15.0
         self.enable_cache = enable_cache
         self.cache_fallback = cache_fallback
         self._custom_cache_dir = Path(cache_dir) if cache_dir else None
@@ -771,7 +792,7 @@ class ScraperPipeline:
         existing_mirror: Optional[str] = None
         if len(defect_complaints) == 0:
             for p in unique_paths:
-                if os.path.exists(p) and os.path.isfile(p) and os.path.getsize(p) > 0:
+                if _is_valid_daily_report(p):
                     existing_mirror = p
                     break
             # Fallback to canonical repository baseline mirror if unique target paths do not exist yet
@@ -787,7 +808,7 @@ class ScraperPipeline:
                 for bc in baseline_candidates:
                     try:
                         bp = str(bc.resolve()) if hasattr(bc, "resolve") else str(bc)
-                        if os.path.exists(bp) and os.path.isfile(bp) and os.path.getsize(bp) > 0:
+                        if _is_valid_daily_report(bp):
                             existing_mirror = bp
                             break
                     except Exception:
@@ -810,16 +831,16 @@ class ScraperPipeline:
                     results_summary["written_paths"].append(written_path)
                     logger.info(f"Successfully published daily reports to: {written_path}")
                 else:
-                    # Graceful degradation: preserve existing data if file exists and scrape is empty
-                    if os.path.exists(out_path):
+                    # Graceful degradation: preserve existing data if file exists and has valid schema
+                    if _is_valid_daily_report(out_path):
                         logger.warning(
                             f"Scrape produced 0 authentic defects. Preserving existing reports at {out_path}."
                         )
                         results_summary["preserved_paths"].append(out_path)
                     elif existing_mirror is not None:
-                        # Replicate authentic content from the existing mirror instead of creating an empty payload
+                        # Replicate authentic content from the existing mirror instead of creating an empty payload or leaving corrupt file
                         logger.warning(
-                            f"Scrape produced 0 authentic defects and {out_path} does not exist. "
+                            f"Scrape produced 0 authentic defects and {out_path} is missing or invalid. "
                             f"Replicating authentic contents from existing mirror at {existing_mirror}."
                         )
                         _atomic_copy_file(existing_mirror, out_path)

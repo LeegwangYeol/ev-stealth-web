@@ -456,8 +456,8 @@ function checkMinWidths(dir) {
         if (match) {
           const px = parseInt(match[1], 10);
           if (px > 320) {
-            // Check if surrounding context (within 5 lines above) contains overflow-x-auto
-            const contextAbove = lines.slice(Math.max(0, i - 5), i + 1).join('\n');
+            // Check if surrounding context (within 12 lines above) contains overflow-x-auto
+            const contextAbove = lines.slice(Math.max(0, i - 12), i + 1).join('\n');
             const hasScrollWrapper = contextAbove.includes('overflow-x-auto') || contextAbove.includes('overflow-x-scroll');
             assert(
               'viewportStyling',

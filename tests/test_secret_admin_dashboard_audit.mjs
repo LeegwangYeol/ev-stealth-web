@@ -23,6 +23,7 @@ const rawDashboardClient = fs.readFileSync(dashboardClientPath, 'utf-8');
 // 1. URL Sanitization Tests
 test('getDailyReports.ts: sanitizeReportUrl blocks dangerous URI schemes', async () => {
   const patched = rawDailyReports
+    .replace(/from '\.\/reportCalculations(?:\.ts)?';/, "from '../src/lib/reportCalculations.ts';")
     .replace(/from '\.\/sanitizeUrl(?:\.ts)?';/, "from '../src/lib/sanitizeUrl.ts';")
     .replace(/from '\.\.\/data\/daily_reports\.json' with \{ type: 'json' \};/, "from '../src/data/daily_reports.json' with { type: 'json' };");
 
@@ -229,6 +230,7 @@ test('getDailyReports.ts and page.tsx: Safe JSON parsing, empty reports handling
 // 8. Deduplication Engine & Status Display Audit
 test('getDailyReports.ts and AdminDashboardClient.tsx: Deduplication engine & status display', async () => {
   const patched = rawDailyReports
+    .replace(/from '\.\/reportCalculations(?:\.ts)?';/, "from '../src/lib/reportCalculations.ts';")
     .replace(/from '\.\/sanitizeUrl(?:\.ts)?';/, "from '../src/lib/sanitizeUrl.ts';")
     .replace(/from '\.\.\/data\/daily_reports\.json' with \{ type: 'json' \};/, "from '../src/data/daily_reports.json' with { type: 'json' };");
 
@@ -274,6 +276,7 @@ test('getDailyReports.ts and AdminDashboardClient.tsx: Deduplication engine & st
 // 9. Security Audit: Sensitive Data Leakage Protection
 test('Security Sanitization: Mask internal paths, sensitive tokens, author PII, SSRF loopback URLs', async () => {
   const patched = rawDailyReports
+    .replace(/from '\.\/reportCalculations(?:\.ts)?';/, "from '../src/lib/reportCalculations.ts';")
     .replace(/from '\.\/sanitizeUrl(?:\.ts)?';/, "from '../src/lib/sanitizeUrl.ts';")
     .replace(/from '\.\.\/data\/daily_reports\.json' with \{ type: 'json' \};/, "from '../src/data/daily_reports.json' with { type: 'json' };");
 

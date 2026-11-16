@@ -44,12 +44,16 @@ _last_temp_dir_cleanup_time: float = 0.0
 _cleanup_meta_lock = threading.Lock()
 
 
-def is_pid_alive(pid: int) -> bool:
+def is_pid_alive(pid: Any) -> bool:
     """Check if process with given PID is currently running."""
-    if pid <= 0:
+    try:
+        pid_int = int(pid)
+    except (ValueError, TypeError):
+        return False
+    if pid_int <= 0:
         return False
     try:
-        os.kill(pid, 0)
+        os.kill(pid_int, 0)
         return True
     except ProcessLookupError:
         return False
@@ -73,13 +77,17 @@ def read_lock_metadata(lock_path: Union[str, Path]) -> Tuple[Optional[int], Opti
             line = line.strip()
             if line.startswith("pid="):
                 try:
-                    pid = int(line.split("=", 1)[1])
-                except ValueError:
+                    parsed_pid = int(line.split("=", 1)[1])
+                    if parsed_pid > 0:
+                        pid = parsed_pid
+                except (ValueError, TypeError):
                     pass
             elif line.startswith("time="):
                 try:
-                    ts = float(line.split("=", 1)[1])
-                except ValueError:
+                    parsed_ts = float(line.split("=", 1)[1])
+                    if not math.isnan(parsed_ts) and not math.isinf(parsed_ts):
+                        ts = parsed_ts
+                except (ValueError, TypeError):
                     pass
         return pid, ts
     except OSError:
@@ -119,9 +127,9 @@ class FileLock:
         if not lock_path or not str(lock_path).strip():
             raise ValueError("lock_path cannot be empty")
         self.lock_path = str(Path(lock_path).resolve())
-        self.timeout = timeout
-        self.poll_interval = poll_interval
-        self.stale_timeout = stale_timeout
+        self.timeout = max(0.0, float(timeout)) if timeout is not None else 10.0
+        self.poll_interval = max(0.001, float(poll_interval)) if poll_interval is not None else 0.02
+        self.stale_timeout = max(0.1, float(stale_timeout)) if stale_timeout is not None else 300.0
         self.fail_on_timeout = fail_on_timeout
         self.fd: Optional[int] = None
         self.acquired: bool = False
@@ -456,6 +464,8 @@ def cleanup_stale_temp_files(
     max_age_seconds: float = 3600.0,
 ) -> int:
     """Defensively unlink orphaned temporary files older than max_age_seconds."""
+    if not directory or not str(directory).strip():
+        return 0
     d = Path(directory)
     if not d.is_dir():
         return 0
@@ -464,9 +474,10 @@ def cleanup_stale_temp_files(
     prefixes = (prefix,) if isinstance(prefix, str) else tuple(prefix)
     try:
         for entry in d.iterdir():
-            if any(entry.name.startswith(p) for p in prefixes) and entry.is_file():
+            if any(entry.name.startswith(p) for p in prefixes):
                 try:
-                    if (now - entry.stat().st_mtime) > max_age_seconds:
+                    st = entry.lstat()
+                    if (now - st.st_mtime) > max_age_seconds:
                         entry.unlink(missing_ok=True)
                         cleaned += 1
                 except OSError:
@@ -483,6 +494,8 @@ def cleanup_stale_lock_files(
     max_age_seconds: float = 3600.0,
 ) -> int:
     """Defensively clean up orphaned advisory lock files older than max_age_seconds if unheld."""
+    if not directory or not str(directory).strip():
+        return 0
     d = Path(directory)
     if not d.is_dir():
         return 0
@@ -584,8 +597,10 @@ def cleanup_stale_lock_files(
     return cleaned
 
 
-def is_corrupted_or_quarantined_filename(filename_or_path: Union[str, Path]) -> bool:
+def is_corrupted_or_quarantined_filename(filename_or_path: Union[str, Path, None]) -> bool:
     """Return True if filename indicates a quarantined or corrupted payload."""
+    if not filename_or_path:
+        return False
     name = Path(filename_or_path).name.lower()
     return (
         ".corrupted" in name
@@ -770,6 +785,8 @@ def sanitize_nan_inf(obj: Any, seen: Optional[set[int]] = None) -> Any:
                     sanitized_k = str(k)
                 elif isinstance(k, uuid.UUID):
                     sanitized_k = str(k)
+                elif isinstance(k, (complex, tuple)):
+                    sanitized_k = str(k)
                 else:
                     sanitized_k = k
                 res[sanitized_k] = sanitize_nan_inf(v, seen)
@@ -814,18 +831,13 @@ def _json_default(obj: Any) -> Any:
         return obj.decode("utf-8", errors="replace")
     if isinstance(obj, uuid.UUID):
         return str(obj)
-    if hasattr(obj, "to_dict") and callable(getattr(obj, "to_dict")):
-        return sanitize_nan_inf(obj.to_dict())
-    if hasattr(obj, "as_dict") and callable(getattr(obj, "as_dict")):
-        return sanitize_nan_inf(obj.as_dict())
-    if hasattr(obj, "model_dump") and callable(getattr(obj, "model_dump")):
-        return sanitize_nan_inf(obj.model_dump())
-    if hasattr(obj, "dict") and callable(getattr(obj, "dict")):
-        return sanitize_nan_inf(obj.dict())
-    if hasattr(obj, "tolist") and callable(getattr(obj, "tolist")):
-        return sanitize_nan_inf(obj.tolist())
-    if hasattr(obj, "item") and callable(getattr(obj, "item")):
-        return sanitize_nan_inf(obj.item())
+    for meth in ("to_dict", "as_dict", "model_dump", "dict", "tolist", "item"):
+        fn = getattr(obj, meth, None)
+        if callable(fn):
+            try:
+                return sanitize_nan_inf(fn())
+            except TypeError:
+                pass
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         return sanitize_nan_inf(dataclasses.asdict(obj))
     if isinstance(obj, Mapping):
@@ -877,6 +889,8 @@ def atomic_write_json(
     if not target_path or not str(target_path).strip():
         raise ValueError("target_path cannot be empty")
     dest = Path(target_path).resolve()
+    if dest.is_dir():
+        raise IsADirectoryError(f"Target path is an existing directory: {dest}")
     dest_dir = dest.parent
     dest_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1084,6 +1098,9 @@ def atomic_write_json_multiple(
     for p in target_paths:
         if not p or not str(p).strip():
             raise ValueError("target_path cannot be empty")
+        resolved = Path(p).resolve()
+        if resolved.is_dir():
+            raise IsADirectoryError(f"Target path is an existing directory: {resolved}")
 
     # Serialize and sanitize once across all destination writes
     if hasattr(data, "to_dict") and callable(getattr(data, "to_dict")):
@@ -1162,6 +1179,8 @@ def atomic_write_text(
     if not target_path or not str(target_path).strip():
         raise ValueError("target_path cannot be empty")
     dest = Path(target_path).resolve()
+    if dest.is_dir():
+        raise IsADirectoryError(f"Target path is an existing directory: {dest}")
     dest_dir = dest.parent
     dest_dir.mkdir(parents=True, exist_ok=True)
 

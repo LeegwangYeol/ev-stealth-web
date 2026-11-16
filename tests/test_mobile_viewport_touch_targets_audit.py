@@ -12,7 +12,8 @@ import re
 import pytest
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC_DIR = os.path.join(BASE_DIR, "src")
+WEB_DIR = os.path.join(BASE_DIR, "ev-stealth-web") if os.path.isdir(os.path.join(BASE_DIR, "ev-stealth-web")) else BASE_DIR
+SRC_DIR = os.path.join(WEB_DIR, "src")
 
 
 def test_viewport_meta_tag_configuration():
@@ -62,8 +63,8 @@ def test_globals_css_safe_area_and_ios_zoom_prevention():
 
 def test_tailwind_config_mobile_screens():
     """Verify tailwind.config.ts defines xs and xxs mobile breakpoints."""
-    tailwind_path = os.path.join(BASE_DIR, "tailwind.config.ts")
-    assert os.path.exists(tailwind_path), "tailwind.config.ts must exist"
+    tailwind_path = os.path.join(WEB_DIR, "tailwind.config.ts")
+    assert os.path.exists(tailwind_path), f"tailwind.config.ts must exist at {tailwind_path}"
 
     with open(tailwind_path, "r", encoding="utf-8") as f:
         content = f.read()

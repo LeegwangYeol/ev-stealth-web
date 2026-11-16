@@ -126,6 +126,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     (re.compile(r"(니로\s*(?:일렉트릭|일렉|ev|플러스|전기차)|niro\s*ev)", re.IGNORECASE), "니로 EV", BRAND_KIA),
     (re.compile(r"(레이\s*(?:ev|전기차)|ray\s*ev)", re.IGNORECASE), "레이 EV", BRAND_KIA),
     (re.compile(r"(봉고\s*(?:일렉트릭|일렉|ev|전기차)|bongo\s*ev)", re.IGNORECASE), "봉고 EV", BRAND_KIA),
+    (re.compile(r"(쏘울\s*(?:일렉트릭|일렉|ev|전기차)|soul\s*ev)", re.IGNORECASE), "쏘울 EV", BRAND_KIA),
 
     # -----------------------------------------------------------------
     # BMW M3 (Precedes Tesla Model 3 to prevent M3 Competition collision)
@@ -135,7 +136,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     # -----------------------------------------------------------------
     # Tesla Models & Colloquialisms
     # -----------------------------------------------------------------
-    (re.compile(r"(모델\s*(?:3|쓰리|스리)\s*하이랜드|model\s*3\s*highland|m3\s*(?:highland|하이랜드)|하이랜드|highland)", re.IGNORECASE), "Model 3 Highland", BRAND_TESLA),
+    (re.compile(r"(모델\s*(?:3|쓰리|스리)\s*하이랜드|model\s*3\s*highland|m3\s*(?:highland|하이랜드)|하이랜드(?![a-zA-Z0-9가-힣])|(?<![a-zA-Z0-9])highland(?![a-zA-Z0-9]))", re.IGNORECASE), "Model 3 Highland", BRAND_TESLA),
     (re.compile(
         r"(모델\s*(?:3|쓰리|스리)|model\s*3|모삼|모\s*3"
         r"|(?:테슬라\s*)?삼식이"
@@ -151,7 +152,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
         r")",
         re.IGNORECASE,
     ), "Model 3", BRAND_TESLA),
-    (re.compile(r"(모델\s*(?:y|와이)\s*주니퍼|model\s*y\s*juniper|my\s*(?:주니퍼|juniper)|주니퍼|juniper)", re.IGNORECASE), "Model Y Juniper", BRAND_TESLA),
+    (re.compile(r"(모델\s*(?:y|와이)\s*주니퍼|model\s*y\s*juniper|my\s*(?:주니퍼|juniper)|주니퍼(?!\s*(?:네트웍스|networks|라우터|router|스위치|switch))(?![a-zA-Z0-9가-힣])|(?<![a-zA-Z0-9])juniper(?!\s*(?:networks|router|switch))(?![a-zA-Z0-9]))", re.IGNORECASE), "Model Y Juniper", BRAND_TESLA),
     (re.compile(
         r"(모델\s*(?:y|와이)|model\s*y|모와|모\s*[y와]"
         r"|(?:테슬라\s*|tesla\s*)my"
@@ -165,7 +166,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
         r"|(?:테슬라\s*|tesla\s*)ms"
         r"|(?<!\d\s)(?<!\d)(?<![a-zA-Z0-9])ms(?=[은는이가을를의에과와도만로랑처조마나한께보부까]|으로|보다|부터|까지|처럼|조차|마저|한테|입|했|하|인|임|일)"
         r"|(?<!\d\s)(?<!\d)(?<![a-zA-Z0-9])ms\s*(?:플래드|plaid|롱레인지|롱레|퍼포먼스|차주|오너|출고|인도|계약|단차|결함|승차감)"
-        r"|(?<!\d\s)(?<!\d)(?<![a-zA-Z0-9])ms(?!\s*(?:윈도우|windows|오피스|office|팀즈|teams|서피스|surface|소프트웨어|주가|주식|시총|초|sec))(?=\s|$|[^a-zA-Z0-9가-힣])"
+        r"|(?<!\d\s)(?<!\d)(?<![a-zA-Z0-9])ms(?!\s*(?:윈도우|windows|오피스|office|팀즈|teams|서피스|surface|소프트웨어|주가|주식|시총|초|sec|워드|word|애저|azure|클라우드|cloud|사|계정|account))(?=\s|$|[^a-zA-Z0-9가-힣])"
         r")",
         re.IGNORECASE,
     ), "Model S", BRAND_TESLA),
@@ -174,7 +175,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
         r"|(?:테슬라\s*|tesla\s*)mx"
         r"|(?<![a-zA-Z0-9])mx(?=[은는이가을를의에과와도만로랑처조마나한께보부까]|으로|보다|부터|까지|처럼|조차|마저|한테|입|했|하|인|임|일)"
         r"|(?<![a-zA-Z0-9])mx\s*(?:플래드|plaid|롱레인지|롱레|팔콘윙|falcon|차주|오너|출고|인도|계약|단차|결함|승차감)"
-        r"|(?<![a-zA-Z0-9])mx(?!\s*(?:마스터|master|애니웨어|anywhere|버티컬|vertical|키즈|keys|-5|-30))(?=\s|$|[^a-zA-Z0-9가-힣])"
+        r"|(?<![a-zA-Z0-9])mx(?!\s*(?:마스터|master|애니웨어|anywhere|버티컬|vertical|키즈|keys|-5|-30|레코드|record|플레이어|player))(?=\s|$|[^a-zA-Z0-9가-힣])"
         r")",
         re.IGNORECASE,
     ), "Model X", BRAND_TESLA),
@@ -252,7 +253,7 @@ BRAND_KEYWORDS: List[Tuple[Pattern[str], str]] = [
     (re.compile(r"(제네시스|genesis|(?:(?:electrified|일렉트리파이드)\s*)?(?:gv\s*60|gv\s*70|g\s*80))", re.IGNORECASE), BRAND_HYUNDAI),
     (re.compile(r"(기아차|기아\s*전기차|기아|오토큐|기아\s*(?:ev|이[븨브]이?))", re.IGNORECASE), BRAND_KIA),
     (re.compile(r"(byd|비야디|짱깨차|짱차|중국\s*전기차)", re.IGNORECASE), BRAND_BYD),
-    (re.compile(r"(벤츠|mercedes|mercedes-benz|bmw|비엠더블유|비엠|아우디|audi|포르쉐|porsche|폴스타|polestar|볼보|volvo|쉐보레|chevrolet|chevy|캐딜락|cadillac|폭스바겐|volkswagen|vw|리비안|rivian|루시드|lucid|샤오미|xiaomi|쌍용|쌍용차|kgm|케이지엠|kg\s*모빌리티)", re.IGNORECASE), BRAND_OTHER),
+    (re.compile(r"(벤츠|mercedes|mercedes-benz|bmw|비엠더블유|비엠|아우디|audi|포르쉐|porsche|폴스타|polestar|볼보|volvo|쉐보레|chevrolet|chevy|캐딜락|cadillac|폭스바겐|volkswagen|vw|리비안|rivian|루시드|lucid|샤오미|xiaomi|쌍용|쌍용차|kgm|케이지엠|kg\s*모빌리티|르노|renault|르노코리아|푸조|peugeot|지프|jeep)", re.IGNORECASE), BRAND_OTHER),
 ]
 
 

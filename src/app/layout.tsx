@@ -189,12 +189,12 @@ export default function RootLayout({
         </a>
 
         <header role="banner" className="bg-slate-900 text-white shadow-md sticky top-0 z-50 print:hidden">
-          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+          <div className="max-w-6xl mx-auto px-3 xs:px-4 py-2.5 xs:py-3 flex items-center justify-between gap-2 xs:gap-4">
             <Link
               href="/"
               prefetch={false}
               aria-label="Global EV Hub 홈으로 이동"
-              className="text-xl font-bold tracking-tight hover:text-blue-300 transition shrink-0 flex items-center gap-2 min-h-[44px] focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded-lg aria-[current=page]:text-blue-400"
+              className="text-lg xs:text-xl font-bold tracking-tight hover:text-blue-300 transition shrink flex items-center gap-1.5 xs:gap-2 min-h-[44px] focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded-lg aria-[current=page]:text-blue-400"
             >
               <span aria-hidden="true">⚡</span> Global EV Hub
             </Link>
@@ -241,7 +241,7 @@ export default function RootLayout({
                 aria-haspopup="dialog"
                 aria-expanded="false"
                 aria-controls="mobile-nav-panel"
-                className="list-none [&::-webkit-details-marker]:hidden flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-sm font-medium cursor-pointer border border-slate-700 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 select-none"
+                className="list-none [&::-webkit-details-marker]:hidden flex items-center gap-1.5 px-2.5 xs:px-3 py-2 min-h-[44px] rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-sm font-medium cursor-pointer border border-slate-700 focus:outline-none focus:ring-2 focus-visible:ring-2 focus-visible:ring-blue-400 select-none"
               >
                 <svg className="w-5 h-5 block group-open:hidden" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />

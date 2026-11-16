@@ -12,7 +12,7 @@ import {
   stripHtmlTags,
   type DailyReportData,
   type DefectReportItem,
-} from '@/lib/getDailyReports';
+} from '@/lib/reportCalculations';
 import { isExternalUrl, safeJsonParse } from '@/lib/sanitizeUrl';
 import ClientTimestamp from '@/components/ClientTimestamp';
 
@@ -1519,7 +1519,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                         <span>{report.title}</span>
                         {isExt ? (
                           <a
-                            href={report.url}
+                            href={safeUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             aria-label="게시글 원문 보기"
@@ -1722,10 +1722,13 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
       {/* Accessible Detail Modal Dialog for Admin Defect Inspection */}
       {activeModalReport && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto"
-          onClick={handleCloseModal}
-        >
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          {/* Backdrop overlay */}
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
+            aria-hidden="true"
+            onClick={handleCloseModal}
+          />
           <div
             role="dialog"
             aria-modal="true"
@@ -1733,8 +1736,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             aria-describedby="defect-modal-desc"
             ref={modalRef}
             onKeyDown={handleModalKeyDown}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-3xl max-w-2xl w-full max-h-[calc(100vh-2rem)] overflow-y-auto p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-6 relative focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 my-4 sm:my-8"
+            className="bg-white rounded-3xl max-w-2xl w-full max-h-[calc(100vh-2rem)] overflow-y-auto p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-6 relative focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 my-4 sm:my-8 z-10"
             tabIndex={-1}
           >
             {/* Modal Header */}

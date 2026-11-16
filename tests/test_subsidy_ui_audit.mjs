@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
-import { getBadgeStyle, getStatusLabel } from '../src/components/subsidy/SubsidyBadge.tsx';
+import { getBadgeStyle, getStatusLabel } from '../src/lib/subsidyCalculations.ts';
 
 console.log('--- Testing Subsidy UI Client & Table Comprehensive Audit ---');
 

@@ -66,8 +66,8 @@ assert.ok(
   'error.tsx must not use borderline text-slate-500 on white background'
 );
 assert.ok(
-  errorCode.includes('text-slate-600'),
-  'error.tsx must use text-slate-600 for AA-compliant contrast on white background'
+  errorCode.includes('text-slate-600') || errorCode.includes('text-slate-700'),
+  'error.tsx must use text-slate-600 or text-slate-700 for AA/AAA-compliant contrast on white background'
 );
 
 // 1.5 Accordion expansion keyboard accessibility (Escape to close and focus return)

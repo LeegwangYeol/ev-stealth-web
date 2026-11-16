@@ -24,7 +24,7 @@ import signal
 import sys
 import tempfile
 import threading
-from typing import Any, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 # Ensure repository root and tracker package are on sys.path
 _CURRENT_DIR = Path(__file__).resolve().parent
@@ -535,10 +535,16 @@ def auto_heal_mirrored_parity(repo_root: Optional[Path] = None) -> List[str]:
             if fp.is_file() and fp.stat().st_size > 0:
                 try:
                     content = fp.read_bytes()
-                    json.loads(content.decode("utf-8-sig"))
+                    parsed = json.loads(content.decode("utf-8-sig"))
                     h = hashlib.sha256(content).hexdigest()
                     hashes[fp] = h
-                    score = (1, fp.stat().st_mtime)
+                    # For daily_reports, prioritize candidates with actual defect reports over empty shells
+                    priority = 1
+                    if fname == "daily_reports.json" and isinstance(parsed, dict):
+                        raw_reps = parsed.get("reports")
+                        rep_count = len(raw_reps) if isinstance(raw_reps, list) else 0
+                        priority = 2 if rep_count >= 4 else (1 if rep_count > 0 else 0)
+                    score = (priority, fp.stat().st_mtime)
                     if best_cand is None or score > (best_cand[0], best_cand[1]):
                         best_cand = (score[0], score[1], fp, h, content)
                 except Exception:

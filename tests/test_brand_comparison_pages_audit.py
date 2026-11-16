@@ -155,6 +155,59 @@ class TestBrandComparisonPagesAudit(unittest.TestCase):
         self.assertIn('aria-labelledby="heading-other-brands"', content, "OtherBrandsCrossNav missing aria-labelledby linking heading")
         self.assertIn("brand.badge", content, "OtherBrandsCrossNav must render brand badges")
 
+    def test_json_ld_schemas_completeness_and_breadcrumbs(self):
+        """All brand pages must define comprehensive JSON-LD graphs including Article, Vehicle, ItemList, FAQPage, BreadcrumbList."""
+        for route in self.brand_routes:
+            page_path = os.path.join(self.app_dir, route, "page.tsx")
+            with open(page_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            self.assertIn("<JsonLd", content, f"{route} missing <JsonLd component")
+            self.assertIn("'@type': 'Article'", content, f"{route} JSON-LD missing Article")
+            self.assertIn("'@type': 'Vehicle'", content, f"{route} JSON-LD missing Vehicle")
+            self.assertIn("'@type': 'ItemList'", content, f"{route} JSON-LD missing ItemList")
+            self.assertIn("'@type': 'FAQPage'", content, f"{route} JSON-LD missing FAQPage")
+            self.assertIn("'@type': 'BreadcrumbList'", content, f"{route} JSON-LD missing BreadcrumbList")
+
+            # Check that BreadcrumbList contains root and route
+            self.assertIn("name: '홈'", content, f"{route} BreadcrumbList missing '홈'")
+            self.assertIn("SITE_URL", content, f"{route} BreadcrumbList missing SITE_URL")
+
+    def test_responsive_tables_mobile_guidance_and_scope(self):
+        """Summary tables must include mobile scroll guidance, table caption, scope attributes, and min-width."""
+        for route in self.brand_routes:
+            page_path = os.path.join(self.app_dir, route, "page.tsx")
+            with open(page_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            self.assertIn("<caption", content, f"{route} summary table missing <caption> for screen readers")
+            self.assertIn('scope="col"', content, f"{route} table headers missing scope=\"col\"")
+            self.assertIn('scope="row"', content, f"{route} row headers missing scope=\"row\"")
+            self.assertIn("min-w-[640px]", content, f"{route} table missing min-w-[640px] responsive guard")
+            self.assertIn("sm:hidden", content, f"{route} table missing mobile horizontal scroll visual hint")
+            self.assertIn("가로 스크롤", content, f"{route} table missing horizontal scroll Korean badge")
+
+    def test_model_spec_warranty_cards_integration(self):
+        """All brand pages must render ModelSpecWarrantyCard for key models with battery specs and warranty."""
+        for route in self.brand_routes:
+            page_path = os.path.join(self.app_dir, route, "page.tsx")
+            with open(page_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            self.assertIn("<ModelSpecWarrantyCard", content, f"{route} missing ModelSpecWarrantyCard")
+            self.assertIn("batterySpecs={{", content, f"{route} ModelSpecWarrantyCard missing batterySpecs")
+            self.assertIn("warranty={{", content, f"{route} ModelSpecWarrantyCard missing warranty")
+
+    def test_touch_target_accessibility_in_tables_and_nav(self):
+        """Interactive table links and breadcrumb navigation must satisfy >= 44px touch targets."""
+        for route in self.brand_routes:
+            page_path = os.path.join(self.app_dir, route, "page.tsx")
+            with open(page_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # External table links must have min-h-[44px]
+            self.assertIn("min-h-[44px]", content, f"{route} table links must have min-h-[44px]")
+
 
 if __name__ == "__main__":
     unittest.main()

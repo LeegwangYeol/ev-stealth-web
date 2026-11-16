@@ -599,10 +599,12 @@ class TestCycle16FrontendRemediationsAndContracts(unittest.TestCase):
         self.assertEqual(output["top_model"], "해당 없음 (0건)")
         self.assertEqual(output["top_platform"], "해당 없음 (0%)")
 
-        # Also inspect getDailyReports.ts catch fallback
+        # Also inspect getDailyReports.ts and reportCalculations.ts catch fallback
         daily_src = (LIB_DIR / "getDailyReports.ts").read_text(encoding="utf-8")
-        self.assertIn("해당 없음 (0건)", daily_src)
-        self.assertIn("해당 없음 (0%)", daily_src)
+        calc_src = (LIB_DIR / "reportCalculations.ts").read_text(encoding="utf-8") if (LIB_DIR / "reportCalculations.ts").exists() else ""
+        combined_src = daily_src + "\n" + calc_src
+        self.assertIn("해당 없음 (0건)", combined_src)
+        self.assertIn("해당 없음 (0%)", combined_src)
 
     def test_14_get_subsidy_data_custom_msrp_and_default_model_resilience(self) -> None:
         """Verifies custom MSRP is clamped to 10 billion KRW ceiling and fallback model/region IDs."""

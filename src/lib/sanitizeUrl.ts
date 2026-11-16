@@ -166,13 +166,14 @@ export interface SanitizeUrlOptions {
 /**
  * Dangerous parameter keys and expressions associated with Prototype Pollution attacks.
  */
-export const PROTOTYPE_POLLUTION_REGEX = /^(?:__proto__|constructor|prototype)(?:[.[\]\s]|$)/i;
+export const PROTOTYPE_POLLUTION_REGEX = /^(?:__proto__|constructor|prototype|Object\.prototype)(?:[.[\]\s]|$)/i;
 
 /**
  * Decodes HTML entities (numeric decimal/hex and named entities) to uncover obfuscated URI schemes.
  * Handles decimal (&#58;), hex (&#x3a;), optional trailing semicolons, and common named entities (&colon;).
  */
 export function decodeHtmlEntities(str: string): string {
+  if (!str || typeof str !== 'string') return '';
   return str
     .replace(/&#x([0-9a-fA-F]+);?/gi, (_, hex) => {
       try {
@@ -209,6 +210,7 @@ export function decodeHtmlEntities(str: string): string {
  * Also neutralizes Microsoft %uXXXX unicode bypass patterns.
  */
 export function safeDecodePercent(str: string): string {
+  if (!str || typeof str !== 'string') return '';
   let prev = str;
   // Decode legacy %uXXXX encoding if present
   if (/%u[0-9a-fA-F]{4}/i.test(prev)) {
@@ -248,6 +250,7 @@ export function safeDecodePercent(str: string): string {
  * Uses a two-pass decode in case percent decoding reveals newly formed HTML entities.
  */
 export function extractAndNormalizeScheme(raw: string): string {
+  if (!raw || typeof raw !== 'string') return '';
   let decoded = safeDecodePercent(decodeHtmlEntities(raw));
   // Second pass: uncover nested entity sequences like %26colon; or %26%23x3a%3b
   decoded = safeDecodePercent(decodeHtmlEntities(decoded));
@@ -285,6 +288,7 @@ export function extractAndNormalizeScheme(raw: string): string {
  * Checks if a candidate URL is a malicious open redirect vector (protocol-relative, backslash, or encoded slashes).
  */
 export function isOpenRedirect(raw: string): boolean {
+  if (!raw || typeof raw !== 'string') return false;
   let decoded = safeDecodePercent(decodeHtmlEntities(raw));
   decoded = safeDecodePercent(decodeHtmlEntities(decoded));
   const trimmedDecoded = decoded.trim();
@@ -316,7 +320,7 @@ export function isOpenRedirect(raw: string): boolean {
  * Checks whether a parameter key (or its percent-decoded representation) matches a prototype pollution pattern.
  */
 export function isPrototypePollutionKey(key: string): boolean {
-  if (!key) return false;
+  if (!key || typeof key !== 'string') return false;
   // Raw check
   if (PROTOTYPE_POLLUTION_REGEX.test(key)) return true;
   // Decoded check to uncover percent-encoded keys (%5f%5fproto%5f%5f, %63onstructor, etc.)
@@ -334,7 +338,7 @@ export function isPrototypePollutionKey(key: string): boolean {
  * Retains all legitimate query parameters, paths, and anchors.
  */
 export function stripPrototypePollutionQueryParams(url: string): string {
-  if (!url || !url.includes('?')) return url;
+  if (!url || typeof url !== 'string' || !url.includes('?')) return typeof url === 'string' ? url : '';
 
   // Case 1: Absolute URL
   if (/^https?:\/\//i.test(url)) {
@@ -404,13 +408,21 @@ export function parseSafeQueryParams(input?: unknown): Record<string, string> {
   if (!input || typeof input !== 'string') return result;
 
   let searchStr = input.trim();
+  if (!searchStr) return result;
+
+  // If hash comes before question mark (e.g. /path#section?query=1), the query belongs to the hash fragment, not searchParams
+  const hashIndex = searchStr.indexOf('#');
   const qmarkIndex = searchStr.indexOf('?');
+  if (hashIndex !== -1 && (qmarkIndex === -1 || hashIndex < qmarkIndex)) {
+    return result;
+  }
+
   if (qmarkIndex !== -1) {
     searchStr = searchStr.slice(qmarkIndex + 1);
   }
-  const hashIndex = searchStr.indexOf('#');
-  if (hashIndex !== -1) {
-    searchStr = searchStr.slice(0, hashIndex);
+  const trailingHashIndex = searchStr.indexOf('#');
+  if (trailingHashIndex !== -1) {
+    searchStr = searchStr.slice(0, trailingHashIndex);
   }
   if (!searchStr) return result;
 
@@ -459,7 +471,7 @@ export function extractHostname(urlOrHost?: unknown): string {
  * Strictly prevents prefix/suffix spoofing (e.g. fake-ev.or.kr, ev.or.kr.evil.com).
  */
 export function matchDomain(candidateHost: string, trustedDomain: string): boolean {
-  if (!candidateHost || !trustedDomain) return false;
+  if (!candidateHost || !trustedDomain || typeof candidateHost !== 'string' || typeof trustedDomain !== 'string') return false;
   const normHost = candidateHost.toLowerCase().replace(/\.$/, '');
   const normTarget = trustedDomain.toLowerCase().replace(/\.$/, '');
   return normHost === normTarget || normHost.endsWith('.' + normTarget);
@@ -720,10 +732,19 @@ export function stripHtmlTags(input?: unknown): string {
   // 5. Decode common HTML entities (&quot;, &apos;, &amp;, &lt;, &gt;, &nbsp;, decimal, and hex entities)
   str = decodeHtmlEntities(str);
 
-  // 6. Second pass: in case decoding entities revealed newly formed tags (e.g., &lt;script&gt;)
-  if (str.includes('<') && str.includes('>')) {
+  // 6. Multi-pass tag removal in case decoding entities or nested structures revealed new tags (e.g. &lt;script&gt;)
+  let prevPass = '';
+  while (str.includes('<') && str !== prevPass) {
+    prevPass = str;
     str = str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    str = str.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+    str = str.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '');
+    str = str.replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '');
+    str = str.replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '');
+    str = str.replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '');
+    str = str.replace(/<template\b[^<]*(?:(?!<\/template>)<[^<]*)*<\/template>/gi, '');
     str = str.replace(/<[^>]+>/g, '');
+    str = str.replace(/<[a-zA-Z\/!?][^>]*$/g, '');
   }
 
   // 7. Neutralize any stray event handler attributes (e.g., onmouseover=, onerror=, onload=) or javascript: schemes

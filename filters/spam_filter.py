@@ -131,7 +131,9 @@ COMMERCIAL_SPAM_KEYWORDS: Tuple[str, ...] = (
     "카톡문의",
     "오픈카톡",
     "오픈채팅",
-    "텔레그램",
+    "텔레그램 상담",
+    "텔레그램 문의",
+    "텔레그램 리딩방",
     "선물옵션",
     "바카라",
     "출장안마",
@@ -200,7 +202,8 @@ CONTACT_SPAM_REGEXES: List[re.Pattern[str]] = [
     re.compile(r"(?:https?://)?t\.me/[a-zA-Z0-9_\-\./]+", re.IGNORECASE),
     re.compile(r"(?:https?://)?(?:bit\.ly|tinyurl\.com|me2\.do)/[a-zA-Z0-9_\-\./]+", re.IGNORECASE),
     re.compile(r"(?:카톡|텔레|라인|톡)\s*(?:아이디|ID|문의|상담|연락|주세요)\s*[:：]?\s*@?[a-zA-Z0-9_]{3,}", re.IGNORECASE),
-    re.compile(r"010[-.\s]?\d{4}[-.\s]?\d{4}\s*(?:로\s*)?(?:문의|상담|연락|문자)", re.IGNORECASE),
+    re.compile(r"010[-.\s]?\d{4}[-.\s]?\d{4}\s*(?:로\s*)?(?:문의|상담|연락|문자)\s*(?:주세요|바랍니다|환영|신청|대기|부탁|남겨|요망|가능)", re.IGNORECASE),
+    re.compile(r"(?:문의|상담|연락처|상담처)\s*[:：]\s*010[-.\s]?\d{4}[-.\s]?\d{4}", re.IGNORECASE),
 ]
 
 # Scam promotions, illegal gambling & predatory financial services

@@ -163,6 +163,10 @@ NEGATIVE_LEXICON: Dict[str, float] = {
     "식겁": -0.85,
     "죽는 줄": -0.95,
     "죽을 뻔": -0.98,
+    "심함": -0.75,
+    "심각": -0.85,
+    "개판": -0.85,
+    "개뿔": -0.70,
 }
 
 # Pre-compiled regular expressions for tokenization, boundary matching and ReDoS avoidance
@@ -192,7 +196,7 @@ _BASE_DEFECT_WORDS: Tuple[str, ...] = (
 )
 _ALL_DEFECT_TERMS_LIST: List[str] = list(_BASE_DEFECT_WORDS)
 for _entry in RAW_SLANG_ENTRIES:
-    if _entry.term not in _ALL_DEFECT_TERMS_LIST:
+    if _entry.defect_category is not None and _entry.term not in _ALL_DEFECT_TERMS_LIST:
         _ALL_DEFECT_TERMS_LIST.append(_entry.term)
 
 _SINGLE_PART_DEFECT_TERMS: Tuple[str, ...] = tuple(t for t in _ALL_DEFECT_TERMS_LIST if " " not in t)
@@ -419,6 +423,11 @@ class DefectClassifier:
             if w_strip == "안":
                 if j > 0 and window[j - 1] in ("말도", "납득이", "이해가"):
                     continue
+                # Hearsay contrastive: '안 난다더니', '안 들린다더니', '안 보인다더니'
+                if j + 1 < len(window) and any(
+                    window[j + 1].startswith(p) for p in ("난다더니", "들린다더니", "보인다더니")
+                ):
+                    continue
                 malfunction_verbs = (
                     "되고", "된다", "돼서", "됨", "돼",
                     "열리고", "열려", "열림", "열린다",
@@ -442,6 +451,14 @@ class DefectClassifier:
                     if any(window[j + 1].startswith(mv) for mv in malfunction_verbs):
                         continue
                     return True
+                continue
+
+            # Rhetorical and hearsay contrastive exclusions: '없기는 개뿔', '없기는커녕', '없다더니', '없다는데'
+            if w_strip.startswith(("없기는", "없다더니", "없다는데", "없다지만", "없긴")):
+                continue
+            if w_strip.startswith("없") and j + 1 < len(window) and window[j + 1] in (
+                "개뿔", "커녕", "무슨", "개뿔이", "들었는데", "하더니", "해서", "했으나", "봤는데"
+            ):
                 continue
 
             # 1. Any inflection of '없다' (e.g. 없다, 없고, 없음, 없네, 없습니다, 없네요, 없어서, 없더군요, 없더라고요, 없었던, 없었어요, 없는, 없으므로)
@@ -480,7 +497,8 @@ class DefectClassifier:
         non_negatable_terms = {"깜빡이", "v2l", "dsm", "mcu", "tcam", "hud", "아이오닉", "이븨", "이브이", "모델와이"}
         affirmative_occurrences = (
             "돼서", "됐다", "됨", "터져서", "터짐", "났음", "났다", "생겨서", "생김", "생겼", "심해서", "심함", "터져", "터졌",
-            "발생", "발생해", "발생함", "발생했다", "나타나", "나타남", "나타났다", "시작", "시작됨"
+            "발생", "발생해", "발생함", "발생했다", "나타나", "나타남", "나타났다", "시작", "시작됨",
+            "심하", "심해요", "심한", "개심함", "개판", "난리", "오지", "폭발"
         )
 
         for dw in _SINGLE_PART_DEFECT_TERMS:

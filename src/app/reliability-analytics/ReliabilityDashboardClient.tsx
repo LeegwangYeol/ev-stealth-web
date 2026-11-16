@@ -771,11 +771,15 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       const distA = brandAObj?.category_distribution?.[cat.code];
       const distB = brandBObj?.category_distribution?.[cat.code];
 
-      const shareA = typeof distA === 'object' && distA ? Number(distA.percentage || 0) : 0;
-      const countA = typeof distA === 'object' && distA ? Number(distA.count || 0) : 0;
+      const rawShareA = typeof distA === 'object' && distA ? Number(distA.percentage) : 0;
+      const shareA = Number.isFinite(rawShareA) ? Math.max(0, rawShareA) : 0;
+      const rawCountA = typeof distA === 'object' && distA ? Number(distA.count) : 0;
+      const countA = Number.isFinite(rawCountA) ? Math.max(0, Math.floor(rawCountA)) : 0;
 
-      const shareB = typeof distB === 'object' && distB ? Number(distB.percentage || 0) : 0;
-      const countB = typeof distB === 'object' && distB ? Number(distB.count || 0) : 0;
+      const rawShareB = typeof distB === 'object' && distB ? Number(distB.percentage) : 0;
+      const shareB = Number.isFinite(rawShareB) ? Math.max(0, rawShareB) : 0;
+      const rawCountB = typeof distB === 'object' && distB ? Number(distB.count) : 0;
+      const countB = Number.isFinite(rawCountB) ? Math.max(0, Math.floor(rawCountB)) : 0;
 
       const indShare = Number.isFinite(cat.industry_share_pct) ? cat.industry_share_pct : 0;
 
@@ -1676,8 +1680,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   tabIndex={0}
                   role="region"
                   aria-label="브랜드 1:1 결함 프로파일 레이더 비교 차트 스크롤 영역"
-                  className="w-full overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="w-full overflow-x-auto table-scroll-container focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
+                  <div className="sm:hidden flex items-center justify-between pb-2 mb-2 text-[11px] font-medium text-slate-400 border-b border-slate-800 select-none" aria-hidden="true"><span>← 좌우로 밀어서 레이더 차트 비교</span><span className="text-[10px] text-blue-400 font-semibold">차트 스크롤 ↔</span></div>
                 <svg
                   className="w-full min-w-[460px] max-w-[520px] mx-auto h-auto select-none mt-2"
                   viewBox="0 0 500 480"

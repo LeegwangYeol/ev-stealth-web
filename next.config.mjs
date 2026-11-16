@@ -24,11 +24,11 @@ const cspDirectives = [
 ].join('; ');
 
 const nextConfig = {
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   reactStrictMode: true,
   productionBrowserSourceMaps: false,
   poweredByHeader: false,
   compress: true,
-  swcMinify: true,
   generateEtags: true,
   httpAgentOptions: {
     keepAlive: true,
@@ -112,6 +112,18 @@ const nextConfig = {
           {
             key: 'X-Robots-Tag',
             value: 'noindex, nofollow, noarchive, nosnippet, noimageindex',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+          },
+          {
+            key: 'Pragma',
+            value: 'no-cache',
+          },
+          {
+            key: 'Expires',
+            value: '0',
           },
         ],
       },
