@@ -484,13 +484,14 @@ class DomainTokenizer:
         dict_path = next((p for p in dict_candidates if p and os.path.exists(p)), None)
         if dict_path:
             try:
-                with open(dict_path, "r", encoding="utf-8") as f:
+                with open(dict_path, "r", encoding="utf-8-sig") as f:
                     slang_data = json.load(f)
-                for term, info in slang_data.items():
-                    cat = info.get("category", "slang")
-                    self.trie.insert(term, domain_category=cat, severity_weight=2.0, canonical_name=term)
-                    if " " in term:
-                        self.trie.insert(term.replace(" ", ""), domain_category=cat, severity_weight=2.0, canonical_name=term)
+                if isinstance(slang_data, dict):
+                    for term, info in slang_data.items():
+                        cat = info.get("category", "slang") if isinstance(info, dict) else "slang"
+                        self.trie.insert(term, domain_category=cat, severity_weight=2.0, canonical_name=term)
+                        if " " in term:
+                            self.trie.insert(term.replace(" ", ""), domain_category=cat, severity_weight=2.0, canonical_name=term)
             except Exception:
                 pass
 
@@ -509,10 +510,12 @@ class DomainTokenizer:
 
         return stem
 
-    def normalize_text(self, text: str) -> str:
+    def normalize_text(self, text: Optional[str]) -> str:
         """Clean noise characters and unify whitespace."""
         if not text:
             return ""
+        if not isinstance(text, str):
+            text = str(text)
         cleaned = self.CLEAN_REGEX.sub(" ", text)
         return re.sub(r'\s+', ' ', cleaned).strip()
 

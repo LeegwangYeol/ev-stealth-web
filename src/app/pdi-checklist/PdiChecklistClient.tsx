@@ -123,10 +123,18 @@ export function parseStoredChecklistState(
       }
 
       // Dictionary/map of id to boolean: { '1': true, '2': false }
-      const hasIdKey = defaultItems.some((item) => item.id in obj || String(item.id) in obj);
+      const hasIdKey = defaultItems.some(
+        (item) =>
+          Object.prototype.hasOwnProperty.call(obj, item.id) ||
+          Object.prototype.hasOwnProperty.call(obj, String(item.id))
+      );
       if (hasIdKey) {
         return defaultItems.map((item) => {
-          const val = obj[item.id] ?? obj[String(item.id)];
+          const val = Object.prototype.hasOwnProperty.call(obj, item.id)
+            ? obj[item.id]
+            : Object.prototype.hasOwnProperty.call(obj, String(item.id))
+            ? obj[String(item.id)]
+            : undefined;
           const isChecked = val === true || val === 'true' || val === 1 || val === '1';
           return val !== undefined ? { ...item, checked: isChecked } : item;
         });
@@ -290,10 +298,15 @@ export function saveChecklistToStorage(items: ChecklistItem[]): boolean {
     console.warn('[PDI Checklist] Failed to save checklist to localStorage:', e);
   }
 
-  // 2. Fallback to sessionStorage
+  // 2. Fallback to sessionStorage (remove stale localStorage entry so reload reads latest sessionStorage)
   try {
     if (window.sessionStorage) {
       window.sessionStorage.setItem(STORAGE_KEY, serialized);
+      try {
+        window.localStorage?.removeItem(STORAGE_KEY);
+      } catch {
+        // Ignore cleanup failure in restricted environments
+      }
       return true;
     }
   } catch {
@@ -343,6 +356,7 @@ export const PdiItemRow = memo(function PdiItemRow({ item, onToggle }: PdiItemRo
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar' || e.code === 'Space') {
       e.preventDefault();
+      if (e.repeat) return;
       onToggle(item.id);
     }
   };
@@ -388,7 +402,7 @@ export default function PdiChecklistClient() {
   const [items, setItems] = useState<ChecklistItem[]>(INITIAL_PDI_ITEMS);
   const [mounted, setMounted] = useState(false);
   const [storageType, setStorageType] = useState<'localStorage' | 'sessionStorage' | 'memory'>('localStorage');
-  const isSyncingRef = React.useRef(false);
+  const syncedItemsRef = React.useRef<ChecklistItem[] | null>(null);
 
   // Safe client mounting check: hydrate from localStorage after mount with schema migration
   useEffect(() => {
@@ -403,15 +417,20 @@ export default function PdiChecklistClient() {
     if (typeof window === 'undefined') return;
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === STORAGE_KEY) {
-        isSyncingRef.current = true;
         if (!e.newValue) {
-          // Another tab cleared or reset storage -> synchronize to initial defaults
-          setItems(INITIAL_PDI_ITEMS);
+          // Another tab cleared or reset storage -> synchronize to initial defaults with fresh reference
+          const resetItems = INITIAL_PDI_ITEMS.map((item) => ({ ...item }));
+          syncedItemsRef.current = resetItems;
+          setItems(resetItems);
           return;
         }
         try {
           const updated = parseStoredChecklistState(e.newValue, INITIAL_PDI_ITEMS);
-          setItems(updated);
+          const nextItems = updated === INITIAL_PDI_ITEMS
+            ? INITIAL_PDI_ITEMS.map((item) => ({ ...item }))
+            : updated;
+          syncedItemsRef.current = nextItems;
+          setItems(nextItems);
         } catch {
           // Ignore concurrent write issues
         }
@@ -424,10 +443,11 @@ export default function PdiChecklistClient() {
   // Save changes to localStorage after mounted
   useEffect(() => {
     if (!mounted) return;
-    if (isSyncingRef.current) {
-      isSyncingRef.current = false;
+    if (syncedItemsRef.current === items) {
+      syncedItemsRef.current = null;
       return;
     }
+    syncedItemsRef.current = null;
     saveChecklistToStorage(items);
   }, [items, mounted]);
 
@@ -464,17 +484,14 @@ export default function PdiChecklistClient() {
   const isAllChecked = useMemo(() => items.length > 0 && items.every((i) => i.checked), [items]);
 
   const toggleAllItems = useCallback(() => {
-    setItems((prev) => {
-      const allChecked = prev.length > 0 && prev.every((i) => i.checked);
-      const nextChecked = !allChecked;
-      setActionAnnouncement(
-        nextChecked
-          ? '전체 항목이 선택되었습니다. '
-          : '전체 항목이 해제되었습니다. '
-      );
-      return prev.map((item) => ({ ...item, checked: nextChecked }));
-    });
-  }, []);
+    const nextChecked = !isAllChecked;
+    setItems((prev) => prev.map((item) => ({ ...item, checked: nextChecked })));
+    setActionAnnouncement(
+      nextChecked
+        ? '전체 항목이 선택되었습니다. '
+        : '전체 항목이 해제되었습니다. '
+    );
+  }, [isAllChecked]);
 
   // Memoized category sets and filtered count calculations
   const categories = useMemo(() => Array.from(new Set(items.map((i) => i.category))), [items]);

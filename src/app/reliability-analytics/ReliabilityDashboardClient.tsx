@@ -83,15 +83,11 @@ function resolveBrandId(input: string, brands: BrandReliability[] = []): string 
 
   const match = brands.find((b) => {
     if (!b) return false;
-    const en = (b.name_en || '').toLowerCase();
-    const ko = (b.name_ko || '').toLowerCase();
+    const en = (b.name_en || '').trim().toLowerCase();
+    const ko = (b.name_ko || '').trim().toLowerCase();
     return (
-      clean === en ||
-      clean === ko ||
-      en.includes(clean) ||
-      clean.includes(en) ||
-      ko.includes(clean) ||
-      clean.includes(ko)
+      (en.length > 0 && (clean === en || en.includes(clean) || clean.includes(en))) ||
+      (ko.length > 0 && (clean === ko || ko.includes(clean) || clean.includes(ko)))
     );
   });
   if (match) return match.id;
@@ -121,12 +117,10 @@ function resolveCategoryKey(input: string, categories: DefectCategoryMetadata[] 
   if (exact) return exact.code;
 
   const lower = input.trim().toLowerCase();
-  const labelMatch = categories.find(
-    (c) =>
-      c &&
-      (c.label_ko?.toLowerCase().includes(lower) ||
-        lower.includes(c.label_ko?.toLowerCase() || ''))
-  );
+  const labelMatch = categories.find((c) => {
+    const labelKo = (c?.label_ko || '').trim().toLowerCase();
+    return Boolean(c && labelKo.length > 0 && (labelKo.includes(lower) || lower.includes(labelKo)));
+  });
   if (labelMatch) return labelMatch.code;
 
   if (lower.includes('battery') || lower.includes('충전') || lower.includes('배터리')) return 'BATTERY_CHARGING';
@@ -569,6 +563,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       const evalTexts: string[] = [];
 
       for (const y of yearEvals) {
+        if (!y || typeof y !== 'object') continue;
         if (y.verdict) verdicts.add(y.verdict);
         if (typeof y.year === 'number') {
           if (y.year <= 2020) hasEarlyYear = true;
@@ -576,7 +571,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           if (y.year >= 2024) hasLateYear = true;
         }
 
-        const defectText = `${y.primary_defect || ''} ${(y.chronic_symptoms || []).join(' ')}`.toLowerCase();
+        const symptoms = Array.isArray(y.chronic_symptoms) ? y.chronic_symptoms : [];
+        const defectText = `${y.primary_defect || ''} ${symptoms.join(' ')}`.toLowerCase();
         evalTexts.push(defectText);
         if (y.raw_quote) evalTexts.push(y.raw_quote.toLowerCase());
 
@@ -703,7 +699,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           (gradeOrder[a.overall_grade] || 99) - (gradeOrder[b.overall_grade] || 99)
       );
     } else if (sortBy === 'NAME') {
-      sorted.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+      sorted.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
     }
     return sorted;
   }, [filteredModels, sortBy]);
@@ -1440,6 +1436,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           ? '#f97316'
                           : '#f43f5e';
 
+                      const isBarHighlighted = hoveredSvgBrand?.id === brand.id;
                       return (
                         <g
                           key={brand.id}
@@ -1457,7 +1454,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                               handleBrandToggle(brand.id);
                             }
                           }}
-                          className="transition-opacity hover:opacity-90 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-400"
+                          className="transition-opacity hover:opacity-90 cursor-pointer focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 focus-visible:outline-offset-2"
                         >
                           <text
                             x="110"
@@ -1476,6 +1473,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                             height="18"
                             rx="4"
                             fill="#1e293b"
+                            stroke={isBarHighlighted ? '#60a5fa' : 'none'}
+                            strokeWidth={isBarHighlighted ? 2 : 0}
                           />
                           <rect
                             x="120"
@@ -1595,7 +1594,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     </label>
                     <select
                       id="compare-brand-a-select"
-                      value={compareBrandA}
+                      value={brandAObj?.id || compareBrandA}
                       onChange={(e) => setCompareBrandA(e.target.value)}
                       aria-label="비교 기준 브랜드 A 선택"
                       className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-3 py-2.5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 min-h-[44px]"
@@ -1614,7 +1613,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     </label>
                     <select
                       id="compare-brand-b-select"
-                      value={compareBrandB}
+                      value={brandBObj?.id || compareBrandB}
                       onChange={(e) => setCompareBrandB(e.target.value)}
                       aria-label="비교 대상 브랜드 B 선택"
                       className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-3 py-2.5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 min-h-[44px]"
@@ -1632,8 +1631,10 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   <button
                     type="button"
                     onClick={() => {
-                      setCompareBrandA(compareBrandB);
-                      setCompareBrandB(compareBrandA);
+                      const nextA = brandBObj?.id ?? compareBrandB;
+                      const nextB = brandAObj?.id ?? compareBrandA;
+                      setCompareBrandA(nextA);
+                      setCompareBrandB(nextB);
                     }}
                     className="px-3.5 py-2 min-h-[44px] inline-flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold rounded-xl border border-slate-200 shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                     aria-label="비교 브랜드 A와 B 맞바꾸기"
@@ -1645,21 +1646,11 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               </div>
 
               {/* Radar Chart Visual Container */}
-              <div
-                tabIndex={0}
-                role="region"
-                aria-label="브랜드 1:1 결함 프로파일 레이더 비교 차트 스크롤 영역"
-                className="w-full overflow-x-auto table-scroll-container border border-slate-800 rounded-2xl p-4 sm:p-6 bg-slate-900 text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 shadow-inner"
-              >
-                <div className="sm:hidden flex items-center justify-between pb-2 mb-2 text-[11px] font-medium text-slate-400 border-b border-slate-800 select-none" aria-hidden="true">
-                  <span>← 좌우로 밀어서 레이더 차트 확인</span>
-                  <span className="text-[10px] text-blue-400 font-semibold">차트 스크롤 ↔</span>
-                </div>
-
+              <div className="w-full border border-slate-800 rounded-2xl p-4 sm:p-6 bg-slate-900 text-white shadow-inner">
                 {/* Radar Legend */}
                 <ul
                   aria-label="레이더 차트 브랜드 범례"
-                  className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 pb-4 border-b border-slate-800 text-xs font-semibold list-none m-0 p-0"
+                  className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 pb-4 border-b border-slate-800 text-xs font-semibold list-none m-0 px-0 pt-0"
                 >
                   <li className="flex items-center gap-2">
                     <span className="w-3.5 h-3.5 rounded-full bg-blue-500 inline-block shadow-sm ring-2 ring-white/20" aria-hidden="true" />
@@ -1774,7 +1765,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           role="button"
                           tabIndex={0}
                           aria-label={`${axis.label} 결함 비중 비교 상세 보기`}
-                          className="cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+                          className="cursor-pointer transition-colors focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 focus-visible:outline-offset-2"
                           onClick={() => setHoveredRadarCategory(isHovered ? null : axis.code)}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
@@ -1808,7 +1799,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                               setHoveredRadarCategory(isHovered ? null : axis.code);
                             }
                           }}
-                          className="cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-blue-400"
+                          className="cursor-pointer transition-all focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 focus-visible:outline-offset-2"
                         ></circle>
 
                         {/* Brand B vertex circle */}
@@ -1833,7 +1824,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                               setHoveredRadarCategory(isHovered ? null : axis.code);
                             }
                           }}
-                          className="cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-rose-400"
+                          className="cursor-pointer transition-all focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400 focus-visible:outline-offset-2"
                         ></circle>
                       </g>
                     );
@@ -1929,9 +1920,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     <div className="flex items-center justify-between">
                       <div>
                         <span className="text-xs font-semibold text-blue-800 uppercase tracking-wider">비교 브랜드 A</span>
-                        <h4 className="text-xl font-extrabold text-slate-900 mt-0.5">
+                        <h3 className="text-xl font-extrabold text-slate-900 mt-0.5">
                           {brandAObj.name_ko} ({brandAObj.name_en})
-                        </h4>
+                        </h3>
                         <div className="text-xs text-slate-700 mt-0.5">
                           {brandAObj.country} · {(brandAObj.models || []).length}개 모델 분석
                         </div>
@@ -1952,7 +1943,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       </div>
                       <div
                         role="progressbar"
-                        aria-valuenow={Math.round(brandAObj.overall_dsi || 0)}
+                        aria-valuenow={Math.min(100, Math.max(0, Math.round(Number.isFinite(brandAObj.overall_dsi) ? brandAObj.overall_dsi : 0)))}
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-label={`${brandAObj.name_ko} 종합 DSI 지수`}
@@ -1974,7 +1965,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       </div>
                       <div
                         role="progressbar"
-                        aria-valuenow={Math.round(brandAObj.critical_issue_rate || 0)}
+                        aria-valuenow={Math.min(100, Math.max(0, Math.round(Number.isFinite(brandAObj.critical_issue_rate) ? brandAObj.critical_issue_rate : 0)))}
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-label={`${brandAObj.name_ko} 치명 결함율`}
@@ -2007,9 +1998,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     <div className="flex items-center justify-between">
                       <div>
                         <span className="text-xs font-semibold text-rose-800 uppercase tracking-wider">비교 브랜드 B</span>
-                        <h4 className="text-xl font-extrabold text-slate-900 mt-0.5">
+                        <h3 className="text-xl font-extrabold text-slate-900 mt-0.5">
                           {brandBObj.name_ko} ({brandBObj.name_en})
-                        </h4>
+                        </h3>
                         <div className="text-xs text-slate-700 mt-0.5">
                           {brandBObj.country} · {(brandBObj.models || []).length}개 모델 분석
                         </div>
@@ -2030,7 +2021,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       </div>
                       <div
                         role="progressbar"
-                        aria-valuenow={Math.round(brandBObj.overall_dsi || 0)}
+                        aria-valuenow={Math.min(100, Math.max(0, Math.round(Number.isFinite(brandBObj.overall_dsi) ? brandBObj.overall_dsi : 0)))}
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-label={`${brandBObj.name_ko} 종합 DSI 지수`}
@@ -2052,7 +2043,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       </div>
                       <div
                         role="progressbar"
-                        aria-valuenow={Math.round(brandBObj.critical_issue_rate || 0)}
+                        aria-valuenow={Math.min(100, Math.max(0, Math.round(Number.isFinite(brandBObj.critical_issue_rate) ? brandBObj.critical_issue_rate : 0)))}
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-label={`${brandBObj.name_ko} 치명 결함율`}
@@ -2124,7 +2115,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   {/* Category Color Legend */}
                   <ul
                     aria-label="결함 부문별 산업 점유율 범례"
-                    className="flex flex-wrap items-center gap-x-4 gap-y-2 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 list-none m-0 p-0"
+                    className="flex flex-wrap items-center gap-x-4 gap-y-2 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 list-none m-0"
                   >
                     {categories.map((cat) => (
                       <li key={cat.code} className="flex items-center gap-1.5">
@@ -2260,7 +2251,12 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             <select
               id="reliability-sort-select"
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as ReliabilitySortOption)}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (isReliabilitySortOption(val)) {
+                  setSortBy(val);
+                }
+              }}
               aria-label="차종 정렬 기준 선택"
               className="sr-only"
             >
@@ -2312,7 +2308,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
         {/* Mobile Brand Selector Dropdown */}
         <div className="sm:hidden space-y-1">
-          <label htmlFor="mobile-brand-filter-select" className="text-xs font-semibold text-slate-700">
+          <label htmlFor="mobile-brand-filter-select" className="block text-xs font-semibold text-slate-700">
             제조사 브랜드 빠른 선택
           </label>
           <select
@@ -2657,7 +2653,7 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
           </div>
           <div
             role="progressbar"
-            aria-valuenow={Math.round(safeDsi)}
+            aria-valuenow={Math.min(100, Math.max(0, Math.round(safeDsi)))}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-label={`${model.brand_name_ko} ${model.name} 평균 결함 심각도 지수 DSI`}
@@ -2684,7 +2680,7 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
             role="list"
             tabIndex={0}
             aria-label={`${model.brand_name_ko} ${model.name} 연식별 평가 목록`}
-            className="space-y-2 max-h-56 overflow-y-auto pr-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg outline-none list-none m-0 p-0"
+            className="space-y-2 max-h-56 overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg outline-none list-none m-0 p-0 pr-1"
           >
             {(!model.year_evaluations || model.year_evaluations.length === 0) ? (
               <li className="p-3 text-center text-xs text-slate-700 bg-slate-50 rounded-xl">

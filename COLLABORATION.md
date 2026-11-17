@@ -1606,3 +1606,23 @@
      - `npx tsx tests/test_challenger_fuzz_all.ts`: 395/395 passed.
      - `npm run typecheck`: 0 TypeScript errors.
      - `npm run build`: 17/17 static pages compiled cleanly with 0 errors.
+
+## Automated Swarm Sync & Audit (2026-11-18)
+- **Swarm Scope**: Full-stack multi-agent data sync, backend Python hardening, frontend TS/UI audit, WCAG 2.1 AA verification, and parent-repo mirror synchronization in `/Users/a7890/src/my-e-car/ev-stealth-web`.
+- **Step 1 Data Sync (`datasync` + `data-verifier`)**:
+  - Executed `python3 run_tracker.py --sync-web` (exit 0) and `python3 scripts/validate_data.py --strict --dry-run` (`PASS`).
+  - Nationwide EV subsidy depletion rate: **89.4%** (공고 148,510 / 접수 132,766 / 출고 122,515 / 잔여 15,744; 4 regions >95%: 제주 99.0%, 경북 97.3%, 울산 96.5%, 대구 96.4%; 14 municipalities >95%).
+  - Daily reports synced: 22 filtered reports (7 critical) across `bobaedream` and `dcinside` with 5-way SHA-256 parity across `data/`, `public/data/`, `ev-stealth-web/data/`, `ev-stealth-web/src/data/`, and `ev-stealth-web/public/data/`.
+- **Backend Python Hardening (`py-tracker`, `py-crawlers`, `py-filters`, `py-scripts`)**:
+  - `tracker/`: Fixed `FileLock` same-instance re-entrancy depth and `NaN`/`Inf` timeout guards (`atomic_writer.py`), eliminated TOCTOU race and `dir_fd` leak (`defect_tracker.py`), hardened `None`/`NaN`/ISO alias handling (`subsidy_models.py`, `report_generator.py`, `subsidy_baseline.py`, `subsidy_tracker.py`).
+  - `crawlers/` & `scrapers/`: Fixed `SafeHttpClient` ownership leak (`bobaedream.py`, `dcinside.py`), `warm_up_session()` timeout tuple `TypeError` and trailing-dot SSRF checks (`common_utils.py`), `limit=0` fallback bugs, URL encoding, and `NaN`/scalar timeout handling.
+  - `filters/` & `utils/`: Added CP949-safe byte decoding, Korean double-negation & `"개"` intensifier scoping (`defect_classifier.py`), ASCII boundary checks for `ota`/`soc`/`ex30`/`su7`/`m3` (`spam_filter.py`, `vehicle_matcher.py`), trailing-dot SSRF + `_cache_lock` (`http_client.py`), and calendar date validation (`json_writer.py`).
+  - `scripts/` & `run_*.py`: Added missing `import os` (`verify_tracker_adversarial.py`), corruption-resistant parity healing (`run_tracker.py`, `validate_data.py`), `None`/`NaN`/`Inf` safety (`sync_defect_reports.py`, `run_scraper.py`), and empty-corpus/div0 guards across analytics scripts. Synced all modified Python files to parent root mirrors.
+- **Frontend TS Libraries & UI/A11y Hardening (`lib-*`, `ui-*`)**:
+  - `src/lib/`: Hardened `Number('') === 0`/corrupted-JSON/zero-division guards (`reliabilityCalculations.ts`, `getReliabilityData.ts`), type symmetry & partial `customParams`/`NaN` immunity (`depreciationCalculations.ts`, `getDepreciationData.ts`), UTC date exhaustion & non-string field guards (`subsidyCalculations.ts`, `getSubsidyData.ts`), prototype-key/Korean generation regex/date-parsing fixes (`recallCalculations.ts`, `getRecallData.ts`), and `deduplicateReports` normalization + IPv4/IPv6 SSRF + CSP `script-src-attr 'none'` (`getDailyReports.ts`, `reportCalculations.ts`, `sanitizeUrl.ts`, `next.config.mjs`).
+  - `src/app/` & `src/components/`: Fixed WCAG 2.1 AA contrast, light-surface focus rings, >=44px touch targets, semantic `<nav>`/`<dl>`/`role="region"` structure, skip-link scroll positioning, VIN paste/immediate-clear UX (`RecallPortalClient.tsx`), cross-tab storage sync (`PdiChecklistClient.tsx`), radar/table/truncation fixes (`ReliabilityDashboardClient.tsx`, `AdminDashboardClient.tsx`, `BrandComparisonNav.tsx`), and status alias normalization (`SubsidyTrackerClient.tsx`).
+- **4-Gate Verification Results**:
+  - `data-verifier`: `validate_data.py --strict --dry-run` PASS; 5-way JSON SHA-256 parity 100%.
+  - `a11y-auditor`: `test_frontend_a11y_wcag.py` (101/101), `test_depreciation_calc_a11y_hardening.py` (9/9), `test_reliability_analytics_a11y_audit.py` + `test_subsidy_components_a11y.py` + `test_frontend_math_a11y_sync5.py` + `test_mobile_viewport_touch_targets_audit.py` (37/37), `test_wcag_color_contrast_audit.mjs` PASS (post-#48/#49 re-verified in #48/#49/#50/#52).
+  - `js-verifier`: `npm run typecheck` (0 errors), `npm run lint` (0 warnings/errors), `npm run build` (17/17 static pages, 16 routes), all 28 JS/TS test files (24 `.mjs` + 4 `.ts`) 100% PASS.
+  - `py-verifier`: `python3 -m pytest tests/ --tb=short -ra` — **2,354 passed, 20 skipped** (live `localhost:3000` dev server absent), **0 failed**, 1,023 subtests passed.

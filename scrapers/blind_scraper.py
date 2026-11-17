@@ -14,7 +14,7 @@ import re
 import sys
 import time
 import urllib.parse
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Ensure parent directory is in path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -26,7 +26,9 @@ from scrapers.common_utils import (
     SafeHttpClient,
     clean_html_text,
     extract_slang_terms,
+    normalize_scraper_url,
     polite_delay,
+    resolve_timeout_pair,
     robust_decode,
     save_complaints_json,
 )
@@ -58,9 +60,13 @@ class BlindScraper:
         cache_fallback: bool = True,
     ):
         # Enforce polite delay with randomized jitter (1.5s - 3.5s) and cooldown
+        self._owns_client = client is None
         self.timeout = timeout
-        self.connect_timeout = connect_timeout or (timeout[0] if isinstance(timeout, (tuple, list)) and len(timeout) >= 2 else 5.0)
-        self.read_timeout = read_timeout or (timeout[1] if isinstance(timeout, (tuple, list)) and len(timeout) >= 2 else 15.0)
+        self.connect_timeout, self.read_timeout = resolve_timeout_pair(
+            timeout=timeout,
+            connect_timeout=connect_timeout,
+            read_timeout=read_timeout,
+        )
         self.enable_cache = enable_cache
         self.cache_fallback = cache_fallback
         self.client = client or SafeHttpClient(
@@ -79,6 +85,28 @@ class BlindScraper:
         self.slang_dict = self._load_slang_dict()
         self.post_cache: Dict[str, Dict[str, Any]] = {}
         self._warmed_up = False
+
+    def close(self, force: bool = False) -> None:
+        """Release HTTP client resources if owned by this scraper."""
+        if (self._owns_client or force) and self.client is not None and hasattr(self.client, "close"):
+            try:
+                self.client.close()
+            except Exception as e:
+                logger.warning(f"Error closing HTTP client: {e}")
+
+    def __del__(self) -> None:
+        try:
+            if getattr(self, "_owns_client", False):
+                self.close()
+        except Exception:
+            pass
+
+    def __enter__(self) -> "BlindScraper":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        self.close()
+        return False
 
     def sleep_polite(self):
         """Randomized sleep with jitter between requests."""
@@ -119,7 +147,7 @@ class BlindScraper:
         """
         self.ensure_warm_up()
         results = []
-        encoded_topic = urllib.parse.quote(topic_name)
+        encoded_topic = urllib.parse.quote(str(topic_name or "자동차"))
         topic_url = f"{BLIND_KR_URL}/topics/{encoded_topic}"
 
         logger.info(f"Fetching Blind topic feed: {topic_url}")
@@ -128,7 +156,8 @@ class BlindScraper:
             method="GET",
             referer=BLIND_KR_URL,
             encoding="utf-8",
-            timeout=self.timeout,
+            connect_timeout=self.connect_timeout,
+            read_timeout=self.read_timeout,
         )
 
         if status == 200 and text:
@@ -149,14 +178,22 @@ class BlindScraper:
         if next_data_match:
             try:
                 data = json.loads(next_data_match.group(1))
-                page_props = data.get("props", {}).get("pageProps", {})
-                posts_list = page_props.get("articles", []) or page_props.get("posts", []) or []
+                page_props = data.get("props", {}).get("pageProps", {}) if isinstance(data, dict) else {}
+                if not isinstance(page_props, dict):
+                    page_props = {}
+                posts_list = page_props.get("articles") or page_props.get("posts") or []
+                if not isinstance(posts_list, list):
+                    posts_list = []
                 for p in posts_list:
+                    if not isinstance(p, dict):
+                        continue
                     post_id = str(p.get("id") or p.get("article_id") or "")
-                    title = p.get("title", "")
-                    slug = p.get("slug", "") or post_id
-                    url = f"{BLIND_KR_URL}/post/{slug}-{post_id}" if not slug.startswith("http") else slug
-                    company = p.get("user", {}).get("companyName", "") or p.get("author", {}).get("company", "")
+                    title = str(p.get("title") or "")
+                    slug = str(p.get("slug") or post_id or "")
+                    url = f"{BLIND_KR_URL}/post/{slug}-{post_id}" if not slug.startswith(("http://", "https://")) else slug
+                    user_obj = p.get("user") if isinstance(p.get("user"), dict) else {}
+                    author_obj = p.get("author") if isinstance(p.get("author"), dict) else {}
+                    company = str(user_obj.get("companyName") or author_obj.get("company") or "")
                     items.append({
                         "post_id": post_id,
                         "title": title,
@@ -195,32 +232,37 @@ class BlindScraper:
 
     def fetch_post_detail(self, post_url: str) -> Dict[str, Any]:
         """Fetch and parse Blind post detail page."""
+        norm_url = normalize_scraper_url(post_url, BLIND_BASE_URL)
+        if not norm_url:
+            logger.warning(f"Invalid Blind post_url provided: {post_url!r}")
+            return {}
         self.ensure_warm_up()
         status, text, raw = self.client.request(
-            post_url,
+            norm_url,
             method="GET",
             referer=BLIND_AUTO_TOPIC_URL,
             encoding="utf-8",
-            timeout=self.timeout,
+            connect_timeout=self.connect_timeout,
+            read_timeout=self.read_timeout,
         )
 
         if status != 200 or not text:
-            if post_url in self.post_cache:
-                logger.warning(f"Failed to fetch Blind post detail for {post_url}; falling back to cached post.")
-                return self.post_cache[post_url]
-            logger.warning(f"Failed to fetch Blind post detail: {post_url}")
+            if norm_url in self.post_cache:
+                logger.warning(f"Failed to fetch Blind post detail for {norm_url}; falling back to cached post.")
+                return self.post_cache[norm_url]
+            logger.warning(f"Failed to fetch Blind post detail: {norm_url}")
             return {}
 
         try:
-            detail = self.parse_post_detail(text, post_url)
+            detail = self.parse_post_detail(text, norm_url)
             if detail:
-                self.post_cache[post_url] = detail
+                self.post_cache[norm_url] = detail
             return detail
         except Exception as e:
-            logger.warning(f"Error parsing Blind post detail ({post_url}): {e}")
-            if post_url in self.post_cache:
-                logger.warning(f"Falling back to cached post for {post_url} after parse error.")
-                return self.post_cache[post_url]
+            logger.warning(f"Error parsing Blind post detail ({norm_url}): {e}")
+            if norm_url in self.post_cache:
+                logger.warning(f"Falling back to cached post for {norm_url} after parse error.")
+                return self.post_cache[norm_url]
             return {}
 
     def parse_post_detail(self, html_content: str, post_url: str) -> Dict[str, Any]:
@@ -235,24 +277,32 @@ class BlindScraper:
         if next_data_match:
             try:
                 data = json.loads(next_data_match.group(1))
-                page_props = data.get("props", {}).get("pageProps", {})
+                page_props = data.get("props", {}).get("pageProps", {}) if isinstance(data, dict) else {}
+                if not isinstance(page_props, dict):
+                    page_props = {}
                 post = page_props.get("article") or page_props.get("post") or {}
 
-                if post:
-                    title = post.get("title", "")
-                    body = post.get("body", "") or post.get("content", "")
-                    user = post.get("user", {}) or post.get("author", {})
-                    company = user.get("companyName", "") or user.get("company", "블라인드 인증유저")
-                    published_at = post.get("created_at", "") or post.get("registered_at", "")
-                    view_count = post.get("view_count", 0) or post.get("count_views", 0)
-                    upvote_count = post.get("like_count", 0) or post.get("count_likes", 0)
+                if isinstance(post, dict) and post:
+                    title = str(post.get("title") or "")
+                    body = str(post.get("body") or post.get("content") or "")
+                    raw_user = post.get("user") if isinstance(post.get("user"), dict) else post.get("author")
+                    user = raw_user if isinstance(raw_user, dict) else {}
+                    company = str(user.get("companyName") or user.get("company") or "블라인드 인증유저")
+                    published_at = str(post.get("created_at") or post.get("registered_at") or "")
+                    view_count = post.get("view_count") or post.get("count_views") or 0
+                    upvote_count = post.get("like_count") or post.get("count_likes") or 0
 
                     comments = []
-                    raw_comments = post.get("comments", []) or page_props.get("comments", []) or []
+                    raw_comments = post.get("comments") or page_props.get("comments") or []
+                    if not isinstance(raw_comments, list):
+                        raw_comments = []
                     for c in raw_comments:
-                        c_body = c.get("body", "") or c.get("content", "")
-                        c_user = c.get("user", {}) or c.get("author", {})
-                        c_comp = c_user.get("companyName", "") or c_user.get("company", "")
+                        if not isinstance(c, dict):
+                            continue
+                        c_body = str(c.get("body") or c.get("content") or "")
+                        raw_cu = c.get("user") if isinstance(c.get("user"), dict) else c.get("author")
+                        c_user = raw_cu if isinstance(raw_cu, dict) else {}
+                        c_comp = str(c_user.get("companyName") or c_user.get("company") or "")
                         cleaned_c = clean_html_text(c_body)
                         if cleaned_c and len(cleaned_c) > 5:
                             prefix = f"[{c_comp}] " if c_comp else ""
@@ -322,6 +372,8 @@ class BlindScraper:
 
     def classify_text(self, text: str) -> Tuple[str, Optional[str]]:
         """Classify text into target vehicle and category."""
+        if not text or not isinstance(text, str):
+            return "BYD EV General", None
         text_lower = text.lower()
 
         # Identify vehicle
@@ -349,13 +401,16 @@ class BlindScraper:
         board_name: str = "블라인드 자동차"
     ) -> List[ComplaintRecord]:
         """Convert parsed post data into ComplaintRecord objects."""
+        if not post_data or not isinstance(post_data, dict):
+            return []
         records = []
-        url = post_data.get("url", "")
-        title = post_data.get("title", "")
-        body = post_data.get("body", "")
-        comments = post_data.get("comments", [])
-        company = post_data.get("company", "블라인드 재직자")
-        published_at = post_data.get("published_at", "")
+        url = str(post_data.get("url") or "")
+        title = str(post_data.get("title") or "")
+        body = str(post_data.get("body") or "")
+        raw_comments = post_data.get("comments")
+        comments = raw_comments if isinstance(raw_comments, list) else []
+        company = str(post_data.get("company") or "블라인드 재직자")
+        published_at = str(post_data.get("published_at") or "")
 
         # Check post body
         combined_post = f"{title}\n{body}"
@@ -389,6 +444,8 @@ class BlindScraper:
 
         # Check individual comments
         for idx, comment in enumerate(comments):
+            if not isinstance(comment, str):
+                continue
             c_veh, c_cat = self.classify_text(comment)
             if c_cat and len(comment) >= 15:
                 # Extract commenter company if prefixed e.g. [LG에너지솔루션]
@@ -430,6 +487,8 @@ class BlindScraper:
 
     def load_seed_records(self, limit: Optional[int] = None) -> List[ComplaintRecord]:
         """Load fallback records from seed dataset when live scraping is unavailable or restricted."""
+        if limit is not None and limit <= 0:
+            return []
         records: List[ComplaintRecord] = []
         seed_filenames = ["raw_blind_emerging.json", "compiled_complaints.json"]
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -458,26 +517,26 @@ class BlindScraper:
                                         seen_ids.add(pid)
                                     records.append(ComplaintRecord(
                                         id=pid,
-                                        platform=item.get("platform", "blind"),
-                                        board_name=item.get("board_name", "블라인드"),
+                                        platform=item.get("platform") or "blind",
+                                        board_name=item.get("board_name") or "블라인드",
                                         post_url=item.get("post_url") or item.get("url") or "",
                                         post_title=item.get("post_title") or item.get("title") or "",
-                                        target_vehicle=item.get("target_vehicle", "Unknown"),
-                                        category=item.get("category", "convenience"),
-                                        defect_topic=item.get("defect_topic", ""),
+                                        target_vehicle=item.get("target_vehicle") or "Unknown",
+                                        category=item.get("category") or "convenience",
+                                        defect_topic=item.get("defect_topic") or "",
                                         raw_quote=item.get("raw_quote") or item.get("content") or "",
-                                        slang_terms=item.get("slang_terms", []),
-                                        severity=item.get("severity", "convenience_issue"),
-                                        platform_metadata=item.get("platform_metadata", {}),
+                                        slang_terms=item.get("slang_terms") if isinstance(item.get("slang_terms"), list) else [],
+                                        severity=item.get("severity") or "convenience_issue",
+                                        platform_metadata=item.get("platform_metadata") if isinstance(item.get("platform_metadata"), dict) else {},
                                         collected_at=str(item.get("collected_at") or ""),
                                     ))
-                                    if limit and len(records) >= limit:
+                                    if limit is not None and len(records) >= limit:
                                         return records
                     except Exception as e:
                         logger.debug(f"Failed to load seed records from {s_file}: {e}")
             if records:
                 break
-        return records[:limit] if limit else records
+        return records[:limit] if limit is not None else records
 
     @staticmethod
     def _determine_severity(category: str, text: str) -> str:

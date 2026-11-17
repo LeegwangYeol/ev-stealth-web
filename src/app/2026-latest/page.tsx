@@ -413,7 +413,7 @@ export default function Latest2026Page() {
                     href="https://m.bobaedream.co.kr/board/bbs_view/national/2328953/2/1"
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="기아 EV3 보배드림 커뮤니티 결함 원문 (새 창에서 열림)"
+                    aria-label="기아 EV3 결함 보배드림 커뮤니티 원문 (새 창에서 열림)"
                     className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>보배드림</span>
@@ -444,7 +444,7 @@ export default function Latest2026Page() {
                     href="https://www.reddit.com/r/Ioniq5/comments/1ibf63c/800_miles_in_my_2025_ioniq_5_officially_has_a/"
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="더 뉴 아이오닉 5 페이스리프트 레딧 차주 ICCU 고장 인증글 (새 창에서 열림)"
+                    aria-label="더 뉴 아이오닉 5 페이스리프트 ICCU 고장 레딧 인증 (새 창에서 열림)"
                     className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>레딧 인증</span>
@@ -506,7 +506,7 @@ export default function Latest2026Page() {
                     href="https://www.bobaedream.co.kr/view?code=best&No=888548"
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="BYD 시라이언 7 보배드림 조기 녹 부식 현상 제보 (새 창에서 열림)"
+                    aria-label="BYD 시라이언 7 보배드림 조기 녹(부식) 현상 제보 (새 창에서 열림)"
                     className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>보배드림</span>
@@ -537,7 +537,7 @@ export default function Latest2026Page() {
                     href="https://m.bobaedream.co.kr/board/bbs_view/best/1008916/2/8?cmt=1"
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="현대 아이오닉 9 보배드림 배터리 결함 제보 (새 창에서 열림)"
+                    aria-label="현대 아이오닉 9 보배드림 아이오닉9 배터리 결함 제보 (새 창에서 열림)"
                     className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>보배드림</span>
@@ -596,7 +596,7 @@ export default function Latest2026Page() {
                 href="https://m.bobaedream.co.kr/board/bbs_view/national/2328953/2/1"
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="기아 EV3 보배드림 커뮤니티 결함 원문 (새 창에서 열림)"
+                aria-label="기아 EV3 결함 보배드림 커뮤니티 원문 (새 창에서 열림)"
                 className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
               >
                 <span>보배드림 커뮤니티 원문</span>
@@ -610,7 +610,7 @@ export default function Latest2026Page() {
                 href="https://www.autodaily.co.kr/news/articleView.html?idxno=535684"
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="기아 EV3 오토데일리 리콜 보도 기사 (새 창에서 열림)"
+                aria-label="기아 EV3 리콜 보도 오토데일리 기사 (새 창에서 열림)"
                 className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
               >
                 <span>오토데일리 기사</span>
@@ -667,7 +667,7 @@ export default function Latest2026Page() {
                 href="https://www.reddit.com/r/Ioniq5/comments/1ibf63c/800_miles_in_my_2025_ioniq_5_officially_has_a/"
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="더 뉴 아이오닉 5 페이스리프트 레딧 차주 ICCU 고장 인증글 (새 창에서 열림)"
+                aria-label="더 뉴 아이오닉 5 페이스리프트 ICCU 고장 레딧 차주 인증 (새 창에서 열림)"
                 className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
               >
                 <span>레딧 차주 인증</span>
@@ -809,7 +809,7 @@ export default function Latest2026Page() {
                 href="https://www.bobaedream.co.kr/view?code=best&No=888548"
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="BYD 시라이언 7 보배드림 조기 녹 부식 현상 제보 (새 창에서 열림)"
+                aria-label="BYD 시라이언 7 보배드림 조기 녹(부식) 현상 제보 (새 창에서 열림)"
                 className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
               >
                 <span>보배드림 조기 녹(부식) 현상</span>
@@ -880,7 +880,7 @@ export default function Latest2026Page() {
                 href="https://m.bobaedream.co.kr/board/bbs_view/best/1008916/2/8?cmt=1"
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="현대 아이오닉 9 보배드림 배터리 결함 제보 (새 창에서 열림)"
+                aria-label="현대 아이오닉 9 보배드림 아이오닉9 배터리 결함 제보 (새 창에서 열림)"
                 className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
               >
                 <span>보배드림 아이오닉9 배터리 결함</span>
@@ -909,8 +909,8 @@ export default function Latest2026Page() {
           <Link
             href="/reliability-analytics"
             prefetch={false}
-            aria-label="스텔스 품질 점수 및 실차주 결함 통계 바로가기"
-            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+            aria-label="스텔스 품질 점수 & 실차주 결함 통계 (DSI) 바로가기"
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
           >
             <h3 className="flex items-center gap-2 text-blue-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📊</span>
@@ -927,8 +927,8 @@ export default function Latest2026Page() {
           <Link
             href="/recall-portal"
             prefetch={false}
-            aria-label="통합 리콜 현황 및 배터리 제조사 조회 바로가기"
-            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-rose-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
+            aria-label="통합 리콜 현황 & 배터리 제조사 조회 바로가기"
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-rose-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-2"
           >
             <h3 className="flex items-center gap-2 text-rose-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">🚨</span>
@@ -945,8 +945,8 @@ export default function Latest2026Page() {
           <Link
             href="/depreciation-calculator"
             prefetch={true}
-            aria-label="전기차 감가상각 시뮬레이터 및 배터리 수명 계산기 바로가기"
-            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+            aria-label="전기차 감가상각 시뮬레이터 & 배터리 수명 계산기 바로가기"
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
           >
             <h3 className="flex items-center gap-2 text-emerald-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📉</span>
@@ -964,7 +964,7 @@ export default function Latest2026Page() {
             href="/subsidy-tracker"
             prefetch={true}
             aria-label="지자체 보조금 실시간 소진율 추적기 바로가기"
-            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2"
           >
             <h3 className="flex items-center gap-2 text-amber-800 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">⚡</span>

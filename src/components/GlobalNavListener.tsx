@@ -140,7 +140,9 @@ export const GlobalNavListener = memo(function GlobalNavListener() {
 
     // Cross-browser programmatic focus transfer for skip-to-content links
     const handleSkipLink = (e: MouseEvent) => {
-      const target = (e.target as Element | null)?.closest?.('a[href="#main-content"]');
+      const rawTarget = e.target as Node | null;
+      const elementTarget = rawTarget instanceof Element ? rawTarget : rawTarget?.parentElement;
+      const target = elementTarget?.closest?.('a[href="#main-content"]');
       if (target) {
         const main = document.getElementById('main-content');
         if (main) {

@@ -326,6 +326,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
   const [vinInput, setVinInput] = useState<string>('');
   const [vinTouched, setVinTouched] = useState<boolean>(false);
   const [vinBlurred, setVinBlurred] = useState<boolean>(false);
+  const [vinSubmitted, setVinSubmitted] = useState<boolean>(false);
   const [isSearchingVin, setIsSearchingVin] = useState<boolean>(false);
 
   // Mode B state
@@ -364,7 +365,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
   useEffect(() => {
     setVisibleRecallCount(PAGE_SIZE_RECALLS);
-  }, [recallSearch, selectedRiskFilter, selectedRemedyFilter]);
+  }, [recallSearch, selectedRecallBrandFilter, selectedRiskFilter, selectedRemedyFilter]);
 
   // Expanded recall card IDs for accordion view
   const [expandedRecallIds, setExpandedRecallIds] = useState<Set<string>>(new Set());
@@ -406,6 +407,18 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     () => (selectedBrand ? getModelsForBrand(selectedBrand, initialDatabase) : []),
     [selectedBrand, initialDatabase]
   );
+
+  // Keep Mode B brand/model aligned with available options in case database lacks defaults
+  useEffect(() => {
+    if (availableBrands.length > 0 && !availableBrands.includes(selectedBrand)) {
+      const nextBrand = availableBrands[0];
+      setSelectedBrand(nextBrand);
+      const nextModels = getModelsForBrand(nextBrand, initialDatabase);
+      setSelectedModel(nextModels[0] || '');
+    } else if (availableModels.length > 0 && !availableModels.includes(selectedModel)) {
+      setSelectedModel(availableModels[0]);
+    }
+  }, [availableBrands, availableModels, selectedBrand, selectedModel, initialDatabase]);
 
   // Defensive fallbacks for database collections and metadata (Zero-GC)
   const batteryProfiles = useMemo(
@@ -451,9 +464,14 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
       const cleanVin = sanitizeText(vin).trim().toUpperCase().replace(/[\s-]/g, '');
       setVinInput(cleanVin);
       setVinTouched(true);
-      setVinBlurred(false);
+      setVinBlurred(cleanVin.length !== 17);
+      setVinSubmitted(false);
       setActiveCheckerMode('VIN');
       if (cleanVin.length === 17) {
+        const result = decodeVinAndCheckRecalls(cleanVin, initialDatabase);
+        setCheckResult(result);
+        focusResultSection();
+      } else if (cleanVin.length > 0) {
         const result = decodeVinAndCheckRecalls(cleanVin, initialDatabase);
         setCheckResult(result);
         focusResultSection();
@@ -463,29 +481,29 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
   );
 
   // Deferred values for stutter-free filtering on large datasets
-  const deferredVinInput = useDeferredValue(vinInput);
   const deferredBatterySearch = useDeferredValue(batterySearch);
   const deferredRecallSearch = useDeferredValue(recallSearch);
 
-  // Live validation for VIN input (using deferred value to prevent keystroke lag)
+  // Live validation for VIN input (computed synchronously to avoid 1-frame alert flash on 17th char)
   const vinValidation = useMemo(() => {
-    if (!deferredVinInput) return { valid: false, normalized: '', error: '' };
-    return validateVinString(deferredVinInput);
-  }, [deferredVinInput]);
+    if (!vinInput) return { valid: false, normalized: '', error: '' };
+    return validateVinString(vinInput);
+  }, [vinInput]);
 
   // Realtime ISO / US 9th check digit checksum verification
   const vinChecksum = useMemo(() => {
-    if (!deferredVinInput) return null;
-    const clean = deferredVinInput.trim().toUpperCase().replace(/[\s-]/g, '');
+    if (!vinInput) return null;
+    const clean = vinInput.trim().toUpperCase().replace(/[\s-]/g, '');
     if (clean.length !== 17) return null;
     return verifyVinChecksum(clean);
-  }, [deferredVinInput]);
+  }, [vinInput]);
 
   // Debounced input change handler for VIN search
   const handleVinChange = useCallback((value: string) => {
     const uppercaseVal = value.toUpperCase();
     setVinInput(uppercaseVal);
     setVinTouched(true);
+    setVinSubmitted(false);
 
     if (vinDebounceTimerRef.current) {
       clearTimeout(vinDebounceTimerRef.current);
@@ -500,25 +518,47 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
       return;
     }
 
-    // When 17 characters entered, debounce auto-search (350ms)
+    // When 17 characters entered, validate before scheduling debounce auto-search
     if (clean.length === 17) {
+      const valResult = validateVinString(clean);
+      if (!valResult.valid) {
+        setIsSearchingVin(false);
+        setCheckResult((prev) => (prev && prev.mode === 'VIN' ? null : prev));
+        return;
+      }
       setIsSearchingVin(true);
       vinDebounceTimerRef.current = setTimeout(() => {
         setIsSearchingVin(false);
-        const valResult = validateVinString(clean);
-        if (valResult.valid) {
-          const result = decodeVinAndCheckRecalls(clean, initialDatabase);
-          setCheckResult(result);
-        }
+        const result = decodeVinAndCheckRecalls(clean, initialDatabase);
+        setCheckResult(result);
       }, 350);
     }
   }, [initialDatabase]);
+
+  // Clean pasted VINs with hyphens/spaces before maxLength=17 truncates them
+  const handleVinPaste = useCallback(
+    (e: React.ClipboardEvent<HTMLInputElement>) => {
+      const pastedText = e.clipboardData.getData('text');
+      if (!pastedText) return;
+      if (/[\s-]/.test(pastedText) || pastedText !== pastedText.toUpperCase()) {
+        e.preventDefault();
+        const input = e.currentTarget;
+        const start = input.selectionStart ?? vinInput.length;
+        const end = input.selectionEnd ?? vinInput.length;
+        const combined = vinInput.slice(0, start) + pastedText + vinInput.slice(end);
+        const cleaned = combined.toUpperCase().replace(/[\s-]/g, '').slice(0, 17);
+        handleVinChange(cleaned);
+      }
+    },
+    [vinInput, handleVinChange]
+  );
 
   // Handle Mode A lookup
   const handleVinSubmit = useCallback((e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setVinTouched(true);
     setVinBlurred(true);
+    setVinSubmitted(true);
     if (vinDebounceTimerRef.current) {
       clearTimeout(vinDebounceTimerRef.current);
     }
@@ -546,6 +586,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
   // Quick 1-click sample VIN handler
   const handleSelectSampleVin = useCallback((sampleVin: string) => {
+    if (!sampleVin) return;
     if (vinDebounceTimerRef.current) {
       clearTimeout(vinDebounceTimerRef.current);
     }
@@ -553,6 +594,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     setVinInput(sampleVin);
     setVinTouched(true);
     setVinBlurred(false);
+    setVinSubmitted(false);
     const result = decodeVinAndCheckRecalls(sampleVin, initialDatabase);
     setCheckResult(result);
     focusResultSection();
@@ -696,7 +738,8 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
   const hasIllegalVinChars = /[IOQ]/i.test(vinInput);
   const showVinError =
     hasIllegalVinChars ||
-    (vinBlurred && !vinValidation.valid) ||
+    (vinSubmitted && !vinValidation.valid) ||
+    (vinBlurred && cleanVinLength > 0 && !vinValidation.valid) ||
     (vinTouched && cleanVinLength === 17 && !vinValidation.valid);
   const vinError = showVinError ? (vinValidation.error || '차대번호(VIN) 17자리를 입력해 주십시오.') : '';
 
@@ -934,6 +977,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     aria-describedby={vinError ? "vin-error-feedback vin-format-hint" : "vin-format-hint"}
                     onBlur={() => setVinBlurred(true)}
                     onChange={(e) => handleVinChange(e.target.value)}
+                    onPaste={handleVinPaste}
                     onKeyDown={(e) => {
                       if (e.key === 'Escape' && vinInput) {
                         e.stopPropagation();
@@ -944,6 +988,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                         setVinInput('');
                         setVinTouched(false);
                         setVinBlurred(false);
+                        setVinSubmitted(false);
                         setCheckResult(null);
                       }
                     }}
@@ -1024,6 +1069,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     setVinInput('');
                     setVinTouched(false);
                     setVinBlurred(false);
+                    setVinSubmitted(false);
                     setCheckResult(null);
                     document.getElementById('vin-input')?.focus();
                   }}

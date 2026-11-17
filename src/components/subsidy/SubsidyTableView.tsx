@@ -227,7 +227,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
               aria-valuemax={100}
               aria-label={`${regionName} ${categoryLabel} 소진율`}
               aria-valuetext={`소진율 ${depletionRate.toFixed(1)}% (${cleanStatus}), 잔여 ${remaining.toLocaleString()}대`}
-              className="w-24 bg-slate-900 rounded-full h-2 overflow-hidden flex border border-slate-600"
+              className="w-24 bg-slate-900 rounded-full h-2 overflow-hidden flex border border-slate-500"
             >
               <div
                 style={{ width: `${Math.min(100, Math.max(0, depletionRate))}%` }}
@@ -385,7 +385,7 @@ export const SubsidyTableView = memo(function SubsidyTableView({
   const renderedRows = useMemo(() => {
     return (regions || EMPTY_REGIONS).map((region) => (
       <SubsidyTableRow
-        key={region.region_id}
+        key={region.region_id || region.iso_code || region.name_ko}
         region={region}
         selectedCategory={selectedCategory}
         isExpanded={Boolean(expandedRegions[region.region_id])}
@@ -404,7 +404,7 @@ export const SubsidyTableView = memo(function SubsidyTableView({
     >
       <div className="md:hidden flex items-center justify-between px-3.5 py-2 text-[11px] font-medium text-slate-300 bg-slate-900 border-b border-slate-800 select-none" aria-hidden="true">
         <span>← 좌우로 밀어서 17개 지자체 비교</span>
-        <span className="flex items-center gap-1 font-mono text-[10px] text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-500/40">
+        <span className="flex items-center gap-1 font-mono text-[10px] text-amber-400 bg-amber-950 px-2 py-0.5 rounded border border-amber-500/40">
           가로 스크롤 ↔
         </span>
       </div>

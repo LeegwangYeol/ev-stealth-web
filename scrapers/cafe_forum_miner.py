@@ -32,6 +32,8 @@ from scrapers.common_utils import (
     clean_html_text,
     encode_euc_kr_query,
     extract_slang_terms,
+    normalize_scraper_url,
+    resolve_timeout_pair,
     robust_decode,
     save_complaints_json,
 )
@@ -64,9 +66,13 @@ class CafeForumMiner:
         cache_fallback: bool = True,
     ):
         # Enforce polite delay with randomized jitter (1.5s - 3.5s) and cooldown
+        self._owns_client = client is None
         self.timeout = timeout
-        self.connect_timeout = connect_timeout or (timeout[0] if isinstance(timeout, (tuple, list)) and len(timeout) >= 2 else 5.0)
-        self.read_timeout = read_timeout or (timeout[1] if isinstance(timeout, (tuple, list)) and len(timeout) >= 2 else 15.0)
+        self.connect_timeout, self.read_timeout = resolve_timeout_pair(
+            timeout=timeout,
+            connect_timeout=connect_timeout,
+            read_timeout=read_timeout,
+        )
         self.enable_cache = enable_cache
         self.cache_fallback = cache_fallback
         self.client = client or SafeHttpClient(
@@ -84,6 +90,28 @@ class CafeForumMiner:
         )
         self.slang_dict = self._load_slang_dict()
         self.post_cache: Dict[str, Dict[str, Any]] = {}
+
+    def close(self, force: bool = False) -> None:
+        """Release HTTP client resources if owned by this miner."""
+        if (self._owns_client or force) and self.client is not None and hasattr(self.client, "close"):
+            try:
+                self.client.close()
+            except Exception as e:
+                logger.warning(f"Error closing HTTP client: {e}")
+
+    def __del__(self) -> None:
+        try:
+            if getattr(self, "_owns_client", False):
+                self.close()
+        except Exception:
+            pass
+
+    def __enter__(self) -> "CafeForumMiner":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        self.close()
+        return False
 
     def sleep_polite(self):
         """Randomized sleep with jitter between requests."""
@@ -104,22 +132,28 @@ class CafeForumMiner:
         """
         self.client.warm_up_session(POMPPU_BASE_URL)
         results = []
+        kw_str = str(keyword or "")
+        try:
+            eff_pages = max(1, int(max_pages))
+        except (ValueError, TypeError, OverflowError):
+            eff_pages = 1
 
-        for page in range(1, max_pages + 1):
+        for page in range(1, eff_pages + 1):
             try:
-                encoded_kw = urllib.parse.quote(keyword.encode("euc-kr"))
+                encoded_kw = urllib.parse.quote(kw_str.encode("euc-kr"))
             except UnicodeEncodeError:
-                encoded_kw = urllib.parse.quote(keyword.encode("cp949", errors="replace"))
+                encoded_kw = urllib.parse.quote(kw_str.encode("cp949", errors="replace"))
 
             search_url = f"{POMPPU_CAR_URL}&search_type=sub_memo&keyword={encoded_kw}&page={page}"
-            logger.info(f"Searching Pomppu Car Forum for '{keyword}' (Page {page})...")
+            logger.info(f"Searching Pomppu Car Forum for '{kw_str}' (Page {page})...")
 
             status, text, raw = self.client.request(
                 search_url,
                 method="GET",
                 referer=f"{POMPPU_BASE_URL}/",
                 encoding="euc-kr",
-                timeout=self.timeout,
+                connect_timeout=self.connect_timeout,
+                read_timeout=self.read_timeout,
             )
 
             if status != 200 or not text:
@@ -142,7 +176,9 @@ class CafeForumMiner:
                 continue
             no_match = re.search(r"no=(\d+)", href)
             post_no = no_match.group(1) if no_match else ""
-            full_url = f"{POMPPU_BASE_URL}/zboard/{href}"
+            full_url = normalize_scraper_url(href, f"{POMPPU_BASE_URL}/zboard")
+            if not full_url:
+                continue
             items.append({
                 "platform": "pomppu",
                 "board_name": "뽐뿌 자동차포럼",
@@ -156,18 +192,24 @@ class CafeForumMiner:
         """Search Clien Allpark/Car board."""
         self.client.warm_up_session(CLIEN_BASE_URL)
         results = []
+        kw_str = str(keyword or "")
+        try:
+            eff_pages = max(1, int(max_pages))
+        except (ValueError, TypeError, OverflowError):
+            eff_pages = 1
 
-        for page in range(0, max_pages):
-            encoded_kw = urllib.parse.quote(keyword)
+        for page in range(0, eff_pages):
+            encoded_kw = urllib.parse.quote(kw_str)
             search_url = f"{CLIEN_CAR_URL}?&od=T31&po={page}&sk=title&sv={encoded_kw}"
-            logger.info(f"Searching Clien cm_car for '{keyword}' (Page {page})...")
+            logger.info(f"Searching Clien cm_car for '{kw_str}' (Page {page})...")
 
             status, text, raw = self.client.request(
                 search_url,
                 method="GET",
                 referer=f"{CLIEN_BASE_URL}/",
                 encoding="utf-8",
-                timeout=self.timeout,
+                connect_timeout=self.connect_timeout,
+                read_timeout=self.read_timeout,
             )
 
             if status != 200 or not text:
@@ -188,7 +230,9 @@ class CafeForumMiner:
             clean_title = clean_html_text(raw_title)
             if not clean_title or len(clean_title) < 4:
                 continue
-            full_url = f"{CLIEN_BASE_URL}{href}"
+            full_url = normalize_scraper_url(href, CLIEN_BASE_URL)
+            if not full_url:
+                continue
             items.append({
                 "platform": "clien",
                 "board_name": "클리앙 굴러간당",
@@ -211,15 +255,16 @@ class CafeForumMiner:
         if not raw_quote or len(raw_quote) < 10:
             return None
 
-        platform = raw_data.get("platform", "naver_cafe")
-        board_name = raw_data.get("board_name", "전기차 커뮤니티")
-        post_url = raw_data.get("post_url", "")
-        post_title = raw_data.get("post_title", "중국 전기차 사용자 결함 리포트")
-        target_vehicle = raw_data.get("target_vehicle", "BYD Atto 3")
-        category = raw_data.get("category", "")
-        defect_topic = raw_data.get("defect_topic", "")
-        severity = raw_data.get("severity", "functional_failure")
-        platform_metadata = raw_data.get("platform_metadata", {})
+        platform = str(raw_data.get("platform") or "naver_cafe")
+        board_name = str(raw_data.get("board_name") or "전기차 커뮤니티")
+        post_url = str(raw_data.get("post_url") or "")
+        post_title = str(raw_data.get("post_title") or "중국 전기차 사용자 결함 리포트")
+        target_vehicle = str(raw_data.get("target_vehicle") or "BYD Atto 3")
+        category = str(raw_data.get("category") or "")
+        defect_topic = str(raw_data.get("defect_topic") or "")
+        severity = str(raw_data.get("severity") or "functional_failure")
+        raw_meta = raw_data.get("platform_metadata")
+        platform_metadata = raw_meta if isinstance(raw_meta, dict) else {}
 
         # Category detection if missing
         if not category or category not in CATEGORY_KEYWORDS:
@@ -232,17 +277,19 @@ class CafeForumMiner:
             defect_topic = self._derive_defect_topic(category, f"{post_title}\n{raw_quote}")
 
         # Slang extraction
-        slang_terms = raw_data.get("slang_terms")
-        if not slang_terms:
+        raw_slang = raw_data.get("slang_terms")
+        if isinstance(raw_slang, list) and raw_slang:
+            slang_terms = raw_slang
+        else:
             slang_terms = extract_slang_terms(f"{post_title}\n{raw_quote}\n{defect_topic}", self.slang_dict)
 
         # ID generation
-        rec_id = raw_data.get("id")
+        rec_id = str(raw_data.get("id") or "")
         if not rec_id:
             h = hashlib.md5(f"{post_url}_{raw_quote[:50]}".encode("utf-8")).hexdigest()[:6]
             rec_id = f"CASE_{category.upper()[:4]}_{h}"
 
-        collected_at = raw_data.get("collected_at", datetime.now(timezone.utc).isoformat())
+        collected_at = str(raw_data.get("collected_at") or datetime.now(timezone.utc).isoformat())
 
         record = ComplaintRecord(
             id=rec_id,
@@ -269,6 +316,8 @@ class CafeForumMiner:
 
     def load_seed_records(self, limit: Optional[int] = None) -> List[ComplaintRecord]:
         """Load fallback records from seed dataset when live scraping is unavailable or restricted."""
+        if limit is not None and limit <= 0:
+            return []
         records: List[ComplaintRecord] = []
         seed_filenames = ["raw_cafe_emerging.json", "compiled_complaints.json"]
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -297,26 +346,26 @@ class CafeForumMiner:
                                         seen_ids.add(pid)
                                     records.append(ComplaintRecord(
                                         id=pid,
-                                        platform=item.get("platform", "naver_cafe"),
-                                        board_name=item.get("board_name", "전기차 카페"),
+                                        platform=item.get("platform") or "naver_cafe",
+                                        board_name=item.get("board_name") or "전기차 카페",
                                         post_url=item.get("post_url") or item.get("url") or "",
                                         post_title=item.get("post_title") or item.get("title") or "",
-                                        target_vehicle=item.get("target_vehicle", "Unknown"),
-                                        category=item.get("category", "convenience"),
-                                        defect_topic=item.get("defect_topic", ""),
+                                        target_vehicle=item.get("target_vehicle") or "Unknown",
+                                        category=item.get("category") or "convenience",
+                                        defect_topic=item.get("defect_topic") or "",
                                         raw_quote=item.get("raw_quote") or item.get("content") or "",
-                                        slang_terms=item.get("slang_terms", []),
-                                        severity=item.get("severity", "convenience_issue"),
-                                        platform_metadata=item.get("platform_metadata", {}),
+                                        slang_terms=item.get("slang_terms") if isinstance(item.get("slang_terms"), list) else [],
+                                        severity=item.get("severity") or "convenience_issue",
+                                        platform_metadata=item.get("platform_metadata") if isinstance(item.get("platform_metadata"), dict) else {},
                                         collected_at=str(item.get("collected_at") or ""),
                                     ))
-                                    if limit and len(records) >= limit:
+                                    if limit is not None and len(records) >= limit:
                                         return records
                     except Exception as e:
                         logger.debug(f"Failed to load seed records from {s_file}: {e}")
             if records:
                 break
-        return records[:limit] if limit else records
+        return records[:limit] if limit is not None else records
 
     def _detect_category(self, text: str) -> Optional[str]:
         text_lower = text.lower()

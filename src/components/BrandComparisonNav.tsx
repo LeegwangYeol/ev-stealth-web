@@ -1,4 +1,4 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo } from 'react';
 import Link from 'next/link';
 
 export type BrandPageKey = 'hyundai-kia' | 'tesla' | 'byd' | 'global-brands' | '2026-latest';
@@ -88,7 +88,7 @@ export const BrandComparisonNav = memo(function BrandComparisonNav({
           {BRAND_PAGES.map((brand) => {
             const isActive = brand.key === currentBrand;
             return (
-              <li key={brand.key} className="flex-1 min-w-[96px] sm:min-w-0">
+              <li key={brand.key} className="shrink-0 md:flex-1 min-w-[96px]">
                 <Link
                   href={brand.href}
                   prefetch={false}
@@ -104,8 +104,8 @@ export const BrandComparisonNav = memo(function BrandComparisonNav({
                   <span className="whitespace-nowrap">{brand.shortLabel}</span>
                   {brand.badge && (
                     <span
-                      className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
-                        isActive ? 'bg-white text-blue-700 shadow-xs' : 'bg-rose-100 text-rose-800'
+                      className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full whitespace-nowrap ${
+                        isActive ? 'bg-white text-blue-700 shadow-sm' : 'bg-rose-100 text-rose-800'
                       }`}
                     >
                       <span className="sr-only">특징: </span>
@@ -129,10 +129,7 @@ export const OtherBrandsCrossNav = memo(function OtherBrandsCrossNav({
 }: {
   currentBrand: BrandPageKey;
 }) {
-  const otherBrands = useMemo(
-    () => BRAND_PAGES.filter((b) => b.key !== currentBrand),
-    [currentBrand]
-  );
+  const otherBrands = BRAND_PAGES.filter((b) => b.key !== currentBrand);
 
   return (
     <nav
@@ -155,13 +152,13 @@ export const OtherBrandsCrossNav = memo(function OtherBrandsCrossNav({
             <Link
               href={brand.href}
               prefetch={false}
-              aria-label={`${brand.label} 연식별 결함 가이드 보기${brand.badge ? ` (${brand.badge})` : ''}`}
+              aria-label={`${brand.label}${brand.badge ? ` (${brand.badge})` : ''} 연식별 결함 가이드 보기`}
               className="w-full group p-3 sm:p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-md transition flex flex-col justify-between gap-2 min-h-[72px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
             >
               <div className="flex items-center justify-between gap-1.5">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-2xl shrink-0" aria-hidden="true">{brand.icon}</span>
-                  <span className="font-bold text-xs sm:text-sm text-slate-900 group-hover:text-blue-700 transition truncate break-keep">
+                  <span className="font-bold text-xs sm:text-sm text-slate-900 group-hover:text-blue-700 transition break-keep leading-snug">
                     {brand.label}
                   </span>
                 </div>

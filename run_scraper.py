@@ -17,6 +17,7 @@ import argparse
 import datetime
 import json
 import logging
+import math
 import os
 from pathlib import Path
 import re
@@ -123,7 +124,10 @@ def _resolve_web_reports_path(custom_web_dir: Optional[Union[str, Path]] = None)
     if custom_web_dir:
         raw_web = str(custom_web_dir).strip()
         if raw_web and raw_web != ".":
-            return Path(raw_web) / "daily_reports.json"
+            w_cand = Path(raw_web)
+            if (w_cand / "src" / "data").is_dir():
+                return w_cand / "src" / "data" / "daily_reports.json"
+            return w_cand / "daily_reports.json"
     env_dir = (
         os.getenv("EV_SCRAPER_WEB_DIR")
         or os.getenv("EV_TRACKER_WEB_DIR")
@@ -402,12 +406,12 @@ class ScraperPipeline:
     ):
         try:
             val_conn = float(connect_timeout) if connect_timeout is not None else 5.0
-            self.connect_timeout = val_conn if val_conn > 0 else 5.0
+            self.connect_timeout = val_conn if (math.isfinite(val_conn) and val_conn > 0) else 5.0
         except (ValueError, TypeError):
             self.connect_timeout = 5.0
         try:
             val_read = float(read_timeout) if read_timeout is not None else 15.0
-            self.read_timeout = val_read if val_read > 0 else 15.0
+            self.read_timeout = val_read if (math.isfinite(val_read) and val_read > 0) else 15.0
         except (ValueError, TypeError):
             self.read_timeout = 15.0
         self.enable_cache = enable_cache
@@ -546,7 +550,7 @@ class ScraperPipeline:
 
         try:
             clamped_limit = min(500, max(1, int(limit)))
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             clamped_limit = 20
 
         raw_posts: List[Dict[str, Any]] = []
@@ -604,14 +608,22 @@ class ScraperPipeline:
     def _save_harvest_cache(self, posts: List[Dict[str, Any]]) -> None:
         if not posts or not self.enable_cache:
             return
+        temp_file: Optional[Path] = None
         try:
             cache_file = self._get_harvest_cache_path()
             temp_file = cache_file.with_suffix(f".tmp.{os.getpid()}")
             with open(temp_file, "w", encoding="utf-8") as f:
                 json.dump(posts, f, ensure_ascii=False)
             os.replace(temp_file, cache_file)
+            temp_file = None
         except Exception as e:
             logger.debug(f"Failed to save harvest cache: {e}")
+        finally:
+            if temp_file is not None and temp_file.exists():
+                try:
+                    temp_file.unlink()
+                except OSError:
+                    pass
 
     def _load_seed_fallback(self) -> List[Dict[str, Any]]:
         """Load fallback records from seed datasets in data/ if live harvest is unavailable."""
@@ -716,7 +728,7 @@ class ScraperPipeline:
         configure_logging(verbose)
         try:
             clamped_limit = max(1, int(limit))
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             clamped_limit = 20
 
         logger.info(
@@ -888,7 +900,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         output_dest = raw_out.strip() if isinstance(raw_out, str) and raw_out.strip() and raw_out.strip() != "." else None
         if output_dest:
             dest_p = Path(output_dest)
-            if dest_p.is_dir():
+            if dest_p.is_dir() or output_dest.endswith(("/", "\\")):
                 output_dest = str(dest_p / "daily_reports.json")
 
         with ScraperPipeline(

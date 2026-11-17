@@ -24,22 +24,50 @@ import SubsidyErrorBoundary from '@/components/subsidy/SubsidyErrorBoundary';
 import SubsidyBadge from '@/components/subsidy/SubsidyBadge';
 import SubsidyProgressBar from '@/components/subsidy/SubsidyProgressBar';
 
-// Pure Helper: Badge styling with opaque solid backgrounds for compliant contrast
+// Pure Helper: Normalize status aliases to canonical 5-tier AlertSeverity
+const normalizeAlertSeverity = (status?: AlertSeverity | string | null): AlertSeverity => {
+  switch ((status || '').toUpperCase()) {
+    case 'CAUTION':
+      return 'CAUTION';
+    case 'WARNING':
+      return 'WARNING';
+    case 'CRITICAL':
+    case 'DANGER':
+    case 'EMERGENCY':
+      return 'CRITICAL';
+    case 'DEPLETED':
+    case 'EXHAUSTED':
+    case 'CLOSED':
+    case 'END':
+      return 'DEPLETED';
+    case 'HEALTHY':
+    case 'AVAILABLE':
+    default:
+      return 'HEALTHY';
+  }
+};
+
+// Pure Helper: Badge styling with opaque solid backgrounds for compliant WCAG AAA contrast (> 7:1)
 export const getBadgeStyle = (status?: AlertSeverity | string | null): string => {
   switch ((status || '').toLowerCase()) {
     case 'healthy':
     case 'available':
-      return 'bg-emerald-950 text-emerald-300 border-emerald-500/40';
+      return 'bg-emerald-950 text-emerald-200 border-emerald-400';
     case 'caution':
-      return 'bg-amber-950 text-amber-300 border-amber-500/40';
+      return 'bg-amber-950 text-amber-200 border-amber-400';
     case 'warning':
-      return 'bg-orange-950 text-orange-300 border-orange-500/40';
+      return 'bg-orange-950 text-orange-200 border-orange-400';
     case 'critical':
-      return 'bg-rose-950 text-rose-300 border-rose-500/40 animate-pulse motion-reduce:animate-none';
+    case 'danger':
+    case 'emergency':
+      return 'bg-rose-950 text-rose-200 border-rose-400 animate-pulse motion-reduce:animate-none';
     case 'depleted':
-      return 'bg-slate-900 text-slate-300 border-slate-700';
+    case 'exhausted':
+    case 'closed':
+    case 'end':
+      return 'bg-slate-950 text-slate-100 border-slate-400';
     default:
-      return 'bg-emerald-950 text-emerald-300 border-emerald-500/40';
+      return 'bg-emerald-950 text-emerald-200 border-emerald-400';
   }
 };
 
@@ -54,8 +82,13 @@ export const getStatusLabel = (status?: AlertSeverity | string | null): string =
     case 'warning':
       return '🟠 경고';
     case 'critical':
+    case 'danger':
+    case 'emergency':
       return '🔴 마감임박';
     case 'depleted':
+    case 'exhausted':
+    case 'closed':
+    case 'end':
       return '🔒 소진';
     default:
       return '🟢 안정';
@@ -411,6 +444,8 @@ interface AlertLegendSectionProps {
   onSelectAlertFilter: (key: AlertSeverity) => void;
 }
 
+const ALERT_TIER_ORDER: readonly AlertSeverity[] = ['HEALTHY', 'CAUTION', 'WARNING', 'CRITICAL', 'DEPLETED'];
+
 const AlertLegendSection = React.memo(function AlertLegendSection({
   thresholds,
   alertFilter,
@@ -426,8 +461,8 @@ const AlertLegendSection = React.memo(function AlertLegendSection({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
-        {(Object.keys(thresholds) as AlertSeverity[]).map((key) => {
-          const t = thresholds[key];
+        {ALERT_TIER_ORDER.map((key) => {
+          const t = thresholds[key] || FALLBACK_THRESHOLDS[key];
           const isSelected = alertFilter === key;
           return (
             <button
@@ -533,7 +568,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
       }
 
       // Alert filter
-      const status = catMetrics.status || 'HEALTHY';
+      const status = normalizeAlertSeverity(catMetrics.status);
       if (alertFilter !== 'ALL' && status !== alertFilter) {
         return false;
       }
@@ -570,12 +605,11 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
       if (!cat) return false;
       const ann = Number.isFinite(cat.announced_units) ? Math.max(0, cat.announced_units) : 0;
       const app = Number.isFinite(cat.applied_units) ? Math.max(0, cat.applied_units) : 0;
-      const rate = Number.isFinite(cat.depletion_rate) ? cat.depletion_rate : ann > 0 ? (app / ann) * 100 : 0;
+      const rate = Number.isFinite(cat.depletion_rate) ? Math.max(0, cat.depletion_rate) : ann > 0 ? (app / ann) * 100 : 0;
+      const normalized = normalizeAlertSeverity(cat.status);
       return (
-        cat.status === 'CRITICAL' ||
-        cat.status === 'DEPLETED' ||
-        (cat.status as string) === 'CLOSED' ||
-        (cat.status as string) === 'EXHAUSTED' ||
+        normalized === 'CRITICAL' ||
+        normalized === 'DEPLETED' ||
         rate >= 95.0
       );
     });
@@ -585,7 +619,15 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   const handleSelectRegionForCalc = useCallback((regionId: string) => {
     setSelectedRegionId(regionId);
     if (calculatorRef.current) {
-      calculatorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const prefersReducedMotion =
+        typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      calculatorRef.current.scrollIntoView({
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
+        block: 'start',
+      });
+      calculatorRef.current.focus({ preventScroll: true });
     }
   }, []);
 
@@ -685,7 +727,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   const renderedGridCards = useMemo(() => {
     return filteredRegions.map((regionItem) => (
       <RegionCard
-        key={regionItem.region_id}
+        key={regionItem.region_id || regionItem.iso_code || regionItem.name_ko}
         region={regionItem}
         selectedCategory={selectedCategory}
         isExpanded={Boolean(expandedRegions[regionItem.region_id])}
@@ -1060,16 +1102,16 @@ const RegionCard = React.memo(function RegionCard({
 
   const announcedUnits = Number.isFinite(cat?.announced_units) ? Math.max(0, cat.announced_units) : 0;
   const safeAnnounced = announcedUnits > 0 ? announcedUnits : 1;
-  const safeDelivered = Number.isFinite(cat?.delivered_units) ? cat.delivered_units : 0;
-  const safeApplied = Number.isFinite(cat?.applied_units) ? cat.applied_units : 0;
+  const safeDelivered = Number.isFinite(cat?.delivered_units) ? Math.max(0, cat.delivered_units) : 0;
+  const safeApplied = Number.isFinite(cat?.applied_units) ? Math.max(0, cat.applied_units) : 0;
   const pendingUnits = Math.max(0, safeApplied - safeDelivered);
   const safeDepletion = Number.isFinite(cat?.depletion_rate)
-    ? cat.depletion_rate
+    ? Math.max(0, cat.depletion_rate)
     : announcedUnits > 0
     ? (safeApplied / safeAnnounced) * 100
     : 0;
   const safeRemaining = Number.isFinite(cat?.remaining_units)
-    ? cat.remaining_units
+    ? Math.max(0, cat.remaining_units)
     : Math.max(0, announcedUnits - safeApplied);
 
   const regionName = region?.name_ko || '해당 지역';
@@ -1314,7 +1356,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
   }, [onSelectRegionId]);
 
   const handleCustomMsrpChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setCustomMsrpInput(e.target.value.replace(/[^0-9]/g, ''));
+    setCustomMsrpInput(e.target.value.replace(/[^0-9]/g, '').slice(0, 11));
   }, []);
 
   const handleSetPresetMsrp = useCallback((msrp: string) => {
@@ -1409,8 +1451,8 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
       customMsrpNum = Number.isFinite(parsed) && parsed > 0 ? parsed : (activeModel?.base_price_krw ?? 0);
     }
     return calculateNetSubsidyPure(
-      activeModel!,
-      activeRegionForCalc!,
+      activeModel,
+      activeRegionForCalc,
       customMsrpNum,
       calcOptions
     );
@@ -1457,11 +1499,15 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               onChange={handleModelSelectChange}
               className="w-full py-3 px-3.5 min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
             >
-              {models.map((model) => (
-                <option key={model.model_id} value={model.model_id}>
-                  {model.manufacturer} - {model.name_ko} (출고가 {((Number.isFinite(model.base_price_krw) ? Math.max(0, model.base_price_krw) : 0) / 10000).toLocaleString()}만 원)
-                </option>
-              ))}
+              {models.length === 0 ? (
+                <option value="">등록된 차량 모델 없음</option>
+              ) : (
+                models.map((model) => (
+                  <option key={model.model_id} value={model.model_id}>
+                    {model.manufacturer} - {model.name_ko} (출고가 {((Number.isFinite(model.base_price_krw) ? Math.max(0, model.base_price_krw) : 0) / 10000).toLocaleString()}만 원)
+                  </option>
+                ))
+              )}
             </select>
 
             {/* Quick Pills for Top Models */}
@@ -1510,11 +1556,15 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               aria-describedby="region-residency-note"
               className="w-full py-3 px-3.5 min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
             >
-              {regions.map((reg) => (
-                <option key={reg.region_id} value={reg.region_id}>
-                  {reg.name_ko} ({(Number.isFinite(reg.categories?.passenger?.depletion_rate) ? reg.categories.passenger.depletion_rate : 0).toFixed(1)}% 소진, {getStatusLabel(reg.categories?.passenger?.status || 'available')})
-                </option>
-              ))}
+              {regions.length === 0 ? (
+                <option value="">등록된 지자체 데이터 없음</option>
+              ) : (
+                regions.map((reg) => (
+                  <option key={reg.region_id} value={reg.region_id}>
+                    {reg.name_ko} ({(Number.isFinite(reg.categories?.passenger?.depletion_rate) ? reg.categories.passenger.depletion_rate : 0).toFixed(1)}% 소진, {getStatusLabel(reg.categories?.passenger?.status || 'available')})
+                  </option>
+                ))
+              )}
             </select>
             <p id="region-residency-note" className="text-xs text-amber-300 flex items-center gap-1.5 pt-0.5">
               <span aria-hidden="true">ℹ️</span> 해당 지자체 최소 <strong>{Number.isFinite(activeRegionForCalc?.residency_requirement_days) ? activeRegionForCalc.residency_requirement_days : 30}일 이상</strong> 연속 거주 요건 필요
@@ -1651,7 +1701,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
         <div
           role="region"
           aria-labelledby="calc-summary-heading"
-          className="lg:col-span-5 bg-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-7 space-y-6 shadow-2xl sticky top-24"
+          className="lg:col-span-5 bg-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-7 space-y-6 shadow-2xl lg:sticky lg:top-24"
         >
           <div>
             <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">

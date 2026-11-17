@@ -109,21 +109,21 @@ export default function SubsidyTrackerError({ error, reset }: SubsidyErrorProps)
           <Link
             href="/depreciation-calculator"
             prefetch={true}
-            className="hover:text-amber-300 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+            className="hover:text-amber-300 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
           >
             <span aria-hidden="true">📉</span> 감가상각 시뮬레이터
           </Link>
           <Link
             href="/reliability-analytics"
             prefetch={false}
-            className="hover:text-blue-300 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+            className="hover:text-blue-300 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
           >
             <span aria-hidden="true">📊</span> 스텔스 품질 점수
           </Link>
           <Link
             href="/recall-portal"
             prefetch={false}
-            className="hover:text-rose-300 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+            className="hover:text-rose-300 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
           >
             <span aria-hidden="true">🚨</span> 통합 리콜 현황
           </Link>

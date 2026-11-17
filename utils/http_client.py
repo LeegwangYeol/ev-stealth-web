@@ -150,7 +150,9 @@ def is_safe_url(
     if not hostname:
         return False, "Missing hostname in URL"
 
-    host_lower = hostname.lower().strip()
+    host_lower = hostname.lower().strip().rstrip(".")
+    if not host_lower:
+        return False, "Missing hostname in URL"
 
     if allow_private_ips:
         return True, "Private IPs allowed by configuration"
@@ -209,13 +211,19 @@ def is_safe_url(
     return True, "Safe URL"
 
 
-def robust_decode(raw_bytes: Union[bytes, str], declared_encoding: Optional[str] = None) -> str:
+def robust_decode(raw_bytes: Union[bytes, bytearray, memoryview, str], declared_encoding: Optional[str] = None) -> str:
     """Decode raw bytes with graceful fallback across Korean and universal charsets.
     Tries declared encoding, utf-8, cp949, euc-kr, and latin-1.
     """
     if isinstance(raw_bytes, str):
         return raw_bytes
     if not raw_bytes:
+        return ""
+    if isinstance(raw_bytes, memoryview):
+        raw_bytes = bytes(raw_bytes)
+    elif isinstance(raw_bytes, bytearray):
+        raw_bytes = bytes(raw_bytes)
+    elif not isinstance(raw_bytes, bytes):
         return ""
 
     encodings_to_try = [declared_encoding, "utf-8", "cp949", "euc-kr", "latin-1"]
@@ -248,7 +256,7 @@ def encode_euc_kr_query(param: Union[str, Dict[str, Any], None]) -> str:
 
     pairs = []
     for k, v in param.items():
-        k_str = str(k)
+        k_str = urllib.parse.quote(str(k))
         v_str = str(v)
         try:
             v_enc = urllib.parse.quote(v_str.encode("euc-kr"))
@@ -264,7 +272,7 @@ _RE_HTML_BLOCK_TAGS = re.compile(r"<(br|p|/p|div|/div|li|/li|h\d|/h\d|tr|/tr|dt|
 _RE_HTML_TAGS = re.compile(r"<[^>]+>")
 _RE_HTML_TRAILING = re.compile(r"<[a-zA-Z/][^<]*$")
 _RE_SPACES = re.compile(r"[ \t]+")
-_RE_CHARSET = re.compile(r"charset=([\w\-]+)", flags=re.IGNORECASE)
+_RE_CHARSET = re.compile(r'charset=["\']?([\w\-]+)', flags=re.IGNORECASE)
 _RE_META_CHARSET = re.compile(r'<meta[^>]+charset=["\']?([\w\-]+)', flags=re.IGNORECASE)
 _RE_META_HTTP = re.compile(
     r'<meta[^>]+http-equiv=["\']?content-type["\']?[^>]+content=["\'][^"\']*charset=([\w\-]+)',
@@ -725,6 +733,7 @@ class SafeHttpClient:
         self.last_request_time = 0.0
         self._rate_limited_until = 0.0
         self.last_response_from_cache = False
+        self._cache_lock = threading.Lock()
         self._memory_cache: Dict[str, Dict[str, Any]] = {}
         eff_cooldown = cooldown_seconds if cooldown_seconds is not None else circuit_cooldown
         self.circuit_breaker = circuit_breaker or CircuitBreaker(
@@ -827,9 +836,10 @@ class SafeHttpClient:
             return None
         key = self._cache_key(url)
         # 1. In-memory cache
-        if key in self._memory_cache:
-            entry = self._memory_cache[key]
-            return entry.get("status", 200), entry.get("text", ""), entry.get("raw", b"")
+        with self._cache_lock:
+            if key in self._memory_cache:
+                entry = self._memory_cache[key]
+                return entry.get("status", 200), entry.get("text", ""), entry.get("raw", b"")
 
         # 2. Disk cache
         if self.cache_dir:
@@ -842,13 +852,14 @@ class SafeHttpClient:
                     text = str(data.get("text", ""))
                     raw_hex = data.get("raw_hex", "")
                     raw_bytes = bytes.fromhex(raw_hex) if raw_hex else text.encode("utf-8")
-                    self._memory_cache[key] = {
-                        "status": status,
-                        "text": text,
-                        "raw": raw_bytes,
-                        "time": data.get("time", time.time()),
-                        "url": url,
-                    }
+                    with self._cache_lock:
+                        self._memory_cache[key] = {
+                            "status": status,
+                            "text": text,
+                            "raw": raw_bytes,
+                            "time": data.get("time", time.time()),
+                            "url": url,
+                        }
                     return status, text, raw_bytes
                 except Exception as e:
                     logger.debug(f"Cache read error for {url}: {e}")
@@ -872,10 +883,11 @@ class SafeHttpClient:
             "time": time.time(),
             "url": str(url),
         }
-        self._memory_cache[key] = entry
-        if len(self._memory_cache) > 500:
-            oldest_k = min(self._memory_cache, key=lambda k: self._memory_cache[k].get("time", 0))
-            del self._memory_cache[oldest_k]
+        with self._cache_lock:
+            self._memory_cache[key] = entry
+            if len(self._memory_cache) > 500:
+                oldest_k = min(self._memory_cache, key=lambda k: self._memory_cache[k].get("time", 0))
+                del self._memory_cache[oldest_k]
 
         if self.cache_dir:
             temp_path = None
@@ -915,7 +927,8 @@ class SafeHttpClient:
 
     def clear_cache(self) -> None:
         """Clear memory and disk HTTP response caches."""
-        self._memory_cache.clear()
+        with self._cache_lock:
+            self._memory_cache.clear()
         if self.cache_dir and os.path.isdir(self.cache_dir):
             try:
                 shutil.rmtree(self.cache_dir, ignore_errors=True)
@@ -1150,7 +1163,9 @@ class SafeHttpClient:
                 req_headers[k] = v
 
         has_custom_ua = bool(
-            self.user_agent or (headers and any(k.lower() == "user-agent" for k in headers))
+            self.user_agent
+            or (self.default_headers and any(k.lower() == "user-agent" for k in self.default_headers))
+            or (headers and any(k.lower() == "user-agent" for k in headers))
         )
 
         payload_bytes: Optional[bytes] = None
@@ -1241,13 +1256,14 @@ class SafeHttpClient:
                         except TypeError:
                             chunk = resp.read()
                         except http.client.IncompleteRead as ire:
+                            partial = ire.partial or b""
                             logger.warning(
                                 f"IncompleteRead on {norm_url} (Attempt {attempt}/{eff_retries}): "
-                                f"{len(ire.partial)} partial bytes received before disconnect."
+                                f"{len(partial)} partial bytes received before disconnect."
                             )
-                            if ire.partial:
-                                chunks.append(ire.partial)
-                                bytes_read += len(ire.partial)
+                            if partial:
+                                chunks.append(partial)
+                                bytes_read += len(partial)
                             if attempt < eff_retries:
                                 raise  # Let outer retry loop attempt a clean request
                             # On last attempt, break to salvage already-read bytes
@@ -1264,6 +1280,8 @@ class SafeHttpClient:
                         if len(chunk) > 65536:
                             break
                     raw_bytes = b"".join(chunks)
+                    if self.max_response_size > 0 and len(raw_bytes) > self.max_response_size:
+                        raw_bytes = raw_bytes[: self.max_response_size]
 
                     content_type_header = (
                         resp.headers.get("Content-Type", "")

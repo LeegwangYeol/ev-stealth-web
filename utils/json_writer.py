@@ -68,7 +68,17 @@ _DATE_4DIGIT_RE = re.compile(r"(\d{4})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})
 _DATE_2DIGIT_RE = re.compile(r"(?:^|[^\d])(\d{2})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})")
 
 
-def _extract_record_date(record: Optional[Dict[str, Any]]) -> str:
+def _validate_ymd(y: int, m: int, d: int) -> Optional[str]:
+    """Validate calendar date bounds and return YYYY-MM-DD, or None if invalid."""
+    if not (1900 <= y <= 2100 and 1 <= m <= 12 and 1 <= d <= 31):
+        return None
+    try:
+        return datetime(y, m, d).strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+def _extract_record_date(record: Optional[Mapping[str, Any]]) -> str:
     """Extract normalized YYYY-MM-DD date string from a complaint record dict."""
     if not isinstance(record, (dict, Mapping)):
         return ""
@@ -79,15 +89,22 @@ def _extract_record_date(record: Optional[Dict[str, Any]]) -> str:
         val_str = str(val).strip()
         match_4 = _DATE_4DIGIT_RE.search(val_str)
         if match_4:
-            y, m, d = match_4.group(1), match_4.group(2).zfill(2), match_4.group(3).zfill(2)
-            return f"{y}-{m}-{d}"
+            validated = _validate_ymd(int(match_4.group(1)), int(match_4.group(2)), int(match_4.group(3)))
+            if validated:
+                return validated
         match_2 = _DATE_2DIGIT_RE.search(val_str)
         if match_2:
-            yy, m, d = int(match_2.group(1)), match_2.group(2).zfill(2), match_2.group(3).zfill(2)
-            y = f"20{yy:02d}" if yy < 70 else f"19{yy:02d}"
-            return f"{y}-{m}-{d}"
+            yy = int(match_2.group(1))
+            y = (2000 + yy) if yy < 70 else (1900 + yy)
+            validated = _validate_ymd(y, int(match_2.group(2)), int(match_2.group(3)))
+            if validated:
+                return validated
         if len(val_str) >= 10 and val_str[4] in ("-", "/") and val_str[7] in ("-", "/"):
-            return val_str[:10].replace("/", "-")
+            candidate = val_str[:10].replace("/", "-")
+            try:
+                return datetime.strptime(candidate, "%Y-%m-%d").strftime("%Y-%m-%d")
+            except ValueError:
+                pass
         try:
             dt = datetime.fromisoformat(val_str.replace("Z", "+00:00"))
             return dt.strftime("%Y-%m-%d")
@@ -123,7 +140,7 @@ def format_daily_report_payload(
             neg_score = _safe_float(item.negativity_score, 0.5)
             is_critical = str(item.severity_tier or "").strip().upper() == "CRITICAL" or _safe_float(getattr(item, "severity_index", 0.0), 0.0) >= 8.0
             category = item.defect_category
-        elif isinstance(item, dict):
+        elif isinstance(item, (dict, Mapping)):
             # Check is_authentic_defect if provided
             if not item.get("is_authentic_defect", True):
                 continue
@@ -149,7 +166,8 @@ def format_daily_report_payload(
             raw_sev = str(record_dict.get("severity") or record_dict.get("severity_tier") or "").strip().upper()
             is_critical = (raw_sev == "CRITICAL" or sev_idx >= 8.0)
             raw_cat = record_dict.get("defect_category")
-            category = str(raw_cat) if raw_cat and str(raw_cat) != "None" else "BUILD_QUALITY"
+            cat_str = str(raw_cat).strip() if raw_cat is not None else ""
+            category = cat_str if cat_str and cat_str != "None" else "BUILD_QUALITY"
         else:
             continue
 
@@ -182,12 +200,17 @@ def format_daily_report_payload(
 
     # Accurately compute total_complaints_today based on generated_at date
     target_date_str = ""
-    if generated_at:
-        if len(generated_at) >= 10 and generated_at[4] in ("-", "/") and generated_at[7] in ("-", "/"):
-            target_date_str = generated_at[:10].replace("/", "-")
-        else:
+    gen_str = str(generated_at).strip() if generated_at is not None else ""
+    if gen_str:
+        if len(gen_str) >= 10 and gen_str[4] in ("-", "/") and gen_str[7] in ("-", "/"):
+            candidate = gen_str[:10].replace("/", "-")
             try:
-                target_date_str = datetime.fromisoformat(generated_at.replace("Z", "+00:00")).strftime("%Y-%m-%d")
+                target_date_str = datetime.strptime(candidate, "%Y-%m-%d").strftime("%Y-%m-%d")
+            except ValueError:
+                pass
+        if not target_date_str:
+            try:
+                target_date_str = datetime.fromisoformat(gen_str.replace("Z", "+00:00")).strftime("%Y-%m-%d")
             except Exception:
                 pass
     if not target_date_str:

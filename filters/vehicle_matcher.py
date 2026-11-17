@@ -18,8 +18,10 @@ Authoritative reference:
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Optional, Pattern, Tuple
+from typing import Any, Dict, List, Optional, Pattern, Tuple
 import unicodedata
+
+from filters.slang_lexicon import _decode_bytes_safely
 
 
 # Canonical brand definitions
@@ -49,10 +51,7 @@ def _sanitize_matcher_text(val: Any, max_len: int) -> str:
     if val is None or val is False:
         return ""
     if isinstance(val, (bytes, bytearray)):
-        try:
-            val_str = val.decode("utf-8", errors="replace")
-        except Exception:
-            val_str = str(val)
+        val_str = _decode_bytes_safely(val)
     elif isinstance(val, str):
         val_str = val
     else:
@@ -136,23 +135,23 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     # -----------------------------------------------------------------
     # Tesla Models & Colloquialisms
     # -----------------------------------------------------------------
-    (re.compile(r"(모델\s*(?:3|쓰리|스리)\s*하이랜드|model\s*3\s*highland|m3\s*(?:highland|하이랜드)|하이랜드(?![a-zA-Z0-9가-힣])|(?<![a-zA-Z0-9])highland(?![a-zA-Z0-9]))", re.IGNORECASE), "Model 3 Highland", BRAND_TESLA),
+    (re.compile(r"(모델\s*(?:3|쓰리|스리)\s*하이랜드|model\s*3\s*highland|m3\s*(?:highland|하이랜드)|(?<![가-힣a-zA-Z0-9])하이랜드" + PARTICLE_LOOKAHEAD + r"|(?<![a-zA-Z0-9])highland(?![a-zA-Z0-9]))", re.IGNORECASE), "Model 3 Highland", BRAND_TESLA),
     (re.compile(
         r"(모델\s*(?:3|쓰리|스리)|model\s*3|모삼|모\s*3"
         r"|(?:테슬라\s*)?삼식이"
         r"|(?:테슬라\s*)?메기\s*3"
         r"|(?:테슬라\s+)메기"
         r"|(?:테슬라\s*|tesla\s*)m3"
-        r"|(?<!bmw\s)(?<!bmw)(?<!비엠\s)(?<!비엠)(?<!비엠더블유\s)(?<!비엠더블유)(?<!sm)(?<!애플\s)(?<!애플)(?<!맥\s)(?<!맥)(?<!mac\s)(?<!mac)"
+        r"|(?<!bmw\s)(?<!bmw)(?<!비엠\s)(?<!비엠)(?<!비엠더블유\s)(?<!비엠더블유)(?<!sm)(?<!애플\s)(?<!애플)(?<!맥\s)(?<!맥)(?<!맥북\s)(?<!맥북)(?<!아이맥\s)(?<!아이맥)(?<!아이패드\s)(?<!아이패드)(?<!mac\s)(?<!mac)(?<!macbook\s)(?<!macbook)(?<!imac\s)(?<!imac)(?<!ipad\s)(?<!ipad)"
         r"(?<![a-zA-Z0-9])m3(?=[은는이가을를의에과와도만로랑처조마나한께보부까]|으로|보다|부터|까지|처럼|조차|마저|한테|입|했|하|인|임|일)"
-        r"|(?<!bmw\s)(?<!bmw)(?<!비엠\s)(?<!비엠)(?<!비엠더블유\s)(?<!비엠더블유)(?<!sm)(?<!애플\s)(?<!애플)(?<!맥\s)(?<!맥)(?<!mac\s)(?<!mac)"
+        r"|(?<!bmw\s)(?<!bmw)(?<!비엠\s)(?<!비엠)(?<!비엠더블유\s)(?<!비엠더블유)(?<!sm)(?<!애플\s)(?<!애플)(?<!맥\s)(?<!맥)(?<!맥북\s)(?<!맥북)(?<!아이맥\s)(?<!아이맥)(?<!아이패드\s)(?<!아이패드)(?<!mac\s)(?<!mac)(?<!macbook\s)(?<!macbook)(?<!imac\s)(?<!imac)(?<!ipad\s)(?<!ipad)"
         r"(?<![a-zA-Z0-9])m3\s*(?:rwd|awd|lwd|lr|p|롱레인지|롱레|스탠다드|스탠|퍼포먼스|퍼포|차주|오너|출고|인도|계약|단차|결함|승차감|전비|충전|배터리)"
-        r"|(?<!bmw\s)(?<!bmw)(?<!비엠\s)(?<!비엠)(?<!비엠더블유\s)(?<!비엠더블유)(?<!sm)(?<!애플\s)(?<!애플)(?<!맥\s)(?<!맥)(?<!mac\s)(?<!mac)"
+        r"|(?<!bmw\s)(?<!bmw)(?<!비엠\s)(?<!비엠)(?<!비엠더블유\s)(?<!비엠더블유)(?<!sm)(?<!애플\s)(?<!애플)(?<!맥\s)(?<!맥)(?<!맥북\s)(?<!맥북)(?<!아이맥\s)(?<!아이맥)(?<!아이패드\s)(?<!아이패드)(?<!mac\s)(?<!mac)(?<!macbook\s)(?<!macbook)(?<!imac\s)(?<!imac)(?<!ipad\s)(?<!ipad)"
         r"(?<![a-zA-Z0-9])m3(?!\s*(?:맥북|macbook|칩|chip|프로|pro|max|맥스|울트라|ultra|컴페티션|competition))(?=\s|$|[^a-zA-Z0-9가-힣])"
         r")",
         re.IGNORECASE,
     ), "Model 3", BRAND_TESLA),
-    (re.compile(r"(모델\s*(?:y|와이)\s*주니퍼|model\s*y\s*juniper|my\s*(?:주니퍼|juniper)|주니퍼(?!\s*(?:네트웍스|networks|라우터|router|스위치|switch))(?![a-zA-Z0-9가-힣])|(?<![a-zA-Z0-9])juniper(?!\s*(?:networks|router|switch))(?![a-zA-Z0-9]))", re.IGNORECASE), "Model Y Juniper", BRAND_TESLA),
+    (re.compile(r"(모델\s*(?:y|와이)\s*주니퍼|model\s*y\s*juniper|my\s*(?:주니퍼|juniper)|(?<![가-힣a-zA-Z0-9])주니퍼(?!\s*(?:네트웍스|networks|라우터|router|스위치|switch))" + PARTICLE_LOOKAHEAD + r"|(?<![a-zA-Z0-9])juniper(?!\s*(?:networks|router|switch))(?![a-zA-Z0-9]))", re.IGNORECASE), "Model Y Juniper", BRAND_TESLA),
     (re.compile(
         r"(모델\s*(?:y|와이)|model\s*y|모와|모\s*[y와]"
         r"|(?:테슬라\s*|tesla\s*)my"
@@ -227,10 +226,10 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     (re.compile(r"(?:bmw\s*|비엠\s*)?(?<![a-zA-Z0-9])(i7|i5|ix1|ix2)(?![a-zA-Z0-9])|(?:bmw\s*|비엠\s*)i\s*시리즈", re.IGNORECASE), "BMW i Series", BRAND_OTHER),
     (re.compile(r"(e-tron|이 트론|이트론|q4\s*e-tron)", re.IGNORECASE), "Audi e-tron", BRAND_OTHER),
     (re.compile(r"(볼트\s*(?:ev|euv)|bolt\s*ev)", re.IGNORECASE), "볼트 EV", BRAND_OTHER),
-    (re.compile(r"(ex\s*30|c40|xc40\s*recharge)", re.IGNORECASE), "Volvo EV", BRAND_OTHER),
+    (re.compile(r"(?<![a-zA-Z0-9])(ex\s*30|c40|xc40\s*recharge)(?![a-zA-Z0-9])", re.IGNORECASE), "Volvo EV", BRAND_OTHER),
     (re.compile(r"(리비안|rivian|r1t|r1s)", re.IGNORECASE), "Rivian", BRAND_OTHER),
     (re.compile(r"(루시드\s*에어|lucid\s*air|루시드)", re.IGNORECASE), "Lucid Air", BRAND_OTHER),
-    (re.compile(r"(샤오미\s*su7|su7)", re.IGNORECASE), "샤오미 SU7", BRAND_OTHER),
+    (re.compile(r"(샤오미\s*su7|(?<![a-zA-Z0-9])su7(?![a-zA-Z0-9]))", re.IGNORECASE), "샤오미 SU7", BRAND_OTHER),
     (re.compile(r"(폭스바겐\s*id\s*\.?\s*4|vw\s*id\s*\.?\s*4|(?<![a-zA-Z0-9])id\s*\.?\s*4(?![a-zA-Z0-9]))", re.IGNORECASE), "Volkswagen ID.4", BRAND_OTHER),
     (re.compile(r"(폭스바겐\s*id\s*\.?\s*버즈|vw\s*id\s*\.?\s*buzz|(?<![a-zA-Z0-9])id\s*\.?\s*(?:buzz|버즈)(?![a-zA-Z0-9]))", re.IGNORECASE), "Volkswagen ID.Buzz", BRAND_OTHER),
     (
@@ -253,7 +252,7 @@ BRAND_KEYWORDS: List[Tuple[Pattern[str], str]] = [
     (re.compile(r"(제네시스|genesis|(?:(?:electrified|일렉트리파이드)\s*)?(?:gv\s*60|gv\s*70|g\s*80))", re.IGNORECASE), BRAND_HYUNDAI),
     (re.compile(r"(기아차|기아\s*전기차|기아|오토큐|기아\s*(?:ev|이[븨브]이?))", re.IGNORECASE), BRAND_KIA),
     (re.compile(r"(byd|비야디|짱깨차|짱차|중국\s*전기차)", re.IGNORECASE), BRAND_BYD),
-    (re.compile(r"(벤츠|mercedes|mercedes-benz|bmw|비엠더블유|비엠|아우디|audi|포르쉐|porsche|폴스타|polestar|볼보|volvo|쉐보레|chevrolet|chevy|캐딜락|cadillac|폭스바겐|volkswagen|vw|리비안|rivian|루시드|lucid|샤오미|xiaomi|쌍용|쌍용차|kgm|케이지엠|kg\s*모빌리티|르노|renault|르노코리아|푸조|peugeot|지프|jeep)", re.IGNORECASE), BRAND_OTHER),
+    (re.compile(r"(벤츠|mercedes|mercedes-benz|bmw|비엠더블유|비엠|아우디|audi|포르쉐|porsche|폴스타|polestar|볼보|volvo|쉐보레|chevrolet|chevy|캐딜락|cadillac|폭스바겐|volkswagen|vw|리비안|rivian|루시드|lucid|샤오미|xiaomi|쌍용|쌍용차|(?<![a-zA-Z0-9])kgm(?![a-zA-Z0-9])|케이지엠|kg\s*모빌리티|르노|renault|르노코리아|푸조|peugeot|지프|jeep)", re.IGNORECASE), BRAND_OTHER),
 ]
 
 

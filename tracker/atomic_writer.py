@@ -40,7 +40,7 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
-_last_temp_dir_cleanup_time: float = 0.0
+_last_temp_dir_cleanup_time: float = -60.0
 _cleanup_meta_lock = threading.Lock()
 
 
@@ -127,18 +127,26 @@ class FileLock:
         if not lock_path or not str(lock_path).strip():
             raise ValueError("lock_path cannot be empty")
         self.lock_path = str(Path(lock_path).resolve())
-        self.timeout = max(0.0, float(timeout)) if timeout is not None else 10.0
-        self.poll_interval = max(0.001, float(poll_interval)) if poll_interval is not None else 0.02
-        self.stale_timeout = max(0.1, float(stale_timeout)) if stale_timeout is not None else 300.0
+        t_val = float(timeout) if timeout is not None else 10.0
+        self.timeout = 10.0 if (math.isnan(t_val) or math.isinf(t_val)) else max(0.0, t_val)
+        p_val = float(poll_interval) if poll_interval is not None else 0.02
+        self.poll_interval = 0.02 if (math.isnan(p_val) or math.isinf(p_val)) else max(0.001, p_val)
+        s_val = float(stale_timeout) if stale_timeout is not None else 300.0
+        self.stale_timeout = 300.0 if (math.isnan(s_val) or math.isinf(s_val)) else max(0.1, s_val)
         self.fail_on_timeout = fail_on_timeout
         self.fd: Optional[int] = None
         self.acquired: bool = False
-        self._thread_locked: bool = False
+        self._thread_lock_depth: int = 0
         self._instance_depth: int = 0
         with self._meta_lock:
             if self.lock_path not in self._process_locks:
                 self._process_locks[self.lock_path] = threading.RLock()
             self._thread_lock = self._process_locks[self.lock_path]
+
+    @property
+    def _thread_locked(self) -> bool:
+        """Return True if this instance currently holds its thread lock."""
+        return self._thread_lock_depth > 0
 
     @property
     def is_locked(self) -> bool:
@@ -160,7 +168,7 @@ class FileLock:
             self.acquired = False
             return self
 
-        self._thread_locked = True
+        self._thread_lock_depth += 1
         try:
             if not hasattr(self._local, "depths"):
                 self._local.depths = {}
@@ -386,8 +394,8 @@ class FileLock:
                 del self._local.depths[self.lock_path]
             if hasattr(self._local, "fds") and self.lock_path in self._local.fds:
                 del self._local.fds[self.lock_path]
-            if self._thread_locked:
-                self._thread_locked = False
+            if self._thread_lock_depth > 0:
+                self._thread_lock_depth -= 1
                 try:
                     self._thread_lock.release()
                 except RuntimeError:
@@ -434,8 +442,8 @@ class FileLock:
             self.acquired = False
             self._instance_depth = 0
         finally:
-            if getattr(self, "_thread_locked", False):
-                self._thread_locked = False
+            if self._thread_lock_depth > 0:
+                self._thread_lock_depth -= 1
                 try:
                     self._thread_lock.release()
                 except RuntimeError:
@@ -785,6 +793,8 @@ def sanitize_nan_inf(obj: Any, seen: Optional[set[int]] = None) -> Any:
                     sanitized_k = str(k)
                 elif isinstance(k, uuid.UUID):
                     sanitized_k = str(k)
+                elif isinstance(k, (bytes, bytearray)):
+                    sanitized_k = k.decode("utf-8", errors="replace")
                 elif isinstance(k, (complex, tuple)):
                     sanitized_k = str(k)
                 else:
@@ -841,7 +851,7 @@ def _json_default(obj: Any) -> Any:
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         return sanitize_nan_inf(dataclasses.asdict(obj))
     if isinstance(obj, Mapping):
-        return {k: sanitize_nan_inf(v) for k, v in obj.items()}
+        return sanitize_nan_inf(dict(obj))
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 

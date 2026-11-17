@@ -71,19 +71,19 @@ export default function NotFound() {
             href="/"
             prefetch={false}
             aria-label="메인 대시보드 홈으로 이동"
-            className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+            className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">🏠</span> 메인 홈으로 이동
           </Link>
         </div>
 
         {/* Quick Navigation Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-left">
+        <nav aria-label="핵심 서비스 바로가기" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-left">
           <Link
             href="/subsidy-tracker"
             prefetch={true}
             aria-label="보조금 실시간 소진율 추적기: 전국 17개 지자체 실시간 쿼터 및 소진 마감 긴급 경보"
-            className="group min-h-[44px] p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-amber-50/60 hover:border-amber-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
+            className="group min-h-[44px] p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-amber-50/60 hover:border-amber-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2"
           >
             <div className="flex items-center gap-2 font-bold text-slate-900 group-hover:text-amber-800 text-base">
               <span className="text-xl" aria-hidden="true">⚡</span>
@@ -98,7 +98,7 @@ export default function NotFound() {
             href="/reliability-analytics"
             prefetch={false}
             aria-label="스텔스 품질 점수 (DSI): 9대 제조사 22개 차종 연식별 결함 심각도 및 피해야 할 연식"
-            className="group min-h-[44px] p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-blue-50/60 hover:border-blue-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+            className="group min-h-[44px] p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-blue-50/60 hover:border-blue-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
           >
             <div className="flex items-center gap-2 font-bold text-slate-900 group-hover:text-blue-800 text-base">
               <span className="text-xl" aria-hidden="true">📊</span>
@@ -113,7 +113,7 @@ export default function NotFound() {
             href="/depreciation-calculator"
             prefetch={true}
             aria-label="감가상각 시뮬레이터: 실구매가·배터리 건강도(SoH) 기반 5년 TCO 및 잔존가치 시뮬레이션"
-            className="group min-h-[44px] p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-emerald-50/60 hover:border-emerald-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+            className="group min-h-[44px] p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-emerald-50/60 hover:border-emerald-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2"
           >
             <div className="flex items-center gap-2 font-bold text-slate-900 group-hover:text-emerald-800 text-base">
               <span className="text-xl" aria-hidden="true">📉</span>
@@ -128,7 +128,7 @@ export default function NotFound() {
             href="/recall-portal"
             prefetch={false}
             aria-label="통합 리콜 현황: 차대번호(VIN) 조회 및 국토부·제조사 공식 리콜 & 화재 포털"
-            className="group min-h-[44px] p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-rose-50/60 hover:border-rose-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2"
+            className="group min-h-[44px] p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-rose-50/60 hover:border-rose-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-2"
           >
             <div className="flex items-center gap-2 font-bold text-slate-900 group-hover:text-rose-800 text-base">
               <span className="text-xl" aria-hidden="true">🚨</span>
@@ -143,7 +143,7 @@ export default function NotFound() {
             href="/pdi-checklist"
             prefetch={false}
             aria-label="신차 검수 PDI 체크리스트: 인수증 서명 전 하부 배터리·단차·도장·ICCU 필수 점검 항목"
-            className="group min-h-[44px] p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-cyan-50/60 hover:border-cyan-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2"
+            className="group min-h-[44px] p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-cyan-50/60 hover:border-cyan-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-700 focus-visible:ring-offset-2"
           >
             <div className="flex items-center gap-2 font-bold text-slate-900 group-hover:text-cyan-800 text-base">
               <span className="text-xl" aria-hidden="true">✅</span>
@@ -158,7 +158,7 @@ export default function NotFound() {
             href="/"
             prefetch={false}
             aria-label="홈으로 이동: Global EV Hub 메인 대시보드 및 실시간 커뮤니티 결함 리포트"
-            className="group min-h-[44px] p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-indigo-50/60 hover:border-indigo-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+            className="group min-h-[44px] p-5 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-indigo-50/60 hover:border-indigo-300 transition shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
           >
             <div className="flex items-center gap-2 font-bold text-slate-900 group-hover:text-indigo-800 text-base">
               <span className="text-xl" aria-hidden="true">🏠</span>
@@ -168,7 +168,7 @@ export default function NotFound() {
               Global EV Hub 메인 대시보드 및 실시간 커뮤니티 결함 리포트
             </p>
           </Link>
-        </div>
+        </nav>
       </div>
     </div>
   );

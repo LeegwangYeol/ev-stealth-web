@@ -13,18 +13,24 @@ from datetime import datetime, timezone
 import math
 from typing import Any, Dict, List, Optional, Union
 
-from tracker.subsidy_models import RegionRecord, SubsidyPayload
+from tracker.subsidy_models import PopularModelEntry, RegionRecord, SubsidyPayload
 
 
 def _safe_int_val(val: Any, default: int = 0) -> int:
     """Safely convert value to int, catching None, NaN, Inf, ValueError, TypeError, OverflowError."""
     if val is None:
         return default
+    if type(val) is int:
+        return val
+    if isinstance(val, str):
+        val = val.strip().replace(",", "")
+        if not val:
+            return default
     try:
-        if isinstance(val, float):
-            if math.isnan(val) or math.isinf(val):
-                return default
-        return int(val)
+        f = float(val)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return int(f)
     except (ValueError, TypeError, OverflowError):
         return default
 
@@ -105,6 +111,8 @@ def format_currency_krw(amount: Any, unit: str = "auto") -> str:
         f = float(amount)
         if math.isnan(f) or math.isinf(f):
             return "0원"
+        if f == 0.0:
+            f = 0.0
     except (ValueError, TypeError, OverflowError):
         return "0원"
 
@@ -134,9 +142,12 @@ def format_currency_krw(amount: Any, unit: str = "auto") -> str:
 def format_percentage(val: Any, decimals: int = 1) -> str:
     """Safely format percentage value with specified decimal precision."""
     f = _safe_float_val(val, 0.0)
-    if decimals <= 0 or (f % 1 == 0 and decimals == 0):
-        return f"{int(f)}%"
-    fmt = f"{{:,.{decimals}f}}%"
+    if f == 0.0:
+        f = 0.0
+    dec = max(0, _safe_int_val(decimals, 1))
+    if dec <= 0:
+        return f"{int(round(f))}%"
+    fmt = f"{{:,.{dec}f}}%"
     return fmt.format(f)
 
 
@@ -314,6 +325,7 @@ class ReportGenerator:
             "KR-29": "광주광역시",
             "KR-30": "대전광역시",
             "KR-31": "울산광역시",
+            "KR-36": "세종특별자치시",
             "KR-50": "세종특별자치시",
             "KR-41": "경기도",
             "KR-49": "제주특별자치도",
@@ -343,15 +355,9 @@ class ReportGenerator:
 
             local_sub = 0
             if hasattr(m, "get_regional_subsidy") and callable(getattr(m, "get_regional_subsidy")):
-                local_sub = m.get_regional_subsidy(target_region)
-            else:
-                samples = _get_field(m, "regional_subsidy_samples", {}) or {}
-                if isinstance(samples, dict):
-                    entry = samples.get(target_region, {})
-                    if isinstance(entry, dict):
-                        local_sub = max(0, _safe_int_val(entry.get("local_subsidy_krw", 0)))
-                    elif isinstance(entry, (int, float)):
-                        local_sub = max(0, _safe_int_val(entry))
+                local_sub = max(0, _safe_int_val(m.get_regional_subsidy(target_region), 0))
+            elif isinstance(m, dict):
+                local_sub = PopularModelEntry.from_dict(m).get_regional_subsidy(target_region)
 
             total_sub = nat_sub + local_sub
             final_price = max(0, base_price - total_sub)
@@ -381,7 +387,11 @@ class ReportGenerator:
             gen_time = datetime.now(timezone.utc).isoformat()
         else:
             reports = _get_field(report_data, "reports", []) or []
+            if not isinstance(reports, (list, tuple)):
+                reports = []
             stats = _get_field(report_data, "statistics", {}) or {}
+            if isinstance(stats, (int, float, str, bool, list)):
+                stats = {}
             gen_time = _get_field(report_data, "generated_at", datetime.now(timezone.utc).isoformat())
 
         total_reports = len(reports)
@@ -446,6 +456,11 @@ class ReportGenerator:
         """Encapsulate statistical reporting formatting into publication-grade Markdown."""
         if records is None:
             records = []
+        elif not isinstance(records, (list, tuple)):
+            if hasattr(records, "__iter__") and not isinstance(records, (str, bytes, dict)):
+                records = list(records)
+            else:
+                records = []
         total_records = len(records)
         stats = summary_stats or {}
 
@@ -456,13 +471,16 @@ class ReportGenerator:
 
         severity_scores: List[float] = []
         for rec in records:
-            brand = _get_field(rec, "vehicle_brand") or "기타/미지정"
+            raw_brand = _get_field(rec, "vehicle_brand")
+            brand = (str(raw_brand).strip() if raw_brand is not None else "") or "기타/미지정"
             brand_counts[brand] = brand_counts.get(brand, 0) + 1
 
-            plat = _get_field(rec, "source") or _get_field(rec, "platform") or "커뮤니티"
+            raw_plat = _get_field(rec, "source") or _get_field(rec, "platform")
+            plat = (str(raw_plat).strip() if raw_plat is not None else "") or "커뮤니티"
             platform_counts[plat] = platform_counts.get(plat, 0) + 1
 
-            cat = _get_field(rec, "defect_category") or _get_field(rec, "category") or "기타"
+            raw_cat = _get_field(rec, "defect_category") or _get_field(rec, "category")
+            cat = (str(raw_cat).strip() if raw_cat is not None else "") or "기타"
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
             dsi = _get_field(rec, "severity_index")

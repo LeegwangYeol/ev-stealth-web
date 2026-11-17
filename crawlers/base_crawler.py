@@ -8,13 +8,28 @@ from __future__ import annotations
 import abc
 import json
 import logging
+import math
 import os
+import urllib.parse
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from utils.http_client import SafeHttpClient
 
 logger = logging.getLogger("BaseCrawler")
+
+
+def _positive_float(value: Any, default: float) -> float:
+    """Convert value to a positive finite float, or return default."""
+    if value is None or isinstance(value, bool):
+        return default
+    try:
+        num = float(value)
+    except (ValueError, TypeError):
+        return default
+    if not math.isfinite(num) or num <= 0:
+        return default
+    return num
 
 
 class BaseCrawler(abc.ABC):
@@ -41,39 +56,27 @@ class BaseCrawler(abc.ABC):
 
         # Resolve explicit connect and read timeouts
         if connect_timeout is not None:
-            try:
-                self._connect_timeout = float(connect_timeout)
-            except (ValueError, TypeError):
-                self._connect_timeout = 5.0
+            self._connect_timeout = _positive_float(connect_timeout, 5.0)
         elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
-            try:
-                self._connect_timeout = float(timeout[0])
-            except (ValueError, TypeError):
-                self._connect_timeout = 5.0
-        elif isinstance(timeout, (int, float)) and timeout > 0 and (timeout != 15.0 or client is None):
+            self._connect_timeout = _positive_float(timeout[0], 5.0)
+        elif isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(float(timeout)) and float(timeout) > 0 and (float(timeout) != 15.0 or client is None):
             self._connect_timeout = min(5.0, float(timeout))
         elif client is not None and hasattr(client, "connect_timeout") and isinstance(getattr(client, "connect_timeout", None), (int, float)):
-            self._connect_timeout = float(client.connect_timeout)
-        elif isinstance(timeout, (int, float)) and timeout > 0:
+            self._connect_timeout = _positive_float(client.connect_timeout, 5.0)
+        elif isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(float(timeout)) and float(timeout) > 0:
             self._connect_timeout = min(5.0, float(timeout))
         else:
             self._connect_timeout = 5.0
 
         if read_timeout is not None:
-            try:
-                self._read_timeout = float(read_timeout)
-            except (ValueError, TypeError):
-                self._read_timeout = 15.0
+            self._read_timeout = _positive_float(read_timeout, 15.0)
         elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
-            try:
-                self._read_timeout = float(timeout[1])
-            except (ValueError, TypeError):
-                self._read_timeout = 15.0
-        elif isinstance(timeout, (int, float)) and timeout > 0 and (timeout != 15.0 or client is None):
+            self._read_timeout = _positive_float(timeout[1], 15.0)
+        elif isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(float(timeout)) and float(timeout) > 0 and (float(timeout) != 15.0 or client is None):
             self._read_timeout = float(timeout)
         elif client is not None and hasattr(client, "read_timeout") and isinstance(getattr(client, "read_timeout", None), (int, float)):
-            self._read_timeout = float(client.read_timeout)
-        elif isinstance(timeout, (int, float)) and timeout > 0:
+            self._read_timeout = _positive_float(client.read_timeout, 15.0)
+        elif isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(float(timeout)) and float(timeout) > 0:
             self._read_timeout = float(timeout)
         else:
             self._read_timeout = 15.0
@@ -183,6 +186,8 @@ class BaseCrawler(abc.ABC):
         limit: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """Load fallback records from seed datasets in data/ if live crawl is unavailable."""
+        if limit is not None and limit <= 0:
+            return []
         seed_posts: List[Dict[str, Any]] = []
         target_platform = (platform_name or getattr(self, "platform", "") or "").lower().strip()
         seed_files = [
@@ -227,13 +232,13 @@ class BaseCrawler(abc.ABC):
                                     if "raw_quote" in norm_item and "content" not in norm_item:
                                         norm_item["content"] = norm_item["raw_quote"]
                                     seed_posts.append(norm_item)
-                                    if limit and len(seed_posts) >= limit:
+                                    if limit is not None and len(seed_posts) >= limit:
                                         return seed_posts
                     except Exception as e:
                         logger.debug(f"Failed reading seed file {s_file}: {e}")
             if seed_posts:
                 break
-        return seed_posts[:limit] if limit else seed_posts
+        return seed_posts[:limit] if limit is not None else seed_posts
 
     def reset_session(self) -> None:
         """Alias for clear_session() to reinitialize session state."""
@@ -321,9 +326,23 @@ class BaseCrawler(abc.ABC):
             return None
 
         eff_url = post_url.strip()
+        if any(ord(c) < 32 or ord(c) == 127 for c in eff_url):
+            logger.warning(f"Unsafe control characters in post_url: {post_url!r}")
+            return None
+
+        parsed_input = urllib.parse.urlsplit(eff_url)
+        if parsed_input.scheme and parsed_input.scheme.lower() not in ("http", "https"):
+            logger.warning(f"Disallowed URL scheme in fetch_post: {post_url!r}")
+            return None
+
         base_url = kwargs.get("base_url") or self.base_url
-        if not (eff_url.startswith("http://") or eff_url.startswith("https://")):
-            if base_url:
+        if eff_url.startswith("//"):
+            base_scheme = "https"
+            if isinstance(base_url, str) and base_url.strip():
+                base_scheme = urllib.parse.urlsplit(base_url.strip()).scheme or "https"
+            eff_url = f"{base_scheme}:{eff_url}"
+        elif not (eff_url.startswith("http://") or eff_url.startswith("https://")):
+            if base_url and isinstance(base_url, str):
                 base_clean = base_url.rstrip("/")
                 path_clean = eff_url.lstrip("/")
                 eff_url = f"{base_clean}/{path_clean}"

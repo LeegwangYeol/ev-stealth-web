@@ -83,7 +83,7 @@ export default function PdiChecklistError({ error, reset }: PdiErrorProps) {
             type="button"
             onClick={handleRetry}
             aria-label="PDI 체크리스트 다시 시도"
-            className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2"
+            className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-cyan-700 hover:bg-cyan-800 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">🔄</span> 다시 시도
           </button>

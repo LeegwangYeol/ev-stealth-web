@@ -69,6 +69,23 @@ export type {
 // ==========================================
 
 /**
+ * Parses a number or non-empty numeric string into a finite number, or returns null.
+ * Rejects empty/whitespace strings, NaN, Infinity, booleans, and objects.
+ */
+function parseFiniteNumber(val: unknown): number | null {
+  if (typeof val === 'number') {
+    return Number.isFinite(val) ? val : null;
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (trimmed === '') return null;
+    const num = Number(trimmed);
+    return Number.isFinite(num) ? num : null;
+  }
+  return null;
+}
+
+/**
  * Normalizes a raw reliability or DSI score to the strictly bounded [0, 100] interval.
  * - Non-numeric or non-finite inputs (NaN, null, undefined, Infinity, -Infinity) fall back safely to fallback (default: 0).
  * - Negative values are clamped to 0.
@@ -78,22 +95,10 @@ export type {
 export function normalizeReliabilityScore(rawScore: unknown, fallback: number = 0): number {
   const safeFallback =
     typeof fallback === 'number' && Number.isFinite(fallback)
-      ? Math.max(0, Math.min(100, Math.round(fallback * 10) / 10))
+      ? Math.max(0, Math.min(100, Math.round(fallback * 10) / 10)) + 0
       : 0;
 
-  let parsed: number | null = null;
-  if (typeof rawScore === 'number' && Number.isFinite(rawScore)) {
-    parsed = rawScore;
-  } else if (typeof rawScore === 'string') {
-    const trimmed = rawScore.trim();
-    if (trimmed !== '') {
-      const num = Number(trimmed);
-      if (Number.isFinite(num)) {
-        parsed = num;
-      }
-    }
-  }
-
+  const parsed = parseFiniteNumber(rawScore);
   if (parsed === null) {
     return safeFallback;
   }
@@ -130,15 +135,8 @@ export function aggregateCategoryComplaintCounts(
     const key = rawKey.trim().toUpperCase();
     if (!key) return;
 
-    let parsedCount = 0;
-    if (typeof rawCount === 'number' && Number.isFinite(rawCount)) {
-      parsedCount = Math.max(0, Math.floor(rawCount));
-    } else if (typeof rawCount === 'string') {
-      const num = Number(rawCount.trim());
-      if (Number.isFinite(num)) {
-        parsedCount = Math.max(0, Math.floor(num));
-      }
-    }
+    const num = parseFiniteNumber(rawCount);
+    const parsedCount = num !== null ? Math.max(0, Math.floor(num)) : 0;
 
     countMap.set(key, (countMap.get(key) || 0) + parsedCount);
   };
@@ -149,12 +147,21 @@ export function aggregateCategoryComplaintCounts(
 
       // Case A: Item is a BrandReliability object with category_distribution
       if ('category_distribution' in item && item.category_distribution && typeof item.category_distribution === 'object') {
-        const dist = item.category_distribution as Record<string, { count?: unknown } | number>;
-        for (const [cat, val] of Object.entries(dist)) {
-          if (val && typeof val === 'object' && 'count' in val) {
-            addCount(cat, (val as { count?: unknown }).count);
-          } else {
-            addCount(cat, val);
+        if (Array.isArray(item.category_distribution)) {
+          const nested = aggregateCategoryComplaintCounts(
+            item.category_distribution as Array<CategoryComplaintInputEntry | null | undefined>
+          );
+          for (const [cat, val] of Object.entries(nested)) {
+            addCount(cat, val.count);
+          }
+        } else {
+          const dist = item.category_distribution as Record<string, { count?: unknown } | number>;
+          for (const [cat, val] of Object.entries(dist)) {
+            if (val && typeof val === 'object' && 'count' in val) {
+              addCount(cat, (val as { count?: unknown }).count);
+            } else {
+              addCount(cat, val);
+            }
           }
         }
         continue;
@@ -243,7 +250,7 @@ export function calculateTrendDirection(
       ? Math.max(0, thresholdPct)
       : 0.1;
 
-  const absoluteChange = Math.round((safeCurrent - safePrevious) * 100) / 100;
+  const absoluteChange = Math.round((safeCurrent - safePrevious) * 100) / 100 + 0;
 
   // Edge case: previous period is 0 (prevents division by zero, Infinity, and NaN)
   if (safePrevious === 0) {
@@ -282,7 +289,13 @@ export function calculateTrendDirection(
 
   // Normal calculation: ((current - previous) / Math.abs(safePrevious)) * 100
   const rawPctChange = ((safeCurrent - safePrevious) / Math.abs(safePrevious)) * 100;
-  const pctChange = Number.isFinite(rawPctChange) ? Math.round(rawPctChange * 10) / 10 : 0;
+  const pctChange = Number.isFinite(rawPctChange)
+    ? Math.round(rawPctChange * 10) / 10 + 0
+    : rawPctChange > 0
+      ? 100
+      : rawPctChange < 0
+        ? -100
+        : 0;
 
   if (Math.abs(pctChange) <= safeThreshold) {
     return {
@@ -325,20 +338,23 @@ export function calculateTrendDirection(
  * the top defect category using safe category complaint aggregation.
  */
 export function calculateReliabilityKPIs(data?: ReliabilityTrendsDatabase | null): ReliabilityKPIs {
-  const brands = Array.isArray(data?.brands) ? data.brands : [];
+  const brands = Array.isArray(data?.brands)
+    ? data.brands.filter((b): b is BrandReliability => Boolean(b && typeof b === 'object'))
+    : [];
   const meta = data?.metadata;
 
-  const rawMetaTotal = meta?.total_records_analyzed ?? meta?.total_analyzed_posts;
+  const rawMetaTotal = parseFiniteNumber(
+    meta?.total_records_analyzed ?? meta?.total_analyzed_posts
+  );
   let totalAnalyzedPosts =
-    typeof rawMetaTotal === 'number' && Number.isFinite(rawMetaTotal) && rawMetaTotal > 0
-      ? Math.floor(rawMetaTotal)
-      : 0;
+    rawMetaTotal !== null && rawMetaTotal > 0 ? Math.floor(rawMetaTotal) : 0;
 
   // Single-brand or missing metadata fallback: sum across brand reports
   if (totalAnalyzedPosts === 0 && brands.length > 0) {
     for (const b of brands) {
-      if (b && typeof b.total_reports === 'number' && Number.isFinite(b.total_reports) && b.total_reports > 0) {
-        totalAnalyzedPosts += Math.floor(b.total_reports);
+      const bReports = parseFiniteNumber(b.total_reports);
+      if (bReports !== null && bReports > 0) {
+        totalAnalyzedPosts += Math.floor(bReports);
       }
     }
   }
@@ -346,15 +362,16 @@ export function calculateReliabilityKPIs(data?: ReliabilityTrendsDatabase | null
   const trackedBrandsCount = brands.length;
   let trackedModelsCount = 0;
   for (const b of brands) {
-    if (b && Array.isArray(b.models)) {
-      trackedModelsCount += b.models.length;
+    if (Array.isArray(b.models)) {
+      trackedModelsCount += b.models.filter((m) => Boolean(m && typeof m === 'object')).length;
     }
   }
 
   // Calculate industry / dataset average DSI
   let industryAvgDsi = 0;
-  if (typeof meta?.avg_industry_dsi === 'number' && Number.isFinite(meta.avg_industry_dsi) && meta.avg_industry_dsi > 0) {
-    industryAvgDsi = normalizeReliabilityScore(meta.avg_industry_dsi, 0);
+  const metaAvgDsi = parseFiniteNumber(meta?.avg_industry_dsi);
+  if (metaAvgDsi !== null && metaAvgDsi > 0) {
+    industryAvgDsi = normalizeReliabilityScore(metaAvgDsi, 0);
   } else if (brands.length > 0) {
     // Dynamic calculation for single-brand or partial datasets
     let weightedDsiSum = 0;
@@ -363,19 +380,17 @@ export function calculateReliabilityKPIs(data?: ReliabilityTrendsDatabase | null
     let validDsiCount = 0;
 
     for (const b of brands) {
-      if (!b) continue;
-      const bDsi = normalizeReliabilityScore(b.overall_dsi, 0);
-      const bReports = typeof b.total_reports === 'number' && Number.isFinite(b.total_reports) && b.total_reports > 0
-        ? b.total_reports
-        : 0;
+      const rawBrandDsi = parseFiniteNumber(b.overall_dsi);
+      if (rawBrandDsi === null) continue;
+      const bDsi = normalizeReliabilityScore(rawBrandDsi, 0);
+      const rawReports = parseFiniteNumber(b.total_reports);
+      const bReports = rawReports !== null && rawReports > 0 ? rawReports : 0;
 
-      if (bDsi > 0) {
-        simpleDsiSum += bDsi;
-        validDsiCount++;
-        if (bReports > 0) {
-          weightedDsiSum += bDsi * bReports;
-          totalDsiWeight += bReports;
-        }
+      simpleDsiSum += bDsi;
+      validDsiCount++;
+      if (bReports > 0) {
+        weightedDsiSum += bDsi * bReports;
+        totalDsiWeight += bReports;
       }
     }
 
@@ -388,7 +403,7 @@ export function calculateReliabilityKPIs(data?: ReliabilityTrendsDatabase | null
 
   // Determine top defect category via safe aggregation
   const aggregated = aggregateCategoryComplaintCounts(brands);
-  let topDefectCategory = 'BATTERY_CHARGING';
+  let topDefectCategory = 'NONE';
   let maxCount = 0;
 
   for (const [catKey, val] of Object.entries(aggregated)) {
@@ -396,10 +411,6 @@ export function calculateReliabilityKPIs(data?: ReliabilityTrendsDatabase | null
       maxCount = val.count;
       topDefectCategory = catKey;
     }
-  }
-
-  if (maxCount === 0 && Object.keys(aggregated).length === 0) {
-    topDefectCategory = 'NONE';
   }
 
   return {
@@ -444,9 +455,9 @@ export function getAllEnrichedModels(data?: ReliabilityTrendsDatabase): Enriched
                 dsi_score: normalizeReliabilityScore(y.dsi_score, 0),
               }))
           : [],
-        brand_name_ko: brand.name_ko || '',
-        brand_name_en: brand.name_en || '',
-        brand_country: brand.country || '',
+        brand_name_ko: typeof brand.name_ko === 'string' ? brand.name_ko : '',
+        brand_name_en: typeof brand.name_en === 'string' ? brand.name_en : '',
+        brand_country: typeof brand.country === 'string' ? brand.country : '',
       });
     }
   }
@@ -597,22 +608,22 @@ export function getModelReliabilityById(
 
   // Priority 1: Exact ID match
   const exactId = allModels.find((m) => {
-    const mIdNorm = (m?.id || '').toLowerCase().replace(/[\s\-_]+/g, '');
+    const mIdNorm = (typeof m?.id === 'string' ? m.id : '').toLowerCase().replace(/[\s\-_]+/g, '');
     return mIdNorm === normalized;
   });
   if (exactId) return exactId;
 
   // Priority 2: Exact Name match
   const exactName = allModels.find((m) => {
-    const mNameNorm = (m?.name || '').toLowerCase().replace(/[\s\-_]+/g, '');
+    const mNameNorm = (typeof m?.name === 'string' ? m.name : '').toLowerCase().replace(/[\s\-_]+/g, '');
     return mNameNorm === normalized;
   });
   if (exactName) return exactName;
 
   // Priority 3: Fallback substring match
   return allModels.find((m) => {
-    const mIdNorm = (m?.id || '').toLowerCase().replace(/[\s\-_]+/g, '');
-    const mNameNorm = (m?.name || '').toLowerCase().replace(/[\s\-_]+/g, '');
+    const mIdNorm = (typeof m?.id === 'string' ? m.id : '').toLowerCase().replace(/[\s\-_]+/g, '');
+    const mNameNorm = (typeof m?.name === 'string' ? m.name : '').toLowerCase().replace(/[\s\-_]+/g, '');
     return (
       (mIdNorm.length > 0 &&
         (mIdNorm.includes(normalized) || normalized.includes(mIdNorm))) ||
@@ -645,13 +656,26 @@ export function getBrandReliabilityById(
   if (!brandId || typeof brandId !== 'string') return undefined;
   const normalized = brandId.trim().toLowerCase();
   if (!normalized) return undefined;
-  const brands = Array.isArray(data?.brands) ? data.brands : [];
+  const brands = Array.isArray(data?.brands)
+    ? data.brands.filter((b): b is BrandReliability => Boolean(b && typeof b === 'object'))
+    : [];
+
+  const exactId = brands.find(
+    (b) => typeof b.id === 'string' && b.id.toLowerCase() === normalized
+  );
+  if (exactId) return exactId;
+
+  const exactName = brands.find(
+    (b) =>
+      (typeof b.name_ko === 'string' && b.name_ko.toLowerCase() === normalized) ||
+      (typeof b.name_en === 'string' && b.name_en.toLowerCase() === normalized)
+  );
+  if (exactName) return exactName;
+
   return brands.find(
-    (b: BrandReliability) =>
-      Boolean(b && typeof b === 'object') &&
-      ((b.id && b.id.toLowerCase() === normalized) ||
-        (b.name_ko && b.name_ko.toLowerCase().includes(normalized)) ||
-        (b.name_en && b.name_en.toLowerCase().includes(normalized)))
+    (b) =>
+      (typeof b.name_ko === 'string' && b.name_ko.toLowerCase().includes(normalized)) ||
+      (typeof b.name_en === 'string' && b.name_en.toLowerCase().includes(normalized))
   );
 }
 
@@ -690,11 +714,12 @@ export function calculateReliabilityConfidence(
   yearsEvaluated?: unknown,
   minSampleThreshold: number = 50
 ): number {
-  if (typeof complaintCount !== 'number' || !Number.isFinite(complaintCount) || complaintCount <= 0) {
+  const parsedComplaints = parseFiniteNumber(complaintCount);
+  if (parsedComplaints === null || parsedComplaints <= 0) {
     return 0.0;
   }
 
-  const safeComplaints = Math.max(0, Math.floor(complaintCount));
+  const safeComplaints = Math.max(0, Math.floor(parsedComplaints));
   if (safeComplaints === 0) return 0.0;
 
   const threshold =
@@ -711,13 +736,8 @@ export function calculateReliabilityConfidence(
   // Year coverage factor (if specified)
   let yearFactor = 1.0;
   if (yearsEvaluated !== undefined && yearsEvaluated !== null) {
-    let parsedYears: number | null = null;
-    if (typeof yearsEvaluated === 'number' && Number.isFinite(yearsEvaluated)) {
-      parsedYears = Math.floor(yearsEvaluated);
-    } else if (typeof yearsEvaluated === 'string') {
-      const num = Number(yearsEvaluated.trim());
-      if (Number.isFinite(num)) parsedYears = Math.floor(num);
-    }
+    const rawYears = parseFiniteNumber(yearsEvaluated);
+    const parsedYears = rawYears !== null ? Math.floor(rawYears) : null;
 
     if (parsedYears !== null) {
       const safeYears = Math.max(0, parsedYears);
@@ -748,21 +768,11 @@ export function normalizeDefectFrequency(
   fleetOrSalesVolume: unknown,
   baselineScale: number = 1000
 ): number {
-  let safeComplaints = 0;
-  if (typeof complaintCount === 'number' && Number.isFinite(complaintCount)) {
-    safeComplaints = Math.max(0, complaintCount);
-  } else if (typeof complaintCount === 'string') {
-    const num = Number(complaintCount.trim());
-    if (Number.isFinite(num)) safeComplaints = Math.max(0, num);
-  }
+  const parsedComplaints = parseFiniteNumber(complaintCount);
+  const safeComplaints = parsedComplaints !== null ? Math.max(0, parsedComplaints) : 0;
 
-  let safeVolume = 0;
-  if (typeof fleetOrSalesVolume === 'number' && Number.isFinite(fleetOrSalesVolume)) {
-    safeVolume = Math.max(0, fleetOrSalesVolume);
-  } else if (typeof fleetOrSalesVolume === 'string') {
-    const num = Number(fleetOrSalesVolume.trim());
-    if (Number.isFinite(num)) safeVolume = Math.max(0, num);
-  }
+  const parsedVolume = parseFiniteNumber(fleetOrSalesVolume);
+  const safeVolume = parsedVolume !== null ? Math.max(0, parsedVolume) : 0;
 
   if (safeComplaints === 0 || safeVolume === 0) {
     return 0.0;
@@ -774,7 +784,7 @@ export function normalizeDefectFrequency(
       : 1000;
 
   const frequency = (safeComplaints / safeVolume) * safeScale;
-  return Number.isFinite(frequency) ? Math.round(frequency * 100) / 100 : 0.0;
+  return Number.isFinite(frequency) ? Math.round(frequency * 100) / 100 + 0 : 0.0;
 }
 
 /**
@@ -821,19 +831,15 @@ export function calculateWeightedDefectFrequency(
 
   let volume = 0;
   let scale = 1000;
-  if (typeof totalVolumeOrReports === 'number' && Number.isFinite(totalVolumeOrReports)) {
-    volume = Math.max(0, totalVolumeOrReports);
-  } else if (typeof totalVolumeOrReports === 'string') {
-    const num = Number(totalVolumeOrReports.trim());
-    if (Number.isFinite(num)) volume = Math.max(0, num);
+  const directVol = parseFiniteNumber(totalVolumeOrReports);
+  if (directVol !== null) {
+    volume = Math.max(0, directVol);
   } else if (totalVolumeOrReports && typeof totalVolumeOrReports === 'object') {
     const opts = totalVolumeOrReports as DefectFrequencyOptions;
     const rawV = opts.fleetOrSalesVolume ?? (opts as Record<string, unknown>).volume;
-    if (typeof rawV === 'number' && Number.isFinite(rawV)) {
-      volume = Math.max(0, rawV);
-    } else if (typeof rawV === 'string') {
-      const num = Number(rawV.trim());
-      if (Number.isFinite(num)) volume = Math.max(0, num);
+    const parsedV = parseFiniteNumber(rawV);
+    if (parsedV !== null) {
+      volume = Math.max(0, parsedV);
     }
     if (typeof opts.baselineScale === 'number' && Number.isFinite(opts.baselineScale) && opts.baselineScale > 0) {
       scale = opts.baselineScale;
@@ -841,11 +847,13 @@ export function calculateWeightedDefectFrequency(
   }
 
   if (volume > 0) {
-    return Math.round(((weightedSum / volume) * scale) * 100) / 100;
+    const freq = (weightedSum / volume) * scale;
+    return Number.isFinite(freq) ? Math.round(freq * 100) / 100 + 0 : 0.0;
   }
 
   // Fallback to average severity multiplier
-  return Math.round((weightedSum / totalComplaints) * 100) / 100;
+  const avgMult = weightedSum / totalComplaints;
+  return Number.isFinite(avgMult) ? Math.round(avgMult * 100) / 100 + 0 : 0.0;
 }
 
 /**
@@ -896,32 +904,16 @@ export function deriveVerdictFromStealthScore(
  */
 export function calculateStealthScore(input?: StealthScoreInput | null): StealthScoreResult {
   const safeDsi = normalizeReliabilityScore(input?.dsi, 50.0);
-  const safeIncidentRate =
-    typeof input?.incidentRate === 'number' && Number.isFinite(input.incidentRate)
-      ? Math.max(0, Math.min(100, input.incidentRate))
-      : 0.0;
-  const safeCriticalRate =
-    typeof input?.criticalIssueRate === 'number' && Number.isFinite(input.criticalIssueRate)
-      ? Math.max(0, Math.min(100, input.criticalIssueRate))
-      : 0.0;
+  const parsedIncident = parseFiniteNumber(input?.incidentRate);
+  const safeIncidentRate = parsedIncident !== null ? Math.max(0, Math.min(100, parsedIncident)) : 0.0;
+  const parsedCritical = parseFiniteNumber(input?.criticalIssueRate);
+  const safeCriticalRate = parsedCritical !== null ? Math.max(0, Math.min(100, parsedCritical)) : 0.0;
 
-  const rawComplaints = input?.totalComplaints;
-  let safeComplaints = 0;
-  if (typeof rawComplaints === 'number' && Number.isFinite(rawComplaints)) {
-    safeComplaints = Math.max(0, Math.floor(rawComplaints));
-  } else if (typeof rawComplaints === 'string') {
-    const num = Number(rawComplaints.trim());
-    if (Number.isFinite(num)) safeComplaints = Math.max(0, Math.floor(num));
-  }
+  const parsedComplaints = parseFiniteNumber(input?.totalComplaints);
+  const safeComplaints = parsedComplaints !== null ? Math.max(0, Math.floor(parsedComplaints)) : 0;
 
-  const rawYears = input?.yearsEvaluated;
-  let safeYears: number | undefined;
-  if (typeof rawYears === 'number' && Number.isFinite(rawYears)) {
-    safeYears = Math.max(0, Math.floor(rawYears));
-  } else if (typeof rawYears === 'string') {
-    const num = Number(rawYears.trim());
-    if (Number.isFinite(num)) safeYears = Math.max(0, Math.floor(num));
-  }
+  const parsedYears = parseFiniteNumber(input?.yearsEvaluated);
+  const safeYears = parsedYears !== null ? Math.max(0, Math.floor(parsedYears)) : undefined;
 
   // Weight validation and normalization
   let hasInvalidWeight = false;
@@ -931,9 +923,9 @@ export function calculateStealthScore(input?: StealthScoreInput | null): Stealth
 
   if (input?.weights && typeof input.weights === 'object') {
     if (
-      (rawWDsi !== undefined && (!Number.isFinite(rawWDsi) || (rawWDsi as number) < 0)) ||
-      (rawWInc !== undefined && (!Number.isFinite(rawWInc) || (rawWInc as number) < 0)) ||
-      (rawWCrit !== undefined && (!Number.isFinite(rawWCrit) || (rawWCrit as number) < 0))
+      (rawWDsi !== undefined && (typeof rawWDsi !== 'number' || !Number.isFinite(rawWDsi) || rawWDsi < 0)) ||
+      (rawWInc !== undefined && (typeof rawWInc !== 'number' || !Number.isFinite(rawWInc) || rawWInc < 0)) ||
+      (rawWCrit !== undefined && (typeof rawWCrit !== 'number' || !Number.isFinite(rawWCrit) || rawWCrit < 0))
     ) {
       hasInvalidWeight = true;
     }
@@ -988,7 +980,12 @@ export function calculateStealthScore(input?: StealthScoreInput | null): Stealth
 
   // Volume-aware normalized defect frequency
   const rawVolume = input?.fleetOrSalesVolume ?? input?.fleetVolume ?? input?.salesVolume;
-  const scale = typeof input?.baselineScale === 'number' && input.baselineScale > 0 ? input.baselineScale : 1000;
+  const scale =
+    typeof input?.baselineScale === 'number' &&
+    Number.isFinite(input.baselineScale) &&
+    input.baselineScale > 0
+      ? input.baselineScale
+      : 1000;
   const normalizedDefectFrequency = rawVolume !== undefined && rawVolume !== null
     ? normalizeDefectFrequency(safeComplaints, rawVolume, scale)
     : normalizeDefectFrequency(safeComplaints, 1000, 1000);
@@ -1022,18 +1019,22 @@ export function getModelYearEvaluation(
   data?: ReliabilityTrendsDatabase
 ): YearEvaluation | undefined {
   if (!modelId || typeof modelId !== 'string') return undefined;
-  const numYear = typeof year === 'number' ? year : Number(String(year || '').trim());
-  if (!Number.isFinite(numYear)) return undefined;
+  const numYear = parseFiniteNumber(year);
+  if (numYear === null) return undefined;
 
   const defects = getDefectsForModel(modelId, data);
   if (!defects || defects.length === 0) return undefined;
 
-  const target = defects.find((y) => y && Number.isFinite(y.year) && Math.floor(y.year) === Math.floor(numYear));
+  const target = defects.find((y) => {
+    if (!y) return false;
+    const yNum = parseFiniteNumber(y.year);
+    return yNum !== null && Math.floor(yNum) === Math.floor(numYear);
+  });
   if (!target) return undefined;
 
   return {
     ...target,
-    year: Math.floor(target.year),
+    year: Math.floor(Number(target.year)),
     dsi_score: normalizeReliabilityScore(target.dsi_score, 50.0),
     incident_rate:
       typeof target.incident_rate === 'number' && Number.isFinite(target.incident_rate)
@@ -1058,24 +1059,27 @@ export function resolveBrandReliability(
   const clean = brandQuery.trim().toLowerCase();
   if (!clean || clean === 'all') return undefined;
 
-  const brands = Array.isArray(data?.brands) ? data.brands : [];
+  const brands = Array.isArray(data?.brands)
+    ? data.brands.filter((b): b is BrandReliability => Boolean(b && typeof b === 'object'))
+    : [];
   if (brands.length === 0) return undefined;
 
   // Exact ID match
-  const exact = brands.find((b) => b?.id?.toLowerCase() === clean);
+  const exact = brands.find((b) => typeof b.id === 'string' && b.id.toLowerCase() === clean);
   if (exact) return exact;
 
   // Exact name match
   const nameExact = brands.find(
-    (b) => (b?.name_en || '').toLowerCase() === clean || (b?.name_ko || '').toLowerCase() === clean
+    (b) =>
+      (typeof b.name_en === 'string' && b.name_en.toLowerCase() === clean) ||
+      (typeof b.name_ko === 'string' && b.name_ko.toLowerCase() === clean)
   );
   if (nameExact) return nameExact;
 
   // Substring match
   return brands.find((b) => {
-    if (!b) return false;
-    const en = (b.name_en || '').toLowerCase();
-    const ko = (b.name_ko || '').toLowerCase();
+    const en = typeof b.name_en === 'string' ? b.name_en.toLowerCase() : '';
+    const ko = typeof b.name_ko === 'string' ? b.name_ko.toLowerCase() : '';
     return (
       (en.length > 0 && (en.includes(clean) || clean.includes(en))) ||
       (ko.length > 0 && (ko.includes(clean) || clean.includes(ko)))
@@ -1129,11 +1133,12 @@ export function getSafeDefaultModelReliability(
   brandId: string = 'unknown'
 ): EnrichedModelItem {
   const safeId = typeof modelId === 'string' && modelId.trim() ? modelId.trim().toLowerCase() : 'unknown_model';
+  const safeBrandId = typeof brandId === 'string' && brandId.trim() ? brandId.trim().toLowerCase() : 'unknown';
   return {
     id: safeId,
     name: '미확인 차종',
     segment: '미분류',
-    brand_id: brandId || 'unknown',
+    brand_id: safeBrandId,
     overall_grade: 'C',
     avg_dsi: 50.0,
     top_category: 'BATTERY_CHARGING',
@@ -1147,6 +1152,147 @@ export function getSafeDefaultModelReliability(
 // ==========================================
 // 6. DEFECT TREND AGGREGATION & PERIOD BREAKDOWN ALGORITHMS
 // ==========================================
+
+interface PeriodAccumulator {
+  year: number;
+  subPeriod: number;
+  totalComplaints: number;
+  dsiWeightedSum: number;
+  dsiCount: number;
+  categoryCounts: Map<string, number>;
+}
+
+const STABLE_ZERO_TREND: TrendCalculationResult = {
+  direction: 'STABLE',
+  percentageChange: 0,
+  absoluteChange: 0,
+  formattedChange: '0.0%',
+  isIncrease: false,
+  isDecrease: false,
+  isStable: true,
+};
+
+function parseValidDateString(dateVal: string | Date): string | null {
+  if (dateVal instanceof Date) {
+    return Number.isNaN(dateVal.getTime()) ? null : dateVal.toISOString();
+  }
+  return typeof dateVal === 'string' ? dateVal.trim() : String(dateVal).trim();
+}
+
+function parsePeriodicMetrics(item: PeriodicDefectInput): {
+  parsedCount: number;
+  parsedDsi: number | null;
+  catKey: string;
+} {
+  let parsedCount = 1;
+  if (item.count !== undefined && item.count !== null) {
+    const c = parseFiniteNumber(item.count);
+    parsedCount = c !== null ? Math.max(0, Math.floor(c)) : 0;
+  }
+
+  const rawDsi = parseFiniteNumber(item.dsiScore);
+  const parsedDsi = rawDsi !== null ? normalizeReliabilityScore(rawDsi, 50.0) : null;
+
+  const trimmedCat =
+    (typeof item.category === 'string' && item.category.trim()) ||
+    (typeof item.defectCategory === 'string' && item.defectCategory.trim()) ||
+    'UNKNOWN';
+  const catKey = trimmedCat.toUpperCase();
+
+  return { parsedCount, parsedDsi, catKey };
+}
+
+function accumulatePeriodEntry(
+  groups: Map<string, PeriodAccumulator>,
+  periodKey: string,
+  year: number,
+  subPeriod: number,
+  metrics: { parsedCount: number; parsedDsi: number | null; catKey: string }
+): number {
+  if (!groups.has(periodKey)) {
+    groups.set(periodKey, {
+      year,
+      subPeriod,
+      totalComplaints: 0,
+      dsiWeightedSum: 0,
+      dsiCount: 0,
+      categoryCounts: new Map(),
+    });
+  }
+
+  const g = groups.get(periodKey)!;
+  g.totalComplaints += metrics.parsedCount;
+
+  if (metrics.parsedDsi !== null) {
+    const weight = Math.max(1, metrics.parsedCount);
+    g.dsiWeightedSum += metrics.parsedDsi * weight;
+    g.dsiCount += weight;
+  }
+
+  if (metrics.parsedCount > 0) {
+    g.categoryCounts.set(metrics.catKey, (g.categoryCounts.get(metrics.catKey) || 0) + metrics.parsedCount);
+  }
+
+  return metrics.parsedCount;
+}
+
+function buildPeriodSummary(
+  sortedKeys: string[],
+  groups: Map<string, PeriodAccumulator>,
+  index: number,
+  grandTotalComplaints: number
+) {
+  const key = sortedKeys[index];
+  const g = groups.get(key)!;
+
+  const percentage = grandTotalComplaints > 0
+    ? Math.round((g.totalComplaints / grandTotalComplaints) * 1000) / 10
+    : 0.0;
+
+  const avgDsi = g.dsiCount > 0
+    ? Math.round((g.dsiWeightedSum / g.dsiCount) * 10) / 10
+    : 50.0;
+
+  let topCategory: DefectCategoryKey | string = 'NONE';
+  let maxCatCount = 0;
+  const categoryDistribution: Record<string, { count: number; percentage: number }> = {};
+
+  for (const [cat, cnt] of g.categoryCounts.entries()) {
+    categoryDistribution[cat] = {
+      count: cnt,
+      percentage: g.totalComplaints > 0 ? Math.round((cnt / g.totalComplaints) * 1000) / 10 : 0.0,
+    };
+    if (cnt > maxCatCount) {
+      maxCatCount = cnt;
+      topCategory = cat;
+    }
+  }
+
+  const previousCount = index > 0 ? groups.get(sortedKeys[index - 1])!.totalComplaints : g.totalComplaints;
+  const trendFromPrevious = index > 0
+    ? calculateTrendDirection(g.totalComplaints, previousCount)
+    : { ...STABLE_ZERO_TREND };
+
+  const windowStart = Math.max(0, index - 2);
+  let windowSum = 0;
+  for (let w = windowStart; w <= index; w++) {
+    windowSum += groups.get(sortedKeys[w])!.totalComplaints;
+  }
+  const movingAverage3 = Math.round((windowSum / (index - windowStart + 1)) * 10) / 10;
+
+  return {
+    periodKey: key,
+    year: g.year,
+    subPeriod: g.subPeriod,
+    totalComplaints: g.totalComplaints,
+    percentage,
+    avgDsi,
+    topCategory,
+    categoryDistribution,
+    trendFromPrevious,
+    movingAverage3,
+  };
+}
 
 /**
  * Aggregates periodic defect inputs into quarterly breakdowns (Q1, Q2, Q3, Q4)
@@ -1165,18 +1311,7 @@ export function aggregateQuarterlyDefectBreakdown(
 ): QuarterlyDefectBreakdown[] {
   if (!Array.isArray(inputs) || inputs.length === 0) return [];
 
-  const groups = new Map<
-    string,
-    {
-      year: number;
-      quarter: 1 | 2 | 3 | 4;
-      totalComplaints: number;
-      dsiWeightedSum: number;
-      dsiCount: number;
-      categoryCounts: Map<string, number>;
-    }
-  >();
-
+  const groups = new Map<string, PeriodAccumulator>();
   let grandTotalComplaints = 0;
 
   for (const item of inputs) {
@@ -1186,14 +1321,14 @@ export function aggregateQuarterlyDefectBreakdown(
     let quarter: (1 | 2 | 3 | 4) | null = null;
 
     // 1. Direct year and quarter fields
-    if (item.year !== undefined && item.year !== null) {
-      const y = Number(String(item.year).trim());
-      if (Number.isFinite(y) && y >= 1990 && y <= 2100) year = Math.floor(y);
+    const directYear = parseFiniteNumber(item.year);
+    if (directYear !== null && directYear >= 1990 && directYear <= 2100) {
+      year = Math.floor(directYear);
     }
 
     if (item.quarter !== undefined && item.quarter !== null) {
       const qStr = String(item.quarter).trim().toUpperCase();
-      const match = qStr.match(/(?:Q|^)([1-4])/);
+      const match = qStr.match(/^(?:Q)?([1-4])$/);
       if (match) {
         quarter = Number(match[1]) as 1 | 2 | 3 | 4;
       }
@@ -1201,26 +1336,32 @@ export function aggregateQuarterlyDefectBreakdown(
 
     // 2. Month-based quarter derivation
     if (!quarter && item.month !== undefined && item.month !== null) {
-      const m = Number(String(item.month).trim());
-      if (Number.isFinite(m) && m >= 1 && m <= 12) {
-        quarter = Math.ceil(m / 3) as 1 | 2 | 3 | 4;
+      const m = parseFiniteNumber(item.month);
+      if (m !== null && m >= 1 && m <= 12) {
+        quarter = Math.ceil(Math.floor(m) / 3) as 1 | 2 | 3 | 4;
       }
     }
 
     // 3. Date string or Date object parsing
     if ((!year || !quarter) && item.date) {
-      const dateStr = item.date instanceof Date ? item.date.toISOString() : String(item.date).trim();
-      const qMatch = dateStr.match(/^(\d{4})[-/. ]*Q([1-4])/i);
-      if (qMatch) {
-        year = Number(qMatch[1]);
-        quarter = Number(qMatch[2]) as 1 | 2 | 3 | 4;
-      } else {
-        const dMatch = dateStr.match(/^(\d{4})[-/. ](\d{1,2})/);
-        if (dMatch) {
-          year = Number(dMatch[1]);
-          const m = Number(dMatch[2]);
-          if (m >= 1 && m <= 12) {
-            quarter = Math.ceil(m / 3) as 1 | 2 | 3 | 4;
+      const dateStr = parseValidDateString(item.date);
+      if (dateStr) {
+        const qMatch = dateStr.match(/^(\d{4})[-/. ]*Q([1-4])/i);
+        if (qMatch) {
+          const parsedY = Number(qMatch[1]);
+          if (parsedY >= 1990 && parsedY <= 2100) {
+            year = parsedY;
+            quarter = Number(qMatch[2]) as 1 | 2 | 3 | 4;
+          }
+        } else {
+          const dMatch = dateStr.match(/^(\d{4})[-/. ](\d{1,2})/);
+          if (dMatch) {
+            const parsedY = Number(dMatch[1]);
+            const m = Number(dMatch[2]);
+            if (parsedY >= 1990 && parsedY <= 2100 && m >= 1 && m <= 12) {
+              year = parsedY;
+              quarter = Math.ceil(m / 3) as 1 | 2 | 3 | 4;
+            }
           }
         }
       }
@@ -1229,50 +1370,13 @@ export function aggregateQuarterlyDefectBreakdown(
     if (!year || !quarter) continue;
 
     const periodKey = `${year}-Q${quarter}`;
-
-    let parsedCount = 1;
-    if (item.count !== undefined && item.count !== null) {
-      const c = Number(String(item.count).trim());
-      parsedCount = Number.isFinite(c) ? Math.max(0, Math.floor(c)) : 0;
-    }
-
-    let parsedDsi: number | null = null;
-    if (item.dsiScore !== undefined && item.dsiScore !== null) {
-      const d = Number(String(item.dsiScore).trim());
-      if (Number.isFinite(d)) {
-        parsedDsi = normalizeReliabilityScore(d, 50.0);
-      }
-    }
-
-    const catKey = (
-      (typeof item.category === 'string' && item.category) ||
-      (typeof item.defectCategory === 'string' && item.defectCategory) ||
-      'UNKNOWN'
-    ).trim().toUpperCase();
-
-    if (!groups.has(periodKey)) {
-      groups.set(periodKey, {
-        year,
-        quarter,
-        totalComplaints: 0,
-        dsiWeightedSum: 0,
-        dsiCount: 0,
-        categoryCounts: new Map(),
-      });
-    }
-
-    const g = groups.get(periodKey)!;
-    g.totalComplaints += parsedCount;
-    grandTotalComplaints += parsedCount;
-
-    if (parsedDsi !== null) {
-      g.dsiWeightedSum += parsedDsi * Math.max(1, parsedCount);
-      g.dsiCount += Math.max(1, parsedCount);
-    }
-
-    if (parsedCount > 0) {
-      g.categoryCounts.set(catKey, (g.categoryCounts.get(catKey) || 0) + parsedCount);
-    }
+    grandTotalComplaints += accumulatePeriodEntry(
+      groups,
+      periodKey,
+      year,
+      quarter,
+      parsePeriodicMetrics(item)
+    );
   }
 
   // Sort chronologically by year and quarter
@@ -1283,70 +1387,19 @@ export function aggregateQuarterlyDefectBreakdown(
   });
 
   const results: QuarterlyDefectBreakdown[] = [];
-
   for (let i = 0; i < sortedKeys.length; i++) {
-    const key = sortedKeys[i];
-    const g = groups.get(key)!;
-
-    const percentage = grandTotalComplaints > 0
-      ? Math.round((g.totalComplaints / grandTotalComplaints) * 1000) / 10
-      : 0.0;
-
-    const avgDsi = g.dsiCount > 0
-      ? Math.round((g.dsiWeightedSum / g.dsiCount) * 10) / 10
-      : 50.0;
-
-    let topCategory: DefectCategoryKey | string = 'BATTERY_CHARGING';
-    let maxCatCount = 0;
-    const categoryDistribution: Record<string, { count: number; percentage: number }> = {};
-
-    for (const [cat, cnt] of g.categoryCounts.entries()) {
-      categoryDistribution[cat] = {
-        count: cnt,
-        percentage: g.totalComplaints > 0 ? Math.round((cnt / g.totalComplaints) * 1000) / 10 : 0.0,
-      };
-      if (cnt > maxCatCount) {
-        maxCatCount = cnt;
-        topCategory = cat;
-      }
-    }
-
-    if (maxCatCount === 0) {
-      topCategory = 'NONE';
-    }
-
-    const previousCount = i > 0 ? groups.get(sortedKeys[i - 1])!.totalComplaints : g.totalComplaints;
-    const trendFromPrevious = i > 0
-      ? calculateTrendDirection(g.totalComplaints, previousCount)
-      : {
-          direction: 'STABLE' as const,
-          percentageChange: 0,
-          absoluteChange: 0,
-          formattedChange: '0.0%',
-          isIncrease: false,
-          isDecrease: false,
-          isStable: true,
-        };
-
-    // 3-quarter moving average
-    const windowStart = Math.max(0, i - 2);
-    let windowSum = 0;
-    for (let w = windowStart; w <= i; w++) {
-      windowSum += groups.get(sortedKeys[w])!.totalComplaints;
-    }
-    const movingAverage3Q = Math.round((windowSum / (i - windowStart + 1)) * 10) / 10;
-
+    const summary = buildPeriodSummary(sortedKeys, groups, i, grandTotalComplaints);
     results.push({
-      periodKey: key,
-      year: g.year,
-      quarter: g.quarter,
-      totalComplaints: g.totalComplaints,
-      percentage,
-      avgDsi,
-      topCategory,
-      categoryDistribution,
-      trendFromPrevious,
-      movingAverage3Q,
+      periodKey: summary.periodKey,
+      year: summary.year,
+      quarter: summary.subPeriod as 1 | 2 | 3 | 4,
+      totalComplaints: summary.totalComplaints,
+      percentage: summary.percentage,
+      avgDsi: summary.avgDsi,
+      topCategory: summary.topCategory,
+      categoryDistribution: summary.categoryDistribution,
+      trendFromPrevious: summary.trendFromPrevious,
+      movingAverage3Q: summary.movingAverage3,
     });
   }
 
@@ -1363,18 +1416,7 @@ export function aggregateMonthlyDefectBreakdown(
 ): MonthlyDefectBreakdown[] {
   if (!Array.isArray(inputs) || inputs.length === 0) return [];
 
-  const groups = new Map<
-    string,
-    {
-      year: number;
-      month: number;
-      totalComplaints: number;
-      dsiWeightedSum: number;
-      dsiCount: number;
-      categoryCounts: Map<string, number>;
-    }
-  >();
-
+  const groups = new Map<string, PeriodAccumulator>();
   let grandTotalComplaints = 0;
 
   for (const item of inputs) {
@@ -1383,141 +1425,60 @@ export function aggregateMonthlyDefectBreakdown(
     let year: number | null = null;
     let month: number | null = null;
 
-    if (item.year !== undefined && item.year !== null) {
-      const y = Number(String(item.year).trim());
-      if (Number.isFinite(y) && y >= 1990 && y <= 2100) year = Math.floor(y);
+    const directYear = parseFiniteNumber(item.year);
+    if (directYear !== null && directYear >= 1990 && directYear <= 2100) {
+      year = Math.floor(directYear);
     }
 
-    if (item.month !== undefined && item.month !== null) {
-      const m = Number(String(item.month).trim());
-      if (Number.isFinite(m) && m >= 1 && m <= 12) month = Math.floor(m);
+    const directMonth = parseFiniteNumber(item.month);
+    if (directMonth !== null && directMonth >= 1 && directMonth <= 12) {
+      month = Math.floor(directMonth);
     }
 
     if ((!year || !month) && item.date) {
-      const dateStr = item.date instanceof Date ? item.date.toISOString() : String(item.date).trim();
-      const dMatch = dateStr.match(/^(\d{4})[-/. ](\d{1,2})/);
-      if (dMatch) {
-        year = Number(dMatch[1]);
-        const m = Number(dMatch[2]);
-        if (m >= 1 && m <= 12) month = m;
+      const dateStr = parseValidDateString(item.date);
+      if (dateStr) {
+        const dMatch = dateStr.match(/^(\d{4})[-/. ](\d{1,2})/);
+        if (dMatch) {
+          const parsedY = Number(dMatch[1]);
+          const m = Number(dMatch[2]);
+          if (parsedY >= 1990 && parsedY <= 2100 && m >= 1 && m <= 12) {
+            year = parsedY;
+            month = m;
+          }
+        }
       }
     }
 
     if (!year || !month) continue;
 
     const periodKey = `${year}-${String(month).padStart(2, '0')}`;
-
-    let parsedCount = 1;
-    if (item.count !== undefined && item.count !== null) {
-      const c = Number(String(item.count).trim());
-      parsedCount = Number.isFinite(c) ? Math.max(0, Math.floor(c)) : 0;
-    }
-
-    let parsedDsi: number | null = null;
-    if (item.dsiScore !== undefined && item.dsiScore !== null) {
-      const d = Number(String(item.dsiScore).trim());
-      if (Number.isFinite(d)) {
-        parsedDsi = normalizeReliabilityScore(d, 50.0);
-      }
-    }
-
-    const catKey = (
-      (typeof item.category === 'string' && item.category) ||
-      (typeof item.defectCategory === 'string' && item.defectCategory) ||
-      'UNKNOWN'
-    ).trim().toUpperCase();
-
-    if (!groups.has(periodKey)) {
-      groups.set(periodKey, {
-        year,
-        month,
-        totalComplaints: 0,
-        dsiWeightedSum: 0,
-        dsiCount: 0,
-        categoryCounts: new Map(),
-      });
-    }
-
-    const g = groups.get(periodKey)!;
-    g.totalComplaints += parsedCount;
-    grandTotalComplaints += parsedCount;
-
-    if (parsedDsi !== null) {
-      g.dsiWeightedSum += parsedDsi * Math.max(1, parsedCount);
-      g.dsiCount += Math.max(1, parsedCount);
-    }
-
-    if (parsedCount > 0) {
-      g.categoryCounts.set(catKey, (g.categoryCounts.get(catKey) || 0) + parsedCount);
-    }
+    grandTotalComplaints += accumulatePeriodEntry(
+      groups,
+      periodKey,
+      year,
+      month,
+      parsePeriodicMetrics(item)
+    );
   }
 
   const sortedKeys = Array.from(groups.keys()).sort();
   const results: MonthlyDefectBreakdown[] = [];
 
   for (let i = 0; i < sortedKeys.length; i++) {
-    const key = sortedKeys[i];
-    const g = groups.get(key)!;
-
-    const percentage = grandTotalComplaints > 0
-      ? Math.round((g.totalComplaints / grandTotalComplaints) * 1000) / 10
-      : 0.0;
-
-    const avgDsi = g.dsiCount > 0
-      ? Math.round((g.dsiWeightedSum / g.dsiCount) * 10) / 10
-      : 50.0;
-
-    let topCategory: DefectCategoryKey | string = 'BATTERY_CHARGING';
-    let maxCatCount = 0;
-    const categoryDistribution: Record<string, { count: number; percentage: number }> = {};
-
-    for (const [cat, cnt] of g.categoryCounts.entries()) {
-      categoryDistribution[cat] = {
-        count: cnt,
-        percentage: g.totalComplaints > 0 ? Math.round((cnt / g.totalComplaints) * 1000) / 10 : 0.0,
-      };
-      if (cnt > maxCatCount) {
-        maxCatCount = cnt;
-        topCategory = cat;
-      }
-    }
-
-    if (maxCatCount === 0) {
-      topCategory = 'NONE';
-    }
-
-    const previousCount = i > 0 ? groups.get(sortedKeys[i - 1])!.totalComplaints : g.totalComplaints;
-    const trendFromPrevious = i > 0
-      ? calculateTrendDirection(g.totalComplaints, previousCount)
-      : {
-          direction: 'STABLE' as const,
-          percentageChange: 0,
-          absoluteChange: 0,
-          formattedChange: '0.0%',
-          isIncrease: false,
-          isDecrease: false,
-          isStable: true,
-        };
-
-    const windowStart = Math.max(0, i - 2);
-    let windowSum = 0;
-    for (let w = windowStart; w <= i; w++) {
-      windowSum += groups.get(sortedKeys[w])!.totalComplaints;
-    }
-    const movingAverage3M = Math.round((windowSum / (i - windowStart + 1)) * 10) / 10;
-
+    const summary = buildPeriodSummary(sortedKeys, groups, i, grandTotalComplaints);
     results.push({
-      periodKey: key,
-      year: g.year,
-      month: g.month,
-      monthLabel: `${g.year}년 ${g.month}월`,
-      totalComplaints: g.totalComplaints,
-      percentage,
-      avgDsi,
-      topCategory,
-      categoryDistribution,
-      trendFromPrevious,
-      movingAverage3M,
+      periodKey: summary.periodKey,
+      year: summary.year,
+      month: summary.subPeriod,
+      monthLabel: `${summary.year}년 ${summary.subPeriod}월`,
+      totalComplaints: summary.totalComplaints,
+      percentage: summary.percentage,
+      avgDsi: summary.avgDsi,
+      topCategory: summary.topCategory,
+      categoryDistribution: summary.categoryDistribution,
+      trendFromPrevious: summary.trendFromPrevious,
+      movingAverage3M: summary.movingAverage3,
     });
   }
 
@@ -1546,9 +1507,11 @@ export function calculateModelYearDefectTrajectory(
     if (Array.isArray(model.year_evaluations)) {
       evals = model.year_evaluations;
     }
-    if (model.id) mId = model.id;
-    if (model.name) mName = model.name;
-    if ('brand_name_ko' in model && model.brand_name_ko) bName = model.brand_name_ko;
+    if (typeof model.id === 'string' && model.id) mId = model.id;
+    if (typeof model.name === 'string' && model.name) mName = model.name;
+    if ('brand_name_ko' in model && typeof model.brand_name_ko === 'string' && model.brand_name_ko) {
+      bName = model.brand_name_ko;
+    }
   }
 
   const validEvals = evals
@@ -1634,12 +1597,17 @@ export function calculateModelYearDefectTrajectory(
           isStable: true,
         };
 
+    const validVerdict: ModelYearVerdict =
+      curr.verdict === 'BUY_SAFE' || curr.verdict === 'CAUTION' || curr.verdict === 'AVOID'
+        ? curr.verdict
+        : 'CAUTION';
+
     progression.push({
       year: curr.year,
       dsi: curr.dsi_score,
-      verdict: curr.verdict || 'CAUTION',
+      verdict: validVerdict,
       incidentRate: curr.incident_rate,
-      primaryDefect: curr.primary_defect || '',
+      primaryDefect: typeof curr.primary_defect === 'string' ? curr.primary_defect : '',
       trendFromPreviousYear,
     });
   }

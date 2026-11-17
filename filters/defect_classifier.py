@@ -37,12 +37,14 @@ from filters.slang_lexicon import (
     SlangEntry,
     _RE_BYD_SEAL,
     _RE_RICE_COOKER_APP,
+    _decode_bytes_safely,
     find_matching_slang,
 )
 from filters.spam_filter import (
     CATEGORY_KEYWORD_MAP,
     SpamFilter,
     evaluate_stage1_noise,
+    matches_category_keyword,
 )
 from filters.vehicle_matcher import extract_vehicle_info
 from models.complaint import (
@@ -174,6 +176,10 @@ RE_CLAUSE_SPLIT: re.Pattern[str] = re.compile(r"[,;.\n]+")
 RE_TOKENS: re.Pattern[str] = re.compile(r"[\w가-힣]+")
 RE_HANGUL: re.Pattern[str] = re.compile(r"[가-힣]")
 RE_AS_KEYWORD: re.Pattern[str] = re.compile(r"(?:\b|[^a-zA-Z])(?:as|a/s)(?:\b|[^a-zA-Z])", re.IGNORECASE)
+_RE_GAE_INTENSIFIER: re.Pattern[str] = re.compile(
+    r"(?<![가-힣0-9a-zA-Z])개(?!(?:선|인|발|정|시|업|통|최|편|방|념|요|괄|혁|수|월|별|체|입|관|막|장|축|량|조|척|학|화|회|국|근|녕|념|로|에서|부터|까지|랑|와|과|의|에|도|는|은|를|이|가|\s*$))"
+    r"|(?<![가-힣0-9a-zA-Z])개(?=\s|$)"
+)
 
 # Malfunction cues that disambiguate neutral EV features from actual defect complaints
 MALFUNCTION_CUES: Tuple[str, ...] = (
@@ -228,10 +234,7 @@ def sanitize_text(val: Any, max_len: int = MAX_TEXT_LENGTH) -> str:
     if val is None or val is False:
         return ""
     if isinstance(val, (bytes, bytearray)):
-        try:
-            val_str = val.decode("utf-8", errors="replace")
-        except Exception:
-            val_str = str(val)
+        val_str = _decode_bytes_safely(val)
     elif isinstance(val, str):
         val_str = val
     else:
@@ -461,6 +464,15 @@ class DefectClassifier:
             ):
                 continue
 
+            # Double-negation / persistent defect: '안 없어지고', '안 없어져요', '없어지지 않고'
+            if w_strip.startswith(("없어지", "없어져", "없어졌", "없어진")):
+                if j > 0 and window[j - 1] == "안":
+                    continue
+                if j + 1 < len(window) and any(
+                    window[j + 1].startswith(p) for p in ("않", "못", "안")
+                ):
+                    continue
+
             # 1. Any inflection of '없다' (e.g. 없다, 없고, 없음, 없네, 없습니다, 없네요, 없어서, 없더군요, 없더라고요, 없었던, 없었어요, 없는, 없으므로)
             if w_strip.startswith("없"):
                 return True
@@ -492,6 +504,8 @@ class DefectClassifier:
 
         if text_str is None:
             text_str = " ".join(tokens)
+        text_lower = text_str.lower()
+        tokens_lower = [t.lower() for t in tokens]
 
         negated: List[str] = []
         non_negatable_terms = {"깜빡이", "v2l", "dsm", "mcu", "tcam", "hud", "아이오닉", "이븨", "이브이", "모델와이"}
@@ -502,10 +516,11 @@ class DefectClassifier:
         )
 
         for dw in _SINGLE_PART_DEFECT_TERMS:
-            if dw.lower() in non_negatable_terms or dw not in text_str:
+            dw_lower = dw.lower()
+            if dw_lower in non_negatable_terms or dw_lower not in text_lower:
                 continue
-            for i, tok in enumerate(tokens):
-                if dw in tok or tok.startswith(dw):
+            for i, tok_lower in enumerate(tokens_lower):
+                if dw_lower in tok_lower or tok_lower.startswith(dw_lower):
                     after_slice = tokens[i + 1:min(len(tokens), i + 4)]
                     if any(any(t.startswith(aff) for aff in affirmative_occurrences) for t in after_slice):
                         continue
@@ -516,12 +531,14 @@ class DefectClassifier:
                         break
 
         for parts, dw in _MULTI_PART_DEFECT_TERMS:
-            if dw.lower() in non_negatable_terms or parts[0] not in text_str:
+            dw_lower = dw.lower()
+            parts_lower = tuple(p.lower() for p in parts)
+            if dw_lower in non_negatable_terms or parts_lower[0] not in text_lower:
                 continue
-            m = len(parts)
-            for i in range(len(tokens) - m + 1):
-                if (tokens[i] == parts[0] or parts[0] in tokens[i]) and all(
-                    tokens[i + k].startswith(parts[k]) or parts[k] in tokens[i + k]
+            m = len(parts_lower)
+            for i in range(len(tokens_lower) - m + 1):
+                if (tokens_lower[i] == parts_lower[0] or parts_lower[0] in tokens_lower[i]) and all(
+                    tokens_lower[i + k].startswith(parts_lower[k]) or parts_lower[k] in tokens_lower[i + k]
                     for k in range(1, m)
                 ):
                     after_slice = tokens[i + m:min(len(tokens), i + m + 4)]
@@ -625,14 +642,27 @@ class DefectClassifier:
 
     def _get_intensifier_multiplier(self, clause: str) -> float:
         """Find the strongest intensifier or diminisher in the clause."""
+        best_super = 0.0
         for term, mult in self.super_intensifiers.items():
-            if term in clause:
-                return mult
+            if not term:
+                continue
+            if term == "개":
+                if _RE_GAE_INTENSIFIER.search(clause):
+                    best_super = max(best_super, mult)
+            elif term in clause:
+                best_super = max(best_super, mult)
+        if best_super > 0.0:
+            return best_super
+
+        best_std = 0.0
         for term, mult in self.standard_intensifiers.items():
-            if term in clause:
-                return mult
+            if term and term in clause:
+                best_std = max(best_std, mult)
+        if best_std > 0.0:
+            return best_std
+
         for term, mult in self.diminishers.items():
-            if term in clause:
+            if term and term in clause:
                 return mult
         return 1.0
 
@@ -686,10 +716,7 @@ class DefectClassifier:
                     continue
                 if kw in ("소음", "잡소리") and suppress_build_noise:
                     continue
-                if cat == "SERVICE_REPAIR_COST" and kw == "as":
-                    if RE_AS_KEYWORD.search(text_lower):
-                        category_scores[cat] += 1.0
-                elif kw.lower() in text_lower:
+                if matches_category_keyword(cat, kw, text_lower):
                     category_scores[cat] += 1.0
 
         # 4. Root Cause Priority Resolution:
@@ -735,15 +762,10 @@ class DefectClassifier:
         confidence = 0.0
 
         # 1. Technical component keyword from category map
-        has_comp_kw = False
-        for kw in CATEGORY_KEYWORD_MAP.get(category, []):
-            if category == "SERVICE_REPAIR_COST" and kw == "as":
-                if RE_AS_KEYWORD.search(text_lower):
-                    has_comp_kw = True
-                    break
-            elif kw.lower() in text_lower:
-                has_comp_kw = True
-                break
+        has_comp_kw = any(
+            matches_category_keyword(category, kw, text_lower)
+            for kw in CATEGORY_KEYWORD_MAP.get(category, [])
+        )
         if has_comp_kw:
             confidence += 0.20
 
@@ -877,9 +899,9 @@ class DefectClassifier:
             safe_comments = [c_clean] if c_clean else []
         elif isinstance(raw_comments, (list, tuple, set)):
             safe_comments = [
-                sanitize_text(c, max_len=10_000)
-                for c in raw_comments
-                if c is not None and str(c).strip()
+                cleaned
+                for cleaned in (sanitize_text(c, max_len=10_000) for c in raw_comments)
+                if cleaned
             ]
         else:
             safe_comments = []

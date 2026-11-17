@@ -20,6 +20,8 @@ def _safe_int(val: Any, default: int = 0) -> int:
     """
     if val is None:
         return default
+    if type(val) is int:
+        return val
     if isinstance(val, str):
         val = val.strip().replace(",", "")
         if not val:
@@ -507,12 +509,13 @@ class RegionRecord:
 
     def get_depletion_rate(self, category_name: str = "passenger") -> float:
         """Safely get depletion rate for category, falling back to overall_depletion_rate."""
+        fallback_rate = max(0.0, _safe_float(self.overall_depletion_rate, 0.0))
         cat = self.get_category(category_name)
         if cat is None:
-            return self.overall_depletion_rate
+            return fallback_rate
         if isinstance(cat, dict):
-            return max(0.0, _safe_float(cat.get("depletion_rate", self.overall_depletion_rate)))
-        return max(0.0, _safe_float(getattr(cat, "depletion_rate", self.overall_depletion_rate)))
+            return max(0.0, _safe_float(cat.get("depletion_rate", fallback_rate), fallback_rate))
+        return max(0.0, _safe_float(getattr(cat, "depletion_rate", fallback_rate), fallback_rate))
 
     def get_local_subsidy(self, category_name: str = "passenger") -> int:
         """Safely get max local subsidy KRW for category."""
@@ -534,9 +537,11 @@ class RegionRecord:
 
     def get_municipality(self, muni_name_or_id: str) -> Optional[MunicipalityMetrics]:
         """Safely lookup lower-tier municipality by ID or name (Korean/English)."""
-        if not self.municipalities or not isinstance(self.municipalities, (list, tuple)):
+        if not muni_name_or_id or not self.municipalities or not isinstance(self.municipalities, (list, tuple)):
             return None
         target = str(muni_name_or_id).strip().lower()
+        if not target:
+            return None
         for m in self.municipalities:
             if isinstance(m, dict):
                 m_id = str(m.get("muni_id", "")).strip().lower()
@@ -546,9 +551,9 @@ class RegionRecord:
                     return MunicipalityMetrics.from_dict(m)
             elif hasattr(m, "muni_id"):
                 if target in (
-                    str(m.muni_id).strip().lower(),
-                    str(m.name_ko).strip().lower(),
-                    str(m.name_en).strip().lower(),
+                    str(getattr(m, "muni_id", "") or "").strip().lower(),
+                    str(getattr(m, "name_ko", "") or "").strip().lower(),
+                    str(getattr(m, "name_en", "") or "").strip().lower(),
                 ):
                     return m
         return None
@@ -557,19 +562,20 @@ class RegionRecord:
         """Return True if overall status is CRITICAL or DEPLETED (depletion >= 95%)."""
         st = getattr(self.overall_status, "value", self.overall_status)
         st_str = str(st).split(".")[-1].strip().upper()
-        return st_str in ("CRITICAL", "DEPLETED") or self.overall_depletion_rate >= 95.0
+        return st_str in ("CRITICAL", "DEPLETED") or _safe_float(self.overall_depletion_rate, 0.0) >= 95.0
 
     def is_warning(self) -> bool:
         """Return True if overall status is WARNING (depletion 80% to 94.9%)."""
         st = getattr(self.overall_status, "value", self.overall_status)
         st_str = str(st).split(".")[-1].strip().upper()
-        return st_str == "WARNING" or (80.0 <= self.overall_depletion_rate < 95.0)
+        rate = _safe_float(self.overall_depletion_rate, 0.0)
+        return st_str == "WARNING" or (80.0 <= rate < 95.0)
 
     def is_depleted(self) -> bool:
         """Return True if overall status is DEPLETED or depletion >= 100%."""
         st = getattr(self.overall_status, "value", self.overall_status)
         st_str = str(st).split(".")[-1].strip().upper()
-        return st_str == "DEPLETED" or self.overall_depletion_rate >= 100.0
+        return st_str == "DEPLETED" or _safe_float(self.overall_depletion_rate, 0.0) >= 100.0
 
     def to_dict(self) -> Dict[str, Any]:
         result = {
@@ -730,6 +736,26 @@ class PopularModelEntry:
                     entry = v
                     break
         if entry is None:
+            iso_alias_map = {
+                "KR-11": "seoul",
+                "KR-26": "busan",
+                "KR-27": "daegu",
+                "KR-28": "incheon",
+                "KR-29": "gwangju",
+                "KR-30": "daejeon",
+                "KR-31": "ulsan",
+                "KR-36": "sejong",
+                "KR-50": "sejong",
+                "KR-41": "gyeonggi",
+                "KR-42": "gangwon",
+                "KR-43": "chungbuk",
+                "KR-44": "chungnam",
+                "KR-45": "jeonbuk",
+                "KR-46": "jeonnam",
+                "KR-47": "gyeongbuk",
+                "KR-48": "gyeongnam",
+                "KR-49": "jeju",
+            }
             alias_map = {
                 "서울": "seoul",
                 "경기": "gyeonggi",
@@ -750,30 +776,46 @@ class PopularModelEntry:
                 "제주": "jeju",
             }
             code_str = str(region_code).strip()
-            for ko_key, en_key in alias_map.items():
-                if ko_key in code_str or en_key in code_str.lower():
-                    for k, v in self.regional_subsidy_samples.items():
-                        if en_key in str(k).lower():
-                            entry = v
-                            break
-                    if entry is not None:
+            mapped_en = iso_alias_map.get(code_str.upper())
+            if mapped_en:
+                for k, v in self.regional_subsidy_samples.items():
+                    if mapped_en in str(k).lower():
+                        entry = v
                         break
+            if entry is None:
+                for ko_key, en_key in alias_map.items():
+                    if ko_key in code_str or en_key in code_str.lower():
+                        for k, v in self.regional_subsidy_samples.items():
+                            if en_key in str(k).lower():
+                                entry = v
+                                break
+                        if entry is not None:
+                            break
         if entry is None:
             return 0
-        if isinstance(entry, (int, float)):
+        if isinstance(entry, (int, float, str)) and not isinstance(entry, bool):
             return max(0, _safe_int(entry, 0))
         if isinstance(entry, dict):
-            val = entry.get(subsidy_type, entry.get("local_subsidy_krw", entry.get("subsidy_krw", 0)))
-            return max(0, _safe_int(val, 0))
+            if subsidy_type in entry:
+                return max(0, _safe_int(entry.get(subsidy_type), 0))
+            if "local_subsidy_krw" in entry:
+                return max(0, _safe_int(entry.get("local_subsidy_krw"), 0))
+            if "subsidy_krw" in entry:
+                return max(0, _safe_int(entry.get("subsidy_krw"), 0))
+            if subsidy_type == "local_subsidy_krw" and "total_subsidy_krw" in entry:
+                tot = max(0, _safe_int(entry.get("total_subsidy_krw"), 0))
+                nat = max(0, _safe_int(self.national_subsidy_krw, 0))
+                return max(0, tot - nat)
+            return 0
         return 0
 
     def calculate_total_subsidy(self, region_code: str) -> int:
         """Calculate total national + local subsidy for this vehicle model in a given region."""
-        return max(0, self.national_subsidy_krw) + self.get_regional_subsidy(region_code)
+        return max(0, _safe_int(self.national_subsidy_krw, 0)) + self.get_regional_subsidy(region_code)
 
     def calculate_final_price(self, region_code: str) -> int:
         """Calculate final out-of-pocket price after total subsidies."""
-        return max(0, self.base_price_krw - self.calculate_total_subsidy(region_code))
+        return max(0, _safe_int(self.base_price_krw, 0) - self.calculate_total_subsidy(region_code))
 
     def get_subsidy(self, region_code: str) -> int:
         """Alias for calculate_total_subsidy."""
@@ -928,9 +970,9 @@ class NationwideSummary:
             "disbursed_budget_krw": self.disbursed_budget_krw,
             "category_totals": {
                 k: v.to_dict() if hasattr(v, "to_dict") else v
-                for k, v in self.category_totals.items()
+                for k, v in (self.category_totals or {}).items()
             },
-            "alert_region_counts": self.alert_region_counts,
+            "alert_region_counts": self.alert_region_counts or {},
         }
 
     @property
@@ -1301,20 +1343,20 @@ class SubsidyPayload:
             "metadata": self.metadata.to_dict() if hasattr(self.metadata, "to_dict") else self.metadata,
             "alert_thresholds": {
                 k: v.to_dict() if hasattr(v, "to_dict") else v
-                for k, v in self.alert_thresholds.items()
+                for k, v in (self.alert_thresholds or {}).items()
             },
             "nationwide_summary": (
                 self.nationwide_summary.to_dict()
                 if hasattr(self.nationwide_summary, "to_dict")
                 else self.nationwide_summary
             ),
-            "regions": [r.to_dict() if hasattr(r, "to_dict") else r for r in self.regions],
+            "regions": [r.to_dict() if hasattr(r, "to_dict") else r for r in (self.regions or [])],
             "popular_models_matrix": [
-                m.to_dict() if hasattr(m, "to_dict") else m for m in self.popular_models_matrix
+                m.to_dict() if hasattr(m, "to_dict") else m for m in (self.popular_models_matrix or [])
             ],
             "historical_depletion_trajectory": [
                 h.to_dict() if hasattr(h, "to_dict") else h
-                for h in self.historical_depletion_trajectory
+                for h in (self.historical_depletion_trajectory or [])
             ],
         }
 

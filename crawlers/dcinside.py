@@ -226,13 +226,22 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
         return now.isoformat()
     rel_min = re.search(r"(\d+)\s*분\s*전", raw)
     if rel_min:
-        return (now - datetime.timedelta(minutes=int(rel_min.group(1)))).isoformat()
+        try:
+            return (now - datetime.timedelta(minutes=int(rel_min.group(1)))).isoformat()
+        except (ValueError, OverflowError):
+            return now.isoformat()
     rel_hour = re.search(r"(\d+)\s*시간\s*전", raw)
     if rel_hour:
-        return (now - datetime.timedelta(hours=int(rel_hour.group(1)))).isoformat()
+        try:
+            return (now - datetime.timedelta(hours=int(rel_hour.group(1)))).isoformat()
+        except (ValueError, OverflowError):
+            return now.isoformat()
     rel_day = re.search(r"(\d+)\s*일\s*전", raw)
     if rel_day:
-        return (now - datetime.timedelta(days=int(rel_day.group(1)))).isoformat()
+        try:
+            return (now - datetime.timedelta(days=int(rel_day.group(1)))).isoformat()
+        except (ValueError, OverflowError):
+            return now.isoformat()
     if "어제" in raw:
         return (now - datetime.timedelta(days=1)).isoformat()
 
@@ -329,6 +338,7 @@ class DCInsideCrawler(BaseCrawler):
     ):
         self.min_delay = min_delay
         self.max_delay = max_delay
+        owns_client = client is None
         if client is None:
             client = SafeHttpClient(
                 min_delay=min_delay,
@@ -348,6 +358,7 @@ class DCInsideCrawler(BaseCrawler):
             enable_cache=enable_cache,
             cache_fallback=cache_fallback,
         )
+        self._owns_client = owns_client
         self.platform = "dcinside"
 
     def load_seed_posts(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -384,20 +395,20 @@ class DCInsideCrawler(BaseCrawler):
     def build_list_url(self, gallery_id: str, page: int = 1) -> str:
         """Build standard gallery list URL."""
         prefix = self.get_gallery_prefix(gallery_id)
-        gid = str(gallery_id or "").strip()
+        gid = urllib.parse.quote(str(gallery_id or "").strip(), safe="")
         try:
-            eff_page = max(1, int(page))
-        except (ValueError, TypeError):
+            eff_page = max(1, int(float(page)))
+        except (ValueError, TypeError, OverflowError):
             eff_page = 1
         return f"{DC_BASE_URL}/{prefix}/lists/?id={gid}&page={eff_page}"
 
     def build_search_url(self, gallery_id: str, keyword: str, page: int = 1) -> str:
         """Build UTF-8 encoded search URL."""
         prefix = self.get_gallery_prefix(gallery_id)
-        gid = str(gallery_id or "").strip()
+        gid = urllib.parse.quote(str(gallery_id or "").strip(), safe="")
         try:
-            eff_page = max(1, int(page))
-        except (ValueError, TypeError):
+            eff_page = max(1, int(float(page)))
+        except (ValueError, TypeError, OverflowError):
             eff_page = 1
         encoded_kw = urllib.parse.quote(str(keyword or ""))
         return (
@@ -408,8 +419,8 @@ class DCInsideCrawler(BaseCrawler):
     def build_post_url(self, gallery_id: str, post_id: str) -> str:
         """Build canonical desktop view URL for a post."""
         prefix = self.get_gallery_prefix(gallery_id)
-        gid = str(gallery_id or "").strip()
-        pid = str(post_id or "").strip()
+        gid = urllib.parse.quote(str(gallery_id or "").strip(), safe="")
+        pid = urllib.parse.quote(str(post_id or "").strip(), safe="")
         return f"{DC_BASE_URL}/{prefix}/view/?id={gid}&no={pid}"
 
     def parse_gallery_list(self, html_content: str, gallery_id: str) -> List[Dict[str, Any]]:
@@ -987,9 +998,19 @@ class DCInsideCrawler(BaseCrawler):
             referer = gallery_id
             gallery_id = "car_new1"
 
-        # Defensively normalize relative URLs
-        eff_url = post_url.strip()
-        if eff_url.startswith("/"):
+        # Defensively normalize relative URLs and HTML entities
+        eff_url = html.unescape(post_url.strip())
+        if not eff_url or any(ord(c) < 32 or ord(c) == 127 for c in eff_url):
+            logger.warning(f"Unsafe DCInside post_url provided: {post_url!r}")
+            return None
+        parsed_input = urllib.parse.urlsplit(eff_url)
+        if parsed_input.scheme and parsed_input.scheme.lower() not in ("http", "https"):
+            logger.warning(f"Disallowed URL scheme in DCInside post_url: {post_url!r}")
+            return None
+
+        if eff_url.startswith("//"):
+            eff_url = f"https:{eff_url}"
+        elif eff_url.startswith("/"):
             eff_url = f"{DC_BASE_URL}{eff_url}"
         elif not (eff_url.startswith("http://") or eff_url.startswith("https://")):
             eff_url = f"{DC_BASE_URL}/{eff_url}"
@@ -997,7 +1018,7 @@ class DCInsideCrawler(BaseCrawler):
         base_url = kwargs.get("base_url")
         self.ensure_warm_up(base_url)
         eff_referer = referer or f"{DC_BASE_URL}/"
-        timeout = kwargs.get("timeout")
+        timeout = kwargs.get("timeout", (self.connect_timeout, self.read_timeout))
 
         if not self.client:
             return None
@@ -1152,7 +1173,10 @@ class DCInsideCrawler(BaseCrawler):
         self.ensure_warm_up()
         results: List[Dict[str, Any]] = []
         seen_pids = set()
-        eff_pages = max(1, int(pages)) if str(pages).isdigit() else 1
+        try:
+            eff_pages = max(1, int(float(pages)))
+        except (ValueError, TypeError, OverflowError):
+            eff_pages = 1
 
         for page in range(1, eff_pages + 1):
             url = self.build_list_url(gallery_id, page=page)
@@ -1236,7 +1260,10 @@ class DCInsideCrawler(BaseCrawler):
         self.ensure_warm_up()
         results: List[Dict[str, Any]] = []
         seen_pids = set()
-        eff_pages = max(1, int(pages)) if str(pages).isdigit() else 1
+        try:
+            eff_pages = max(1, int(float(pages)))
+        except (ValueError, TypeError, OverflowError):
+            eff_pages = 1
 
         for page in range(1, eff_pages + 1):
             url = self.build_search_url(gallery_id, keyword, page=page)

@@ -23,7 +23,7 @@ def load_json_file(file_path: Path) -> Any:
     """Load and parse JSON file."""
     if not file_path.exists():
         raise FileNotFoundError(f"Required file not found: {file_path}")
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, "r", encoding="utf-8-sig") as f:
         return json.load(f)
 
 
@@ -76,10 +76,12 @@ def build_slang_dictionary_section(slang_dict: Dict[str, Any]) -> str:
     ]
 
     for term, data in slang_dict.items():
-        category = data.get("category", "")
-        meaning = data.get("meaning", "").replace("\n", " ")
-        context = data.get("context", "").replace("\n", " ")
-        example = data.get("example", "").replace("\n", " ")
+        if not isinstance(data, dict):
+            continue
+        category = data.get("category") or ""
+        meaning = (data.get("meaning") or "").replace("\n", " ")
+        context = (data.get("context") or "").replace("\n", " ")
+        example = (data.get("example") or "").replace("\n", " ")
         lines.append(f"| **{term}** | `{category}` | {meaning} | {context} | *\"{example}\"* |")
 
     lines.extend([
@@ -207,8 +209,9 @@ def build_source_index_section(complaints: List[Dict[str, Any]]) -> str:
 
     lines.append("| 플랫폼 (Platform) | 수집 사례 수 (Cases) | 비율 (%) | 대표 게시판 |")
     lines.append("|---|---|---|---|")
+    total_complaints = len(complaints) or 1
     for p, cnt in sorted(platform_counts.items(), key=lambda x: x[1], reverse=True):
-        ratio = (cnt / len(complaints)) * 100
+        ratio = (cnt / total_complaints) * 100
         lines.append(f"| `{p}` | {cnt}건 | {ratio:.1f}% | 보배드림 국산차/수입차/자유, 디시 전기차갤, 네이버 카페 등 |")
 
     lines.extend([

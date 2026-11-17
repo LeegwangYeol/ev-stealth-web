@@ -367,7 +367,7 @@ export default function GlobalEvPage() {
                     href="https://www.car.go.kr"
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="볼트 EV 국토교통부 자동차리콜센터 공식 정보 (새 창에서 열림)"
+                    aria-label="볼트 EV 국토교통부 자동차리콜센터 리콜 조회 (새 창에서 열림)"
                     className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>리콜 조회</span>
@@ -400,7 +400,7 @@ export default function GlobalEvPage() {
                     href="https://www.car.go.kr"
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="ID.4 국토교통부 자동차리콜센터 공식 정보 (새 창에서 열림)"
+                    aria-label="ID.4 국토교통부 자동차리콜센터 리콜 조회 (새 창에서 열림)"
                     className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>리콜 조회</span>
@@ -433,7 +433,7 @@ export default function GlobalEvPage() {
                     href="https://www.car.go.kr"
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="볼보/폴스타 국토교통부 자동차리콜센터 공식 정보 (새 창에서 열림)"
+                    aria-label="볼보/폴스타 국토교통부 자동차리콜센터 리콜 조회 (새 창에서 열림)"
                     className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>리콜 조회</span>
@@ -466,7 +466,7 @@ export default function GlobalEvPage() {
                     href="https://www.car.go.kr"
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="벤츠 EQE 국토교통부 자동차리콜센터 공식 정보 (새 창에서 열림)"
+                    aria-label="벤츠 EQE 국토교통부 자동차리콜센터 리콜 조회 (새 창에서 열림)"
                     className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>리콜 조회</span>
@@ -669,8 +669,8 @@ export default function GlobalEvPage() {
           <Link
             href="/reliability-analytics"
             prefetch={false}
-            aria-label="글로벌 9대 브랜드 스텔스 품질 점수 및 DSI 비교 바로가기"
-            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+            aria-label="글로벌 9대 브랜드 스텔스 품질 점수(DSI) 비교 바로가기"
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
           >
             <h3 className="flex items-center gap-2 text-blue-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📊</span>
@@ -688,7 +688,7 @@ export default function GlobalEvPage() {
             href="/recall-portal"
             prefetch={false}
             aria-label="수입차 VIN 및 통합 리콜 현황 조회 바로가기"
-            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-rose-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-rose-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-2"
           >
             <h3 className="flex items-center gap-2 text-rose-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">🚨</span>
@@ -705,8 +705,8 @@ export default function GlobalEvPage() {
           <Link
             href="/depreciation-calculator"
             prefetch={true}
-            aria-label="수입 EV 감가상각 시뮬레이터 및 배터리 잔존가치 계산기 바로가기"
-            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+            aria-label="수입 EV 감가상각 시뮬레이터 & 배터리 잔존가치 계산기 바로가기"
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
           >
             <h3 className="flex items-center gap-2 text-emerald-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📉</span>
@@ -724,7 +724,7 @@ export default function GlobalEvPage() {
             href="/subsidy-tracker"
             prefetch={true}
             aria-label="수입 전기차 보조금 실시간 소진율 및 상한제 시뮬레이터 바로가기"
-            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2"
           >
             <h3 className="flex items-center gap-2 text-amber-800 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">⚡</span>

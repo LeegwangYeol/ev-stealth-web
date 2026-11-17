@@ -51,7 +51,7 @@ class SlangFilter:
 
     def find_matching_slang(self, text: Any) -> List[SlangEntry]:
         """Identify all slang entries present in the given text with Unicode & case resilience."""
-        return find_matching_slang(text)
+        return find_matching_slang(text, max_length=self.max_length)
 
     def filter_slang(self, text: Any) -> List[SlangEntry]:
         """Alias for find_matching_slang."""
@@ -75,11 +75,12 @@ class SlangFilter:
             return False
         if term_or_category is None:
             return True
-        target = str(term_or_category).strip().upper()
+        norm_raw = unicodedata.normalize("NFC", str(term_or_category)).strip()
+        target = norm_raw.upper()
         if not target:
             return False
         for e in entries:
-            if e.term == term_or_category or e.term.upper() == target or (e.defect_category and e.defect_category.upper() == target):
+            if e.term == norm_raw or e.term.upper() == target or (e.defect_category and e.defect_category.upper() == target):
                 return True
             if e.dimension and e.dimension.upper() == target:
                 return True

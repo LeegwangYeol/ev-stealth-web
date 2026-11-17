@@ -166,11 +166,11 @@ export interface SanitizeUrlOptions {
 /**
  * Dangerous parameter keys and expressions associated with Prototype Pollution attacks.
  */
-export const PROTOTYPE_POLLUTION_REGEX = /^(?:__proto__|constructor|prototype|Object\.prototype)(?:[.[\]\s]|$)/i;
+export const PROTOTYPE_POLLUTION_REGEX = /(?:^|[.[\]\s])(?:__proto__|constructor|prototype|Object\.prototype)(?:[.[\]\s]|$)/i;
 
 /**
  * Decodes HTML entities (numeric decimal/hex and named entities) to uncover obfuscated URI schemes.
- * Handles decimal (&#58;), hex (&#x3a;), optional trailing semicolons, and common named entities (&colon;).
+ * Handles decimal (&#58;), hex (&#x3a;), optional trailing semicolons on numeric/legacy entities, and named entities (&colon;).
  */
 export function decodeHtmlEntities(str: string): string {
   if (!str || typeof str !== 'string') return '';
@@ -191,14 +191,14 @@ export function decodeHtmlEntities(str: string): string {
         return '';
       }
     })
-    .replace(/&colon;?/gi, ':')
-    .replace(/&tab;?/gi, '\t')
-    .replace(/&newline;?/gi, '\n')
+    .replace(/&colon;/gi, ':')
+    .replace(/&tab;/gi, '\t')
+    .replace(/&newline;/gi, '\n')
     .replace(/&nbsp;?/gi, ' ')
-    .replace(/&sol;?/gi, '/')
-    .replace(/&bsol;?/gi, '\\')
+    .replace(/&sol;/gi, '/')
+    .replace(/&bsol;/gi, '\\')
     .replace(/&quot;?/gi, '"')
-    .replace(/&apos;?/gi, "'")
+    .replace(/&apos;/gi, "'")
     .replace(/&lt;?/gi, '<')
     .replace(/&gt;?/gi, '>')
     .replace(/&amp;?/gi, '&');
@@ -579,8 +579,8 @@ export function sanitizeSafeUrl(url?: unknown, options?: SanitizeUrlOptions): st
 
   // 7. Explicit check for forbidden schemes (javascript:, data:, vbscript:)
   if (
-    /^(?:\s*|.*?)(?:javascript|data|vbscript)\s*:/i.test(trimmed) ||
-    /^(?:\s*|.*?)(?:javascript|data|vbscript)\s*:/i.test(decodedCheck)
+    /(?:javascript|data|vbscript)\s*:/i.test(trimmed) ||
+    /(?:javascript|data|vbscript)\s*:/i.test(decodedCheck)
   ) {
     const extracted = extractAndNormalizeScheme(trimmed);
     if (!extracted || extracted === 'javascript' || extracted === 'data' || extracted === 'vbscript' || FORBIDDEN_SCHEMES.has(extracted)) {
@@ -685,7 +685,7 @@ export function isSafeUrl(url?: unknown): boolean {
  */
 export function isExternalUrl(url?: unknown): boolean {
   const safe = sanitizeSafeUrl(url);
-  return safe.startsWith('http://') || safe.startsWith('https://');
+  return /^https?:\/\//i.test(safe);
 }
 
 /**
@@ -714,13 +714,13 @@ export function stripHtmlTags(input?: unknown): string {
   str = sanitizeText(str);
 
   // 2. Strip executable and container elements including their inner content
-  str = str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-  str = str.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
-  str = str.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '');
-  str = str.replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '');
-  str = str.replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '');
-  str = str.replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '');
-  str = str.replace(/<template\b[^<]*(?:(?!<\/template>)<[^<]*)*<\/template>/gi, '');
+  str = str.replace(/<script\b[^<]*(?:(?!<\/script\s*>)<[^<]*)*<\/script\s*>/gi, '');
+  str = str.replace(/<style\b[^<]*(?:(?!<\/style\s*>)<[^<]*)*<\/style\s*>/gi, '');
+  str = str.replace(/<iframe\b[^<]*(?:(?!<\/iframe\s*>)<[^<]*)*<\/iframe\s*>/gi, '');
+  str = str.replace(/<object\b[^<]*(?:(?!<\/object\s*>)<[^<]*)*<\/object\s*>/gi, '');
+  str = str.replace(/<embed\b[^<]*(?:(?!<\/embed\s*>)<[^<]*)*<\/embed\s*>/gi, '');
+  str = str.replace(/<svg\b[^<]*(?:(?!<\/svg\s*>)<[^<]*)*<\/svg\s*>/gi, '');
+  str = str.replace(/<template\b[^<]*(?:(?!<\/template\s*>)<[^<]*)*<\/template\s*>/gi, '');
 
   // 3. Convert breaks and block-closing tags to clean newlines
   str = str.replace(/<br\s*\/?>/gi, '\n');
@@ -736,13 +736,13 @@ export function stripHtmlTags(input?: unknown): string {
   let prevPass = '';
   while (str.includes('<') && str !== prevPass) {
     prevPass = str;
-    str = str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-    str = str.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
-    str = str.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '');
-    str = str.replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '');
-    str = str.replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '');
-    str = str.replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '');
-    str = str.replace(/<template\b[^<]*(?:(?!<\/template>)<[^<]*)*<\/template>/gi, '');
+    str = str.replace(/<script\b[^<]*(?:(?!<\/script\s*>)<[^<]*)*<\/script\s*>/gi, '');
+    str = str.replace(/<style\b[^<]*(?:(?!<\/style\s*>)<[^<]*)*<\/style\s*>/gi, '');
+    str = str.replace(/<iframe\b[^<]*(?:(?!<\/iframe\s*>)<[^<]*)*<\/iframe\s*>/gi, '');
+    str = str.replace(/<object\b[^<]*(?:(?!<\/object\s*>)<[^<]*)*<\/object\s*>/gi, '');
+    str = str.replace(/<embed\b[^<]*(?:(?!<\/embed\s*>)<[^<]*)*<\/embed\s*>/gi, '');
+    str = str.replace(/<svg\b[^<]*(?:(?!<\/svg\s*>)<[^<]*)*<\/svg\s*>/gi, '');
+    str = str.replace(/<template\b[^<]*(?:(?!<\/template\s*>)<[^<]*)*<\/template\s*>/gi, '');
     str = str.replace(/<[^>]+>/g, '');
     str = str.replace(/<[a-zA-Z\/!?][^>]*$/g, '');
   }

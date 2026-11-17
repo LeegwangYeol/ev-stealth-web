@@ -33,11 +33,11 @@ export const ModelSpecWarrantyCard = memo(function ModelSpecWarrantyCard({
     <div
       role="region"
       aria-label={`${modelName} 핵심 제원 및 공식 보증 가이드`}
-      className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-xs space-y-3.5 transition-all hover:border-slate-300"
+      className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-sm space-y-3.5 transition-all hover:border-slate-300"
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
-        <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
-          <span className="text-blue-600 text-lg sm:text-xl" aria-hidden="true">
+        <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2 min-w-0">
+          <span className="text-blue-600 text-lg sm:text-xl shrink-0" aria-hidden="true">
             📋
           </span>
           <span>{modelName} 제원 · 공식 보증 · 실구매가</span>
@@ -61,16 +61,16 @@ export const ModelSpecWarrantyCard = memo(function ModelSpecWarrantyCard({
           <dl className="text-xs space-y-1 text-slate-700">
             <div className="flex justify-between items-baseline gap-2">
               <dt className="text-slate-600 font-medium shrink-0">신차 출고가:</dt>
-              <dd className="font-semibold text-slate-900 text-right">{msrpRange}</dd>
+              <dd className="font-semibold text-slate-900 text-right min-w-0">{msrpRange}</dd>
             </div>
             <div className="flex justify-between items-baseline gap-2">
               <dt className="text-slate-600 font-medium shrink-0">보조금 실구매:</dt>
-              <dd className="font-bold text-blue-700 text-right">{effectivePriceRange}</dd>
+              <dd className="font-bold text-blue-700 text-right min-w-0">{effectivePriceRange}</dd>
             </div>
             {usedPriceRange && (
               <div className="flex justify-between items-baseline gap-2 pt-1 border-t border-blue-200/50">
                 <dt className="text-slate-600 font-medium shrink-0">중고차 시세:</dt>
-                <dd className="font-semibold text-emerald-800 text-right">{usedPriceRange}</dd>
+                <dd className="font-semibold text-emerald-800 text-right min-w-0">{usedPriceRange}</dd>
               </div>
             )}
           </dl>
@@ -86,23 +86,23 @@ export const ModelSpecWarrantyCard = memo(function ModelSpecWarrantyCard({
           <dl className="text-xs space-y-1 text-slate-700">
             <div className="flex justify-between items-baseline gap-2">
               <dt className="text-slate-600 font-medium shrink-0">배터리 용량:</dt>
-              <dd className="font-semibold text-slate-900 text-right">{batterySpecs.capacity}</dd>
+              <dd className="font-semibold text-slate-900 text-right min-w-0">{batterySpecs.capacity}</dd>
             </div>
             <div className="flex justify-between items-baseline gap-2">
               <dt className="text-slate-600 font-medium shrink-0">양극재 / 셀:</dt>
-              <dd className="font-semibold text-slate-900 text-right break-keep leading-tight" title={batterySpecs.chemistry}>
+              <dd className="font-semibold text-slate-900 text-right break-keep leading-tight min-w-0" title={batterySpecs.chemistry}>
                 {batterySpecs.chemistry}
               </dd>
             </div>
             <div className="flex justify-between items-baseline gap-2">
               <dt className="text-slate-600 font-medium shrink-0">충전 시스템:</dt>
-              <dd className="font-semibold text-slate-900 text-right break-keep leading-tight" title={batterySpecs.voltage}>
+              <dd className="font-semibold text-slate-900 text-right break-keep leading-tight min-w-0" title={batterySpecs.voltage}>
                 {batterySpecs.voltage}
               </dd>
             </div>
             <div className="flex justify-between items-baseline gap-2 pt-1 border-t border-emerald-200/50">
               <dt className="text-slate-600 font-medium shrink-0">복합 주행거리:</dt>
-              <dd className="font-bold text-emerald-800 text-right">{batterySpecs.range}</dd>
+              <dd className="font-bold text-emerald-800 text-right min-w-0">{batterySpecs.range}</dd>
             </div>
           </dl>
         </div>
@@ -117,26 +117,29 @@ export const ModelSpecWarrantyCard = memo(function ModelSpecWarrantyCard({
           <dl className="text-xs space-y-1 text-slate-700">
             <div className="flex justify-between items-baseline gap-2">
               <dt className="text-slate-600 font-medium shrink-0">배터리/구동계:</dt>
-              <dd className="font-bold text-indigo-800 text-right">{warranty.batteryYearsKm}</dd>
+              <dd className="font-bold text-indigo-800 text-right min-w-0">{warranty.batteryYearsKm}</dd>
             </div>
             {warranty.batteryGuaranteeSoh && (
               <div className="flex justify-between items-baseline gap-2">
                 <dt className="text-slate-600 font-medium shrink-0">성능 보증:</dt>
-                <dd className="font-medium text-slate-700 text-right">{warranty.batteryGuaranteeSoh}</dd>
+                <dd className="font-medium text-slate-700 text-right min-w-0">{warranty.batteryGuaranteeSoh}</dd>
               </div>
             )}
             <div className="flex justify-between items-baseline gap-2">
               <dt className="text-slate-600 font-medium shrink-0">차체 / 일반:</dt>
-              <dd className="font-semibold text-slate-900 text-right">{warranty.generalYearsKm}</dd>
+              <dd className="font-semibold text-slate-900 text-right min-w-0">{warranty.generalYearsKm}</dd>
             </div>
-            {warranty.outOfWarrantyRisk && (
-              <div className="pt-1 border-t border-indigo-200/50">
-                <p className="text-[11px] text-rose-800 leading-tight">
-                  <span className="font-bold">⚠️ 보증 만료 위험:</span> {warranty.outOfWarrantyRisk}
-                </p>
-              </div>
-            )}
           </dl>
+          {warranty.outOfWarrantyRisk && (
+            <div className="pt-1 border-t border-indigo-200/50">
+              <p className="text-[11px] text-rose-800 leading-tight">
+                <span className="font-bold">
+                  <span aria-hidden="true">⚠️ </span>보증 만료 위험:
+                </span>{' '}
+                {warranty.outOfWarrantyRisk}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -28,6 +28,7 @@ from filters.slang_lexicon import (
     NEWS_PATTERNS,
     OWNERSHIP_ANCHORS,
     STOCK_TERMS,
+    _decode_bytes_safely,
     find_matching_slang,
 )
 
@@ -55,10 +56,7 @@ def sanitize_input(val: Any, max_len: int = MAX_TEXT_LENGTH) -> str:
     if val is None or val is False:
         return ""
     if isinstance(val, (bytes, bytearray)):
-        try:
-            val_str = val.decode("utf-8", errors="replace")
-        except Exception:
-            val_str = str(val)
+        val_str = _decode_bytes_safely(val)
     elif isinstance(val, str):
         val_str = val
     else:
@@ -95,6 +93,21 @@ JOURNALISTIC_WIRE_REGEXES: Tuple[re.Pattern[str], ...] = (
     re.compile(r"연합뉴스|뉴시스|뉴스1"),
 )
 RE_AS_KEYWORD: re.Pattern[str] = re.compile(r"(?:\b|[^a-zA-Z])(?:as|a/s)(?:\b|[^a-zA-Z])", re.IGNORECASE)
+_RE_BOUNDED_CATEGORY_KEYWORDS: Dict[str, re.Pattern[str]] = {
+    "ota": re.compile(r"(?<![a-zA-Z])ota(?![a-zA-Z])", re.IGNORECASE),
+    "soc": re.compile(r"(?<![a-zA-Z])soc(?![a-zA-Z])", re.IGNORECASE),
+}
+
+
+def matches_category_keyword(category: str, keyword: str, text_lower: str) -> bool:
+    """Match a CATEGORY_KEYWORD_MAP keyword against lowercased text with ASCII boundary safety."""
+    kw_lower = keyword.lower()
+    if category == "SERVICE_REPAIR_COST" and kw_lower == "as":
+        return bool(RE_AS_KEYWORD.search(text_lower))
+    bounded_pat = _RE_BOUNDED_CATEGORY_KEYWORDS.get(kw_lower)
+    if bounded_pat is not None:
+        return bool(bounded_pat.search(text_lower))
+    return kw_lower in text_lower
 
 # Pre-compiled inquiry patterns
 INQUIRY_REGEXES: List[re.Pattern[str]] = [
@@ -420,11 +433,7 @@ class SpamFilter:
         has_component = False
         for cat, cats in CATEGORY_KEYWORD_MAP.items():
             for k in cats:
-                if cat == "SERVICE_REPAIR_COST" and k == "as":
-                    if RE_AS_KEYWORD.search(text_lower):
-                        has_component = True
-                        break
-                elif k.lower() in text_lower:
+                if matches_category_keyword(cat, k, text_lower):
                     has_component = True
                     break
             if has_component:
@@ -438,7 +447,7 @@ class SpamFilter:
         except Exception:
             has_defect_slang = False
 
-        has_ownership_anchor = any(anchor in text_str for anchor in self.ownership_anchors)
+        has_ownership_anchor = any(anchor and anchor in text_str for anchor in self.ownership_anchors)
 
         has_defect_symptom = has_defect_keyword or has_defect_slang or any(
             w in text_lower for w in (
@@ -458,7 +467,9 @@ class SpamFilter:
         # 1. Commercial / Promotional Spam, Solicitations & Affiliate Codes
         # -----------------------------------------------------------------
         for spam_term in self.commercial_spam_terms:
-            if spam_term in text_str:
+            if not spam_term:
+                continue
+            if spam_term in text_str or spam_term.lower() in text_lower:
                 return True, f"Commercial advertisement spam detected: {spam_term}"
 
         for pattern in self.commercial_spam_regexes:
@@ -484,7 +495,8 @@ class SpamFilter:
         # -----------------------------------------------------------------
         # 3. Journalistic News Detection
         # -----------------------------------------------------------------
-        if any(d in url_str for d in NEWS_DOMAINS) and len(text_str) < 50:
+        url_lower = url_str.lower()
+        if any(d in url_lower for d in NEWS_DOMAINS) and len(text_str) < 50:
             return True, "External news link share with minimal personal text"
 
         for pattern in self.news_regexes:
@@ -501,7 +513,7 @@ class SpamFilter:
         # -----------------------------------------------------------------
         # 4. Financial / Stock Market & Crypto Speculation
         # -----------------------------------------------------------------
-        matched_stock_terms = [term for term in self.financial_terms if term in text_str]
+        matched_stock_terms = [term for term in self.financial_terms if term and term in text_str]
         if len(matched_stock_terms) >= 2:
             if is_owner_complaint:
                 pure_trading_terms = [
@@ -516,7 +528,7 @@ class SpamFilter:
         # -----------------------------------------------------------------
         # 5. Unrelated Political Discussions
         # -----------------------------------------------------------------
-        matched_political = [term for term in self.political_terms if term in text_str]
+        matched_political = [term for term in self.political_terms if term and term in text_str]
         if len(matched_political) >= 2:
             if is_owner_complaint:
                 partisan_insults = [
@@ -586,8 +598,8 @@ class SpamFilter:
                     content = getattr(p, "content", "")
                     url = getattr(p, "url", "")
 
-                combined = f"{title or ''} {content or ''}".strip()
-                if not self.is_spam(combined, str(url or "")):
+                combined = f"{sanitize_input(title)} {sanitize_input(content)}".strip()
+                if not self.is_spam(combined, sanitize_input(url, MAX_URL_LENGTH)):
                     retained.append(p)
             except Exception:
                 continue

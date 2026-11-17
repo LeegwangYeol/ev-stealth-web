@@ -364,7 +364,7 @@ def sync_defect_reports(
 
         def _candidate_score(cand_path: Path) -> Tuple[int, int, float]:
             is_valid, num_reports, mtime = _evaluate_candidate(cand_path)
-            return (1 if (is_valid and num_reports >= 4) else (1 if is_valid else 0), num_reports, mtime)
+            return (2 if (is_valid and num_reports >= 4) else (1 if is_valid else 0), num_reports, mtime)
 
         known_paths: List[Path] = [root_reports_path, web_reports_path] + deduped_public
         candidate_paths: List[Path] = [p for p in known_paths if p.exists()]
@@ -402,7 +402,8 @@ def sync_defect_reports(
                 resolved_p = str(Path(p).resolve())
             except (OSError, RuntimeError):
                 resolved_p = str(Path(p).absolute())
-            if resolved_p not in seen_target_abs and (p.parent.exists() or p.parent.parent.exists()):
+            is_explicit_web_target = (web_dir is not None and p == web_reports_path)
+            if resolved_p not in seen_target_abs and (is_explicit_web_target or p.parent.exists() or p.parent.parent.exists()):
                 seen_target_abs.add(resolved_p)
                 target_paths.append(p)
 
@@ -491,6 +492,30 @@ def sync_defect_reports(
     return deduped_written
 
 
+def _mirrored_candidate_priority(fname: str, parsed: Any) -> int:
+    """Score parsed JSON candidate so empty or structurally corrupt shells never overwrite healthy mirrors."""
+    if parsed is None:
+        return -1
+    if fname == "daily_reports.json":
+        if not isinstance(parsed, dict) or not isinstance(parsed.get("reports"), list):
+            return -1
+        rep_count = len(parsed["reports"])
+        return 2 if rep_count >= 4 else (1 if rep_count > 0 else 0)
+    if fname in ("ev_subsidy_data.json", "subsidy_depletion_data.json"):
+        if not isinstance(parsed, dict) or not isinstance(parsed.get("regions"), list):
+            return -1
+        return 2 if len(parsed["regions"]) >= 17 else (1 if len(parsed["regions"]) > 0 else 0)
+    if fname == "models_subsidy_matrix.json":
+        if not isinstance(parsed, list):
+            return -1
+        return 2 if len(parsed) >= 15 else (1 if len(parsed) > 0 else -1)
+    if isinstance(parsed, dict):
+        return 2 if len(parsed) > 0 else -1
+    if isinstance(parsed, list):
+        return 2 if len(parsed) > 0 else -1
+    return -1
+
+
 def auto_heal_mirrored_parity(repo_root: Optional[Path] = None) -> List[str]:
     """Scan all canonical mirrored JSON datasets across data/, src/data/, public/data/ and heal any disparities.
 
@@ -538,12 +563,9 @@ def auto_heal_mirrored_parity(repo_root: Optional[Path] = None) -> List[str]:
                     parsed = json.loads(content.decode("utf-8-sig"))
                     h = hashlib.sha256(content).hexdigest()
                     hashes[fp] = h
-                    # For daily_reports, prioritize candidates with actual defect reports over empty shells
-                    priority = 1
-                    if fname == "daily_reports.json" and isinstance(parsed, dict):
-                        raw_reps = parsed.get("reports")
-                        rep_count = len(raw_reps) if isinstance(raw_reps, list) else 0
-                        priority = 2 if rep_count >= 4 else (1 if rep_count > 0 else 0)
+                    priority = _mirrored_candidate_priority(fname, parsed)
+                    if priority < 0:
+                        continue
                     score = (priority, fp.stat().st_mtime)
                     if best_cand is None or score > (best_cand[0], best_cand[1]):
                         best_cand = (score[0], score[1], fp, h, content)
@@ -552,22 +574,42 @@ def auto_heal_mirrored_parity(repo_root: Optional[Path] = None) -> List[str]:
 
         if best_cand is not None:
             auth_path, auth_hash, auth_bytes = best_cand[2], best_cand[3], best_cand[4]
+            try:
+                auth_stat = auth_path.stat()
+            except OSError:
+                auth_stat = None
             for d in active_dirs:
                 fp = d / fname
                 if not fp.exists() or hashes.get(fp) != auth_hash:
+                    temp_name: Optional[str] = None
                     try:
                         d.mkdir(parents=True, exist_ok=True)
-                        tmp_p = d / f".tmp_heal_{fname}_{os.getpid()}"
-                        tmp_p.write_bytes(auth_bytes)
+                        with tempfile.NamedTemporaryFile("wb", dir=str(d), delete=False, prefix=f".tmp_heal_{fname}_") as tf:
+                            temp_name = tf.name
+                            tf.write(auth_bytes)
+                            tf.flush()
+                            os.fsync(tf.fileno())
                         try:
-                            os.chmod(tmp_p, 0o644)
+                            os.chmod(temp_name, 0o644)
                         except OSError:
                             pass
-                        os.replace(tmp_p, fp)
+                        os.replace(temp_name, fp)
+                        temp_name = None
+                        if auth_stat is not None:
+                            try:
+                                os.utime(fp, (auth_stat.st_atime, auth_stat.st_mtime))
+                            except OSError:
+                                pass
                         repaired.append(f"{fname} -> {fp}")
                         logger.info("Auto-healed mirror parity for %s in %s", fname, d)
                     except Exception as e:
                         logger.warning("Failed to auto-heal %s in %s: %s", fname, d, e)
+                    finally:
+                        if temp_name and os.path.exists(temp_name):
+                            try:
+                                os.unlink(temp_name)
+                            except OSError:
+                                pass
     return repaired
 
 

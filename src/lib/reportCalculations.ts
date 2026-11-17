@@ -252,11 +252,11 @@ export function sanitizeReportUrl(rawUrl?: unknown): string {
     // Malformed URI encoding
   }
 
-  // Block internal hostnames, loopbacks, and RFC 1918 private IP ranges
+  // Block internal hostnames, loopbacks, and private/reserved IPv4 & IPv6 ranges
   try {
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    if (/^https?:\/\//i.test(trimmed)) {
       const urlObj = new URL(trimmed);
-      const host = urlObj.hostname.toLowerCase();
+      const host = urlObj.hostname.toLowerCase().replace(/\.+$/, '');
       if (
         host === 'localhost' ||
         host === '0.0.0.0' ||
@@ -273,17 +273,30 @@ export function sanitizeReportUrl(rawUrl?: unknown): string {
         /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
         /^172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host) ||
         /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
-        /^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}$/.test(host)
+        /^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}$/.test(host) ||
+        /^\[?(?:::ffff:|fe[89ab][0-9a-f]:|(?:fc|fd)[0-9a-f]{2}:)/i.test(host)
       ) {
         return '#';
       }
 
-      // Strip sensitive tokens/credentials from query parameters
-      const sensitiveKeys = ['token', 'access_token', 'auth', 'auth_token', 'api_key', 'apikey', 'key', 'secret', 'password', 'session', 'jwt'];
+      // Strip sensitive tokens/credentials from query parameters (case-insensitive)
+      const sensitiveKeys = new Set([
+        'token',
+        'access_token',
+        'auth',
+        'auth_token',
+        'api_key',
+        'apikey',
+        'key',
+        'secret',
+        'password',
+        'session',
+        'jwt',
+      ]);
       let modified = false;
-      for (const key of sensitiveKeys) {
-        if (urlObj.searchParams.has(key)) {
-          urlObj.searchParams.delete(key);
+      for (const paramKey of Array.from(urlObj.searchParams.keys())) {
+        if (sensitiveKeys.has(paramKey.toLowerCase())) {
+          urlObj.searchParams.delete(paramKey);
           modified = true;
         }
       }
@@ -302,7 +315,10 @@ export function sanitizeReportUrl(rawUrl?: unknown): string {
  * Normalizes and bounds sentiment/negativity scores safely between 0.00 and 1.00.
  */
 export function getSafeSentimentScore(rawScore?: unknown, fallback = 0.85): number {
-  const safeFallback = typeof fallback === 'number' && Number.isFinite(fallback) ? fallback : 0.85;
+  const safeFallback =
+    typeof fallback === 'number' && Number.isFinite(fallback)
+      ? Number(Math.min(1.0, Math.max(0.0, fallback)).toFixed(2))
+      : 0.85;
   if (typeof rawScore !== 'number' || !Number.isFinite(rawScore)) {
     return safeFallback;
   }
@@ -339,10 +355,8 @@ export function deduplicateReports(
   safeList.forEach((item, idx) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return;
 
-    // Normalize if not already normalized
-    const normalized = 'defect_category' in item && typeof item.defect_category === 'string'
-      ? (item as DefectReportItem)
-      : normalizeReport(item as Record<string, unknown>, idx);
+    // Always normalize to guarantee URL sanitization, PII masking, and field invariants
+    const normalized = normalizeReport(item as Record<string, unknown>, idx);
 
     // Deterministic deduplication key:
     let key = '';
@@ -467,19 +481,19 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
   }
 
   return {
-    id: sanitizeText(raw.id || raw.post_id || `report_${index + 1}`),
-    source: sanitizeText(raw.source || raw.platform || 'bobaedream').toLowerCase(),
+    id: sanitizeText(raw.id || raw.post_id || '') || `report_${index + 1}`,
+    source: sanitizeText(raw.source || raw.platform || '').toLowerCase() || 'bobaedream',
     url: sanitizeReportUrl(raw.url || raw.post_url || '#'),
-    title: maskSensitiveData(sanitizeText(raw.title || raw.post_title || '전기차 결함 제보')),
+    title: maskSensitiveData(sanitizeText(raw.title || raw.post_title || '')) || '전기차 결함 제보',
     date: safeDate,
     created_at: raw.created_at ? sanitizeText(raw.created_at) : undefined,
-    vehicle_model: sanitizeText(raw.vehicle_model || raw.target_vehicle || '미상 모델'),
-    vehicle_brand: raw.vehicle_brand ? sanitizeText(raw.vehicle_brand) : undefined,
-    target_vehicle: raw.target_vehicle ? sanitizeText(raw.target_vehicle) : undefined,
+    vehicle_model: sanitizeText(raw.vehicle_model || raw.target_vehicle || '') || '미상 모델',
+    vehicle_brand: raw.vehicle_brand ? sanitizeText(raw.vehicle_brand) || undefined : undefined,
+    target_vehicle: raw.target_vehicle ? sanitizeText(raw.target_vehicle) || undefined : undefined,
     defect_category: catInfo.code,
-    defect_category_ko: sanitizeText(raw.defect_category_ko || catInfo.ko),
-    summary: maskSensitiveData(sanitizeText(raw.summary || raw.defect_summary || raw.defect_topic || '결함 상세 내용 요약')),
-    verbatim_quote: maskSensitiveData(sanitizeText(raw.verbatim_quote || raw.raw_quote || raw.content || '원문 없음')),
+    defect_category_ko: sanitizeText(raw.defect_category_ko || '') || catInfo.ko,
+    summary: maskSensitiveData(sanitizeText(raw.summary || raw.defect_summary || raw.defect_topic || '')) || '결함 상세 내용 요약',
+    verbatim_quote: maskSensitiveData(sanitizeText(raw.verbatim_quote || raw.raw_quote || raw.content || '')) || '원문 없음',
     slang_tags: slangTags,
     sentiment_score: score,
     sentiment_polarity: Number.isFinite(raw.sentiment_polarity) ? Number(raw.sentiment_polarity) : undefined,
@@ -554,6 +568,8 @@ export function calculateKPIs(
     : '해당 없음 (0%)';
 
   const totalScraped = existingStats?.total_scraped ?? (totalFiltered * 7);
+  const existingTopModel = typeof existingStats?.top_model === 'string' ? sanitizeText(existingStats.top_model) : '';
+  const existingTopPlatform = typeof existingStats?.top_platform === 'string' ? sanitizeText(existingStats.top_platform) : '';
 
   return {
     total_scraped: typeof totalScraped === 'number' && Number.isFinite(totalScraped)
@@ -566,12 +582,8 @@ export function calculateKPIs(
     critical_defect_count: typeof existingStats?.critical_defect_count === 'number' && Number.isFinite(existingStats.critical_defect_count)
       ? Math.max(0, existingStats.critical_defect_count)
       : criticalCount,
-    top_model: typeof existingStats?.top_model === 'string' && existingStats.top_model.trim()
-      ? sanitizeText(existingStats.top_model)
-      : topModelDisplay,
-    top_platform: typeof existingStats?.top_platform === 'string' && existingStats.top_platform.trim()
-      ? sanitizeText(existingStats.top_platform)
-      : topPlatformDisplay,
+    top_model: existingTopModel || topModelDisplay,
+    top_platform: existingTopPlatform || topPlatformDisplay,
     duplicates_removed: typeof existingStats?.duplicates_removed === 'number' && Number.isFinite(existingStats.duplicates_removed)
       ? Math.max(0, existingStats.duplicates_removed)
       : 0,

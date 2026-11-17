@@ -4,7 +4,13 @@ import JsonLd from "@/components/JsonLd";
 
 export const dynamic = 'force-static';
 
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://ev-stealth-web.vercel.app").replace(/\/+$/, "");
+const rawSiteUrl =
+  (process.env.NEXT_PUBLIC_SITE_URL || "").trim().replace(/\/+$/, "") ||
+  "https://ev-stealth-web.vercel.app";
+const SITE_URL =
+  rawSiteUrl.startsWith("http://") || rawSiteUrl.startsWith("https://")
+    ? rawSiteUrl
+    : `https://${rawSiteUrl}`;
 
 const homeJsonLd = {
   "@context": "https://schema.org",

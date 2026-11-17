@@ -341,7 +341,7 @@ export default function HyundaiKiaPage() {
                     href="https://www.car.go.kr"
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="국토교통부 자동차리콜센터 아이오닉 5 ICCU 리콜 공지 (새 창에서 열림)"
+                    aria-label="국토교통부 자동차리콜센터 아이오닉 5 ICCU 리콜 조회 (새 창에서 열림)"
                     className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>리콜 조회</span>
@@ -415,7 +415,7 @@ export default function HyundaiKiaPage() {
                     href="https://www.car.go.kr"
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="국토교통부 자동차리콜센터 기아 EV9 리콜 및 무상수리 정보 (새 창에서 열림)"
+                    aria-label="국토교통부 자동차리콜센터 기아 EV9 리콜 조회 및 무상수리 정보 (새 창에서 열림)"
                     className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>리콜 조회</span>
@@ -603,8 +603,8 @@ export default function HyundaiKiaPage() {
           <Link
             href="/reliability-analytics?brand=hyundai"
             prefetch={false}
-            aria-label="현대·기아 스텔스 품질 점수 및 결함 통계 바로가기"
-            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+            aria-label="현대·기아 스텔스 품질 점수 & 결함 통계 (DSI) 바로가기"
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
           >
             <h3 className="flex items-center gap-2 text-blue-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📊</span>
@@ -621,8 +621,8 @@ export default function HyundaiKiaPage() {
           <Link
             href="/recall-portal?brand=hyundai"
             prefetch={false}
-            aria-label="현대·기아 통합 리콜 현황 및 배터리 조회 바로가기"
-            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-rose-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
+            aria-label="현대·기아 통합 리콜 현황 & 배터리 조회 바로가기"
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-rose-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-2"
           >
             <h3 className="flex items-center gap-2 text-rose-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">🚨</span>
@@ -639,8 +639,8 @@ export default function HyundaiKiaPage() {
           <Link
             href="/depreciation-calculator"
             prefetch={true}
-            aria-label="전기차 감가상각 시뮬레이터 및 배터리 수명 계산기 바로가기"
-            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+            aria-label="전기차 감가상각 시뮬레이터 & 배터리 수명 계산기 바로가기"
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
           >
             <h3 className="flex items-center gap-2 text-emerald-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📉</span>
@@ -658,7 +658,7 @@ export default function HyundaiKiaPage() {
             href="/subsidy-tracker"
             prefetch={true}
             aria-label="전국 지자체 보조금 실시간 소진율 조회 바로가기"
-            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+            className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2"
           >
             <h3 className="flex items-center gap-2 text-amber-800 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">⚡</span>

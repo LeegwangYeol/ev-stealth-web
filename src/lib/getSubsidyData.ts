@@ -20,6 +20,10 @@ import {
   parseSubsidyNumber,
   parseModelSubsidy,
   parseCategoryMetrics,
+  resolveAlertSeverity,
+  getRegionByIdFromList,
+  getModelByIdFromList,
+  DEFAULT_NATIONWIDE_SUMMARY,
   safeCompareNumbers,
   compareRegions,
   sortRegions,
@@ -228,13 +232,22 @@ export function getSubsidyDatabase(): EVSubsidyDataset {
     if (rawData && typeof rawData === 'object' && Array.isArray((rawData as Record<string, unknown>).regions)) {
       const typed = rawData as unknown as Partial<EVSubsidyDataset>;
       return {
-        metadata: typed.metadata || fallbackDataset.metadata,
-        alert_thresholds: typed.alert_thresholds || fallbackDataset.alert_thresholds,
-        nationwide_summary: typed.nationwide_summary || fallbackDataset.nationwide_summary,
+        metadata: typed.metadata && typeof typed.metadata === 'object' ? typed.metadata : fallbackDataset.metadata,
+        alert_thresholds:
+          typed.alert_thresholds && typeof typed.alert_thresholds === 'object'
+            ? typed.alert_thresholds
+            : fallbackDataset.alert_thresholds,
+        nationwide_summary:
+          typed.nationwide_summary && typeof typed.nationwide_summary === 'object'
+            ? typed.nationwide_summary
+            : fallbackDataset.nationwide_summary,
         regions: Array.isArray(typed.regions) ? typed.regions : fallbackDataset.regions,
         popular_models_matrix: Array.isArray(typed.popular_models_matrix)
           ? typed.popular_models_matrix
           : fallbackDataset.popular_models_matrix,
+        ...(Array.isArray(typed.historical_depletion_trajectory)
+          ? { historical_depletion_trajectory: typed.historical_depletion_trajectory }
+          : {}),
       };
     }
     return fallbackDataset;
@@ -257,67 +270,7 @@ export function getAllRegions(): RegionEntry[] {
  * Guards against null elements and missing string properties.
  */
 export function getRegionById(regionId: string): RegionEntry | undefined {
-  if (!regionId || typeof regionId !== 'string') return undefined;
-  const regions = getAllRegions();
-  const normalized = regionId.trim().toLowerCase();
-  if (!normalized) return undefined;
-
-  const validRegions = regions.filter((r): r is RegionEntry => Boolean(r && typeof r === 'object'));
-
-  // 1. Direct alias resolution
-  const rawAlias = Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, normalized)
-    ? REGION_ALIAS_MAP[normalized]
-    : Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, regionId.trim())
-    ? REGION_ALIAS_MAP[regionId.trim()]
-    : undefined;
-  const aliasedId = typeof rawAlias === 'string' ? rawAlias.toLowerCase() : undefined;
-  if (aliasedId) {
-    const matched = validRegions.find(
-      (r) =>
-        (typeof r.region_id === 'string' && r.region_id.toLowerCase() === aliasedId) ||
-        (typeof r.iso_code === 'string' && r.iso_code.toLowerCase() === aliasedId)
-    );
-    if (matched) return matched;
-  }
-
-  // 2. Direct exact match on ID, ISO code, or localized names
-  const exact = validRegions.find(
-    (r) =>
-      (typeof r.region_id === 'string' && r.region_id.toLowerCase() === normalized) ||
-      (typeof r.iso_code === 'string' && r.iso_code.toLowerCase() === normalized) ||
-      (typeof r.name_ko === 'string' && r.name_ko.toLowerCase() === normalized) ||
-      (typeof r.name_en === 'string' && r.name_en.toLowerCase() === normalized)
-  );
-  if (exact) return exact;
-
-  // 3. 2-letter provincial abbreviation / stripped administrative suffix match
-  const stripped = normalized.replace(/(특별시|광역시|특별자치시|특별자치도|도)$/, '');
-  if (stripped) {
-    const rawStrippedAlias = Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, stripped)
-      ? REGION_ALIAS_MAP[stripped]
-      : undefined;
-    const strippedAliasedId = typeof rawStrippedAlias === 'string' ? rawStrippedAlias.toLowerCase() : undefined;
-    if (strippedAliasedId) {
-      const matched = validRegions.find(
-        (r) =>
-          (typeof r.region_id === 'string' && r.region_id.toLowerCase() === strippedAliasedId) ||
-          (typeof r.iso_code === 'string' && r.iso_code.toLowerCase() === strippedAliasedId)
-      );
-      if (matched) return matched;
-    }
-
-    return validRegions.find((r) => {
-      if (!r.name_ko || typeof r.name_ko !== 'string') return false;
-      const rStripped = r.name_ko.toLowerCase().replace(/(특별시|광역시|특별자치시|특별자치도|도)$/, '');
-      return (
-        rStripped === stripped ||
-        r.name_ko.toLowerCase().includes(stripped) ||
-        stripped.includes(rStripped)
-      );
-    });
-  }
-
-  return undefined;
+  return getRegionByIdFromList(getAllRegions(), regionId);
 }
 
 /**
@@ -333,31 +286,7 @@ export function getAllModels(): PopularModelEntry[] {
  * Guards against null elements and missing string properties.
  */
 export function getModelById(modelId: string): PopularModelEntry | undefined {
-  if (!modelId || typeof modelId !== 'string') return undefined;
-  const models = getAllModels();
-  const normalized = modelId.trim().toLowerCase();
-  if (!normalized) return undefined;
-
-  const validModels = models.filter((m): m is PopularModelEntry => Boolean(m && typeof m === 'object'));
-
-  // 1. Exact or substring match on raw string
-  const directMatch = validModels.find(
-    (m) =>
-      (typeof m.model_id === 'string' && m.model_id.toLowerCase() === normalized) ||
-      (typeof m.name_ko === 'string' && m.name_ko.toLowerCase() === normalized) ||
-      (typeof m.name_ko === 'string' && m.name_ko.toLowerCase().includes(normalized))
-  );
-  if (directMatch) return directMatch;
-
-  // 2. Normalize by stripping whitespace, hyphens, and punctuation
-  const cleanQuery = normalized.replace(/[\s\-_]+/g, '');
-  if (!cleanQuery) return undefined;
-
-  return validModels.find((m) => {
-    const cleanId = (typeof m.model_id === 'string' ? m.model_id : '').toLowerCase().replace(/[\s\-_]+/g, '');
-    const cleanKo = (typeof m.name_ko === 'string' ? m.name_ko : '').toLowerCase().replace(/[\s\-_]+/g, '');
-    return (cleanId && cleanId.includes(cleanQuery)) || (cleanKo && cleanKo.includes(cleanQuery));
-  });
+  return getModelByIdFromList(getAllModels(), modelId);
 }
 
 
@@ -374,7 +303,7 @@ export function calculateNetSubsidy(
 ): SubsidyCalculationResult {
   const models = getAllModels();
   const regions = getAllRegions();
-  const defaultModel: PopularModelEntry = models[0] || {
+  const defaultModel: PopularModelEntry = models.find((m): m is PopularModelEntry => Boolean(m && typeof m === 'object')) || {
     model_id: 'ioniq-5-2026',
     name_ko: '현대 아이오닉 5 롱레인지 2WD (2026)',
     manufacturer: '현대자동차',
@@ -385,12 +314,20 @@ export function calculateNetSubsidy(
     price_subsidy_ratio: 1.0,
     national_subsidy_krw: 6500000,
   };
-  const defaultRegion: RegionEntry = regions.find(r => r.region_id === 'KR-11') || regions[0] || {
-    region_id: 'KR-11',
-    name_ko: '서울특별시',
-    residency_requirement_days: 30,
-    announced_date: '2026-02-15',
-  };
+  const defaultRegion: RegionEntry =
+    regions.find((r): r is RegionEntry => Boolean(r && typeof r === 'object' && r.region_id === 'KR-11')) ||
+    regions.find((r): r is RegionEntry => Boolean(r && typeof r === 'object')) || {
+      region_id: 'KR-11',
+      iso_code: 'KR-11',
+      name_ko: '서울특별시',
+      name_en: 'Seoul',
+      tier: 'special_city',
+      overall_depletion_rate: 0,
+      overall_status: 'HEALTHY',
+      residency_requirement_days: 30,
+      supplementary_budget_added: false,
+      categories: DEFAULT_NATIONWIDE_SUMMARY.category_totals,
+    };
 
   const model = getModelById(modelId) || defaultModel;
   const region = getRegionById(regionId) || defaultRegion;
@@ -418,7 +355,7 @@ export function getCategoryDepletion(
   if (typeof regionOrId === 'string') {
     region = getRegionById(regionOrId);
   } else if (regionOrId && typeof regionOrId === 'object') {
-    if ('categories' in regionOrId && regionOrId.categories) {
+    if ('categories' in regionOrId && regionOrId.categories && typeof regionOrId.categories === 'object') {
       region = regionOrId as RegionEntry;
     } else if ('region_id' in regionOrId && typeof regionOrId.region_id === 'string') {
       region = getRegionById(regionOrId.region_id);
@@ -426,15 +363,21 @@ export function getCategoryDepletion(
   }
 
   const category = region?.categories?.[categoryKey];
-  const announced = parseSubsidyNumber(category?.announced_units, { defaultKrw: 0 });
-  const applied = parseSubsidyNumber(category?.applied_units, { defaultKrw: 0 });
+  const rawAnnounced = category?.announced_units;
+  const rawApplied = category?.applied_units;
+  const announced = typeof rawAnnounced === 'number' && !Number.isFinite(rawAnnounced)
+    ? 0
+    : parseSubsidyNumber(rawAnnounced, { defaultKrw: 0 });
+  const applied = typeof rawApplied === 'number' && !Number.isFinite(rawApplied)
+    ? 0
+    : parseSubsidyNumber(rawApplied, { defaultKrw: 0 });
   const remaining = typeof category?.remaining_units === 'number' && Number.isFinite(category.remaining_units) && category.remaining_units >= 0
     ? category.remaining_units
     : calculateRemainingUnits(applied, announced);
   const rate = typeof category?.depletion_rate === 'number' && Number.isFinite(category.depletion_rate) && category.depletion_rate >= 0
     ? category.depletion_rate
     : calculateDepletionRate(applied, announced);
-  const status: AlertSeverity = category?.status || (rate >= 100.0 ? 'DEPLETED' : rate >= 95.0 ? 'CRITICAL' : rate >= 80.0 ? 'WARNING' : rate >= 60.0 ? 'CAUTION' : 'HEALTHY');
+  const status: AlertSeverity = resolveAlertSeverity(category?.status, rate);
 
   const safeAnnounced = Number.isFinite(announced) ? announced : 0;
   const safeApplied = Number.isFinite(applied) ? applied : 0;

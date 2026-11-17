@@ -12,6 +12,7 @@ import http.cookiejar
 import ipaddress
 import json
 import logging
+import math
 import os
 import random
 import re
@@ -24,6 +25,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
@@ -85,6 +87,69 @@ DEFAULT_FALLBACK_USER_AGENT: str = (
 )
 
 
+def _positive_float(value: Any, default: float) -> float:
+    """Convert value to a positive finite float, or return default."""
+    if value is None or isinstance(value, bool):
+        return default
+    try:
+        num = float(value)
+    except (ValueError, TypeError):
+        return default
+    if not math.isfinite(num) or num <= 0:
+        return default
+    return num
+
+
+def resolve_timeout_pair(
+    timeout: Union[float, Tuple[float, float], None] = (5.0, 15.0),
+    connect_timeout: Optional[float] = None,
+    read_timeout: Optional[float] = None,
+    default_connect: float = 5.0,
+    default_read: float = 15.0,
+) -> Tuple[float, float]:
+    """Resolve explicit finite positive (connect_timeout, read_timeout) pair."""
+    if connect_timeout is not None:
+        conn = _positive_float(connect_timeout, default_connect)
+    elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
+        conn = _positive_float(timeout[0], default_connect)
+    elif isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(float(timeout)) and float(timeout) > 0:
+        conn = min(default_connect, float(timeout))
+    else:
+        conn = default_connect
+
+    if read_timeout is not None:
+        read = _positive_float(read_timeout, default_read)
+    elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
+        read = _positive_float(timeout[1], default_read)
+    elif isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(float(timeout)) and float(timeout) > 0:
+        read = float(timeout)
+    else:
+        read = default_read
+
+    return conn, read
+
+
+def normalize_scraper_url(raw_url: Any, base_url: str) -> Optional[str]:
+    """Normalize a scraped link or post URL against base_url while rejecting unsafe schemes."""
+    if not raw_url or not isinstance(raw_url, str):
+        return None
+    eff_url = html.unescape(raw_url.strip())
+    if not eff_url or any(ord(c) < 32 or ord(c) == 127 for c in eff_url):
+        return None
+    parsed = urllib.parse.urlsplit(eff_url)
+    if parsed.scheme and parsed.scheme.lower() not in ("http", "https"):
+        return None
+    if eff_url.startswith("//"):
+        base_scheme = urllib.parse.urlsplit(base_url).scheme or "https"
+        return f"{base_scheme}:{eff_url}"
+    if eff_url.startswith(("http://", "https://")):
+        return eff_url
+    base_clean = base_url.rstrip("/")
+    if eff_url.startswith("/"):
+        return f"{base_clean}{eff_url}"
+    return f"{base_clean}/{eff_url}"
+
+
 def is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
     """Check if an IP address is publicly routable and safe from SSRF."""
     if (
@@ -120,6 +185,8 @@ def is_safe_url(
     """Verify URL against SSRF attacks (private subnets, cloud metadata, non-HTTP schemes)."""
     if not url or not isinstance(url, str):
         return False, "Empty or invalid URL"
+    if any(ord(c) < 32 or ord(c) == 127 for c in url):
+        return False, "Invalid control character in URL"
 
     url_str = url.strip()
     if not url_str:
@@ -138,7 +205,9 @@ def is_safe_url(
     if not hostname:
         return False, "Missing hostname in URL"
 
-    host_lower = hostname.lower().strip()
+    host_lower = hostname.lower().strip().rstrip(".")
+    if not host_lower:
+        return False, "Missing hostname in URL"
 
     if allow_private_ips:
         return True, "Private IPs allowed by configuration"
@@ -760,6 +829,7 @@ class SafeHttpClient:
         self.last_request_time = 0.0
         self.last_response_from_cache = False
         self._memory_cache: Dict[str, Dict[str, Any]] = {}
+        self._cache_lock = threading.Lock()
         eff_cooldown = cooldown_seconds if cooldown_seconds is not None else circuit_cooldown
         self.circuit_breaker = circuit_breaker or CircuitBreaker(
             failure_threshold=failure_threshold,
@@ -768,31 +838,19 @@ class SafeHttpClient:
 
         # Resolve explicit connect and read timeouts
         if connect_timeout is not None:
-            try:
-                self._connect_timeout = float(connect_timeout)
-            except (ValueError, TypeError):
-                self._connect_timeout = 5.0
+            self._connect_timeout = _positive_float(connect_timeout, 5.0)
         elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
-            try:
-                self._connect_timeout = float(timeout[0])
-            except (ValueError, TypeError):
-                self._connect_timeout = 5.0
-        elif isinstance(timeout, (int, float)) and timeout > 0:
+            self._connect_timeout = _positive_float(timeout[0], 5.0)
+        elif isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(float(timeout)) and float(timeout) > 0:
             self._connect_timeout = min(5.0, float(timeout))
         else:
             self._connect_timeout = 5.0
 
         if read_timeout is not None:
-            try:
-                self._read_timeout = float(read_timeout)
-            except (ValueError, TypeError):
-                self._read_timeout = 15.0
+            self._read_timeout = _positive_float(read_timeout, 15.0)
         elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
-            try:
-                self._read_timeout = float(timeout[1])
-            except (ValueError, TypeError):
-                self._read_timeout = 15.0
-        elif isinstance(timeout, (int, float)) and timeout > 0:
+            self._read_timeout = _positive_float(timeout[1], 15.0)
+        elif isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(float(timeout)) and float(timeout) > 0:
             self._read_timeout = float(timeout)
         else:
             self._read_timeout = 15.0
@@ -846,9 +904,10 @@ class SafeHttpClient:
         if not self.enable_cache or not url:
             return None
         key = self._cache_key(url)
-        if key in self._memory_cache:
-            entry = self._memory_cache[key]
-            return entry.get("status", 200), entry.get("text", ""), entry.get("raw", b"")
+        with self._cache_lock:
+            if key in self._memory_cache:
+                entry = self._memory_cache[key]
+                return entry.get("status", 200), entry.get("text", ""), entry.get("raw", b"")
 
         if self.cache_dir:
             file_path = os.path.join(self.cache_dir, f"{key}.json")
@@ -860,13 +919,14 @@ class SafeHttpClient:
                     text = str(data.get("text", ""))
                     raw_hex = data.get("raw_hex", "")
                     raw_bytes = bytes.fromhex(raw_hex) if raw_hex else text.encode("utf-8")
-                    self._memory_cache[key] = {
-                        "status": status,
-                        "text": text,
-                        "raw": raw_bytes,
-                        "time": data.get("time", time.time()),
-                        "url": url,
-                    }
+                    with self._cache_lock:
+                        self._memory_cache[key] = {
+                            "status": status,
+                            "text": text,
+                            "raw": raw_bytes,
+                            "time": data.get("time", time.time()),
+                            "url": url,
+                        }
                     return status, text, raw_bytes
                 except Exception as e:
                     logger.debug(f"Cache read error for {url}: {e}")
@@ -890,16 +950,22 @@ class SafeHttpClient:
             "time": time.time(),
             "url": str(url),
         }
-        self._memory_cache[key] = entry
-        if len(self._memory_cache) > 500:
-            oldest_k = min(self._memory_cache, key=lambda k: self._memory_cache[k].get("time", 0))
-            del self._memory_cache[oldest_k]
+        with self._cache_lock:
+            self._memory_cache[key] = entry
+            if len(self._memory_cache) > 500:
+                oldest_k = min(self._memory_cache, key=lambda k: self._memory_cache[k].get("time", 0))
+                del self._memory_cache[oldest_k]
 
         if self.cache_dir:
+            temp_path = None
             try:
                 os.makedirs(self.cache_dir, exist_ok=True)
                 file_path = os.path.join(self.cache_dir, f"{key}.json")
-                temp_path = f"{file_path}.tmp.{os.getpid()}"
+                temp_fd, temp_path = tempfile.mkstemp(
+                    dir=self.cache_dir,
+                    prefix=f".tmp_cache_{os.getpid()}_{threading.get_ident()}_{uuid.uuid4().hex[:8]}_",
+                    suffix=".json",
+                )
                 payload = {
                     "url": str(url),
                     "status": int(status_code),
@@ -907,15 +973,23 @@ class SafeHttpClient:
                     "raw_hex": bytes(raw_bytes).hex(),
                     "time": time.time(),
                 }
-                with open(temp_path, "w", encoding="utf-8") as f:
+                with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
                     json.dump(payload, f)
                 os.replace(temp_path, file_path)
+                temp_path = None
             except Exception as e:
                 logger.debug(f"Failed to persist cache file for {url}: {e}")
+            finally:
+                if temp_path and os.path.exists(temp_path):
+                    try:
+                        os.unlink(temp_path)
+                    except OSError:
+                        pass
 
     def clear_cache(self) -> None:
         """Clear memory and disk HTTP response caches."""
-        self._memory_cache.clear()
+        with self._cache_lock:
+            self._memory_cache.clear()
         if self.cache_dir and os.path.isdir(self.cache_dir):
             try:
                 shutil.rmtree(self.cache_dir, ignore_errors=True)
@@ -1044,30 +1118,64 @@ class SafeHttpClient:
         if not base_url or not isinstance(base_url, str) or not base_url.strip():
             logger.warning(f"Invalid base_url for session warm-up: {base_url!r}")
             return False
-        logger.info(f"Warming up session on base domain: {base_url}")
+        norm_url = base_url.strip()
+        is_safe, reason = is_safe_url(
+            norm_url,
+            allow_private_ips=self.allow_private_ips,
+            allowed_ports=self.allowed_ports,
+        )
+        if not is_safe:
+            logger.warning(f"SSRF defense blocked warm_up_session to {norm_url}: {reason}")
+            return False
+        logger.info(f"Warming up session on base domain: {norm_url}")
+        resp = None
         try:
             headers = get_random_headers(referer=referer)
-            req = urllib.request.Request(base_url.strip(), headers=headers)
-            with self.opener.open(req, timeout=self.timeout) as resp:
-                _ = resp.read(1024)
-            logger.info(f"Session warmed up successfully on {base_url}. Cookies in jar: {len(self.cookie_jar)}")
+            req = urllib.request.Request(norm_url, headers=headers)
+            req._connect_timeout = self._connect_timeout
+            req._read_timeout = self._read_timeout
+            resp = self.opener.open(req, timeout=self._read_timeout)
+            _ = resp.read(1024)
+            logger.info(f"Session warmed up successfully on {norm_url}. Cookies in jar: {len(self.cookie_jar)}")
             return True
         except Exception as e:
-            logger.warning(f"Session warm-up encountered notice on {base_url}: {e}")
+            logger.warning(f"Session warm-up encountered notice on {norm_url}: {e}")
             return False
+        finally:
+            if resp is not None:
+                try:
+                    if hasattr(resp, "close"):
+                        resp.close()
+                except Exception:
+                    pass
+                try:
+                    if hasattr(resp, "fp") and resp.fp and hasattr(resp.fp, "close"):
+                        resp.fp.close()
+                except Exception:
+                    pass
 
     @staticmethod
     def _parse_retry_after(he: urllib.error.HTTPError) -> Optional[float]:
         """Parse standard HTTP Retry-After header (seconds or RFC date)."""
         if not hasattr(he, "headers") or not he.headers:
             return None
-        val = he.headers.get("Retry-After")
+        val = None
+        if hasattr(he.headers, "get"):
+            val = he.headers.get("Retry-After")
+            if val is None:
+                val = he.headers.get("retry-after")
+        if val is None and hasattr(he.headers, "items"):
+            for k, v in he.headers.items():
+                if str(k).lower() == "retry-after":
+                    val = v
+                    break
         if not val:
             return None
         val_str = str(val).strip()
         try:
             sec = float(val_str)
-            return max(0.0, sec)
+            if math.isfinite(sec):
+                return max(0.0, min(3600.0, sec))
         except (ValueError, TypeError):
             pass
         try:
@@ -1077,7 +1185,8 @@ class SafeHttpClient:
                 if parsed_tuple.tzinfo is None:
                     parsed_tuple = parsed_tuple.replace(tzinfo=timezone.utc)
                 diff = (parsed_tuple - now_dt).total_seconds()
-                return max(0.0, diff)
+                if math.isfinite(diff):
+                    return max(0.0, min(3600.0, diff))
         except Exception:
             pass
         return None
@@ -1141,7 +1250,11 @@ class SafeHttpClient:
 
         req_headers = get_random_headers(referer=referer)
         if headers:
-            req_headers.update(headers)
+            for k, v in headers.items():
+                matching_keys = [ek for ek in req_headers if ek.lower() == str(k).lower()]
+                for mk in matching_keys:
+                    del req_headers[mk]
+                req_headers[k] = v
 
         payload_bytes = None
         if data is not None:
@@ -1155,42 +1268,27 @@ class SafeHttpClient:
 
         # Resolve explicit connect and read timeouts
         if connect_timeout is not None:
-            try:
-                eff_connect_timeout = float(connect_timeout)
-            except (ValueError, TypeError):
-                eff_connect_timeout = self._connect_timeout
+            eff_connect_timeout = _positive_float(connect_timeout, self._connect_timeout)
         elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
-            try:
-                eff_connect_timeout = float(timeout[0])
-            except (ValueError, TypeError):
-                eff_connect_timeout = self._connect_timeout
-        elif isinstance(timeout, (int, float)) and float(timeout) > 0:
+            eff_connect_timeout = _positive_float(timeout[0], self._connect_timeout)
+        elif isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(float(timeout)) and float(timeout) > 0:
             eff_connect_timeout = min(5.0, float(timeout))
         else:
             eff_connect_timeout = self._connect_timeout
 
         if read_timeout is not None:
-            try:
-                eff_read_timeout = float(read_timeout)
-            except (ValueError, TypeError):
-                eff_read_timeout = self._read_timeout
+            eff_read_timeout = _positive_float(read_timeout, self._read_timeout)
         elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
-            try:
-                eff_read_timeout = float(timeout[1])
-            except (ValueError, TypeError):
-                eff_read_timeout = self._read_timeout
-        elif isinstance(timeout, (int, float)) and float(timeout) > 0:
+            eff_read_timeout = _positive_float(timeout[1], self._read_timeout)
+        elif isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(float(timeout)) and float(timeout) > 0:
             eff_read_timeout = float(timeout)
         else:
-            try:
-                raw_to = float(self.timeout)
-                eff_read_timeout = raw_to if raw_to > 0 else 15.0
-            except (ValueError, TypeError):
-                eff_read_timeout = 15.0
+            eff_read_timeout = self._read_timeout
 
         eff_timeout = eff_read_timeout
+        eff_retries = max(1, int(self.max_retries)) if self.max_retries is not None else 3
 
-        for attempt in range(1, self.max_retries + 1):
+        for attempt in range(1, eff_retries + 1):
             if attempt > 1:
                 current_ua = req_headers.get("User-Agent")
                 req_headers["User-Agent"] = self.get_random_user_agent(exclude=current_ua)
@@ -1229,21 +1327,24 @@ class SafeHttpClient:
                         except TypeError:
                             chunk = resp.read()
                         except http.client.IncompleteRead as ire:
+                            partial_bytes = ire.partial if isinstance(ire.partial, (bytes, bytearray)) else b""
                             logger.warning(
-                                f"IncompleteRead on {norm_url} (Attempt {attempt}/{self.max_retries}): "
-                                f"{len(ire.partial)} partial bytes received before disconnect."
+                                f"IncompleteRead on {norm_url} (Attempt {attempt}/{eff_retries}): "
+                                f"{len(partial_bytes)} partial bytes received before disconnect."
                             )
-                            if ire.partial:
-                                chunks.append(ire.partial)
-                                bytes_read += len(ire.partial)
-                            if attempt < self.max_retries:
+                            if partial_bytes:
+                                chunks.append(bytes(partial_bytes))
+                                bytes_read += len(partial_bytes)
+                            if attempt < eff_retries:
                                 raise
                             break
                         if not chunk or not isinstance(chunk, (bytes, str)):
                             break
+                        if isinstance(chunk, str):
+                            chunk = chunk.encode("utf-8")
                         chunks.append(chunk)
                         bytes_read += len(chunk)
-                        if bytes_read >= self.max_response_size:
+                        if self.max_response_size > 0 and bytes_read >= self.max_response_size:
                             logger.warning(
                                 f"Response from {norm_url} exceeded max size ({self.max_response_size} bytes). Truncating."
                             )
@@ -1251,9 +1352,16 @@ class SafeHttpClient:
                         if len(chunk) > 65536:
                             break
                     raw_bytes = b"".join(chunks)
+                    if self.max_response_size > 0 and len(raw_bytes) > self.max_response_size:
+                        raw_bytes = raw_bytes[: self.max_response_size]
 
                     # Detect charset from response headers
-                    content_type = resp.headers.get("Content-Type", "") if hasattr(resp, "headers") and resp.headers else ""
+                    content_type_hdr = (
+                        resp.headers.get("Content-Type", "")
+                        if hasattr(resp, "headers") and resp.headers
+                        else ""
+                    )
+                    content_type = str(content_type_hdr) if content_type_hdr is not None else ""
                     detected_encoding = encoding or self._detect_encoding(content_type, raw_bytes)
                     decoded_text = robust_decode(raw_bytes, declared_encoding=detected_encoding)
 
@@ -1269,12 +1377,17 @@ class SafeHttpClient:
                             resp.close()
                         except Exception:
                             pass
+                    if hasattr(resp, "fp") and resp.fp and hasattr(resp.fp, "close"):
+                        try:
+                            resp.fp.close()
+                        except Exception:
+                            pass
 
             except urllib.error.HTTPError as he:
-                logger.warning(f"HTTPError {he.code} on {norm_url} (Attempt {attempt}/{self.max_retries}): {he.reason}")
+                logger.warning(f"HTTPError {he.code} on {norm_url} (Attempt {attempt}/{eff_retries}): {he.reason}")
                 try:
                     retryable_codes = [408, 429, 403, 500, 502, 503, 504, 520, 521, 522, 523, 524]
-                    if he.code in retryable_codes and attempt < self.max_retries:
+                    if he.code in retryable_codes and attempt < eff_retries:
                         if he.code in (403, 429):
                             self.clear_cookies()
                         retry_after = self._parse_retry_after(he) if he.code in (429, 503) else None
@@ -1332,8 +1445,8 @@ class SafeHttpClient:
                 OSError,
                 Exception,
             ) as ex:
-                logger.warning(f"Request error on {norm_url} (Attempt {attempt}/{self.max_retries}): {ex}")
-                if attempt < self.max_retries:
+                logger.warning(f"Request error on {norm_url} (Attempt {attempt}/{eff_retries}): {ex}")
+                if attempt < eff_retries:
                     backoff = min(30.0, (2 ** attempt) * 1.5 + random.uniform(0.5, 1.5))
                     time.sleep(backoff)
                 else:
@@ -1356,7 +1469,7 @@ class SafeHttpClient:
                 self.last_response_from_cache = True
                 return cached
 
-        logger.error(f"Failed to fetch {norm_url} after {self.max_retries} attempts.")
+        logger.error(f"Failed to fetch {norm_url} after {eff_retries} attempts.")
         return 0, "", b""
 
     def get(
@@ -1374,6 +1487,7 @@ class SafeHttpClient:
             url,
             method="GET",
             headers=headers,
+            encoding=kwargs.get("encoding"),
             referer=referer,
             timeout=timeout,
             connect_timeout=connect_timeout,
@@ -1398,6 +1512,7 @@ class SafeHttpClient:
             method="POST",
             data=data,
             headers=headers,
+            encoding=kwargs.get("encoding"),
             referer=referer,
             timeout=timeout,
             connect_timeout=connect_timeout,
@@ -1408,7 +1523,7 @@ class SafeHttpClient:
     @staticmethod
     def _detect_encoding(content_type: str, raw_bytes: bytes) -> str:
         """Detect encoding from Content-Type header or HTML meta tags."""
-        match = re.search(r"charset=([\w\-]+)", content_type, re.IGNORECASE)
+        match = re.search(r'charset=["\']?([\w\-]+)', content_type or "", re.IGNORECASE)
         if match:
             return match.group(1).strip().lower()
 
@@ -1425,13 +1540,15 @@ class SafeHttpClient:
         return "utf-8"
 
 
-def robust_decode(raw_bytes: Union[bytes, str, None], declared_encoding: Optional[str] = None) -> str:
+def robust_decode(raw_bytes: Union[bytes, bytearray, memoryview, str, None], declared_encoding: Optional[str] = None) -> str:
     """Decode raw bytes with graceful cascade across Korean/Universal charsets."""
     if raw_bytes is None:
         return ""
     if isinstance(raw_bytes, str):
         return raw_bytes
-    if not raw_bytes:
+    if isinstance(raw_bytes, (bytearray, memoryview)):
+        raw_bytes = bytes(raw_bytes)
+    if not isinstance(raw_bytes, bytes) or not raw_bytes:
         return ""
 
     encodings_to_try = [declared_encoding, "utf-8", "cp949", "euc-kr", "latin-1"]
@@ -1447,9 +1564,11 @@ def robust_decode(raw_bytes: Union[bytes, str, None], declared_encoding: Optiona
 
 def encode_euc_kr_query(params: Dict[str, Any]) -> bytes:
     """Encode dictionary into URL-encoded bytes using EUC-KR / CP949 (for Bobae/Pomppu)."""
+    if not params or not isinstance(params, dict):
+        return b""
     encoded_pairs = []
     for k, v in params.items():
-        k_str = str(k)
+        k_str = urllib.parse.quote(str(k))
         v_str = str(v)
         try:
             v_encoded = urllib.parse.quote(v_str.encode("euc-kr"))
@@ -1508,8 +1627,11 @@ def save_complaints_json(records: List[Union[ComplaintRecord, Dict[str, Any]]], 
     if not output_path:
         logger.warning("Empty output_path provided to save_complaints_json")
         return
+    temp_path = None
     try:
-        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+        abs_output = os.path.abspath(output_path)
+        out_dir = os.path.dirname(abs_output)
+        os.makedirs(out_dir, exist_ok=True)
         data = []
         for r in records:
             if isinstance(r, ComplaintRecord):
@@ -1522,16 +1644,22 @@ def save_complaints_json(records: List[Union[ComplaintRecord, Dict[str, Any]]], 
                 except Exception:
                     continue
 
-        temp_path = f"{output_path}.tmp.{os.getpid()}"
-        with open(temp_path, "w", encoding="utf-8") as f:
+        temp_fd, temp_path = tempfile.mkstemp(
+            dir=out_dir,
+            prefix=f".tmp_complaints_{os.getpid()}_{threading.get_ident()}_",
+            suffix=".json",
+        )
+        with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-        os.replace(temp_path, output_path)
+        os.replace(temp_path, abs_output)
+        temp_path = None
         logger.info(f"Saved {len(data)} complaint records to {output_path}")
     except Exception as e:
         logger.error(f"Failed to save complaints JSON to {output_path}: {e}")
-        if "temp_path" in locals() and os.path.exists(temp_path):
+    finally:
+        if temp_path and os.path.exists(temp_path):
             try:
-                os.remove(temp_path)
+                os.unlink(temp_path)
             except Exception:
                 pass
 

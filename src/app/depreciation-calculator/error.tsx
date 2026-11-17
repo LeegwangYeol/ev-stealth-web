@@ -83,7 +83,7 @@ export default function DepreciationCalculatorError({ error, reset }: Depreciati
             type="button"
             onClick={handleRetry}
             aria-label="감가상각 시뮬레이터 다시 시도"
-            className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+            className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">🔄</span> 다시 시도
           </button>

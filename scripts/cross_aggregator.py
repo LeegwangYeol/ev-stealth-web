@@ -221,19 +221,19 @@ class CrossAggregator:
         })
 
         for r in records:
-            plat = r.get("platform", "unknown").lower()
-            tier = r.get("sentiment_tier", "NEGATIVE")
+            plat = (r.get("platform") or "unknown").lower()
+            tier = r.get("sentiment_tier") or "NEGATIVE"
             dsi = r.get("dsi_score", 5.0)
-            board = r.get("board_name", "")
-            quote = r.get("raw_quote", "")
-            slangs = r.get("slang_terms", [])
+            board = r.get("board_name") or ""
+            quote = r.get("raw_quote") or ""
+            slangs = r.get("slang_terms") or []
 
             tokens = self.tokenizer.tokenize(quote)
             tok_len = max(1, len(tokens))
 
             group = platform_groups[plat]
             group["count"] += 1
-            group["sentiment_counts"][tier] += 1
+            group["sentiment_counts"][tier] = group["sentiment_counts"].get(tier, 0) + 1
             group["dsi_sum"] += dsi
             group["slang_count"] += len(slangs)
             group["token_count"] += tok_len
@@ -306,8 +306,8 @@ class CrossAggregator:
         })
 
         for r in records:
-            veh = r.get("target_vehicle", "Unknown EV")
-            cat = r.get("category", "parking")
+            veh = r.get("target_vehicle") or "Unknown EV"
+            cat = r.get("category") or "parking"
             dsi = r.get("dsi_score", 5.0)
 
             # Determine segment
@@ -415,17 +415,17 @@ class CrossAggregator:
         }
 
         for r in records:
-            ts = r.get("collected_at", "")
+            ts = r.get("collected_at") or ""
             match = re.search(r"\b(202[4-6])\b", ts)
             year = match.group(1) if match else "2026"
 
-            tier = r.get("sentiment_tier", "NEGATIVE")
-            cat = r.get("category", "parking")
+            tier = r.get("sentiment_tier") or "NEGATIVE"
+            cat = r.get("category") or "parking"
             dsi = r.get("dsi_score", 5.0)
 
             grp = temporal_groups.get(year, temporal_groups["2026"])
             grp["count"] += 1
-            grp["sentiment_counts"][tier] += 1
+            grp["sentiment_counts"][tier] = grp["sentiment_counts"].get(tier, 0) + 1
             grp["category_counts"][cat] += 1
             grp["dsi_sum"] += dsi
 
@@ -471,7 +471,7 @@ class CrossAggregator:
         for plat in target_platforms:
             row = []
             for tier in sentiment_tiers:
-                c = sum(1 for r in records if r.get("platform", "").lower() == plat and r.get("sentiment_tier") == tier)
+                c = sum(1 for r in records if (r.get("platform") or "").lower() == plat and r.get("sentiment_tier") == tier)
                 row.append(c)
             plat_sent_matrix.append(row)
 
@@ -489,7 +489,7 @@ class CrossAggregator:
                     c = sum(
                         1 for r in records
                         if r.get("category") == cat and any(
-                            v in r.get("target_vehicle", "").lower()
+                            v in (r.get("target_vehicle") or "").lower()
                             for v in ["t4k", "masada", "van", "truck", "마사다", "이티밴", "1톤", "포터", "봉고"]
                         )
                     )
@@ -497,7 +497,7 @@ class CrossAggregator:
                     c = sum(
                         1 for r in records
                         if r.get("category") == cat and not any(
-                            v in r.get("target_vehicle", "").lower()
+                            v in (r.get("target_vehicle") or "").lower()
                             for v in ["t4k", "masada", "van", "truck", "마사다", "이티밴", "1톤", "포터", "봉고"]
                         )
                     )

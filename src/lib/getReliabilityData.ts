@@ -127,71 +127,95 @@ export {
 // 3. MASTER DATA LOADER & DATA-DEPENDENT WRAPPERS
 // ==========================================
 
-/**
- * Fallback baseline in case JSON parsing encounters any anomaly.
- */
-const DEFAULT_FALLBACK_DATABASE: ReliabilityTrendsDatabase = {
-  metadata: {
-    version: '1.0.0',
-    updated_at: '2026-09-16T12:00:00Z',
-    total_records_analyzed: 1280,
-    brands_count: 9,
-    models_count: 22,
-    avg_industry_dsi: 64.2,
+const DEFAULT_FALLBACK_CATEGORIES: DefectCategoryMetadata[] = [
+  {
+    code: 'BATTERY_CHARGING',
+    label_ko: '배터리 & 고전압 충전',
+    description: '고전압 배터리 셀 열화, 화재 리콜 위험, 급속/완속 충전 중단',
+    icon_name: 'BatteryCharging',
+    industry_share_pct: 38.4,
+    avg_repair_cost_range: '2,500만 ~ 7,500만 원',
   },
-  categories: [
-    {
-      code: 'BATTERY_CHARGING',
-      label_ko: '배터리 & 고전압 충전',
-      description: '고전압 배터리 셀 열화, 화재 리콜 위험, 급속/완속 충전 중단',
-      icon_name: 'BatteryCharging',
-      industry_share_pct: 38.4,
-      avg_repair_cost_range: '2,500만 ~ 7,500만 원',
+  {
+    code: 'DRIVING_POWERTRAIN',
+    label_ko: '모터·감속기·ICCU 구동계',
+    description: 'ICCU 폭파 및 주행 중 동력 상실, 감속기 기어 마모 소음',
+    icon_name: 'Zap',
+    industry_share_pct: 26.2,
+    avg_repair_cost_range: '520만 ~ 1,450만 원',
+  },
+  {
+    code: 'SOFTWARE_ELECTRONICS',
+    label_ko: 'OTA·BMS·인포테인먼트',
+    description: 'OTA 업데이트 벽돌 현상, BMS 오류로 인한 시동 불가',
+    icon_name: 'Cpu',
+    industry_share_pct: 14.8,
+    avg_repair_cost_range: '150만 ~ 420만 원',
+  },
+  {
+    code: 'BUILD_QUALITY',
+    label_ko: '단차·도장·누수·조립 품질',
+    description: '트렁크/도어 유격 단차, 우천 시 실내 누수, 테일램프 결로',
+    icon_name: 'Wrench',
+    industry_share_pct: 9.5,
+    avg_repair_cost_range: '80만 ~ 350만 원',
+  },
+  {
+    code: 'SERVICE_REPAIR_COST',
+    label_ko: '보증 외 수리비 & 정비성',
+    description: '부품 수급 지연, 경미한 하부 충격 시 배터리 전손 처리',
+    icon_name: 'Coins',
+    industry_share_pct: 6.1,
+    avg_repair_cost_range: '200만 ~ 7,500만 원',
+  },
+  {
+    code: 'COLD_WEATHER',
+    label_ko: '혹한기 저온 결함 & 히트펌프',
+    description: '영하 기온 시 히트펌프 옥토밸브 고착으로 난방 정지',
+    icon_name: 'Snowflake',
+    industry_share_pct: 5.0,
+    avg_repair_cost_range: '320만 ~ 510만 원',
+  },
+];
+
+function createDefaultFallbackDatabase(): ReliabilityTrendsDatabase {
+  return {
+    metadata: {
+      version: '1.0.0',
+      updated_at: '2026-09-16T12:00:00Z',
+      total_records_analyzed: 1280,
+      brands_count: 0,
+      models_count: 0,
+      avg_industry_dsi: 64.2,
     },
-    {
-      code: 'DRIVING_POWERTRAIN',
-      label_ko: '모터·감속기·ICCU 구동계',
-      description: 'ICCU 폭파 및 주행 중 동력 상실, 감속기 기어 마모 소음',
-      icon_name: 'Zap',
-      industry_share_pct: 26.2,
-      avg_repair_cost_range: '520만 ~ 1,450만 원',
-    },
-    {
-      code: 'SOFTWARE_ELECTRONICS',
-      label_ko: 'OTA·BMS·인포테인먼트',
-      description: 'OTA 업데이트 벽돌 현상, BMS 오류로 인한 시동 불가',
-      icon_name: 'Cpu',
-      industry_share_pct: 14.8,
-      avg_repair_cost_range: '150만 ~ 420만 원',
-    },
-    {
-      code: 'BUILD_QUALITY',
-      label_ko: '단차·도장·누수·조립 품질',
-      description: '트렁크/도어 유격 단차, 우천 시 실내 누수, 테일램프 결로',
-      icon_name: 'Wrench',
-      industry_share_pct: 9.5,
-      avg_repair_cost_range: '80만 ~ 350만 원',
-    },
-    {
-      code: 'SERVICE_REPAIR_COST',
-      label_ko: '보증 외 수리비 & 정비성',
-      description: '부품 수급 지연, 경미한 하부 충격 시 배터리 전손 처리',
-      icon_name: 'Coins',
-      industry_share_pct: 6.1,
-      avg_repair_cost_range: '200만 ~ 7,500만 원',
-    },
-    {
-      code: 'COLD_WEATHER',
-      label_ko: '혹한기 저온 결함 & 히트펌프',
-      description: '영하 기온 시 히트펌프 옥토밸브 고착으로 난방 정지',
-      icon_name: 'Snowflake',
-      industry_share_pct: 5.0,
-      avg_repair_cost_range: '320만 ~ 510만 원',
-    },
-  ],
-  repair_cost_matrix: [],
-  brands: [],
-};
+    categories: DEFAULT_FALLBACK_CATEGORIES.map((c) => ({ ...c })),
+    repair_cost_matrix: [],
+    brands: [],
+  };
+}
+
+function sanitizeFiniteNumber(val: unknown): number | null {
+  if (typeof val === 'number') {
+    return Number.isFinite(val) ? val : null;
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (trimmed === '') return null;
+    const num = Number(trimmed);
+    return Number.isFinite(num) ? num : null;
+  }
+  return null;
+}
+
+function sanitizeVerdict(val: unknown): ModelYearVerdict {
+  return val === 'BUY_SAFE' || val === 'CAUTION' || val === 'AVOID' ? val : 'CAUTION';
+}
+
+function sanitizeGrade(val: unknown): OverallReliabilityGrade {
+  return val === 'A+' || val === 'A' || val === 'B' || val === 'C' || val === 'D' || val === 'F'
+    ? val
+    : 'C';
+}
 
 /**
  * Safely loads the master EV Reliability & Defect Trends database.
@@ -200,67 +224,143 @@ const DEFAULT_FALLBACK_DATABASE: ReliabilityTrendsDatabase = {
  */
 export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
   try {
-    if (!rawTrendsData) {
-      return DEFAULT_FALLBACK_DATABASE;
+    if (!rawTrendsData || typeof rawTrendsData !== 'object' || Array.isArray(rawTrendsData)) {
+      return createDefaultFallbackDatabase();
     }
 
     const data = rawTrendsData as unknown as ReliabilityTrendsDatabase;
 
-    const rawTotal = Number(data?.metadata?.total_records_analyzed ?? (data?.metadata as unknown as Record<string, unknown>)?.total_analyzed_posts);
-    const total_records_analyzed = Number.isFinite(rawTotal) && rawTotal >= 0 ? Math.floor(rawTotal) : 1280;
-
-    const metadata = {
-      version: typeof data?.metadata?.version === 'string' ? data.metadata.version : '1.0.0',
-      updated_at: typeof data?.metadata?.updated_at === 'string' ? data.metadata.updated_at : '2026-09-16T12:00:00Z',
-      total_records_analyzed,
-      brands_count: Array.isArray(data?.brands) ? data.brands.length : 9,
-      models_count: Array.isArray(data?.brands)
-        ? data.brands.reduce((acc, b) => acc + (b && Array.isArray(b.models) ? b.models.length : 0), 0)
-        : 22,
-      avg_industry_dsi: normalizeReliabilityScore(data?.metadata?.avg_industry_dsi, 64.2),
-    };
-
-    const categories = Array.isArray(data.categories) && data.categories.length > 0
-      ? data.categories
-      : DEFAULT_FALLBACK_DATABASE.categories;
-
-    const repair_cost_matrix = Array.isArray(data.repair_cost_matrix)
-      ? data.repair_cost_matrix
-      : [];
-
-    const brands = Array.isArray(data.brands)
+    const brands: BrandReliability[] = Array.isArray(data.brands)
       ? data.brands
           .filter((b): b is BrandReliability => Boolean(b && typeof b === 'object'))
-          .map((b) => ({
-            ...b,
-            overall_dsi: normalizeReliabilityScore(b.overall_dsi, 50.0),
-            total_reports: Math.max(0, Number.isFinite(b.total_reports) ? b.total_reports : 0),
-            critical_issue_rate: Math.max(
-              0,
-              Math.min(100, Number.isFinite(b.critical_issue_rate) ? b.critical_issue_rate : 0)
-            ),
-            category_distribution: aggregateCategoryComplaintCounts(
-              b.category_distribution && typeof b.category_distribution === 'object'
-                ? b.category_distribution
-                : {}
-            ) as Record<DefectCategoryKey, { count: number; percentage: number }>,
-            models: Array.isArray(b.models)
-              ? b.models
-                  .filter((m): m is ModelReliability => Boolean(m && typeof m === 'object'))
-                  .map((m) => ({
-                    ...m,
-                    avg_dsi: normalizeReliabilityScore(m.avg_dsi, 50.0),
-                    year_evaluations: Array.isArray(m.year_evaluations)
-                      ? m.year_evaluations
-                          .filter((y): y is YearEvaluation => Boolean(y && typeof y === 'object'))
-                          .map((y) => ({
-                            ...y,
-                            dsi_score: normalizeReliabilityScore(y.dsi_score, 50.0),
-                          }))
-                      : [],
-                  }))
-              : [],
-          }))
+          .map((b) => {
+            const safeBrandId = typeof b.id === 'string' ? b.id : '';
+            const rawReports = sanitizeFiniteNumber(b.total_reports);
+            const rawCritical = sanitizeFiniteNumber(b.critical_issue_rate);
+            return {
+              ...b,
+              id: safeBrandId,
+              name_ko: typeof b.name_ko === 'string' ? b.name_ko : '',
+              name_en: typeof b.name_en === 'string' ? b.name_en : '',
+              country: typeof b.country === 'string' ? b.country : '',
+              overall_dsi: normalizeReliabilityScore(b.overall_dsi, 50.0),
+              total_reports: rawReports !== null ? Math.max(0, Math.floor(rawReports)) : 0,
+              critical_issue_rate:
+                rawCritical !== null ? Math.max(0, Math.min(100, rawCritical)) : 0,
+              category_distribution: aggregateCategoryComplaintCounts(
+                b.category_distribution && typeof b.category_distribution === 'object'
+                  ? b.category_distribution
+                  : {}
+              ) as Record<DefectCategoryKey, { count: number; percentage: number }>,
+              models: Array.isArray(b.models)
+                ? b.models
+                    .filter((m): m is ModelReliability => Boolean(m && typeof m === 'object'))
+                    .map((m) => ({
+                      ...m,
+                      id: typeof m.id === 'string' ? m.id : '',
+                      name: typeof m.name === 'string' ? m.name : '',
+                      segment: typeof m.segment === 'string' ? m.segment : '',
+                      brand_id: typeof m.brand_id === 'string' ? m.brand_id : safeBrandId,
+                      overall_grade: sanitizeGrade(m.overall_grade),
+                      avg_dsi: normalizeReliabilityScore(m.avg_dsi, 50.0),
+                      top_category:
+                        typeof m.top_category === 'string' && m.top_category
+                          ? m.top_category
+                          : 'BATTERY_CHARGING',
+                      year_evaluations: Array.isArray(m.year_evaluations)
+                        ? m.year_evaluations
+                            .filter((y): y is YearEvaluation => Boolean(y && typeof y === 'object'))
+                            .map((y) => {
+                              const parsedYear = sanitizeFiniteNumber(y.year);
+                              const parsedIncident = sanitizeFiniteNumber(y.incident_rate);
+                              return {
+                                ...y,
+                                year: parsedYear !== null ? Math.floor(parsedYear) : 0,
+                                verdict: sanitizeVerdict(y.verdict),
+                                dsi_score: normalizeReliabilityScore(y.dsi_score, 50.0),
+                                incident_rate:
+                                  parsedIncident !== null
+                                    ? Math.max(0, Math.min(100, parsedIncident))
+                                    : 0,
+                                primary_defect:
+                                  typeof y.primary_defect === 'string' ? y.primary_defect : '',
+                                estimated_repair_cost:
+                                  typeof y.estimated_repair_cost === 'string'
+                                    ? y.estimated_repair_cost
+                                    : '',
+                                chronic_symptoms: Array.isArray(y.chronic_symptoms)
+                                  ? y.chronic_symptoms.filter(
+                                      (s): s is string => typeof s === 'string'
+                                    )
+                                  : [],
+                                raw_quote: typeof y.raw_quote === 'string' ? y.raw_quote : '',
+                              };
+                            })
+                        : [],
+                    }))
+                : [],
+            };
+          })
+      : [];
+
+    const rawMetaObj =
+      data.metadata && typeof data.metadata === 'object' ? data.metadata : undefined;
+    const rawTotal = sanitizeFiniteNumber(
+      rawMetaObj?.total_records_analyzed ??
+        (rawMetaObj as unknown as Record<string, unknown> | undefined)?.total_analyzed_posts
+    );
+    const brandReportsSum = brands.reduce((acc, b) => acc + b.total_reports, 0);
+    const total_records_analyzed =
+      rawTotal !== null && rawTotal >= 0
+        ? Math.floor(rawTotal)
+        : brandReportsSum > 0
+          ? brandReportsSum
+          : 1280;
+
+    const rawAvgDsi = sanitizeFiniteNumber(rawMetaObj?.avg_industry_dsi);
+    let avg_industry_dsi = 64.2;
+    if (rawAvgDsi !== null) {
+      avg_industry_dsi = normalizeReliabilityScore(rawAvgDsi, 64.2);
+    } else if (brands.length > 0) {
+      const computedKpis = calculateReliabilityKPIsPure({
+        metadata: { version: '1.0.0' },
+        repair_cost_matrix: [],
+        brands,
+      });
+      avg_industry_dsi = computedKpis.industryAvgDsi;
+    }
+
+    const metadata = {
+      version: typeof rawMetaObj?.version === 'string' ? rawMetaObj.version : '1.0.0',
+      updated_at:
+        typeof rawMetaObj?.updated_at === 'string'
+          ? rawMetaObj.updated_at
+          : '2026-09-16T12:00:00Z',
+      total_records_analyzed,
+      brands_count: brands.length,
+      models_count: brands.reduce((acc, b) => acc + b.models.length, 0),
+      avg_industry_dsi,
+    };
+
+    const rawCategories = Array.isArray(data.categories)
+      ? data.categories
+      : Array.isArray(data.defect_categories)
+        ? data.defect_categories
+        : [];
+    const validCategories = rawCategories.filter(
+      (c): c is DefectCategoryMetadata =>
+        Boolean(c && typeof c === 'object' && typeof c.code === 'string')
+    );
+    const categories =
+      validCategories.length > 0
+        ? validCategories
+        : DEFAULT_FALLBACK_CATEGORIES.map((c) => ({ ...c }));
+
+    const repair_cost_matrix = Array.isArray(data.repair_cost_matrix)
+      ? data.repair_cost_matrix.filter(
+          (r): r is RepairCostMatrixItem =>
+            Boolean(r && typeof r === 'object' && typeof r.component_name === 'string')
+        )
       : [];
 
     return {
@@ -271,7 +371,7 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
     };
   } catch (error) {
     console.error('[getReliabilityTrendsData] Failed to load trends data safely:', error);
-    return DEFAULT_FALLBACK_DATABASE;
+    return createDefaultFallbackDatabase();
   }
 }
 
@@ -288,7 +388,7 @@ export function getAllEnrichedModels(data?: ReliabilityTrendsDatabase): Enriched
  * Uses master trends database if data parameter is omitted.
  */
 export function calculateReliabilityKPIs(data?: ReliabilityTrendsDatabase | null): ReliabilityKPIs {
-  return calculateReliabilityKPIsPure(data || getReliabilityTrendsData());
+  return calculateReliabilityKPIsPure(data === undefined ? getReliabilityTrendsData() : data);
 }
 
 /**
@@ -374,7 +474,7 @@ export function calculateStealthScore(input?: StealthScoreInput | null): Stealth
     }
   }
   return calculateStealthScorePure({
-    ...input,
+    ...(input ?? {}),
     baselineIndustryDsi: baseline,
   });
 }

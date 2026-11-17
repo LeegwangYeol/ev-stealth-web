@@ -14,7 +14,7 @@ import re
 import sys
 import time
 import urllib.parse
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Ensure parent directory is in path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -27,7 +27,9 @@ from scrapers.common_utils import (
     clean_html_text,
     encode_euc_kr_query,
     extract_slang_terms,
+    normalize_scraper_url,
     polite_delay,
+    resolve_timeout_pair,
     robust_decode,
     save_complaints_json,
 )
@@ -70,9 +72,13 @@ class BobaedreamScraper:
         cache_fallback: bool = True,
     ):
         # Enforce polite delay with jitter (2.0s - 4.0s) and burst cooldown
+        self._owns_client = client is None
         self.timeout = timeout
-        self.connect_timeout = connect_timeout or (timeout[0] if isinstance(timeout, (tuple, list)) and len(timeout) >= 2 else 5.0)
-        self.read_timeout = read_timeout or (timeout[1] if isinstance(timeout, (tuple, list)) and len(timeout) >= 2 else 15.0)
+        self.connect_timeout, self.read_timeout = resolve_timeout_pair(
+            timeout=timeout,
+            connect_timeout=connect_timeout,
+            read_timeout=read_timeout,
+        )
         self.enable_cache = enable_cache
         self.cache_fallback = cache_fallback
         self.client = client or SafeHttpClient(
@@ -91,6 +97,28 @@ class BobaedreamScraper:
         self.slang_dict = self._load_slang_dict()
         self.post_cache: Dict[str, Dict[str, Any]] = {}
         self._warmed_up = False
+
+    def close(self, force: bool = False) -> None:
+        """Release HTTP client resources if owned by this scraper."""
+        if (self._owns_client or force) and self.client is not None and hasattr(self.client, "close"):
+            try:
+                self.client.close()
+            except Exception as e:
+                logger.warning(f"Error closing HTTP client: {e}")
+
+    def __del__(self) -> None:
+        try:
+            if getattr(self, "_owns_client", False):
+                self.close()
+        except Exception:
+            pass
+
+    def __enter__(self) -> "BobaedreamScraper":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        self.close()
+        return False
 
     def sleep_polite(self):
         """Randomized sleep with jitter between requests."""
@@ -124,22 +152,30 @@ class BobaedreamScraper:
         """
         self.ensure_warm_up()
         results = []
+        kw_str = str(keyword or "")
+        safe_code = urllib.parse.quote(str(board_code or "national").strip(), safe="")
+        safe_s_key = urllib.parse.quote(str(s_key or "sub_bod").strip(), safe="")
+        try:
+            eff_pages = max(1, int(max_pages))
+        except (ValueError, TypeError, OverflowError):
+            eff_pages = 1
 
-        for page in range(1, max_pages + 1):
+        for page in range(1, eff_pages + 1):
             try:
-                encoded_kw = urllib.parse.quote(keyword.encode("euc-kr"))
+                encoded_kw = urllib.parse.quote(kw_str.encode("euc-kr"))
             except UnicodeEncodeError:
-                encoded_kw = urllib.parse.quote(keyword.encode("cp949", errors="replace"))
+                encoded_kw = urllib.parse.quote(kw_str.encode("cp949", errors="replace"))
 
-            search_url = f"{BOBAE_LIST_URL}?code={board_code}&s_cate=&s_key={s_key}&search={encoded_kw}&page={page}"
-            logger.info(f"Searching Bobaedream [{board_code}] for '{keyword}' (Page {page})...")
+            search_url = f"{BOBAE_LIST_URL}?code={safe_code}&s_cate=&s_key={safe_s_key}&search={encoded_kw}&page={page}"
+            logger.info(f"Searching Bobaedream [{board_code}] for '{kw_str}' (Page {page})...")
 
             status, text, raw = self.client.request(
                 search_url,
                 method="GET",
                 referer=f"{BOBAE_BASE_URL}/",
-                encoding="utf-8",
-                timeout=self.timeout,
+                encoding=None,
+                connect_timeout=self.connect_timeout,
+                read_timeout=self.read_timeout,
             )
 
             if status != 200 or not text:
@@ -175,7 +211,9 @@ class BobaedreamScraper:
             if not clean_title or len(clean_title) < 2 or "공지" in clean_title:
                 continue
 
-            full_url = href if href.startswith("http") else f"{BOBAE_BASE_URL}{href}"
+            full_url = normalize_scraper_url(href, BOBAE_BASE_URL)
+            if not full_url:
+                continue
             items.append({
                 "title": clean_title,
                 "url": full_url,
@@ -193,11 +231,16 @@ class BobaedreamScraper:
         """
         self.ensure_warm_up()
         results = []
+        kw_str = str(keyword or "")
+        try:
+            eff_pages = max(1, int(max_pages))
+        except (ValueError, TypeError, OverflowError):
+            eff_pages = 1
 
-        for page in range(1, max_pages + 1):
-            logger.info(f"Searching Bobaedream community search for '{keyword}' (Page {page})...")
+        for page in range(1, eff_pages + 1):
+            logger.info(f"Searching Bobaedream community search for '{kw_str}' (Page {page})...")
             post_data = encode_euc_kr_query({
-                "keyword": keyword,
+                "keyword": kw_str,
                 "searchName": "커뮤니티",
                 "page": page,
             })
@@ -206,9 +249,11 @@ class BobaedreamScraper:
                 BOBAE_SEARCH_URL,
                 method="POST",
                 data=post_data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
                 referer=BOBAE_BASE_URL + "/",
-                encoding="utf-8",
-                timeout=self.timeout,
+                encoding=None,
+                connect_timeout=self.connect_timeout,
+                read_timeout=self.read_timeout,
             )
 
             if status != 200 or not text:
@@ -238,7 +283,9 @@ class BobaedreamScraper:
             if not clean_title or len(clean_title) < 2:
                 continue
 
-            full_url = href if href.startswith("http") else f"{BOBAE_BASE_URL}{href}"
+            full_url = normalize_scraper_url(href, BOBAE_BASE_URL)
+            if not full_url:
+                continue
             code_match = re.search(r"code=([a-zA-Z0-9_]+)", href)
             no_match = re.search(r"No=([0-9]+)", href)
             board_code = code_match.group(1) if code_match else "community"
@@ -256,32 +303,37 @@ class BobaedreamScraper:
 
     def fetch_post_detail(self, post_url: str) -> Dict[str, Any]:
         """Fetch and parse post detail page including author, date, body, and comments."""
+        norm_url = normalize_scraper_url(post_url, BOBAE_BASE_URL)
+        if not norm_url:
+            logger.warning(f"Invalid Bobaedream post_url provided: {post_url!r}")
+            return {}
         self.ensure_warm_up()
         status, text, raw = self.client.request(
-            post_url,
+            norm_url,
             method="GET",
             referer=BOBAE_BASE_URL + "/",
-            encoding="utf-8",
-            timeout=self.timeout,
+            encoding=None,
+            connect_timeout=self.connect_timeout,
+            read_timeout=self.read_timeout,
         )
 
         if status != 200 or not text:
-            if post_url in self.post_cache:
-                logger.warning(f"Failed to fetch Bobaedream post detail for {post_url}; falling back to cached post.")
-                return self.post_cache[post_url]
-            logger.warning(f"Failed to fetch post detail: {post_url}")
+            if norm_url in self.post_cache:
+                logger.warning(f"Failed to fetch Bobaedream post detail for {norm_url}; falling back to cached post.")
+                return self.post_cache[norm_url]
+            logger.warning(f"Failed to fetch post detail: {norm_url}")
             return {}
 
         try:
-            detail = self.parse_post_detail(text, post_url)
+            detail = self.parse_post_detail(text, norm_url)
             if detail:
-                self.post_cache[post_url] = detail
+                self.post_cache[norm_url] = detail
             return detail
         except Exception as e:
-            logger.warning(f"Error parsing Bobaedream post detail ({post_url}): {e}")
-            if post_url in self.post_cache:
-                logger.warning(f"Falling back to cached post for {post_url} after parse error.")
-                return self.post_cache[post_url]
+            logger.warning(f"Error parsing Bobaedream post detail ({norm_url}): {e}")
+            if norm_url in self.post_cache:
+                logger.warning(f"Falling back to cached post for {norm_url} after parse error.")
+                return self.post_cache[norm_url]
             return {}
 
     def parse_post_detail(self, html_content: str, post_url: str) -> Dict[str, Any]:
@@ -365,6 +417,8 @@ class BobaedreamScraper:
         1. Target Vehicle
         2. Category (parking, charging, rain_driving, hill_climbing)
         """
+        if not text or not isinstance(text, str):
+            return "BYD EV General", None
         text_lower = text.lower()
 
         # Identify Vehicle
@@ -394,14 +448,17 @@ class BobaedreamScraper:
         """
         Convert post and comments into standardized ComplaintRecord objects.
         """
+        if not post_data or not isinstance(post_data, dict):
+            return []
         records = []
-        url = post_data.get("url", "")
-        title = post_data.get("title", "")
-        body = post_data.get("body", "")
-        comments = post_data.get("comments", [])
+        url = str(post_data.get("url") or "")
+        title = str(post_data.get("title") or "")
+        body = str(post_data.get("body") or "")
+        raw_comments = post_data.get("comments")
+        comments = raw_comments if isinstance(raw_comments, list) else []
         b_name = board_name or "보배드림 커뮤니티"
-        published_at = post_data.get("published_at", "")
-        author = post_data.get("author", "보배드림 유저")
+        published_at = str(post_data.get("published_at") or "")
+        author = str(post_data.get("author") or "보배드림 유저")
 
         # Check post body
         combined_post = f"{title}\n{body}"
@@ -435,6 +492,8 @@ class BobaedreamScraper:
 
         # Check individual comments
         for idx, comment in enumerate(comments):
+            if not isinstance(comment, str):
+                continue
             c_veh, c_cat = self.classify_text(comment)
             if c_cat and len(comment) >= 15:
                 c_slang = extract_slang_terms(comment, self.slang_dict)
@@ -467,6 +526,8 @@ class BobaedreamScraper:
 
     def load_seed_records(self, limit: Optional[int] = None) -> List[ComplaintRecord]:
         """Load fallback records from seed dataset when live scraping is unavailable or restricted."""
+        if limit is not None and limit <= 0:
+            return []
         records: List[ComplaintRecord] = []
         seed_filenames = ["raw_bobae_emerging.json", "compiled_complaints.json"]
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -495,26 +556,26 @@ class BobaedreamScraper:
                                         seen_ids.add(pid)
                                     records.append(ComplaintRecord(
                                         id=pid,
-                                        platform=item.get("platform", "bobaedream"),
-                                        board_name=item.get("board_name", "보배드림"),
+                                        platform=item.get("platform") or "bobaedream",
+                                        board_name=item.get("board_name") or "보배드림",
                                         post_url=item.get("post_url") or item.get("url") or "",
                                         post_title=item.get("post_title") or item.get("title") or "",
-                                        target_vehicle=item.get("target_vehicle", "Unknown"),
-                                        category=item.get("category", "convenience"),
-                                        defect_topic=item.get("defect_topic", ""),
+                                        target_vehicle=item.get("target_vehicle") or "Unknown",
+                                        category=item.get("category") or "convenience",
+                                        defect_topic=item.get("defect_topic") or "",
                                         raw_quote=item.get("raw_quote") or item.get("content") or "",
-                                        slang_terms=item.get("slang_terms", []),
-                                        severity=item.get("severity", "convenience_issue"),
-                                        platform_metadata=item.get("platform_metadata", {}),
+                                        slang_terms=item.get("slang_terms") if isinstance(item.get("slang_terms"), list) else [],
+                                        severity=item.get("severity") or "convenience_issue",
+                                        platform_metadata=item.get("platform_metadata") if isinstance(item.get("platform_metadata"), dict) else {},
                                         collected_at=str(item.get("collected_at") or ""),
                                     ))
-                                    if limit and len(records) >= limit:
+                                    if limit is not None and len(records) >= limit:
                                         return records
                     except Exception as e:
                         logger.debug(f"Failed to load seed records from {s_file}: {e}")
             if records:
                 break
-        return records[:limit] if limit else records
+        return records[:limit] if limit is not None else records
 
     @staticmethod
     def _determine_severity(category: str, text: str) -> str:

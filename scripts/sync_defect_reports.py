@@ -31,10 +31,12 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+import contextlib
 from datetime import datetime, timezone
 import hashlib
 import json
 import logging
+import math
 import os
 from pathlib import Path
 import re
@@ -119,6 +121,17 @@ VALID_SEVERITIES = {
 # =============================================================================
 # DEDUPLICATION & COMPOSITE KEY GENERATION
 # =============================================================================
+
+def _safe_finite_float(val: Any, default: Optional[float] = None) -> Optional[float]:
+    """Convert value to a finite float, rejecting bool, None, NaN, and Infinity."""
+    if val is None or isinstance(val, bool):
+        return default
+    try:
+        num = float(val)
+        return num if math.isfinite(num) else default
+    except (ValueError, TypeError):
+        return default
+
 
 def normalize_text_for_key(text: Optional[str]) -> str:
     """Normalize text string by trimming, lowercasing, and collapsing whitespace."""
@@ -228,14 +241,17 @@ def merge_report_records(existing: Dict[str, Any], incoming: Dict[str, Any]) -> 
         merged["slang_terms_detected"] = ex_terms
 
     # 4. Sentiment and Severity: retain maximum severity and highest negativity
-    try:
-        ex_neg = float(merged.get("negativity_score", merged.get("sentiment_score", 0.0)))
-        inc_neg = float(incoming.get("negativity_score", incoming.get("sentiment_score", 0.0)))
-        if inc_neg > ex_neg:
-            merged["negativity_score"] = round(inc_neg, 4)
-            merged["sentiment_score"] = round(inc_neg, 4)
-    except (ValueError, TypeError):
-        pass
+    ex_raw = merged.get("negativity_score")
+    if ex_raw is None:
+        ex_raw = merged.get("sentiment_score")
+    inc_raw = incoming.get("negativity_score")
+    if inc_raw is None:
+        inc_raw = incoming.get("sentiment_score")
+    ex_neg = _safe_finite_float(ex_raw, 0.0)
+    inc_neg = _safe_finite_float(inc_raw, None)
+    if inc_neg is not None and ex_neg is not None and inc_neg > ex_neg:
+        merged["negativity_score"] = round(inc_neg, 4)
+        merged["sentiment_score"] = round(inc_neg, 4)
 
     severity_order = {"INFO": 0, "LOW": 1, "CAUTION": 2, "MEDIUM": 3, "WARNING": 4, "HIGH": 5, "CRITICAL": 6}
     ex_sev_rank = severity_order.get(str(merged.get("severity", "")).upper(), 2)
@@ -248,17 +264,17 @@ def merge_report_records(existing: Dict[str, Any], incoming: Dict[str, Any]) -> 
     inc_dsi = incoming.get("dsi_breakdown")
     if isinstance(inc_dsi, dict):
         if not isinstance(ex_dsi, dict):
-            merged["dsi_breakdown"] = dict(inc_dsi)
+            merged["dsi_breakdown"] = {
+                k: v for k, v in ((dim, _safe_finite_float(val)) for dim, val in inc_dsi.items()) if v is not None
+            }
         else:
             merged_dsi = dict(ex_dsi)
             for dim, val in inc_dsi.items():
-                if val is not None:
-                    try:
-                        f_val = float(val)
-                        if dim not in merged_dsi or float(merged_dsi[dim]) < f_val:
-                            merged_dsi[dim] = f_val
-                    except (ValueError, TypeError):
-                        pass
+                f_val = _safe_finite_float(val)
+                if f_val is not None:
+                    ex_f = _safe_finite_float(merged_dsi.get(dim))
+                    if ex_f is None or ex_f < f_val:
+                        merged_dsi[dim] = f_val
             merged["dsi_breakdown"] = merged_dsi
 
     # 6. Authenticity flag
@@ -436,25 +452,22 @@ def normalize_report_item(item: Dict[str, Any], default_idx: int = 1) -> Dict[st
         normalized["slang_terms_detected"] = [str(t).strip() for t in terms if str(t).strip()]
 
     # Required: sentiment_score (number, float)
-    try:
-        score = float(item.get("sentiment_score", item.get("negativity_score", 0.5)))
-        normalized["sentiment_score"] = round(max(0.0, min(1.0, score)), 4)
-    except (ValueError, TypeError):
-        normalized["sentiment_score"] = 0.5
+    raw_score = item.get("sentiment_score")
+    if raw_score is None:
+        raw_score = item.get("negativity_score")
+    score = _safe_finite_float(raw_score, 0.5)
+    assert score is not None
+    normalized["sentiment_score"] = round(max(0.0, min(1.0, score)), 4)
 
     # Optional: sentiment_polarity (number)
-    if "sentiment_polarity" in item and item["sentiment_polarity"] is not None:
-        try:
-            normalized["sentiment_polarity"] = round(float(item["sentiment_polarity"]), 4)
-        except (ValueError, TypeError):
-            pass
+    pol = _safe_finite_float(item.get("sentiment_polarity"))
+    if pol is not None:
+        normalized["sentiment_polarity"] = round(pol, 4)
 
     # Optional: negativity_score (number)
-    try:
-        neg = float(item.get("negativity_score", normalized["sentiment_score"]))
-        normalized["negativity_score"] = round(max(0.0, min(1.0, neg)), 4)
-    except (ValueError, TypeError):
-        normalized["negativity_score"] = normalized["sentiment_score"]
+    neg = _safe_finite_float(item.get("negativity_score"), normalized["sentiment_score"])
+    assert neg is not None
+    normalized["negativity_score"] = round(max(0.0, min(1.0, neg)), 4)
 
     # Optional: sentiment_tier (string)
     if item.get("sentiment_tier"):
@@ -477,11 +490,9 @@ def normalize_report_item(item: Dict[str, Any], default_idx: int = 1) -> Dict[st
     normalized["severity"] = sev
 
     # Optional: severity_index (number)
-    if "severity_index" in item and item["severity_index"] is not None:
-        try:
-            normalized["severity_index"] = round(float(item["severity_index"]), 2)
-        except (ValueError, TypeError):
-            pass
+    sev_idx = _safe_finite_float(item.get("severity_index"))
+    if sev_idx is not None:
+        normalized["severity_index"] = round(sev_idx, 2)
 
     # Optional: is_authentic_defect (boolean)
     if "is_authentic_defect" in item and item["is_authentic_defect"] is not None:
@@ -494,11 +505,9 @@ def normalize_report_item(item: Dict[str, Any], default_idx: int = 1) -> Dict[st
     if isinstance(raw_dsi, dict):
         clean_dsi: Dict[str, float] = {}
         for dim in ("safety", "functional", "economic", "social", "convenience"):
-            if dim in raw_dsi and raw_dsi[dim] is not None:
-                try:
-                    clean_dsi[dim] = round(float(raw_dsi[dim]), 2)
-                except (ValueError, TypeError):
-                    pass
+            dim_val = _safe_finite_float(raw_dsi.get(dim))
+            if dim_val is not None:
+                clean_dsi[dim] = round(dim_val, 2)
         if clean_dsi:
             normalized["dsi_breakdown"] = clean_dsi
 
@@ -514,7 +523,13 @@ def compute_report_statistics(
     total_scraped = max(raw_scraped_count or total_defects, total_defects)
 
     if reports:
-        neg_scores = [float(r.get("negativity_score", r.get("sentiment_score", 0.0))) for r in reports]
+        neg_scores = []
+        for r in reports:
+            raw_neg = r.get("negativity_score")
+            if raw_neg is None:
+                raw_neg = r.get("sentiment_score")
+            neg_val = _safe_finite_float(raw_neg, 0.0)
+            neg_scores.append(neg_val if neg_val is not None else 0.0)
         avg_negativity = round(sum(neg_scores) / len(neg_scores), 3)
     else:
         avg_negativity = 0.0
@@ -634,7 +649,8 @@ def get_default_known_paths(
 
     # 1. Root reports path
     if root_dir:
-        root_path = Path(root_dir) / "daily_reports.json" if Path(root_dir).is_dir() else Path(root_dir)
+        rp = Path(root_dir)
+        root_path = rp / "daily_reports.json" if (rp.is_dir() or rp.suffix != ".json") else rp
     elif (repo_root / "data").is_dir():
         root_path = repo_root / "data" / "daily_reports.json"
     else:
@@ -681,13 +697,18 @@ def get_default_known_paths(
 
     # Deduplicate paths preserving order
     seen: Set[str] = set()
+    for base_p in (root_path, web_path):
+        try:
+            seen.add(str(base_p.resolve()))
+        except (OSError, RuntimeError):
+            seen.add(str(base_p.absolute()))
     deduped_additional: List[Path] = []
     for p in additional:
         try:
             res_str = str(p.resolve())
         except (OSError, RuntimeError):
             res_str = str(p.absolute())
-        if res_str not in seen and res_str != str(root_path.resolve() if root_path.exists() else root_path):
+        if res_str not in seen:
             seen.add(res_str)
             deduped_additional.append(p)
 
@@ -734,7 +755,7 @@ def sync_defect_reports(
     # Acquire advisory file lock
     lock_ctx = FileLock(sync_lock_path, timeout=lock_timeout, stale_timeout=stale_timeout) if FileLock else None
 
-    with lock_ctx if lock_ctx else open("/dev/null"):
+    with lock_ctx if lock_ctx else contextlib.nullcontext():
         # Discover and sort candidate source files
         existing_candidates = [p for p in all_target_paths if p.is_file()]
 
@@ -789,7 +810,7 @@ def sync_defect_reports(
 
         # Build canonical payload conforming to TypeScript types
         canonical_payload = build_canonical_payload(deduped_reports, existing_meta=combined_meta)
-        canonical_json_bytes = json.dumps(canonical_payload, indent=2, ensure_ascii=False).encode("utf-8")
+        canonical_json_bytes = json.dumps(canonical_payload, indent=2, ensure_ascii=False, allow_nan=False).encode("utf-8")
         canonical_hash = hashlib.sha256(canonical_json_bytes).hexdigest()
 
         # Target destinations to update
@@ -834,12 +855,18 @@ def sync_defect_reports(
                     pass
 
                 # Fsync parent directory to persist directory entry
+                dir_fd = -1
                 try:
                     dir_fd = os.open(str(dst.parent), os.O_RDONLY)
                     os.fsync(dir_fd)
-                    os.close(dir_fd)
                 except OSError:
                     pass
+                finally:
+                    if dir_fd >= 0:
+                        try:
+                            os.close(dir_fd)
+                        except OSError:
+                            pass
 
                 written_paths.append(str(dst))
                 logger.info("  ✓ Successfully synchronized and deduplicated: %s", dst)

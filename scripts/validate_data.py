@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import json
 import logging
+import math
 import os
 from pathlib import Path
 import shutil
@@ -48,6 +49,33 @@ from scrapers.common_utils import (
 logger = logging.getLogger("DataValidator")
 
 
+def _is_finite_number(val: Any) -> bool:
+    """Return True if val is a finite int/float (excluding bool, NaN, and Inf)."""
+    return isinstance(val, (int, float)) and not isinstance(val, bool) and math.isfinite(val)
+
+
+def _parity_candidate_priority(fname: str, parsed: Any) -> int:
+    """Score parsed JSON candidate so empty or structurally corrupt shells never overwrite healthy mirrors."""
+    if parsed is None:
+        return -1
+    if fname == "daily_reports.json":
+        if not isinstance(parsed, dict) or not isinstance(parsed.get("reports"), list):
+            return -1
+        rep_count = len(parsed["reports"])
+        return 2 if rep_count >= 4 else (1 if rep_count > 0 else 0)
+    if fname in ("ev_subsidy_data.json", "subsidy_depletion_data.json"):
+        if not isinstance(parsed, dict) or not isinstance(parsed.get("regions"), list):
+            return -1
+        return 2 if len(parsed["regions"]) >= 17 else (1 if len(parsed["regions"]) > 0 else 0)
+    if fname == "models_subsidy_matrix.json":
+        if not isinstance(parsed, list):
+            return -1
+        return 2 if len(parsed) >= 15 else (1 if len(parsed) > 0 else -1)
+    if isinstance(parsed, (dict, list)):
+        return 2 if len(parsed) > 0 else -1
+    return -1
+
+
 def validate_database(
     complaints_path: str,
     slang_path: str,
@@ -73,7 +101,7 @@ def validate_database(
         errors.append(f"Slang dictionary file not found: {slang_path}")
         slang_dict = {}
     else:
-        with open(slang_path, "r", encoding="utf-8") as f:
+        with open(slang_path, "r", encoding="utf-8-sig") as f:
             try:
                 slang_dict = json.load(f)
                 if not isinstance(slang_dict, dict):
@@ -91,7 +119,7 @@ def validate_database(
         errors.append(f"Complaints database file not found: {complaints_path}")
         return False, errors, stats
 
-    with open(complaints_path, "r", encoding="utf-8") as f:
+    with open(complaints_path, "r", encoding="utf-8-sig") as f:
         try:
             records = json.load(f)
         except Exception as e:
@@ -197,7 +225,7 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
         return False, errors, stats
 
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8-sig") as f:
             data = json.load(f)
     except Exception as exc:
         errors.append(f"Failed to parse subsidy JSON from {path}: {exc}")
@@ -232,7 +260,7 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
                         errors.append(f"Alert tier '{tier}' missing key '{k}'")
                 min_p = cfg.get("min_percent")
                 max_p = cfg.get("max_percent")
-                if isinstance(min_p, (int, float)) and isinstance(max_p, (int, float)):
+                if _is_finite_number(min_p) and _is_finite_number(max_p):
                     if min_p < 0.0 or max_p < min_p:
                         errors.append(f"Alert tier '{tier}' invalid percentage bounds: {min_p} > {max_p}")
 
@@ -250,30 +278,32 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
         tot_rem = summary.get("total_remaining_units")
         dep_rate = summary.get("nationwide_depletion_rate")
 
-        if isinstance(tot_ann, (int, float)) and tot_ann < 0:
+        if tot_ann is not None and (not _is_finite_number(tot_ann) or tot_ann < 0):
             errors.append(f"Nationwide total_announced_units must be non-negative, got {tot_ann}")
-        if isinstance(tot_app, (int, float)) and tot_app < 0:
+        if tot_app is not None and (not _is_finite_number(tot_app) or tot_app < 0):
             errors.append(f"Nationwide total_applied_units must be non-negative, got {tot_app}")
-        if isinstance(tot_rem, (int, float)) and tot_rem < 0:
+        if tot_rem is not None and (not _is_finite_number(tot_rem) or tot_rem < 0):
             errors.append(f"Nationwide total_remaining_units must be non-negative, got {tot_rem}")
 
-        if isinstance(tot_ann, (int, float)) and isinstance(tot_app, (int, float)) and isinstance(tot_rem, (int, float)):
+        if _is_finite_number(tot_ann) and _is_finite_number(tot_app) and _is_finite_number(tot_rem):
             expected_rem = max(0, tot_ann - tot_app)
             if tot_rem != expected_rem:
                 errors.append(
                     f"Nationwide quota mismatch: total_remaining_units ({tot_rem}) != max(0, ann - app) ({expected_rem})"
                 )
 
-        if isinstance(dep_rate, (int, float)):
+        if dep_rate is not None and not _is_finite_number(dep_rate):
+            errors.append(f"Nationwide depletion rate must be a finite number, got {dep_rate}")
+        elif _is_finite_number(dep_rate):
             if dep_rate < 0.0:
                 errors.append(f"Nationwide depletion rate must be non-negative, got {dep_rate}")
-            elif isinstance(tot_ann, (int, float)) and isinstance(tot_app, (int, float)) and tot_ann > 0:
+            elif _is_finite_number(tot_ann) and _is_finite_number(tot_app) and tot_ann > 0:
                 expected_rate = (tot_app / tot_ann) * 100
                 if abs(dep_rate - expected_rate) > 0.2:
                     errors.append(
                         f"Nationwide depletion rate ({dep_rate}%) inconsistent with applications ({tot_app}/{tot_ann} = {expected_rate:.1f}%)"
                     )
-        stats["nationwide_depletion_rate"] = dep_rate if isinstance(dep_rate, (int, float)) else 0.0
+        stats["nationwide_depletion_rate"] = dep_rate if _is_finite_number(dep_rate) else 0.0
 
     # 4. Regions validation (17 statutory regions)
     regions = data.get("regions")
@@ -323,24 +353,26 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
                     rate = c.get("depletion_rate", 0.0)
                     status = c.get("status")
 
-                    if not isinstance(ann, (int, float)) or ann < 0:
+                    if not _is_finite_number(ann) or ann < 0:
                         errors.append(f"{prefix} Category '{cname}' announced_units must be non-negative, got {ann}")
-                    if not isinstance(app, (int, float)) or app < 0:
+                    if not _is_finite_number(app) or app < 0:
                         errors.append(f"{prefix} Category '{cname}' applied_units must be non-negative, got {app}")
-                    if not isinstance(rem, (int, float)) or rem < 0:
+                    if not _is_finite_number(rem) or rem < 0:
                         errors.append(f"{prefix} Category '{cname}' remaining_units must be non-negative, got {rem}")
 
-                    if isinstance(ann, (int, float)) and isinstance(app, (int, float)) and isinstance(rem, (int, float)):
+                    if _is_finite_number(ann) and _is_finite_number(app) and _is_finite_number(rem):
                         expected_rem = max(0, ann - app)
                         if rem != expected_rem:
                             errors.append(
                                 f"{prefix} Category '{cname}' quota mismatch: remaining_units ({rem}) != max(0, ann - app) ({expected_rem})"
                             )
 
-                    if isinstance(rate, (int, float)):
+                    if not _is_finite_number(rate):
+                        errors.append(f"{prefix} Category '{cname}' depletion_rate must be a finite number, got {rate}")
+                    else:
                         if rate < 0:
                             errors.append(f"{prefix} Category '{cname}' depletion_rate must be non-negative, got {rate}")
-                        elif isinstance(ann, (int, float)) and isinstance(app, (int, float)) and ann > 0:
+                        elif _is_finite_number(ann) and _is_finite_number(app) and ann > 0:
                             expected_rate = (app / ann) * 100
                             if abs(rate - expected_rate) > 0.2:
                                 errors.append(
@@ -364,13 +396,13 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
                 for mk in ("announced_units", "applied_units", "remaining_units"):
                     if mk in muni:
                         val = muni[mk]
-                        if not isinstance(val, (int, float)) or val < 0:
+                        if not _is_finite_number(val) or val < 0:
                             errors.append(f"{prefix} Municipality '{m_name}' key '{mk}' must be non-negative, got {val}")
 
                 m_ann = muni.get("announced_units")
                 m_app = muni.get("applied_units")
                 m_rem = muni.get("remaining_units")
-                if isinstance(m_ann, (int, float)) and isinstance(m_app, (int, float)) and isinstance(m_rem, (int, float)):
+                if _is_finite_number(m_ann) and _is_finite_number(m_app) and _is_finite_number(m_rem):
                     exp_rem = max(0, m_ann - m_app)
                     if m_rem != exp_rem:
                         errors.append(
@@ -378,10 +410,12 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
                         )
 
                 m_rate = muni.get("depletion_rate")
-                if isinstance(m_rate, (int, float)):
+                if m_rate is not None and not _is_finite_number(m_rate):
+                    errors.append(f"{prefix} Municipality '{m_name}' depletion_rate must be a finite number, got {m_rate}")
+                elif _is_finite_number(m_rate):
                     if m_rate < 0:
                         errors.append(f"{prefix} Municipality '{m_name}' depletion_rate must be non-negative, got {m_rate}")
-                    elif isinstance(m_ann, (int, float)) and isinstance(m_app, (int, float)) and m_ann > 0:
+                    elif _is_finite_number(m_ann) and _is_finite_number(m_app) and m_ann > 0:
                         exp_r = (m_app / m_ann) * 100
                         if abs(m_rate - exp_r) > 0.2:
                             errors.append(
@@ -407,7 +441,7 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
                     errors.append(f"Popular model [{midx}] ({m.get('model_id', 'UNKNOWN')}) missing key '{req_k}'")
             price = m.get("base_price_krw")
             ratio = m.get("price_subsidy_ratio")
-            if isinstance(price, (int, float)) and isinstance(ratio, (int, float)):
+            if _is_finite_number(price) and _is_finite_number(ratio):
                 if price <= 55_000_000 and ratio != 1.0:
                     errors.append(f"Model '{m.get('model_id')}' price <=55M but ratio {ratio} != 1.0")
                 elif 55_000_000 < price <= 85_000_000 and ratio != 0.5:
@@ -437,7 +471,7 @@ def validate_models_matrix(file_path: Union[str, Path]) -> Tuple[bool, List[str]
         return False, errors, stats
 
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8-sig") as f:
             data = json.load(f)
     except Exception as exc:
         errors.append(f"Failed to parse models matrix JSON from {path}: {exc}")
@@ -472,13 +506,13 @@ def validate_models_matrix(file_path: Union[str, Path]) -> Tuple[bool, List[str]
                 errors.append(f"{prefix} Missing required field '{rf}'")
 
         cap = m.get("battery_capacity_kwh")
-        if isinstance(cap, (int, float)) and cap <= 0:
+        if _is_finite_number(cap) and cap <= 0:
             errors.append(f"{prefix} Battery capacity must be >0 kWh, got {cap}")
         rng = m.get("rated_range_km")
-        if isinstance(rng, (int, float)) and rng <= 0:
+        if _is_finite_number(rng) and rng <= 0:
             errors.append(f"{prefix} Rated range must be >0 km, got {rng}")
         sub = m.get("national_subsidy_krw")
-        if isinstance(sub, (int, float)) and sub < 0:
+        if _is_finite_number(sub) and sub < 0:
             errors.append(f"{prefix} National subsidy must be >= 0 KRW, got {sub}")
 
         if m.get("manufacturer"):
@@ -486,7 +520,7 @@ def validate_models_matrix(file_path: Union[str, Path]) -> Tuple[bool, List[str]
 
         price = m.get("base_price_krw")
         ratio = m.get("price_subsidy_ratio")
-        if isinstance(price, (int, float)) and isinstance(ratio, (int, float)):
+        if _is_finite_number(price) and _is_finite_number(ratio):
             if price <= 55_000_000 and ratio != 1.0:
                 errors.append(f"{prefix} Price <= 55M but ratio {ratio} != 1.0")
             elif 55_000_000 < price <= 85_000_000 and ratio != 0.5:
@@ -519,7 +553,7 @@ def validate_daily_reports(file_path: Union[str, Path]) -> Tuple[bool, List[str]
         return False, errors, stats
 
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8-sig") as f:
             data = json.load(f)
     except Exception as exc:
         errors.append(f"Failed to parse daily reports JSON from {path}: {exc}")
@@ -540,6 +574,8 @@ def validate_daily_reports(file_path: Union[str, Path]) -> Tuple[bool, List[str]
         for sk in ("total_scraped", "total_filtered_defects", "avg_negativity_score", "critical_defect_count"):
             if sk not in raw_stats:
                 errors.append(f"Statistics missing required key '{sk}'")
+            elif not _is_finite_number(raw_stats[sk]) or raw_stats[sk] < 0:
+                errors.append(f"Statistics '{sk}' must be a finite non-negative number, got {raw_stats[sk]}")
 
     reports = data.get("reports")
     if not isinstance(reports, list):
@@ -566,6 +602,9 @@ def validate_daily_reports(file_path: Union[str, Path]) -> Tuple[bool, List[str]
         for rf in req_rep_fields:
             if rf not in r:
                 errors.append(f"{prefix} Missing required field '{rf}'")
+
+        if "sentiment_score" in r and not _is_finite_number(r["sentiment_score"]):
+            errors.append(f"{prefix} sentiment_score must be a finite number, got {r['sentiment_score']}")
 
         if r.get("source"):
             stats["sources"].add(str(r["source"]))
@@ -638,12 +677,14 @@ def validate_data_parity(
             if fp.is_file() and fp.stat().st_size > 0:
                 try:
                     content = fp.read_bytes()
-                    json.loads(content.decode("utf-8-sig"))
+                    parsed = json.loads(content.decode("utf-8-sig"))
                     h = hashlib.sha256(content).hexdigest()
                     hashes[label] = h
-                    score = (1, fp.stat().st_mtime)
-                    if best_candidate is None or score > (best_candidate[0], best_candidate[1]):
-                        best_candidate = (score[0], score[1], fp, h)
+                    prio = _parity_candidate_priority(fname, parsed)
+                    if prio >= 0:
+                        score = (prio, fp.stat().st_mtime)
+                        if best_candidate is None or score > (best_candidate[0], best_candidate[1]):
+                            best_candidate = (score[0], score[1], fp, h)
                 except Exception as exc:
                     errors.append(f"Failed to read/validate {label} ({fp}): {exc}")
             else:
@@ -656,6 +697,10 @@ def validate_data_parity(
 
         # Automatic mirror repair if requested and authoritative file exists
         if repair and authoritative_path is not None and auth_hash is not None:
+            try:
+                auth_stat = authoritative_path.stat()
+            except OSError:
+                auth_stat = None
             for label, d in dirs_to_check:
                 fp = d / fname
                 if not fp.exists() or hashes.get(label) != auth_hash:
@@ -670,11 +715,20 @@ def validate_data_parity(
                         os.chmod(tmp_repair, 0o644)
                         os.replace(tmp_repair, fp)
                         tmp_repair = None
+                        if auth_stat is not None:
+                            try:
+                                os.utime(fp, (auth_stat.st_atime, auth_stat.st_mtime))
+                            except OSError:
+                                pass
                         hashes[label] = auth_hash
                         # Clear matching errors for this repaired file
                         errors = [
                             e for e in errors
-                            if not (f"'{fname}' missing from {label}" in e or f"SHA-256 mismatch for '{fname}'" in e)
+                            if not (
+                                f"'{fname}' missing from {label}" in e
+                                or f"SHA-256 mismatch for '{fname}'" in e
+                                or f"Failed to read/validate {label} ({fp})" in e
+                            )
                         ]
                         logger.info("Repaired parity for %s in %s", fname, label)
                     except Exception as re_exc:

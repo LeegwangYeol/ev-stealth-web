@@ -78,7 +78,7 @@ function ClientTimestampBase({
   const fallbackText = useMemo(() => {
     if (!effectiveIso) return fallback;
     return effectiveIso.includes('T')
-      ? effectiveIso.replace('T', ' ').substring(0, 19) + ' (UTC)'
+      ? effectiveIso.replace('T', ' ').substring(0, 19) + (effectiveIso.endsWith('Z') ? ' (UTC)' : '')
       : effectiveIso;
   }, [effectiveIso, fallback]);
 

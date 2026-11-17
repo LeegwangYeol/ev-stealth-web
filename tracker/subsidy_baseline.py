@@ -139,7 +139,7 @@ def calculate_net_subsidy(
             safe_msrp = 0
         else:
             f_msrp = float(_clean_val(msrp))
-            safe_msrp = 0 if (math.isnan(f_msrp) or math.isinf(f_msrp)) else int(f_msrp)
+            safe_msrp = 0 if (math.isnan(f_msrp) or math.isinf(f_msrp)) else max(0, int(f_msrp))
     except (ValueError, TypeError, OverflowError):
         safe_msrp = 0
 
@@ -836,15 +836,20 @@ def build_initial_baseline(regions: Optional[List[Any]] = None) -> SubsidyPayloa
     total_municipalities = 0
 
     for r in regions:
+        if r is None:
+            continue
         munis = r.get("municipalities", []) if isinstance(r, dict) else getattr(r, "municipalities", [])
-        total_municipalities += len(munis or [])
+        total_municipalities += len(munis or []) if isinstance(munis, (list, tuple)) else 0
         status_val = r.get("overall_status") if isinstance(r, dict) else getattr(r, "overall_status", "")
-        status_key = str(status_val or "").strip().lower()
+        status_val = getattr(status_val, "value", status_val)
+        status_key = str(status_val or "").split(".")[-1].strip().lower()
         if status_key in alert_counts:
             alert_counts[status_key] += 1
 
         cats = r.get("categories") if isinstance(r, dict) else getattr(r, "categories", {})
-        for c_name, c_metric in (cats or {}).items():
+        if not isinstance(cats, dict):
+            cats = {}
+        for c_name, c_metric in cats.items():
             if c_name not in cat_announced:
                 cat_announced[c_name] = 0
                 cat_applied[c_name] = 0

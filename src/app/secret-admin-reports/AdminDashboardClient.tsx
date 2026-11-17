@@ -289,14 +289,26 @@ function getSeverityBadge(severity: string) {
 }
 
 function getSourceBadge(source: string, url: string) {
-  const isBobae = (source || '').toLowerCase().includes('bobae');
-  const badgeText = isBobae ? '보배드림' : '디시인사이드';
+  const lower = (source || '').toLowerCase();
+  const isBobae = lower.includes('bobae');
+  const isDc = lower.includes('dc');
+  const badgeText = isBobae
+    ? '보배드림'
+    : isDc
+    ? '디시인사이드'
+    : lower.includes('clien')
+    ? '클리앙'
+    : lower.includes('ppomppu')
+    ? '뽐뿌'
+    : source && source !== 'N/A'
+    ? source
+    : '커뮤니티';
   const badgeColor = isBobae
     ? 'bg-blue-50 text-blue-900 border-blue-200 hover:bg-blue-100'
     : 'bg-indigo-50 text-indigo-900 border-indigo-200 hover:bg-indigo-100';
 
   const safeUrl = sanitizeReportUrl(url);
-  const isExternal = safeUrl.startsWith('http://') || safeUrl.startsWith('https://');
+  const isExternal = isExternalUrl(safeUrl);
 
   if (!isExternal) {
     return (
@@ -368,6 +380,15 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
   const modalRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const focusReturnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (focusReturnTimerRef.current) {
+        clearTimeout(focusReturnTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleOpenModal = useCallback((report: DefectReportWithTimestamp, triggerEl?: HTMLButtonElement) => {
     if (triggerEl) {
@@ -378,9 +399,14 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
   const handleCloseModal = useCallback(() => {
     setActiveModalReport(null);
+    if (focusReturnTimerRef.current) {
+      clearTimeout(focusReturnTimerRef.current);
+    }
     // Keyboard accessibility: return focus to the trigger element that opened the dialog
-    setTimeout(() => {
-      triggerButtonRef.current?.focus();
+    focusReturnTimerRef.current = setTimeout(() => {
+      if (triggerButtonRef.current?.isConnected) {
+        triggerButtonRef.current?.focus();
+      }
     }, 0);
   }, []);
 
@@ -558,9 +584,11 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         const spacelessIndex = searchIndex.replace(/\s+/g, '');
 
         // Standardize clean display date YYYY-MM-DD
-        const displayDate = r.date
-          ? r.date.replace(/[./]/g, '-')
-          : (r.created_at ? r.created_at.slice(0, 10).replace(/[./]/g, '-') : '2026-09-30');
+        const rawDateStr = String(r.date || (r.created_at ? r.created_at.slice(0, 10) : '')).trim();
+        const ymdMatch = rawDateStr.match(/^(\d{4})[.\-/\s년]+(\d{1,2})[.\-/\s월]+(\d{1,2})/);
+        const displayDate = ymdMatch
+          ? `${ymdMatch[1]}-${ymdMatch[2].padStart(2, '0')}-${ymdMatch[3].padStart(2, '0')}`
+          : (parsed > 0 ? new Date(parsed).toISOString().slice(0, 10) : '2026-09-30');
 
         return {
           ...r,
@@ -608,13 +636,35 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           ? Number((reports.reduce((acc, r) => acc + (typeof r.sentiment_score === 'number' && Number.isFinite(r.sentiment_score) ? r.sentiment_score : 0), 0) / reports.length).toFixed(2))
           : 0.0);
 
+    let computedTopModel = '해당 없음 (0건)';
+    let computedTopPlatform = '해당 없음 (0%)';
+    if (reports.length > 0 && (!rawStats?.top_model || !rawStats?.top_platform)) {
+      const modelFreq = new Map<string, number>();
+      const sourceFreq = new Map<string, number>();
+      for (const r of reports) {
+        const modelName = r.vehicle_model || '미상 모델';
+        modelFreq.set(modelName, (modelFreq.get(modelName) || 0) + 1);
+        const srcLower = (r.source || '').toLowerCase();
+        const srcName = srcLower.includes('bobae')
+          ? '보배드림'
+          : srcLower.includes('dc')
+          ? '디시인사이드'
+          : r.source || '기타';
+        sourceFreq.set(srcName, (sourceFreq.get(srcName) || 0) + 1);
+      }
+      const topModelEntry = Array.from(modelFreq.entries()).sort((a, b) => b[1] - a[1])[0];
+      if (topModelEntry) computedTopModel = topModelEntry[0];
+      const topSrcEntry = Array.from(sourceFreq.entries()).sort((a, b) => b[1] - a[1])[0];
+      if (topSrcEntry) computedTopPlatform = topSrcEntry[0];
+    }
+
     return {
       total_scraped: totalScraped,
       total_filtered_defects: totalFiltered,
       avg_negativity_score: avgScore,
       critical_defect_count: criticalCount,
-      top_model: rawStats?.top_model || (reports.length > 0 ? '아이오닉5' : '해당 없음 (0건)'),
-      top_platform: rawStats?.top_platform || (reports.length > 0 ? '보배드림' : '해당 없음 (0%)'),
+      top_model: rawStats?.top_model || computedTopModel,
+      top_platform: rawStats?.top_platform || computedTopPlatform,
     };
   }, [rawStats, reports]);
 
@@ -1428,7 +1478,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 type="button"
                 onClick={handleResetFilters}
                 aria-label="모든 검색 및 카테고리 필터 초기화"
-                className="text-xs text-rose-600 hover:text-rose-700 font-semibold underline min-h-[44px] inline-flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-rose-600 focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-1 rounded-lg px-2"
+                className="text-xs text-rose-700 hover:text-rose-800 font-semibold underline min-h-[44px] inline-flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-rose-600 focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-1 rounded-lg px-2"
               >
                 <svg className="w-3 h-3" width="12" height="12" focusable="false" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -1515,22 +1565,24 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap">{getSeverityBadge(report.severity)}</td>
                       <td className="px-3 py-3 whitespace-nowrap">{getSourceBadge(report.source || 'N/A', safeUrl)}</td>
-                      <td className="px-3 py-3 text-slate-900 font-medium max-w-xs truncate" title={report.title}>
-                        <span>{report.title}</span>
-                        {isExt ? (
-                          <a
-                            href={safeUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            aria-label="게시글 원문 보기"
-                            title="게시글 원문 보기 (새 창에서 열림)"
-                            className="inline-flex items-center min-h-[44px] px-2 py-1 focus:bg-blue-700 focus:text-white rounded focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 ml-1 text-blue-700 underline text-xs font-semibold"
-                          >
-                            (원문 링크)
-                          </a>
-                        ) : (
-                          <span className="text-slate-600 ml-1 text-xs">(원문 링크 없음)</span>
-                        )}
+                      <td className="px-3 py-3 text-slate-900 font-medium max-w-xs" title={report.title}>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="truncate"><span>{report.title}</span></span>
+                          {isExt ? (
+                            <a
+                              href={safeUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label="게시글 원문 보기"
+                              title="게시글 원문 보기 (새 창에서 열림)"
+                              className="shrink-0 inline-flex items-center min-h-[44px] px-2 py-1 focus:bg-blue-700 focus:text-white rounded focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 text-blue-700 underline text-xs font-semibold"
+                            >
+                              (원문 링크)
+                            </a>
+                          ) : (
+                            <span className="shrink-0 text-slate-600 text-xs">(원문 링크 없음)</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-3 text-slate-800 text-xs max-w-sm truncate" title={report.summary}>
                         {report.summary}
@@ -1849,7 +1901,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               </button>
               {(() => {
                 const safeModalUrl = sanitizeReportUrl(activeModalReport.url);
-                const isExt = safeModalUrl.startsWith('http://') || safeModalUrl.startsWith('https://');
+                const isExt = isExternalUrl(safeModalUrl);
                 if (!isExt) return null;
                 return (
                   <a
@@ -1888,7 +1940,7 @@ const DefectReportCard = memo(function DefectReportCard({
 }: DefectReportCardProps) {
   const safeSentimentPct = formatSentimentPercent(report.sentiment_score);
   const safeUrl = sanitizeReportUrl(report.url);
-  const isExternal = safeUrl.startsWith('http://') || safeUrl.startsWith('https://');
+  const isExternal = isExternalUrl(safeUrl);
 
   const handleOpenModalClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
     onOpenModal(report, e.currentTarget);
@@ -1952,7 +2004,7 @@ const DefectReportCard = memo(function DefectReportCard({
               href={safeUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:underline hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded inline-block py-1.5 min-h-[44px]"
+              className="hover:underline hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded inline-flex items-center py-2 min-h-[44px]"
             >
               {report.title}
               <span className="sr-only"> (새 창에서 열림)</span>

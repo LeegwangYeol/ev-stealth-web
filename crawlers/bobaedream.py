@@ -406,6 +406,7 @@ class BobaeDreamCrawler(BaseCrawler):
     ):
         self.min_delay = min_delay
         self.max_delay = max_delay
+        owns_client = client is None
         if client is None:
             client = SafeHttpClient(
                 min_delay=min_delay,
@@ -425,6 +426,7 @@ class BobaeDreamCrawler(BaseCrawler):
             enable_cache=enable_cache,
             cache_fallback=cache_fallback,
         )
+        self._owns_client = owns_client
         self.platform = "bobaedream"
 
     def load_seed_posts(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -467,13 +469,13 @@ class BobaeDreamCrawler(BaseCrawler):
         Build search URL with EUC-KR percent-encoded keyword parameter.
         URL format: https://www.bobaedream.co.kr/list?code={board_code}&s_cate=&s_key={s_key}&search={encoded_kw}&page={page}
         """
-        code = str(board_code or "national").strip()
+        code = urllib.parse.quote(str(board_code or "national").strip(), safe="")
         try:
             eff_page = max(1, int(float(page)))
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             eff_page = 1
         encoded_kw = encode_euc_kr_query(keyword or "")
-        key = str(s_key or "sub_bod").strip()
+        key = urllib.parse.quote(str(s_key or "sub_bod").strip(), safe="")
         return (
             f"{BOBAE_LIST_URL}?code={code}&s_cate=&s_key={key}"
             f"&search={encoded_kw}&page={eff_page}"
@@ -484,10 +486,10 @@ class BobaeDreamCrawler(BaseCrawler):
         Build general list URL without search filters.
         URL format: https://www.bobaedream.co.kr/list?code={board_code}&page={page}
         """
-        code = str(board_code or "national").strip()
+        code = urllib.parse.quote(str(board_code or "national").strip(), safe="")
         try:
             eff_page = max(1, int(float(page)))
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             eff_page = 1
         return f"{BOBAE_LIST_URL}?code={code}&page={eff_page}"
 
@@ -521,6 +523,8 @@ class BobaeDreamCrawler(BaseCrawler):
             raw_title = match.group(2)
 
             full_href = html.unescape(raw_href.strip())
+            if full_href.lower().startswith(("javascript:", "data:", "vbscript:", "mailto:")):
+                continue
 
             # Extract post_no from query param (No=, no=, b_no=, bm_no=) or path (/bbs_view/.../123, /view/123)
             no_match = re.search(
@@ -878,6 +882,14 @@ class BobaeDreamCrawler(BaseCrawler):
 
         # Defensively normalize relative URLs and HTML entities (&amp; -> &)
         eff_url = html.unescape(post_url.strip())
+        if not eff_url or any(ord(c) < 32 or ord(c) == 127 for c in eff_url):
+            logger.warning(f"Unsafe BobaeDream post_url provided: {post_url!r}")
+            return None
+        parsed_input = urllib.parse.urlsplit(eff_url)
+        if parsed_input.scheme and parsed_input.scheme.lower() not in ("http", "https"):
+            logger.warning(f"Disallowed URL scheme in BobaeDream post_url: {post_url!r}")
+            return None
+
         if eff_url.startswith("//"):
             eff_url = f"https:{eff_url}"
         elif eff_url.startswith("/"):
@@ -887,8 +899,10 @@ class BobaeDreamCrawler(BaseCrawler):
 
         base_url = kwargs.get("base_url")
         self.ensure_warm_up(base_url)
+        if not self.client:
+            return None
         eff_referer = referer or f"{BOBAE_BASE_URL}/"
-        timeout = kwargs.get("timeout")
+        timeout = kwargs.get("timeout", (self.connect_timeout, self.read_timeout))
 
         try:
             resp = self.client.get(eff_url, referer=eff_referer, timeout=timeout)
@@ -951,10 +965,12 @@ class BobaeDreamCrawler(BaseCrawler):
         """
         if limit is not None and limit <= 0:
             return []
+        if not self.client:
+            return []
 
         try:
             eff_pages = max(1, int(float(pages)))
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             eff_pages = 1
 
         self.ensure_warm_up()
@@ -1044,10 +1060,12 @@ class BobaeDreamCrawler(BaseCrawler):
         """
         if limit is not None and limit <= 0:
             return []
+        if not self.client:
+            return []
 
         try:
             eff_pages = max(1, int(float(pages)))
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             eff_pages = 1
 
         self.ensure_warm_up()

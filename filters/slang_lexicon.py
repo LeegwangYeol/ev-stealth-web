@@ -1636,7 +1636,18 @@ _RE_BYD_SEAL: re.Pattern[str] = re.compile(
 _RE_RICE_COOKER_APP: re.Pattern[str] = re.compile(r"(?:전기|쿠쿠|쿠첸|압력|미니|캠핑용)\s*밥솥")
 
 
-def find_matching_slang(text: Any) -> List[SlangEntry]:
+def _decode_bytes_safely(raw_bytes: Union[bytes, bytearray]) -> str:
+    """Decode bytes cleanly: strict UTF-8 first, then CP949 for legacy Korean, then UTF-8 replace."""
+    try:
+        return bytes(raw_bytes).decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            return bytes(raw_bytes).decode("cp949")
+        except UnicodeDecodeError:
+            return bytes(raw_bytes).decode("utf-8", errors="replace")
+
+
+def find_matching_slang(text: Any, max_length: int = 50_000) -> List[SlangEntry]:
     """Identify all slang entries present in the given text.
 
     Sorts by term length descending to match composite idioms first.
@@ -1648,22 +1659,25 @@ def find_matching_slang(text: Any) -> List[SlangEntry]:
     - Non-breaking spaces (U+00A0 &nbsp;) and zero-width spaces (U+200B)
     - Null bytes, BiDi overrides, and oversized payloads (capped to 50,000 characters)
     """
-    if text is None:
+    if text is None or text is False:
         return []
     if isinstance(text, (bytes, bytearray)):
-        try:
-            raw_str = text.decode("utf-8", errors="replace")
-        except Exception:
-            raw_str = str(text)
+        raw_str = _decode_bytes_safely(text)
+    elif isinstance(text, str):
+        raw_str = text
     else:
-        raw_str = str(text)
+        try:
+            raw_str = str(text)
+        except Exception:
+            return []
 
     if not raw_str or not raw_str.strip():
         return []
 
     # Truncate oversized text early to prevent CPU starvation / ReDoS
-    if len(raw_str) > 50_000:
-        raw_str = raw_str[:50_000]
+    limit = max(0, int(max_length)) if max_length is not None else 50_000
+    if limit and len(raw_str) > limit:
+        raw_str = raw_str[:limit]
 
     # Strip invalid control characters, zero-width spaces, BiDi overrides
     raw_str = _RE_STRIP_CHARS.sub("", raw_str)

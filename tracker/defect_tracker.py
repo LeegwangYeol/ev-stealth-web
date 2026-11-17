@@ -296,7 +296,14 @@ class DefectTracker:
 
         try:
             with open(target, "r", encoding="utf-8-sig") as f:
-                return json.load(f)
+                data = json.load(f)
+            if (
+                not isinstance(data, dict)
+                or not isinstance(data.get("reports"), list)
+                or not all(isinstance(r, dict) for r in data["reports"])
+            ):
+                raise ValueError(f"Defect report file {target} failed post-read schema validation.")
+            return data
         except Exception as exc:
             logger.error("Failed to read defect report %s: %s", target, exc)
             if quarantine_corrupted:
@@ -398,32 +405,40 @@ class DefectTracker:
             candidate_source = list(reports)
             use_cache = False
 
-        cat_upper = category.strip().upper() if (category and isinstance(category, str) and category.strip()) else None
+        cat_raw = getattr(category, "value", category)
+        cat_upper = cat_raw.strip().upper() if (cat_raw and isinstance(cat_raw, str) and cat_raw.strip()) else None
         brand_lower = vehicle_brand.strip().lower() if (vehicle_brand and isinstance(vehicle_brand, str) and vehicle_brand.strip()) else None
         model_lower = vehicle_model.strip().lower() if (vehicle_model and isinstance(vehicle_model, str) and vehicle_model.strip()) else None
         kw_lower = keyword.strip().lower() if (keyword and isinstance(keyword, str) and keyword.strip()) else None
 
+        cache_key: Optional[Tuple[Any, ...]] = None
         if use_cache:
             with self._cache_lock:
-                cache_key = (
-                    str(self._cached_reports_path),
-                    self._cached_reports_mtime,
-                    cat_upper,
-                    brand_lower,
-                    model_lower,
-                    norm_min_sev,
-                    kw_lower,
-                    norm_limit,
-                )
-                if cache_key in self._query_cache:
-                    self._query_cache.move_to_end(cache_key)
-                    return [dict(r) for r in self._query_cache[cache_key]]
-
-                # Category-level pre-filtering: use pre-indexed category bucket if specified
-                if cat_upper is not None:
-                    candidate_pool = list(self._category_index.get(cat_upper, []))
-                else:
+                # Verify cache wasn't invalidated or swapped to a different file by another thread
+                target_mismatch = file_path is not None and self._cached_reports_path != Path(file_path)
+                if self._cached_reports is None or target_mismatch:
+                    use_cache = False
                     candidate_pool = list(candidate_source)
+                else:
+                    cache_key = (
+                        str(self._cached_reports_path),
+                        self._cached_reports_mtime,
+                        cat_upper,
+                        brand_lower,
+                        model_lower,
+                        norm_min_sev,
+                        kw_lower,
+                        norm_limit,
+                    )
+                    if cache_key in self._query_cache:
+                        self._query_cache.move_to_end(cache_key)
+                        return [dict(r) for r in self._query_cache[cache_key]]
+
+                    # Category-level pre-filtering: use pre-indexed category bucket if specified
+                    if cat_upper is not None:
+                        candidate_pool = list(self._category_index.get(cat_upper, []))
+                    else:
+                        candidate_pool = list(candidate_source)
         else:
             candidate_pool = list(candidate_source)
 
@@ -493,12 +508,17 @@ class DefectTracker:
 
         # Thread-safe true LRU cache with promotion and bounded eviction
         result = [_to_record_dict(r) for r in filtered]
-        if use_cache:
+        if use_cache and cache_key is not None:
             with self._cache_lock:
-                self._query_cache[cache_key] = result
-                self._query_cache.move_to_end(cache_key)
-                while len(self._query_cache) > 1024:
-                    self._query_cache.popitem(last=False)
+                if (
+                    self._cached_reports is not None
+                    and str(self._cached_reports_path) == cache_key[0]
+                    and self._cached_reports_mtime == cache_key[1]
+                ):
+                    self._query_cache[cache_key] = result
+                    self._query_cache.move_to_end(cache_key)
+                    while len(self._query_cache) > 1024:
+                        self._query_cache.popitem(last=False)
 
         return [dict(r) for r in result]
 
@@ -524,6 +544,14 @@ class DefectTracker:
         stats = _get_val(full_data, "statistics")
         if stats and isinstance(stats, dict):
             stat_copy = dict(stats)
+            for int_key in ("total_filtered_defects", "critical_defect_count"):
+                raw_cnt = stat_copy.get(int_key)
+                if raw_cnt is not None:
+                    try:
+                        f_cnt = float(raw_cnt)
+                        stat_copy[int_key] = 0 if (math.isnan(f_cnt) or math.isinf(f_cnt)) else int(f_cnt)
+                    except (ValueError, TypeError, OverflowError):
+                        stat_copy[int_key] = 0
             raw_avg = stat_copy.get("avg_negativity_score")
             if raw_avg is not None:
                 try:
@@ -543,7 +571,7 @@ class DefectTracker:
                     for k, v in fd_dist.items():
                         try:
                             cat_dist[str(k)] = int(v)
-                        except (ValueError, TypeError):
+                        except (ValueError, TypeError, OverflowError):
                             pass
                 elif _get_val(full_data, "top_defect_categories"):
                     top_cats = _get_val(full_data, "top_defect_categories")
@@ -552,13 +580,13 @@ class DefectTracker:
                             if isinstance(item, dict) and "category" in item and "count" in item:
                                 try:
                                     cat_dist[str(item["category"])] = int(item["count"])
-                                except (ValueError, TypeError):
+                                except (ValueError, TypeError, OverflowError):
                                     pass
                     elif isinstance(top_cats, dict):
                         for k, v in top_cats.items():
                             try:
                                 cat_dist[str(k)] = int(v)
-                            except (ValueError, TypeError):
+                            except (ValueError, TypeError, OverflowError):
                                 pass
 
                 if not cat_dist:
@@ -575,6 +603,8 @@ class DefectTracker:
 
         # Compute on-the-fly from reports list
         reports = _get_val(full_data, "reports", [])
+        if not isinstance(reports, (list, tuple)):
+            reports = []
         total = len(reports)
         critical_count = 0
         negativities: List[float] = []
@@ -727,7 +757,8 @@ class DefectTracker:
                         web_dir=web_dir,
                         dry_run=dry_run,
                     )
-                    written_paths.extend(res.get("written_paths", []))
+                    if isinstance(res, dict):
+                        written_paths.extend(res.get("written_paths", []))
                 except Exception as exc:
                     logger.warning(
                         "Crawler execution in sync_defect_reports encountered: %s. Falling back to mirror synchronization.",
@@ -819,8 +850,10 @@ class DefectTracker:
                         # Directory fsync to commit new target file
                         try:
                             dir_fd = os.open(str(tgt.parent), os.O_RDONLY)
-                            os.fsync(dir_fd)
-                            os.close(dir_fd)
+                            try:
+                                os.fsync(dir_fd)
+                            finally:
+                                os.close(dir_fd)
                         except OSError:
                             pass
 

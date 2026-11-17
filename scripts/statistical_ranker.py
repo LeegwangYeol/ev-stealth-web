@@ -178,9 +178,11 @@ class StatisticalRanker:
         self.term_dsi_values.clear()
 
         for rec in self.records:
-            title = rec.get("post_title", "")
-            quote = rec.get("raw_quote", "")
-            topic = rec.get("defect_topic", "")
+            if not isinstance(rec, dict):
+                continue
+            title = rec.get("post_title") or ""
+            quote = rec.get("raw_quote") or ""
+            topic = rec.get("defect_topic") or ""
             full_text = f"{title} {topic} {quote}"
 
             # Calculate DSI
@@ -324,19 +326,21 @@ class StatisticalRanker:
             # If count is zero, check regex occurrence in records
             if raw_count == 0:
                 for rec in self.records:
-                    txt = rec.get("raw_quote", "") + " " + rec.get("defect_topic", "")
+                    if not isinstance(rec, dict):
+                        continue
+                    txt = (rec.get("raw_quote") or "") + " " + (rec.get("defect_topic") or "")
                     if any(a in txt for a in alias_terms):
                         raw_count += 1
-                        quotes_pool.append(rec.get("raw_quote", ""))
+                        quotes_pool.append(rec.get("raw_quote") or "")
 
             # Ensure baseline counts proportional to topic relevance
             if raw_count == 0:
                 raw_count = max(2, 35 - rank_idx)
 
             share_pct = round((raw_count / total_tokens) * 100, 2)
-            # Smooth IDF
+            # Smooth IDF (guard against empty corpus num_docs == 0)
             df = max(1, len(set(quotes_pool)) or int(raw_count * 0.75))
-            smooth_idf = math.log((1.0 + self.num_docs) / (1.0 + df)) + 1.0
+            smooth_idf = math.log((1.0 + self.num_docs) / (1.0 + df)) + 1.0 if self.num_docs > 0 else 1.0
             tfidf = round(raw_count * smooth_idf, 2)
 
             # Mean DSI

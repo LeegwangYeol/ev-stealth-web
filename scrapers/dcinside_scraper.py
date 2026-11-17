@@ -15,7 +15,7 @@ import re
 import sys
 import time
 import urllib.parse
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Ensure parent directory is in path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -27,7 +27,9 @@ from scrapers.common_utils import (
     SafeHttpClient,
     clean_html_text,
     extract_slang_terms,
+    normalize_scraper_url,
     polite_delay,
+    resolve_timeout_pair,
     robust_decode,
     save_complaints_json,
 )
@@ -67,9 +69,13 @@ class DCInsideScraper:
         cache_fallback: bool = True,
     ):
         # Enforce polite delay with randomized jitter (1.5s - 3.5s) and cooldown
+        self._owns_client = client is None
         self.timeout = timeout
-        self.connect_timeout = connect_timeout or (timeout[0] if isinstance(timeout, (tuple, list)) and len(timeout) >= 2 else 5.0)
-        self.read_timeout = read_timeout or (timeout[1] if isinstance(timeout, (tuple, list)) and len(timeout) >= 2 else 15.0)
+        self.connect_timeout, self.read_timeout = resolve_timeout_pair(
+            timeout=timeout,
+            connect_timeout=connect_timeout,
+            read_timeout=read_timeout,
+        )
         self.enable_cache = enable_cache
         self.cache_fallback = cache_fallback
         self.client = client or SafeHttpClient(
@@ -88,6 +94,28 @@ class DCInsideScraper:
         self.slang_dict = self._load_slang_dict()
         self.post_cache: Dict[str, Dict[str, Any]] = {}
         self._warmed_up = False
+
+    def close(self, force: bool = False) -> None:
+        """Release HTTP client resources if owned by this scraper."""
+        if (self._owns_client or force) and self.client is not None and hasattr(self.client, "close"):
+            try:
+                self.client.close()
+            except Exception as e:
+                logger.warning(f"Error closing HTTP client: {e}")
+
+    def __del__(self) -> None:
+        try:
+            if getattr(self, "_owns_client", False):
+                self.close()
+        except Exception:
+            pass
+
+    def __enter__(self) -> "DCInsideScraper":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        self.close()
+        return False
 
     def sleep_polite(self):
         """Randomized sleep with jitter between requests."""
@@ -125,24 +153,33 @@ class DCInsideScraper:
         Supports both major and minor galleries.
         """
         self.ensure_warm_up()
-        is_minor = GALLERIES.get(gallery_id, {}).get("is_minor", True)
+        gid_clean = str(gallery_id or "").strip()
+        if not gid_clean:
+            return []
+        safe_gid = urllib.parse.quote(gid_clean, safe="")
+        is_minor = GALLERIES.get(gid_clean, {}).get("is_minor", True)
         board_prefix = "mgallery/board" if is_minor else "board"
-        encoded_kw = urllib.parse.quote(keyword)
+        encoded_kw = urllib.parse.quote(str(keyword or ""))
+        try:
+            eff_pages = max(1, int(max_pages))
+        except (ValueError, TypeError, OverflowError):
+            eff_pages = 1
         results = []
 
-        for page in range(1, max_pages + 1):
+        for page in range(1, eff_pages + 1):
             search_url = (
                 f"{DC_BASE_URL}/{board_prefix}/lists/?"
-                f"id={gallery_id}&s_type=search_subject_memo&s_keyword={encoded_kw}&page={page}"
+                f"id={safe_gid}&s_type=search_subject_memo&s_keyword={encoded_kw}&page={page}"
             )
-            logger.info(f"Searching DC Inside [{gallery_id}] for '{keyword}' (Page {page})...")
+            logger.info(f"Searching DC Inside [{gid_clean}] for '{keyword}' (Page {page})...")
 
             status, text, raw = self.client.request(
                 search_url,
                 method="GET",
                 referer=f"{DC_BASE_URL}/",
                 encoding="utf-8",
-                timeout=self.timeout,
+                connect_timeout=self.connect_timeout,
+                read_timeout=self.read_timeout,
             )
 
             if status != 200 or not text:
@@ -178,8 +215,11 @@ class DCInsideScraper:
             if not clean_title or "공지" in clean_title:
                 continue
 
-            full_url = f"{DC_BASE_URL}{href}" if href.startswith("/") else href
-            mobile_url = f"{DC_MOBILE_BASE_URL}/board/{gallery_id}/{post_no}"
+            full_url = normalize_scraper_url(href, DC_BASE_URL)
+            if not full_url:
+                continue
+            safe_gid = urllib.parse.quote(str(gallery_id or "").strip(), safe="")
+            mobile_url = f"{DC_MOBILE_BASE_URL}/board/{safe_gid}/{post_no}"
 
             items.append({
                 "post_id": post_no,
@@ -203,12 +243,16 @@ class DCInsideScraper:
         Fetch comments using DC Inside internal AJAX comment endpoint.
         URL: https://gall.dcinside.com/[mgallery/]board/comment/
         """
-        if not e_s_n_o:
+        if not e_s_n_o or not gallery_id or not post_id:
             return []
 
+        gid_str = str(gallery_id).strip()
+        pid_str = str(post_id).strip()
+        safe_gid = urllib.parse.quote(gid_str, safe="")
+        safe_pid = urllib.parse.quote(pid_str, safe="")
         prefix = "mgallery/board" if is_minor else "board"
         ajax_url = f"{DC_BASE_URL}/{prefix}/comment/"
-        referer = f"{DC_BASE_URL}/{prefix}/view/?id={gallery_id}&no={post_id}"
+        referer = f"{DC_BASE_URL}/{prefix}/view/?id={safe_gid}&no={safe_pid}"
 
         headers = {
             "X-Requested-With": "XMLHttpRequest",
@@ -218,10 +262,10 @@ class DCInsideScraper:
         }
 
         form_data = {
-            "id": gallery_id,
-            "no": post_id,
-            "cmt_id": gallery_id,
-            "cmt_no": post_id,
+            "id": gid_str,
+            "no": pid_str,
+            "cmt_id": gid_str,
+            "cmt_no": pid_str,
             "e_s_n_o": e_s_n_o,
             "comment_page": "1"
         }
@@ -233,7 +277,8 @@ class DCInsideScraper:
                 data=form_data,
                 headers=headers,
                 encoding="utf-8",
-                timeout=self.timeout,
+                connect_timeout=self.connect_timeout,
+                read_timeout=self.read_timeout,
             )
 
             if status == 200 and text:
@@ -272,24 +317,31 @@ class DCInsideScraper:
 
     def fetch_post_detail(self, gallery_id: str, post_id: str) -> Dict[str, Any]:
         """Fetch post detail with fallback between desktop view, mobile view, and cached data."""
-        cache_key = f"{gallery_id}_{post_id}"
+        gid_clean = str(gallery_id or "").strip()
+        pid_clean = str(post_id or "").strip()
+        if not gid_clean or not pid_clean:
+            return {}
+        safe_gid = urllib.parse.quote(gid_clean, safe="")
+        safe_pid = urllib.parse.quote(pid_clean, safe="")
+        cache_key = f"{gid_clean}_{pid_clean}"
         self.ensure_warm_up()
-        is_minor = GALLERIES.get(gallery_id, {}).get("is_minor", True)
+        is_minor = GALLERIES.get(gid_clean, {}).get("is_minor", True)
         board_prefix = "mgallery/board" if is_minor else "board"
-        desktop_url = f"{DC_BASE_URL}/{board_prefix}/view/?id={gallery_id}&no={post_id}"
+        desktop_url = f"{DC_BASE_URL}/{board_prefix}/view/?id={safe_gid}&no={safe_pid}"
 
         try:
             status, text, raw = self.client.request(
                 desktop_url,
                 method="GET",
-                referer=f"{DC_BASE_URL}/{board_prefix}/lists/?id={gallery_id}",
+                referer=f"{DC_BASE_URL}/{board_prefix}/lists/?id={safe_gid}",
                 encoding="utf-8",
-                timeout=self.timeout,
+                connect_timeout=self.connect_timeout,
+                read_timeout=self.read_timeout,
             )
 
             if status == 200 and text:
                 try:
-                    post_data = self.parse_post_detail(text, desktop_url, gallery_id, post_id, is_desktop=True)
+                    post_data = self.parse_post_detail(text, desktop_url, gid_clean, pid_clean, is_desktop=True)
                 except Exception as e:
                     logger.warning(f"Error parsing DC desktop post detail ({desktop_url}): {e}")
                     post_data = {}
@@ -297,7 +349,7 @@ class DCInsideScraper:
                     # Try fetching AJAX comments if e_s_n_o exists
                     e_s_n_o = post_data.get("e_s_n_o", "")
                     if e_s_n_o and len(post_data.get("comments", [])) == 0:
-                        ajax_comments = self.fetch_comments_ajax(gallery_id, post_id, e_s_n_o=e_s_n_o, is_minor=is_minor)
+                        ajax_comments = self.fetch_comments_ajax(gid_clean, pid_clean, e_s_n_o=e_s_n_o, is_minor=is_minor)
                         if ajax_comments:
                             post_data["comments"] = ajax_comments
                     self.post_cache[cache_key] = post_data
@@ -306,9 +358,9 @@ class DCInsideScraper:
             logger.warning(f"Error fetching DC desktop post ({desktop_url}): {e}")
 
         # Fallback to mobile view
-        mobile_url = f"{DC_MOBILE_BASE_URL}/board/{gallery_id}/{post_id}"
+        mobile_url = f"{DC_MOBILE_BASE_URL}/board/{safe_gid}/{safe_pid}"
         headers = {
-            "Referer": f"{DC_MOBILE_BASE_URL}/board/{gallery_id}",
+            "Referer": f"{DC_MOBILE_BASE_URL}/board/{safe_gid}",
             "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Mobile/15E148 Safari/604.1"
         }
         try:
@@ -317,12 +369,13 @@ class DCInsideScraper:
                 method="GET",
                 headers=headers,
                 encoding="utf-8",
-                timeout=self.timeout,
+                connect_timeout=self.connect_timeout,
+                read_timeout=self.read_timeout,
             )
 
             if status == 200 and text:
                 try:
-                    res = self.parse_post_detail(text, mobile_url, gallery_id, post_id, is_desktop=False)
+                    res = self.parse_post_detail(text, mobile_url, gid_clean, pid_clean, is_desktop=False)
                     if res:
                         self.post_cache[cache_key] = res
                     return res
@@ -451,6 +504,8 @@ class DCInsideScraper:
 
     def classify_text(self, text: str) -> Tuple[str, Optional[str]]:
         """Classify text into target vehicle and category."""
+        if not text or not isinstance(text, str):
+            return "BYD EV General", None
         text_lower = text.lower()
 
         # Identify vehicle
@@ -478,16 +533,19 @@ class DCInsideScraper:
         board_name: Optional[str] = None
     ) -> List[ComplaintRecord]:
         """Convert parsed post data into ComplaintRecord objects."""
+        if not post_data or not isinstance(post_data, dict):
+            return []
         records = []
-        url = post_data.get("url", "")
-        title = post_data.get("title", "")
-        body = post_data.get("body", "")
-        comments = post_data.get("comments", [])
-        gallery_id = post_data.get("gallery_id", "electriccar")
+        url = str(post_data.get("url") or "")
+        title = str(post_data.get("title") or "")
+        body = str(post_data.get("body") or "")
+        raw_comments = post_data.get("comments")
+        comments = raw_comments if isinstance(raw_comments, list) else []
+        gallery_id = str(post_data.get("gallery_id") or "electriccar")
         b_name = board_name or f"디시인사이드 {GALLERIES.get(gallery_id, {}).get('name', gallery_id)}"
-        author_badge = post_data.get("author_badge", "ㅇㅇ")
-        author_type = post_data.get("author_type", "dc_fixed_nick")
-        published_at = post_data.get("published_at", "")
+        author_badge = str(post_data.get("author_badge") or "ㅇㅇ")
+        author_type = str(post_data.get("author_type") or "dc_fixed_nick")
+        published_at = str(post_data.get("published_at") or "")
 
         # Check post body
         combined_post = f"{title}\n{body}"
@@ -521,6 +579,8 @@ class DCInsideScraper:
 
         # Check individual comments
         for idx, comment in enumerate(comments):
+            if not isinstance(comment, str):
+                continue
             c_veh, c_cat = self.classify_text(comment)
             if c_cat and len(comment) >= 15:
                 c_slang = extract_slang_terms(comment, self.slang_dict)
@@ -553,6 +613,8 @@ class DCInsideScraper:
 
     def load_seed_records(self, limit: Optional[int] = None) -> List[ComplaintRecord]:
         """Load fallback records from seed dataset when live scraping is unavailable or restricted."""
+        if limit is not None and limit <= 0:
+            return []
         records: List[ComplaintRecord] = []
         seed_filenames = ["raw_dcinside_emerging.json", "compiled_complaints.json"]
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -581,26 +643,26 @@ class DCInsideScraper:
                                         seen_ids.add(pid)
                                     records.append(ComplaintRecord(
                                         id=pid,
-                                        platform=item.get("platform", "dcinside"),
-                                        board_name=item.get("board_name", "디시인사이드"),
+                                        platform=item.get("platform") or "dcinside",
+                                        board_name=item.get("board_name") or "디시인사이드",
                                         post_url=item.get("post_url") or item.get("url") or "",
                                         post_title=item.get("post_title") or item.get("title") or "",
-                                        target_vehicle=item.get("target_vehicle", "Unknown"),
-                                        category=item.get("category", "convenience"),
-                                        defect_topic=item.get("defect_topic", ""),
+                                        target_vehicle=item.get("target_vehicle") or "Unknown",
+                                        category=item.get("category") or "convenience",
+                                        defect_topic=item.get("defect_topic") or "",
                                         raw_quote=item.get("raw_quote") or item.get("content") or "",
-                                        slang_terms=item.get("slang_terms", []),
-                                        severity=item.get("severity", "convenience_issue"),
-                                        platform_metadata=item.get("platform_metadata", {}),
+                                        slang_terms=item.get("slang_terms") if isinstance(item.get("slang_terms"), list) else [],
+                                        severity=item.get("severity") or "convenience_issue",
+                                        platform_metadata=item.get("platform_metadata") if isinstance(item.get("platform_metadata"), dict) else {},
                                         collected_at=str(item.get("collected_at") or ""),
                                     ))
-                                    if limit and len(records) >= limit:
+                                    if limit is not None and len(records) >= limit:
                                         return records
                     except Exception as e:
                         logger.debug(f"Failed to load seed records from {s_file}: {e}")
             if records:
                 break
-        return records[:limit] if limit else records
+        return records[:limit] if limit is not None else records
 
     @staticmethod
     def _determine_severity(category: str, text: str) -> str:

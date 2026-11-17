@@ -727,8 +727,8 @@ class SubsidyTracker:
         self.endpoint_url = endpoint_url
         try:
             val = float(timeout_seconds) if timeout_seconds is not None else 5.0
-            self.timeout_seconds = val if val > 0 else 5.0
-        except (ValueError, TypeError):
+            self.timeout_seconds = val if (not math.isnan(val) and not math.isinf(val) and val > 0) else 5.0
+        except (ValueError, TypeError, OverflowError):
             self.timeout_seconds = 5.0
         self.cache_fallback_path = Path(cache_fallback_path) if cache_fallback_path else None
         self.validate_cache = validate_cache
@@ -789,7 +789,9 @@ class SubsidyTracker:
         total_applied = 0
 
         cats = region.get("categories") if isinstance(region, dict) else getattr(region, "categories", {})
-        for cat_name, cat in (cats or {}).items():
+        if not isinstance(cats, dict):
+            cats = {}
+        for cat_name, cat in cats.items():
             safe_ann = max(0, _safe_int_metric(_metric_val(cat, "announced_units", 0), 0))
             safe_app = max(0, _safe_int_metric(_metric_val(cat, "applied_units", 0), 0))
             safe_del = max(0, _safe_int_metric(_metric_val(cat, "delivered_units", 0), 0))
@@ -833,8 +835,10 @@ class SubsidyTracker:
 
         # Recalculate municipalities if present
         munis = region.get("municipalities") if isinstance(region, dict) else getattr(region, "municipalities", None)
-        if munis:
+        if isinstance(munis, (list, tuple)):
             for muni in munis:
+                if muni is None:
+                    continue
                 safe_m_ann = max(0, _safe_int_metric(_metric_val(muni, "announced_units", 0), 0))
                 safe_m_app = max(0, _safe_int_metric(_metric_val(muni, "applied_units", 0), 0))
                 safe_m_del = max(0, _safe_int_metric(_metric_val(muni, "delivered_units", 0), 0))
@@ -895,6 +899,8 @@ class SubsidyTracker:
         }
 
         for r in regions:
+            if r is None:
+                continue
             # Region overall status
             st_raw = r.get("overall_status") if isinstance(r, dict) else getattr(r, "overall_status", "")
             if hasattr(st_raw, "value"):
@@ -907,6 +913,8 @@ class SubsidyTracker:
                 alert_counts[st_key] += 1
 
             r_cats = (r.get("categories") if isinstance(r, dict) else getattr(r, "categories", None)) or {}
+            if not isinstance(r_cats, dict):
+                r_cats = {}
             for c_name, c_data in r_cats.items():
                 if c_name not in cat_counts:
                     cat_counts[c_name] = {"announced": 0, "applied": 0, "delivered": 0}
@@ -971,6 +979,12 @@ class SubsidyTracker:
             return None
 
         logger.info("Attempting live poll from %s (timeout=%.1fs)...", self.endpoint_url, self.timeout_seconds)
+        try:
+            safe_backoff = float(backoff_base) if backoff_base is not None else 0.05
+            if math.isnan(safe_backoff) or math.isinf(safe_backoff) or safe_backoff < 0.0:
+                safe_backoff = 0.05
+        except (ValueError, TypeError, OverflowError):
+            safe_backoff = 0.05
         closed_exc_ids: Set[int] = set()
         for attempt in range(1, max_retries + 1):
             try:
@@ -1005,7 +1019,7 @@ class SubsidyTracker:
                                 max_retries,
                             )
                             if attempt < max_retries:
-                                backoff = backoff_base * (2 ** (attempt - 1))
+                                backoff = safe_backoff * (2 ** (attempt - 1))
                                 time.sleep(backoff)
                                 continue
                             return None
@@ -1017,7 +1031,7 @@ class SubsidyTracker:
                         max_retries,
                     )
                     if attempt < max_retries:
-                        backoff = backoff_base * (2 ** (attempt - 1))
+                        backoff = safe_backoff * (2 ** (attempt - 1))
                         time.sleep(backoff)
                         continue
                     return None
@@ -1044,7 +1058,7 @@ class SubsidyTracker:
                         pass
                 logger.warning("Live fetch attempt %d/%d failed: %s.", attempt, max_retries, exc)
                 if attempt < max_retries:
-                    backoff = backoff_base * (2 ** (attempt - 1))
+                    backoff = safe_backoff * (2 ** (attempt - 1))
                     time.sleep(backoff)
                     continue
                 logger.warning("Live fetch failed: %s. Initiating graceful fallback.", exc)
@@ -1412,7 +1426,11 @@ class SubsidyTracker:
             tot_app = 0
             tot_del = 0
             for r in reg_list:
+                if r is None:
+                    continue
                 cats = (r.get("categories") if isinstance(r, dict) else getattr(r, "categories", None)) or {}
+                if not isinstance(cats, dict):
+                    cats = {}
                 for c in cats.values():
                     tot_ann += max(0, _safe_int_metric(_metric_val(c, "announced_units", 0), 0))
                     tot_app += max(0, _safe_int_metric(_metric_val(c, "applied_units", 0), 0))
@@ -1458,7 +1476,7 @@ class SubsidyTracker:
                 "status": "DEPLETED",
             }
         cats = region.get("categories") if isinstance(region, dict) else getattr(region, "categories", {})
-        cat = (cats or {}).get(category_name)
+        cat = cats.get(category_name) if isinstance(cats, dict) else None
         rem = max(0, _safe_int_metric(_metric_val(cat, "remaining_units", 0), 0))
         app = max(0, _safe_int_metric(_metric_val(cat, "applied_units", 0), 0))
         st = str(_metric_val(cat, "status", "HEALTHY")).split(".")[-1].strip().upper()
