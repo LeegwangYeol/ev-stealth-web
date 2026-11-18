@@ -125,7 +125,7 @@ class AlertSeverity(str, Enum):
         return self.value
 
     def __format__(self, format_spec: str) -> str:
-        return self.value
+        return format(self.value, format_spec)
 
     @classmethod
     def from_rate(cls, rate: Any) -> AlertSeverity:
@@ -194,11 +194,11 @@ class AlertThresholdConfig:
         return cls(
             min_percent=_safe_float(data.get("min_percent", 0.0)),
             max_percent=_safe_float(data.get("max_percent", 0.0)),
-            label_ko=str(data.get("label_ko", "")),
-            severity=str(data.get("severity", "")),
-            color_hex=str(data.get("color_hex", "")),
-            badge_class=str(data.get("badge_class", "")),
-            recommended_action=str(data.get("recommended_action", "")),
+            label_ko=str(data.get("label_ko") or ""),
+            severity=str(data.get("severity") or ""),
+            color_hex=str(data.get("color_hex") or ""),
+            badge_class=str(data.get("badge_class") or ""),
+            recommended_action=str(data.get("recommended_action") or ""),
         )
 
 
@@ -569,6 +569,8 @@ class RegionRecord:
         st = getattr(self.overall_status, "value", self.overall_status)
         st_str = str(st).split(".")[-1].strip().upper()
         rate = _safe_float(self.overall_depletion_rate, 0.0)
+        if st_str in ("CRITICAL", "DEPLETED") or rate >= 95.0:
+            return False
         return st_str == "WARNING" or (80.0 <= rate < 95.0)
 
     def is_depleted(self) -> bool:
@@ -1192,19 +1194,19 @@ class SubsidyPayload:
         # 1. Exact match on ID, ISO code, code, Korean name, or English name
         for r in self.regions:
             if isinstance(r, dict):
-                r_id = str(r.get("region_id", "") or r.get("code", "")).strip().lower()
-                r_iso = str(r.get("iso_code", "")).strip().lower()
-                r_code = str(r.get("code", "")).strip().lower()
-                r_ko = str(r.get("name_ko", "")).strip().lower()
-                r_en = str(r.get("name_en", "")).strip().lower()
+                r_id = str(r.get("region_id") or r.get("code") or "").strip().lower()
+                r_iso = str(r.get("iso_code") or "").strip().lower()
+                r_code = str(r.get("code") or "").strip().lower()
+                r_ko = str(r.get("name_ko") or "").strip().lower()
+                r_en = str(r.get("name_en") or "").strip().lower()
                 if target in (r_id, r_iso, r_code, r_ko, r_en):
                     return RegionRecord.from_dict(r)
             elif hasattr(r, "region_id"):
-                r_id = str(r.region_id).strip().lower()
-                r_iso = str(r.iso_code).strip().lower()
+                r_id = str(r.region_id or "").strip().lower()
+                r_iso = str(r.iso_code or "").strip().lower()
                 r_code = str(getattr(r, "code", "") or "").strip().lower()
-                r_ko = str(r.name_ko).strip().lower()
-                r_en = str(r.name_en).strip().lower()
+                r_ko = str(r.name_ko or "").strip().lower()
+                r_en = str(r.name_en or "").strip().lower()
                 if target in (r_id, r_iso, r_code, r_ko, r_en):
                     return r
 
@@ -1232,18 +1234,18 @@ class SubsidyPayload:
         if mapped_keys:
             for cand in mapped_keys:
                 for r in self.regions:
-                    r_id = str(r.get("region_id", "") if isinstance(r, dict) else getattr(r, "region_id", "")).strip().lower()
-                    r_iso = str(r.get("iso_code", "") if isinstance(r, dict) else getattr(r, "iso_code", "")).strip().lower()
-                    r_ko = str(r.get("name_ko", "") if isinstance(r, dict) else getattr(r, "name_ko", "")).strip().lower()
-                    r_en = str(r.get("name_en", "") if isinstance(r, dict) else getattr(r, "name_en", "")).strip().lower()
+                    r_id = str((r.get("region_id") if isinstance(r, dict) else getattr(r, "region_id", "")) or "").strip().lower()
+                    r_iso = str((r.get("iso_code") if isinstance(r, dict) else getattr(r, "iso_code", "")) or "").strip().lower()
+                    r_ko = str((r.get("name_ko") if isinstance(r, dict) else getattr(r, "name_ko", "")) or "").strip().lower()
+                    r_en = str((r.get("name_en") if isinstance(r, dict) else getattr(r, "name_en", "")) or "").strip().lower()
                     if cand in (r_id, r_iso, r_ko, r_en):
                         return r if isinstance(r, RegionRecord) else RegionRecord.from_dict(r)
 
         # 3. Substring match on Korean name or English name
         for r in self.regions:
-            r_ko = str(r.get("name_ko", "") if isinstance(r, dict) else getattr(r, "name_ko", "")).strip().lower()
-            r_en = str(r.get("name_en", "") if isinstance(r, dict) else getattr(r, "name_en", "")).strip().lower()
-            if target in r_ko or target in r_en:
+            r_ko = str((r.get("name_ko") if isinstance(r, dict) else getattr(r, "name_ko", "")) or "").strip().lower()
+            r_en = str((r.get("name_en") if isinstance(r, dict) else getattr(r, "name_en", "")) or "").strip().lower()
+            if (r_ko and target in r_ko) or (r_en and target in r_en):
                 return r if isinstance(r, RegionRecord) else RegionRecord.from_dict(r)
             if r_ko and r_ko in target:
                 return r if isinstance(r, RegionRecord) else RegionRecord.from_dict(r)
@@ -1261,25 +1263,25 @@ class SubsidyPayload:
         # 1. Exact match on model_id or name_ko
         for m in self.popular_models_matrix:
             if isinstance(m, dict):
-                m_id = str(m.get("model_id", "") or m.get("id", "")).strip().lower()
-                m_ko = str(m.get("name_ko", "") or m.get("name", "")).strip().lower()
+                m_id = str(m.get("model_id") or m.get("id") or "").strip().lower()
+                m_ko = str(m.get("name_ko") or m.get("name") or "").strip().lower()
                 if target in (m_id, m_ko):
                     return PopularModelEntry.from_dict(m)
             elif hasattr(m, "model_id"):
                 if target in (
-                    str(m.model_id).strip().lower(),
-                    str(m.name_ko).strip().lower(),
+                    str(m.model_id or "").strip().lower(),
+                    str(m.name_ko or "").strip().lower(),
                 ):
                     return m
 
         # 2. Substring / prefix match on model_id or name_ko
         clean_target = target.replace(" ", "").replace("-", "")
         for m in self.popular_models_matrix:
-            m_id = str(m.get("model_id", "") if isinstance(m, dict) else getattr(m, "model_id", "")).strip().lower()
-            m_ko = str(m.get("name_ko", "") if isinstance(m, dict) else getattr(m, "name_ko", "")).strip().lower()
+            m_id = str((m.get("model_id") if isinstance(m, dict) else getattr(m, "model_id", "")) or "").strip().lower()
+            m_ko = str((m.get("name_ko") if isinstance(m, dict) else getattr(m, "name_ko", "")) or "").strip().lower()
             clean_id = m_id.replace(" ", "").replace("-", "")
             clean_ko = m_ko.replace(" ", "").replace("-", "")
-            if clean_target in clean_id or clean_target in clean_ko:
+            if (clean_id and clean_target in clean_id) or (clean_ko and clean_target in clean_ko):
                 return m if isinstance(m, PopularModelEntry) else PopularModelEntry.from_dict(m)
 
         return None
@@ -1312,6 +1314,8 @@ class SubsidyPayload:
             st = getattr(st_raw, "value", st_raw)
             st_str = str(st).split(".")[-1].strip().upper()
             rate = _safe_float(r.get("overall_depletion_rate", 0.0) if hasattr(r, "get") else getattr(r, "overall_depletion_rate", 0.0))
+            if st_str in ("CRITICAL", "DEPLETED") or rate >= 95.0:
+                continue
             if st_str == "WARNING" or (80.0 <= rate < 95.0):
                 res.append(r if isinstance(r, RegionRecord) else RegionRecord.from_dict(r))
         return res

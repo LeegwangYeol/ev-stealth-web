@@ -73,6 +73,8 @@ class AutomotiveTrie:
         Greedy longest-prefix match from start_idx in text.
         Returns: (matched_surface, domain_category, severity_weight, canonical_name, next_idx) or None.
         """
+        if not text or start_idx < 0:
+            return None
         curr = self.root
         longest_match = None
 
@@ -455,6 +457,7 @@ class DomainTokenizer:
 
     # Text Normalization Cleaner: preserves Korean, alphanumeric, whitespace, key units
     CLEAN_REGEX = re.compile(r'[^가-힣A-Za-z0-9\s%℃kWkm/h\-\.\,\_\/]')
+    _NON_WS_REGEX = re.compile(r'\S+')
 
     def __init__(self, slang_dict_path: Optional[str] = None):
         self.trie = AutomotiveTrie()
@@ -497,6 +500,8 @@ class DomainTokenizer:
 
     def strip_affixes(self, token_str: str) -> str:
         """Strip Josa and Eomi from token string."""
+        if not token_str or not isinstance(token_str, str):
+            return ""
         stem = token_str
         # Strip Josa first
         josa_m = self.JOSA_REGEX.match(stem)
@@ -549,7 +554,7 @@ class DomainTokenizer:
                 continue
 
             # 2. Extract standard whitespace-delimited word
-            match = re.match(r'\S+', normalized[i:])
+            match = self._NON_WS_REGEX.match(normalized, i)
             if match:
                 raw_word = match.group(0)
                 i += len(raw_word)

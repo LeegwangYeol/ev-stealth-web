@@ -43,7 +43,7 @@ def _safe_float_val(val: Any, default: float = 0.0) -> float:
         f = float(val)
         if math.isnan(f) or math.isinf(f):
             return default
-        return f
+        return 0.0 if f == 0.0 else f
     except (ValueError, TypeError, OverflowError):
         return default
 

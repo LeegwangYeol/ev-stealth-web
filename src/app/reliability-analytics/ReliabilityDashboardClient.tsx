@@ -186,7 +186,7 @@ const HeatmapRow = React.memo(function HeatmapRow({
     <tr className="group hover:bg-slate-50/80 transition">
       <th
         scope="row"
-        className="p-3 font-bold text-slate-900 sticky left-0 bg-white group-hover:bg-slate-50/80 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] text-left"
+        className="p-3 font-bold text-slate-900 sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] text-left"
       >
         <div className="truncate max-w-[130px] sm:max-w-none" title={model.name}>{model.name}</div>
       </th>
@@ -201,7 +201,6 @@ const HeatmapRow = React.memo(function HeatmapRow({
               <div
                 className="w-11 h-11 min-w-[44px] min-h-[44px] mx-auto rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] text-slate-700 font-mono font-medium"
                 title="해당 연식 데이터 없음"
-                aria-label="데이터 없음"
               >
                 <span className="sr-only">{model.name} {yr}년식 데이터 없음</span>
                 <span aria-hidden="true">-</span>
@@ -440,9 +439,9 @@ const RepairCostMatrixRow = React.memo(function RepairCostMatrixRow({ item }: Re
           {highRiskModels.length === 0 ? (
             <span className="text-slate-700 text-xs">전 차종 공통</span>
           ) : (
-            highRiskModels.map((m) => (
+            highRiskModels.map((m, idx) => (
               <span
-                key={`${item.component_name}-${m}`}
+                key={`${item.component_name || 'item'}-${m}-${idx}`}
                 className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-medium"
               >
                 {m}
@@ -478,6 +477,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
   const [compareBrandA, setCompareBrandA] = useState<string>('hyundai');
   const [compareBrandB, setCompareBrandB] = useState<string>('tesla');
   const [hoveredRadarCategory, setHoveredRadarCategory] = useState<string | null>(null);
+  const [pinnedRadarCategory, setPinnedRadarCategory] = useState<string | null>(null);
   const [hoveredSvgBrand, setHoveredSvgBrand] = useState<BrandReliability | null>(null);
   const [cellPreview, setCellPreview] = useState<{
     modelName: string;
@@ -514,15 +514,24 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     [initialData?.metadata]
   );
   const brands = useMemo(
-    () => (Array.isArray(initialData?.brands) ? initialData.brands : []),
+    () =>
+      Array.isArray(initialData?.brands)
+        ? initialData.brands.filter((b): b is BrandReliability => Boolean(b && typeof b === 'object'))
+        : [],
     [initialData?.brands]
   );
   const categories = useMemo(
-    () => (Array.isArray(initialData?.categories) ? initialData.categories : []),
+    () =>
+      Array.isArray(initialData?.categories)
+        ? initialData.categories.filter((c): c is DefectCategoryMetadata => Boolean(c && typeof c === 'object'))
+        : [],
     [initialData?.categories]
   );
   const repairCostMatrix = useMemo(
-    () => (Array.isArray(initialData?.repair_cost_matrix) ? initialData.repair_cost_matrix : []),
+    () =>
+      Array.isArray(initialData?.repair_cost_matrix)
+        ? initialData.repair_cost_matrix.filter((r): r is RepairCostMatrixItem => Boolean(r && typeof r === 'object'))
+        : [],
     [initialData?.repair_cost_matrix]
   );
 
@@ -613,7 +622,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     for (const m of allModels) {
       const mLookup = new Map<number, YearEvaluation>();
       for (const y of m.year_evaluations || []) {
-        mLookup.set(y.year, y);
+        if (y && typeof y === 'object' && typeof y.year === 'number' && Number.isFinite(y.year)) {
+          mLookup.set(y.year, y);
+        }
       }
       lookup.set(m.id, mLookup);
     }
@@ -624,7 +635,11 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
   const heatmapYears = useMemo(() => {
     const yearSet = new Set<number>();
     allModels.forEach((m) => {
-      (m.year_evaluations || []).forEach((y) => yearSet.add(y.year));
+      (m.year_evaluations || []).forEach((y) => {
+        if (y && typeof y === 'object' && typeof y.year === 'number' && Number.isFinite(y.year)) {
+          yearSet.add(y.year);
+        }
+      });
     });
     return Array.from(yearSet).sort((a, b) => a - b);
   }, [allModels]);
@@ -855,14 +870,18 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     [radarAxes]
   );
 
+  const activeRadarCode = pinnedRadarCategory ?? hoveredRadarCategory;
+
   const activeRadarItem = useMemo(
-    () => radarAxes.find((a) => a.code === hoveredRadarCategory) || null,
-    [radarAxes, hoveredRadarCategory]
+    () => radarAxes.find((a) => a.code === activeRadarCode) || null,
+    [radarAxes, activeRadarCode]
   );
 
   const radarSvgDesc = useMemo(() => {
     if (!brandAObj || !brandBObj) return '두 제조사의 6대 결함 부문 레이더 차트 비교입니다.';
-    return `${brandAObj.name_ko}(DSI ${brandAObj.overall_dsi || 0}점, 청색)와 ${brandBObj.name_ko}(DSI ${brandBObj.overall_dsi || 0}점, 적색)의 6대 결함 부문(배터리, 구동계, 소프트웨어, 조립품질, 수리비, 혹한기) 점유율을 회색 산업 평균선과 대조한 방사형 레이더 차트입니다. 아래에 상세 비교 데이터 표가 제공됩니다.`;
+    const dsiA = Number.isFinite(brandAObj.overall_dsi) ? brandAObj.overall_dsi : 0;
+    const dsiB = Number.isFinite(brandBObj.overall_dsi) ? brandBObj.overall_dsi : 0;
+    return `${brandAObj.name_ko}(DSI ${dsiA}점, 청색)와 ${brandBObj.name_ko}(DSI ${dsiB}점, 적색)의 6대 결함 부문(배터리, 구동계, 소프트웨어, 조립품질, 수리비, 혹한기) 점유율을 회색 산업 평균선과 대조한 방사형 레이더 차트입니다. 아래에 상세 비교 데이터 표가 제공됩니다.`;
   }, [brandAObj, brandBObj]);
 
   // Stabilized Callback Handlers
@@ -919,10 +938,25 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
   const handleCloseCell = useCallback(() => {
     setHoveredCell(null);
-    if (activeTriggerRef.current && typeof activeTriggerRef.current.focus === 'function') {
+    if (activeTriggerRef.current?.isConnected && typeof activeTriggerRef.current.focus === 'function') {
       activeTriggerRef.current.focus();
     }
   }, []);
+
+  // Clear stale heatmap overlays when switching away from heatmap tab
+  useEffect(() => {
+    if (activeChartTab !== 'heatmap') {
+      setHoveredCell(null);
+      setCellPreview(null);
+    }
+    if (activeChartTab !== 'brand_ranking') {
+      setHoveredSvgBrand(null);
+    }
+    if (activeChartTab !== 'brand_compare') {
+      setHoveredRadarCategory(null);
+      setPinnedRadarCategory(null);
+    }
+  }, [activeChartTab]);
 
   // Focus detail dialog when opened
   useEffect(() => {
@@ -933,7 +967,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
   // Escape key listener for accessible dismissal of detail card with focus return
   useEffect(() => {
-    if (!hoveredCell) return;
+    if (!hoveredCell || activeChartTab !== 'heatmap') return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -942,7 +976,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hoveredCell, handleCloseCell]);
+  }, [hoveredCell, activeChartTab, handleCloseCell]);
 
   const handleBrandToggle = useCallback((brandId: string) => {
     setSelectedBrand((prev) => (prev === brandId ? 'ALL' : brandId));
@@ -965,8 +999,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     let avoid = 0;
     for (const m of allModels) {
       if (Array.isArray(m.year_evaluations)) {
-        total += m.year_evaluations.length;
         for (const y of m.year_evaluations) {
+          if (!y || typeof y !== 'object') continue;
+          total++;
           if (y.verdict === 'AVOID') avoid++;
         }
       }
@@ -1020,7 +1055,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             <tbody>
               <tr>
                 <th scope="row">분석 결함 제보</th>
-                <td>{(Number.isFinite(metadata?.total_records_analyzed) ? metadata.total_records_analyzed : 0).toLocaleString()}건</td>
+                <td>{(Number.isFinite(metadata?.total_records_analyzed) ? metadata.total_records_analyzed : 0).toLocaleString('ko-KR')}건</td>
                 <td>{brands.length}개 브랜드 · {metadata.models_count || allModels.length}개 모델 조사</td>
               </tr>
               <tr>
@@ -1051,7 +1086,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           >
             <h3 id="kpi-records-heading" className="text-xs sm:text-sm text-slate-300 font-medium">분석 결함 제보</h3>
             <div className="text-2xl sm:text-3xl font-black text-white mt-1">
-              {(Number.isFinite(metadata?.total_records_analyzed) ? metadata.total_records_analyzed : 0).toLocaleString()}건
+              {(Number.isFinite(metadata?.total_records_analyzed) ? metadata.total_records_analyzed : 0).toLocaleString('ko-KR')}건
             </div>
             <div id="kpi-records-desc" className="text-xs text-blue-300 mt-1 font-medium">
               {brands.length}개 브랜드 · {metadata.models_count || allModels.length}개 모델 조사
@@ -1436,13 +1471,14 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           ? '#f97316'
                           : '#f43f5e';
 
-                      const isBarHighlighted = hoveredSvgBrand?.id === brand.id;
+                      const isBarHighlighted = hoveredSvgBrand?.id === brand.id || selectedBrand === brand.id;
                       return (
                         <g
                           key={brand.id}
                           tabIndex={0}
                           role="button"
-                          aria-label={`${brand.name_ko} (${brand.name_en}), DSI ${safeDsi}점, 치명 결함율 ${brand.critical_issue_rate || 0}%, 총 ${brand.total_reports || 0}건 제보`}
+                          aria-pressed={selectedBrand === brand.id}
+                          aria-label={`${brand.name_ko} (${brand.name_en}), DSI ${safeDsi}점, 치명 결함율 ${Number.isFinite(brand.critical_issue_rate) ? brand.critical_issue_rate : 0}%, 총 ${(brand.total_reports || 0).toLocaleString('ko-KR')}건 제보`}
                           onMouseEnter={() => setHoveredSvgBrand(brand)}
                           onMouseLeave={() => setHoveredSvgBrand(null)}
                           onFocus={() => setHoveredSvgBrand(brand)}
@@ -1511,10 +1547,10 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           <span className="text-[11px] px-2 py-0.5 rounded bg-slate-700 text-slate-200">{hoveredSvgBrand.country}</span>
                         </div>
                         <div className="text-slate-300 flex flex-wrap items-center gap-3">
-                          <span>종합 DSI: <strong className="text-white">{hoveredSvgBrand.overall_dsi}점</strong></span>
-                          <span>치명 결함율: <strong className="text-rose-300">{hoveredSvgBrand.critical_issue_rate}%</strong></span>
-                          <span>분석 제보: <strong className="text-white">{(hoveredSvgBrand.total_reports || 0).toLocaleString()}건</strong></span>
-                          <span>모델 수: <strong className="text-white">{(hoveredSvgBrand.models || []).length}개</strong></span>
+                          <span>종합 DSI: <strong className="text-white">{Number.isFinite(hoveredSvgBrand.overall_dsi) ? hoveredSvgBrand.overall_dsi : 0}점</strong></span>
+                          <span>치명 결함율: <strong className="text-rose-300">{Number.isFinite(hoveredSvgBrand.critical_issue_rate) ? hoveredSvgBrand.critical_issue_rate : 0}%</strong></span>
+                          <span>분석 제보: <strong className="text-white">{(Number.isFinite(hoveredSvgBrand.total_reports) ? hoveredSvgBrand.total_reports : 0).toLocaleString('ko-KR')}건</strong></span>
+                          <span>모델 수: <strong className="text-white">{(Array.isArray(hoveredSvgBrand.models) ? hoveredSvgBrand.models : []).length}개</strong></span>
                         </div>
                       </div>
                       <button
@@ -1601,7 +1637,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     >
                       {brands.map((b) => (
                         <option key={`compare-a-${b.id}`} value={b.id}>
-                          {b.name_ko} ({b.name_en}) · DSI {b.overall_dsi}점
+                          {b.name_ko} ({b.name_en}) · DSI {Number.isFinite(b.overall_dsi) ? b.overall_dsi : 0}점
                         </option>
                       ))}
                     </select>
@@ -1620,7 +1656,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     >
                       {brands.map((b) => (
                         <option key={`compare-b-${b.id}`} value={b.id}>
-                          {b.name_ko} ({b.name_en}) · DSI {b.overall_dsi}점
+                          {b.name_ko} ({b.name_en}) · DSI {Number.isFinite(b.overall_dsi) ? b.overall_dsi : 0}점
                         </option>
                       ))}
                     </select>
@@ -1654,11 +1690,11 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 >
                   <li className="flex items-center gap-2">
                     <span className="w-3.5 h-3.5 rounded-full bg-blue-500 inline-block shadow-sm ring-2 ring-white/20" aria-hidden="true" />
-                    <span className="text-blue-300">{brandAObj?.name_ko || '브랜드 A'} (DSI {brandAObj?.overall_dsi || 0}점)</span>
+                    <span className="text-blue-300">{brandAObj?.name_ko || '브랜드 A'} (DSI {brandAObj && Number.isFinite(brandAObj.overall_dsi) ? brandAObj.overall_dsi : 0}점)</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <span className="w-3.5 h-3.5 rounded-full bg-rose-500 inline-block shadow-sm ring-2 ring-white/20" aria-hidden="true" />
-                    <span className="text-rose-300">{brandBObj?.name_ko || '브랜드 B'} (DSI {brandBObj?.overall_dsi || 0}점)</span>
+                    <span className="text-rose-300">{brandBObj?.name_ko || '브랜드 B'} (DSI {brandBObj && Number.isFinite(brandBObj.overall_dsi) ? brandBObj.overall_dsi : 0}점)</span>
                   </li>
                   <li className="flex items-center gap-2 text-slate-400">
                     <span className="w-5 h-0.5 border-t-2 border-dashed border-slate-400 inline-block" aria-hidden="true" />
@@ -1724,34 +1760,52 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     ))}
                   </g>
 
-                  {/* Industry Average Polygon */}
-                  <polygon
-                    points={polygonPointsInd}
-                    fill="none"
-                    stroke="#94a3b8"
-                    strokeWidth="1.5"
-                    strokeDasharray="4 4"
-                  />
+                  {/* Polygons (guarded against empty/degenerate axis sets) */}
+                  {radarAxes.length >= 3 && (
+                    <>
+                      {/* Industry Average Polygon */}
+                      <polygon
+                        points={polygonPointsInd}
+                        fill="none"
+                        stroke="#94a3b8"
+                        strokeWidth="1.5"
+                        strokeDasharray="4 4"
+                      />
 
-                  {/* Brand A Polygon (Blue) */}
-                  <polygon
-                    points={polygonPointsA}
-                    fill="rgba(59, 130, 246, 0.25)"
-                    stroke="#3b82f6"
-                    strokeWidth="2.5"
-                  />
+                      {/* Brand A Polygon (Blue) */}
+                      <polygon
+                        points={polygonPointsA}
+                        fill="rgba(59, 130, 246, 0.25)"
+                        stroke="#3b82f6"
+                        strokeWidth="2.5"
+                      />
 
-                  {/* Brand B Polygon (Rose) */}
-                  <polygon
-                    points={polygonPointsB}
-                    fill="rgba(244, 63, 94, 0.25)"
-                    stroke="#f43f5e"
-                    strokeWidth="2.5"
-                  />
+                      {/* Brand B Polygon (Rose) */}
+                      <polygon
+                        points={polygonPointsB}
+                        fill="rgba(244, 63, 94, 0.25)"
+                        stroke="#f43f5e"
+                        strokeWidth="2.5"
+                      />
+                    </>
+                  )}
 
                   {/* Interactive Vertex Nodes and Labels */}
                   {radarAxes.map((axis) => {
-                    const isHovered = hoveredRadarCategory === axis.code;
+                    const isActive = activeRadarCode === axis.code;
+                    const isPinned = pinnedRadarCategory === axis.code;
+                    const togglePin = () =>
+                      setPinnedRadarCategory((prev) => (prev === axis.code ? null : axis.code));
+                    const handleVertexKeyDown = (e: React.KeyboardEvent<SVGElement>) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        togglePin();
+                      } else if (e.key === 'Escape' && (pinnedRadarCategory || hoveredRadarCategory)) {
+                        e.preventDefault();
+                        setPinnedRadarCategory(null);
+                        setHoveredRadarCategory(null);
+                      }
+                    };
                     return (
                       <g key={`nodes-${axis.code}`}>
                         {/* Category Axis Label */}
@@ -1759,20 +1813,20 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           x={axis.labelX}
                           y={axis.labelY}
                           textAnchor={axis.textAnchor}
-                          fill={isHovered ? '#60a5fa' : '#f8fafc'}
+                          fill={isActive ? '#60a5fa' : '#f8fafc'}
                           fontSize="11"
-                          fontWeight={isHovered ? 'bold' : '600'}
+                          fontWeight={isActive ? 'bold' : '600'}
                           role="button"
                           tabIndex={0}
+                          aria-pressed={isPinned}
                           aria-label={`${axis.label} 결함 비중 비교 상세 보기`}
                           className="cursor-pointer transition-colors focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 focus-visible:outline-offset-2"
-                          onClick={() => setHoveredRadarCategory(isHovered ? null : axis.code)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              setHoveredRadarCategory(isHovered ? null : axis.code);
-                            }
-                          }}
+                          onMouseEnter={() => setHoveredRadarCategory(axis.code)}
+                          onMouseLeave={() => setHoveredRadarCategory((prev) => (prev === axis.code ? null : prev))}
+                          onFocus={() => setHoveredRadarCategory(axis.code)}
+                          onBlur={() => setHoveredRadarCategory((prev) => (prev === axis.code ? null : prev))}
+                          onClick={togglePin}
+                          onKeyDown={handleVertexKeyDown}
                         >
                           {axis.label}
                         </text>
@@ -1781,24 +1835,20 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         <circle
                           cx={axis.xA}
                           cy={axis.yA}
-                          r={isHovered ? 7 : 5}
+                          r={isActive ? 7 : 5}
                           fill="#3b82f6"
                           stroke="#ffffff"
                           strokeWidth="1.5"
                           role="button"
                           tabIndex={0}
+                          aria-pressed={isPinned}
                           aria-label={`${brandAObj?.name_ko || '브랜드 A'} ${axis.label}: ${axis.shareA.toFixed(1)}%`}
                           onMouseEnter={() => setHoveredRadarCategory(axis.code)}
-                          onMouseLeave={() => setHoveredRadarCategory(null)}
+                          onMouseLeave={() => setHoveredRadarCategory((prev) => (prev === axis.code ? null : prev))}
                           onFocus={() => setHoveredRadarCategory(axis.code)}
-                          onBlur={() => setHoveredRadarCategory(null)}
-                          onClick={() => setHoveredRadarCategory(isHovered ? null : axis.code)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              setHoveredRadarCategory(isHovered ? null : axis.code);
-                            }
-                          }}
+                          onBlur={() => setHoveredRadarCategory((prev) => (prev === axis.code ? null : prev))}
+                          onClick={togglePin}
+                          onKeyDown={handleVertexKeyDown}
                           className="cursor-pointer transition-all focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 focus-visible:outline-offset-2"
                         ></circle>
 
@@ -1806,24 +1856,20 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         <circle
                           cx={axis.xB}
                           cy={axis.yB}
-                          r={isHovered ? 7 : 5}
+                          r={isActive ? 7 : 5}
                           fill="#f43f5e"
                           stroke="#ffffff"
                           strokeWidth="1.5"
                           role="button"
                           tabIndex={0}
+                          aria-pressed={isPinned}
                           aria-label={`${brandBObj?.name_ko || '브랜드 B'} ${axis.label}: ${axis.shareB.toFixed(1)}%`}
                           onMouseEnter={() => setHoveredRadarCategory(axis.code)}
-                          onMouseLeave={() => setHoveredRadarCategory(null)}
+                          onMouseLeave={() => setHoveredRadarCategory((prev) => (prev === axis.code ? null : prev))}
                           onFocus={() => setHoveredRadarCategory(axis.code)}
-                          onBlur={() => setHoveredRadarCategory(null)}
-                          onClick={() => setHoveredRadarCategory(isHovered ? null : axis.code)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              setHoveredRadarCategory(isHovered ? null : axis.code);
-                            }
-                          }}
+                          onBlur={() => setHoveredRadarCategory((prev) => (prev === axis.code ? null : prev))}
+                          onClick={togglePin}
+                          onKeyDown={handleVertexKeyDown}
                           className="cursor-pointer transition-all focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400 focus-visible:outline-offset-2"
                         ></circle>
                       </g>
@@ -1915,7 +1961,11 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               {/* Side-by-Side Stealth Score Comparison Meters */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Brand A Score Card */}
-                {brandAObj && (
+                {brandAObj && (() => {
+                  const safeDsiA = Number.isFinite(brandAObj.overall_dsi) ? brandAObj.overall_dsi : 0;
+                  const safeCritA = Number.isFinite(brandAObj.critical_issue_rate) ? brandAObj.critical_issue_rate : 0;
+                  const safeReportsA = Number.isFinite(brandAObj.total_reports) ? brandAObj.total_reports : 0;
+                  return (
                   <div className="bg-slate-50 rounded-2xl p-5 border border-blue-200 shadow-sm space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
@@ -1929,7 +1979,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       </div>
                       <div className="text-right">
                         <span className="text-2xl font-black text-slate-900">
-                          {brandAObj.overall_dsi}점
+                          {safeDsiA}점
                         </span>
                         <div className="text-xs font-bold text-blue-800">종합 DSI</div>
                       </div>
@@ -1939,20 +1989,20 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-xs text-slate-700">
                         <span>DSI 심각도 지수</span>
-                        <span className="font-bold text-slate-900">{getDsiSeverityLevel(brandAObj.overall_dsi || 0).label}</span>
+                        <span className="font-bold text-slate-900">{getDsiSeverityLevel(safeDsiA).label}</span>
                       </div>
                       <div
                         role="progressbar"
-                        aria-valuenow={Math.min(100, Math.max(0, Math.round(Number.isFinite(brandAObj.overall_dsi) ? brandAObj.overall_dsi : 0)))}
+                        aria-valuenow={Math.min(100, Math.max(0, Math.round(safeDsiA)))}
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-label={`${brandAObj.name_ko} 종합 DSI 지수`}
-                        aria-valuetext={`${brandAObj.overall_dsi}점`}
+                        aria-valuetext={`${safeDsiA}점`}
                         className="w-full bg-slate-200 rounded-full h-3 overflow-hidden"
                       >
                         <div
-                          className={`h-full rounded-full transition-all duration-300 ${getDsiSeverityLevel(brandAObj.overall_dsi || 0).barBgClass}`}
-                          style={{ width: `${Math.min(100, Math.max(10, brandAObj.overall_dsi || 0))}%` }}
+                          className={`h-full rounded-full transition-all duration-300 ${getDsiSeverityLevel(safeDsiA).barBgClass}`}
+                          style={{ width: `${Math.min(100, Math.max(10, safeDsiA))}%` }}
                         />
                       </div>
                     </div>
@@ -1961,26 +2011,26 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-xs text-slate-700">
                         <span>치명 결함율 (동력상실·화재)</span>
-                        <span className="font-bold text-rose-800">{brandAObj.critical_issue_rate || 0}%</span>
+                        <span className="font-bold text-rose-800">{safeCritA}%</span>
                       </div>
                       <div
                         role="progressbar"
-                        aria-valuenow={Math.min(100, Math.max(0, Math.round(Number.isFinite(brandAObj.critical_issue_rate) ? brandAObj.critical_issue_rate : 0)))}
+                        aria-valuenow={Math.min(100, Math.max(0, Math.round(safeCritA)))}
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-label={`${brandAObj.name_ko} 치명 결함율`}
-                        aria-valuetext={`${brandAObj.critical_issue_rate || 0}%`}
+                        aria-valuetext={`${safeCritA}%`}
                         className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden"
                       >
                         <div
                           className="h-full rounded-full bg-rose-500 transition-all duration-300"
-                          style={{ width: `${Math.min(100, Math.max(5, brandAObj.critical_issue_rate || 0))}%` }}
+                          style={{ width: `${Math.min(100, Math.max(5, safeCritA))}%` }}
                         />
                       </div>
                     </div>
 
                     <div className="pt-2 border-t border-slate-200 text-xs text-slate-700 flex items-center justify-between">
-                      <span>총 실차주 제보: <strong className="text-slate-900">{(brandAObj.total_reports || 0).toLocaleString()}건</strong></span>
+                      <span>총 실차주 제보: <strong className="text-slate-900">{safeReportsA.toLocaleString('ko-KR')}건</strong></span>
                       <button
                         type="button"
                         onClick={() => setSelectedBrand(brandAObj.id)}
@@ -1990,10 +2040,15 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       </button>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
 
                 {/* Brand B Score Card */}
-                {brandBObj && (
+                {brandBObj && (() => {
+                  const safeDsiB = Number.isFinite(brandBObj.overall_dsi) ? brandBObj.overall_dsi : 0;
+                  const safeCritB = Number.isFinite(brandBObj.critical_issue_rate) ? brandBObj.critical_issue_rate : 0;
+                  const safeReportsB = Number.isFinite(brandBObj.total_reports) ? brandBObj.total_reports : 0;
+                  return (
                   <div className="bg-slate-50 rounded-2xl p-5 border border-rose-200 shadow-sm space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
@@ -2007,7 +2062,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       </div>
                       <div className="text-right">
                         <span className="text-2xl font-black text-slate-900">
-                          {brandBObj.overall_dsi}점
+                          {safeDsiB}점
                         </span>
                         <div className="text-xs font-bold text-rose-800">종합 DSI</div>
                       </div>
@@ -2017,20 +2072,20 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-xs text-slate-700">
                         <span>DSI 심각도 지수</span>
-                        <span className="font-bold text-slate-900">{getDsiSeverityLevel(brandBObj.overall_dsi || 0).label}</span>
+                        <span className="font-bold text-slate-900">{getDsiSeverityLevel(safeDsiB).label}</span>
                       </div>
                       <div
                         role="progressbar"
-                        aria-valuenow={Math.min(100, Math.max(0, Math.round(Number.isFinite(brandBObj.overall_dsi) ? brandBObj.overall_dsi : 0)))}
+                        aria-valuenow={Math.min(100, Math.max(0, Math.round(safeDsiB)))}
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-label={`${brandBObj.name_ko} 종합 DSI 지수`}
-                        aria-valuetext={`${brandBObj.overall_dsi}점`}
+                        aria-valuetext={`${safeDsiB}점`}
                         className="w-full bg-slate-200 rounded-full h-3 overflow-hidden"
                       >
                         <div
-                          className={`h-full rounded-full transition-all duration-300 ${getDsiSeverityLevel(brandBObj.overall_dsi || 0).barBgClass}`}
-                          style={{ width: `${Math.min(100, Math.max(10, brandBObj.overall_dsi || 0))}%` }}
+                          className={`h-full rounded-full transition-all duration-300 ${getDsiSeverityLevel(safeDsiB).barBgClass}`}
+                          style={{ width: `${Math.min(100, Math.max(10, safeDsiB))}%` }}
                         />
                       </div>
                     </div>
@@ -2039,26 +2094,26 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-xs text-slate-700">
                         <span>치명 결함율 (동력상실·화재)</span>
-                        <span className="font-bold text-rose-800">{brandBObj.critical_issue_rate || 0}%</span>
+                        <span className="font-bold text-rose-800">{safeCritB}%</span>
                       </div>
                       <div
                         role="progressbar"
-                        aria-valuenow={Math.min(100, Math.max(0, Math.round(Number.isFinite(brandBObj.critical_issue_rate) ? brandBObj.critical_issue_rate : 0)))}
+                        aria-valuenow={Math.min(100, Math.max(0, Math.round(safeCritB)))}
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-label={`${brandBObj.name_ko} 치명 결함율`}
-                        aria-valuetext={`${brandBObj.critical_issue_rate || 0}%`}
+                        aria-valuetext={`${safeCritB}%`}
                         className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden"
                       >
                         <div
                           className="h-full rounded-full bg-rose-500 transition-all duration-300"
-                          style={{ width: `${Math.min(100, Math.max(5, brandBObj.critical_issue_rate || 0))}%` }}
+                          style={{ width: `${Math.min(100, Math.max(5, safeCritB))}%` }}
                         />
                       </div>
                     </div>
 
                     <div className="pt-2 border-t border-slate-200 text-xs text-slate-700 flex items-center justify-between">
-                      <span>총 실차주 제보: <strong className="text-slate-900">{(brandBObj.total_reports || 0).toLocaleString()}건</strong></span>
+                      <span>총 실차주 제보: <strong className="text-slate-900">{safeReportsB.toLocaleString('ko-KR')}건</strong></span>
                       <button
                         type="button"
                         onClick={() => setSelectedBrand(brandBObj.id)}
@@ -2068,7 +2123,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       </button>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
               </div>
 
               {/* Head-to-Head Durability Summary */}
@@ -2258,7 +2314,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 }
               }}
               aria-label="차종 정렬 기준 선택"
-              className="sr-only"
+              className="sr-only focus:not-sr-only focus:px-3 focus:py-2 focus:min-h-[44px] focus:bg-white focus:text-slate-900 focus:border focus:border-blue-600 focus:rounded-xl focus:text-xs focus:font-bold"
             >
               {RELIABILITY_SORT_OPTIONS.map((opt) => (
                 <option key={opt.id} value={opt.id}>{opt.label}</option>
@@ -2321,7 +2377,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             <option value="ALL">전체 브랜드 ({allModels.length}개 차종)</option>
             {brands.map((b) => (
               <option key={`mobile-opt-${b.id}`} value={b.id}>
-                {b.name_ko} ({(b.models || []).length}개 모델) · DSI {b.overall_dsi}점
+                {b.name_ko} ({(b.models || []).length}개 모델) · DSI {Number.isFinite(b.overall_dsi) ? b.overall_dsi : 0}점
               </option>
             ))}
           </select>
@@ -2571,8 +2627,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   </td>
                 </tr>
               ) : (
-                repairCostMatrix.map((item) => (
-                  <RepairCostMatrixRow key={item.component_name} item={item} />
+                repairCostMatrix.map((item, idx) => (
+                  <RepairCostMatrixRow key={`${item.component_name || 'repair'}-${idx}`} item={item} />
                 ))
               )}
             </tbody>
@@ -2687,13 +2743,14 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
                 연식별 세부 평가 데이터가 없습니다.
               </li>
             ) : (
-              model.year_evaluations.map((yEval) => {
+              model.year_evaluations.map((yEval, idx) => {
+                if (!yEval || typeof yEval !== 'object') return null;
                 const vInfo = getVerdictBadgeInfo(yEval.verdict);
                 const safeRate = Number.isFinite(yEval.incident_rate) ? yEval.incident_rate : 0;
 
                 return (
                   <li
-                    key={yEval.year}
+                    key={`${yEval.year ?? 'yr'}-${idx}`}
                     className={`p-2.5 rounded-xl border text-xs space-y-1 ${
                       yEval.verdict === 'AVOID'
                         ? 'bg-rose-50/70 border-rose-200 text-rose-950'

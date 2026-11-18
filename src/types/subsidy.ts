@@ -11,6 +11,8 @@ declare global {
 
 export type AlertSeverity = 'HEALTHY' | 'CAUTION' | 'WARNING' | 'CRITICAL' | 'DEPLETED';
 
+export type SubsidyCategoryKey = 'passenger' | 'commercial' | 'bus';
+
 export type RegionTier =
   | 'special_city'
   | 'metropolitan_city'
@@ -226,7 +228,7 @@ export interface SubsidyCalculationResult {
 }
 
 export interface SubsidyCalculatorOptions {
-  customMsrp?: number | string;
+  customMsrp?: number | string | null;
   isYouthFirstTimeBuyer?: boolean; // +20% national subsidy
   isSmallBusinessOrTaxi?: boolean; // +30% national subsidy
   isMultiChildFamily?: boolean; // +10% national subsidy

@@ -24,11 +24,6 @@
   }
 }
 
-html {
-  overflow-x: hidden;
-  scrollbar-gutter: stable;
-}
-
 /* Smooth scrolling only when user has no reduced motion preference */
 @media (prefers-reduced-motion: no-preference) {
   html {
@@ -36,39 +31,46 @@ html {
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: var(--font-geist-sans), "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
-  font-synthesis: none;
-  font-optical-sizing: auto;
-  word-break: keep-all;
-  overflow-wrap: break-word;
-  overflow-x: hidden;
-  min-height: 100vh;
-  min-height: 100dvh;
-  padding-left: env(safe-area-inset-left, 0px);
-  padding-right: env(safe-area-inset-right, 0px);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-}
+@layer base {
+  html {
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
+  }
 
-/* Prevent Safari/WebKit summary marker layout shift */
-summary::-webkit-details-marker {
-  display: none;
-}
+  body {
+    color: var(--foreground);
+    background: var(--background);
+    font-family: var(--font-geist-sans), "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    font-synthesis: none;
+    font-optical-sizing: auto;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    overflow-x: hidden;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
 
-/* Korean typography readability: preserve word boundaries in titles & paragraphs */
-h1, h2, h3, h4, h5, h6 {
-  word-break: keep-all;
-  overflow-wrap: break-word;
-  text-wrap: balance;
-}
+  /* Prevent Safari/WebKit summary marker layout shift */
+  summary::-webkit-details-marker {
+    display: none;
+  }
 
-p, th, td, label, button, a {
-  word-break: keep-all;
-  overflow-wrap: break-word;
+  /* Korean typography readability: preserve word boundaries in titles & paragraphs */
+  h1, h2, h3, h4, h5, h6 {
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    text-wrap: balance;
+  }
+
+  p, th, td, label, button, a {
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
 }
 
 @layer utilities {

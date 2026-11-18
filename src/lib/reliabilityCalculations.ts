@@ -72,7 +72,7 @@ export type {
  * Parses a number or non-empty numeric string into a finite number, or returns null.
  * Rejects empty/whitespace strings, NaN, Infinity, booleans, and objects.
  */
-function parseFiniteNumber(val: unknown): number | null {
+export function parseFiniteNumber(val: unknown): number | null {
   if (typeof val === 'number') {
     return Number.isFinite(val) ? val : null;
   }
@@ -84,6 +84,40 @@ function parseFiniteNumber(val: unknown): number | null {
   }
   return null;
 }
+
+const VALID_CATEGORY_KEYS: ReadonlySet<DefectCategoryKey> = new Set<DefectCategoryKey>([
+  'BATTERY_CHARGING',
+  'DRIVING_POWERTRAIN',
+  'SOFTWARE_ELECTRONICS',
+  'BUILD_QUALITY',
+  'SERVICE_REPAIR_COST',
+  'COLD_WEATHER',
+]);
+
+export function sanitizeVerdict(val: unknown): ModelYearVerdict {
+  return val === 'BUY_SAFE' || val === 'CAUTION' || val === 'AVOID' ? val : 'CAUTION';
+}
+
+export function sanitizeGrade(val: unknown): OverallReliabilityGrade {
+  return val === 'A+' || val === 'A' || val === 'B' || val === 'C' || val === 'D' || val === 'F'
+    ? val
+    : 'C';
+}
+
+export function sanitizeCategoryKey(
+  val: unknown,
+  fallback: DefectCategoryKey = 'BATTERY_CHARGING'
+): DefectCategoryKey {
+  if (typeof val === 'string') {
+    const upper = val.trim().toUpperCase() as DefectCategoryKey;
+    if (VALID_CATEGORY_KEYS.has(upper)) {
+      return upper;
+    }
+  }
+  return fallback;
+}
+
+const FORBIDDEN_RECORD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 /**
  * Normalizes a raw reliability or DSI score to the strictly bounded [0, 100] interval.
@@ -133,7 +167,7 @@ export function aggregateCategoryComplaintCounts(
   const addCount = (rawKey: unknown, rawCount: unknown) => {
     if (!rawKey || typeof rawKey !== 'string') return;
     const key = rawKey.trim().toUpperCase();
-    if (!key) return;
+    if (!key || FORBIDDEN_RECORD_KEYS.has(key.toLowerCase())) return;
 
     const num = parseFiniteNumber(rawCount);
     const parsedCount = num !== null ? Math.max(0, Math.floor(num)) : 0;
@@ -170,10 +204,10 @@ export function aggregateCategoryComplaintCounts(
       // Case B: Item is a category entry: { category / category_key / code / defect_category, count }
       const entry = item as Record<string, unknown>;
       const catKey =
-        (typeof entry.category === 'string' && entry.category) ||
-        (typeof entry.category_key === 'string' && entry.category_key) ||
-        (typeof entry.code === 'string' && entry.code) ||
-        (typeof entry.defect_category === 'string' && entry.defect_category) ||
+        (typeof entry.category === 'string' && entry.category.trim()) ||
+        (typeof entry.category_key === 'string' && entry.category_key.trim()) ||
+        (typeof entry.code === 'string' && entry.code.trim()) ||
+        (typeof entry.defect_category === 'string' && entry.defect_category.trim()) ||
         '';
 
       addCount(catKey, entry.count);
@@ -182,6 +216,16 @@ export function aggregateCategoryComplaintCounts(
     // Case C: inputs is a ReliabilityTrendsDatabase
     if ('brands' in inputs && Array.isArray((inputs as ReliabilityTrendsDatabase).brands)) {
       return aggregateCategoryComplaintCounts((inputs as ReliabilityTrendsDatabase).brands);
+    }
+
+    // Case C2: inputs is a single BrandReliability object
+    if ('category_distribution' in inputs) {
+      const dist = (inputs as { category_distribution?: unknown }).category_distribution;
+      if (dist && typeof dist === 'object') {
+        return aggregateCategoryComplaintCounts(
+          dist as Parameters<typeof aggregateCategoryComplaintCounts>[0]
+        );
+      }
     }
 
     // Case D: inputs is a Record<string, { count?: unknown } | number>
@@ -201,7 +245,7 @@ export function aggregateCategoryComplaintCounts(
 
   const result: Record<string, { count: number; percentage: number }> = {};
   for (const [key, count] of countMap.entries()) {
-    const percentage = totalCount > 0 ? Math.round((count / totalCount) * 1000) / 10 : 0.0;
+    const percentage = totalCount > 0 ? Math.round((count / totalCount) * 1000) / 10 + 0 : 0.0;
     result[key] = {
       count,
       percentage,
@@ -243,14 +287,18 @@ export function calculateTrendDirection(
   previous: number | unknown,
   thresholdPct: number = 0.1
 ): TrendCalculationResult {
-  const safeCurrent = typeof current === 'number' && Number.isFinite(current) ? current : 0;
-  const safePrevious = typeof previous === 'number' && Number.isFinite(previous) ? previous : 0;
-  const safeThreshold =
-    typeof thresholdPct === 'number' && Number.isFinite(thresholdPct)
-      ? Math.max(0, thresholdPct)
-      : 0.1;
+  const safeCurrent = parseFiniteNumber(current) ?? 0;
+  const safePrevious = parseFiniteNumber(previous) ?? 0;
+  const parsedThreshold = parseFiniteNumber(thresholdPct);
+  const safeThreshold = parsedThreshold !== null ? Math.max(0, parsedThreshold) : 0.1;
 
-  const absoluteChange = Math.round((safeCurrent - safePrevious) * 100) / 100 + 0;
+  const rawAbsChange = safeCurrent - safePrevious;
+  const scaledAbs = rawAbsChange * 100;
+  const absoluteChange = Number.isFinite(scaledAbs)
+    ? Math.round(scaledAbs) / 100 + 0
+    : Number.isFinite(rawAbsChange)
+      ? rawAbsChange + 0
+      : 0;
 
   // Edge case: previous period is 0 (prevents division by zero, Infinity, and NaN)
   if (safePrevious === 0) {
@@ -343,9 +391,9 @@ export function calculateReliabilityKPIs(data?: ReliabilityTrendsDatabase | null
     : [];
   const meta = data?.metadata;
 
-  const rawMetaTotal = parseFiniteNumber(
-    meta?.total_records_analyzed ?? meta?.total_analyzed_posts
-  );
+  const rawMetaTotal =
+    parseFiniteNumber(meta?.total_records_analyzed) ??
+    parseFiniteNumber(meta?.total_analyzed_posts);
   let totalAnalyzedPosts =
     rawMetaTotal !== null && rawMetaTotal > 0 ? Math.floor(rawMetaTotal) : 0;
 
@@ -395,9 +443,9 @@ export function calculateReliabilityKPIs(data?: ReliabilityTrendsDatabase | null
     }
 
     if (totalDsiWeight > 0) {
-      industryAvgDsi = Math.round((weightedDsiSum / totalDsiWeight) * 10) / 10;
+      industryAvgDsi = Math.round((weightedDsiSum / totalDsiWeight) * 10) / 10 + 0;
     } else if (validDsiCount > 0) {
-      industryAvgDsi = Math.round((simpleDsiSum / validDsiCount) * 10) / 10;
+      industryAvgDsi = Math.round((simpleDsiSum / validDsiCount) * 10) / 10 + 0;
     }
   }
 
@@ -434,26 +482,49 @@ export function calculateReliabilityKPIs(data?: ReliabilityTrendsDatabase | null
  * Returns a flattened array of all models enriched with brand information from a given database.
  * Pure function: operates directly on the provided data without importing raw JSON.
  */
-export function getAllEnrichedModels(data?: ReliabilityTrendsDatabase): EnrichedModelItem[] {
+export function getAllEnrichedModels(data?: ReliabilityTrendsDatabase | null): EnrichedModelItem[] {
   if (!data || !Array.isArray(data.brands)) return [];
   const result: EnrichedModelItem[] = [];
   const brands = data.brands;
 
   for (const brand of brands) {
     if (!brand || typeof brand !== 'object') continue;
+    const safeBrandId = typeof brand.id === 'string' ? brand.id : '';
     const models = Array.isArray(brand.models) ? brand.models : [];
     for (const model of models) {
       if (!model || typeof model !== 'object') continue;
       result.push({
         ...model,
+        id: typeof model.id === 'string' ? model.id : '',
+        name: typeof model.name === 'string' ? model.name : '',
+        segment: typeof model.segment === 'string' ? model.segment : '',
+        brand_id: typeof model.brand_id === 'string' && model.brand_id ? model.brand_id : safeBrandId,
+        overall_grade: sanitizeGrade(model.overall_grade),
         avg_dsi: normalizeReliabilityScore(model.avg_dsi, 0),
+        top_category: sanitizeCategoryKey(model.top_category),
         year_evaluations: Array.isArray(model.year_evaluations)
           ? model.year_evaluations
               .filter((y): y is YearEvaluation => Boolean(y && typeof y === 'object'))
-              .map((y) => ({
-                ...y,
-                dsi_score: normalizeReliabilityScore(y.dsi_score, 0),
-              }))
+              .map((y) => {
+                const parsedYear = parseFiniteNumber(y.year);
+                const parsedIncident = parseFiniteNumber(y.incident_rate);
+                return {
+                  ...y,
+                  year: parsedYear !== null ? Math.floor(parsedYear) : 0,
+                  dsi_score: normalizeReliabilityScore(y.dsi_score, 0),
+                  incident_rate:
+                    parsedIncident !== null
+                      ? Math.max(0, Math.min(100, parsedIncident))
+                      : 0,
+                  primary_defect: typeof y.primary_defect === 'string' ? y.primary_defect : '',
+                  estimated_repair_cost:
+                    typeof y.estimated_repair_cost === 'string' ? y.estimated_repair_cost : '',
+                  chronic_symptoms: Array.isArray(y.chronic_symptoms)
+                    ? y.chronic_symptoms.filter((s): s is string => typeof s === 'string')
+                    : [],
+                  raw_quote: typeof y.raw_quote === 'string' ? y.raw_quote : '',
+                };
+              })
           : [],
         brand_name_ko: typeof brand.name_ko === 'string' ? brand.name_ko : '',
         brand_name_en: typeof brand.name_en === 'string' ? brand.name_en : '',
@@ -599,7 +670,7 @@ export function getGradeBadgeStyle(grade: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F' | s
  */
 export function getModelReliabilityById(
   modelId: string,
-  data?: ReliabilityTrendsDatabase
+  data?: ReliabilityTrendsDatabase | null
 ): EnrichedModelItem | undefined {
   if (!modelId || typeof modelId !== 'string') return undefined;
   const normalized = modelId.trim().toLowerCase().replace(/[\s\-_]+/g, '');
@@ -639,11 +710,13 @@ export function getModelReliabilityById(
  */
 export function getDefectsForModel(
   modelId: string,
-  data?: ReliabilityTrendsDatabase
+  data?: ReliabilityTrendsDatabase | null
 ): YearEvaluation[] {
   const model = getModelReliabilityById(modelId, data);
   if (!model || !Array.isArray(model.year_evaluations)) return [];
-  return model.year_evaluations.filter((y: YearEvaluation) => Boolean(y && typeof y === 'object' && y.verdict));
+  return model.year_evaluations.filter((y: YearEvaluation) =>
+    Boolean(y && typeof y === 'object' && typeof y.verdict === 'string' && y.verdict.trim())
+  );
 }
 
 /**
@@ -651,7 +724,7 @@ export function getDefectsForModel(
  */
 export function getBrandReliabilityById(
   brandId: string,
-  data?: ReliabilityTrendsDatabase
+  data?: ReliabilityTrendsDatabase | null
 ): BrandReliability | undefined {
   if (!brandId || typeof brandId !== 'string') return undefined;
   const normalized = brandId.trim().toLowerCase();
@@ -661,22 +734,22 @@ export function getBrandReliabilityById(
     : [];
 
   const exactId = brands.find(
-    (b) => typeof b.id === 'string' && b.id.toLowerCase() === normalized
+    (b) => typeof b.id === 'string' && b.id.trim().toLowerCase() === normalized
   );
   if (exactId) return exactId;
 
   const exactName = brands.find(
     (b) =>
-      (typeof b.name_ko === 'string' && b.name_ko.toLowerCase() === normalized) ||
-      (typeof b.name_en === 'string' && b.name_en.toLowerCase() === normalized)
+      (typeof b.name_ko === 'string' && b.name_ko.trim().toLowerCase() === normalized) ||
+      (typeof b.name_en === 'string' && b.name_en.trim().toLowerCase() === normalized)
   );
   if (exactName) return exactName;
 
-  return brands.find(
-    (b) =>
-      (typeof b.name_ko === 'string' && b.name_ko.toLowerCase().includes(normalized)) ||
-      (typeof b.name_en === 'string' && b.name_en.toLowerCase().includes(normalized))
-  );
+  return brands.find((b) => {
+    const ko = typeof b.name_ko === 'string' ? b.name_ko.trim().toLowerCase() : '';
+    const en = typeof b.name_en === 'string' ? b.name_en.trim().toLowerCase() : '';
+    return (ko.length > 0 && ko.includes(normalized)) || (en.length > 0 && en.includes(normalized));
+  });
 }
 
 // ==========================================
@@ -805,11 +878,14 @@ export function calculateWeightedDefectFrequency(
   let totalComplaints = 0;
   let weightedSum = 0;
 
-  const weights: Record<string, number> = { ...DEFAULT_CATEGORY_SEVERITY_WEIGHTS };
+  const weights = new Map<string, number>(Object.entries(DEFAULT_CATEGORY_SEVERITY_WEIGHTS));
   if (customWeights && typeof customWeights === 'object') {
     for (const [k, v] of Object.entries(customWeights)) {
-      if (typeof k === 'string' && typeof v === 'number' && Number.isFinite(v) && v > 0) {
-        weights[k.trim().toUpperCase() as DefectCategoryKey] = v;
+      if (typeof k === 'string') {
+        const parsedWeight = parseFiniteNumber(v);
+        if (parsedWeight !== null && parsedWeight > 0) {
+          weights.set(k.trim().toUpperCase(), parsedWeight);
+        }
       }
     }
   }
@@ -818,10 +894,8 @@ export function calculateWeightedDefectFrequency(
     const count = data.count || 0;
     if (count <= 0) continue;
     totalComplaints += count;
-    const weight =
-      typeof weights[cat] === 'number' && Number.isFinite(weights[cat]) && weights[cat] > 0
-        ? weights[cat]
-        : 1.0;
+    const w = weights.get(cat);
+    const weight = w !== undefined && Number.isFinite(w) && w > 0 ? w : 1.0;
     weightedSum += count * weight;
   }
 
@@ -836,13 +910,15 @@ export function calculateWeightedDefectFrequency(
     volume = Math.max(0, directVol);
   } else if (totalVolumeOrReports && typeof totalVolumeOrReports === 'object') {
     const opts = totalVolumeOrReports as DefectFrequencyOptions;
-    const rawV = opts.fleetOrSalesVolume ?? (opts as Record<string, unknown>).volume;
-    const parsedV = parseFiniteNumber(rawV);
+    const parsedV =
+      parseFiniteNumber(opts.fleetOrSalesVolume) ??
+      parseFiniteNumber((opts as Record<string, unknown>).volume);
     if (parsedV !== null) {
       volume = Math.max(0, parsedV);
     }
-    if (typeof opts.baselineScale === 'number' && Number.isFinite(opts.baselineScale) && opts.baselineScale > 0) {
-      scale = opts.baselineScale;
+    const parsedScale = parseFiniteNumber(opts.baselineScale);
+    if (parsedScale !== null && parsedScale > 0) {
+      scale = parsedScale;
     }
   }
 
@@ -954,10 +1030,10 @@ export function calculateStealthScore(input?: StealthScoreInput | null): Stealth
 
   // Raw defect penalty [0, 100]
   const rawDefectPenalty = wDsi * safeDsi + wInc * safeIncidentRate + wCrit * safeCriticalRate;
-  const defectPenalty = Math.max(0, Math.min(100, Math.round(rawDefectPenalty * 10) / 10));
+  const defectPenalty = Math.max(0, Math.min(100, Math.round(rawDefectPenalty * 10) / 10)) + 0;
 
   // Raw stealth score (100 - defect penalty)
-  const rawStealthScore = Math.round((100 - defectPenalty) * 10) / 10;
+  const rawStealthScore = Math.round((100 - defectPenalty) * 10) / 10 + 0;
 
   // Statistical confidence score [0.0, 1.0]
   const confidenceScore = calculateReliabilityConfidence(safeComplaints, safeYears);
@@ -967,7 +1043,7 @@ export function calculateStealthScore(input?: StealthScoreInput | null): Stealth
   const baselineDsi = rawBaseline !== undefined && rawBaseline !== null
     ? normalizeReliabilityScore(rawBaseline, 50.0)
     : 50.0;
-  const baselineStealth = Math.round((100 - baselineDsi) * 10) / 10;
+  const baselineStealth = Math.round((100 - baselineDsi) * 10) / 10 + 0;
 
   // Smoothed stealth score prevents 0-complaint or untested models from claiming 100% perfection
   const smoothedStealth = Math.max(
@@ -976,17 +1052,16 @@ export function calculateStealthScore(input?: StealthScoreInput | null): Stealth
       100,
       Math.round((confidenceScore * rawStealthScore + (1 - confidenceScore) * baselineStealth) * 10) / 10
     )
-  );
+  ) + 0;
 
   // Volume-aware normalized defect frequency
-  const rawVolume = input?.fleetOrSalesVolume ?? input?.fleetVolume ?? input?.salesVolume;
-  const scale =
-    typeof input?.baselineScale === 'number' &&
-    Number.isFinite(input.baselineScale) &&
-    input.baselineScale > 0
-      ? input.baselineScale
-      : 1000;
-  const normalizedDefectFrequency = rawVolume !== undefined && rawVolume !== null
+  const rawVolume =
+    parseFiniteNumber(input?.fleetOrSalesVolume) ??
+    parseFiniteNumber(input?.fleetVolume) ??
+    parseFiniteNumber(input?.salesVolume);
+  const parsedScale = parseFiniteNumber(input?.baselineScale);
+  const scale = parsedScale !== null && parsedScale > 0 ? parsedScale : 1000;
+  const normalizedDefectFrequency = rawVolume !== null
     ? normalizeDefectFrequency(safeComplaints, rawVolume, scale)
     : normalizeDefectFrequency(safeComplaints, 1000, 1000);
 
@@ -1016,7 +1091,7 @@ export function calculateStealthScore(input?: StealthScoreInput | null): Stealth
 export function getModelYearEvaluation(
   modelId: string,
   year: number | string,
-  data?: ReliabilityTrendsDatabase
+  data?: ReliabilityTrendsDatabase | null
 ): YearEvaluation | undefined {
   if (!modelId || typeof modelId !== 'string') return undefined;
   const numYear = parseFiniteNumber(year);
@@ -1032,15 +1107,19 @@ export function getModelYearEvaluation(
   });
   if (!target) return undefined;
 
+  const parsedIncident = parseFiniteNumber(target.incident_rate);
   return {
     ...target,
-    year: Math.floor(Number(target.year)),
+    year: Math.floor(numYear) + 0,
+    verdict: sanitizeVerdict(target.verdict),
     dsi_score: normalizeReliabilityScore(target.dsi_score, 50.0),
     incident_rate:
-      typeof target.incident_rate === 'number' && Number.isFinite(target.incident_rate)
-        ? Math.max(0, Math.min(100, target.incident_rate))
+      parsedIncident !== null
+        ? Math.max(0, Math.min(100, parsedIncident))
         : 0,
-    chronic_symptoms: Array.isArray(target.chronic_symptoms) ? target.chronic_symptoms : [],
+    chronic_symptoms: Array.isArray(target.chronic_symptoms)
+      ? target.chronic_symptoms.filter((s): s is string => typeof s === 'string')
+      : [],
     primary_defect: typeof target.primary_defect === 'string' ? target.primary_defect : '',
     estimated_repair_cost: typeof target.estimated_repair_cost === 'string' ? target.estimated_repair_cost : '',
     raw_quote: typeof target.raw_quote === 'string' ? target.raw_quote : '',
@@ -1053,7 +1132,7 @@ export function getModelYearEvaluation(
  */
 export function resolveBrandReliability(
   brandQuery: string,
-  data?: ReliabilityTrendsDatabase
+  data?: ReliabilityTrendsDatabase | null
 ): BrandReliability | undefined {
   if (!brandQuery || typeof brandQuery !== 'string') return undefined;
   const clean = brandQuery.trim().toLowerCase();
@@ -1065,21 +1144,21 @@ export function resolveBrandReliability(
   if (brands.length === 0) return undefined;
 
   // Exact ID match
-  const exact = brands.find((b) => typeof b.id === 'string' && b.id.toLowerCase() === clean);
+  const exact = brands.find((b) => typeof b.id === 'string' && b.id.trim().toLowerCase() === clean);
   if (exact) return exact;
 
   // Exact name match
   const nameExact = brands.find(
     (b) =>
-      (typeof b.name_en === 'string' && b.name_en.toLowerCase() === clean) ||
-      (typeof b.name_ko === 'string' && b.name_ko.toLowerCase() === clean)
+      (typeof b.name_en === 'string' && b.name_en.trim().toLowerCase() === clean) ||
+      (typeof b.name_ko === 'string' && b.name_ko.trim().toLowerCase() === clean)
   );
   if (nameExact) return nameExact;
 
   // Substring match
   return brands.find((b) => {
-    const en = typeof b.name_en === 'string' ? b.name_en.toLowerCase() : '';
-    const ko = typeof b.name_ko === 'string' ? b.name_ko.toLowerCase() : '';
+    const en = typeof b.name_en === 'string' ? b.name_en.trim().toLowerCase() : '';
+    const ko = typeof b.name_ko === 'string' ? b.name_ko.trim().toLowerCase() : '';
     return (
       (en.length > 0 && (en.includes(clean) || clean.includes(en))) ||
       (ko.length > 0 && (ko.includes(clean) || clean.includes(ko)))
@@ -1118,7 +1197,7 @@ export function getSafeDefaultBrandReliability(brandId: string = 'unknown'): Bra
 export function getBrandWithFallback(
   brandId: string,
   fallback?: BrandReliability,
-  data?: ReliabilityTrendsDatabase
+  data?: ReliabilityTrendsDatabase | null
 ): BrandReliability {
   const resolved = resolveBrandReliability(brandId, data) || getBrandReliabilityById(brandId, data);
   if (resolved) return resolved;
@@ -1172,11 +1251,15 @@ const STABLE_ZERO_TREND: TrendCalculationResult = {
   isStable: true,
 };
 
-function parseValidDateString(dateVal: string | Date): string | null {
+function parseValidDateString(dateVal: unknown): string | null {
   if (dateVal instanceof Date) {
     return Number.isNaN(dateVal.getTime()) ? null : dateVal.toISOString();
   }
-  return typeof dateVal === 'string' ? dateVal.trim() : String(dateVal).trim();
+  if (typeof dateVal === 'string') {
+    const trimmed = dateVal.trim();
+    return trimmed ? trimmed : null;
+  }
+  return null;
 }
 
 function parsePeriodicMetrics(item: PeriodicDefectInput): {
@@ -1246,11 +1329,11 @@ function buildPeriodSummary(
   const g = groups.get(key)!;
 
   const percentage = grandTotalComplaints > 0
-    ? Math.round((g.totalComplaints / grandTotalComplaints) * 1000) / 10
+    ? Math.round((g.totalComplaints / grandTotalComplaints) * 1000) / 10 + 0
     : 0.0;
 
   const avgDsi = g.dsiCount > 0
-    ? Math.round((g.dsiWeightedSum / g.dsiCount) * 10) / 10
+    ? Math.round((g.dsiWeightedSum / g.dsiCount) * 10) / 10 + 0
     : 50.0;
 
   let topCategory: DefectCategoryKey | string = 'NONE';
@@ -1260,7 +1343,7 @@ function buildPeriodSummary(
   for (const [cat, cnt] of g.categoryCounts.entries()) {
     categoryDistribution[cat] = {
       count: cnt,
-      percentage: g.totalComplaints > 0 ? Math.round((cnt / g.totalComplaints) * 1000) / 10 : 0.0,
+      percentage: g.totalComplaints > 0 ? Math.round((cnt / g.totalComplaints) * 1000) / 10 + 0 : 0.0,
     };
     if (cnt > maxCatCount) {
       maxCatCount = cnt;
@@ -1278,7 +1361,7 @@ function buildPeriodSummary(
   for (let w = windowStart; w <= index; w++) {
     windowSum += groups.get(sortedKeys[w])!.totalComplaints;
   }
-  const movingAverage3 = Math.round((windowSum / (index - windowStart + 1)) * 10) / 10;
+  const movingAverage3 = Math.round((windowSum / (index - windowStart + 1)) * 10) / 10 + 0;
 
   return {
     periodKey: key,
@@ -1343,15 +1426,15 @@ export function aggregateQuarterlyDefectBreakdown(
     }
 
     // 3. Date string or Date object parsing
-    if ((!year || !quarter) && item.date) {
+    if ((year === null || quarter === null) && item.date) {
       const dateStr = parseValidDateString(item.date);
       if (dateStr) {
         const qMatch = dateStr.match(/^(\d{4})[-/. ]*Q([1-4])/i);
         if (qMatch) {
           const parsedY = Number(qMatch[1]);
           if (parsedY >= 1990 && parsedY <= 2100) {
-            year = parsedY;
-            quarter = Number(qMatch[2]) as 1 | 2 | 3 | 4;
+            if (year === null) year = parsedY;
+            if (quarter === null) quarter = Number(qMatch[2]) as 1 | 2 | 3 | 4;
           }
         } else {
           const dMatch = dateStr.match(/^(\d{4})[-/. ](\d{1,2})/);
@@ -1359,8 +1442,8 @@ export function aggregateQuarterlyDefectBreakdown(
             const parsedY = Number(dMatch[1]);
             const m = Number(dMatch[2]);
             if (parsedY >= 1990 && parsedY <= 2100 && m >= 1 && m <= 12) {
-              year = parsedY;
-              quarter = Math.ceil(m / 3) as 1 | 2 | 3 | 4;
+              if (year === null) year = parsedY;
+              if (quarter === null) quarter = Math.ceil(m / 3) as 1 | 2 | 3 | 4;
             }
           }
         }
@@ -1435,7 +1518,7 @@ export function aggregateMonthlyDefectBreakdown(
       month = Math.floor(directMonth);
     }
 
-    if ((!year || !month) && item.date) {
+    if ((year === null || month === null) && item.date) {
       const dateStr = parseValidDateString(item.date);
       if (dateStr) {
         const dMatch = dateStr.match(/^(\d{4})[-/. ](\d{1,2})/);
@@ -1443,8 +1526,8 @@ export function aggregateMonthlyDefectBreakdown(
           const parsedY = Number(dMatch[1]);
           const m = Number(dMatch[2]);
           if (parsedY >= 1990 && parsedY <= 2100 && m >= 1 && m <= 12) {
-            year = parsedY;
-            month = m;
+            if (year === null) year = parsedY;
+            if (month === null) month = m;
           }
         }
       }
@@ -1462,7 +1545,11 @@ export function aggregateMonthlyDefectBreakdown(
     );
   }
 
-  const sortedKeys = Array.from(groups.keys()).sort();
+  const sortedKeys = Array.from(groups.keys()).sort((a, b) => {
+    const [yA, mA] = a.split('-').map(Number);
+    const [yB, mB] = b.split('-').map(Number);
+    return yA !== yB ? yA - yB : mA - mB;
+  });
   const results: MonthlyDefectBreakdown[] = [];
 
   for (let i = 0; i < sortedKeys.length; i++) {
@@ -1507,24 +1594,27 @@ export function calculateModelYearDefectTrajectory(
     if (Array.isArray(model.year_evaluations)) {
       evals = model.year_evaluations;
     }
-    if (typeof model.id === 'string' && model.id) mId = model.id;
-    if (typeof model.name === 'string' && model.name) mName = model.name;
-    if ('brand_name_ko' in model && typeof model.brand_name_ko === 'string' && model.brand_name_ko) {
+    if (typeof model.id === 'string' && model.id.trim()) mId = model.id;
+    if (typeof model.name === 'string' && model.name.trim()) mName = model.name;
+    if ('brand_name_ko' in model && typeof model.brand_name_ko === 'string' && model.brand_name_ko.trim()) {
       bName = model.brand_name_ko;
     }
   }
 
-  const validEvals = evals
-    .filter((e): e is YearEvaluation => Boolean(e && typeof e === 'object' && Number.isFinite(e.year)))
-    .map((e) => ({
+  const validEvals: YearEvaluation[] = [];
+  for (const e of evals) {
+    if (!e || typeof e !== 'object') continue;
+    const parsedYear = parseFiniteNumber(e.year);
+    if (parsedYear === null) continue;
+    const parsedIncident = parseFiniteNumber(e.incident_rate);
+    validEvals.push({
       ...e,
-      year: Math.floor(e.year),
+      year: Math.floor(parsedYear) + 0,
       dsi_score: normalizeReliabilityScore(e.dsi_score, 50.0),
-      incident_rate: typeof e.incident_rate === 'number' && Number.isFinite(e.incident_rate)
-        ? Math.max(0, Math.min(100, e.incident_rate))
-        : 0,
-    }))
-    .sort((a, b) => a.year - b.year);
+      incident_rate: parsedIncident !== null ? Math.max(0, Math.min(100, parsedIncident)) : 0,
+    });
+  }
+  validEvals.sort((a, b) => a.year - b.year);
 
   if (validEvals.length === 0) {
     return {
@@ -1577,9 +1667,14 @@ export function calculateModelYearDefectTrajectory(
     }
 
     if (Array.isArray(curr.chronic_symptoms)) {
+      const seenInYear = new Set<string>();
       for (const sym of curr.chronic_symptoms) {
-        if (typeof sym === 'string' && sym.trim()) {
-          chronicMap.set(sym.trim(), (chronicMap.get(sym.trim()) || 0) + 1);
+        if (typeof sym === 'string') {
+          const cleanSym = sym.trim();
+          if (cleanSym && !seenInYear.has(cleanSym)) {
+            seenInYear.add(cleanSym);
+            chronicMap.set(cleanSym, (chronicMap.get(cleanSym) || 0) + 1);
+          }
         }
       }
     }

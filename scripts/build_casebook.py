@@ -140,16 +140,18 @@ def build_case_studies_section(category_key: str, category_title: str, complaint
     ]
 
     for idx, c in enumerate(category_cases, 1):
-        case_id = c["id"]
-        post_title = c["post_title"]
-        vehicle = c["target_vehicle"]
-        platform = c["platform"]
-        board_name = c["board_name"]
-        post_url = c["post_url"]
-        topic = c["defect_topic"]
-        quote = c["raw_quote"]
+        if not isinstance(c, dict):
+            continue
+        case_id = c.get("id", f"UNKNOWN_{idx}")
+        post_title = c.get("post_title", "")
+        vehicle = c.get("target_vehicle", "")
+        platform = c.get("platform", "")
+        board_name = c.get("board_name", "")
+        post_url = c.get("post_url", "")
+        topic = c.get("defect_topic", "")
+        quote = c.get("raw_quote", "")
         severity = c.get("severity", "functional_failure")
-        slangs = c.get("slang_terms", [])
+        slangs = c.get("slang_terms") or []
         slang_display = ", ".join([f"`{s}`" for s in slangs]) if slangs else "해당 없음 (일반 불만)"
 
         lines.extend([
@@ -199,17 +201,18 @@ def build_source_index_section(complaints: List[Dict[str, Any]]) -> str:
     vehicle_counts: Dict[str, int] = {}
     cat_counts: Dict[str, int] = {}
 
-    for c in complaints:
-        p = c["platform"]
-        v = c["target_vehicle"]
-        cat = c["category"]
+    valid_complaints = [c for c in (complaints or []) if isinstance(c, dict)]
+    for c in valid_complaints:
+        p = c.get("platform") or "unknown"
+        v = c.get("target_vehicle") or "Unknown EV"
+        cat = c.get("category") or "unknown"
         platform_counts[p] = platform_counts.get(p, 0) + 1
         vehicle_counts[v] = vehicle_counts.get(v, 0) + 1
         cat_counts[cat] = cat_counts.get(cat, 0) + 1
 
     lines.append("| 플랫폼 (Platform) | 수집 사례 수 (Cases) | 비율 (%) | 대표 게시판 |")
     lines.append("|---|---|---|---|")
-    total_complaints = len(complaints) or 1
+    total_complaints = len(valid_complaints) or 1
     for p, cnt in sorted(platform_counts.items(), key=lambda x: x[1], reverse=True):
         ratio = (cnt / total_complaints) * 100
         lines.append(f"| `{p}` | {cnt}건 | {ratio:.1f}% | 보배드림 국산차/수입차/자유, 디시 전기차갤, 네이버 카페 등 |")
@@ -223,10 +226,10 @@ def build_source_index_section(complaints: List[Dict[str, Any]]) -> str:
     ])
 
     for v in sorted(vehicle_counts.keys()):
-        p_c = sum(1 for c in complaints if c["target_vehicle"] == v and c["category"] == "parking")
-        c_c = sum(1 for c in complaints if c["target_vehicle"] == v and c["category"] == "charging")
-        r_c = sum(1 for c in complaints if c["target_vehicle"] == v and c["category"] == "rain_driving")
-        h_c = sum(1 for c in complaints if c["target_vehicle"] == v and c["category"] == "hill_climbing")
+        p_c = sum(1 for c in valid_complaints if c.get("target_vehicle") == v and c.get("category") == "parking")
+        c_c = sum(1 for c in valid_complaints if c.get("target_vehicle") == v and c.get("category") == "charging")
+        r_c = sum(1 for c in valid_complaints if c.get("target_vehicle") == v and c.get("category") == "rain_driving")
+        h_c = sum(1 for c in valid_complaints if c.get("target_vehicle") == v and c.get("category") == "hill_climbing")
         tot = p_c + c_c + r_c + h_c
         lines.append(f"| **{v}** | {p_c}건 | {c_c}건 | {r_c}건 | {h_c}건 | **{tot}건** |")
 
@@ -238,13 +241,13 @@ def build_source_index_section(complaints: List[Dict[str, Any]]) -> str:
         "|---|---|---|---|---|---|",
     ])
 
-    for c in complaints:
-        cid = c["id"]
-        cat = c["category"]
-        veh = c["target_vehicle"]
-        plat = c["platform"]
-        board = c["board_name"]
-        url = c["post_url"]
+    for c in valid_complaints:
+        cid = c.get("id", "")
+        cat = c.get("category", "")
+        veh = c.get("target_vehicle", "")
+        plat = c.get("platform", "")
+        board = c.get("board_name", "")
+        url = c.get("post_url", "")
         lines.append(f"| `{cid}` | `{cat}` | {veh} | `{plat}` | {board} | [링크 바로가기]({url}) |")
 
     lines.extend([

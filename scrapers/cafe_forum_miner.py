@@ -19,7 +19,7 @@ import sys
 import time
 import urllib.parse
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 # Ensure parent directory is in path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -90,6 +90,7 @@ class CafeForumMiner:
         )
         self.slang_dict = self._load_slang_dict()
         self.post_cache: Dict[str, Dict[str, Any]] = {}
+        self._warmed_up_hosts: Set[str] = set()
 
     def close(self, force: bool = False) -> None:
         """Release HTTP client resources if owned by this miner."""
@@ -126,12 +127,19 @@ class CafeForumMiner:
                 logger.warning(f"Failed to load slang dictionary from {self.slang_path}: {e}")
         return {}
 
+    def _ensure_warm_up(self, base_url: str) -> None:
+        if base_url not in self._warmed_up_hosts:
+            if self.client and hasattr(self.client, "warm_up_session"):
+                self.client.warm_up_session(base_url)
+            self._warmed_up_hosts.add(base_url)
+
     def mine_pomppu(self, keyword: str, max_pages: int = 1) -> List[Dict[str, Any]]:
         """
         Search Pomppu car forum using EUC-KR encoding.
         """
-        self.client.warm_up_session(POMPPU_BASE_URL)
+        self._ensure_warm_up(POMPPU_BASE_URL)
         results = []
+        seen_urls: Set[str] = set()
         kw_str = str(keyword or "")
         try:
             eff_pages = max(1, int(max_pages))
@@ -160,7 +168,13 @@ class CafeForumMiner:
                 break
 
             items = self.parse_pomppu_list(text)
-            results.extend(items)
+            if not items:
+                break
+            new_items = [it for it in items if it.get("url") not in seen_urls]
+            if not new_items:
+                break
+            seen_urls.update(it["url"] for it in new_items if it.get("url"))
+            results.extend(new_items)
 
         return results
 
@@ -190,8 +204,9 @@ class CafeForumMiner:
 
     def mine_clien(self, keyword: str, max_pages: int = 1) -> List[Dict[str, Any]]:
         """Search Clien Allpark/Car board."""
-        self.client.warm_up_session(CLIEN_BASE_URL)
+        self._ensure_warm_up(CLIEN_BASE_URL)
         results = []
+        seen_urls: Set[str] = set()
         kw_str = str(keyword or "")
         try:
             eff_pages = max(1, int(max_pages))
@@ -216,7 +231,13 @@ class CafeForumMiner:
                 break
 
             items = self.parse_clien_list(text)
-            results.extend(items)
+            if not items:
+                break
+            new_items = [it for it in items if it.get("url") not in seen_urls]
+            if not new_items:
+                break
+            seen_urls.update(it["url"] for it in new_items if it.get("url"))
+            results.extend(new_items)
 
         return results
 
@@ -351,7 +372,7 @@ class CafeForumMiner:
                                         post_url=item.get("post_url") or item.get("url") or "",
                                         post_title=item.get("post_title") or item.get("title") or "",
                                         target_vehicle=item.get("target_vehicle") or "Unknown",
-                                        category=item.get("category") or "convenience",
+                                        category=item.get("category") or "repair_as",
                                         defect_topic=item.get("defect_topic") or "",
                                         raw_quote=item.get("raw_quote") or item.get("content") or "",
                                         slang_terms=item.get("slang_terms") if isinstance(item.get("slang_terms"), list) else [],
@@ -438,26 +459,26 @@ def main():
     parser.add_argument("--output", type=str, default="/Users/a7890/src/my-e-car/data/forum_complaints.json", help="Output path")
     args = parser.parse_args()
 
-    miner = CafeForumMiner()
-    pomppu_items = []
-    consecutive_failures = 0
-    for kw in args.keywords:
-        if consecutive_failures >= 5:
-            logger.warning("Halting Pomppu mining due to consecutive network failures / circuit trips.")
-            break
-        items = miner.mine_pomppu(kw, max_pages=1)
-        if not items:
-            consecutive_failures += 1
-        else:
-            consecutive_failures = 0
-        pomppu_items.extend(items)
+    with CafeForumMiner() as miner:
+        pomppu_items = []
+        consecutive_failures = 0
+        for kw in args.keywords:
+            if consecutive_failures >= 5:
+                logger.warning("Halting Pomppu mining due to consecutive network failures / circuit trips.")
+                break
+            items = miner.mine_pomppu(kw, max_pages=1)
+            if not items:
+                consecutive_failures += 1
+            else:
+                consecutive_failures = 0
+            pomppu_items.extend(items)
 
-    if not pomppu_items and miner.cache_fallback:
-        logger.warning("No items mined from live forums. Falling back to seed datasets.")
-        fallback_records = miner.load_seed_records(limit=10)
-        print(f"Loaded {len(fallback_records)} fallback records from seed datasets.")
-    else:
-        print(f"Mined {len(pomppu_items)} raw items from Pomppu.")
+        if not pomppu_items and miner.cache_fallback:
+            logger.warning("No items mined from live forums. Falling back to seed datasets.")
+            fallback_records = miner.load_seed_records(limit=10)
+            print(f"Loaded {len(fallback_records)} fallback records from seed datasets.")
+        else:
+            print(f"Mined {len(pomppu_items)} raw items from Pomppu.")
 
 
 if __name__ == "__main__":

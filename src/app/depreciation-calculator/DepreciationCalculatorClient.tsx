@@ -102,7 +102,7 @@ const FALLBACK_REPLACEMENT_TIER = {
 const MAX_BATTERY_SIMULATION_CACHE_ENTRIES = 100;
 
 export const getChemistryBadge = (chem: string) => {
-  const upper = chem.toUpperCase();
+  const upper = String(chem ?? '').toUpperCase();
   if (upper.includes('LFP')) {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-950 border border-emerald-500 shadow-sm">
@@ -139,7 +139,8 @@ export const getChemistryBadge = (chem: string) => {
 };
 
 export const getDefenseTierBadge = (tier: string) => {
-  switch (tier) {
+  const safeTier = tier || 'D';
+  switch (safeTier) {
     case 'S':
       return (
         <span className="px-2 py-0.5 rounded text-xs font-bold bg-amber-400 text-slate-950 shadow-sm border border-amber-500">
@@ -150,7 +151,7 @@ export const getDefenseTierBadge = (tier: string) => {
     case 'A-':
       return (
         <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-800 text-white shadow-sm border border-emerald-700">
-          Tier {tier} (우수)
+          Tier {safeTier} (우수)
         </span>
       );
     case 'B+':
@@ -158,21 +159,21 @@ export const getDefenseTierBadge = (tier: string) => {
     case 'B-':
       return (
         <span className="px-2 py-0.5 rounded text-xs font-bold bg-blue-800 text-white shadow-sm border border-blue-700">
-          Tier {tier} (보통)
+          Tier {safeTier} (보통)
         </span>
       );
     case 'C+':
     case 'C':
       return (
         <span className="px-2 py-0.5 rounded text-xs font-bold bg-orange-800 text-white shadow-sm border border-orange-700">
-          Tier {tier} (주의)
+          Tier {safeTier} (주의)
         </span>
       );
     case 'D':
     default:
       return (
         <span className="px-2 py-0.5 rounded text-xs font-bold bg-red-800 text-white shadow-sm border border-red-700">
-          Tier {tier} (위험)
+          Tier {safeTier} (위험)
         </span>
       );
   }
@@ -223,8 +224,14 @@ const ModelGridCard = memo(function ModelGridCard({
   isSelected,
   onSelect,
 }: ModelGridCardProps) {
-  const msrpManWon = Math.round((model.msrp_krw_baseline ?? 55_000_000) / 10000);
-  const netManWon = Math.round((model.net_purchase_price_krw ?? 48_000_000) / 10000);
+  const msrpRaw = Number.isFinite(model.msrp_krw_baseline) && model.msrp_krw_baseline >= 0
+    ? model.msrp_krw_baseline
+    : 55_000_000;
+  const netRaw = Number.isFinite(model.net_purchase_price_krw) && model.net_purchase_price_krw >= 0
+    ? model.net_purchase_price_krw
+    : 48_000_000;
+  const msrpManWon = Math.round(msrpRaw / 10000);
+  const netManWon = Math.round(netRaw / 10000);
 
   return (
     <button
@@ -406,19 +413,31 @@ export default function DepreciationCalculatorClient({
     if (parsedCustomPrice !== null && Number.isFinite(parsedCustomPrice) && parsedCustomPrice >= 0) {
       return Math.min(10_000_000_000, Math.floor(parsedCustomPrice));
     }
-    return priceBasis === 'effective'
-      ? (selectedModel?.net_purchase_price_krw ?? 48_000_000)
-      : (selectedModel?.msrp_krw_baseline ?? 55_000_000);
+    const defaultNet =
+      Number.isFinite(selectedModel?.net_purchase_price_krw) && selectedModel.net_purchase_price_krw >= 0
+        ? selectedModel.net_purchase_price_krw
+        : 48_000_000;
+    const defaultMsrp =
+      Number.isFinite(selectedModel?.msrp_krw_baseline) && selectedModel.msrp_krw_baseline >= 0
+        ? selectedModel.msrp_krw_baseline
+        : 55_000_000;
+    return priceBasis === 'effective' ? defaultNet : defaultMsrp;
   }, [parsedCustomPrice, priceBasis, selectedModel]);
 
   // Subsidy breakdown for selected model
+  const safeAvgSubsidy = useMemo(() => {
+    return Number.isFinite(selectedModel?.avg_subsidy_krw) && selectedModel.avg_subsidy_krw >= 0
+      ? selectedModel.avg_subsidy_krw
+      : 7_000_000;
+  }, [selectedModel?.avg_subsidy_krw]);
+
   const defaultLocalSubsidy = useMemo(() => {
-    return Math.round((selectedModel?.avg_subsidy_krw ?? 7_000_000) * 0.45);
-  }, [selectedModel]);
+    return Math.round(safeAvgSubsidy * 0.45);
+  }, [safeAvgSubsidy]);
 
   const defaultNationalSubsidy = useMemo(() => {
-    return Math.round((selectedModel?.avg_subsidy_krw ?? 7_000_000) * 0.55);
-  }, [selectedModel]);
+    return Math.round(safeAvgSubsidy * 0.55);
+  }, [safeAvgSubsidy]);
 
   const parsedLocalSubsidy = useMemo(() => {
     if (customLocalSubsidyInput === null || customLocalSubsidyInput.trim() === '') return null;
@@ -459,12 +478,12 @@ export default function DepreciationCalculatorClient({
     setCustomNationalSubsidyInput(null);
   }, []);
 
-  // Sync heldMonths if sync is active
+  // Sync heldMonths if sync is active (clamped to slider max 36 months)
   const handleYearsChange = useCallback((years: number) => {
     const validYears = Number.isFinite(years) ? Math.max(0.5, Math.min(10, years)) : 3;
     setHoldingYears(validYears);
     if (syncMonthsWithYears) {
-      setHeldMonths(Math.round(validYears * 12));
+      setHeldMonths(Math.min(36, Math.max(0, Math.round(validYears * 12))));
     }
   }, [syncMonthsWithYears]);
 
@@ -506,10 +525,10 @@ export default function DepreciationCalculatorClient({
       let nextVal = currentVal;
       if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
         e.preventDefault();
-        nextVal = Math.min(max, Math.round((currentVal + step) * 1000) / 1000);
+        nextVal = Math.max(min, Math.min(max, Math.round((currentVal + step) * 1000) / 1000));
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
         e.preventDefault();
-        nextVal = Math.max(min, Math.round((currentVal - step) * 1000) / 1000);
+        nextVal = Math.max(min, Math.min(max, Math.round((currentVal - step) * 1000) / 1000));
       } else if (e.key === 'Home') {
         e.preventDefault();
         nextVal = min;
@@ -518,10 +537,10 @@ export default function DepreciationCalculatorClient({
         nextVal = max;
       } else if (e.key === 'PageUp') {
         e.preventDefault();
-        nextVal = Math.min(max, Math.round((currentVal + pageStep) * 1000) / 1000);
+        nextVal = Math.max(min, Math.min(max, Math.round((currentVal + pageStep) * 1000) / 1000));
       } else if (e.key === 'PageDown') {
         e.preventDefault();
-        nextVal = Math.max(min, Math.round((currentVal - pageStep) * 1000) / 1000);
+        nextVal = Math.max(min, Math.min(max, Math.round((currentVal - pageStep) * 1000) / 1000));
       } else {
         return;
       }
@@ -740,7 +759,7 @@ export default function DepreciationCalculatorClient({
       setTransferType('intra');
     } else if (preset === 'business') {
       setHoldingYears(4);
-      setHeldMonths(48);
+      setHeldMonths(36);
       setAnnualMileageKm(35000);
       setDcfcRatio(65);
       setWinterSeason(false);
@@ -1160,7 +1179,7 @@ export default function DepreciationCalculatorClient({
               <button
                 type="button"
                 onClick={() => setCustomPriceInput(null)}
-                className="text-[11px] text-blue-700 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none min-h-[44px] inline-flex items-center"
+                className="text-[11px] text-blue-700 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none min-h-[44px] px-2 inline-flex items-center"
                 aria-label="기본값 복원: 차량 기본 가격으로 초기화"
               >
                 기본값 복원
@@ -1421,6 +1440,7 @@ export default function DepreciationCalculatorClient({
                 const y = 30 + i * 50;
                 const pct = 100 - i * 20;
                 const priceVal = Math.round((currentPurchasePrice * pct) / 100 / 10000);
+                const priceLabel = priceVal >= 100000 ? `${Math.round(priceVal / 10000)}억` : `${priceVal}만`;
                 return (
                   <g key={i}>
                     <line
@@ -1439,7 +1459,7 @@ export default function DepreciationCalculatorClient({
                       fill="#cbd5e1"
                       fontSize="11"
                     >
-                      {chartViewMode === 'price' ? `${priceVal}만` : `${pct}%`}
+                      {chartViewMode === 'price' ? priceLabel : `${pct}%`}
                     </text>
                   </g>
                 );
@@ -1992,9 +2012,9 @@ export default function DepreciationCalculatorClient({
                 type="button"
                 onClick={() => {
                   setSyncMonthsWithYears(true);
-                  setHeldMonths(Math.round(holdingYears * 12));
+                  setHeldMonths(Math.min(36, Math.max(0, Math.round(holdingYears * 12))));
                 }}
-                className="text-blue-700 hover:underline text-[11px] font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none min-h-[44px] inline-flex items-center"
+                className="text-blue-700 hover:underline text-[11px] font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none min-h-[44px] px-2 inline-flex items-center"
                 aria-label={`보유 기간(${holdingYears}년)과 동기화: 상단 연수와 개월 수 맞춤`}
               >
                 보유 기간({holdingYears}년)과 동기화
@@ -2049,7 +2069,7 @@ export default function DepreciationCalculatorClient({
                       setCustomLocalSubsidyInput(null);
                       setCustomNationalSubsidyInput(null);
                     }}
-                    className="text-[11px] text-blue-400 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded min-h-[44px] inline-flex items-center"
+                    className="text-[11px] text-blue-400 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded min-h-[44px] px-2 inline-flex items-center"
                     aria-label="보조금 기본값 복원: 차량 기본 보조금으로 초기화"
                   >
                     기본값 복원

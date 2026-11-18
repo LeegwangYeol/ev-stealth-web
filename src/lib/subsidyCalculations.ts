@@ -16,6 +16,7 @@ import type {
   EVSubsidyDataset,
   SubsidyCalculationResult,
   SubsidyCalculatorOptions,
+  SubsidyCategoryKey,
   MunicipalityMetrics,
   SubsidyStatistics,
   CriticalRegionInfo,
@@ -38,6 +39,7 @@ export type {
   EVSubsidyDataset,
   SubsidyCalculationResult,
   SubsidyCalculatorOptions,
+  SubsidyCategoryKey,
   MunicipalityMetrics,
   SubsidyStatistics,
   CriticalRegionInfo,
@@ -346,20 +348,32 @@ export function getModelByIdFromList(
   const normalized = modelId.trim().toLowerCase();
   if (!normalized) return undefined;
 
-  const validModels = models.filter((m): m is PopularModelEntry => Boolean(m && typeof m === 'object'));
+  const validModels = models.filter((m): m is PopularModelEntry => Boolean(m && typeof m === 'object' && !Array.isArray(m)));
 
-  // 1. Exact or substring match on raw string
-  const directMatch = validModels.find(
+  // 1a. Exact match on model_id or name_ko
+  const exactMatch = validModels.find(
     (m) =>
-      (typeof m.model_id === 'string' && m.model_id.toLowerCase() === normalized) ||
-      (typeof m.name_ko === 'string' && m.name_ko.toLowerCase() === normalized) ||
-      (typeof m.name_ko === 'string' && m.name_ko.toLowerCase().includes(normalized))
+      (typeof m.model_id === 'string' && m.model_id.trim().toLowerCase() === normalized) ||
+      (typeof m.name_ko === 'string' && m.name_ko.trim().toLowerCase() === normalized)
   );
-  if (directMatch) return directMatch;
+  if (exactMatch) return exactMatch;
+
+  // 1b. Substring match on name_ko
+  const substringMatch = validModels.find(
+    (m) => typeof m.name_ko === 'string' && m.name_ko.toLowerCase().includes(normalized)
+  );
+  if (substringMatch) return substringMatch;
 
   // 2. Normalize by stripping whitespace, hyphens, and punctuation
   const cleanQuery = normalized.replace(/[\s\-_]+/g, '');
   if (!cleanQuery) return undefined;
+
+  const cleanExactMatch = validModels.find((m) => {
+    const cleanId = (typeof m.model_id === 'string' ? m.model_id : '').toLowerCase().replace(/[\s\-_]+/g, '');
+    const cleanKo = (typeof m.name_ko === 'string' ? m.name_ko : '').toLowerCase().replace(/[\s\-_]+/g, '');
+    return cleanId === cleanQuery || cleanKo === cleanQuery;
+  });
+  if (cleanExactMatch) return cleanExactMatch;
 
   return validModels.find((m) => {
     const cleanId = (typeof m.model_id === 'string' ? m.model_id : '').toLowerCase().replace(/[\s\-_]+/g, '');
@@ -419,7 +433,11 @@ export function calculateDepletionRate(
     ? Math.min(10, Math.floor(options.roundDecimals))
     : 1;
   const factor = Math.pow(10, decimals);
-  const rounded = Math.round(rate * factor) / factor;
+  if (!Number.isFinite(rate) || rate < 0) {
+    return 0.0;
+  }
+  const scaled = rate * factor;
+  const rounded = Number.isFinite(scaled) ? Math.round(scaled) / factor : rate;
 
   return Number.isFinite(rounded) && rounded >= 0 ? rounded : 0.0;
 }
@@ -576,7 +594,72 @@ export function predictExhaustionDays(
 }
 
 /**
- * Predicts estimated calendar date (YYYY-MM-DD) of subsidy exhaustion.
+ * Parses a Date or string strictly into a UTC Date, avoiding local-timezone shifts
+ * on YYYY/MM/DD, YYYY.MM.DD, or timezone-less YYYY-MM-DD HH:mm:ss inputs and
+ * rejecting silent calendar rollovers (e.g., 2026-02-30).
+ */
+function parseUtcStartDate(startDate?: Date | string | null): Date {
+  if (startDate instanceof Date) {
+    return Number.isNaN(startDate.getTime()) ? new Date() : new Date(startDate.getTime());
+  }
+  if (typeof startDate !== 'string') {
+    return new Date();
+  }
+  const s = startDate.trim();
+  if (!s) {
+    return new Date();
+  }
+
+  // Date-only formats: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD
+  const dateOnly = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(s);
+  if (dateOnly) {
+    const year = Number(dateOnly[1]);
+    const month = Number(dateOnly[2]);
+    const day = Number(dateOnly[3]);
+    const dt = new Date(Date.UTC(year, month - 1, day));
+    dt.setUTCFullYear(year);
+    if (
+      !Number.isNaN(dt.getTime()) &&
+      dt.getUTCFullYear() === year &&
+      dt.getUTCMonth() === month - 1 &&
+      dt.getUTCDate() === day
+    ) {
+      return dt;
+    }
+    return new Date();
+  }
+
+  // Datetime without timezone offset: YYYY-MM-DD[T ]HH:mm(:ss(.sss)?)? -> treat as UTC
+  const naiveDt = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})[T ](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/.exec(s);
+  if (naiveDt) {
+    const year = Number(naiveDt[1]);
+    const month = Number(naiveDt[2]);
+    const day = Number(naiveDt[3]);
+    const hour = Number(naiveDt[4]);
+    const minute = Number(naiveDt[5]);
+    const second = naiveDt[6] ? Number(naiveDt[6]) : 0;
+    const ms = naiveDt[7] ? Number(naiveDt[7].padEnd(3, '0')) : 0;
+    if (hour <= 23 && minute <= 59 && second <= 59) {
+      const dt = new Date(Date.UTC(year, month - 1, day, hour, minute, second, ms));
+      dt.setUTCFullYear(year);
+      if (
+        !Number.isNaN(dt.getTime()) &&
+        dt.getUTCFullYear() === year &&
+        dt.getUTCMonth() === month - 1 &&
+        dt.getUTCDate() === day
+      ) {
+        return dt;
+      }
+    }
+    return new Date();
+  }
+
+  const parsed = new Date(s);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
+/**
+ * Predicts estimated calendar date (YYYY-MM-DD in UTC) of subsidy exhaustion.
  */
 export function predictExhaustionDate(
   remainingUnits: number | null | undefined,
@@ -586,22 +669,18 @@ export function predictExhaustionDate(
   const days = predictExhaustionDays(remainingUnits, dailyVelocity);
   if (days === null) return null;
   try {
-    let baseDt: Date;
-    if (!startDate) {
-      baseDt = new Date();
-    } else if (startDate instanceof Date) {
-      baseDt = new Date(startDate.getTime());
-    } else {
-      baseDt = new Date(startDate);
-    }
-    if (Number.isNaN(baseDt.getTime())) {
-      baseDt = new Date();
-    }
+    const baseDt = parseUtcStartDate(startDate);
     baseDt.setUTCDate(baseDt.getUTCDate() + days);
     if (Number.isNaN(baseDt.getTime())) {
       return null;
     }
-    return baseDt.toISOString().slice(0, 10);
+    const yr = baseDt.getUTCFullYear();
+    if (!Number.isFinite(yr) || yr < 0 || yr > 9999) {
+      return null;
+    }
+    const mo = String(baseDt.getUTCMonth() + 1).padStart(2, '0');
+    const da = String(baseDt.getUTCDate()).padStart(2, '0');
+    return `${String(yr).padStart(4, '0')}-${mo}-${da}`;
   } catch {
     return null;
   }
@@ -760,12 +839,42 @@ const VALID_ALERT_SEVERITIES: ReadonlySet<AlertSeverity> = new Set([
   'DEPLETED',
 ]);
 
+const VALID_CATEGORY_KEYS: ReadonlySet<SubsidyCategoryKey> = new Set([
+  'passenger',
+  'commercial',
+  'bus',
+]);
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function getSafeCategory(
+  categories: unknown,
+  categoryKey: SubsidyCategoryKey
+): CategoryMetrics | undefined {
+  if (!isPlainObject(categories) || !VALID_CATEGORY_KEYS.has(categoryKey)) {
+    return undefined;
+  }
+  if (!Object.prototype.hasOwnProperty.call(categories, categoryKey)) {
+    return undefined;
+  }
+  const cat = categories[categoryKey];
+  return isPlainObject(cat) ? (cat as unknown as CategoryMetrics) : undefined;
+}
+
 function safeString(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
 function safeNonEmptyString(value: unknown, fallback: string): string {
-  return typeof value === 'string' && value.length > 0 ? value : fallback;
+  return typeof value === 'string' && value.trim().length > 0 ? value : fallback;
+}
+
+function round1Safe(value: number): number {
+  if (!Number.isFinite(value)) return value;
+  const scaled = value * 10;
+  return Number.isFinite(scaled) ? Math.round(scaled) / 10 : value;
 }
 
 function parseFiniteNonNegNumber(value: unknown): number {
@@ -804,10 +913,10 @@ export interface ParsedModelSubsidy {
  * Safely parses model subsidy fields guarding against missing properties and malformed strings.
  */
 export function parseModelSubsidy(model: unknown): ParsedModelSubsidy {
-  const m = (model && typeof model === 'object') ? (model as Record<string, unknown>) : {};
-  const modelId = typeof m.model_id === 'string' ? m.model_id : (typeof m.id === 'string' ? m.id : 'unknown-model');
-  const nameKo = typeof m.name_ko === 'string' ? m.name_ko : (typeof m.name === 'string' ? m.name : '기본 모델');
-  const manufacturer = typeof m.manufacturer === 'string' ? m.manufacturer : (typeof m.brand === 'string' ? m.brand : '기타');
+  const m = isPlainObject(model) ? model : {};
+  const modelId = safeNonEmptyString(m.model_id, safeNonEmptyString(m.id, 'unknown-model'));
+  const nameKo = safeNonEmptyString(m.name_ko, safeNonEmptyString(m.name, '기본 모델'));
+  const manufacturer = safeNonEmptyString(m.manufacturer, safeNonEmptyString(m.brand, '기타'));
   const rawPrice = parseSubsidyNumber(m.base_price_krw ?? m.basePriceKrw, { defaultKrw: 0 });
   const basePriceKrw = rawPrice > 0 ? rawPrice : 54_100_000;
   const nationalSubsidyKrw = parseSubsidyNumber(m.national_subsidy_krw ?? m.nationalSubsidyKrw, { defaultKrw: 0 });
@@ -846,7 +955,7 @@ export interface ParsedCategoryMetrics {
  * Safely parses category metrics, guarding against missing properties, string values, and division by zero.
  */
 export function parseCategoryMetrics(category: unknown): ParsedCategoryMetrics {
-  const c = (category && typeof category === 'object') ? (category as Record<string, unknown>) : {};
+  const c = isPlainObject(category) ? category : {};
   const announcedUnits = parseFiniteNonNegNumber(c.announced_units ?? c.announcedUnits);
   const appliedUnits = parseFiniteNonNegNumber(c.applied_units ?? c.appliedUnits);
   const deliveredUnits = parseFiniteNonNegNumber(c.delivered_units ?? c.deliveredUnits);
@@ -858,19 +967,22 @@ export function parseCategoryMetrics(category: unknown): ParsedCategoryMetrics {
     rawRemaining !== null &&
     !(typeof rawRemaining === 'number' && !Number.isFinite(rawRemaining))
   ) {
-    remainingUnits = parseSubsidyNumber(rawRemaining, { allowNegative: false });
+    const parsedRemaining = parseSubsidyNumber(rawRemaining, { allowNegative: false, defaultKrw: -1 });
+    remainingUnits = parsedRemaining >= 0
+      ? parsedRemaining
+      : calculateRemainingUnits(appliedUnits, announcedUnits);
   } else {
     remainingUnits = calculateRemainingUnits(appliedUnits, announcedUnits);
   }
 
   const rawRate = c.depletion_rate ?? c.depletionRate;
   const depletionRate = typeof rawRate === 'number' && Number.isFinite(rawRate) && rawRate >= 0
-    ? Math.round(rawRate * 10) / 10
+    ? round1Safe(rawRate)
     : calculateDepletionRate(appliedUnits, announcedUnits);
 
   const rawDelRate = c.delivery_rate ?? c.deliveryRate;
   const deliveryRate = typeof rawDelRate === 'number' && Number.isFinite(rawDelRate) && rawDelRate >= 0
-    ? Math.round(rawDelRate * 10) / 10
+    ? round1Safe(rawDelRate)
     : calculateDeliveryRate(deliveredUnits, announcedUnits);
 
   const maxLocalSubsidyKrw = parseFiniteNonNegNumber(c.max_local_subsidy_krw ?? c.maxLocalSubsidyKrw);
@@ -956,8 +1068,8 @@ export function compareRegions(
   if (!a) return 1;
   if (!b) return -1;
 
-  const catA = a.categories?.[categoryKey];
-  const catB = b.categories?.[categoryKey];
+  const catA = getSafeCategory(a.categories, categoryKey);
+  const catB = getSafeCategory(b.categories, categoryKey);
 
   const normalizedSort = String(sortOption || 'DEPLETION_DESC').toUpperCase();
 
@@ -1065,11 +1177,11 @@ export function rankRegionsByDepletion(
 
   for (let i = 0; i < sorted.length; i++) {
     const r = sorted[i];
-    const cat = r.categories?.[categoryKey];
+    const cat = getSafeCategory(r.categories, categoryKey);
     const rawRate = typeof cat?.depletion_rate === 'number' && !Number.isNaN(cat.depletion_rate)
       ? Math.max(0, cat.depletion_rate)
       : calculateDepletionRate(cat?.applied_units, cat?.announced_units);
-    const rate = Math.round(rawRate * 10) / 10;
+    const rate = round1Safe(rawRate);
     const rem = typeof cat?.remaining_units === 'number' && !Number.isNaN(cat.remaining_units)
       ? Math.max(0, cat.remaining_units)
       : calculateRemainingUnits(cat?.applied_units, cat?.announced_units);
@@ -1263,7 +1375,7 @@ export function calculateNetSubsidyPure(
           },
         } as RegionEntry);
 
-  const passengerCategory = safeRegion.categories?.passenger;
+  const passengerCategory = getSafeCategory(safeRegion.categories, 'passenger');
 
   // 1. Resolve MSRP and statutory price-cap ratio
   const safeModelPrice = parseSubsidyNumber(safeModel?.base_price_krw, {
@@ -1271,11 +1383,14 @@ export function calculateNetSubsidyPure(
     maxKrw: 10_000_000_000,
   });
 
+  const effectiveCustomMsrp =
+    customMsrp !== undefined && customMsrp !== null ? customMsrp : options?.customMsrp;
+
   let activeMsrp: number;
-  if (customMsrp === Infinity) {
+  if (effectiveCustomMsrp === Infinity) {
     activeMsrp = 10_000_000_000;
-  } else if (customMsrp !== undefined && customMsrp !== null) {
-    const parsed = parseSubsidyNumber(customMsrp, { maxKrw: 10_000_000_000 });
+  } else if (effectiveCustomMsrp !== undefined && effectiveCustomMsrp !== null) {
+    const parsed = parseSubsidyNumber(effectiveCustomMsrp, { maxKrw: 10_000_000_000 });
     activeMsrp = parsed > 0 ? parsed : (safeModelPrice > 0 ? safeModelPrice : 54_100_000);
   } else {
     activeMsrp = safeModelPrice > 0 ? safeModelPrice : 54_100_000;
@@ -1294,7 +1409,10 @@ export function calculateNetSubsidyPure(
   const validNationalSubsidy = parseFiniteNonNegNumber(safeModel.national_subsidy_krw);
   let nationalSubsidyKrw = 0;
   if (ratio > 0) {
-    const parsedCustom = customMsrp !== undefined && customMsrp !== null ? parseSubsidyNumber(customMsrp) : 0;
+    const parsedCustom =
+      effectiveCustomMsrp !== undefined && effectiveCustomMsrp !== null
+        ? parseSubsidyNumber(effectiveCustomMsrp)
+        : 0;
     if (parsedCustom > 0) {
       const baseRatio = typeof safeModel.price_subsidy_ratio === 'number' && Number.isFinite(safeModel.price_subsidy_ratio) && safeModel.price_subsidy_ratio > 0
         ? safeModel.price_subsidy_ratio
@@ -1373,8 +1491,8 @@ export function calculateNetSubsidyPure(
     modelName: safeNonEmptyString(safeModel.name_ko, '기본 모델'),
     manufacturer: safeNonEmptyString(safeModel.manufacturer, '기타'),
     batteryType: safeNonEmptyString(safeModel.battery_type, 'NCM 삼원계'),
-    batteryCapacityKwh: typeof safeModel.battery_capacity_kwh === 'number' && Number.isFinite(safeModel.battery_capacity_kwh) ? safeModel.battery_capacity_kwh : 0,
-    ratedRangeKm: typeof safeModel.rated_range_km === 'number' && Number.isFinite(safeModel.rated_range_km) ? safeModel.rated_range_km : 0,
+    batteryCapacityKwh: typeof safeModel.battery_capacity_kwh === 'number' && Number.isFinite(safeModel.battery_capacity_kwh) && safeModel.battery_capacity_kwh >= 0 ? safeModel.battery_capacity_kwh : 0,
+    ratedRangeKm: typeof safeModel.rated_range_km === 'number' && Number.isFinite(safeModel.rated_range_km) && safeModel.rated_range_km >= 0 ? safeModel.rated_range_km : 0,
     regionId: safeNonEmptyString(safeRegion.region_id, 'unknown-region'),
     regionName: regionDisplayName,
     msrpKrw: activeMsrp,
@@ -1387,7 +1505,7 @@ export function calculateNetSubsidyPure(
     isHighDepletionRisk,
     depletionRate,
     depletionStatus,
-    residencyRequirementDays: typeof safeRegion.residency_requirement_days === 'number' && Number.isFinite(safeRegion.residency_requirement_days) ? safeRegion.residency_requirement_days : 30,
+    residencyRequirementDays: typeof safeRegion.residency_requirement_days === 'number' && Number.isFinite(safeRegion.residency_requirement_days) && safeRegion.residency_requirement_days >= 0 ? safeRegion.residency_requirement_days : 30,
     warningNotice,
     priceCapTierText,
   };
@@ -1402,8 +1520,9 @@ export function calculateNetSubsidyPure(
  * Protects against division by zero and NaN/Infinity values.
  */
 export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> | null): SubsidyStatistics {
-  const summary = dataset?.nationwide_summary;
-  const regions = Array.isArray(dataset?.regions) ? dataset.regions : [];
+  const safeDataset = isPlainObject(dataset) ? (dataset as Partial<EVSubsidyDataset>) : undefined;
+  const summary = isPlainObject(safeDataset?.nationwide_summary) ? safeDataset?.nationwide_summary : undefined;
+  const regions = Array.isArray(safeDataset?.regions) ? safeDataset.regions : [];
 
   const announced = parseFiniteNonNegNumber(summary?.total_announced_units);
   const applied = parseFiniteNonNegNumber(summary?.total_applied_units);
@@ -1432,8 +1551,9 @@ export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> |
     budgetDisbursed = Math.round((summary.disbursed_budget_krw / 1_000_000_000) * 10) / 10;
   }
 
-  const budgetExecutionRatePct = budgetTotal > 0 && budgetDisbursed >= 0
-    ? Math.round((budgetDisbursed / budgetTotal) * 1000) / 10
+  const rawExecRate = budgetTotal > 0 && budgetDisbursed >= 0 ? (budgetDisbursed / budgetTotal) * 1000 : 0;
+  const budgetExecutionRatePct = Number.isFinite(rawExecRate)
+    ? Math.round(rawExecRate) / 10
     : 0.0;
 
   // Extract regions >= 95% and >= 100%
@@ -1446,13 +1566,14 @@ export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> |
 
   if (regions.length > 0) {
     for (const r of regions) {
-      if (!r || typeof r !== 'object') continue;
+      if (!isPlainObject(r)) continue;
+      const passengerCat = getSafeCategory(r.categories, 'passenger');
       const rate = typeof r.overall_depletion_rate === 'number' && Number.isFinite(r.overall_depletion_rate) && r.overall_depletion_rate >= 0
         ? r.overall_depletion_rate
-        : calculateDepletionRate(r.categories?.passenger?.applied_units, r.categories?.passenger?.announced_units);
-      const rem = typeof r.categories?.passenger?.remaining_units === 'number' && Number.isFinite(r.categories.passenger.remaining_units) && r.categories.passenger.remaining_units >= 0
-        ? r.categories.passenger.remaining_units
-        : calculateRemainingUnits(r.categories?.passenger?.applied_units, r.categories?.passenger?.announced_units);
+        : calculateDepletionRate(passengerCat?.applied_units, passengerCat?.announced_units);
+      const rem = typeof passengerCat?.remaining_units === 'number' && Number.isFinite(passengerCat.remaining_units) && passengerCat.remaining_units >= 0
+        ? passengerCat.remaining_units
+        : calculateRemainingUnits(passengerCat?.applied_units, passengerCat?.announced_units);
 
       if (rate >= 100.0) {
         depletedCount++;
@@ -1479,7 +1600,7 @@ export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> |
         healthyCount++;
       }
     }
-  } else if (summary?.alert_region_counts && typeof summary.alert_region_counts === 'object') {
+  } else if (isPlainObject(summary?.alert_region_counts)) {
     depletedCount = parseFiniteNonNegNumber(summary.alert_region_counts.depleted);
     criticalCount = parseFiniteNonNegNumber(summary.alert_region_counts.critical) + depletedCount;
     warningCount = parseFiniteNonNegNumber(summary.alert_region_counts.warning);
@@ -1489,12 +1610,15 @@ export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> |
 
   // Sort critical regions descending by depletion rate with full NaN/Infinity guard
   criticalList.sort((a, b) => {
-    const cmp = safeCompareNumbers(b.depletionRate, a.depletionRate, 'asc');
+    const cmp = safeCompareNumbers(a.depletionRate, b.depletionRate, 'desc');
     if (cmp !== 0) return cmp;
     return safeString(a.nameKo).localeCompare(safeString(b.nameKo), 'ko');
   });
 
   const cat = summary?.category_totals;
+  const passengerCat = getSafeCategory(cat, 'passenger');
+  const commercialCat = getSafeCategory(cat, 'commercial');
+  const busCat = getSafeCategory(cat, 'bus');
 
   return {
     totalAnnouncedUnits: announced,
@@ -1513,34 +1637,34 @@ export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> |
     healthyRegionsCount: healthyCount,
     categoryBreakdown: {
       passenger: {
-        announced: parseFiniteNonNegNumber(cat?.passenger?.announced_units),
-        applied: parseFiniteNonNegNumber(cat?.passenger?.applied_units),
-        remaining: typeof cat?.passenger?.remaining_units === 'number' && Number.isFinite(cat.passenger.remaining_units) && cat.passenger.remaining_units >= 0
-          ? cat.passenger.remaining_units
-          : calculateRemainingUnits(cat?.passenger?.applied_units, cat?.passenger?.announced_units),
-        rate: typeof cat?.passenger?.depletion_rate === 'number' && Number.isFinite(cat.passenger.depletion_rate) && cat.passenger.depletion_rate >= 0
-          ? cat.passenger.depletion_rate
-          : calculateDepletionRate(cat?.passenger?.applied_units, cat?.passenger?.announced_units),
+        announced: parseFiniteNonNegNumber(passengerCat?.announced_units),
+        applied: parseFiniteNonNegNumber(passengerCat?.applied_units),
+        remaining: typeof passengerCat?.remaining_units === 'number' && Number.isFinite(passengerCat.remaining_units) && passengerCat.remaining_units >= 0
+          ? passengerCat.remaining_units
+          : calculateRemainingUnits(passengerCat?.applied_units, passengerCat?.announced_units),
+        rate: typeof passengerCat?.depletion_rate === 'number' && Number.isFinite(passengerCat.depletion_rate) && passengerCat.depletion_rate >= 0
+          ? passengerCat.depletion_rate
+          : calculateDepletionRate(passengerCat?.applied_units, passengerCat?.announced_units),
       },
       commercial: {
-        announced: parseFiniteNonNegNumber(cat?.commercial?.announced_units),
-        applied: parseFiniteNonNegNumber(cat?.commercial?.applied_units),
-        remaining: typeof cat?.commercial?.remaining_units === 'number' && Number.isFinite(cat.commercial.remaining_units) && cat.commercial.remaining_units >= 0
-          ? cat.commercial.remaining_units
-          : calculateRemainingUnits(cat?.commercial?.applied_units, cat?.commercial?.announced_units),
-        rate: typeof cat?.commercial?.depletion_rate === 'number' && Number.isFinite(cat.commercial.depletion_rate) && cat.commercial.depletion_rate >= 0
-          ? cat.commercial.depletion_rate
-          : calculateDepletionRate(cat?.commercial?.applied_units, cat?.commercial?.announced_units),
+        announced: parseFiniteNonNegNumber(commercialCat?.announced_units),
+        applied: parseFiniteNonNegNumber(commercialCat?.applied_units),
+        remaining: typeof commercialCat?.remaining_units === 'number' && Number.isFinite(commercialCat.remaining_units) && commercialCat.remaining_units >= 0
+          ? commercialCat.remaining_units
+          : calculateRemainingUnits(commercialCat?.applied_units, commercialCat?.announced_units),
+        rate: typeof commercialCat?.depletion_rate === 'number' && Number.isFinite(commercialCat.depletion_rate) && commercialCat.depletion_rate >= 0
+          ? commercialCat.depletion_rate
+          : calculateDepletionRate(commercialCat?.applied_units, commercialCat?.announced_units),
       },
       bus: {
-        announced: parseFiniteNonNegNumber(cat?.bus?.announced_units),
-        applied: parseFiniteNonNegNumber(cat?.bus?.applied_units),
-        remaining: typeof cat?.bus?.remaining_units === 'number' && Number.isFinite(cat.bus.remaining_units) && cat.bus.remaining_units >= 0
-          ? cat.bus.remaining_units
-          : calculateRemainingUnits(cat?.bus?.applied_units, cat?.bus?.announced_units),
-        rate: typeof cat?.bus?.depletion_rate === 'number' && Number.isFinite(cat.bus.depletion_rate) && cat.bus.depletion_rate >= 0
-          ? cat.bus.depletion_rate
-          : calculateDepletionRate(cat?.bus?.applied_units, cat?.bus?.announced_units),
+        announced: parseFiniteNonNegNumber(busCat?.announced_units),
+        applied: parseFiniteNonNegNumber(busCat?.applied_units),
+        remaining: typeof busCat?.remaining_units === 'number' && Number.isFinite(busCat.remaining_units) && busCat.remaining_units >= 0
+          ? busCat.remaining_units
+          : calculateRemainingUnits(busCat?.applied_units, busCat?.announced_units),
+        rate: typeof busCat?.depletion_rate === 'number' && Number.isFinite(busCat.depletion_rate) && busCat.depletion_rate >= 0
+          ? busCat.depletion_rate
+          : calculateDepletionRate(busCat?.applied_units, busCat?.announced_units),
       },
     },
     // Compatibility Shorthand Aliases
@@ -1683,12 +1807,24 @@ export function classifyRegionGroup(
 ): RegionalGroup {
   if (!region) return 'other';
 
+  const resolveAliasCode = (raw: string): string => {
+    const trimmed = raw.trim();
+    const lower = trimmed.toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, lower)) {
+      return REGION_ALIAS_MAP[lower].toUpperCase();
+    }
+    if (Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, trimmed)) {
+      return REGION_ALIAS_MAP[trimmed].toUpperCase();
+    }
+    return trimmed.toUpperCase();
+  };
+
   if (typeof region === 'string') {
     const ident = region.trim();
     if (!ident) return 'other';
-    const upper = ident.toUpperCase();
-    if ((METROPOLITAN_CITY_CODES as readonly string[]).includes(upper)) return 'metropolitan_cities';
-    if ((PROVINCE_CODES as readonly string[]).includes(upper)) return 'provinces';
+    const canonical = resolveAliasCode(ident);
+    if ((METROPOLITAN_CITY_CODES as readonly string[]).includes(canonical)) return 'metropolitan_cities';
+    if ((PROVINCE_CODES as readonly string[]).includes(canonical)) return 'provinces';
     for (const city of METROPOLITAN_CITIES) {
       if (ident.includes(city)) return 'metropolitan_cities';
     }
@@ -1698,13 +1834,13 @@ export function classifyRegionGroup(
     return 'other';
   }
 
-  if (typeof region !== 'object') return 'other';
+  if (!isPlainObject(region)) return 'other';
 
-  const code = (
+  const rawCode =
     safeString(region.iso_code) ||
     safeString(region.region_id) ||
-    safeString(region.code)
-  ).trim().toUpperCase();
+    safeString(region.code);
+  const code = rawCode.trim() ? resolveAliasCode(rawCode) : '';
   if ((METROPOLITAN_CITY_CODES as readonly string[]).includes(code)) return 'metropolitan_cities';
   if ((PROVINCE_CODES as readonly string[]).includes(code)) return 'provinces';
 

@@ -135,7 +135,10 @@ def _resolve_web_reports_path(custom_web_dir: Optional[Union[str, Path]] = None)
         or ""
     ).strip()
     if env_dir and env_dir != ".":
-        return Path(env_dir) / "daily_reports.json"
+        env_cand = Path(env_dir)
+        if (env_cand / "src" / "data").is_dir():
+            return env_cand / "src" / "data" / "daily_reports.json"
+        return env_cand / "daily_reports.json"
     candidates = [
         REPO_ROOT / "ev-stealth-web" / "src" / "data" / "daily_reports.json",
         REPO_ROOT / "src" / "data" / "daily_reports.json",
@@ -759,14 +762,40 @@ class ScraperPipeline:
         if sync_web:
             resolved_web_path = _resolve_web_reports_path(web_dir)
             target_paths.append(os.path.abspath(str(resolved_web_path)))
-            resolved_public_path = _resolve_public_reports_path(web_dir)
-            target_paths.append(os.path.abspath(str(resolved_public_path)))
-            resolved_root_path = _resolve_root_reports_path()
-            target_paths.append(os.path.abspath(str(resolved_root_path)))
-            if (REPO_ROOT / "ev-stealth-web" / "data").is_dir():
-                target_paths.append(os.path.abspath(str(REPO_ROOT / "ev-stealth-web" / "data" / "daily_reports.json")))
-            if (REPO_ROOT / "public" / "data").is_dir():
-                target_paths.append(os.path.abspath(str(REPO_ROOT / "public" / "data" / "daily_reports.json")))
+
+            is_custom_web_dir = False
+            if web_dir is not None and str(web_dir).strip() not in ("", "."):
+                try:
+                    w_res = Path(web_dir).resolve()
+                    project_web_candidates = {
+                        (REPO_ROOT / "ev-stealth-web").resolve(),
+                        (REPO_ROOT / "ev-stealth-web" / "src" / "data").resolve(),
+                        (REPO_ROOT / "src" / "data").resolve(),
+                        (CURRENT_DIR / "src" / "data").resolve(),
+                        CURRENT_DIR.resolve(),
+                    }
+                    is_custom_web_dir = w_res not in project_web_candidates
+                except (OSError, RuntimeError):
+                    is_custom_web_dir = True
+
+            if is_custom_web_dir:
+                w_base = Path(str(web_dir).strip())
+                for pub_cand in (
+                    w_base / "public" / "data" / "daily_reports.json",
+                    w_base.parent / "public" / "data" / "daily_reports.json",
+                    w_base.parent.parent / "public" / "data" / "daily_reports.json",
+                ):
+                    if pub_cand.parent.exists():
+                        target_paths.append(os.path.abspath(str(pub_cand)))
+            else:
+                resolved_public_path = _resolve_public_reports_path(web_dir)
+                target_paths.append(os.path.abspath(str(resolved_public_path)))
+                resolved_root_path = _resolve_root_reports_path()
+                target_paths.append(os.path.abspath(str(resolved_root_path)))
+                if (REPO_ROOT / "ev-stealth-web" / "data").is_dir():
+                    target_paths.append(os.path.abspath(str(REPO_ROOT / "ev-stealth-web" / "data" / "daily_reports.json")))
+                if (REPO_ROOT / "public" / "data").is_dir():
+                    target_paths.append(os.path.abspath(str(REPO_ROOT / "public" / "data" / "daily_reports.json")))
         if not target_paths:
             target_paths.append(os.path.abspath(DEFAULT_OUTPUT_PATH))
 

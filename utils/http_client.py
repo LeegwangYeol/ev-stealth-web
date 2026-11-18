@@ -15,6 +15,7 @@ import http.cookiejar
 import ipaddress
 import json
 import logging
+import math
 import os
 import random
 import re
@@ -92,7 +93,8 @@ DEFAULT_FALLBACK_USER_AGENT: str = (
 def is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
     """Check if an IP address is publicly routable and safe from SSRF."""
     if (
-        ip.is_loopback
+        not ip.is_global
+        or ip.is_loopback
         or ip.is_private
         or ip.is_link_local
         or ip.is_multicast
@@ -104,7 +106,8 @@ def is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
         mapped = ip.ipv4_mapped
         if (
-            mapped.is_loopback
+            not mapped.is_global
+            or mapped.is_loopback
             or mapped.is_private
             or mapped.is_link_local
             or mapped.is_multicast
@@ -322,12 +325,49 @@ def clean_html_text(raw_html: Union[str, bytes, Any]) -> str:
     return "\n".join([line for line in lines if line])
 
 
+def _normalize_timeout(val: Any, default: float) -> float:
+    """Return a finite positive timeout float, or default."""
+    if val is None or isinstance(val, bool):
+        return default
+    try:
+        num = float(val)
+        if math.isfinite(num) and num > 0:
+            return num
+    except (ValueError, TypeError, OverflowError):
+        pass
+    return default
+
+
+def _resolve_timeouts(
+    timeout: Any,
+    connect_timeout: Any,
+    read_timeout: Any,
+    default_connect: float = 5.0,
+    default_read: float = 15.0,
+) -> Tuple[float, float]:
+    """Resolve separate finite positive (connect_timeout, read_timeout) pair."""
+    tuple_conn: Any = None
+    tuple_read: Any = None
+    if isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
+        tuple_conn = timeout[0]
+        tuple_read = timeout[1]
+    elif timeout is not None and not isinstance(timeout, (tuple, list, bool)):
+        scalar = _normalize_timeout(timeout, -1.0)
+        if scalar > 0:
+            tuple_conn = min(5.0, scalar)
+            tuple_read = scalar
+
+    eff_conn = _normalize_timeout(connect_timeout, _normalize_timeout(tuple_conn, default_connect))
+    eff_read = _normalize_timeout(read_timeout, _normalize_timeout(tuple_read, default_read))
+    return eff_conn, eff_read
+
+
 class ResilientHTTPConnection(http.client.HTTPConnection):
     """HTTPConnection supporting explicit separate connect and read timeouts."""
 
     def __init__(self, *args, connect_timeout: float = 5.0, read_timeout: float = 15.0, **kwargs):
-        self._conn_timeout = float(connect_timeout) if connect_timeout is not None and connect_timeout > 0 else 5.0
-        self._read_timeout = float(read_timeout) if read_timeout is not None and read_timeout > 0 else 15.0
+        self._conn_timeout = _normalize_timeout(connect_timeout, 5.0)
+        self._read_timeout = _normalize_timeout(read_timeout, 15.0)
         super().__init__(*args, **kwargs)
 
     def connect(self):
@@ -344,8 +384,8 @@ class ResilientHTTPSConnection(http.client.HTTPSConnection):
     """HTTPSConnection supporting explicit separate connect and read timeouts."""
 
     def __init__(self, *args, connect_timeout: float = 5.0, read_timeout: float = 15.0, **kwargs):
-        self._conn_timeout = float(connect_timeout) if connect_timeout is not None and connect_timeout > 0 else 5.0
-        self._read_timeout = float(read_timeout) if read_timeout is not None and read_timeout > 0 else 15.0
+        self._conn_timeout = _normalize_timeout(connect_timeout, 5.0)
+        self._read_timeout = _normalize_timeout(read_timeout, 15.0)
         super().__init__(*args, **kwargs)
 
     def connect(self):
@@ -393,8 +433,8 @@ class ResilientHTTPHandler(urllib.request.HTTPHandler):
 
     def __init__(self, connect_timeout: float = 5.0, read_timeout: float = 15.0, **kwargs):
         super().__init__(**kwargs)
-        self._connect_timeout = float(connect_timeout) if connect_timeout is not None and connect_timeout > 0 else 5.0
-        self._read_timeout = float(read_timeout) if read_timeout is not None and read_timeout > 0 else 15.0
+        self._connect_timeout = _normalize_timeout(connect_timeout, 5.0)
+        self._read_timeout = _normalize_timeout(read_timeout, 15.0)
 
     def http_open(self, req):
         conn_to = getattr(req, "_connect_timeout", self._connect_timeout)
@@ -415,8 +455,8 @@ class ResilientHTTPSHandler(urllib.request.HTTPSHandler):
 
     def __init__(self, connect_timeout: float = 5.0, read_timeout: float = 15.0, context=None, **kwargs):
         super().__init__(context=context, **kwargs)
-        self._connect_timeout = float(connect_timeout) if connect_timeout is not None and connect_timeout > 0 else 5.0
-        self._read_timeout = float(read_timeout) if read_timeout is not None and read_timeout > 0 else 15.0
+        self._connect_timeout = _normalize_timeout(connect_timeout, 5.0)
+        self._read_timeout = _normalize_timeout(read_timeout, 15.0)
 
     def https_open(self, req):
         conn_to = getattr(req, "_connect_timeout", self._connect_timeout)
@@ -561,18 +601,25 @@ class CircuitBreaker:
             tripped = False
 
             cooldown = self.cooldown_seconds
-            if retry_after is not None and retry_after > 0:
-                cooldown = max(cooldown, float(retry_after))
+            if retry_after is not None:
+                try:
+                    ra_val = float(retry_after)
+                    if math.isfinite(ra_val) and ra_val > 0:
+                        cooldown = max(cooldown, ra_val)
+                except (ValueError, TypeError, OverflowError):
+                    pass
 
             now = time.time()
             if info.get("state") == CircuitBreakerState.HALF_OPEN:
                 # Canary probe failed; re-trip circuit
                 info["state"] = CircuitBreakerState.OPEN
                 info["tripped_until"] = now + cooldown
+                info["probe_count"] = 0
                 tripped = True
             elif info["failure_count"] >= self.failure_threshold:
                 info["state"] = CircuitBreakerState.OPEN
                 info["tripped_until"] = now + cooldown
+                info["probe_count"] = 0
                 tripped = True
 
             return tripped
@@ -733,6 +780,7 @@ class SafeHttpClient:
         self.last_request_time = 0.0
         self._rate_limited_until = 0.0
         self.last_response_from_cache = False
+        self._rate_lock = threading.Lock()
         self._cache_lock = threading.Lock()
         self._memory_cache: Dict[str, Dict[str, Any]] = {}
         eff_cooldown = cooldown_seconds if cooldown_seconds is not None else circuit_cooldown
@@ -741,36 +789,10 @@ class SafeHttpClient:
             cooldown_seconds=eff_cooldown,
         )
 
-        # Resolve explicit connect and read timeouts
-        if connect_timeout is not None:
-            try:
-                self._connect_timeout = float(connect_timeout)
-            except (ValueError, TypeError):
-                self._connect_timeout = 5.0
-        elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
-            try:
-                self._connect_timeout = float(timeout[0])
-            except (ValueError, TypeError):
-                self._connect_timeout = 5.0
-        elif isinstance(timeout, (int, float)) and timeout > 0:
-            self._connect_timeout = min(5.0, float(timeout))
-        else:
-            self._connect_timeout = 5.0
-
-        if read_timeout is not None:
-            try:
-                self._read_timeout = float(read_timeout)
-            except (ValueError, TypeError):
-                self._read_timeout = 15.0
-        elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
-            try:
-                self._read_timeout = float(timeout[1])
-            except (ValueError, TypeError):
-                self._read_timeout = 15.0
-        elif isinstance(timeout, (int, float)) and timeout > 0:
-            self._read_timeout = float(timeout)
-        else:
-            self._read_timeout = 15.0
+        # Resolve explicit finite positive connect and read timeouts
+        self._connect_timeout, self._read_timeout = _resolve_timeouts(
+            timeout, connect_timeout, read_timeout, default_connect=5.0, default_read=15.0
+        )
 
         # Dedicated session UA if rotation is disabled
         self._session_user_agent = user_agent or self.get_random_user_agent()
@@ -1029,35 +1051,37 @@ class SafeHttpClient:
         max_d = max(0.0, float(max(self.min_delay, self.max_delay)))
 
         if not self.enable_jitter or max_d <= 0:
-            self.last_request_time = time.time()
-            self.request_count += 1
+            with self._rate_lock:
+                self.last_request_time = time.time()
+                self.request_count += 1
             return
 
-        now = time.time()
-
-        # Proactive rate-limit cooldown: if recently throttled by HTTP 429, respect backoff
-        if self._rate_limited_until > 0 and now < self._rate_limited_until:
-            wait_sec = (self._rate_limited_until - now) + random.uniform(0.5, 1.5)
-            logger.info(f"Proactive rate-limit protection: sleeping {wait_sec:.2f}s before next request...")
-            time.sleep(wait_sec)
-            self._rate_limited_until = 0.0
+        sleep_for = 0.0
+        with self._rate_lock:
             now = time.time()
+            # Proactive rate-limit cooldown: if recently throttled by HTTP 429, respect backoff
+            if self._rate_limited_until > 0 and now < self._rate_limited_until:
+                wait_sec = (self._rate_limited_until - now) + random.uniform(0.5, 1.5)
+                logger.info(f"Proactive rate-limit protection: sleeping {wait_sec:.2f}s before next request...")
+                self._rate_limited_until = 0.0
+                sleep_for += wait_sec
 
-        elapsed = now - self.last_request_time
+            # Prolonged cooldown pause every 20 requests to protect rate limits
+            if self.request_count > 0 and self.request_count % 20 == 0:
+                extra_cooldown = random.uniform(4.0, 7.0)
+                logger.info(f"Rate protection cooldown after {self.request_count} requests. Sleeping {extra_cooldown:.2f}s...")
+                sleep_for += extra_cooldown
 
-        # Prolonged cooldown pause every 20 requests to protect rate limits
-        if self.request_count > 0 and self.request_count % 20 == 0:
-            extra_cooldown = random.uniform(4.0, 7.0)
-            logger.info(f"Rate protection cooldown after {self.request_count} requests. Sleeping {extra_cooldown:.2f}s...")
-            time.sleep(extra_cooldown)
+            elapsed = (now + sleep_for) - self.last_request_time
+            target_delay = random.uniform(min_d, max_d)
+            if elapsed < target_delay:
+                sleep_for += target_delay - elapsed
 
-        target_delay = random.uniform(min_d, max_d)
-        if elapsed < target_delay:
-            sleep_duration = target_delay - elapsed
-            time.sleep(sleep_duration)
+            self.last_request_time = now + sleep_for
+            self.request_count += 1
 
-        self.last_request_time = time.time()
-        self.request_count += 1
+        if sleep_for > 0:
+            time.sleep(sleep_for)
 
     def warm_up_session(self, base_url: str, referer: Optional[str] = None) -> bool:
         """
@@ -1112,13 +1136,16 @@ class SafeHttpClient:
             logger.warning(f"SSRF defense blocked request to {norm_url}: {reason}")
             return 0, "", b""
 
+        method_upper = (method or "GET").strip().upper() or "GET"
+        is_cacheable_method = method_upper == "GET"
+
         # Host-level Circuit Breaker guard
         if not self.circuit_breaker.is_available(norm_url):
             logger.warning(
                 f"Circuit breaker is OPEN for {norm_url} (tripped due to repeated 403/429/503 errors). "
                 f"Fast-failing request."
             )
-            if self.cache_fallback:
+            if is_cacheable_method and self.cache_fallback:
                 cached = self.get_cached_response(norm_url)
                 if cached is not None:
                     logger.warning(
@@ -1129,7 +1156,8 @@ class SafeHttpClient:
             return 503, "", b""
 
         # Record in-flight probe if in HALF_OPEN state
-        if self.circuit_breaker.get_state(norm_url) == CircuitBreakerState.HALF_OPEN:
+        is_half_open_probe = self.circuit_breaker.get_state(norm_url) == CircuitBreakerState.HALF_OPEN
+        if is_half_open_probe:
             self.circuit_breaker.record_probe(norm_url)
 
         self.last_response_from_cache = False
@@ -1179,39 +1207,13 @@ class SafeHttpClient:
                 payload_bytes = data.encode("utf-8")
 
         # Resolve explicit connect and read timeouts for this specific request
-        if connect_timeout is not None:
-            try:
-                eff_connect_timeout = float(connect_timeout)
-            except (ValueError, TypeError):
-                eff_connect_timeout = self._connect_timeout
-        elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
-            try:
-                eff_connect_timeout = float(timeout[0])
-            except (ValueError, TypeError):
-                eff_connect_timeout = self._connect_timeout
-        elif isinstance(timeout, (int, float)) and float(timeout) > 0:
-            eff_connect_timeout = min(5.0, float(timeout))
-        else:
-            eff_connect_timeout = self._connect_timeout
-
-        if read_timeout is not None:
-            try:
-                eff_read_timeout = float(read_timeout)
-            except (ValueError, TypeError):
-                eff_read_timeout = self._read_timeout
-        elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
-            try:
-                eff_read_timeout = float(timeout[1])
-            except (ValueError, TypeError):
-                eff_read_timeout = self._read_timeout
-        elif isinstance(timeout, (int, float)) and float(timeout) > 0:
-            eff_read_timeout = float(timeout)
-        else:
-            try:
-                raw_to = float(self.timeout)
-                eff_read_timeout = raw_to if raw_to > 0 else 15.0
-            except (ValueError, TypeError):
-                eff_read_timeout = 15.0
+        eff_connect_timeout, eff_read_timeout = _resolve_timeouts(
+            timeout,
+            connect_timeout,
+            read_timeout,
+            default_connect=self._connect_timeout,
+            default_read=self._read_timeout,
+        )
 
         req_timeout = eff_read_timeout
 
@@ -1226,7 +1228,7 @@ class SafeHttpClient:
                     norm_url,
                     data=payload_bytes,
                     headers=req_headers,
-                    method=method.upper(),
+                    method=method_upper,
                 )
                 req._connect_timeout = eff_connect_timeout
                 req._read_timeout = eff_read_timeout
@@ -1272,7 +1274,7 @@ class SafeHttpClient:
                             break
                         chunks.append(chunk)
                         bytes_read += len(chunk)
-                        if bytes_read >= self.max_response_size:
+                        if self.max_response_size > 0 and bytes_read >= self.max_response_size:
                             logger.warning(
                                 f"Response from {norm_url} exceeded max size ({self.max_response_size} bytes). Truncating."
                             )
@@ -1292,9 +1294,9 @@ class SafeHttpClient:
                     detected_encoding = encoding or self._detect_encoding(content_type, raw_bytes)
                     decoded_text = robust_decode(raw_bytes, declared_encoding=detected_encoding)
 
-                    if status_code == 200:
+                    if status_code == 200 or (is_half_open_probe and status_code < 400):
                         self.circuit_breaker.record_success(norm_url)
-                        if decoded_text:
+                        if is_cacheable_method and status_code == 200 and decoded_text:
                             self.set_cached_response(norm_url, status_code, decoded_text, raw_bytes)
 
                     return status_code, decoded_text, raw_bytes
@@ -1333,7 +1335,10 @@ class SafeHttpClient:
                         if he.code == 429:
                             backoff = self._calc_backoff(attempt, retry_after=retry_after)
                             self._rate_limited_until = time.time() + backoff
-                        if he.code in (403, 429, 503):
+                        if he.code in (403, 429, 503) or (
+                            is_half_open_probe
+                            and he.code in (408, 500, 502, 504, 520, 521, 522, 523, 524)
+                        ):
                             tripped = self.circuit_breaker.record_failure(
                                 norm_url, status_code=he.code, retry_after=retry_after
                             )
@@ -1341,8 +1346,10 @@ class SafeHttpClient:
                                 logger.warning(
                                     f"Circuit breaker tripped OPEN for {norm_url} on HTTP {he.code}."
                                 )
+                        elif is_half_open_probe:
+                            self.circuit_breaker.record_success(norm_url)
                         # On 403, 429, or 5xx server error exhaustion, fallback to cached response if available
-                        if he.code in [403, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524] and self.cache_fallback:
+                        if is_cacheable_method and he.code in [403, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524] and self.cache_fallback:
                             cached = self.get_cached_response(norm_url)
                             if cached is not None:
                                 logger.warning(
@@ -1453,7 +1460,7 @@ class SafeHttpClient:
                     time.sleep(backoff)
                 else:
                     self.circuit_breaker.record_failure(norm_url)
-                    if self.cache_fallback:
+                    if is_cacheable_method and self.cache_fallback:
                         cached = self.get_cached_response(norm_url)
                         if cached is not None:
                             logger.warning(
@@ -1463,7 +1470,7 @@ class SafeHttpClient:
                             return cached
                     break
 
-        if self.cache_fallback:
+        if is_cacheable_method and self.cache_fallback:
             cached = self.get_cached_response(norm_url)
             if cached is not None:
                 logger.warning(
@@ -1499,7 +1506,7 @@ class SafeHttpClient:
             # 1. Delay seconds
             try:
                 sec = float(val_str)
-                if sec >= 0:
+                if math.isfinite(sec) and sec >= 0:
                     return sec
             except ValueError:
                 pass
@@ -1523,7 +1530,7 @@ class SafeHttpClient:
             try:
                 epoch = float(reset_val)
                 now_epoch = time.time()
-                if epoch > now_epoch:
+                if math.isfinite(epoch) and epoch > now_epoch:
                     return min(60.0, max(0.0, epoch - now_epoch))
             except (ValueError, TypeError):
                 pass

@@ -451,16 +451,16 @@ export function extractHostname(urlOrHost?: unknown): string {
 
   // Bare hostname without protocol or slashes
   if (!trimmed.includes('/') && !trimmed.includes(':') && /^[a-zA-Z0-9.\-]+$/.test(trimmed)) {
-    return trimmed.toLowerCase().replace(/\.$/, '');
+    return trimmed.toLowerCase().replace(/\.+$/, '');
   }
 
   try {
     if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) {
       const parsed = new URL(trimmed);
-      return (parsed.hostname || '').toLowerCase().replace(/\.$/, '');
+      return (parsed.hostname || '').toLowerCase().replace(/\.+$/, '');
     }
     const parsed = new URL('http://' + trimmed);
-    return (parsed.hostname || '').toLowerCase().replace(/\.$/, '');
+    return (parsed.hostname || '').toLowerCase().replace(/\.+$/, '');
   } catch {
     return '';
   }
@@ -472,8 +472,8 @@ export function extractHostname(urlOrHost?: unknown): string {
  */
 export function matchDomain(candidateHost: string, trustedDomain: string): boolean {
   if (!candidateHost || !trustedDomain || typeof candidateHost !== 'string' || typeof trustedDomain !== 'string') return false;
-  const normHost = candidateHost.toLowerCase().replace(/\.$/, '');
-  const normTarget = trustedDomain.toLowerCase().replace(/\.$/, '');
+  const normHost = candidateHost.toLowerCase().replace(/\.+$/, '');
+  const normTarget = trustedDomain.toLowerCase().replace(/\.+$/, '');
   return normHost === normTarget || normHost.endsWith('.' + normTarget);
 }
 
@@ -571,8 +571,9 @@ export function sanitizeSafeUrl(url?: unknown, options?: SanitizeUrlOptions): st
     return '#';
   }
 
-  // 6. Decode entities and percent-encodings to detect decoded control characters
-  const decodedCheck = safeDecodePercent(decodeHtmlEntities(trimmed));
+  // 6. Multi-pass decode entities and percent-encodings to detect nested/obfuscated control characters
+  const decodedPass1 = safeDecodePercent(decodeHtmlEntities(trimmed));
+  const decodedCheck = safeDecodePercent(decodeHtmlEntities(decodedPass1));
   if (/[\x00-\x1f\x7f-\x9f\u00ad\u200b-\u200f\u2028-\u202f\u2060-\u206f\ufeff]/u.test(decodedCheck)) {
     return '#';
   }
@@ -626,6 +627,9 @@ export function sanitizeSafeUrl(url?: unknown, options?: SanitizeUrlOptions): st
   if (/^https?:\/\//i.test(trimmed) && !/[\s<>"'\\]/.test(trimmed)) {
     try {
       const parsed = new URL(trimmed);
+      if (parsed.username || parsed.password) {
+        return '#';
+      }
       if (
         (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
         parsed.hostname &&

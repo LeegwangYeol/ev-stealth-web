@@ -5,6 +5,7 @@ Handles EUC-KR keyword encoding, session cookie warm-up, multi-board routing, an
 """
 
 import argparse
+import hashlib
 import html
 import json
 import logging
@@ -136,7 +137,8 @@ class BobaedreamScraper:
     def ensure_warm_up(self):
         """Warm up session cookie jar on Bobaedream."""
         if not self._warmed_up:
-            self.client.warm_up_session(BOBAE_BASE_URL)
+            if self.client and hasattr(self.client, "warm_up_session"):
+                self.client.warm_up_session(BOBAE_BASE_URL)
             self._warmed_up = True
 
     def search_board(
@@ -160,6 +162,7 @@ class BobaedreamScraper:
         except (ValueError, TypeError, OverflowError):
             eff_pages = 1
 
+        seen_nos = set()
         for page in range(1, eff_pages + 1):
             try:
                 encoded_kw = urllib.parse.quote(kw_str.encode("euc-kr"))
@@ -187,7 +190,12 @@ class BobaedreamScraper:
                 logger.info(f"No more items in [{board_code}] for '{keyword}' on page {page}")
                 break
 
-            results.extend(items)
+            new_items = [it for it in items if not it.get("post_no") or it["post_no"] not in seen_nos]
+            if not new_items:
+                logger.info(f"Page {page} of [{board_code}] repeated previously seen items. Halting loop.")
+                break
+            seen_nos.update(it["post_no"] for it in new_items if it.get("post_no"))
+            results.extend(new_items)
 
         logger.info(f"Found {len(results)} items in Bobaedream [{board_code}] for '{keyword}'.")
         return results
@@ -237,6 +245,7 @@ class BobaedreamScraper:
         except (ValueError, TypeError, OverflowError):
             eff_pages = 1
 
+        seen_urls = set()
         for page in range(1, eff_pages + 1):
             logger.info(f"Searching Bobaedream community search for '{kw_str}' (Page {page})...")
             post_data = encode_euc_kr_query({
@@ -265,7 +274,12 @@ class BobaedreamScraper:
                 logger.info(f"No more search results for '{keyword}' on page {page}")
                 break
 
-            results.extend(items)
+            new_items = [it for it in items if it.get("url") not in seen_urls]
+            if not new_items:
+                logger.info(f"Search page {page} repeated previously seen items. Halting loop.")
+                break
+            seen_urls.update(it["url"] for it in new_items if it.get("url"))
+            results.extend(new_items)
 
         logger.info(f"Found {len(results)} search items for keyword '{keyword}' on Bobaedream.")
         return results
@@ -383,6 +397,8 @@ class BobaedreamScraper:
         body_text = ""
         body_match = re.search(r'<div class="bodyCont"[^>]*>(.*?)</div>\s*<!--\s*//bodyCont', html_content, re.DOTALL)
         if not body_match:
+            body_match = re.search(r'<div class="bodyCont"[^>]*>(.*?)</div>', html_content, re.DOTALL)
+        if not body_match:
             body_match = re.search(r'<div id="print_area"[^>]*>(.*?)</div>', html_content, re.DOTALL)
         if not body_match:
             body_match = re.search(r'<div class="content01"[^>]*>(.*?)</div>', html_content, re.DOTALL)
@@ -465,7 +481,7 @@ class BobaedreamScraper:
         veh, cat = self.classify_text(combined_post)
         if cat and len(body) >= 20:
             slang = extract_slang_terms(combined_post, self.slang_dict)
-            rec_id = f"BOBAE_{cat.upper()[:4]}_{abs(hash(url)) % 100000:05d}"
+            rec_id = f"BOBAE_{cat.upper()[:4]}_{int(hashlib.sha256(url.encode('utf-8')).hexdigest(), 16) % 100000:05d}"
             severity = self._determine_severity(cat, combined_post)
             topic = self._extract_defect_topic(cat, combined_post)
             records.append(ComplaintRecord(
@@ -497,7 +513,7 @@ class BobaedreamScraper:
             c_veh, c_cat = self.classify_text(comment)
             if c_cat and len(comment) >= 15:
                 c_slang = extract_slang_terms(comment, self.slang_dict)
-                rec_id = f"BOBAE_{c_cat.upper()[:4]}_{abs(hash(url + str(idx))) % 100000:05d}"
+                rec_id = f"BOBAE_{c_cat.upper()[:4]}_{int(hashlib.sha256((url + str(idx)).encode('utf-8')).hexdigest(), 16) % 100000:05d}"
                 severity = self._determine_severity(c_cat, comment)
                 topic = self._extract_defect_topic(c_cat, comment)
                 records.append(ComplaintRecord(
@@ -561,7 +577,7 @@ class BobaedreamScraper:
                                         post_url=item.get("post_url") or item.get("url") or "",
                                         post_title=item.get("post_title") or item.get("title") or "",
                                         target_vehicle=item.get("target_vehicle") or "Unknown",
-                                        category=item.get("category") or "convenience",
+                                        category=item.get("category") or "repair_as",
                                         defect_topic=item.get("defect_topic") or "",
                                         raw_quote=item.get("raw_quote") or item.get("content") or "",
                                         slang_terms=item.get("slang_terms") if isinstance(item.get("slang_terms"), list) else [],
@@ -653,35 +669,35 @@ def main():
     parser.add_argument("--output", type=str, default="/Users/a7890/src/my-e-car/data/bobaedream_complaints.json", help="Output JSON path")
     args = parser.parse_args()
 
-    scraper = BobaedreamScraper()
-    all_records = []
-    consecutive_failures = 0
+    with BobaedreamScraper() as scraper:
+        all_records = []
+        consecutive_failures = 0
 
-    for b_code in args.boards:
-        if consecutive_failures >= 5:
-            logger.warning("Halting scrape loop due to 5 consecutive network failures / circuit trips.")
-            break
-        for kw in args.keywords:
+        for b_code in args.boards:
             if consecutive_failures >= 5:
+                logger.warning("Halting scrape loop due to 5 consecutive network failures / circuit trips.")
                 break
-            logger.info(f"Searching Bobaedream [{b_code}] for keyword: {kw}")
-            items = scraper.search_board(b_code, kw, max_pages=1)
-            if not items:
-                consecutive_failures += 1
-            else:
-                consecutive_failures = 0
-            for item in items[:args.limit]:
-                post_data = scraper.fetch_post_detail(item["url"])
-                if post_data:
-                    records = scraper.extract_complaint_records(post_data, board_name=BOBAE_BOARDS.get(b_code, f"보배드림 ({b_code})"))
-                    all_records.extend(records)
+            for kw in args.keywords:
+                if consecutive_failures >= 5:
+                    break
+                logger.info(f"Searching Bobaedream [{b_code}] for keyword: {kw}")
+                items = scraper.search_board(b_code, kw, max_pages=1)
+                if not items:
+                    consecutive_failures += 1
+                else:
+                    consecutive_failures = 0
+                for item in items[:args.limit]:
+                    post_data = scraper.fetch_post_detail(item["url"])
+                    if post_data:
+                        records = scraper.extract_complaint_records(post_data, board_name=BOBAE_BOARDS.get(b_code, f"보배드림 ({b_code})"))
+                        all_records.extend(records)
 
-    if not all_records and scraper.cache_fallback:
-        logger.warning("No records harvested from live Bobaedream site. Falling back to seed datasets.")
-        all_records = scraper.load_seed_records(limit=args.limit * len(args.boards))
+        if not all_records and scraper.cache_fallback:
+            logger.warning("No records harvested from live Bobaedream site. Falling back to seed datasets.")
+            all_records = scraper.load_seed_records(limit=args.limit * len(args.boards))
 
-    save_complaints_json(all_records, args.output)
-    print(f"Collected {len(all_records)} records from Bobaedream.")
+        save_complaints_json(all_records, args.output)
+        print(f"Collected {len(all_records)} records from Bobaedream.")
 
 
 if __name__ == "__main__":

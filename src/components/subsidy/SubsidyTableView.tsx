@@ -2,6 +2,7 @@
 
 import React, { memo, useCallback, useMemo, useState, useEffect } from 'react';
 import { RegionEntry, CategoryMetrics, AlertSeverity } from '@/types/subsidy';
+import { resolveAlertSeverity } from '@/lib/subsidyCalculations';
 import type { RegionSortOption } from '@/lib/subsidyCalculations';
 import SubsidyBadge, { getStatusLabel } from './SubsidyBadge';
 
@@ -106,7 +107,9 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
   const regionName = region?.name_ko || '해당 지역';
   const regionId = region?.region_id || '';
   const categoryLabel = selectedCategory === 'passenger' ? '전기승용' : selectedCategory === 'commercial' ? '전기화물' : '전기승합';
-  const isDepleted = (cat?.status || '').toUpperCase() === 'DEPLETED' || depletionRate >= 100;
+  const rawStatus = typeof cat?.status === 'string' ? cat.status.trim() : '';
+  const effectiveStatus = rawStatus ? rawStatus : resolveAlertSeverity(undefined, depletionRate);
+  const isDepleted = effectiveStatus.toUpperCase() === 'DEPLETED' || depletionRate >= 100;
 
   // Memoized stable row handlers to prevent recreating closures on every render
   const handleToggle = useCallback(() => {
@@ -131,7 +134,8 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
   const shouldRenderMunis = isExpanded || hasBeenExpanded;
   const renderedMunis = useMemo(() => {
     if (!shouldRenderMunis) return null;
-    return munis.map((muni) => {
+    return munis.map((muni, idx) => {
+      if (!muni || typeof muni !== 'object') return null;
       const muniAnnounced = Number.isFinite(muni.announced_units) ? Math.max(0, muni.announced_units) : 0;
       const muniApplied = Number.isFinite(muni.applied_units) ? Math.max(0, muni.applied_units) : 0;
       const muniRemaining = Number.isFinite(muni.remaining_units)
@@ -143,11 +147,13 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
         ? (muniApplied / muniAnnounced) * 100
         : 0;
       const muniLocalSubsidy = Number.isFinite(muni.local_subsidy_krw) ? Math.max(0, muni.local_subsidy_krw) : 0;
+      const muniRawStatus = typeof muni.status === 'string' ? muni.status.trim() : '';
+      const muniStatus = muniRawStatus ? muniRawStatus : resolveAlertSeverity(undefined, muniDepletion);
 
       return (
-        <tr key={muni.muni_id || `${regionId}-${muni.name_ko}`} className="hover:bg-slate-900/50">
+        <tr key={muni.muni_id || `${regionId}-${muni.name_ko || idx}`} className="hover:bg-slate-900/50">
           <th scope="row" className="p-2 font-medium text-slate-200 sticky left-0 bg-slate-950 z-10 border-r border-slate-800">
-            {muni.name_ko}
+            {muni.name_ko || '세부 지자체'}
           </th>
           <td className="p-2 text-right font-mono text-slate-300">
             {((muniLocalSubsidy) / 10000).toLocaleString()}만 원
@@ -159,14 +165,14 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
             {muniDepletion.toFixed(1)}%
           </td>
           <td className="p-2 text-center">
-            <SubsidyBadge status={muni.status || 'available'} />
+            <SubsidyBadge status={muniStatus} />
           </td>
         </tr>
       );
     });
   }, [shouldRenderMunis, munis, regionId]);
 
-  const cleanStatus = getStatusLabel(cat?.status || 'available').replace(/^[^a-zA-Z0-9가-힣]+\s*/, '');
+  const cleanStatus = getStatusLabel(effectiveStatus).replace(/^[^a-zA-Z0-9가-힣]+\s*/, '');
 
   return (
     <React.Fragment>
@@ -258,7 +264,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
 
         {/* Alert Status */}
         <td className="p-3.5 text-center whitespace-nowrap">
-          <SubsidyBadge status={cat?.status || 'available'} />
+          <SubsidyBadge status={effectiveStatus} />
         </td>
 
         {/* Sub-Municipalities Collapsible Toggle */}
@@ -270,7 +276,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
               aria-expanded={isExpanded}
               aria-controls={'muni-details-table-' + regionId}
               aria-label={`${regionName} 세부 시·군·구 ${munis.length}개 현황 ${isExpanded ? '접기' : '보기'}`}
-              className="px-2.5 py-1.5 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium border border-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              className="px-2.5 py-1.5 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium border border-slate-500 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
               {isExpanded ? '접기 ▲' : `${munis.length}개 시·군 ▼`}
             </button>
@@ -285,9 +291,9 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
             type="button"
             onClick={handleSelectCalc}
             aria-label={`${regionName} 보조금으로 계산기 설정`}
-            className="px-3 py-1.5 min-h-[44px] inline-flex items-center justify-center text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+            className="px-3 py-1.5 min-h-[44px] inline-flex items-center justify-center gap-1 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
           >
-            계산 ⚡
+            계산 <span aria-hidden="true">⚡</span>
           </button>
         </td>
       </tr>
@@ -301,7 +307,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
               className="p-4 space-y-2"
             >
               <div className="flex items-center justify-between text-xs text-slate-300 font-bold mb-2">
-                <span>📍 {regionName} 관할 세부 시·군·구별 보조금 및 소진율 내역</span>
+                <span><span aria-hidden="true">📍</span> {regionName} 관할 세부 시·군·구별 보조금 및 소진율 내역</span>
                 <span className="text-[11px] text-slate-300 font-normal">
                   총 {munis.length}개 행정구역
                 </span>
@@ -311,7 +317,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
                 tabIndex={0}
                 role="region"
                 aria-label={`${regionName} 세부 시·군·구 보조금 현황 스크롤 영역`}
-                className="overflow-x-auto table-scroll-container rounded-xl border border-slate-800 bg-slate-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="overflow-x-auto table-scroll-container rounded-xl border border-slate-800 bg-slate-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
               >
                 <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-300 bg-slate-900 border-b border-slate-800 select-none" aria-hidden="true">
                   <span>← 좌우로 밀어서 세부 내역 확인</span>
@@ -400,7 +406,7 @@ export const SubsidyTableView = memo(function SubsidyTableView({
       tabIndex={0}
       role="region"
       aria-label="지자체별 보조금 소진율 비교 표 스크롤 영역"
-      className="overflow-x-auto table-scroll-container rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      className="overflow-x-auto table-scroll-container rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
     >
       <div className="md:hidden flex items-center justify-between px-3.5 py-2 text-[11px] font-medium text-slate-300 bg-slate-900 border-b border-slate-800 select-none" aria-hidden="true">
         <span>← 좌우로 밀어서 17개 지자체 비교</span>

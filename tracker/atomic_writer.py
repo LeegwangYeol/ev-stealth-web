@@ -193,27 +193,37 @@ class FileLock:
                     try:
                         fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                         # Inode verification: verify file was not unlinked and recreated under race condition
+                        inode_invalid = False
                         try:
                             f_stat = os.fstat(self.fd)
                             p_stat = os.stat(self.lock_path)
-                            if f_stat.st_nlink == 0 or (
+                            inode_invalid = f_stat.st_nlink == 0 or (
                                 f_stat.st_ino != 0 and (
                                     f_stat.st_ino != p_stat.st_ino or f_stat.st_dev != p_stat.st_dev
                                 )
-                            ):
-                                try:
-                                    os.close(self.fd)
-                                except OSError:
-                                    pass
-                                self.fd = None
-                                self.fd = os.open(self.lock_path, flags, 0o644)
-                                continue
+                            )
                         except OSError:
+                            inode_invalid = True
+
+                        if inode_invalid:
                             try:
                                 os.close(self.fd)
                             except OSError:
                                 pass
                             self.fd = None
+                            if (time.monotonic() - start_time) >= self.timeout:
+                                if self.fail_on_timeout:
+                                    raise TimeoutError(
+                                        f"Timeout ({self.timeout:.1f}s) acquiring lock on {self.lock_path}"
+                                    )
+                                logger.warning(
+                                    "Timeout (%.1fs) acquiring lock on %s during inode verification. Proceeding defensively.",
+                                    self.timeout,
+                                    self.lock_path,
+                                )
+                                self.acquired = False
+                                break
+                            time.sleep(self.poll_interval)
                             self.fd = os.open(self.lock_path, flags, 0o644)
                             continue
                         self.acquired = True
@@ -253,7 +263,7 @@ class FileLock:
                                 "Breaking stale lock on %s (holder pid=%s alive=%s, age=%.1fs > %.1fs)",
                                 self.lock_path,
                                 holder_pid,
-                                not is_dead_holder,
+                                holder_pid is not None and not is_dead_holder,
                                 lock_age,
                                 self.stale_timeout,
                             )
@@ -949,10 +959,9 @@ def atomic_write_json(
 
             # Throttle global temp directory cleanup to avoid disk thrashing
             global _last_temp_dir_cleanup_time
-            now_mono = time.monotonic()
-            if (now_mono - _last_temp_dir_cleanup_time) > 60.0:
+            if (time.monotonic() - _last_temp_dir_cleanup_time) > 60.0:
                 with _cleanup_meta_lock:
-                    if (now_mono - _last_temp_dir_cleanup_time) > 60.0:
+                    if (time.monotonic() - _last_temp_dir_cleanup_time) > 60.0:
                         cleanup_stale_lock_files(tempfile.gettempdir(), max_age_seconds=3600.0)
                         _last_temp_dir_cleanup_time = time.monotonic()
 
@@ -1223,10 +1232,9 @@ def atomic_write_text(
             cleanup_stale_lock_files(dest_dir, max_age_seconds=3600.0)
 
             global _last_temp_dir_cleanup_time
-            now_mono = time.monotonic()
-            if (now_mono - _last_temp_dir_cleanup_time) > 60.0:
+            if (time.monotonic() - _last_temp_dir_cleanup_time) > 60.0:
                 with _cleanup_meta_lock:
-                    if (now_mono - _last_temp_dir_cleanup_time) > 60.0:
+                    if (time.monotonic() - _last_temp_dir_cleanup_time) > 60.0:
                         cleanup_stale_lock_files(tempfile.gettempdir(), max_age_seconds=3600.0)
                         _last_temp_dir_cleanup_time = time.monotonic()
 

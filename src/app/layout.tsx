@@ -46,7 +46,7 @@ const geistMono = localFont({
 const rawSiteUrl =
   (process.env.NEXT_PUBLIC_SITE_URL || "").trim().replace(/\/+$/, "") ||
   "https://ev-stealth-web.vercel.app";
-const SITE_URL =
+const normalizedSiteUrl =
   rawSiteUrl.startsWith("http://") || rawSiteUrl.startsWith("https://")
     ? rawSiteUrl
     : `https://${rawSiteUrl}`;
@@ -58,6 +58,9 @@ function safeMetadataBase(url: string): URL {
     return new URL("https://ev-stealth-web.vercel.app");
   }
 }
+
+const METADATA_BASE = safeMetadataBase(normalizedSiteUrl);
+const SITE_URL = METADATA_BASE.origin;
 
 const globalJsonLd = {
   "@context": "https://schema.org",

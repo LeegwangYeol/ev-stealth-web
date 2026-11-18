@@ -32,6 +32,17 @@ except ImportError:
     from sentiment_engine import SentimentEngine
 
 
+def _safe_finite_float(val: Any, default: float) -> float:
+    """Return finite float value or default when val is None, bool, NaN, Inf, or non-numeric."""
+    if val is None or isinstance(val, bool):
+        return default
+    try:
+        f = float(val)
+        return f if math.isfinite(f) else default
+    except (ValueError, TypeError):
+        return default
+
+
 class CrossAggregator:
     """
     Multi-Dimensional Aggregation and Comparative Statistical Engine for EV Complaints.
@@ -55,8 +66,10 @@ class CrossAggregator:
         """
         # Enrich records with sentiment and DSI if not already present
         enriched_records = []
-        for r in records:
-            full_text = f"{r.get('post_title', '')} {r.get('defect_topic', '')} {r.get('raw_quote', '')}"
+        for r in (records or []):
+            if not isinstance(r, dict):
+                continue
+            full_text = f"{r.get('post_title') or ''} {r.get('defect_topic') or ''} {r.get('raw_quote') or ''}"
             sent_res = self.sentiment_engine.classify(full_text)
 
             rec_copy = dict(r)
@@ -137,16 +150,17 @@ class CrossAggregator:
             }
         }
 
-        for r in records:
-            veh = (r.get("target_vehicle", "") or "").lower()
-            quote = (r.get("raw_quote", "") or "").lower()
-            title = (r.get("post_title", "") or "").lower()
+        clean_records = [r for r in (records or []) if isinstance(r, dict)]
+        for r in clean_records:
+            veh = str(r.get("target_vehicle") or "").lower()
+            quote = str(r.get("raw_quote") or "").lower()
+            title = str(r.get("post_title") or "").lower()
             combined = f"{veh} {quote} {title}"
 
-            tier = r.get("sentiment_tier", "NEGATIVE")
-            cat = r.get("category", "parking")
-            dsi = r.get("dsi_score", 5.0)
-            pol = r.get("polarity_score", -0.5)
+            tier = str(r.get("sentiment_tier") or "NEGATIVE")
+            cat = str(r.get("category") or "parking")
+            dsi = _safe_finite_float(r.get("dsi_score"), 5.0)
+            pol = _safe_finite_float(r.get("polarity_score"), -0.5)
 
             # Classify Brand Family
             if any(k in combined for k in ["tesla", "테슬라", "model 3", "model y", "model s", "model x", "사이버트럭", "하이랜드"]):
@@ -168,7 +182,7 @@ class CrossAggregator:
             if pol <= -0.70:
                 grp["toxic_sentiment_count"] += 1
 
-        total_all = len(records) or 1
+        total_all = len(clean_records) or 1
         results = {}
 
         for key, grp in brand_groups.items():
@@ -220,13 +234,15 @@ class CrossAggregator:
             "boards": set(),
         })
 
-        for r in records:
-            plat = (r.get("platform") or "unknown").lower()
-            tier = r.get("sentiment_tier") or "NEGATIVE"
-            dsi = r.get("dsi_score", 5.0)
-            board = r.get("board_name") or ""
-            quote = r.get("raw_quote") or ""
-            slangs = r.get("slang_terms") or []
+        clean_records = [r for r in (records or []) if isinstance(r, dict)]
+        for r in clean_records:
+            plat = str(r.get("platform") or "unknown").lower()
+            tier = str(r.get("sentiment_tier") or "NEGATIVE")
+            dsi = _safe_finite_float(r.get("dsi_score"), 5.0)
+            board = str(r.get("board_name") or "")
+            quote = str(r.get("raw_quote") or "")
+            raw_slangs = r.get("slang_terms")
+            slangs = raw_slangs if isinstance(raw_slangs, (list, tuple, set)) else []
 
             tokens = self.tokenizer.tokenize(quote)
             tok_len = max(1, len(tokens))
@@ -239,10 +255,12 @@ class CrossAggregator:
             group["token_count"] += tok_len
             group["boards"].add(board)
 
-            for comp in r.get("detected_complaints", []):
-                group["complaint_counts"][comp] += 1
+            raw_comps = r.get("detected_complaints")
+            if isinstance(raw_comps, (list, tuple, set)):
+                for comp in raw_comps:
+                    group["complaint_counts"][str(comp)] += 1
 
-        total_all = len(records) or 1
+        total_all = len(clean_records) or 1
         results = {}
 
         for plat, grp in platform_groups.items():
@@ -305,10 +323,11 @@ class CrossAggregator:
             "segment": "Passenger EV",
         })
 
-        for r in records:
-            veh = r.get("target_vehicle") or "Unknown EV"
-            cat = r.get("category") or "parking"
-            dsi = r.get("dsi_score", 5.0)
+        clean_records = [r for r in (records or []) if isinstance(r, dict)]
+        for r in clean_records:
+            veh = str(r.get("target_vehicle") or "Unknown EV")
+            cat = str(r.get("category") or "parking")
+            dsi = _safe_finite_float(r.get("dsi_score"), 5.0)
 
             # Determine segment
             is_commercial = any(c in veh.lower() for c in ["t4k", "masada", "van", "truck", "마사다", "이티밴", "1톤", "포터", "봉고"])
@@ -320,10 +339,12 @@ class CrossAggregator:
             group["dsi_sum"] += dsi
             group["segment"] = segment
 
-            for comp in r.get("detected_complaints", []):
-                group["complaint_counts"][comp] += 1
+            raw_comps = r.get("detected_complaints")
+            if isinstance(raw_comps, (list, tuple, set)):
+                for comp in raw_comps:
+                    group["complaint_counts"][str(comp)] += 1
 
-        total_all = len(records) or 1
+        total_all = len(clean_records) or 1
         results = {}
 
         # Primary defect symptoms mapping for vehicle models
@@ -414,14 +435,15 @@ class CrossAggregator:
             },
         }
 
-        for r in records:
-            ts = r.get("collected_at") or ""
+        clean_records = [r for r in (records or []) if isinstance(r, dict)]
+        for r in clean_records:
+            ts = str(r.get("collected_at") or "")
             match = re.search(r"\b(202[4-6])\b", ts)
             year = match.group(1) if match else "2026"
 
-            tier = r.get("sentiment_tier") or "NEGATIVE"
-            cat = r.get("category") or "parking"
-            dsi = r.get("dsi_score", 5.0)
+            tier = str(r.get("sentiment_tier") or "NEGATIVE")
+            cat = str(r.get("category") or "parking")
+            dsi = _safe_finite_float(r.get("dsi_score"), 5.0)
 
             grp = temporal_groups.get(year, temporal_groups["2026"])
             grp["count"] += 1
@@ -429,7 +451,7 @@ class CrossAggregator:
             grp["category_counts"][cat] += 1
             grp["dsi_sum"] += dsi
 
-        total_all = len(records) or 1
+        total_all = len(clean_records) or 1
         results = {}
 
         for yr, grp in sorted(temporal_groups.items()):
@@ -463,6 +485,8 @@ class CrossAggregator:
         3. Brand Family x Category (Tesla vs Hyundai/Kia vs Global vs BYD x 4 Categories)
         4. Brand Family x Sentiment Tier (4 Brands x 4 Tiers)
         """
+        clean_records = [r for r in (records or []) if isinstance(r, dict)]
+
         # 1. Platform x Sentiment Contingency
         target_platforms = ["bobaedream", "dcinside", "blind", "naver_cafe", "youtube"]
         sentiment_tiers = ["POSITIVE", "NEUTRAL", "NEGATIVE", "STRONGLY_NEGATIVE"]
@@ -471,7 +495,7 @@ class CrossAggregator:
         for plat in target_platforms:
             row = []
             for tier in sentiment_tiers:
-                c = sum(1 for r in records if (r.get("platform") or "").lower() == plat and r.get("sentiment_tier") == tier)
+                c = sum(1 for r in clean_records if str(r.get("platform") or "").lower() == plat and r.get("sentiment_tier") == tier)
                 row.append(c)
             plat_sent_matrix.append(row)
 
@@ -487,17 +511,17 @@ class CrossAggregator:
             for seg in segments:
                 if seg == "Commercial EV":
                     c = sum(
-                        1 for r in records
+                        1 for r in clean_records
                         if r.get("category") == cat and any(
-                            v in (r.get("target_vehicle") or "").lower()
+                            v in str(r.get("target_vehicle") or "").lower()
                             for v in ["t4k", "masada", "van", "truck", "마사다", "이티밴", "1톤", "포터", "봉고"]
                         )
                     )
                 else:
                     c = sum(
-                        1 for r in records
+                        1 for r in clean_records
                         if r.get("category") == cat and not any(
-                            v in (r.get("target_vehicle") or "").lower()
+                            v in str(r.get("target_vehicle") or "").lower()
                             for v in ["t4k", "masada", "van", "truck", "마사다", "이티밴", "1톤", "포터", "봉고"]
                         )
                     )
@@ -510,7 +534,7 @@ class CrossAggregator:
         brand_families = ["Tesla", "Hyundai_Kia_Genesis", "Global_Imports", "BYD_Chinese"]
 
         def get_brand_key(rec):
-            combined = f"{rec.get('target_vehicle', '')} {rec.get('raw_quote', '')} {rec.get('post_title', '')}".lower()
+            combined = f"{rec.get('target_vehicle') or ''} {rec.get('raw_quote') or ''} {rec.get('post_title') or ''}".lower()
             if any(k in combined for k in ["tesla", "테슬라", "model 3", "model y", "model s", "model x", "사이버트럭", "하이랜드"]):
                 return "Tesla"
             elif any(k in combined for k in ["ioniq", "아이오닉", "ev6", "ev9", "현대", "기아", "코나", "니로", "gv60", "genesis", "제네시스", "eg80", "egv70", "iccu", "e-gmp"]):
@@ -524,7 +548,7 @@ class CrossAggregator:
         for bf in brand_families:
             row = []
             for cat in categories:
-                c = sum(1 for r in records if get_brand_key(r) == bf and r.get("category") == cat)
+                c = sum(1 for r in clean_records if get_brand_key(r) == bf and r.get("category") == cat)
                 row.append(c)
             brand_cat_matrix.append(row)
 
@@ -535,7 +559,7 @@ class CrossAggregator:
         for bf in brand_families:
             row = []
             for tier in sentiment_tiers:
-                c = sum(1 for r in records if get_brand_key(r) == bf and r.get("sentiment_tier") == tier)
+                c = sum(1 for r in clean_records if get_brand_key(r) == bf and r.get("sentiment_tier") == tier)
                 row.append(c)
             brand_sent_matrix.append(row)
 
@@ -586,17 +610,19 @@ class CrossAggregator:
         Pure Python implementation of Pearson's Chi-Square Test of Independence / Homogeneity.
         Returns: (chi2_statistic, degrees_of_freedom, p_value_approx)
         """
+        if not contingency_matrix:
+            return 0.0, 0, 1.0
         num_rows = len(contingency_matrix)
-        num_cols = len(contingency_matrix[0]) if num_rows > 0 else 0
+        num_cols = min((len(row) for row in contingency_matrix), default=0)
 
         if num_rows <= 1 or num_cols <= 1:
             return 0.0, 0, 1.0
 
-        row_totals = [sum(row) for row in contingency_matrix]
+        row_totals = [sum(row[:num_cols]) for row in contingency_matrix]
         col_totals = [sum(contingency_matrix[r][c] for r in range(num_rows)) for c in range(num_cols)]
         grand_total = sum(row_totals)
 
-        if grand_total == 0:
+        if grand_total <= 0:
             return 0.0, 0, 1.0
 
         chi2_stat = 0.0

@@ -72,7 +72,12 @@ function ClientTimestampBase({
 }: ClientTimestampProps) {
   const mounted = useIsMounted();
 
-  const rawVal = typeof isoString === 'string' ? isoString : typeof timestamp === 'string' ? timestamp : '';
+  const rawVal =
+    typeof isoString === 'string' && isoString.trim().length > 0
+      ? isoString
+      : typeof timestamp === 'string'
+      ? timestamp
+      : '';
   const effectiveIso = rawVal.trim();
 
   const fallbackText = useMemo(() => {

@@ -38,7 +38,7 @@ export interface DsiBreakdown {
 
 export interface DefectReportItem {
   id: string;
-  source: DefectReportSource | string;
+  source: DefectReportSource;
   date: string;
   title: string;
   summary: string;

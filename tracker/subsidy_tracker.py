@@ -986,7 +986,8 @@ class SubsidyTracker:
         except (ValueError, TypeError, OverflowError):
             safe_backoff = 0.05
         closed_exc_ids: Set[int] = set()
-        for attempt in range(1, max_retries + 1):
+        safe_retries = max(1, _safe_int_metric(max_retries, 3))
+        for attempt in range(1, safe_retries + 1):
             try:
                 req = urllib.request.Request(
                     self.endpoint_url,
@@ -1016,9 +1017,9 @@ class SubsidyTracker:
                                 "Remote server returned non-dict JSON structure (%s). Attempt %d/%d",
                                 type(parsed).__name__,
                                 attempt,
-                                max_retries,
+                                safe_retries,
                             )
-                            if attempt < max_retries:
+                            if attempt < safe_retries:
                                 backoff = safe_backoff * (2 ** (attempt - 1))
                                 time.sleep(backoff)
                                 continue
@@ -1028,9 +1029,9 @@ class SubsidyTracker:
                         "Remote server returned non-200 status: %d (attempt %d/%d)",
                         resp_status,
                         attempt,
-                        max_retries,
+                        safe_retries,
                     )
-                    if attempt < max_retries:
+                    if attempt < safe_retries:
                         backoff = safe_backoff * (2 ** (attempt - 1))
                         time.sleep(backoff)
                         continue
@@ -1056,8 +1057,8 @@ class SubsidyTracker:
                         exc.close()
                     except Exception:
                         pass
-                logger.warning("Live fetch attempt %d/%d failed: %s.", attempt, max_retries, exc)
-                if attempt < max_retries:
+                logger.warning("Live fetch attempt %d/%d failed: %s.", attempt, safe_retries, exc)
+                if attempt < safe_retries:
                     backoff = safe_backoff * (2 ** (attempt - 1))
                     time.sleep(backoff)
                     continue
@@ -1479,7 +1480,7 @@ class SubsidyTracker:
         cat = cats.get(category_name) if isinstance(cats, dict) else None
         rem = max(0, _safe_int_metric(_metric_val(cat, "remaining_units", 0), 0))
         app = max(0, _safe_int_metric(_metric_val(cat, "applied_units", 0), 0))
-        st = str(_metric_val(cat, "status", "HEALTHY")).split(".")[-1].strip().upper()
+        st = str(_metric_val(cat, "status", "HEALTHY") or "HEALTHY").split(".")[-1].strip().upper() or "HEALTHY"
 
         velocity = calculate_depletion_velocity(0, app, reference_days)
         days = predict_exhaustion_days(rem, velocity)

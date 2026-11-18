@@ -184,6 +184,11 @@ export interface AdjustmentFactors {
     | Record<BatteryChemistryType, BatteryChemistryAdjustment>
     | Record<string, BatteryChemistryAdjustment>;
   facelift_hardware?: FaceliftHardwareAdjustment;
+  hardware_platform?: {
+    architecture_800v_bonus: number;
+    architecture_400v_penalty: number;
+    description: string;
+  };
   software_ota?:
     | Record<SoftwareOtaLevel, number>
     | Record<string, number>
@@ -193,6 +198,15 @@ export interface AdjustmentFactors {
         description?: string;
       };
   mileage_sensitivity: MileageSensitivityAdjustment;
+}
+
+export interface PartialAdjustmentFactors {
+  warranty_cliff?: Partial<WarrantyCliffAdjustment>;
+  battery_chemistry?: Record<string, Partial<BatteryChemistryAdjustment>>;
+  facelift_hardware?: Partial<FaceliftHardwareAdjustment>;
+  hardware_platform?: Partial<NonNullable<AdjustmentFactors['hardware_platform']>>;
+  software_ota?: AdjustmentFactors['software_ota'];
+  mileage_sensitivity?: Partial<MileageSensitivityAdjustment>;
 }
 
 export interface ClawbackTier {
@@ -285,6 +299,13 @@ export interface TcoParameters {
   tax?: TcoTaxParameters;
 }
 
+export interface PartialTcoParameters {
+  fuel_tariffs?: Partial<TcoFuelTariffs>;
+  efficiency_baselines?: Partial<TcoEfficiencyBaselines>;
+  tax_parameters?: Partial<TcoTaxParameters>;
+  auxiliary_benefits?: Partial<TcoAuxiliaryBenefits>;
+}
+
 export interface DepreciationDatabase {
   metadata: {
     version: string;
@@ -314,7 +335,7 @@ export interface DepreciationDatabase {
 }
 
 export interface DepreciationCalculationInput {
-  modelId: string;
+  modelId?: string;
   years: number; // 0 to 10
   mileageKm?: number; // total odometer km
   winterSeason?: boolean;
@@ -384,6 +405,7 @@ export interface DepreciationCalculationResult {
 
 export interface BatterySimulationInput {
   modelId?: string;
+  model?: EvModelDepreciation;
   chemistry?: string | BatteryChemistryType;
   years?: number;
   heldYears?: number;
@@ -530,6 +552,6 @@ export interface CalculateDepreciationOptions {
   models?: EvModelDepreciation[];
   baselineAnnualMileageKm?: number;
   annualAverageKm?: number;
-  adjustmentFactors?: AdjustmentFactors;
+  adjustmentFactors?: PartialAdjustmentFactors;
   customPurchasePriceKrw?: number;
 }

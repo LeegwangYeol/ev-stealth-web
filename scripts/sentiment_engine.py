@@ -182,9 +182,11 @@ class SentimentEngine:
         s_convenience = 0.0
 
         for i, tok in enumerate(tokens):
-            raw = tok["raw"]
-            stem = tok["stem"]
-            cat = tok.get("category", "")
+            if not isinstance(tok, dict):
+                continue
+            raw = str(tok.get("raw") or "")
+            stem = str(tok.get("stem") or "")
+            cat = str(tok.get("category") or "")
 
             # 1. Concessive Transition Check
             if raw in self.CONCESSIVES or stem in self.CONCESSIVES:

@@ -93,6 +93,7 @@ export const SubsidyProgressBar = memo(function SubsidyProgressBar({
   const remainingPct = Math.max(0, 100 - (deliveredPct + pendingPct));
   const pendingCount = Math.max(0, safeApplied - safeDelivered);
   const colorScheme = getDepletionColor(safeDepletion, status);
+  const cleanStatusLabel = getStatusLabel(status).replace(/^[^a-zA-Z0-9가-힣]+\s*/, '');
 
   return (
     <div className="space-y-1.5 pt-1">
@@ -114,7 +115,7 @@ export const SubsidyProgressBar = memo(function SubsidyProgressBar({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-label={`${safeRegionName} ${safeCategoryLabel} 보조금 소진율`}
-        aria-valuetext={`소진율 ${safeDepletion.toFixed(1)}% (${getStatusLabel(status)}), 잔여 ${safeRemaining.toLocaleString()}대`}
+        aria-valuetext={`소진율 ${safeDepletion.toFixed(1)}% (${cleanStatusLabel}), 잔여 ${safeRemaining.toLocaleString()}대`}
         className="w-full bg-slate-950 rounded-full h-3.5 overflow-hidden flex relative border border-slate-600"
       >
         {/* Layer 1: Confirmed Delivered */}

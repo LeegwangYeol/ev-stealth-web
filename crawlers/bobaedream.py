@@ -17,7 +17,7 @@ import time
 import urllib.parse
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from crawlers.base_crawler import BaseCrawler
+from crawlers.base_crawler import BaseCrawler, _positive_float
 from utils.http_client import SafeHttpClient, clean_html_text, encode_euc_kr_query
 
 logger = logging.getLogger("BobaeDreamCrawler")
@@ -155,8 +155,11 @@ def is_deleted_or_restricted(html_content: Optional[str]) -> Tuple[bool, str]:
     # 2. Check if page has actual substantial article body:
     # If a page contains a large bodyCont (> 50 chars), only alert(...) can indicate deletion
     has_large_body = False
-    body_match = re.search(r'class=["\']bodyCont["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
-    if body_match and len(clean_html_text(body_match.group(1))) > 50:
+    body_inner = extract_container_content(html_content, "div", "bodyCont")
+    if not body_inner:
+        body_match = re.search(r'class=["\']bodyCont["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
+        body_inner = body_match.group(1) if body_match else ""
+    if body_inner and len(clean_html_text(body_inner)) > 50:
         has_large_body = True
 
     # Deleted or Non-existent posts
@@ -376,7 +379,8 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
             hour = int(month_day_match.group(3)) if month_day_match.group(3) else 12
             minute = int(month_day_match.group(4)) if month_day_match.group(4) else 0
             second = int(month_day_match.group(5)) if month_day_match.group(5) else 0
-            year = now.year
+            # Year rollover guard: if crawling in Jan but post date is Nov/Dec, post belongs to previous year
+            year = now.year - 1 if (now.month == 1 and month >= 11) else now.year
             dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
             return dt.isoformat()
         except (ValueError, OverflowError):
@@ -440,19 +444,24 @@ class BobaeDreamCrawler(BaseCrawler):
         if high > 0 and low <= high:
             time.sleep(random.uniform(low, high))
 
-    def ensure_warm_up(self, base_url: Optional[str] = None, force: bool = False):
+    def ensure_warm_up(self, base_url: Optional[Union[str, bool]] = None, force: bool = False) -> bool:
         """Warm up session cookies on BobaeDream base URL if not already done."""
         if isinstance(base_url, bool):
             force = base_url
             base_url = None
-        target_url = base_url or BOBAE_BASE_URL
+        target_url = (base_url if isinstance(base_url, str) else None) or BOBAE_BASE_URL
         if (not self._warmed_up or force) and target_url:
+            success = True
             try:
                 if self.client and hasattr(self.client, "warm_up_session"):
-                    self.client.warm_up_session(target_url)
+                    res = self.client.warm_up_session(target_url)
+                    success = bool(res) if res is not None else True
             except Exception as e:
                 logger.warning(f"BobaeDream warm_up_session notice: {e}")
+                success = False
             self._warmed_up = True
+            return success
+        return self._warmed_up
 
     def is_deleted_or_restricted(self, html_content: Optional[str]) -> Tuple[bool, str]:
         """Proxy check for deleted, restricted, or blocked pages."""
@@ -842,6 +851,8 @@ class BobaeDreamCrawler(BaseCrawler):
         # 5. Comments (Static + Dynamic AJAX)
         comments: List[str] = []
         timeout = kwargs.get("timeout")
+        if timeout is None:
+            timeout = (self.connect_timeout, self.read_timeout)
         ajax_cmt_url = self.extract_ajax_comment_url(html_content)
         if ajax_cmt_url:
             comments = self.fetch_ajax_comments(ajax_cmt_url, referer=post_url, timeout=timeout)
@@ -894,7 +905,7 @@ class BobaeDreamCrawler(BaseCrawler):
             eff_url = f"https:{eff_url}"
         elif eff_url.startswith("/"):
             eff_url = f"{BOBAE_BASE_URL}{eff_url}"
-        elif not (eff_url.startswith("http://") or eff_url.startswith("https://")):
+        elif not eff_url.lower().startswith(("http://", "https://")):
             eff_url = f"{BOBAE_BASE_URL}/{eff_url}"
 
         base_url = kwargs.get("base_url")
@@ -902,7 +913,12 @@ class BobaeDreamCrawler(BaseCrawler):
         if not self.client:
             return None
         eff_referer = referer or f"{BOBAE_BASE_URL}/"
-        timeout = kwargs.get("timeout", (self.connect_timeout, self.read_timeout))
+        timeout = kwargs.get("timeout")
+        if timeout is None:
+            timeout = (
+                _positive_float(kwargs.get("connect_timeout"), self.connect_timeout),
+                _positive_float(kwargs.get("read_timeout"), self.read_timeout),
+            )
 
         try:
             resp = self.client.get(eff_url, referer=eff_referer, timeout=timeout)

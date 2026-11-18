@@ -137,7 +137,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     # -----------------------------------------------------------------
     (re.compile(r"(모델\s*(?:3|쓰리|스리)\s*하이랜드|model\s*3\s*highland|m3\s*(?:highland|하이랜드)|(?<![가-힣a-zA-Z0-9])하이랜드" + PARTICLE_LOOKAHEAD + r"|(?<![a-zA-Z0-9])highland(?![a-zA-Z0-9]))", re.IGNORECASE), "Model 3 Highland", BRAND_TESLA),
     (re.compile(
-        r"(모델\s*(?:3|쓰리|스리)|model\s*3|모삼|모\s*3"
+        r"(모델\s*(?:3|쓰리|스리)|model\s*3|(?:테슬라\s*(?:모삼|모\s*3)|(?<![가-힣a-zA-Z0-9])(?:모삼|모\s*3))"
         r"|(?:테슬라\s*)?삼식이"
         r"|(?:테슬라\s*)?메기\s*3"
         r"|(?:테슬라\s+)메기"
@@ -153,7 +153,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     ), "Model 3", BRAND_TESLA),
     (re.compile(r"(모델\s*(?:y|와이)\s*주니퍼|model\s*y\s*juniper|my\s*(?:주니퍼|juniper)|(?<![가-힣a-zA-Z0-9])주니퍼(?!\s*(?:네트웍스|networks|라우터|router|스위치|switch))" + PARTICLE_LOOKAHEAD + r"|(?<![a-zA-Z0-9])juniper(?!\s*(?:networks|router|switch))(?![a-zA-Z0-9]))", re.IGNORECASE), "Model Y Juniper", BRAND_TESLA),
     (re.compile(
-        r"(모델\s*(?:y|와이)|model\s*y|모와|모\s*[y와]"
+        r"(모델\s*(?:y|와이)|model\s*y|(?:테슬라\s*(?:모와|모\s*[y와])|(?<![가-힣a-zA-Z0-9])(?:모와|모\s*[y와]))"
         r"|(?:테슬라\s*|tesla\s*)my"
         r"|\bmy(?=[은는이가을를의에과와도만로랑처조마나한께보부까]|으로|보다|부터|까지|처럼|조차|마저|한테|입|했|하|인|임|일)"
         r"|\bmy\s*(?:rwd|awd|lwd|lr|p|롱레인지|롱레|스탠다드|스탠|퍼포먼스|퍼포|차주|오너|출고|인도|계약|단차|결함|승차감)"

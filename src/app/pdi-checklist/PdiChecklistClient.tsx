@@ -59,87 +59,115 @@ export const LEGACY_STORAGE_KEYS = ['ev_pdi_checklist_state', 'ev_pdi_checklist'
  *
  * Guarantees prototype pollution safety, dirty array isolation, and fallback integrity.
  */
+function toSafeChecklistId(val: unknown): string | null {
+  if (typeof val === 'string' || typeof val === 'number') {
+    return String(val);
+  }
+  return null;
+}
+
+function isTruthyCheckFlag(val: unknown): boolean {
+  return val === true || val === 'true' || val === 1 || val === '1';
+}
+
+function parseParsedChecklistState(
+  parsed: unknown,
+  defaultItems: ChecklistItem[]
+): ChecklistItem[] {
+  if (!parsed || !Array.isArray(defaultItems)) return defaultItems;
+
+  // Case 1: Array of items or primitive IDs
+  if (Array.isArray(parsed)) {
+    if (parsed.length === 0) return defaultItems;
+
+    // Check if elements are purely primitive IDs (e.g. ['1', '3'] or [1, 3])
+    const isPureIdArray = parsed.every(
+      (p) => p === null || p === undefined || typeof p === 'string' || typeof p === 'number'
+    );
+    if (isPureIdArray) {
+      const checkedIdSet = new Set<string>();
+      for (const p of parsed) {
+        const safeId = toSafeChecklistId(p);
+        if (safeId !== null) checkedIdSet.add(safeId);
+      }
+      return defaultItems.map((item) => ({
+        ...item,
+        checked: checkedIdSet.has(String(item.id)),
+      }));
+    }
+
+    // Array of objects (e.g. [{ id: '1', checked: true }]) in single O(M) pass
+    const parsedById = new Map<string, boolean>();
+    for (const p of parsed) {
+      if (p && typeof p === 'object' && Object.prototype.hasOwnProperty.call(p, 'id')) {
+        const safeId = toSafeChecklistId((p as { id?: unknown }).id);
+        if (safeId !== null) {
+          parsedById.set(safeId, isTruthyCheckFlag((p as { checked?: unknown }).checked));
+        }
+      }
+    }
+    if (parsedById.size === 0) return defaultItems;
+    return defaultItems.map((item) => {
+      const matched = parsedById.get(String(item.id));
+      return matched !== undefined ? { ...item, checked: matched } : item;
+    });
+  }
+
+  // Case 2: Object envelope or dictionary
+  if (typeof parsed === 'object') {
+    const obj = parsed as Record<string, unknown>;
+
+    // Envelope with checkedIds array: { checkedIds: ['1', '3'] }
+    if (Array.isArray(obj.checkedIds)) {
+      const checkedIdSet = new Set<string>();
+      for (const id of obj.checkedIds) {
+        const safeId = toSafeChecklistId(id);
+        if (safeId !== null) checkedIdSet.add(safeId);
+      }
+      return defaultItems.map((item) => ({
+        ...item,
+        checked: checkedIdSet.has(String(item.id)),
+      }));
+    }
+
+    // Envelope with items array: { items: [...] } (direct recursion, no JSON round-trip)
+    if (Array.isArray(obj.items)) {
+      return parseParsedChecklistState(obj.items, defaultItems);
+    }
+
+    // Dictionary/map of id to boolean: { '1': true, '2': false }
+    const hasIdKey = defaultItems.some(
+      (item) =>
+        Object.prototype.hasOwnProperty.call(obj, item.id) ||
+        Object.prototype.hasOwnProperty.call(obj, String(item.id))
+    );
+    if (hasIdKey) {
+      return defaultItems.map((item) => {
+        const val = Object.prototype.hasOwnProperty.call(obj, item.id)
+          ? obj[item.id]
+          : Object.prototype.hasOwnProperty.call(obj, String(item.id))
+          ? obj[String(item.id)]
+          : undefined;
+        return val !== undefined ? { ...item, checked: isTruthyCheckFlag(val) } : item;
+      });
+    }
+  }
+
+  return defaultItems;
+}
+
 export function parseStoredChecklistState(
   raw: unknown,
   defaultItems: ChecklistItem[]
 ): ChecklistItem[] {
+  if (!Array.isArray(defaultItems)) return [];
   if (!raw || typeof raw !== 'string') return defaultItems;
   const trimmed = raw.trim();
   if (!trimmed) return defaultItems;
 
   try {
     const parsed = safeJsonParse<unknown>(trimmed, null);
-    if (!parsed) return defaultItems;
-
-    // Case 1: Array of items or primitive IDs
-    if (Array.isArray(parsed)) {
-      if (parsed.length === 0) return defaultItems;
-
-      // Check if elements are purely primitive IDs (e.g. ['1', '3'] or [1, 3])
-      const isPureIdArray = parsed.every(
-        (p) => p === null || p === undefined || typeof p === 'string' || typeof p === 'number'
-      );
-      if (isPureIdArray) {
-        const checkedIdSet = new Set(
-          parsed
-            .filter((p) => p !== null && p !== undefined)
-            .map((p) => String(p))
-        );
-        return defaultItems.map((item) => ({
-          ...item,
-          checked: checkedIdSet.has(String(item.id)),
-        }));
-      }
-
-      // Array of objects (e.g. [{ id: '1', checked: true }])
-      return defaultItems.map((item) => {
-        const match = parsed.find(
-          (p: unknown): p is Partial<ChecklistItem> =>
-            Boolean(p && typeof p === 'object' && 'id' in p && String((p as { id: unknown }).id) === String(item.id))
-        );
-        const rawChecked = match ? (match.checked as unknown) : false;
-        const isChecked =
-          rawChecked === true || rawChecked === 'true' || rawChecked === 1 || rawChecked === '1';
-        return match ? { ...item, checked: Boolean(isChecked) } : item;
-      });
-    }
-
-    // Case 2: Object envelope or dictionary
-    if (typeof parsed === 'object') {
-      const obj = parsed as Record<string, unknown>;
-
-      // Envelope with checkedIds array: { checkedIds: ['1', '3'] }
-      if (Array.isArray(obj.checkedIds)) {
-        const checkedIdSet = new Set(obj.checkedIds.map((id) => String(id)));
-        return defaultItems.map((item) => ({
-          ...item,
-          checked: checkedIdSet.has(String(item.id)),
-        }));
-      }
-
-      // Envelope with items array: { items: [...] }
-      if (Array.isArray(obj.items)) {
-        return parseStoredChecklistState(JSON.stringify(obj.items), defaultItems);
-      }
-
-      // Dictionary/map of id to boolean: { '1': true, '2': false }
-      const hasIdKey = defaultItems.some(
-        (item) =>
-          Object.prototype.hasOwnProperty.call(obj, item.id) ||
-          Object.prototype.hasOwnProperty.call(obj, String(item.id))
-      );
-      if (hasIdKey) {
-        return defaultItems.map((item) => {
-          const val = Object.prototype.hasOwnProperty.call(obj, item.id)
-            ? obj[item.id]
-            : Object.prototype.hasOwnProperty.call(obj, String(item.id))
-            ? obj[String(item.id)]
-            : undefined;
-          const isChecked = val === true || val === 'true' || val === 1 || val === '1';
-          return val !== undefined ? { ...item, checked: isChecked } : item;
-        });
-      }
-    }
+    return parseParsedChecklistState(parsed, defaultItems);
   } catch (e) {
     console.warn('[PDI Checklist] Corrupted storage recovery triggered:', e);
   }
@@ -409,13 +437,21 @@ export default function PdiChecklistClient() {
     setMounted(true);
     setStorageType(getStorageType());
     const loaded = loadChecklistFromStorage(INITIAL_PDI_ITEMS);
+    syncedItemsRef.current = loaded;
     setItems(loaded);
   }, []);
 
-  // Cross-tab synchronization via storage event (handles updates and resets)
+  // Cross-tab synchronization via storage event (handles updates, resets, and localStorage.clear())
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handleStorageChange = (e: StorageEvent) => {
+      if (e.storageArea && e.storageArea !== window.localStorage) return;
+      if (e.key === null && !e.newValue) {
+        const resetItems = INITIAL_PDI_ITEMS.map((item) => ({ ...item }));
+        syncedItemsRef.current = resetItems;
+        setItems(resetItems);
+        return;
+      }
       if (e.key === STORAGE_KEY) {
         if (!e.newValue) {
           // Another tab cleared or reset storage -> synchronize to initial defaults with fresh reference
@@ -464,7 +500,7 @@ export default function PdiChecklistClient() {
 
   const resetChecklist = useCallback(() => {
     if (typeof window !== 'undefined' && window.confirm('체크리스트 상태를 초기화하시겠습니까?')) {
-      setItems(INITIAL_PDI_ITEMS);
+      setItems(INITIAL_PDI_ITEMS.map((item) => ({ ...item })));
       clearChecklistFromStorage();
       setActionAnnouncement('체크리스트가 초기화되었습니다. ');
     }
@@ -665,7 +701,7 @@ export default function PdiChecklistClient() {
           className="w-full bg-slate-200 border border-slate-300 rounded-full h-3 overflow-hidden"
         >
           <div
-            className={`h-3 rounded-full transition-all duration-500 ease-out ${
+            className={`h-3 rounded-full transition-all duration-500 ease-out motion-reduce:transition-none ${
               isAllChecked ? 'bg-emerald-600' : 'bg-blue-600'
             }`}
             style={{ width: `${progressPercentage}%` }}
@@ -767,11 +803,12 @@ export default function PdiChecklistClient() {
                   <span className="flex items-center gap-2 text-xs font-normal text-slate-600 print:hidden">
                     <span>({categoryStats[category]?.checked || 0}/{categoryStats[category]?.total || 0} 완료)</span>
                     <svg
-                      className={`w-5 h-5 transform transition-transform duration-200 ${!isCollapsed ? 'rotate-180' : ''}`}
+                      className={`w-5 h-5 transform transition-transform duration-200 motion-reduce:transition-none ${!isCollapsed ? 'rotate-180' : ''}`}
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
                       aria-hidden="true"
+                      focusable="false"
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                     </svg>

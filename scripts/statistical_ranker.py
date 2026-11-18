@@ -232,6 +232,8 @@ class StatisticalRanker:
         Extract N-grams and score with Pointwise Mutual Information (PMI).
         Returns: List of ((w1, w2, ...), count, pmi_score)
         """
+        if n < 1 or top_k <= 0:
+            return []
         ngram_counts: Counter = Counter()
         total_ngrams = 0
 
@@ -256,7 +258,7 @@ class StatisticalRanker:
             for w in gram:
                 p_indep *= (self.term_freq.get(w, 1) / total_tokens)
 
-            pmi = math.log2(p_joint / p_indep) if p_indep > 0 else 0.0
+            pmi = math.log2(p_joint / p_indep) if (p_joint > 0 and p_indep > 0) else 0.0
             scored_ngrams.append((gram, count, round(pmi, 2)))
 
         scored_ngrams.sort(key=lambda x: (x[1], x[2]), reverse=True)
@@ -273,6 +275,8 @@ class StatisticalRanker:
         """
         if records is not None:
             self.fit_and_process(records)
+        if top_n <= 0:
+            return []
 
         # Authoritative master topics for the top ranking table matching project inventory
         canonical_master_topics = [
@@ -383,14 +387,16 @@ class StatisticalRanker:
         Compute top complaint keywords filtered for a specific automotive brand family.
         Supported brands: 'tesla', 'hyundai_kia', 'genesis', 'mercedes', 'bmw', 'porsche', 'polestar', 'byd', 'chinese'
         """
-        recs = records if records is not None else self.records
-        brand_lower = brand.lower()
+        if top_n <= 0:
+            return []
+        recs = [r for r in (records if records is not None else self.records) if isinstance(r, dict)]
+        brand_lower = str(brand or "").lower()
 
         filtered_recs = []
         for r in recs:
-            v = (r.get("target_vehicle", "") or "").lower()
-            q = (r.get("raw_quote", "") or "").lower()
-            t = (r.get("post_title", "") or "").lower()
+            v = str(r.get("target_vehicle") or "").lower()
+            q = str(r.get("raw_quote") or "").lower()
+            t = str(r.get("post_title") or "").lower()
             combined = f"{v} {q} {t}"
 
             if brand_lower in ["tesla", "테슬라"]:
@@ -433,7 +439,7 @@ class StatisticalRanker:
             if term in KOREAN_STOPWORDS or len(term) < 2:
                 continue
             df = sub_ranker.doc_freq.get(term, 1)
-            smooth_idf = math.log((1.0 + sub_ranker.num_docs) / (1.0 + df)) + 1.0
+            smooth_idf = math.log((1.0 + sub_ranker.num_docs) / (1.0 + df)) + 1.0 if sub_ranker.num_docs > 0 else 1.0
             weight = DOMAIN_SEVERITY_MAP.get(term, 1.2)
             ccs = (count ** 0.85) * smooth_idf * weight
             dsi_vals = sub_ranker.term_dsi_values.get(term, [7.0])

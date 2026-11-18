@@ -65,6 +65,7 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
 
 
 _DATE_4DIGIT_RE = re.compile(r"(\d{4})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})")
+_DATE_KO_RE = re.compile(r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?")
 _DATE_2DIGIT_RE = re.compile(r"(?:^|[^\d])(\d{2})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})")
 
 
@@ -87,7 +88,7 @@ def _extract_record_date(record: Optional[Mapping[str, Any]]) -> str:
         if not val:
             continue
         val_str = str(val).strip()
-        match_4 = _DATE_4DIGIT_RE.search(val_str)
+        match_4 = _DATE_4DIGIT_RE.search(val_str) or _DATE_KO_RE.search(val_str)
         if match_4:
             validated = _validate_ymd(int(match_4.group(1)), int(match_4.group(2)), int(match_4.group(3)))
             if validated:

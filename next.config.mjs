@@ -2,16 +2,17 @@
 import withBundleAnalyzer from '@next/bundle-analyzer';
 
 const isProd = process.env.NODE_ENV === 'production';
+const isDev = process.env.NODE_ENV === 'development';
 
 // Dynamic Content Security Policy supporting local development and hardened production
 const cspDirectives = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isProd ? '' : " 'unsafe-eval'"}`,
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
   "script-src-attr 'none'",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net",
-  `connect-src 'self'${isProd ? '' : ' ws: wss:'}`,
+  `connect-src 'self'${isDev ? ' ws: wss:' : ''}`,
   "worker-src 'self' blob:",
   "child-src 'self' blob:",
   "frame-src 'none'",

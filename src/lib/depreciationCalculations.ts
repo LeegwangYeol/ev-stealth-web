@@ -778,6 +778,7 @@ export function clamp(val: number, min: number, max: number): number {
   const safeMax = Number.isFinite(max) ? max : safeMin;
   const trueMin = Math.min(safeMin, safeMax);
   const trueMax = Math.max(safeMin, safeMax);
+  if (val === Infinity) return trueMax;
   if (!Number.isFinite(val)) return trueMin;
   return Math.min(Math.max(val, trueMin), trueMax);
 }
@@ -837,7 +838,7 @@ export function interpolateBaselineResidual(
 ): number {
   const key = basis === 'effective' ? 'residual_pct_effective' : 'residual_pct_msrp';
 
-  const numYears = typeof years === 'number' ? years : Number(years);
+  const numYears = parseNumericInput(years);
   if (!Number.isFinite(numYears) || numYears <= 0) return 100.0;
 
   const getPoint = (val: unknown, fallback: number): number =>
@@ -895,32 +896,61 @@ export function calculateDepreciation(
   const parsedYears = parseNumericInput(safeInput.years);
   const years = Number.isFinite(parsedYears) ? clamp(parsedYears, 0, 100) : 0;
 
+  const rawFactors =
+    options?.adjustmentFactors && typeof options.adjustmentFactors === 'object'
+      ? options.adjustmentFactors
+      : undefined;
   const baselineAnnualMileageKm = finitePosOr(
     options?.baselineAnnualMileageKm,
-    DEFAULT_BASELINE_ANNUAL_MILEAGE_KM
+    finitePosOr(
+      rawFactors?.mileage_sensitivity?.baseline_annual_km,
+      finitePosOr(
+        rawFactors?.mileage_sensitivity?.base_km_per_year,
+        DEFAULT_BASELINE_ANNUAL_MILEAGE_KM
+      )
+    )
   );
-  const rawFactors = options?.adjustmentFactors;
   const defaultWarrantyCliff = DEFAULT_ADJUSTMENT_FACTORS.warranty_cliff;
   const defaultMileageSens = DEFAULT_ADJUSTMENT_FACTORS.mileage_sensitivity;
-  const approachingCliffPenalty = finiteOr(
-    rawFactors?.warranty_cliff?.approaching_cliff_1_2_years_penalty,
-    defaultWarrantyCliff.approaching_cliff_1_2_years_penalty
+  const approachingCliffPenalty = clamp(
+    finiteOr(
+      rawFactors?.warranty_cliff?.approaching_cliff_1_2_years_penalty,
+      defaultWarrantyCliff.approaching_cliff_1_2_years_penalty
+    ),
+    -1e6,
+    1e6
   );
-  const expiredWarrantyPenalty = finiteOr(
-    rawFactors?.warranty_cliff?.expired_warranty_penalty,
-    defaultWarrantyCliff.expired_warranty_penalty
+  const expiredWarrantyPenalty = clamp(
+    finiteOr(
+      rawFactors?.warranty_cliff?.expired_warranty_penalty,
+      defaultWarrantyCliff.expired_warranty_penalty
+    ),
+    -1e6,
+    1e6
   );
-  const excessPenaltyRate = finiteOr(
-    rawFactors?.mileage_sensitivity?.penalty_per_10000km_excess,
-    defaultMileageSens.penalty_per_10000km_excess
+  const excessPenaltyRate = clamp(
+    finiteOr(
+      rawFactors?.mileage_sensitivity?.penalty_per_10000km_excess,
+      defaultMileageSens.penalty_per_10000km_excess
+    ),
+    -1e6,
+    1e6
   );
-  const deficitBonusRate = finiteOr(
-    rawFactors?.mileage_sensitivity?.bonus_per_10000km_deficit,
-    defaultMileageSens.bonus_per_10000km_deficit
+  const deficitBonusRate = clamp(
+    finiteOr(
+      rawFactors?.mileage_sensitivity?.bonus_per_10000km_deficit,
+      defaultMileageSens.bonus_per_10000km_deficit
+    ),
+    -1e6,
+    1e6
   );
-  const maxMileageDiscountCap = finiteOr(
-    rawFactors?.mileage_sensitivity?.max_mileage_discount_cap,
-    defaultMileageSens.max_mileage_discount_cap ?? -0.15
+  const maxMileageDiscountCap = clamp(
+    finiteOr(
+      rawFactors?.mileage_sensitivity?.max_mileage_discount_cap,
+      defaultMileageSens.max_mileage_discount_cap ?? -0.15
+    ),
+    -1e6,
+    1e6
   );
 
   const parsedMileage = parseNumericInput(safeInput.mileageKm);
@@ -932,11 +962,16 @@ export function calculateDepreciation(
   const {
     modelId,
     winterSeason = false,
-    priceBasis = 'msrp',
     customPurchasePriceKrw,
   } = safeInput;
+  const priceBasis: PriceBasis = safeInput.priceBasis === 'effective' ? 'effective' : 'msrp';
 
-  let model = safeInput.model || options?.model;
+  let model =
+    safeInput.model && typeof safeInput.model === 'object'
+      ? safeInput.model
+      : options?.model && typeof options.model === 'object'
+      ? options.model
+      : undefined;
   if (!model && options?.models && modelId) {
     model = findModelById(options.models, modelId);
   }
@@ -944,11 +979,14 @@ export function calculateDepreciation(
     model = FALLBACK_MODEL;
   }
 
-  const baselineResidualPct = interpolateBaselineResidual(
+  const rawBaselineResidualPct = interpolateBaselineResidual(
     model.depreciation_curve,
     years,
     priceBasis
   );
+  const baselineResidualPct = Number.isFinite(rawBaselineResidualPct)
+    ? clamp(rawBaselineResidualPct, 0.0, 100.0)
+    : 100.0;
 
   // 1. Mileage Adjustment
   const expectedMileage = years * baselineAnnualMileageKm;
@@ -989,7 +1027,9 @@ export function calculateDepreciation(
   const isLfp = normalizeChemistry(modelChemistry) === 'LFP';
   const rawChemBonus = model?.factor_weights?.chemistry_aging;
   let batteryChemistryBonus =
-    typeof rawChemBonus === 'number' && Number.isFinite(rawChemBonus) ? rawChemBonus : 0;
+    typeof rawChemBonus === 'number' && Number.isFinite(rawChemBonus)
+      ? clamp(rawChemBonus, -1e6, 1e6)
+      : 0;
   if (isLfp) {
     // Smooth monotonic ramp from year 2.0 to 3.0 to ensure discrete chemistry bonuses never invert the depreciation curve
     const lfpBonusRamp = clamp(years - 2.0, 0.0, 1.0);
@@ -1009,10 +1049,16 @@ export function calculateDepreciation(
   // 5. Hardware Architecture & OTA
   const rawArchAdj = model?.factor_weights?.architecture_800v;
   const architectureAdjustment =
-    typeof rawArchAdj === 'number' && Number.isFinite(rawArchAdj) ? rawArchAdj : 0;
+    typeof rawArchAdj === 'number' && Number.isFinite(rawArchAdj)
+      ? clamp(rawArchAdj, -1e6, 1e6)
+      : 0;
   const rawOtaAdj = model?.factor_weights?.ota_maturity;
   const otaAdjustment =
-    typeof rawOtaAdj === 'number' && Number.isFinite(rawOtaAdj) ? rawOtaAdj : 0;
+    typeof rawOtaAdj === 'number' && Number.isFinite(rawOtaAdj)
+      ? clamp(rawOtaAdj, -1e6, 1e6)
+      : 0;
+
+  mileageAdjustment = Number.isFinite(mileageAdjustment) ? clamp(mileageAdjustment, -1e6, 1e6) : 0;
 
   // Combine Total Adjustments
   const totalAdjustmentPct =
@@ -1120,7 +1166,12 @@ export function simulateBatteryHealth(
     parsedYears < 0;
   const safeYears = isInvalidYears ? 3 : clamp(parsedYears, 0, 100);
 
-  let model: EvModelDepreciation | undefined = safeParams.model || options?.model;
+  let model: EvModelDepreciation | undefined =
+    safeParams.model && typeof safeParams.model === 'object'
+      ? safeParams.model
+      : options?.model && typeof options.model === 'object'
+      ? options.model
+      : undefined;
   if (!model && options?.models && modelId) {
     model = findModelById(options.models, modelId);
   }
@@ -1135,16 +1186,30 @@ export function simulateBatteryHealth(
   const defaultChem =
     DEFAULT_CHEMISTRY_PROFILES[chemistryKey] ||
     DEFAULT_CHEMISTRY_PROFILES.NCM_811;
-  const chemProfile = customChemistries?.[chemistryKey] || defaultChem;
+  const rawCustomChem =
+    customChemistries &&
+    typeof customChemistries === 'object' &&
+    Object.prototype.hasOwnProperty.call(customChemistries, chemistryKey)
+      ? customChemistries[chemistryKey]
+      : undefined;
+  const chemProfile =
+    rawCustomChem && typeof rawCustomChem === 'object' ? rawCustomChem : defaultChem;
 
+  const modelCapacityFallback = finitePosOr(model?.battery_specs?.capacity_kwh, 77.4);
   const parsedPackCapacity =
     safeParams.packCapacityKwh !== undefined && safeParams.packCapacityKwh !== null
       ? parseNumericInput(safeParams.packCapacityKwh)
-      : finitePosOr(model?.battery_specs?.capacity_kwh, 77.4);
-  const packCapacityKwh = Number.isFinite(parsedPackCapacity) && parsedPackCapacity > 0 ? clamp(parsedPackCapacity, 10.0, 500.0) : 77.4;
+      : modelCapacityFallback;
+  const packCapacityKwh =
+    Number.isFinite(parsedPackCapacity) && parsedPackCapacity > 0
+      ? clamp(parsedPackCapacity, 10.0, 500.0)
+      : clamp(modelCapacityFallback, 10.0, 500.0);
 
   const parsedAnnualKm = parseNumericInput(annualKm);
-  const safeAnnualKm = Number.isFinite(parsedAnnualKm) && parsedAnnualKm >= 0 ? parsedAnnualKm : 15000;
+  const safeAnnualKm =
+    Number.isFinite(parsedAnnualKm) && parsedAnnualKm >= 0
+      ? Math.min(10_000_000, parsedAnnualKm)
+      : 15000;
 
   const parsedInputTotalKm = parseNumericInput(inputTotalKm);
   const rawMileage = Number.isFinite(parsedInputTotalKm)
@@ -1185,17 +1250,13 @@ export function simulateBatteryHealth(
     chemProfile?.calendar_baseline_annual_loss_pct,
     defaultChem.calendar_baseline_annual_loss_pct
   );
-  const kCal =
-    (baselineAnnualLoss / 100.0) *
-    arrheniusFactor *
-    socFactor;
   const calendarTimeExp = finiteNonNegOr(
     chemProfile?.calendar_time_exponent_z,
     defaultChem.calendar_time_exponent_z
   );
   const qLossCal =
-    safeYears > 0
-      ? kCal * Math.pow(safeYears, calendarTimeExp)
+    safeYears > 0 && baselineAnnualLoss > 0
+      ? (baselineAnnualLoss / 100.0) * arrheniusFactor * socFactor * Math.pow(safeYears, calendarTimeExp)
       : 0;
 
   // B. Cyclic Aging via Mechanical Strain & DCFC Factor
@@ -1204,10 +1265,7 @@ export function simulateBatteryHealth(
     Number.isFinite(parsedEfficiency) && parsedEfficiency > 0
       ? clamp(parsedEfficiency, 0.5, 30.0)
       : 5.2;
-  const safeCapacity =
-    Number.isFinite(packCapacityKwh) && packCapacityKwh > 0
-      ? packCapacityKwh
-      : finitePosOr(model?.battery_specs?.capacity_kwh, 77.4);
+  const safeCapacity = packCapacityKwh;
 
   const energyThroughputKwh = safeMileage / Math.max(1.0, safeEfficiency);
   const equivalentFullCycles = energyThroughputKwh / Math.max(10.0, safeCapacity);
@@ -1238,22 +1296,24 @@ export function simulateBatteryHealth(
   );
   const cyclicExp = finiteNonNegOr(chemProfile?.cyclic_exponent_w, defaultChem.cyclic_exponent_w);
   const qLossCyc =
-    (0.2 / Math.pow(baseCycles, cyclicExp)) *
-    fDod *
-    fDcfc *
-    fTempCyc *
-    Math.pow(safeCycles, cyclicExp);
+    safeCycles > 0
+      ? (0.2 / Math.pow(baseCycles, cyclicExp)) *
+        fDod *
+        fDcfc *
+        fTempCyc *
+        Math.pow(safeCycles, cyclicExp)
+      : 0;
 
   // C. Sub-additive Coupling (p = 1.25)
   const P_COUPLING = 1.25;
-  const safeQLossCal = Number.isFinite(qLossCal) ? Math.max(0, qLossCal) : 0;
-  const safeQLossCyc = Number.isFinite(qLossCyc) ? Math.max(0, qLossCyc) : 0;
+  const safeQLossCal = Number.isNaN(qLossCal) ? 0 : Math.min(100, Math.max(0, qLossCal));
+  const safeQLossCyc = Number.isNaN(qLossCyc) ? 0 : Math.min(100, Math.max(0, qLossCyc));
   const qLossTotal = Math.pow(
     Math.pow(safeQLossCal, P_COUPLING) + Math.pow(safeQLossCyc, P_COUPLING),
     1.0 / P_COUPLING
   );
 
-  const finiteQLossTotal = Number.isFinite(qLossTotal) ? Math.max(0, qLossTotal) : 0;
+  const finiteQLossTotal = Number.isNaN(qLossTotal) ? 0 : Math.min(100, Math.max(0, qLossTotal));
   const rawSoh = (1.0 - finiteQLossTotal) * 100;
   const sohPct = clamp(Math.round(rawSoh * 10) / 10, 0.0, 100.0);
 
@@ -1323,9 +1383,13 @@ export function simulateBatteryHealth(
   const tierCosts = targetTier?.costs ?? defaultCosts;
   const newPackKrw = finiteNonNegOr(tierCosts?.new_pack_krw, defaultCosts.new_pack_krw);
   const laborCoolantKrw = finiteNonNegOr(tierCosts?.labor_coolant_krw, defaultCosts.labor_coolant_krw);
+  const fallbackTotalNew =
+    typeof tierCosts?.new_pack_krw === 'number' && Number.isFinite(tierCosts.new_pack_krw) && tierCosts.new_pack_krw >= 0
+      ? newPackKrw + laborCoolantKrw
+      : defaultCosts.total_new_installed_krw;
   const totalNewInstalledKrw = finiteNonNegOr(
     tierCosts?.total_new_installed_krw,
-    defaultCosts.total_new_installed_krw
+    fallbackTotalNew
   );
   const remanPackKrw =
     tierCosts?.reman_pack_krw === null
@@ -1346,7 +1410,11 @@ export function simulateBatteryHealth(
 
   return {
     chemistry: chemistryKey,
-    chemistryName: chemProfile?.name || chemistryKey || '전기차 배터리',
+    chemistryName:
+      (typeof chemProfile?.name === 'string' && chemProfile.name.trim()) ||
+      defaultChem.name ||
+      chemistryKey ||
+      '전기차 배터리',
     years: safeYears,
     totalKm: safeMileage,
     equivalentFullCycles: Math.round(safeCycles),
@@ -1363,8 +1431,14 @@ export function simulateBatteryHealth(
     usedMarketValuationText,
     actionRecommendation,
     replacementCostEstimate: {
-      tierId: targetTier?.tier_id ?? 'TIER_77KWH',
-      segmentName: targetTier?.segment_name ?? '준중형/중형 (65~84kWh)',
+      tierId:
+        typeof targetTier?.tier_id === 'string' && targetTier.tier_id
+          ? targetTier.tier_id
+          : 'TIER_77KWH',
+      segmentName:
+        typeof targetTier?.segment_name === 'string' && targetTier.segment_name
+          ? targetTier.segment_name
+          : '준중형/중형 (65~84kWh)',
       newPackKrw,
       remanPackKrw,
       laborCoolantKrw,
@@ -1434,7 +1508,11 @@ export function calculateSubsidyClawback(
   for (const t of tiers) {
     if (!t || typeof t !== 'object') continue;
     const minM = finiteNonNegOr(t.min_months, 0);
-    if (t.max_months_exclusive === null || t.max_months_exclusive === undefined) {
+    if (
+      t.max_months_exclusive === null ||
+      t.max_months_exclusive === undefined ||
+      t.max_months_exclusive === Infinity
+    ) {
       if (normalizedMonths >= minM) {
         matchedTier = t;
         break;
@@ -1503,7 +1581,10 @@ export function calculateSubsidyClawback(
 
   return {
     heldMonths: normalizedMonths,
-    tierLabel: matchedTier?.label_ko || defaultTier.label_ko,
+    tierLabel:
+      typeof matchedTier?.label_ko === 'string' && matchedTier.label_ko
+        ? matchedTier.label_ko
+        : defaultTier.label_ko,
     statutoryClawbackRate: statutoryRate,
     effectiveClawbackRate: effectiveRate,
     localSubsidyReceivedKrw: safeLocalSubsidy,
@@ -1532,21 +1613,33 @@ export function calculateTcoComparison(
 ): TcoResult {
   const params = customParams && typeof customParams === 'object' ? customParams : DEFAULT_TCO_PARAMETERS;
   const fuelTariffs = {
-    ev_slow_charging_krw_per_kwh: finiteNonNegOr(
-      params?.fuel_tariffs?.ev_slow_charging_krw_per_kwh,
-      DEFAULT_TCO_PARAMETERS.fuel_tariffs.ev_slow_charging_krw_per_kwh
+    ev_slow_charging_krw_per_kwh: Math.min(
+      1e12,
+      finiteNonNegOr(
+        params?.fuel_tariffs?.ev_slow_charging_krw_per_kwh,
+        DEFAULT_TCO_PARAMETERS.fuel_tariffs.ev_slow_charging_krw_per_kwh
+      )
     ),
-    ev_fast_charging_krw_per_kwh: finiteNonNegOr(
-      params?.fuel_tariffs?.ev_fast_charging_krw_per_kwh,
-      DEFAULT_TCO_PARAMETERS.fuel_tariffs.ev_fast_charging_krw_per_kwh
+    ev_fast_charging_krw_per_kwh: Math.min(
+      1e12,
+      finiteNonNegOr(
+        params?.fuel_tariffs?.ev_fast_charging_krw_per_kwh,
+        DEFAULT_TCO_PARAMETERS.fuel_tariffs.ev_fast_charging_krw_per_kwh
+      )
     ),
-    ice_gasoline_krw_per_liter: finiteNonNegOr(
-      params?.fuel_tariffs?.ice_gasoline_krw_per_liter,
-      DEFAULT_TCO_PARAMETERS.fuel_tariffs.ice_gasoline_krw_per_liter
+    ice_gasoline_krw_per_liter: Math.min(
+      1e12,
+      finiteNonNegOr(
+        params?.fuel_tariffs?.ice_gasoline_krw_per_liter,
+        DEFAULT_TCO_PARAMETERS.fuel_tariffs.ice_gasoline_krw_per_liter
+      )
     ),
-    ice_diesel_krw_per_liter: finiteNonNegOr(
-      params?.fuel_tariffs?.ice_diesel_krw_per_liter,
-      DEFAULT_TCO_PARAMETERS.fuel_tariffs.ice_diesel_krw_per_liter
+    ice_diesel_krw_per_liter: Math.min(
+      1e12,
+      finiteNonNegOr(
+        params?.fuel_tariffs?.ice_diesel_krw_per_liter,
+        DEFAULT_TCO_PARAMETERS.fuel_tariffs.ice_diesel_krw_per_liter
+      )
     ),
   };
   const iceFuelEconomy = finitePosOr(
@@ -1556,13 +1649,16 @@ export function calculateTcoComparison(
   const rawTaxParams = params?.tax_parameters;
   const defaultTaxParams = DEFAULT_TCO_PARAMETERS.tax_parameters;
   const taxParameters = {
-    ev_annual_tax_krw: finiteNonNegOr(
-      rawTaxParams?.ev_annual_tax_krw,
-      defaultTaxParams.ev_annual_tax_krw
+    ev_annual_tax_krw: Math.min(
+      1e12,
+      finiteNonNegOr(rawTaxParams?.ev_annual_tax_krw, defaultTaxParams.ev_annual_tax_krw)
     ),
-    education_tax_multiplier: finiteNonNegOr(
-      rawTaxParams?.education_tax_multiplier,
-      defaultTaxParams.education_tax_multiplier
+    education_tax_multiplier: Math.min(
+      1e6,
+      finiteNonNegOr(
+        rawTaxParams?.education_tax_multiplier,
+        defaultTaxParams.education_tax_multiplier
+      )
     ),
     ice_age_discount_start_year: Math.max(
       1,
@@ -1587,25 +1683,42 @@ export function calculateTcoComparison(
         : defaultTaxParams.ice_displacement_tiers,
   };
   const auxiliaryBenefits = {
-    expressway_toll_discount_rate: finiteNonNegOr(
-      params?.auxiliary_benefits?.expressway_toll_discount_rate,
-      DEFAULT_TCO_PARAMETERS.auxiliary_benefits.expressway_toll_discount_rate
+    expressway_toll_discount_rate: clamp(
+      finiteNonNegOr(
+        params?.auxiliary_benefits?.expressway_toll_discount_rate,
+        DEFAULT_TCO_PARAMETERS.auxiliary_benefits.expressway_toll_discount_rate
+      ),
+      0,
+      1
     ),
-    annual_toll_savings_krw: finiteNonNegOr(
-      params?.auxiliary_benefits?.annual_toll_savings_krw,
-      DEFAULT_TCO_PARAMETERS.auxiliary_benefits.annual_toll_savings_krw
+    annual_toll_savings_krw: Math.min(
+      1e12,
+      finiteNonNegOr(
+        params?.auxiliary_benefits?.annual_toll_savings_krw,
+        DEFAULT_TCO_PARAMETERS.auxiliary_benefits.annual_toll_savings_krw
+      )
     ),
-    public_parking_discount_rate: finiteNonNegOr(
-      params?.auxiliary_benefits?.public_parking_discount_rate,
-      DEFAULT_TCO_PARAMETERS.auxiliary_benefits.public_parking_discount_rate
+    public_parking_discount_rate: clamp(
+      finiteNonNegOr(
+        params?.auxiliary_benefits?.public_parking_discount_rate,
+        DEFAULT_TCO_PARAMETERS.auxiliary_benefits.public_parking_discount_rate
+      ),
+      0,
+      1
     ),
-    annual_parking_savings_krw: finiteNonNegOr(
-      params?.auxiliary_benefits?.annual_parking_savings_krw,
-      DEFAULT_TCO_PARAMETERS.auxiliary_benefits.annual_parking_savings_krw
+    annual_parking_savings_krw: Math.min(
+      1e12,
+      finiteNonNegOr(
+        params?.auxiliary_benefits?.annual_parking_savings_krw,
+        DEFAULT_TCO_PARAMETERS.auxiliary_benefits.annual_parking_savings_krw
+      )
     ),
-    maintenance_annual_savings_krw: finiteNonNegOr(
-      params?.auxiliary_benefits?.maintenance_annual_savings_krw,
-      DEFAULT_TCO_PARAMETERS.auxiliary_benefits.maintenance_annual_savings_krw
+    maintenance_annual_savings_krw: Math.min(
+      1e12,
+      finiteNonNegOr(
+        params?.auxiliary_benefits?.maintenance_annual_savings_krw,
+        DEFAULT_TCO_PARAMETERS.auxiliary_benefits.maintenance_annual_savings_krw
+      )
     ),
   };
 
@@ -1624,7 +1737,10 @@ export function calculateTcoComparison(
   const safeEvEff =
     Number.isFinite(parsedEvEff) && parsedEvEff > 0
       ? parsedEvEff
-      : 5.2;
+      : finitePosOr(
+          params?.efficiency_baselines?.ev_efficiency_km_per_kwh,
+          DEFAULT_TCO_PARAMETERS.efficiency_baselines.ev_efficiency_km_per_kwh
+        );
   const safeIceEff = finitePosOr(iceFuelEconomy, 12.0);
 
   const evCostPerKm = blendedTariff / Math.max(1.0, safeEvEff);
@@ -1636,17 +1752,17 @@ export function calculateTcoComparison(
     const parsedCc = parseNumericInput(iceDisplacementCc);
     const safeCc =
       Number.isFinite(parsedCc) && parsedCc > 0
-        ? parsedCc
+        ? Math.min(100_000, parsedCc)
         : 1998;
     let ratePerCc = safeCc <= 1000 ? 80 : safeCc <= 1600 ? 140 : 200;
     for (const tier of taxParameters.ice_displacement_tiers) {
       if (!tier || typeof tier !== 'object') continue;
-      if (tier.max_cc === null || tier.max_cc === undefined) {
-        ratePerCc = finiteNonNegOr(tier.rate_per_cc_krw, ratePerCc);
+      if (tier.max_cc === null || tier.max_cc === undefined || tier.max_cc === Infinity) {
+        ratePerCc = Math.min(1e9, finiteNonNegOr(tier.rate_per_cc_krw, ratePerCc));
         break;
       }
       if (typeof tier.max_cc === 'number' && Number.isFinite(tier.max_cc) && safeCc <= tier.max_cc) {
-        ratePerCc = finiteNonNegOr(tier.rate_per_cc_krw, ratePerCc);
+        ratePerCc = Math.min(1e9, finiteNonNegOr(tier.rate_per_cc_krw, ratePerCc));
         break;
       }
     }

@@ -341,7 +341,7 @@ class BaseCrawler(abc.ABC):
             if isinstance(base_url, str) and base_url.strip():
                 base_scheme = urllib.parse.urlsplit(base_url.strip()).scheme or "https"
             eff_url = f"{base_scheme}:{eff_url}"
-        elif not (eff_url.startswith("http://") or eff_url.startswith("https://")):
+        elif not eff_url.lower().startswith(("http://", "https://")):
             if base_url and isinstance(base_url, str):
                 base_clean = base_url.rstrip("/")
                 path_clean = eff_url.lstrip("/")
@@ -352,13 +352,12 @@ class BaseCrawler(abc.ABC):
             logger.warning(f"No HTTP client configured on {self.__class__.__name__}")
             return None
 
-        timeout = kwargs.get(
-            "timeout",
-            (
-                kwargs.get("connect_timeout", getattr(self, "connect_timeout", 5.0)),
-                kwargs.get("read_timeout", getattr(self, "read_timeout", 15.0)),
-            ),
-        )
+        timeout = kwargs.get("timeout")
+        if timeout is None:
+            timeout = (
+                _positive_float(kwargs.get("connect_timeout"), getattr(self, "connect_timeout", 5.0)),
+                _positive_float(kwargs.get("read_timeout"), getattr(self, "read_timeout", 15.0)),
+            )
         try:
             resp = self.client.get(eff_url, referer=referer, timeout=timeout)
             if not resp or not isinstance(resp, (tuple, list)) or len(resp) < 2:

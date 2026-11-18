@@ -16,7 +16,7 @@ import re
 import urllib.parse
 from typing import Any, Dict, List, Optional
 
-from crawlers.base_crawler import BaseCrawler
+from crawlers.base_crawler import BaseCrawler, _positive_float
 from utils.http_client import SafeHttpClient, clean_html_text
 
 logger = logging.getLogger("DCInsideCrawler")
@@ -149,8 +149,11 @@ def is_deleted_or_restricted(html_content: Optional[str]) -> Tuple[bool, str]:
     # 2. Check if page has actual substantial article body:
     # If a page contains a large write_div (> 50 chars), only alert(...) can indicate deletion
     has_large_body = False
-    write_div_match = re.search(r'class=["\']write_div["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
-    if write_div_match and len(clean_html_text(write_div_match.group(1))) > 50:
+    write_div_inner = extract_container_content(html_content, "div", "write_div")
+    if not write_div_inner:
+        write_div_match = re.search(r'class=["\']write_div["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
+        write_div_inner = write_div_match.group(1) if write_div_match else ""
+    if write_div_inner and len(clean_html_text(write_div_inner)) > 50:
         has_large_body = True
 
     # Deleted or Non-existent posts
@@ -369,19 +372,24 @@ class DCInsideCrawler(BaseCrawler):
         """Proxy check for deleted, restricted, or blocked pages."""
         return is_deleted_or_restricted(html_content)
 
-    def ensure_warm_up(self, base_url: Optional[str] = None, force: bool = False):
+    def ensure_warm_up(self, base_url: Optional[Union[str, bool]] = None, force: bool = False) -> bool:
         """Warm up session cookies on DCInside base URL if not already done."""
         if isinstance(base_url, bool):
             force = base_url
             base_url = None
-        target_url = base_url or DC_BASE_URL
+        target_url = (base_url if isinstance(base_url, str) else None) or DC_BASE_URL
         if (not self._warmed_up or force) and target_url:
+            success = True
             try:
                 if self.client and hasattr(self.client, "warm_up_session"):
-                    self.client.warm_up_session(target_url)
+                    res = self.client.warm_up_session(target_url)
+                    success = bool(res) if res is not None else True
             except Exception as e:
                 logger.warning(f"DCInside warm_up_session notice: {e}")
+                success = False
             self._warmed_up = True
+            return success
+        return self._warmed_up
 
     def get_gallery_prefix(self, gallery_id: str) -> str:
         """Determine URL route prefix for the gallery (board, mini/board, mgallery/board)."""
@@ -459,7 +467,8 @@ class DCInsideCrawler(BaseCrawler):
             if len(match.groups()) >= 2 and match.group(1) and match.group(1).isdigit():
                 post_no = match.group(1)
                 row_html = match.group(2)
-                tr_attrs = ""
+                full_match_str = match.group(0)
+                tr_attrs = full_match_str.split(">", 1)[0]
             else:
                 tr_attrs = match.group(1)
                 row_html = match.group(2)
@@ -501,8 +510,8 @@ class DCInsideCrawler(BaseCrawler):
                 best_anchor = None
                 # Prefer anchor linking directly to post view (containing view, no=, or post_no)
                 for a_attrs, a_inner in anchors:
-                    href_m = re.search(r'href=["\']([^"\']+)["\']', a_attrs, re.IGNORECASE)
-                    href_val = href_m.group(1) if href_m else ""
+                    href_m = re.search(r'href=(?:"([^"]+)"|\'([^\']+)\'|([^\s>]+))', a_attrs, re.IGNORECASE)
+                    href_val = (href_m.group(1) or href_m.group(2) or href_m.group(3)) if href_m else ""
                     if "reply_num" in a_attrs or "reply_numbox" in a_attrs:
                         continue
                     if "view" in href_val or "no=" in href_val or (post_no and post_no in href_val):
@@ -515,8 +524,8 @@ class DCInsideCrawler(BaseCrawler):
                     for a_attrs, a_inner in anchors:
                         if "reply_num" in a_attrs or "reply_numbox" in a_attrs:
                             continue
-                        href_m = re.search(r'href=["\']([^"\']+)["\']', a_attrs, re.IGNORECASE)
-                        href_val = href_m.group(1) if href_m else ""
+                        href_m = re.search(r'href=(?:"([^"]+)"|\'([^\']+)\'|([^\s>]+))', a_attrs, re.IGNORECASE)
+                        href_val = (href_m.group(1) or href_m.group(2) or href_m.group(3)) if href_m else ""
                         candidates.append((href_val, a_inner))
                     if candidates:
                         best_anchor = max(candidates, key=lambda c: len(clean_html_text(c[1])))
@@ -571,7 +580,7 @@ class DCInsideCrawler(BaseCrawler):
             })
 
         # Fallback if ub-content wasn't strictly found (e.g. mobile or alternative layout)
-        if not items:
+        if not items and not matches:
             alt_pattern = re.compile(
                 r'<a[^>]*href=["\']?([^"\'\s>]*?(?:view/?\?[^"\'\s>]*no=|/(?:board|mgallery|mini)/[\w\-]+/|/view/)(\d+)[^"\'\s>]*)["\']?[^>]*>(.*?)</a>',
                 re.DOTALL | re.IGNORECASE,
@@ -950,6 +959,8 @@ class DCInsideCrawler(BaseCrawler):
         # 5. Dynamic AJAX comments using e_s_n_o
         comments: List[str] = []
         timeout = kwargs.get("timeout")
+        if timeout is None:
+            timeout = (self.connect_timeout, self.read_timeout)
         e_s_n_o = self.extract_esno_token(html_content)
         if e_s_n_o and eff_post_id:
             comments = self.fetch_ajax_comments(eff_gallery_id, eff_post_id, e_s_n_o, post_url=post_url, timeout=timeout)
@@ -1012,13 +1023,18 @@ class DCInsideCrawler(BaseCrawler):
             eff_url = f"https:{eff_url}"
         elif eff_url.startswith("/"):
             eff_url = f"{DC_BASE_URL}{eff_url}"
-        elif not (eff_url.startswith("http://") or eff_url.startswith("https://")):
+        elif not eff_url.lower().startswith(("http://", "https://")):
             eff_url = f"{DC_BASE_URL}/{eff_url}"
 
         base_url = kwargs.get("base_url")
         self.ensure_warm_up(base_url)
         eff_referer = referer or f"{DC_BASE_URL}/"
-        timeout = kwargs.get("timeout", (self.connect_timeout, self.read_timeout))
+        timeout = kwargs.get("timeout")
+        if timeout is None:
+            timeout = (
+                _positive_float(kwargs.get("connect_timeout"), self.connect_timeout),
+                _positive_float(kwargs.get("read_timeout"), self.read_timeout),
+            )
 
         if not self.client:
             return None
@@ -1210,6 +1226,11 @@ class DCInsideCrawler(BaseCrawler):
                 logger.info(f"No more items in DCInside [{gallery_id}] page {page}")
                 break
 
+            page_pids = {it.get("post_id", "") for it in items if it.get("post_id")}
+            if page_pids and page_pids.issubset(seen_pids):
+                logger.info(f"Page {page} of DCInside [{gallery_id}] repeated previously seen posts. Halting pagination loop.")
+                break
+
             consecutive_failures = 0
             MAX_CONSECUTIVE_FAILURES = 5
             halt_crawl = False
@@ -1295,6 +1316,11 @@ class DCInsideCrawler(BaseCrawler):
             items = self.parse_gallery_list(text, gallery_id)
             if not items:
                 logger.info(f"No items found for DC [{gallery_id}] keyword '{keyword}' page {page}")
+                break
+
+            page_pids = {it.get("post_id", "") for it in items if it.get("post_id")}
+            if page_pids and page_pids.issubset(seen_pids):
+                logger.info(f"Search page {page} of DCInside [{gallery_id}] repeated previously seen posts. Halting loop.")
                 break
 
             consecutive_failures = 0

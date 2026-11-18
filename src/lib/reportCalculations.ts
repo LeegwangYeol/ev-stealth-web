@@ -193,8 +193,8 @@ export function maskSensitiveTokens(text?: unknown): string {
     .replace(/gh[pousr]_[A-Za-z0-9]{20,}/g, '[REDACTED_TOKEN]')
     // AWS access keys
     .replace(/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g, '[REDACTED_AWS_KEY]')
-    // OpenAI / AI secret keys
-    .replace(/\bsk-[a-zA-Z0-9]{20,}\b/g, '[REDACTED_KEY]')
+    // OpenAI / AI secret keys (including project-scoped sk-proj-... keys)
+    .replace(/\bsk-(?:proj-)?[a-zA-Z0-9_-]{20,}\b/g, '[REDACTED_KEY]')
     // Key-value credential pairs (api_key=..., secret=..., password=...)
     .replace(/(?<=(?:api[_-]?key|secret|password|passwd|auth[_-]?token|access[_-]?token)\s*[:=]\s*["']?)[a-zA-Z0-9_\-.~+/]{8,}(?=["']?)/gi, '[REDACTED_SECRET]');
 }
@@ -252,29 +252,38 @@ export function sanitizeReportUrl(rawUrl?: unknown): string {
     // Malformed URI encoding
   }
 
-  // Block internal hostnames, loopbacks, and private/reserved IPv4 & IPv6 ranges
+  // Block internal hostnames, loopbacks, userinfo credentials, and private/reserved IPv4 & IPv6 ranges
   try {
     if (/^https?:\/\//i.test(trimmed)) {
       const urlObj = new URL(trimmed);
+      if (urlObj.username || urlObj.password) {
+        return '#';
+      }
       const host = urlObj.hostname.toLowerCase().replace(/\.+$/, '');
       if (
         host === 'localhost' ||
+        host.endsWith('.localhost') ||
         host === '0.0.0.0' ||
         host === '::1' ||
         host === '[::1]' ||
         host === '::' ||
         host === '[::]' ||
+        host.includes('%') ||
         host.endsWith('.local') ||
         host.endsWith('.internal') ||
         host.endsWith('.corp') ||
-        host.endsWith('.home.arpa') ||
+        host.endsWith('.arpa') ||
+        /^0\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
         /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
         /^169\.254\.\d{1,3}\.\d{1,3}$/.test(host) ||
         /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
         /^172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host) ||
         /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+        /^192\.0\.0\.\d{1,3}$/.test(host) ||
+        /^198\.1[89]\.\d{1,3}\.\d{1,3}$/.test(host) ||
         /^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}$/.test(host) ||
-        /^\[?(?:::ffff:|fe[89ab][0-9a-f]:|(?:fc|fd)[0-9a-f]{2}:)/i.test(host)
+        /^(?:22[4-9]|23\d|24\d|25[0-5])\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+        /^\[?(?:::ffff:|64:ff9b:|fe[89ab][0-9a-f]:|(?:fc|fd)[0-9a-f]{2}:)/i.test(host)
       ) {
         return '#';
       }
@@ -283,14 +292,21 @@ export function sanitizeReportUrl(rawUrl?: unknown): string {
       const sensitiveKeys = new Set([
         'token',
         'access_token',
+        'refresh_token',
+        'id_token',
         'auth',
         'auth_token',
         'api_key',
         'apikey',
         'key',
         'secret',
+        'client_secret',
         'password',
+        'passwd',
+        'pwd',
         'session',
+        'session_id',
+        'sessionid',
         'jwt',
       ]);
       let modified = false;
@@ -338,6 +354,50 @@ export interface DeduplicationSummary {
   isDeduplicated: boolean;
 }
 
+const DEDUP_NOISE_PARAMS = new Set([
+  'utm_source',
+  'utm_medium',
+  'utm_campaign',
+  'utm_term',
+  'utm_content',
+  'fbclid',
+  'gclid',
+  'yclid',
+  'mc_cid',
+  'mc_eid',
+  'ref',
+  'referer',
+  'referrer',
+  'source',
+  'query',
+  'page',
+  'rtn',
+  '_',
+]);
+
+function canonicalizeReportUrlForDedup(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl);
+    const host = parsed.hostname.toLowerCase().replace(/\.+$/, '');
+    const pathname = parsed.pathname.replace(/\/+$/, '');
+    const keptParams: Array<[string, string]> = [];
+    for (const [rawKey, rawVal] of parsed.searchParams.entries()) {
+      const key = rawKey.toLowerCase();
+      if (DEDUP_NOISE_PARAMS.has(key) || key.startsWith('utm_')) continue;
+      // Strip malformed appended query string suffix (e.g. "999?query=1" -> "999")
+      const cleanVal = rawVal.replace(/\?[a-zA-Z0-9_]+=.*$/, '');
+      keptParams.push([key, cleanVal]);
+    }
+    keptParams.sort((a, b) => (a[0] === b[0] ? a[1].localeCompare(b[1]) : a[0].localeCompare(b[0])));
+    const queryStr = keptParams.length > 0
+      ? '?' + keptParams.map(([k, v]) => `${k}=${v}`).join('&')
+      : '';
+    return `${host}${pathname}${queryStr}`;
+  } catch {
+    return rawUrl.replace(/^https?:\/\//i, '').replace(/#.*$/, '').replace(/\/+$/, '');
+  }
+}
+
 /**
  * Deduplicates reports list using deterministic ID, canonical URL, and semantic composite keys.
  */
@@ -358,27 +418,32 @@ export function deduplicateReports(
     // Always normalize to guarantee URL sanitization, PII masking, and field invariants
     const normalized = normalizeReport(item as Record<string, unknown>, idx);
 
-    // Deterministic deduplication key:
-    let key = '';
+    // Deterministic deduplication keys (ID + canonical URL, or semantic fingerprint fallback):
     const id = String(normalized.id || '').trim();
-    if (id && !id.startsWith('report_')) {
-      key = `id:${id}`;
-    } else if (normalized.url && normalized.url !== '#') {
-      const normUrl = normalized.url.replace(/^https?:\/\//i, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
-      key = `url:${normUrl}`;
-    } else {
+    const idKey = id && !id.startsWith('report_') ? `id:${id}` : '';
+    const urlKey = normalized.url && normalized.url !== '#'
+      ? `url:${canonicalizeReportUrlForDedup(normalized.url)}`
+      : '';
+    let fpKey = '';
+    if (!idKey && !urlKey) {
       const model = (normalized.vehicle_model || '').trim().toLowerCase();
       const cat = (normalized.defect_category || '').trim().toUpperCase();
       const titleClean = (normalized.title || '').trim().toLowerCase().replace(/[^\w\s가-힣]/g, '').slice(0, 40);
-      key = `fp:${model}:${cat}:${titleClean}`;
+      fpKey = `fp:${model}:${cat}:${titleClean}`;
     }
 
-    if (seenKeys.has(key)) {
+    if (
+      (idKey && seenKeys.has(idKey)) ||
+      (urlKey && seenKeys.has(urlKey)) ||
+      (fpKey && seenKeys.has(fpKey))
+    ) {
       duplicatesRemoved++;
       return;
     }
 
-    seenKeys.add(key);
+    if (idKey) seenKeys.add(idKey);
+    if (urlKey) seenKeys.add(urlKey);
+    if (fpKey) seenKeys.add(fpKey);
     deduped.push(normalized);
   });
 
@@ -471,7 +536,7 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
 
   let safeDate = sanitizeText(raw.date || raw.post_date || '');
   if (!safeDate && raw.created_at) {
-    const split = String(raw.created_at).split('T')[0];
+    const split = String(raw.created_at).trim().split(/[T\s]/)[0];
     if (split && split.length >= 8) {
       safeDate = sanitizeText(split);
     }
@@ -481,7 +546,7 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
   }
 
   return {
-    id: sanitizeText(raw.id || raw.post_id || '') || `report_${index + 1}`,
+    id: sanitizeText(raw.id ?? raw.post_id ?? '') || `report_${index + 1}`,
     source: sanitizeText(raw.source || raw.platform || '').toLowerCase() || 'bobaedream',
     url: sanitizeReportUrl(raw.url || raw.post_url || '#'),
     title: maskSensitiveData(sanitizeText(raw.title || raw.post_title || '')) || '전기차 결함 제보',
@@ -562,7 +627,21 @@ export function calculateKPIs(
     }
   });
   const platformRatio = totalFiltered > 0 ? Math.round((maxPlatformCount / totalFiltered) * 100) : 0;
-  const platformNameKo = topPlatformKey.includes('bobae') ? '보배드림' : '디시인사이드';
+  const platformNameKo = topPlatformKey.includes('bobae')
+    ? '보배드림'
+    : topPlatformKey.includes('dc')
+      ? '디시인사이드'
+      : topPlatformKey.includes('clien')
+        ? '클리앙'
+        : topPlatformKey.includes('ppomppu')
+          ? '뽐뿌'
+          : topPlatformKey.includes('naver')
+            ? '네이버 카페'
+            : topPlatformKey.includes('blind')
+              ? '블라인드'
+              : topPlatformKey.includes('reddit')
+                ? '레딧'
+                : topPlatformKey;
   const topPlatformDisplay = totalFiltered > 0
     ? `${platformNameKo} (${platformRatio}%)`
     : '해당 없음 (0%)';

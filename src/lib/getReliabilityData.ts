@@ -65,6 +65,10 @@ export type {
 // ==========================================
 
 import {
+  parseFiniteNumber,
+  sanitizeVerdict,
+  sanitizeGrade,
+  sanitizeCategoryKey,
   normalizeReliabilityScore,
   aggregateCategoryComplaintCounts,
   getAggregatedCategoryList,
@@ -194,29 +198,6 @@ function createDefaultFallbackDatabase(): ReliabilityTrendsDatabase {
   };
 }
 
-function sanitizeFiniteNumber(val: unknown): number | null {
-  if (typeof val === 'number') {
-    return Number.isFinite(val) ? val : null;
-  }
-  if (typeof val === 'string') {
-    const trimmed = val.trim();
-    if (trimmed === '') return null;
-    const num = Number(trimmed);
-    return Number.isFinite(num) ? num : null;
-  }
-  return null;
-}
-
-function sanitizeVerdict(val: unknown): ModelYearVerdict {
-  return val === 'BUY_SAFE' || val === 'CAUTION' || val === 'AVOID' ? val : 'CAUTION';
-}
-
-function sanitizeGrade(val: unknown): OverallReliabilityGrade {
-  return val === 'A+' || val === 'A' || val === 'B' || val === 'C' || val === 'D' || val === 'F'
-    ? val
-    : 'C';
-}
-
 /**
  * Safely loads the master EV Reliability & Defect Trends database.
  * Strictly guarantees non-null, valid array/object shapes with defensive fallbacks
@@ -235,8 +216,8 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
           .filter((b): b is BrandReliability => Boolean(b && typeof b === 'object'))
           .map((b) => {
             const safeBrandId = typeof b.id === 'string' ? b.id : '';
-            const rawReports = sanitizeFiniteNumber(b.total_reports);
-            const rawCritical = sanitizeFiniteNumber(b.critical_issue_rate);
+            const rawReports = parseFiniteNumber(b.total_reports);
+            const rawCritical = parseFiniteNumber(b.critical_issue_rate);
             return {
               ...b,
               id: safeBrandId,
@@ -260,22 +241,19 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
                       id: typeof m.id === 'string' ? m.id : '',
                       name: typeof m.name === 'string' ? m.name : '',
                       segment: typeof m.segment === 'string' ? m.segment : '',
-                      brand_id: typeof m.brand_id === 'string' ? m.brand_id : safeBrandId,
+                      brand_id: typeof m.brand_id === 'string' && m.brand_id ? m.brand_id : safeBrandId,
                       overall_grade: sanitizeGrade(m.overall_grade),
                       avg_dsi: normalizeReliabilityScore(m.avg_dsi, 50.0),
-                      top_category:
-                        typeof m.top_category === 'string' && m.top_category
-                          ? m.top_category
-                          : 'BATTERY_CHARGING',
+                      top_category: sanitizeCategoryKey(m.top_category),
                       year_evaluations: Array.isArray(m.year_evaluations)
                         ? m.year_evaluations
                             .filter((y): y is YearEvaluation => Boolean(y && typeof y === 'object'))
                             .map((y) => {
-                              const parsedYear = sanitizeFiniteNumber(y.year);
-                              const parsedIncident = sanitizeFiniteNumber(y.incident_rate);
+                              const parsedYear = parseFiniteNumber(y.year);
+                              const parsedIncident = parseFiniteNumber(y.incident_rate);
                               return {
                                 ...y,
-                                year: parsedYear !== null ? Math.floor(parsedYear) : 0,
+                                year: parsedYear !== null ? Math.floor(parsedYear) + 0 : 0,
                                 verdict: sanitizeVerdict(y.verdict),
                                 dsi_score: normalizeReliabilityScore(y.dsi_score, 50.0),
                                 incident_rate:
@@ -305,10 +283,11 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
 
     const rawMetaObj =
       data.metadata && typeof data.metadata === 'object' ? data.metadata : undefined;
-    const rawTotal = sanitizeFiniteNumber(
-      rawMetaObj?.total_records_analyzed ??
+    const rawTotal =
+      parseFiniteNumber(rawMetaObj?.total_records_analyzed) ??
+      parseFiniteNumber(
         (rawMetaObj as unknown as Record<string, unknown> | undefined)?.total_analyzed_posts
-    );
+      );
     const brandReportsSum = brands.reduce((acc, b) => acc + b.total_reports, 0);
     const total_records_analyzed =
       rawTotal !== null && rawTotal >= 0
@@ -317,7 +296,7 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
           ? brandReportsSum
           : 1280;
 
-    const rawAvgDsi = sanitizeFiniteNumber(rawMetaObj?.avg_industry_dsi);
+    const rawAvgDsi = parseFiniteNumber(rawMetaObj?.avg_industry_dsi);
     let avg_industry_dsi = 64.2;
     if (rawAvgDsi !== null) {
       avg_industry_dsi = normalizeReliabilityScore(rawAvgDsi, 64.2);
@@ -330,12 +309,17 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
       avg_industry_dsi = computedKpis.industryAvgDsi;
     }
 
+    const updatedAt =
+      (typeof rawMetaObj?.updated_at === 'string' && rawMetaObj.updated_at.trim()) ||
+      (typeof rawMetaObj?.last_updated === 'string' && rawMetaObj.last_updated.trim()) ||
+      '2026-09-16T12:00:00Z';
+
     const metadata = {
-      version: typeof rawMetaObj?.version === 'string' ? rawMetaObj.version : '1.0.0',
-      updated_at:
-        typeof rawMetaObj?.updated_at === 'string'
-          ? rawMetaObj.updated_at
-          : '2026-09-16T12:00:00Z',
+      version:
+        typeof rawMetaObj?.version === 'string' && rawMetaObj.version.trim()
+          ? rawMetaObj.version
+          : '1.0.0',
+      updated_at: updatedAt,
       total_records_analyzed,
       brands_count: brands.length,
       models_count: brands.reduce((acc, b) => acc + b.models.length, 0),
@@ -347,20 +331,47 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
       : Array.isArray(data.defect_categories)
         ? data.defect_categories
         : [];
-    const validCategories = rawCategories.filter(
-      (c): c is DefectCategoryMetadata =>
-        Boolean(c && typeof c === 'object' && typeof c.code === 'string')
-    );
+    const validCategories = rawCategories
+      .filter(
+        (c): c is DefectCategoryMetadata =>
+          Boolean(c && typeof c === 'object' && typeof c.code === 'string' && c.code.trim())
+      )
+      .map((c) => {
+        const share = parseFiniteNumber(c.industry_share_pct);
+        return {
+          ...c,
+          code: sanitizeCategoryKey(c.code),
+          label_ko: typeof c.label_ko === 'string' ? c.label_ko : '',
+          description: typeof c.description === 'string' ? c.description : '',
+          icon_name: typeof c.icon_name === 'string' ? c.icon_name : 'AlertCircle',
+          industry_share_pct: share !== null ? Math.max(0, Math.min(100, share)) : 0,
+          avg_repair_cost_range:
+            typeof c.avg_repair_cost_range === 'string' ? c.avg_repair_cost_range : '',
+        };
+      });
     const categories =
       validCategories.length > 0
         ? validCategories
         : DEFAULT_FALLBACK_CATEGORIES.map((c) => ({ ...c }));
 
     const repair_cost_matrix = Array.isArray(data.repair_cost_matrix)
-      ? data.repair_cost_matrix.filter(
-          (r): r is RepairCostMatrixItem =>
-            Boolean(r && typeof r === 'object' && typeof r.component_name === 'string')
-        )
+      ? data.repair_cost_matrix
+          .filter(
+            (r): r is RepairCostMatrixItem =>
+              Boolean(r && typeof r === 'object' && typeof r.component_name === 'string')
+          )
+          .map((r) => ({
+            ...r,
+            affected_systems: typeof r.affected_systems === 'string' ? r.affected_systems : '',
+            avg_cost_krw: typeof r.avg_cost_krw === 'string' ? r.avg_cost_krw : '',
+            standard_warranty: typeof r.standard_warranty === 'string' ? r.standard_warranty : '',
+            high_risk_models: Array.isArray(r.high_risk_models)
+              ? r.high_risk_models.filter((m): m is string => typeof m === 'string')
+              : undefined,
+            representative_models: Array.isArray(r.representative_models)
+              ? r.representative_models.filter((m): m is string => typeof m === 'string')
+              : undefined,
+          }))
       : [];
 
     return {
@@ -379,8 +390,8 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
  * Returns a flattened array of all models enriched with brand information.
  * Uses master trends database if data parameter is omitted.
  */
-export function getAllEnrichedModels(data?: ReliabilityTrendsDatabase): EnrichedModelItem[] {
-  return getAllEnrichedModelsPure(data || getReliabilityTrendsData());
+export function getAllEnrichedModels(data?: ReliabilityTrendsDatabase | null): EnrichedModelItem[] {
+  return getAllEnrichedModelsPure(data === undefined ? getReliabilityTrendsData() : data);
 }
 
 /**
@@ -397,9 +408,9 @@ export function calculateReliabilityKPIs(data?: ReliabilityTrendsDatabase | null
  */
 export function getModelReliabilityById(
   modelId: string,
-  data?: ReliabilityTrendsDatabase
+  data?: ReliabilityTrendsDatabase | null
 ): EnrichedModelItem | undefined {
-  return getModelReliabilityByIdPure(modelId, data || getReliabilityTrendsData());
+  return getModelReliabilityByIdPure(modelId, data === undefined ? getReliabilityTrendsData() : data);
 }
 
 /**
@@ -408,9 +419,9 @@ export function getModelReliabilityById(
  */
 export function getDefectsForModel(
   modelId: string,
-  data?: ReliabilityTrendsDatabase
+  data?: ReliabilityTrendsDatabase | null
 ): YearEvaluation[] {
-  return getDefectsForModelPure(modelId, data || getReliabilityTrendsData());
+  return getDefectsForModelPure(modelId, data === undefined ? getReliabilityTrendsData() : data);
 }
 
 /**
@@ -419,9 +430,9 @@ export function getDefectsForModel(
  */
 export function getBrandReliabilityById(
   brandId: string,
-  data?: ReliabilityTrendsDatabase
+  data?: ReliabilityTrendsDatabase | null
 ): BrandReliability | undefined {
-  return getBrandReliabilityByIdPure(brandId, data || getReliabilityTrendsData());
+  return getBrandReliabilityByIdPure(brandId, data === undefined ? getReliabilityTrendsData() : data);
 }
 
 /**
@@ -431,9 +442,9 @@ export function getBrandReliabilityById(
 export function getModelYearEvaluation(
   modelId: string,
   year: number | string,
-  data?: ReliabilityTrendsDatabase
+  data?: ReliabilityTrendsDatabase | null
 ): YearEvaluation | undefined {
-  return getModelYearEvaluationPure(modelId, year, data || getReliabilityTrendsData());
+  return getModelYearEvaluationPure(modelId, year, data === undefined ? getReliabilityTrendsData() : data);
 }
 
 /**
@@ -442,9 +453,9 @@ export function getModelYearEvaluation(
  */
 export function resolveBrandReliability(
   brandQuery: string,
-  data?: ReliabilityTrendsDatabase
+  data?: ReliabilityTrendsDatabase | null
 ): BrandReliability | undefined {
-  return resolveBrandReliabilityPure(brandQuery, data || getReliabilityTrendsData());
+  return resolveBrandReliabilityPure(brandQuery, data === undefined ? getReliabilityTrendsData() : data);
 }
 
 /**
@@ -454,9 +465,9 @@ export function resolveBrandReliability(
 export function getBrandWithFallback(
   brandId: string,
   fallback?: BrandReliability,
-  data?: ReliabilityTrendsDatabase
+  data?: ReliabilityTrendsDatabase | null
 ): BrandReliability {
-  return getBrandWithFallbackPure(brandId, fallback, data || getReliabilityTrendsData());
+  return getBrandWithFallbackPure(brandId, fallback, data === undefined ? getReliabilityTrendsData() : data);
 }
 
 /**

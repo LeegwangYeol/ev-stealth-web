@@ -666,6 +666,23 @@ class DefectClassifier:
                 return mult
         return 1.0
 
+    def _filter_actionable_slang(
+        self,
+        slang_matches: List[SlangEntry],
+        text_lower: str,
+    ) -> List[SlangEntry]:
+        """Exclude neutral feature terms unless accompanied by a malfunction cue."""
+        has_malfunction_cue: Optional[bool] = None
+        filtered: List[SlangEntry] = []
+        for entry in slang_matches:
+            if entry.term.lower() in ("v2l", "깜빡이", "웨더스트립"):
+                if has_malfunction_cue is None:
+                    has_malfunction_cue = any(mc in text_lower for mc in MALFUNCTION_CUES)
+                if not has_malfunction_cue:
+                    continue
+            filtered.append(entry)
+        return filtered
+
     # -----------------------------------------------------------------
     # STAGE 4: Defect Actionability Gate & 5-Pillar Classification
     # -----------------------------------------------------------------
@@ -679,6 +696,7 @@ class DefectClassifier:
         category_scores: Dict[str, float] = {cat: 0.0 for cat in CANONICAL_CATEGORIES}
 
         text_lower = text_str.lower()
+        actionable_slang = self._filter_actionable_slang(slang_matches, text_lower)
         suppress_software_meoktong = False
         suppress_build_noise = False
 
@@ -697,16 +715,13 @@ class DefectClassifier:
                             suppress_software_meoktong = True
 
         # 2. Slang matches with suppression awareness
-        for entry in slang_matches:
+        for entry in actionable_slang:
             if not entry.defect_category or entry.defect_category not in category_scores:
                 continue
             if entry.term == "먹통" and suppress_software_meoktong:
                 continue
             if entry.term in ("잡소리", "소음", "찌걱") and suppress_build_noise:
                 continue
-            if entry.term.lower() in ("v2l", "깜빡이", "웨더스트립"):
-                if not any(mc in text_lower for mc in MALFUNCTION_CUES):
-                    continue
             category_scores[entry.defect_category] += entry.severity_weight * 2.5
 
         # 3. Category keyword map with word boundary and suppression awareness
@@ -758,6 +773,7 @@ class DefectClassifier:
         slang_matches = slang_matches if slang_matches is not None else find_matching_slang(text_str)
         negated_defects = negated_defects or []
         text_lower = text_str.lower()
+        actionable_slang = self._filter_actionable_slang(slang_matches, text_lower)
 
         confidence = 0.0
 
@@ -770,7 +786,7 @@ class DefectClassifier:
             confidence += 0.20
 
         # 2. Defect slang entry for this category
-        cat_slang = [e for e in slang_matches if e.defect_category == category]
+        cat_slang = [e for e in actionable_slang if e.defect_category == category]
         if cat_slang:
             max_sev = max(e.severity_weight for e in cat_slang)
             confidence += 0.25 * (max_sev / 5.0)
@@ -811,12 +827,13 @@ class DefectClassifier:
         """Calculate 5-Dimensional Defect Severity Index (DSI 0.0 ~ 10.0)."""
         text_str = sanitize_text(text)
         slang_matches = slang_matches if slang_matches is not None else find_matching_slang(text_str)
+        actionable_slang = self._filter_actionable_slang(slang_matches, text_str.lower())
 
-        s_safety = max([e.safety_impact for e in slang_matches] + [0.0])
-        s_functional = max([e.functional_impact for e in slang_matches] + [0.0])
-        s_economic = max([e.economic_impact for e in slang_matches] + [0.0])
-        s_social = max([e.social_impact for e in slang_matches] + [0.0])
-        s_convenience = max([e.convenience_impact for e in slang_matches] + [0.0])
+        s_safety = max([e.safety_impact for e in actionable_slang] + [0.0])
+        s_functional = max([e.functional_impact for e in actionable_slang] + [0.0])
+        s_economic = max([e.economic_impact for e in actionable_slang] + [0.0])
+        s_social = max([e.social_impact for e in actionable_slang] + [0.0])
+        s_convenience = max([e.convenience_impact for e in actionable_slang] + [0.0])
 
         if category == "BATTERY_CHARGING":
             s_safety = max(s_safety, 7.5)

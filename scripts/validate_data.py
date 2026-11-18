@@ -101,30 +101,30 @@ def validate_database(
         errors.append(f"Slang dictionary file not found: {slang_path}")
         slang_dict = {}
     else:
-        with open(slang_path, "r", encoding="utf-8-sig") as f:
-            try:
+        try:
+            with open(slang_path, "r", encoding="utf-8-sig") as f:
                 slang_dict = json.load(f)
-                if not isinstance(slang_dict, dict):
-                    errors.append(f"Slang dictionary must be a JSON object, got {type(slang_dict).__name__}")
-                    slang_dict = {}
-                stats["slang_terms_count"] = len(slang_dict)
-                if len(slang_dict) < 10:
-                    errors.append(f"Slang dictionary has too few entries: {len(slang_dict)}")
-            except Exception as e:
-                errors.append(f"Failed to parse slang dictionary JSON: {e}")
+            if not isinstance(slang_dict, dict):
+                errors.append(f"Slang dictionary must be a JSON object, got {type(slang_dict).__name__}")
                 slang_dict = {}
+            stats["slang_terms_count"] = len(slang_dict)
+            if len(slang_dict) < 10:
+                errors.append(f"Slang dictionary has too few entries: {len(slang_dict)}")
+        except Exception as e:
+            errors.append(f"Failed to parse slang dictionary JSON: {e}")
+            slang_dict = {}
 
     # 2. Validate Complaints Database
     if not os.path.exists(complaints_path):
         errors.append(f"Complaints database file not found: {complaints_path}")
         return False, errors, stats
 
-    with open(complaints_path, "r", encoding="utf-8-sig") as f:
-        try:
+    try:
+        with open(complaints_path, "r", encoding="utf-8-sig") as f:
             records = json.load(f)
-        except Exception as e:
-            errors.append(f"Failed to parse complaints database JSON: {e}")
-            return False, errors, stats
+    except Exception as e:
+        errors.append(f"Failed to parse complaints database JSON: {e}")
+        return False, errors, stats
 
     if not isinstance(records, list):
         errors.append("Complaints database root must be a list")
@@ -260,6 +260,10 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
                         errors.append(f"Alert tier '{tier}' missing key '{k}'")
                 min_p = cfg.get("min_percent")
                 max_p = cfg.get("max_percent")
+                if min_p is not None and not _is_finite_number(min_p):
+                    errors.append(f"Alert tier '{tier}' min_percent must be a finite number, got {min_p}")
+                if max_p is not None and not _is_finite_number(max_p):
+                    errors.append(f"Alert tier '{tier}' max_percent must be a finite number, got {max_p}")
                 if _is_finite_number(min_p) and _is_finite_number(max_p):
                     if min_p < 0.0 or max_p < min_p:
                         errors.append(f"Alert tier '{tier}' invalid percentage bounds: {min_p} > {max_p}")
@@ -506,20 +510,24 @@ def validate_models_matrix(file_path: Union[str, Path]) -> Tuple[bool, List[str]
                 errors.append(f"{prefix} Missing required field '{rf}'")
 
         cap = m.get("battery_capacity_kwh")
-        if _is_finite_number(cap) and cap <= 0:
-            errors.append(f"{prefix} Battery capacity must be >0 kWh, got {cap}")
+        if "battery_capacity_kwh" in m and (not _is_finite_number(cap) or cap <= 0):
+            errors.append(f"{prefix} Battery capacity must be finite >0 kWh, got {cap}")
         rng = m.get("rated_range_km")
-        if _is_finite_number(rng) and rng <= 0:
-            errors.append(f"{prefix} Rated range must be >0 km, got {rng}")
+        if "rated_range_km" in m and (not _is_finite_number(rng) or rng <= 0):
+            errors.append(f"{prefix} Rated range must be finite >0 km, got {rng}")
         sub = m.get("national_subsidy_krw")
-        if _is_finite_number(sub) and sub < 0:
-            errors.append(f"{prefix} National subsidy must be >= 0 KRW, got {sub}")
+        if "national_subsidy_krw" in m and (not _is_finite_number(sub) or sub < 0):
+            errors.append(f"{prefix} National subsidy must be finite >= 0 KRW, got {sub}")
 
         if m.get("manufacturer"):
             stats["manufacturers"].add(m["manufacturer"])
 
         price = m.get("base_price_krw")
         ratio = m.get("price_subsidy_ratio")
+        if "base_price_krw" in m and (not _is_finite_number(price) or price < 0):
+            errors.append(f"{prefix} base_price_krw must be finite >= 0, got {price}")
+        if "price_subsidy_ratio" in m and not _is_finite_number(ratio):
+            errors.append(f"{prefix} price_subsidy_ratio must be finite, got {ratio}")
         if _is_finite_number(price) and _is_finite_number(ratio):
             if price <= 55_000_000 and ratio != 1.0:
                 errors.append(f"{prefix} Price <= 55M but ratio {ratio} != 1.0")
@@ -595,9 +603,13 @@ def validate_daily_reports(file_path: Union[str, Path]) -> Tuple[bool, List[str]
         prefix = f"Report [{idx}] ({rid or 'MISSING'}):"
         if not rid:
             errors.append(f"{prefix} Missing 'id'")
-        elif rid in seen_ids:
-            errors.append(f"{prefix} Duplicate report id '{rid}'")
-        seen_ids.add(rid)
+        elif not isinstance(rid, (str, int)):
+            errors.append(f"{prefix} Invalid id type '{type(rid).__name__}'")
+        else:
+            rid_key = str(rid)
+            if rid_key in seen_ids:
+                errors.append(f"{prefix} Duplicate report id '{rid}'")
+            seen_ids.add(rid_key)
 
         for rf in req_rep_fields:
             if rf not in r:
@@ -690,6 +702,10 @@ def validate_data_parity(
             else:
                 if not fp.exists():
                     errors.append(f"File '{fname}' missing from {label} ({fp})")
+                elif not fp.is_file():
+                    errors.append(f"Path '{fname}' in {label} is not a regular file ({fp})")
+                else:
+                    errors.append(f"File '{fname}' is empty (0 bytes) in {label} ({fp})")
 
         if best_candidate is not None:
             authoritative_path = best_candidate[2]
@@ -726,6 +742,7 @@ def validate_data_parity(
                             e for e in errors
                             if not (
                                 f"'{fname}' missing from {label}" in e
+                                or f"'{fname}' is empty (0 bytes) in {label}" in e
                                 or f"SHA-256 mismatch for '{fname}'" in e
                                 or f"Failed to read/validate {label} ({fp})" in e
                             )
@@ -761,11 +778,20 @@ def validate_all_datasets(
     Comprehensive validator executing data integrity and parity checks across all modules.
     """
     root = Path(project_root) if project_root else _find_repo_root()
-    if not (root / "data").is_dir() and (root.parent / "data").is_dir():
+    if not (root / "ev-stealth-web").is_dir() and (root.parent / "ev-stealth-web").is_dir() and (root.parent / "data").is_dir():
+        root = root.parent
+    elif not (root / "data").is_dir() and (root.parent / "data").is_dir():
         root = root.parent
     root_data = root / "data"
-    web_src_data = root / "ev-stealth-web" / "src" / "data"
-    web_pub_data = root / "ev-stealth-web" / "public" / "data"
+    if (root / "ev-stealth-web" / "src" / "data").is_dir() or (root / "ev-stealth-web").is_dir():
+        web_src_data = root / "ev-stealth-web" / "src" / "data"
+        web_pub_data = root / "ev-stealth-web" / "public" / "data"
+    elif (root / "src" / "data").is_dir():
+        web_src_data = root / "src" / "data"
+        web_pub_data = root / "public" / "data"
+    else:
+        web_src_data = root / "ev-stealth-web" / "src" / "data"
+        web_pub_data = root / "ev-stealth-web" / "public" / "data"
 
     all_errors: List[str] = []
     summary_stats: Dict[str, Any] = {}
@@ -819,6 +845,14 @@ def validate_all_datasets(
     )
     summary_stats["parity"] = s6
     all_errors.extend(e6)
+
+    summary_stats["module_status"] = {
+        "complaints": v1,
+        "subsidy": v2 and v3,
+        "models_matrix": v4,
+        "daily_reports": v5,
+        "parity": v6,
+    }
 
     is_overall_valid = len(all_errors) == 0
     return is_overall_valid, all_errors, summary_stats
@@ -931,6 +965,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.format == "json":
             print(json.dumps(result_payload, indent=2, ensure_ascii=False))
         elif args.format in ("markdown", "md"):
+            mod_status = stats.get("module_status", {})
+            comp_ok = mod_status.get("complaints", not any("complaints" in e.lower() for e in errors))
+            sub_ok = mod_status.get("subsidy", not any("subsidy" in e.lower() for e in errors))
+            mat_ok = mod_status.get("models_matrix", not any("models" in e.lower() for e in errors))
+            rep_ok = mod_status.get("daily_reports", not any("daily" in e.lower() for e in errors))
+            par_ok = mod_status.get("parity", not any("parity" in e.lower() or "mismatch" in e.lower() for e in errors))
             md_lines = [
                 "# EV Daily Monitoring System - Comprehensive Data Integrity Report",
                 f"- **Overall Result**: {'✅ PASS' if is_valid else '❌ FAIL'}",
@@ -938,11 +978,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                 "",
                 "| Dataset Module | Status | Key Metric |",
                 "| :--- | :--- | :--- |",
-                f"| Complaints Database | {'✅ PASS' if not any('complaints' in e.lower() for e in errors) else '❌ FAIL'} | {stats.get('complaints', {}).get('total_cases', 0)} cases / {stats.get('complaints', {}).get('slang_terms_count', 0)} slang terms |",
-                f"| Subsidy Datasets | {'✅ PASS' if not any('subsidy' in e.lower() for e in errors) else '❌ FAIL'} | {stats.get('subsidy', {}).get('total_regions', 0)} regions ({stats.get('subsidy', {}).get('nationwide_depletion_rate', 0)}% depletion) |",
-                f"| Models Matrix | {'✅ PASS' if not any('models' in e.lower() for e in errors) else '❌ FAIL'} | {stats.get('models_matrix', {}).get('total_models', 0)} vehicle models |",
-                f"| Daily Reports | {'✅ PASS' if not any('daily' in e.lower() for e in errors) else '❌ FAIL'} | {stats.get('daily_reports', {}).get('total_reports', 0)} defect reports ({stats.get('daily_reports', {}).get('critical_reports', 0)} critical) |",
-                f"| Directory Mirror Parity | {'✅ PASS' if not any('parity' in e.lower() or 'mismatch' in e.lower() for e in errors) else '❌ FAIL'} | 100% bitwise parity verified across mirrors |",
+                f"| Complaints Database | {'✅ PASS' if comp_ok else '❌ FAIL'} | {stats.get('complaints', {}).get('total_cases', 0)} cases / {stats.get('complaints', {}).get('slang_terms_count', 0)} slang terms |",
+                f"| Subsidy Datasets | {'✅ PASS' if sub_ok else '❌ FAIL'} | {stats.get('subsidy', {}).get('total_regions', 0)} regions ({stats.get('subsidy', {}).get('nationwide_depletion_rate', 0)}% depletion) |",
+                f"| Models Matrix | {'✅ PASS' if mat_ok else '❌ FAIL'} | {stats.get('models_matrix', {}).get('total_models', 0)} vehicle models |",
+                f"| Daily Reports | {'✅ PASS' if rep_ok else '❌ FAIL'} | {stats.get('daily_reports', {}).get('total_reports', 0)} defect reports ({stats.get('daily_reports', {}).get('critical_reports', 0)} critical) |",
+                f"| Directory Mirror Parity | {'✅ PASS' if par_ok else '❌ FAIL'} | 100% bitwise parity verified across mirrors |",
                 "",
             ]
             if errors:

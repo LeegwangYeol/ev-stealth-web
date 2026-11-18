@@ -51,6 +51,14 @@ export function parseSafeDate(rawDate?: string): number {
   const trimmed = rawDate.trim();
   if (!trimmed) return 0;
 
+  // 0. Preserve ISO 8601 timestamps (including fractional seconds and timezone offsets) before separator normalization
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(trimmed)) {
+    const hasTz = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(trimmed);
+    const isoCandidate = hasTz ? trimmed : `${trimmed}Z`;
+    const timestamp = new Date(isoCandidate).getTime();
+    if (Number.isFinite(timestamp) && timestamp > 0) return timestamp;
+  }
+
   // Clean Korean date separators (e.g. "2026. 09. 08.", "2026년 9월 8일")
   const cleaned = trimmed
     .replace(/년\s*/g, '-')
@@ -62,9 +70,11 @@ export function parseSafeDate(rawDate?: string): number {
   // 1. Cross-browser normalizer: replace dots and slashes with hyphens (e.g. 2026.09.08 -> 2026-09-08)
   const normalized = cleaned.replace(/\./g, '-').replace(/\//g, '-');
 
-  // 2. Date-only format "YYYY-MM-DD" -> parse consistently as UTC midnight across all browsers
-  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
-    const timestamp = new Date(`${normalized}T00:00:00Z`).getTime();
+  // 2. Date-only format "YYYY-M-D" or "YYYY-MM-DD" -> pad & parse consistently as UTC midnight across all browsers
+  const ymdOnly = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (ymdOnly) {
+    const padded = `${ymdOnly[1]}-${ymdOnly[2].padStart(2, '0')}-${ymdOnly[3].padStart(2, '0')}`;
+    const timestamp = new Date(`${padded}T00:00:00Z`).getTime();
     if (Number.isFinite(timestamp) && timestamp > 0) return timestamp;
   }
 
@@ -737,8 +747,10 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
     const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
     for (const r of reports) {
-      if (maxTs > 0 && r._timestamp >= maxTs - sevenDaysMs) counts.RECENT_7D++;
-      if (maxTs > 0 && r._timestamp >= maxTs - thirtyDaysMs) counts.RECENT_30D++;
+      if (maxTs > 0 && r._timestamp > 0) {
+        if (r._timestamp >= maxTs - sevenDaysMs) counts.RECENT_7D++;
+        if (r._timestamp >= maxTs - thirtyDaysMs) counts.RECENT_30D++;
+      }
     }
 
     const dates = Object.keys(counts)
@@ -793,10 +805,10 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         if (selectedDateRange !== 'ALL') {
           if (selectedDateRange === 'RECENT_7D') {
             const cutoff = maxReportTimestamp - 7 * 24 * 60 * 60 * 1000;
-            if (report._timestamp < cutoff) return false;
+            if (maxReportTimestamp <= 0 || report._timestamp <= 0 || report._timestamp < cutoff) return false;
           } else if (selectedDateRange === 'RECENT_30D') {
             const cutoff = maxReportTimestamp - 30 * 24 * 60 * 60 * 1000;
-            if (report._timestamp < cutoff) return false;
+            if (maxReportTimestamp <= 0 || report._timestamp <= 0 || report._timestamp < cutoff) return false;
           } else {
             if (report.date !== selectedDateRange) return false;
           }
@@ -1036,7 +1048,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           <div className="mt-2 text-xs text-slate-800 flex items-center justify-between">
             <span>스크랩 대상: {statistics.total_scraped}건</span>
             <span className="text-blue-700 font-semibold">
-              유효율 {Math.round((statistics.total_filtered_defects / Math.max(statistics.total_scraped || 0, 1)) * 100)}%
+              유효율 {statistics.total_scraped > 0 ? Math.min(100, Math.max(0, Math.round((statistics.total_filtered_defects / statistics.total_scraped) * 100))) : 0}%
             </span>
           </div>
           <div className="mt-1 text-[11px] text-cyan-800 font-medium flex items-center gap-1">
@@ -1327,7 +1339,10 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               <select
                 id="admin-page-size-select"
                 value={pageSize}
-                onChange={(e) => setPageSize(Number(e.target.value))}
+                onChange={(e) => {
+                  const next = Number(e.target.value);
+                  if (Number.isFinite(next) && next > 0) setPageSize(next);
+                }}
                 className="min-h-[44px] px-2 py-1.5 bg-slate-100 text-slate-800 rounded-xl border border-slate-200 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"
                 aria-label="페이지당 표시 제보 개수 선택"
               >
@@ -1509,13 +1524,13 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           aria-atomic="true"
           className="sr-only"
         >
-          {selectedCategory !== 'ALL' || searchQuery || selectedSource !== 'all'
+          {selectedCategory !== 'ALL' || searchQuery || selectedSource !== 'all' || selectedBrand !== 'ALL' || selectedDateRange !== 'ALL'
             ? `필터링된 결과: 총 ${filteredReports.length}건의 결함 제보`
             : `전체 수집된 결함 제보: 총 ${filteredReports.length}건`}
         </div>
 
         {/* Screen Reader Accessible Summary Table for Defect Reports (always present for screen readers) */}
-        <div className={viewMode === 'table' ? 'overflow-x-auto table-scroll-container rounded-2xl border border-slate-200 bg-white shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2' : 'sr-only'} tabIndex={viewMode === 'table' ? 0 : undefined} role={viewMode === 'table' ? 'region' : undefined} aria-label={viewMode === 'table' ? '결함 제보 요약 데이터 테이블' : undefined}>
+        <div className={viewMode === 'table' ? 'overflow-x-auto table-scroll-container rounded-2xl border border-slate-200 bg-white shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2' : 'sr-only focus-within:not-sr-only focus-within:overflow-x-auto focus-within:bg-white focus-within:p-2 focus-within:rounded-2xl focus-within:border focus-within:border-slate-200'} tabIndex={viewMode === 'table' ? 0 : undefined} role={viewMode === 'table' ? 'region' : undefined} aria-label={viewMode === 'table' ? '결함 제보 요약 데이터 테이블' : undefined}>
           {viewMode === 'table' && (
             <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-600 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true"><span>← 좌우로 밀어서 전체 제보 내역 확인</span><span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span></div>
           )}
@@ -1567,13 +1582,14 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                       <td className="px-3 py-3 whitespace-nowrap">{getSourceBadge(report.source || 'N/A', safeUrl)}</td>
                       <td className="px-3 py-3 text-slate-900 font-medium max-w-xs" title={report.title}>
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="truncate"><span>{report.title}</span></span>
+                          <span id={`report-table-title-${report.id}`} className="truncate"><span>{report.title}</span></span>
                           {isExt ? (
                             <a
                               href={safeUrl}
                               target="_blank"
                               rel="noopener noreferrer"
                               aria-label="게시글 원문 보기"
+                              aria-describedby={`report-table-title-${report.id}`}
                               title="게시글 원문 보기 (새 창에서 열림)"
                               className="shrink-0 inline-flex items-center min-h-[44px] px-2 py-1 focus:bg-blue-700 focus:text-white rounded focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 text-blue-700 underline text-xs font-semibold"
                             >

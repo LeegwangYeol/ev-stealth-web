@@ -5,6 +5,7 @@ Parses Next.js SSR JSON state (__NEXT_DATA__), OpenGraph metadata, and DOM struc
 """
 
 import argparse
+import hashlib
 import html
 import json
 import logging
@@ -124,7 +125,8 @@ class BlindScraper:
     def ensure_warm_up(self):
         """Warm up session cookie jar on Blind."""
         if not self._warmed_up:
-            self.client.warm_up_session(BLIND_KR_URL)
+            if self.client and hasattr(self.client, "warm_up_session"):
+                self.client.warm_up_session(BLIND_KR_URL)
             self._warmed_up = True
 
     def build_google_dork_query(self, keyword: str, category: Optional[str] = None) -> str:
@@ -190,7 +192,10 @@ class BlindScraper:
                     post_id = str(p.get("id") or p.get("article_id") or "")
                     title = str(p.get("title") or "")
                     slug = str(p.get("slug") or post_id or "")
-                    url = f"{BLIND_KR_URL}/post/{slug}-{post_id}" if not slug.startswith(("http://", "https://")) else slug
+                    raw_url = slug if slug.lower().startswith(("http://", "https://")) else f"{BLIND_KR_URL}/post/{slug}-{post_id}"
+                    url = normalize_scraper_url(raw_url, BLIND_BASE_URL)
+                    if not url:
+                        continue
                     user_obj = p.get("user") if isinstance(p.get("user"), dict) else {}
                     author_obj = p.get("author") if isinstance(p.get("author"), dict) else {}
                     company = str(user_obj.get("companyName") or author_obj.get("company") or "")
@@ -213,8 +218,8 @@ class BlindScraper:
         seen_urls = set()
 
         for href, inner in matches:
-            full_url = f"{BLIND_BASE_URL}{href}" if href.startswith("/") else href
-            if full_url in seen_urls:
+            full_url = normalize_scraper_url(href, BLIND_BASE_URL)
+            if not full_url or full_url in seen_urls:
                 continue
             seen_urls.add(full_url)
 
@@ -417,7 +422,7 @@ class BlindScraper:
         veh, cat = self.classify_text(combined_post)
         if cat and len(body) >= 20:
             slang = extract_slang_terms(combined_post, self.slang_dict)
-            rec_id = f"BLIND_{cat.upper()[:4]}_{abs(hash(url)) % 100000:05d}"
+            rec_id = f"BLIND_{cat.upper()[:4]}_{int(hashlib.sha256(url.encode('utf-8')).hexdigest(), 16) % 100000:05d}"
             severity = self._determine_severity(cat, combined_post)
             topic = self._extract_defect_topic(cat, combined_post)
             records.append(ComplaintRecord(
@@ -458,7 +463,7 @@ class BlindScraper:
                     c_text = comment
 
                 c_slang = extract_slang_terms(c_text, self.slang_dict)
-                rec_id = f"BLIND_{c_cat.upper()[:4]}_{abs(hash(url + str(idx))) % 100000:05d}"
+                rec_id = f"BLIND_{c_cat.upper()[:4]}_{int(hashlib.sha256((url + str(idx)).encode('utf-8')).hexdigest(), 16) % 100000:05d}"
                 severity = self._determine_severity(c_cat, c_text)
                 topic = self._extract_defect_topic(c_cat, c_text)
                 records.append(ComplaintRecord(
@@ -522,7 +527,7 @@ class BlindScraper:
                                         post_url=item.get("post_url") or item.get("url") or "",
                                         post_title=item.get("post_title") or item.get("title") or "",
                                         target_vehicle=item.get("target_vehicle") or "Unknown",
-                                        category=item.get("category") or "convenience",
+                                        category=item.get("category") or "repair_as",
                                         defect_topic=item.get("defect_topic") or "",
                                         raw_quote=item.get("raw_quote") or item.get("content") or "",
                                         slang_terms=item.get("slang_terms") if isinstance(item.get("slang_terms"), list) else [],
@@ -613,22 +618,22 @@ def main():
     parser.add_argument("--output", type=str, default="/Users/a7890/src/my-e-car/data/blind_complaints.json", help="Output JSON path")
     args = parser.parse_args()
 
-    scraper = BlindScraper()
-    all_records = []
+    with BlindScraper() as scraper:
+        all_records = []
 
-    topic_items = scraper.fetch_topic_posts(topic_name=args.topic, max_pages=1)
-    for item in topic_items[:10]:
-        post_data = scraper.fetch_post_detail(item["url"])
-        if post_data:
-            records = scraper.extract_complaint_records(post_data)
-            all_records.extend(records)
+        topic_items = scraper.fetch_topic_posts(topic_name=args.topic, max_pages=1)
+        for item in topic_items[:10]:
+            post_data = scraper.fetch_post_detail(item["url"])
+            if post_data:
+                records = scraper.extract_complaint_records(post_data)
+                all_records.extend(records)
 
-    if not all_records and scraper.cache_fallback:
-        logger.warning("No records harvested from live Blind topic. Falling back to seed datasets.")
-        all_records = scraper.load_seed_records(limit=10)
+        if not all_records and scraper.cache_fallback:
+            logger.warning("No records harvested from live Blind topic. Falling back to seed datasets.")
+            all_records = scraper.load_seed_records(limit=10)
 
-    save_complaints_json(all_records, args.output)
-    print(f"Collected {len(all_records)} records from Blind.")
+        save_complaints_json(all_records, args.output)
+        print(f"Collected {len(all_records)} records from Blind.")
 
 
 if __name__ == "__main__":

@@ -3,8 +3,11 @@ import type {
   EVSubsidyDataset,
   PopularModelEntry,
   RegionEntry,
+  CategoryMetrics,
+  AlertThresholdConfig,
   SubsidyCalculationResult,
   SubsidyCalculatorOptions,
+  SubsidyCategoryKey,
   AlertSeverity,
 } from '../types/subsidy.ts';
 import {
@@ -224,33 +227,197 @@ const fallbackDataset: EVSubsidyDataset = {
   popular_models_matrix: [],
 };
 
+const ALERT_SEVERITIES: readonly AlertSeverity[] = [
+  'HEALTHY',
+  'CAUTION',
+  'WARNING',
+  'CRITICAL',
+  'DEPLETED',
+];
+
+const CATEGORY_KEYS: readonly SubsidyCategoryKey[] = ['passenger', 'commercial', 'bus'];
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function safeNonNegNum(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function safeNonEmptyStr(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value : fallback;
+}
+
+function normalizeCategoryMetricsObj(raw: unknown, fb: CategoryMetrics): CategoryMetrics {
+  if (!isPlainRecord(raw)) {
+    return fb;
+  }
+  const announced = safeNonNegNum(raw.announced_units, fb.announced_units);
+  const applied = safeNonNegNum(raw.applied_units, fb.applied_units);
+  const delivered = safeNonNegNum(raw.delivered_units, fb.delivered_units);
+  const remaining = safeNonNegNum(raw.remaining_units, calculateRemainingUnits(applied, announced));
+  const depletionRate = safeNonNegNum(raw.depletion_rate, calculateDepletionRate(applied, announced));
+  const deliveryRate = safeNonNegNum(raw.delivery_rate, calculateDeliveryRate(delivered, announced));
+  const status = resolveAlertSeverity(raw.status, depletionRate);
+
+  return {
+    announced_units: announced,
+    applied_units: applied,
+    delivered_units: delivered,
+    remaining_units: remaining,
+    depletion_rate: depletionRate,
+    delivery_rate: deliveryRate,
+    status,
+    ...(typeof raw.max_local_subsidy_krw === 'number' && Number.isFinite(raw.max_local_subsidy_krw) && raw.max_local_subsidy_krw >= 0
+      ? { max_local_subsidy_krw: raw.max_local_subsidy_krw }
+      : fb.max_local_subsidy_krw !== undefined
+      ? { max_local_subsidy_krw: fb.max_local_subsidy_krw }
+      : {}),
+    ...(typeof raw.max_total_subsidy_krw === 'number' && Number.isFinite(raw.max_total_subsidy_krw) && raw.max_total_subsidy_krw >= 0
+      ? { max_total_subsidy_krw: raw.max_total_subsidy_krw }
+      : fb.max_total_subsidy_krw !== undefined
+      ? { max_total_subsidy_krw: fb.max_total_subsidy_krw }
+      : {}),
+    ...(typeof raw.total_budget_krw === 'number' && Number.isFinite(raw.total_budget_krw) && raw.total_budget_krw >= 0
+      ? { total_budget_krw: raw.total_budget_krw }
+      : {}),
+    ...(typeof raw.remaining_budget_krw === 'number' && Number.isFinite(raw.remaining_budget_krw) && raw.remaining_budget_krw >= 0
+      ? { remaining_budget_krw: raw.remaining_budget_krw }
+      : {}),
+  };
+}
+
+/**
+ * Validates and deeply normalizes an untrusted or partially corrupted EV subsidy dataset
+ * so missing nested fields, non-object array entries, or NaN/Infinity values never crash consumers.
+ */
+export function normalizeSubsidyDataset(data: unknown): EVSubsidyDataset {
+  if (!isPlainRecord(data) || !Array.isArray(data.regions)) {
+    return fallbackDataset;
+  }
+
+  const rawMeta = isPlainRecord(data.metadata) ? data.metadata : {};
+  const fbMeta = fallbackDataset.metadata;
+  const metadata: EVSubsidyDataset['metadata'] = {
+    version: safeNonEmptyStr(rawMeta.version, fbMeta.version),
+    generated_at: safeNonEmptyStr(rawMeta.generated_at, fbMeta.generated_at),
+    policy_year:
+      typeof rawMeta.policy_year === 'number' && Number.isFinite(rawMeta.policy_year) && rawMeta.policy_year >= 2020
+        ? Math.floor(rawMeta.policy_year)
+        : fbMeta.policy_year,
+    data_sources: Array.isArray(rawMeta.data_sources)
+      ? rawMeta.data_sources.filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+      : fbMeta.data_sources,
+    total_regions_tracked: safeNonNegNum(rawMeta.total_regions_tracked, fbMeta.total_regions_tracked),
+    total_municipalities_tracked: safeNonNegNum(
+      rawMeta.total_municipalities_tracked,
+      fbMeta.total_municipalities_tracked
+    ),
+    currency: safeNonEmptyStr(rawMeta.currency, fbMeta.currency),
+  };
+  if (metadata.data_sources.length === 0) {
+    metadata.data_sources = fbMeta.data_sources;
+  }
+
+  const rawThresholds = isPlainRecord(data.alert_thresholds) ? data.alert_thresholds : {};
+  const alertThresholds = {} as Record<AlertSeverity, AlertThresholdConfig>;
+  for (const sev of ALERT_SEVERITIES) {
+    const fbCfg = fallbackDataset.alert_thresholds[sev];
+    const rawCfg = Object.prototype.hasOwnProperty.call(rawThresholds, sev) && isPlainRecord(rawThresholds[sev])
+      ? (rawThresholds[sev] as Record<string, unknown>)
+      : {};
+    alertThresholds[sev] = {
+      min_percent: typeof rawCfg.min_percent === 'number' && Number.isFinite(rawCfg.min_percent) ? rawCfg.min_percent : fbCfg.min_percent,
+      max_percent: typeof rawCfg.max_percent === 'number' && Number.isFinite(rawCfg.max_percent) ? rawCfg.max_percent : fbCfg.max_percent,
+      label_ko: safeNonEmptyStr(rawCfg.label_ko, fbCfg.label_ko),
+      severity: sev,
+      color_hex: safeNonEmptyStr(rawCfg.color_hex, fbCfg.color_hex),
+      badge_class: safeNonEmptyStr(rawCfg.badge_class, fbCfg.badge_class),
+      recommended_action: safeNonEmptyStr(rawCfg.recommended_action, fbCfg.recommended_action),
+    };
+  }
+
+  const rawSummary = isPlainRecord(data.nationwide_summary) ? data.nationwide_summary : {};
+  const fbSummary = fallbackDataset.nationwide_summary;
+  const rawCatTotals = isPlainRecord(rawSummary.category_totals) ? rawSummary.category_totals : {};
+  const rawAlertCounts = isPlainRecord(rawSummary.alert_region_counts) ? rawSummary.alert_region_counts : {};
+
+  const nationwideSummary: EVSubsidyDataset['nationwide_summary'] = {
+    total_announced_units: safeNonNegNum(rawSummary.total_announced_units, fbSummary.total_announced_units),
+    total_applied_units: safeNonNegNum(rawSummary.total_applied_units, fbSummary.total_applied_units),
+    total_delivered_units: safeNonNegNum(rawSummary.total_delivered_units, fbSummary.total_delivered_units),
+    total_remaining_units: safeNonNegNum(rawSummary.total_remaining_units, fbSummary.total_remaining_units),
+    nationwide_depletion_rate: safeNonNegNum(
+      rawSummary.nationwide_depletion_rate,
+      fbSummary.nationwide_depletion_rate
+    ),
+    total_budget_billion_krw: safeNonNegNum(
+      rawSummary.total_budget_billion_krw,
+      fbSummary.total_budget_billion_krw
+    ),
+    disbursed_budget_billion_krw: safeNonNegNum(
+      rawSummary.disbursed_budget_billion_krw,
+      fbSummary.disbursed_budget_billion_krw
+    ),
+    ...(typeof rawSummary.total_budget_krw === 'number' && Number.isFinite(rawSummary.total_budget_krw) && rawSummary.total_budget_krw >= 0
+      ? { total_budget_krw: rawSummary.total_budget_krw }
+      : {}),
+    ...(typeof rawSummary.disbursed_budget_krw === 'number' && Number.isFinite(rawSummary.disbursed_budget_krw) && rawSummary.disbursed_budget_krw >= 0
+      ? { disbursed_budget_krw: rawSummary.disbursed_budget_krw }
+      : {}),
+    category_totals: {
+      passenger: normalizeCategoryMetricsObj(rawCatTotals.passenger, fbSummary.category_totals.passenger),
+      commercial: normalizeCategoryMetricsObj(rawCatTotals.commercial, fbSummary.category_totals.commercial),
+      bus: normalizeCategoryMetricsObj(rawCatTotals.bus, fbSummary.category_totals.bus),
+    },
+    alert_region_counts: {
+      healthy: safeNonNegNum(rawAlertCounts.healthy, fbSummary.alert_region_counts.healthy),
+      caution: safeNonNegNum(rawAlertCounts.caution, fbSummary.alert_region_counts.caution),
+      warning: safeNonNegNum(rawAlertCounts.warning, fbSummary.alert_region_counts.warning),
+      critical: safeNonNegNum(rawAlertCounts.critical, fbSummary.alert_region_counts.critical),
+      depleted: safeNonNegNum(rawAlertCounts.depleted, fbSummary.alert_region_counts.depleted),
+    },
+  };
+
+  const regions: RegionEntry[] = data.regions.filter((r): r is RegionEntry => isPlainRecord(r));
+  const popularModels: PopularModelEntry[] = Array.isArray(data.popular_models_matrix)
+    ? data.popular_models_matrix.filter((m): m is PopularModelEntry => isPlainRecord(m))
+    : fallbackDataset.popular_models_matrix;
+
+  const trajectory: HistoricalTrajectoryPoint[] | undefined = Array.isArray(data.historical_depletion_trajectory)
+    ? data.historical_depletion_trajectory
+        .filter((pt): pt is Record<string, unknown> => isPlainRecord(pt))
+        .map((pt) => ({
+          date: safeNonEmptyStr(pt.date, metadata.generated_at.slice(0, 10)),
+          passenger_rate: safeNonNegNum(pt.passenger_rate, 0),
+          commercial_rate: safeNonNegNum(pt.commercial_rate, 0),
+          overall_rate: safeNonNegNum(pt.overall_rate, 0),
+        }))
+    : undefined;
+
+  return {
+    metadata,
+    alert_thresholds: alertThresholds,
+    nationwide_summary: nationwideSummary,
+    regions,
+    popular_models_matrix: popularModels,
+    ...(trajectory ? { historical_depletion_trajectory: trajectory } : {}),
+  };
+}
+
+let cachedDatabase: EVSubsidyDataset | null = null;
+
 /**
  * Returns the strongly-typed EV Subsidy Database.
  */
 export function getSubsidyDatabase(): EVSubsidyDataset {
+  if (cachedDatabase) {
+    return cachedDatabase;
+  }
   try {
-    if (rawData && typeof rawData === 'object' && Array.isArray((rawData as Record<string, unknown>).regions)) {
-      const typed = rawData as unknown as Partial<EVSubsidyDataset>;
-      return {
-        metadata: typed.metadata && typeof typed.metadata === 'object' ? typed.metadata : fallbackDataset.metadata,
-        alert_thresholds:
-          typed.alert_thresholds && typeof typed.alert_thresholds === 'object'
-            ? typed.alert_thresholds
-            : fallbackDataset.alert_thresholds,
-        nationwide_summary:
-          typed.nationwide_summary && typeof typed.nationwide_summary === 'object'
-            ? typed.nationwide_summary
-            : fallbackDataset.nationwide_summary,
-        regions: Array.isArray(typed.regions) ? typed.regions : fallbackDataset.regions,
-        popular_models_matrix: Array.isArray(typed.popular_models_matrix)
-          ? typed.popular_models_matrix
-          : fallbackDataset.popular_models_matrix,
-        ...(Array.isArray(typed.historical_depletion_trajectory)
-          ? { historical_depletion_trajectory: typed.historical_depletion_trajectory }
-          : {}),
-      };
-    }
-    return fallbackDataset;
+    cachedDatabase = normalizeSubsidyDataset(rawData);
+    return cachedDatabase;
   } catch (err) {
     console.error('Failed to load subsidy database, using fallback:', err);
     return fallbackDataset;
@@ -329,8 +496,8 @@ export function calculateNetSubsidy(
       categories: DEFAULT_NATIONWIDE_SUMMARY.category_totals,
     };
 
-  const model = getModelById(modelId) || defaultModel;
-  const region = getRegionById(regionId) || defaultRegion;
+  const model = getModelByIdFromList(models, modelId) || defaultModel;
+  const region = getRegionByIdFromList(regions, regionId) || defaultRegion;
   return calculateNetSubsidyPure(model, region, customMsrp, options);
 }
 
@@ -340,7 +507,7 @@ export function calculateNetSubsidy(
  */
 export function getCategoryDepletion(
   regionOrId?: RegionEntry | string | null,
-  categoryKey: 'passenger' | 'commercial' | 'bus' = 'passenger'
+  categoryKey: SubsidyCategoryKey = 'passenger'
 ): {
   announcedUnits: number;
   appliedUnits: number;
@@ -354,15 +521,22 @@ export function getCategoryDepletion(
   let region: RegionEntry | undefined;
   if (typeof regionOrId === 'string') {
     region = getRegionById(regionOrId);
-  } else if (regionOrId && typeof regionOrId === 'object') {
-    if ('categories' in regionOrId && regionOrId.categories && typeof regionOrId.categories === 'object') {
-      region = regionOrId as RegionEntry;
+  } else if (isPlainRecord(regionOrId)) {
+    if ('categories' in regionOrId && isPlainRecord(regionOrId.categories)) {
+      region = regionOrId as unknown as RegionEntry;
     } else if ('region_id' in regionOrId && typeof regionOrId.region_id === 'string') {
       region = getRegionById(regionOrId.region_id);
     }
   }
 
-  const category = region?.categories?.[categoryKey];
+  const rawCategories = region?.categories as unknown;
+  const category =
+    CATEGORY_KEYS.includes(categoryKey) &&
+    isPlainRecord(rawCategories) &&
+    Object.prototype.hasOwnProperty.call(rawCategories, categoryKey) &&
+    isPlainRecord(rawCategories[categoryKey])
+      ? (rawCategories[categoryKey] as unknown as CategoryMetrics)
+      : undefined;
   const rawAnnounced = category?.announced_units;
   const rawApplied = category?.applied_units;
   const announced = typeof rawAnnounced === 'number' && !Number.isFinite(rawAnnounced)

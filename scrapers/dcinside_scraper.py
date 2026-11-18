@@ -6,6 +6,7 @@ rate limiting, and AJAX comment post-fetching.
 """
 
 import argparse
+import hashlib
 import html
 import json
 import logging
@@ -139,7 +140,8 @@ class DCInsideScraper:
     def ensure_warm_up(self):
         """Warm up session cookie jar on DC Inside."""
         if not self._warmed_up:
-            self.client.warm_up_session(DC_BASE_URL)
+            if self.client and hasattr(self.client, "warm_up_session"):
+                self.client.warm_up_session(DC_BASE_URL)
             self._warmed_up = True
 
     def search_gallery(
@@ -165,6 +167,7 @@ class DCInsideScraper:
         except (ValueError, TypeError, OverflowError):
             eff_pages = 1
         results = []
+        seen_pids = set()
 
         for page in range(1, eff_pages + 1):
             search_url = (
@@ -191,7 +194,12 @@ class DCInsideScraper:
                 logger.info(f"No more items found for keyword '{keyword}' in {gallery_id}")
                 break
 
-            results.extend(items)
+            new_items = [it for it in items if not it.get("post_id") or it["post_id"] not in seen_pids]
+            if not new_items:
+                logger.info(f"Search page {page} of [{gallery_id}] repeated previously seen items. Halting loop.")
+                break
+            seen_pids.update(it["post_id"] for it in new_items if it.get("post_id"))
+            results.extend(new_items)
 
         logger.info(f"Found {len(results)} items for '{keyword}' in DC Inside [{gallery_id}].")
         return results
@@ -207,10 +215,12 @@ class DCInsideScraper:
         # Match table rows in DC desktop list view
         # <tr class="ub-content us-post" data-no="12345">
         # <td class="gall_tit ub-word"><a href="...">제목</a>
-        row_pattern = r'<tr[^>]*data-no="(\d+)"[^>]*>.*?<td[^>]*class="[^"]*gall_tit[^"]*"[^>]*>.*?<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>'
+        row_pattern = r'<tr([^>]*)data-no="(\d+)"([^>]*)>.*?<td[^>]*class="[^"]*gall_tit[^"]*"[^>]*>.*?<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>'
         matches = re.findall(row_pattern, html_content, re.IGNORECASE | re.DOTALL)
 
-        for post_no, href, raw_title in matches:
+        for tr_pre, post_no, tr_post, href, raw_title in matches:
+            if "ub-notice" in (tr_pre + tr_post).lower():
+                continue
             clean_title = clean_html_text(raw_title)
             if not clean_title or "공지" in clean_title:
                 continue
@@ -552,7 +562,7 @@ class DCInsideScraper:
         veh, cat = self.classify_text(combined_post)
         if cat and len(body) >= 20:
             slang = extract_slang_terms(combined_post, self.slang_dict)
-            rec_id = f"DC_{cat.upper()[:4]}_{abs(hash(url)) % 100000:05d}"
+            rec_id = f"DC_{cat.upper()[:4]}_{int(hashlib.sha256(url.encode('utf-8')).hexdigest(), 16) % 100000:05d}"
             severity = self._determine_severity(cat, combined_post)
             topic = self._extract_defect_topic(cat, combined_post)
             records.append(ComplaintRecord(
@@ -584,7 +594,7 @@ class DCInsideScraper:
             c_veh, c_cat = self.classify_text(comment)
             if c_cat and len(comment) >= 15:
                 c_slang = extract_slang_terms(comment, self.slang_dict)
-                rec_id = f"DC_{c_cat.upper()[:4]}_{abs(hash(url + str(idx))) % 100000:05d}"
+                rec_id = f"DC_{c_cat.upper()[:4]}_{int(hashlib.sha256((url + str(idx)).encode('utf-8')).hexdigest(), 16) % 100000:05d}"
                 severity = self._determine_severity(c_cat, comment)
                 topic = self._extract_defect_topic(c_cat, comment)
                 records.append(ComplaintRecord(
@@ -648,7 +658,7 @@ class DCInsideScraper:
                                         post_url=item.get("post_url") or item.get("url") or "",
                                         post_title=item.get("post_title") or item.get("title") or "",
                                         target_vehicle=item.get("target_vehicle") or "Unknown",
-                                        category=item.get("category") or "convenience",
+                                        category=item.get("category") or "repair_as",
                                         defect_topic=item.get("defect_topic") or "",
                                         raw_quote=item.get("raw_quote") or item.get("content") or "",
                                         slang_terms=item.get("slang_terms") if isinstance(item.get("slang_terms"), list) else [],
@@ -740,34 +750,34 @@ def main():
     parser.add_argument("--output", type=str, default="/Users/a7890/src/my-e-car/data/dcinside_complaints.json", help="Output JSON path")
     args = parser.parse_args()
 
-    scraper = DCInsideScraper()
-    all_records = []
-    consecutive_failures = 0
+    with DCInsideScraper() as scraper:
+        all_records = []
+        consecutive_failures = 0
 
-    for gall in args.galleries:
-        if consecutive_failures >= 5:
-            logger.warning("Halting scrape loop due to 5 consecutive network failures / circuit trips.")
-            break
-        for kw in args.keywords:
+        for gall in args.galleries:
             if consecutive_failures >= 5:
+                logger.warning("Halting scrape loop due to 5 consecutive network failures / circuit trips.")
                 break
-            items = scraper.search_gallery(gall, kw, max_pages=1)
-            if not items:
-                consecutive_failures += 1
-            else:
-                consecutive_failures = 0
-            for item in items[:args.limit]:
-                post_data = scraper.fetch_post_detail(gall, item["post_id"])
-                if post_data:
-                    records = scraper.extract_complaint_records(post_data)
-                    all_records.extend(records)
+            for kw in args.keywords:
+                if consecutive_failures >= 5:
+                    break
+                items = scraper.search_gallery(gall, kw, max_pages=1)
+                if not items:
+                    consecutive_failures += 1
+                else:
+                    consecutive_failures = 0
+                for item in items[:args.limit]:
+                    post_data = scraper.fetch_post_detail(gall, item["post_id"])
+                    if post_data:
+                        records = scraper.extract_complaint_records(post_data)
+                        all_records.extend(records)
 
-    if not all_records and scraper.cache_fallback:
-        logger.warning("No records harvested from live DCInside site. Falling back to seed datasets.")
-        all_records = scraper.load_seed_records(limit=args.limit * len(args.galleries))
+        if not all_records and scraper.cache_fallback:
+            logger.warning("No records harvested from live DCInside site. Falling back to seed datasets.")
+            all_records = scraper.load_seed_records(limit=args.limit * len(args.galleries))
 
-    save_complaints_json(all_records, args.output)
-    print(f"Collected {len(all_records)} records from DC Inside.")
+        save_complaints_json(all_records, args.output)
+        print(f"Collected {len(all_records)} records from DC Inside.")
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ export const JsonLd = memo(function JsonLd({ data, id }: JsonLdProps) {
   // Sanitize JSON-LD to prevent script breakout XSS (e.g. </script> injection), unicode escaping, and prototype pollution
   const safeJsonString = useMemo(() => serializeJsonLd(data), [data]);
 
-  if (!safeJsonString || safeJsonString === '{}') {
+  if (!safeJsonString || safeJsonString === '{}' || safeJsonString === '[]') {
     return null;
   }
 

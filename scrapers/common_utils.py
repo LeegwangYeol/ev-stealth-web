@@ -136,24 +136,31 @@ def normalize_scraper_url(raw_url: Any, base_url: str) -> Optional[str]:
     eff_url = html.unescape(raw_url.strip())
     if not eff_url or any(ord(c) < 32 or ord(c) == 127 for c in eff_url):
         return None
-    parsed = urllib.parse.urlsplit(eff_url)
+    try:
+        parsed = urllib.parse.urlsplit(eff_url)
+    except Exception:
+        return None
     if parsed.scheme and parsed.scheme.lower() not in ("http", "https"):
         return None
     if eff_url.startswith("//"):
         base_scheme = urllib.parse.urlsplit(base_url).scheme or "https"
         return f"{base_scheme}:{eff_url}"
-    if eff_url.startswith(("http://", "https://")):
+    if eff_url.lower().startswith(("http://", "https://")):
         return eff_url
-    base_clean = base_url.rstrip("/")
+    if parsed.scheme:
+        # Malformed scheme-relative or schemed URL without '//' (e.g. 'https:evil.com')
+        return None
     if eff_url.startswith("/"):
-        return f"{base_clean}{eff_url}"
+        return urllib.parse.urljoin(base_url, eff_url)
+    base_clean = base_url.rstrip("/")
     return f"{base_clean}/{eff_url}"
 
 
 def is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
     """Check if an IP address is publicly routable and safe from SSRF."""
     if (
-        ip.is_loopback
+        not ip.is_global
+        or ip.is_loopback
         or ip.is_private
         or ip.is_link_local
         or ip.is_multicast
@@ -164,7 +171,8 @@ def is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
         mapped = ip.ipv4_mapped
         if (
-            mapped.is_loopback
+            not mapped.is_global
+            or mapped.is_loopback
             or mapped.is_private
             or mapped.is_link_local
             or mapped.is_multicast
@@ -220,8 +228,12 @@ def is_safe_url(
             return False, f"SSRF blocked: Hostname '{host_lower}' matches disallowed internal suffix '{suffix}'"
 
     ports_set = allowed_ports if allowed_ports is not None else STANDARD_SAFE_PORTS
-    if parsed.port is not None and parsed.port not in ports_set:
-        return False, f"SSRF blocked: Disallowed port {parsed.port}"
+    try:
+        parsed_port = parsed.port
+    except ValueError:
+        return False, "SSRF blocked: Invalid port in URL"
+    if parsed_port is not None and parsed_port not in ports_set:
+        return False, f"SSRF blocked: Disallowed port {parsed_port}"
 
     try:
         ip = ipaddress.ip_address(host_lower)
@@ -441,8 +453,8 @@ class ResilientHTTPConnection(http.client.HTTPConnection):
     """HTTPConnection supporting explicit separate connect and read timeouts."""
 
     def __init__(self, *args, connect_timeout: float = 5.0, read_timeout: float = 15.0, **kwargs):
-        self._conn_timeout = float(connect_timeout) if connect_timeout is not None and connect_timeout > 0 else 5.0
-        self._read_timeout = float(read_timeout) if read_timeout is not None and read_timeout > 0 else 15.0
+        self._conn_timeout = _positive_float(connect_timeout, 5.0)
+        self._read_timeout = _positive_float(read_timeout, 15.0)
         super().__init__(*args, **kwargs)
 
     def connect(self):
@@ -451,16 +463,25 @@ class ResilientHTTPConnection(http.client.HTTPConnection):
             self._conn_timeout,
             self.source_address,
         )
-        if self._read_timeout is not None:
-            self.sock.settimeout(self._read_timeout)
+        try:
+            if self._read_timeout is not None:
+                self.sock.settimeout(self._read_timeout)
+        except Exception:
+            if self.sock is not None:
+                try:
+                    self.sock.close()
+                except Exception:
+                    pass
+                self.sock = None
+            raise
 
 
 class ResilientHTTPSConnection(http.client.HTTPSConnection):
     """HTTPSConnection supporting explicit separate connect and read timeouts."""
 
     def __init__(self, *args, connect_timeout: float = 5.0, read_timeout: float = 15.0, **kwargs):
-        self._conn_timeout = float(connect_timeout) if connect_timeout is not None and connect_timeout > 0 else 5.0
-        self._read_timeout = float(read_timeout) if read_timeout is not None and read_timeout > 0 else 15.0
+        self._conn_timeout = _positive_float(connect_timeout, 5.0)
+        self._read_timeout = _positive_float(read_timeout, 15.0)
         super().__init__(*args, **kwargs)
 
     def connect(self):
@@ -469,12 +490,21 @@ class ResilientHTTPSConnection(http.client.HTTPSConnection):
             self._conn_timeout,
             self.source_address,
         )
-        if self._read_timeout is not None:
-            self.sock.settimeout(self._read_timeout)
-        if self._tunnel_host:
-            self._tunnel()
-        server_hostname = self.host if ssl.HAS_SNI else None
-        self.sock = self._context.wrap_socket(self.sock, server_hostname=server_hostname)
+        try:
+            if self._read_timeout is not None:
+                self.sock.settimeout(self._read_timeout)
+            if self._tunnel_host:
+                self._tunnel()
+            server_hostname = self.host if ssl.HAS_SNI else None
+            self.sock = self._context.wrap_socket(self.sock, server_hostname=server_hostname)
+        except Exception:
+            if self.sock is not None:
+                try:
+                    self.sock.close()
+                except Exception:
+                    pass
+                self.sock = None
+            raise
 
 
 class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -508,8 +538,8 @@ class ResilientHTTPHandler(urllib.request.HTTPHandler):
 
     def __init__(self, connect_timeout: float = 5.0, read_timeout: float = 15.0, **kwargs):
         super().__init__(**kwargs)
-        self._connect_timeout = float(connect_timeout) if connect_timeout is not None and connect_timeout > 0 else 5.0
-        self._read_timeout = float(read_timeout) if read_timeout is not None and read_timeout > 0 else 15.0
+        self._connect_timeout = _positive_float(connect_timeout, 5.0)
+        self._read_timeout = _positive_float(read_timeout, 15.0)
 
     def http_open(self, req):
         conn_to = getattr(req, "_connect_timeout", self._connect_timeout)
@@ -530,8 +560,8 @@ class ResilientHTTPSHandler(urllib.request.HTTPSHandler):
 
     def __init__(self, connect_timeout: float = 5.0, read_timeout: float = 15.0, context=None, **kwargs):
         super().__init__(context=context, **kwargs)
-        self._connect_timeout = float(connect_timeout) if connect_timeout is not None and connect_timeout > 0 else 5.0
-        self._read_timeout = float(read_timeout) if read_timeout is not None and read_timeout > 0 else 15.0
+        self._connect_timeout = _positive_float(connect_timeout, 5.0)
+        self._read_timeout = _positive_float(read_timeout, 15.0)
 
     def https_open(self, req):
         conn_to = getattr(req, "_connect_timeout", self._connect_timeout)
@@ -676,8 +706,13 @@ class CircuitBreaker:
             tripped = False
 
             cooldown = self.cooldown_seconds
-            if retry_after is not None and retry_after > 0:
-                cooldown = max(cooldown, float(retry_after))
+            if retry_after is not None:
+                try:
+                    ra_val = float(retry_after)
+                    if math.isfinite(ra_val) and ra_val > 0:
+                        cooldown = max(cooldown, min(3600.0, ra_val))
+                except (ValueError, TypeError):
+                    pass
 
             now = time.time()
             if info.get("state") == CircuitBreakerState.HALF_OPEN:
@@ -1085,8 +1120,17 @@ class SafeHttpClient:
         except Exception:
             pass
 
-        min_d = max(0.0, float(min(self.min_delay, self.max_delay)))
-        max_d = max(0.0, float(max(self.min_delay, self.max_delay)))
+        try:
+            raw_min = float(self.min_delay)
+            raw_max = float(self.max_delay)
+        except (ValueError, TypeError):
+            raw_min, raw_max = 0.0, 0.0
+        if not math.isfinite(raw_min) or raw_min < 0:
+            raw_min = 0.0
+        if not math.isfinite(raw_max) or raw_max < 0:
+            raw_max = 0.0
+        min_d = min(raw_min, raw_max)
+        max_d = max(raw_min, raw_max)
         if max_d <= 0:
             self.last_request_time = time.time()
             self.request_count += 1
@@ -1096,7 +1140,7 @@ class SafeHttpClient:
         elapsed = now - self.last_request_time
 
         # Cooldown trigger (every 18 requests, pause 5-8s)
-        if self.request_count > 0 and self.request_count % self.cooldown_interval == 0:
+        if self.cooldown_interval and self.cooldown_interval > 0 and self.request_count > 0 and self.request_count % self.cooldown_interval == 0:
             extra_cooldown = random.uniform(5.0, 8.0)
             logger.info(f"Cooldown triggered after {self.request_count} requests. Sleeping {extra_cooldown:.2f}s...")
             time.sleep(extra_cooldown)
@@ -1127,6 +1171,9 @@ class SafeHttpClient:
         if not is_safe:
             logger.warning(f"SSRF defense blocked warm_up_session to {norm_url}: {reason}")
             return False
+        if not self.circuit_breaker.is_available(norm_url):
+            logger.warning(f"Circuit breaker OPEN for {norm_url}; skipping session warm-up.")
+            return False
         logger.info(f"Warming up session on base domain: {norm_url}")
         resp = None
         try:
@@ -1138,6 +1185,15 @@ class SafeHttpClient:
             _ = resp.read(1024)
             logger.info(f"Session warmed up successfully on {norm_url}. Cookies in jar: {len(self.cookie_jar)}")
             return True
+        except urllib.error.HTTPError as he:
+            logger.warning(f"Session warm-up HTTP {he.code} on {norm_url}: {he.reason}")
+            try:
+                if hasattr(he, "fp") and he.fp:
+                    he.fp.close()
+                he.close()
+            except Exception:
+                pass
+            return False
         except Exception as e:
             logger.warning(f"Session warm-up encountered notice on {norm_url}: {e}")
             return False
@@ -1286,7 +1342,10 @@ class SafeHttpClient:
             eff_read_timeout = self._read_timeout
 
         eff_timeout = eff_read_timeout
-        eff_retries = max(1, int(self.max_retries)) if self.max_retries is not None else 3
+        try:
+            eff_retries = max(1, int(self.max_retries)) if self.max_retries is not None and not isinstance(self.max_retries, bool) else 3
+        except (ValueError, TypeError, OverflowError):
+            eff_retries = 3
 
         for attempt in range(1, eff_retries + 1):
             if attempt > 1:
@@ -1450,6 +1509,7 @@ class SafeHttpClient:
                     backoff = min(30.0, (2 ** attempt) * 1.5 + random.uniform(0.5, 1.5))
                     time.sleep(backoff)
                 else:
+                    self.circuit_breaker.record_failure(norm_url)
                     if self.cache_fallback:
                         cached = self.get_cached_response(norm_url)
                         if cached is not None:

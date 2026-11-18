@@ -17,6 +17,7 @@ import {
   calculateNetSubsidyPure,
   getModelByIdFromList,
   getRegionByIdFromList,
+  resolveAlertSeverity,
 } from '@/lib/subsidyCalculations';
 import type { RegionSortOption } from '@/lib/subsidyCalculations';
 import ClientTimestamp from '@/components/ClientTimestamp';
@@ -26,7 +27,8 @@ import SubsidyProgressBar from '@/components/subsidy/SubsidyProgressBar';
 
 // Pure Helper: Normalize status aliases to canonical 5-tier AlertSeverity
 const normalizeAlertSeverity = (status?: AlertSeverity | string | null): AlertSeverity => {
-  switch ((status || '').toUpperCase()) {
+  const normalized = typeof status === 'string' ? status.trim().toUpperCase() : '';
+  switch (normalized) {
     case 'CAUTION':
       return 'CAUTION';
     case 'WARNING':
@@ -49,7 +51,8 @@ const normalizeAlertSeverity = (status?: AlertSeverity | string | null): AlertSe
 
 // Pure Helper: Badge styling with opaque solid backgrounds for compliant WCAG AAA contrast (> 7:1)
 export const getBadgeStyle = (status?: AlertSeverity | string | null): string => {
-  switch ((status || '').toLowerCase()) {
+  const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+  switch (normalized) {
     case 'healthy':
     case 'available':
       return 'bg-emerald-950 text-emerald-200 border-emerald-400';
@@ -73,7 +76,8 @@ export const getBadgeStyle = (status?: AlertSeverity | string | null): string =>
 
 // Pure Helper: Status badge labels
 export const getStatusLabel = (status?: AlertSeverity | string | null): string => {
-  switch ((status || '').toLowerCase()) {
+  const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+  switch (normalized) {
     case 'healthy':
     case 'available':
       return '🟢 안정';
@@ -338,7 +342,7 @@ const TrackerHeader = React.memo(function TrackerHeader({
         <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
           <div className="text-xs font-medium text-slate-300">전국 평균 소진율</div>
           <div className="text-2xl sm:text-3xl font-extrabold text-amber-400 mt-1">
-            {(Number.isFinite(summary?.nationwide_depletion_rate) ? summary.nationwide_depletion_rate : 0).toFixed(1)}%
+            {(Number.isFinite(summary?.nationwide_depletion_rate) ? Math.max(0, summary.nationwide_depletion_rate) : 0).toFixed(1)}%
           </div>
           <div className="text-[11px] text-slate-300 mt-1">
             전체 카테고리 종합
@@ -374,15 +378,15 @@ const TrackerHeader = React.memo(function TrackerHeader({
             <span className="text-xs font-normal text-slate-300 ml-1">대</span>
           </div>
           <div className="text-[11px] text-slate-300 mt-1">
-            잔여율 {(100 - (Number.isFinite(summary?.nationwide_depletion_rate) ? summary.nationwide_depletion_rate : 0)).toFixed(1)}%
+            잔여율 {Math.max(0, Math.min(100, 100 - (Number.isFinite(summary?.nationwide_depletion_rate) ? Math.max(0, summary.nationwide_depletion_rate) : 0))).toFixed(1)}%
           </div>
         </div>
 
         <div className="sm:col-span-2 lg:col-span-1 bg-rose-950 border border-rose-500/50 rounded-2xl p-4 flex flex-col justify-between">
           <div className="text-xs font-medium text-rose-300">긴급 마감 위험 지역</div>
           <div className="text-2xl sm:text-3xl font-extrabold text-rose-400 mt-1">
-            {(Number.isFinite(summary?.alert_region_counts?.critical) ? summary.alert_region_counts.critical : 0) +
-              (Number.isFinite(summary?.alert_region_counts?.depleted) ? summary.alert_region_counts.depleted : 0)}
+            {(Number.isFinite(summary?.alert_region_counts?.critical) ? Math.max(0, summary.alert_region_counts.critical) : 0) +
+              (Number.isFinite(summary?.alert_region_counts?.depleted) ? Math.max(0, summary.alert_region_counts.depleted) : 0)}
             <span className="text-xs font-normal text-rose-300 ml-1">개 시도</span>
           </div>
           <div className="text-[11px] text-rose-300 mt-1">
@@ -406,7 +410,13 @@ const TrackerHeader = React.memo(function TrackerHeader({
             <div className="flex flex-wrap gap-1.5 ml-1">
               {criticalRegions.map((crit) => {
                 const critCat = crit.categories?.[selectedCategory] || crit.categories?.passenger;
-                const critRate = Number.isFinite(critCat?.depletion_rate) ? critCat.depletion_rate : 0;
+                const critAnn = Number.isFinite(critCat?.announced_units) ? Math.max(0, critCat.announced_units) : 0;
+                const critApp = Number.isFinite(critCat?.applied_units) ? Math.max(0, critCat.applied_units) : 0;
+                const critRate = Number.isFinite(critCat?.depletion_rate)
+                  ? Math.max(0, critCat.depletion_rate)
+                  : critAnn > 0
+                  ? (critApp / critAnn) * 100
+                  : 0;
                 return (
                   <button
                     key={crit.region_id}
@@ -460,7 +470,7 @@ const AlertLegendSection = React.memo(function AlertLegendSection({
         <span className="text-xs text-slate-300">배지 클릭 시 해당 경보 지역만 필터링</span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+      <div role="group" aria-label="경보 등급별 필터" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
         {ALERT_TIER_ORDER.map((key) => {
           const t = thresholds[key] || FALLBACK_THRESHOLDS[key];
           const isSelected = alertFilter === key;
@@ -474,7 +484,7 @@ const AlertLegendSection = React.memo(function AlertLegendSection({
               className={`p-3 min-h-[44px] rounded-xl border text-left transition flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                 isSelected
                   ? 'ring-2 ring-amber-400 ' + getBadgeStyle(key)
-                  : 'bg-slate-950 hover:bg-slate-800 border-slate-800 text-slate-300'
+                  : 'bg-slate-950 hover:bg-slate-800 border-slate-600 text-slate-300'
               }`}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -526,7 +536,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   void _legacyDeferredSearch;
 
   // Calculator State & Ref
-  const calculatorRef = useRef<HTMLDivElement>(null);
+  const calculatorRef = useRef<HTMLElement>(null);
   // Default to server baseline to eliminate hydration mismatch risks with query strings
   const [selectedModelId, setSelectedModelId] = useState<string>(
     initialData?.popular_models_matrix?.[0]?.model_id || 'ioniq-5-2026'
@@ -558,6 +568,8 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
     const trimmedQuery = deferredSearchQuery.trim().toLowerCase();
 
     const filtered = regions.filter((region) => {
+      if (!region || typeof region !== 'object') return false;
+
       // Category Metrics
       const catMetrics: CategoryMetrics | undefined = region.categories?.[selectedCategory];
       if (!catMetrics) return false;
@@ -567,8 +579,18 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         return false;
       }
 
-      // Alert filter
-      const status = normalizeAlertSeverity(catMetrics.status);
+      // Alert filter (falls back to computed depletion rate when status is omitted)
+      const ann = Number.isFinite(catMetrics.announced_units) ? Math.max(0, catMetrics.announced_units) : 0;
+      const app = Number.isFinite(catMetrics.applied_units) ? Math.max(0, catMetrics.applied_units) : 0;
+      const rate = Number.isFinite(catMetrics.depletion_rate)
+        ? Math.max(0, catMetrics.depletion_rate)
+        : ann > 0
+        ? (app / ann) * 100
+        : 0;
+      const status =
+        typeof catMetrics.status === 'string' && catMetrics.status.trim()
+          ? normalizeAlertSeverity(catMetrics.status)
+          : resolveAlertSeverity(undefined, rate);
       if (alertFilter !== 'ALL' && status !== alertFilter) {
         return false;
       }
@@ -581,12 +603,15 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
       // Search Query
       if (trimmedQuery) {
         const matchRegion =
-          (region.name_ko || '').toLowerCase().includes(trimmedQuery) ||
-          (region.name_en || '').toLowerCase().includes(trimmedQuery) ||
-          (region.iso_code || '').toLowerCase().includes(trimmedQuery);
+          (typeof region.name_ko === 'string' ? region.name_ko : '').toLowerCase().includes(trimmedQuery) ||
+          (typeof region.name_en === 'string' ? region.name_en : '').toLowerCase().includes(trimmedQuery) ||
+          (typeof region.iso_code === 'string' ? region.iso_code : '').toLowerCase().includes(trimmedQuery);
 
         const matchMuni =
-          region.municipalities?.some((m) => (m.name_ko || '').toLowerCase().includes(trimmedQuery)) ?? false;
+          Array.isArray(region.municipalities) &&
+          region.municipalities.some(
+            (m) => m && typeof m.name_ko === 'string' && m.name_ko.toLowerCase().includes(trimmedQuery)
+          );
 
         if (!matchRegion && !matchMuni) return false;
       }
@@ -601,12 +626,16 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   // Critical regions (for emergency ticker) with safe fallback computation
   const criticalRegions = useMemo(() => {
     return regions.filter((r) => {
+      if (!r || typeof r !== 'object') return false;
       const cat = r.categories?.[selectedCategory] || r.categories?.passenger;
       if (!cat) return false;
       const ann = Number.isFinite(cat.announced_units) ? Math.max(0, cat.announced_units) : 0;
       const app = Number.isFinite(cat.applied_units) ? Math.max(0, cat.applied_units) : 0;
       const rate = Number.isFinite(cat.depletion_rate) ? Math.max(0, cat.depletion_rate) : ann > 0 ? (app / ann) * 100 : 0;
-      const normalized = normalizeAlertSeverity(cat.status);
+      const normalized =
+        typeof cat.status === 'string' && cat.status.trim()
+          ? normalizeAlertSeverity(cat.status)
+          : resolveAlertSeverity(undefined, rate);
       return (
         normalized === 'CRITICAL' ||
         normalized === 'DEPLETED' ||
@@ -788,7 +817,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                       : 'text-slate-300 hover:text-white'
                   }`}
                 >
-                  {cat.icon} {cat.label}
+                  <span aria-hidden="true">{cat.icon}</span> {cat.label}
                 </button>
               );
             })}
@@ -802,7 +831,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               aria-label="추경 예산 편성 지자체만 보기"
               checked={supplementaryOnly}
               onChange={handleToggleSupplementary}
-              className="w-5 h-5 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              className="w-5 h-5 rounded bg-slate-800 border-slate-500 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             />
             <span>추경 예산 편성 지자체만 보기</span>
           </label>
@@ -830,7 +859,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               value={searchQuery}
               onChange={handleSearchChange}
               placeholder="시·도 또는 세부 시·군·구 검색 (예: 서울, 수원, 성남, 대구, 포항, 울릉)"
-              className="w-full pl-10 pr-9 py-2.5 min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 text-white placeholder-slate-300 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              className="w-full pl-10 pr-11 py-2.5 min-h-[44px] rounded-xl bg-slate-950 border border-slate-500 text-white placeholder-slate-300 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             />
             {searchQuery && (
               <button
@@ -845,7 +874,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
           </div>
 
           {/* Regional Zone Pills */}
-          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <div role="group" aria-label="권역별 필터" className="flex flex-wrap items-center gap-1.5 text-xs">
             {ZONE_FILTERS.map((zone) => (
               <button
                 key={zone.id}
@@ -855,8 +884,8 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 onClick={() => handleSelectZone(zone.id)}
                 className={`px-2.5 py-1.5 min-h-[44px] flex items-center justify-center rounded-lg border font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                   zoneFilter === zone.id
-                    ? 'bg-blue-600 text-white border-blue-500'
-                    : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
+                    ? 'bg-blue-600 text-white border-blue-400'
+                    : 'bg-slate-950 text-slate-300 border-slate-600 hover:bg-slate-800'
                 }`}
               >
                 {zone.label}
@@ -876,7 +905,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 }
               }}
               aria-label="지자체 정렬 방식"
-              className="py-2.5 px-3 min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 text-slate-200 text-xs sm:text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
+              className="py-2.5 px-3 min-h-[44px] rounded-xl bg-slate-950 border border-slate-500 text-slate-200 text-xs sm:text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
             >
               <option value="DEPLETION_DESC">소진율 높은 순 (마감임박)</option>
               <option value="DEPLETION_ASC">소진율 낮은 순 (신청여유)</option>
@@ -918,7 +947,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         role="tabpanel"
         aria-labelledby={`tab-category-${selectedCategory}`}
         tabIndex={0}
-        className="space-y-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
+        className="space-y-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 rounded-2xl"
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="regional-grid-heading" className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
@@ -940,26 +969,26 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 aria-pressed={viewMode === 'grid'}
                 aria-label="카드 그리드 형식으로 보기"
                 onClick={handleSetViewGrid}
-                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center justify-center rounded-lg font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
+                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center justify-center gap-1 rounded-lg font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                   viewMode === 'grid'
                     ? 'bg-blue-600 text-white shadow'
                     : 'text-slate-300 hover:text-white'
                 }`}
               >
-                🗂️ 카드 보기
+                <span aria-hidden="true">🗂️</span> 카드 보기
               </button>
               <button
                 type="button"
                 aria-pressed={viewMode === 'table'}
                 aria-label="표(테이블) 형식으로 보기"
                 onClick={handleSetViewTable}
-                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center justify-center rounded-lg font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
+                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center justify-center gap-1 rounded-lg font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                   viewMode === 'table'
                     ? 'bg-blue-600 text-white shadow'
                     : 'text-slate-300 hover:text-white'
                 }`}
               >
-                📊 표로 보기
+                <span aria-hidden="true">📊</span> 표로 보기
               </button>
             </div>
           </div>
@@ -1038,7 +1067,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 type="button"
                 onClick={handleResetFilters}
                 aria-label="적용된 전체 필터 초기화하고 전체 지자체 보기"
-                className="px-4 py-2 min-h-[44px] inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                className="px-4 py-2 min-h-[44px] inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
               >
                 전체 필터 초기화
               </button>
@@ -1114,6 +1143,9 @@ const RegionCard = React.memo(function RegionCard({
     ? Math.max(0, cat.remaining_units)
     : Math.max(0, announcedUnits - safeApplied);
 
+  const rawStatus = typeof cat?.status === 'string' ? cat.status.trim() : '';
+  const effectiveStatus = rawStatus ? rawStatus : resolveAlertSeverity(undefined, safeDepletion);
+
   const regionName = region?.name_ko || '해당 지역';
   const regionId = region?.region_id || '';
   const munis = useMemo(
@@ -1141,7 +1173,8 @@ const RegionCard = React.memo(function RegionCard({
   const shouldRenderMunis = isExpanded || hasBeenExpanded;
   const renderedMunis = useMemo(() => {
     if (!shouldRenderMunis) return null;
-    return munis.map((muni) => {
+    return munis.map((muni, idx) => {
+      if (!muni || typeof muni !== 'object') return null;
       const muniAnnounced = Number.isFinite(muni.announced_units) ? Math.max(0, muni.announced_units) : 0;
       const muniApplied = Number.isFinite(muni.applied_units) ? Math.max(0, muni.applied_units) : 0;
       const muniRemaining = Number.isFinite(muni.remaining_units)
@@ -1153,21 +1186,23 @@ const RegionCard = React.memo(function RegionCard({
         ? (muniApplied / muniAnnounced) * 100
         : 0;
       const muniLocalSubsidy = Number.isFinite(muni.local_subsidy_krw) ? Math.max(0, muni.local_subsidy_krw) : 0;
+      const muniRawStatus = typeof muni.status === 'string' ? muni.status.trim() : '';
+      const muniStatus = muniRawStatus ? muniRawStatus : resolveAlertSeverity(undefined, muniDepletion);
 
       return (
         <div
-          key={muni.muni_id || `${regionId}-${muni.name_ko}`}
-          className="p-2 rounded bg-slate-950 border border-slate-800 flex items-center justify-between text-[11px]"
+          key={muni.muni_id || `${regionId}-${muni.name_ko || idx}`}
+          className="p-2 rounded bg-slate-950 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px]"
         >
           <div>
-            <span className="font-semibold text-slate-200">{muni.name_ko}</span>
+            <span className="font-semibold text-slate-200">{muni.name_ko || '세부 지자체'}</span>
             <span className="text-slate-300 ml-2">
               {((muniLocalSubsidy) / 10000).toLocaleString()}만 원
             </span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-slate-300">잔여 {muniRemaining.toLocaleString()}대</span>
-            <SubsidyBadge status={muni.status || 'available'} />
+            <SubsidyBadge status={muniStatus} />
             <span className="font-mono text-amber-300 font-semibold text-[10px]">
               {muniDepletion.toFixed(1)}%
             </span>
@@ -1193,7 +1228,7 @@ const RegionCard = React.memo(function RegionCard({
               <div className="text-xs text-slate-300">{region.name_en}</div>
             )}
           </div>
-          <SubsidyBadge status={cat?.status || 'available'} />
+          <SubsidyBadge status={effectiveStatus} />
         </div>
 
         {/* Dual-layer Progress Bar via memoized SubsidyProgressBar */}
@@ -1206,7 +1241,7 @@ const RegionCard = React.memo(function RegionCard({
             announcedUnits={announcedUnits}
             regionName={regionName}
             categoryLabel={categoryLabel}
-            status={cat?.status || 'available'}
+            status={effectiveStatus}
             showDetails={true}
           />
           <div className="sr-only">
@@ -1244,7 +1279,7 @@ const RegionCard = React.memo(function RegionCard({
 
         {region?.notes && (
           <p className="text-xs text-slate-300 leading-relaxed bg-slate-950 p-2 rounded-lg border border-slate-800">
-            ℹ️ {region.notes}
+            <span aria-hidden="true">ℹ️</span> {region.notes}
           </p>
         )}
 
@@ -1257,10 +1292,10 @@ const RegionCard = React.memo(function RegionCard({
               aria-expanded={isExpanded}
               aria-controls={'muni-details-' + region.region_id}
               aria-label={`${region.name_ko} 세부 시·군·구 ${munis.length}개 현황 ${isExpanded ? '접기' : '보기'}`}
-              className="w-full py-2.5 px-3 min-h-[44px] rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-xs font-medium flex items-center justify-between transition border border-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              className="w-full py-2.5 px-3 min-h-[44px] rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-xs font-medium flex items-center justify-between transition border border-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
               <span>세부 시·군·구 {munis.length}개 현황 보기</span>
-              <span>{isExpanded ? '▲ 접기' : '▼ 펼치기'}</span>
+              <span aria-hidden="true">{isExpanded ? '▲ 접기' : '▼ 펼치기'}</span>
             </button>
 
             {/* Preserved in DOM with hidden attribute so aria-controls never breaks */}
@@ -1271,7 +1306,7 @@ const RegionCard = React.memo(function RegionCard({
               tabIndex={0}
               role="region"
               aria-label={`${region.name_ko} 세부 시·군·구 보조금 현황 목록`}
-              className={`${!isExpanded ? 'hidden' : ''} mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg`}
+              className={`${!isExpanded ? 'hidden' : ''} mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded-lg`}
             >
               {renderedMunis}
             </div>
@@ -1285,9 +1320,9 @@ const RegionCard = React.memo(function RegionCard({
           type="button"
           onClick={handleSelectCalc}
           aria-label={`${regionName} 보조금으로 실구매가 계산`}
-          className="w-full py-3 px-4 min-h-[44px] rounded-xl bg-blue-600/90 hover:bg-blue-600 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5 shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+          className="w-full py-3 px-4 min-h-[44px] rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5 shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
         >
-          <span>⚡</span> 이 지역({regionName})으로 실구매가 계산
+          <span aria-hidden="true">⚡</span> 이 지역({regionName})으로 실구매가 계산
         </button>
       </div>
     </div>
@@ -1300,7 +1335,7 @@ const RegionCard = React.memo(function RegionCard({
 // and toggling calculator checkboxes will not re-render the regional cards)
 // ============================================================================
 interface SubsidyCalculatorProps {
-  calculatorRef: React.RefObject<HTMLDivElement>;
+  calculatorRef: React.RefObject<HTMLElement>;
   models: PopularModelEntry[];
   regions: RegionEntry[];
   selectedModelId: string;
@@ -1392,63 +1427,88 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
 
   const activeModel = useMemo(() => {
     const q = (selectedModelId || '').trim().toLowerCase();
-    if (modelsMap.has(q)) {
+    if (q && modelsMap.has(q)) {
       return modelsMap.get(q)!;
     }
     const resolved = getModelById(q);
     if (resolved) {
-      const matchInModels = modelsMap.get(resolved.model_id.toLowerCase());
+      const resolvedId = typeof resolved.model_id === 'string' ? resolved.model_id.toLowerCase() : '';
+      const matchInModels = resolvedId ? modelsMap.get(resolvedId) : undefined;
       if (matchInModels) return matchInModels;
       return resolved;
     }
     return (
-      models.find(
-        (m) =>
-          m.model_id.toLowerCase() === q ||
-          m.name_ko.toLowerCase().includes(q)
-      ) || models[0] || undefined
+      (q
+        ? models.find(
+            (m) =>
+              m &&
+              ((typeof m.model_id === 'string' && m.model_id.toLowerCase() === q) ||
+                (typeof m.name_ko === 'string' && m.name_ko.toLowerCase().includes(q)))
+          )
+        : undefined) ||
+      models[0] ||
+      undefined
     );
   }, [models, modelsMap, selectedModelId, getModelById]);
 
   const activeRegionForCalc = useMemo(() => {
     const q = (selectedRegionId || '').trim().toLowerCase();
-    if (regionsMap.has(q)) {
+    if (q && regionsMap.has(q)) {
       return regionsMap.get(q)!;
     }
     const resolved = getRegionById(q);
     if (resolved) {
-      const matchInRegions = regionsMap.get(resolved.region_id.toLowerCase());
+      const resolvedId = typeof resolved.region_id === 'string' ? resolved.region_id.toLowerCase() : '';
+      const matchInRegions = resolvedId ? regionsMap.get(resolvedId) : undefined;
       if (matchInRegions) return matchInRegions;
       return resolved;
     }
     return (
-      regions.find(
-        (r) =>
-          r.region_id.toLowerCase() === q ||
-          r.iso_code.toLowerCase() === q ||
-          r.name_ko.toLowerCase() === q ||
-          r.name_ko.replace(/(특별시|광역시|특별자치시|도|특별자치도)$/, '').toLowerCase() === q ||
-          r.name_en.toLowerCase() === q
-      ) || regions[0] || undefined
+      (q
+        ? regions.find((r) => {
+            if (!r || typeof r !== 'object') return false;
+            const rid = typeof r.region_id === 'string' ? r.region_id.toLowerCase() : '';
+            const iso = typeof r.iso_code === 'string' ? r.iso_code.toLowerCase() : '';
+            const ko = typeof r.name_ko === 'string' ? r.name_ko.toLowerCase() : '';
+            const en = typeof r.name_en === 'string' ? r.name_en.toLowerCase() : '';
+            const strippedKo = ko.replace(/(특별시|광역시|특별자치시|도|특별자치도)$/, '');
+            return rid === q || iso === q || ko === q || strippedKo === q || en === q;
+          })
+        : undefined) ||
+      regions[0] ||
+      undefined
     );
   }, [regions, regionsMap, selectedRegionId, getRegionById]);
 
   const handleToggleCustomMsrp = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const checked = e.target.checked;
     setIsCustomMsrp(checked);
-    if (checked && !customMsrpInput && activeModel) {
-      setCustomMsrpInput(activeModel.base_price_krw.toString());
+    const safeBasePrice =
+      Number.isFinite(activeModel?.base_price_krw) && activeModel!.base_price_krw > 0
+        ? Math.round(activeModel!.base_price_krw)
+        : 0;
+    if (checked && !customMsrpInput && safeBasePrice > 0) {
+      setCustomMsrpInput(safeBasePrice.toString());
     }
   }, [customMsrpInput, activeModel]);
 
   const topModels = useMemo(() => (Array.isArray(models) ? models.slice(0, 8) : []), [models]);
 
+  const parsedCustomMsrp = useMemo(() => {
+    const cleaned = (customMsrpInput || '').replace(/[^0-9]/g, '');
+    return cleaned ? parseInt(cleaned, 10) : NaN;
+  }, [customMsrpInput]);
+
+  const hasInvalidCustomMsrp =
+    isCustomMsrp && customMsrpInput !== '' && (!Number.isFinite(parsedCustomMsrp) || parsedCustomMsrp <= 0);
+
   const calculationResult = useMemo(() => {
     let customMsrpNum: number | undefined = undefined;
     if (isCustomMsrp) {
-      const cleaned = (customMsrpInput || '').replace(/[^0-9]/g, '');
-      const parsed = cleaned ? parseInt(cleaned, 10) : NaN;
-      customMsrpNum = Number.isFinite(parsed) && parsed > 0 ? parsed : (activeModel?.base_price_krw ?? 0);
+      customMsrpNum =
+        Number.isFinite(parsedCustomMsrp) && parsedCustomMsrp > 0
+          ? parsedCustomMsrp
+          : (Number.isFinite(activeModel?.base_price_krw) ? activeModel!.base_price_krw : 0);
     }
     return calculateNetSubsidyPure(
       activeModel,
@@ -1460,7 +1520,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
     activeModel,
     activeRegionForCalc,
     isCustomMsrp,
-    customMsrpInput,
+    parsedCustomMsrp,
     calcOptions,
   ]);
 
@@ -1470,7 +1530,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
       ref={calculatorRef}
       tabIndex={-1}
       aria-labelledby="calculator-heading"
-      className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 border border-blue-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-8 outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 border border-blue-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-8 outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
     >
       <div className="max-w-3xl space-y-2">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-bold uppercase tracking-wider">
@@ -1495,39 +1555,40 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             <select
               id="model-select"
               aria-label="차량 모델 선택"
-              value={activeModel?.model_id || selectedModelId}
+              value={models.length === 0 ? '' : (activeModel?.model_id || selectedModelId)}
               onChange={handleModelSelectChange}
-              className="w-full py-3 px-3.5 min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
+              className="w-full py-3 px-3.5 min-h-[44px] rounded-xl bg-slate-950 border border-slate-500 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
             >
               {models.length === 0 ? (
                 <option value="">등록된 차량 모델 없음</option>
               ) : (
                 models.map((model) => (
                   <option key={model.model_id} value={model.model_id}>
-                    {model.manufacturer} - {model.name_ko} (출고가 {((Number.isFinite(model.base_price_krw) ? Math.max(0, model.base_price_krw) : 0) / 10000).toLocaleString()}만 원)
+                    {model.manufacturer || ''} - {model.name_ko || model.model_id} (출고가 {((Number.isFinite(model.base_price_krw) ? Math.max(0, model.base_price_krw) : 0) / 10000).toLocaleString()}만 원)
                   </option>
                 ))
               )}
             </select>
 
             {/* Quick Pills for Top Models */}
-            <div className="flex flex-wrap gap-1.5 pt-1">
+            <div role="group" aria-label="인기 전기차 모델 빠른 선택" className="flex flex-wrap gap-1.5 pt-1">
               {topModels.map((m) => {
                 const isSelected = (activeModel?.model_id || selectedModelId) === m.model_id;
+                const displayName = (typeof m.name_ko === 'string' ? m.name_ko : m.model_id || '').replace(BRAND_PREFIX_REGEX, '');
                 return (
                   <button
                     key={m.model_id}
                     type="button"
                     aria-pressed={isSelected}
-                    aria-label={`${m.name_ko} 모델 선택`}
+                    aria-label={`${m.name_ko || displayName} 모델 선택`}
                     onClick={() => onSelectModelId(m.model_id)}
                     className={`px-2.5 py-1 min-h-[44px] flex items-center justify-center rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                       isSelected
                         ? 'bg-blue-600 text-white'
-                        : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                        : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-slate-600'
                     }`}
                   >
-                    {m.name_ko.replace(BRAND_PREFIX_REGEX, '')}
+                    {displayName}
                   </button>
                 );
               })}
@@ -1551,10 +1612,10 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             <select
               id="region-select"
               aria-label="거주 지자체 (시·도) 선택"
-              value={activeRegionForCalc?.region_id || selectedRegionId}
+              value={regions.length === 0 ? '' : (activeRegionForCalc?.region_id || selectedRegionId)}
               onChange={handleRegionSelectChange}
               aria-describedby="region-residency-note"
-              className="w-full py-3 px-3.5 min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
+              className="w-full py-3 px-3.5 min-h-[44px] rounded-xl bg-slate-950 border border-slate-500 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
             >
               {regions.length === 0 ? (
                 <option value="">등록된 지자체 데이터 없음</option>
@@ -1581,7 +1642,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                   aria-label="옵션 포함 출고가 직접 입력 (커스텀 MSRP)"
                   checked={isCustomMsrp}
                   onChange={handleToggleCustomMsrp}
-                  className="w-5 h-5 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                  className="w-5 h-5 rounded bg-slate-800 border-slate-500 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 />
                 <span>옵션 포함 출고가 직접 입력 (커스텀 MSRP)</span>
               </label>
@@ -1601,21 +1662,33 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                     type="text"
                     inputMode="numeric"
                     aria-label="직접 차량 출고가 입력"
-                    value={customMsrpInput && Number.isFinite(parseInt(customMsrpInput, 10)) ? parseInt(customMsrpInput, 10).toLocaleString('ko-KR') : ''}
+                    aria-invalid={hasInvalidCustomMsrp}
+                    aria-describedby="custom-msrp-hint"
+                    value={customMsrpInput && Number.isFinite(parsedCustomMsrp) ? parsedCustomMsrp.toLocaleString('ko-KR') : ''}
                     onChange={handleCustomMsrpChange}
                     placeholder="원 단위 출고가 입력 (예: 54,900,000)"
-                    className="w-full py-2.5 px-3.5 min-h-[44px] rounded-xl bg-slate-900 border border-slate-700 text-white text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 pr-12"
+                    className={`w-full py-2.5 px-3.5 min-h-[44px] rounded-xl bg-slate-900 border text-white text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 pr-12 ${
+                      hasInvalidCustomMsrp ? 'border-rose-400' : 'border-slate-500'
+                    }`}
                   />
                   <span aria-hidden="true" className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-300 text-xs font-semibold">
                     원
                   </span>
                 </div>
-                <div className="flex flex-wrap gap-2 text-[11px]">
+                <p
+                  id="custom-msrp-hint"
+                  className={`text-[11px] ${hasInvalidCustomMsrp ? 'text-rose-300 font-medium' : 'text-slate-300'}`}
+                >
+                  {hasInvalidCustomMsrp
+                    ? '1원 이상의 유효한 출고가를 입력해 주세요. 현재는 선택 모델 기본 출고가로 계산 중입니다.'
+                    : '미입력 시 선택 모델의 기본 출고가가 자동 적용됩니다.'}
+                </p>
+                <div role="group" aria-label="출고가 구간별 빠른 입력 프리셋" className="flex flex-wrap gap-2 text-[11px]">
                   <button
                     type="button"
                     aria-label="차량 출고가 5,400만 원 (100% 구간) 프리셋 적용"
                     onClick={() => handleSetPresetMsrp('54000000')}
-                    className="px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                    className="px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     5,400만 원 (100% 구간)
                   </button>
@@ -1623,7 +1696,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                     type="button"
                     aria-label="차량 출고가 6,200만 원 (50% 감액 구간) 프리셋 적용"
                     onClick={() => handleSetPresetMsrp('62000000')}
-                    className="px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                    className="px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     6,200만 원 (50% 감액)
                   </button>
@@ -1631,7 +1704,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                     type="button"
                     aria-label="차량 출고가 8,600만 원 (보조금 0원 구간) 프리셋 적용"
                     onClick={() => handleSetPresetMsrp('86000000')}
-                    className="px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                    className="px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     8,600만 원 (보조금 0원)
                   </button>
@@ -1641,60 +1714,60 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
           </div>
 
           {/* 4. Special Additional Grants & Incentives */}
-          <div className="space-y-2.5 p-4 bg-slate-950 border border-slate-800 rounded-2xl">
-            <div className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+          <fieldset className="space-y-2.5 p-4 bg-slate-950 border border-slate-800 rounded-2xl">
+            <legend className="text-xs font-bold text-slate-300 uppercase tracking-wider px-1">
               3. 추가 지원금 &amp; 특별 가산 혜택 (해당 시 선택)
-            </div>
+            </legend>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              <label htmlFor="grant-youth-buyer-checkbox" className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
+              <label htmlFor="grant-youth-buyer-checkbox" className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-slate-900 border border-slate-600 hover:bg-slate-800 cursor-pointer select-none">
                 <input
                   id="grant-youth-buyer-checkbox"
                   type="checkbox"
                   aria-label="청년 생애 최초 구매 (+20% 국비)"
                   checked={calcOptions.isYouthFirstTimeBuyer}
                   onChange={handleToggleYouthBuyer}
-                  className="w-5 h-5 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                  className="w-5 h-5 rounded bg-slate-800 border-slate-500 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 />
                 <span>청년 생애 최초 구매 (+20% 국비)</span>
               </label>
 
-              <label htmlFor="grant-small-business-checkbox" className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
+              <label htmlFor="grant-small-business-checkbox" className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-slate-900 border border-slate-600 hover:bg-slate-800 cursor-pointer select-none">
                 <input
                   id="grant-small-business-checkbox"
                   type="checkbox"
                   aria-label="소상공인 / 영업용 택시 (+30% 국비)"
                   checked={calcOptions.isSmallBusinessOrTaxi}
                   onChange={handleToggleSmallBusiness}
-                  className="w-5 h-5 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                  className="w-5 h-5 rounded bg-slate-800 border-slate-500 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 />
                 <span>소상공인 / 영업용 택시 (+30% 국비)</span>
               </label>
 
-              <label htmlFor="grant-multi-child-checkbox" className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
+              <label htmlFor="grant-multi-child-checkbox" className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-slate-900 border border-slate-600 hover:bg-slate-800 cursor-pointer select-none">
                 <input
                   id="grant-multi-child-checkbox"
                   type="checkbox"
                   aria-label="다자녀 가구 (+10% 국비)"
                   checked={calcOptions.isMultiChildFamily}
                   onChange={handleToggleMultiChild}
-                  className="w-5 h-5 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                  className="w-5 h-5 rounded bg-slate-800 border-slate-500 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 />
                 <span>다자녀 가구 (+10% 국비)</span>
               </label>
 
-              <label htmlFor="grant-diesel-scrappage-checkbox" className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 cursor-pointer select-none">
+              <label htmlFor="grant-diesel-scrappage-checkbox" className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-slate-900 border border-slate-600 hover:bg-slate-800 cursor-pointer select-none">
                 <input
                   id="grant-diesel-scrappage-checkbox"
                   type="checkbox"
                   aria-label="노후 경유차 조기폐차 (+100만 원)"
                   checked={calcOptions.isOldDieselScrappage}
                   onChange={handleToggleOldDiesel}
-                  className="w-5 h-5 rounded bg-slate-800 border-slate-700 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                  className="w-5 h-5 rounded bg-slate-800 border-slate-500 text-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                 />
                 <span>노후 경유차 조기폐차 (+100만 원)</span>
               </label>
             </div>
-          </div>
+          </fieldset>
         </div>
 
         {/* Right Column: Live Output & Net Price Card */}
@@ -1793,7 +1866,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             }`}
           >
             <div className="font-bold flex items-center gap-1.5">
-              <span>{calculationResult.isHighDepletionRisk ? '🚨' : '✅'}</span>
+              <span aria-hidden="true">{calculationResult.isHighDepletionRisk ? '🚨' : '✅'}</span>
               <span>{calculationResult.regionName} 보조금 예산 소진 위험도 분석</span>
             </div>
             <p>{calculationResult.warningNotice}</p>

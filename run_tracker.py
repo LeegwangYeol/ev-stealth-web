@@ -600,6 +600,18 @@ def auto_heal_mirrored_parity(repo_root: Optional[Path] = None) -> List[str]:
                                 os.utime(fp, (auth_stat.st_atime, auth_stat.st_mtime))
                             except OSError:
                                 pass
+                        dir_fd = -1
+                        try:
+                            dir_fd = os.open(str(d), os.O_RDONLY)
+                            os.fsync(dir_fd)
+                        except OSError:
+                            pass
+                        finally:
+                            if dir_fd >= 0:
+                                try:
+                                    os.close(dir_fd)
+                                except OSError:
+                                    pass
                         repaired.append(f"{fname} -> {fp}")
                         logger.info("Auto-healed mirror parity for %s in %s", fname, d)
                     except Exception as e:

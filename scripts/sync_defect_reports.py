@@ -181,6 +181,15 @@ def get_report_url_key(report: Dict[str, Any]) -> Optional[str]:
     return f"url::{norm_url}" if norm_url else None
 
 
+def _coerce_str_list(val: Any) -> List[str]:
+    """Coerce a tag/term field into a list of non-empty strings without char-splitting scalars."""
+    if isinstance(val, (list, tuple, set)):
+        return [str(x).strip() for x in val if x is not None and str(x).strip()]
+    if isinstance(val, str) and val.strip():
+        return [val.strip()]
+    return []
+
+
 def merge_report_records(existing: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str, Any]:
     """Merge an incoming duplicate report record into existing record.
     
@@ -220,21 +229,21 @@ def merge_report_records(existing: Dict[str, Any], incoming: Dict[str, Any]) -> 
             merged["date"] = str(incoming["date"])[:10]
 
     # 3. Slang tags: set union preserving deterministic order
-    ex_tags = list(merged.get("slang_tags") or [])
-    inc_tags = list(incoming.get("slang_tags") or [])
+    ex_tags = _coerce_str_list(merged.get("slang_tags"))
+    inc_tags = _coerce_str_list(incoming.get("slang_tags"))
     seen_tags = set(ex_tags)
     for tag in inc_tags:
-        if tag and tag not in seen_tags:
+        if tag not in seen_tags:
             ex_tags.append(tag)
             seen_tags.add(tag)
     merged["slang_tags"] = ex_tags
 
     # Slang terms detected
-    ex_terms = list(merged.get("slang_terms_detected") or [])
-    inc_terms = list(incoming.get("slang_terms_detected") or [])
+    ex_terms = _coerce_str_list(merged.get("slang_terms_detected"))
+    inc_terms = _coerce_str_list(incoming.get("slang_terms_detected"))
     seen_terms = set(ex_terms)
     for term in inc_terms:
-        if term and term not in seen_terms:
+        if term not in seen_terms:
             ex_terms.append(term)
             seen_terms.add(term)
     if ex_terms:
@@ -247,17 +256,20 @@ def merge_report_records(existing: Dict[str, Any], incoming: Dict[str, Any]) -> 
     inc_raw = incoming.get("negativity_score")
     if inc_raw is None:
         inc_raw = incoming.get("sentiment_score")
-    ex_neg = _safe_finite_float(ex_raw, 0.0)
+    ex_neg_opt = _safe_finite_float(ex_raw, None)
     inc_neg = _safe_finite_float(inc_raw, None)
-    if inc_neg is not None and ex_neg is not None and inc_neg > ex_neg:
+    if inc_neg is not None and (ex_neg_opt is None or inc_neg > ex_neg_opt):
         merged["negativity_score"] = round(inc_neg, 4)
         merged["sentiment_score"] = round(inc_neg, 4)
 
     severity_order = {"INFO": 0, "LOW": 1, "CAUTION": 2, "MEDIUM": 3, "WARNING": 4, "HIGH": 5, "CRITICAL": 6}
-    ex_sev_rank = severity_order.get(str(merged.get("severity", "")).upper(), 2)
-    inc_sev_rank = severity_order.get(str(incoming.get("severity", "")).upper(), 2)
-    if inc_sev_rank > ex_sev_rank:
-        merged["severity"] = incoming.get("severity")
+    ex_sev_key = str(merged.get("severity") or "").strip().upper()
+    inc_sev_key = str(incoming.get("severity") or "").strip().upper()
+    if inc_sev_key in severity_order:
+        ex_sev_rank = severity_order.get(ex_sev_key, -1)
+        inc_sev_rank = severity_order[inc_sev_key]
+        if inc_sev_rank > ex_sev_rank:
+            merged["severity"] = inc_sev_key
 
     # 5. DSI breakdown: combine metrics
     ex_dsi = merged.get("dsi_breakdown")
@@ -520,7 +532,9 @@ def compute_report_statistics(
 ) -> Dict[str, Any]:
     """Compute DailyReportStatistics adhering to TypeScript definition."""
     total_defects = len(reports)
-    total_scraped = max(raw_scraped_count or total_defects, total_defects)
+    safe_scraped_f = _safe_finite_float(raw_scraped_count, 0.0)
+    safe_scraped = max(0, int(safe_scraped_f)) if safe_scraped_f is not None else 0
+    total_scraped = max(safe_scraped, total_defects)
 
     if reports:
         neg_scores = []
@@ -536,9 +550,17 @@ def compute_report_statistics(
 
     critical_count = sum(1 for r in reports if str(r.get("severity", "")).upper() == "CRITICAL")
 
-    # Find top model and platform
-    model_counter = Counter(r.get("vehicle_model") for r in reports if r.get("vehicle_model"))
-    platform_counter = Counter(r.get("platform") or r.get("source") for r in reports if r.get("platform") or r.get("source"))
+    # Find top model and platform (guard against unhashable values)
+    model_counter = Counter(
+        str(r.get("vehicle_model"))
+        for r in reports
+        if isinstance(r.get("vehicle_model"), str) and r.get("vehicle_model").strip()
+    )
+    platform_counter = Counter(
+        str(r.get("platform") or r.get("source"))
+        for r in reports
+        if isinstance(r.get("platform") or r.get("source"), str) and str(r.get("platform") or r.get("source")).strip()
+    )
 
     stats: Dict[str, Any] = {
         "total_scraped": total_scraped,
@@ -559,7 +581,10 @@ def compute_top_categories(reports: List[Dict[str, Any]]) -> List[Dict[str, Any]
     if not reports:
         return []
     total = len(reports)
-    cat_counts = Counter(r.get("defect_category") or r.get("category") or "BUILD_QUALITY" for r in reports)
+    cat_counts = Counter(
+        str(r.get("defect_category") or r.get("category") or "BUILD_QUALITY")
+        for r in reports
+    )
     categories_list = []
     for cat, count in cat_counts.most_common():
         categories_list.append({

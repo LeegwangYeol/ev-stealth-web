@@ -101,7 +101,7 @@ export default function Latest2026Error({ error, reset }: ErrorProps) {
           </Link>
         </div>
 
-        <div className="pt-4 border-t border-slate-100 text-xs text-slate-700 flex flex-wrap justify-center gap-3">
+        <nav aria-label="주요 서비스 바로가기" className="pt-4 border-t border-slate-100 text-xs text-slate-700 flex flex-wrap justify-center gap-3">
           <Link
             href="/reliability-analytics"
             prefetch={false}
@@ -123,7 +123,7 @@ export default function Latest2026Error({ error, reset }: ErrorProps) {
           >
             <span aria-hidden="true">⚡</span> 보조금 추적기
           </Link>
-        </div>
+        </nav>
       </div>
     </div>
   );

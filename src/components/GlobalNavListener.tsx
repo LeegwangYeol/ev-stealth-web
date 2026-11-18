@@ -44,7 +44,7 @@ export const GlobalNavListener = memo(function GlobalNavListener() {
       );
       allNavLinks.forEach((link) => {
         const href = link.getAttribute('href');
-        if (!href) return;
+        if (!href || !href.startsWith('/')) return;
         const linkPath = normalizePath(href);
         const isCurrent = linkPath === '/' ? currentPath === '/' : currentPath === linkPath;
 
@@ -147,6 +147,12 @@ export const GlobalNavListener = memo(function GlobalNavListener() {
         const main = document.getElementById('main-content');
         if (main) {
           main.focus();
+          // Re-verify focus after native hash navigation completes in Safari/WebKit
+          requestAnimationFrame(() => {
+            if (document.activeElement !== main) {
+              main.focus({ preventScroll: true });
+            }
+          });
         }
       }
     };
@@ -154,6 +160,12 @@ export const GlobalNavListener = memo(function GlobalNavListener() {
     const handleKeydown = (e: KeyboardEvent) => {
       const drawer = getDrawer();
       if (!drawer || !drawer.hasAttribute('open')) return;
+
+      if (window.getComputedStyle(drawer).display === 'none') {
+        drawer.removeAttribute('open');
+        syncAriaExpanded();
+        return;
+      }
 
       const summary = drawer.querySelector('summary') as HTMLElement | null;
 
@@ -168,12 +180,17 @@ export const GlobalNavListener = memo(function GlobalNavListener() {
       }
 
       // Keyboard Focus Trap (Tab and Shift+Tab)
-      if (e.key === 'Tab') {
+      if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         const focusableElements = Array.from(
           drawer.querySelectorAll<HTMLElement>(
             'summary, a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
           )
-        ).filter((el) => el.offsetParent !== null || el === summary);
+        ).filter(
+          (el) =>
+            (el.offsetParent !== null || el === summary) &&
+            !el.hasAttribute('hidden') &&
+            el.getAttribute('aria-hidden') !== 'true'
+        );
 
         if (focusableElements.length === 0) return;
 

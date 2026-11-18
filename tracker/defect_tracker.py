@@ -193,6 +193,7 @@ class DefectTracker:
         # Caching and category pre-filtering index structures (thread-safe LRU)
         self._cache_lock = threading.Lock()
         self._cached_reports_mtime: Optional[float] = None
+        self._cached_reports_sig: Optional[Tuple[int, int]] = None
         self._cached_reports_path: Optional[Path] = None
         self._cached_reports: Optional[List[Dict[str, Any]]] = None
         self._category_index: Dict[str, List[Dict[str, Any]]] = {}
@@ -314,6 +315,7 @@ class DefectTracker:
         """Invalidate in-memory report cache, category index, and query results."""
         with self._cache_lock:
             self._cached_reports_mtime = None
+            self._cached_reports_sig = None
             self._cached_reports_path = None
             self._cached_reports = None
             self._category_index.clear()
@@ -324,6 +326,7 @@ class DefectTracker:
         self._category_index.clear()
         for r in reports:
             raw_cat = _extract_val(r, "defect_category") or _extract_val(r, "category")
+            raw_cat = getattr(raw_cat, "value", raw_cat)
             if raw_cat and isinstance(raw_cat, str) and raw_cat.strip():
                 cat_norm = raw_cat.upper().strip()
             else:
@@ -337,12 +340,15 @@ class DefectTracker:
         target = Path(file_path) if file_path else self.resolve_primary_reports_path()
         if target and target.exists():
             try:
-                current_mtime = target.stat().st_mtime
+                st = target.stat()
+                current_mtime = st.st_mtime
+                current_sig = (st.st_mtime_ns, st.st_size)
                 with self._cache_lock:
                     if (
                         self._cached_reports is not None
                         and self._cached_reports_path == target
                         and self._cached_reports_mtime == current_mtime
+                        and self._cached_reports_sig == current_sig
                     ):
                         return [_to_record_dict(r) for r in self._cached_reports]
             except OSError:
@@ -354,13 +360,17 @@ class DefectTracker:
         with self._cache_lock:
             if target and target.exists():
                 try:
-                    self._cached_reports_mtime = target.stat().st_mtime
+                    st = target.stat()
+                    self._cached_reports_mtime = st.st_mtime
+                    self._cached_reports_sig = (st.st_mtime_ns, st.st_size)
                     self._cached_reports_path = target
                 except OSError:
                     self._cached_reports_mtime = None
+                    self._cached_reports_sig = None
                     self._cached_reports_path = None
             else:
                 self._cached_reports_mtime = None
+                self._cached_reports_sig = None
                 self._cached_reports_path = None
 
             self._cached_reports = reports
@@ -423,6 +433,7 @@ class DefectTracker:
                     cache_key = (
                         str(self._cached_reports_path),
                         self._cached_reports_mtime,
+                        self._cached_reports_sig,
                         cat_upper,
                         brand_lower,
                         model_lower,
@@ -448,6 +459,7 @@ class DefectTracker:
             # Category filter (re-verify for defensive assurance, normalizing missing/None to UNKNOWN)
             if cat_upper:
                 raw_cat = _extract_val(r, "defect_category") or _extract_val(r, "category")
+                raw_cat = getattr(raw_cat, "value", raw_cat)
                 item_cat = (raw_cat.upper().strip() if (raw_cat and isinstance(raw_cat, str) and raw_cat.strip()) else "UNKNOWN")
                 if item_cat != cat_upper:
                     continue
@@ -514,6 +526,7 @@ class DefectTracker:
                     self._cached_reports is not None
                     and str(self._cached_reports_path) == cache_key[0]
                     and self._cached_reports_mtime == cache_key[1]
+                    and self._cached_reports_sig == cache_key[2]
                 ):
                     self._query_cache[cache_key] = result
                     self._query_cache.move_to_end(cache_key)
@@ -842,6 +855,7 @@ class DefectTracker:
                         except OSError:
                             pass
                         os.replace(temp_name, tgt)
+                        temp_name = None
                         # Preserve original source timestamp to prevent oscillation
                         try:
                             os.utime(tgt, (source_stat.st_atime, source_stat.st_mtime))

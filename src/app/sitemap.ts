@@ -1,6 +1,5 @@
 import type { MetadataRoute } from 'next';
 
-export const dynamic = 'force-dynamic';
 export const revalidate = 3600;
 
 function getBaseUrl(): string {
@@ -8,7 +7,15 @@ function getBaseUrl(): string {
   for (const candidate of candidates) {
     const raw = (candidate || '').trim().replace(/\/+$/, '');
     if (raw) {
-      return raw.startsWith('http://') || raw.startsWith('https://') ? raw : `https://${raw}`;
+      const normalized = raw.startsWith('http://') || raw.startsWith('https://') ? raw : `https://${raw}`;
+      try {
+        const parsed = new URL(normalized);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+          return parsed.origin;
+        }
+      } catch {
+        // try next candidate
+      }
     }
   }
   return 'https://ev-stealth-web.vercel.app';

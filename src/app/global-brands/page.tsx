@@ -7,7 +7,23 @@ import ModelSpecWarrantyCard from '@/components/ModelSpecWarrantyCard';
 export const dynamic = 'force-static';
 export const revalidate = false;
 
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://ev-stealth-web.vercel.app').replace(/\/+$/, '');
+const rawSiteUrl =
+  (process.env.NEXT_PUBLIC_SITE_URL || '').trim().replace(/\/+$/, '') ||
+  'https://ev-stealth-web.vercel.app';
+const normalizedSiteUrl =
+  rawSiteUrl.startsWith('http://') || rawSiteUrl.startsWith('https://')
+    ? rawSiteUrl
+    : `https://${rawSiteUrl}`;
+
+function resolveSiteUrl(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return 'https://ev-stealth-web.vercel.app';
+  }
+}
+
+const SITE_URL = resolveSiteUrl(normalizedSiteUrl);
 
 const globalBrandsJsonLd = {
   '@context': 'https://schema.org',
