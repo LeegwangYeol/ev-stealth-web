@@ -183,16 +183,28 @@ class CafeForumMiner:
         if not html_content or not isinstance(html_content, str):
             return []
         items = []
-        matches = re.findall(r'<a\s+href="(view\.php\?id=car&no=\d+[^"]*)"[^>]*>(.*?)</a>', html_content, re.IGNORECASE | re.DOTALL)
+        seen_urls: Set[str] = set()
+        matches = re.findall(
+            r'<a\b[^>]*\bhref=["\']((?:/zboard/)?view\.php\?[^"\']*\bid=car\b[^"\']*)["\'][^>]*>(.*?)</a>',
+            html_content,
+            re.IGNORECASE | re.DOTALL,
+        )
         for href, raw_title in matches:
+            no_match = re.search(r"[?&](?:amp;)?no=(\d+)", href, re.IGNORECASE)
+            if not no_match:
+                continue
             clean_title = clean_html_text(raw_title)
-            if not clean_title or len(clean_title) < 4 or "공지" in clean_title:
+            if (
+                not clean_title
+                or len(clean_title) < 4
+                or re.match(r"^(?:\[공지\]|공지(?:\s|$|:|-)|\[필독\])", clean_title)
+            ):
                 continue
-            no_match = re.search(r"no=(\d+)", href)
-            post_no = no_match.group(1) if no_match else ""
+            post_no = no_match.group(1)
             full_url = normalize_scraper_url(href, f"{POMPPU_BASE_URL}/zboard")
-            if not full_url:
+            if not full_url or full_url in seen_urls:
                 continue
+            seen_urls.add(full_url)
             items.append({
                 "platform": "pomppu",
                 "board_name": "뽐뿌 자동차포럼",
@@ -246,14 +258,22 @@ class CafeForumMiner:
         if not html_content or not isinstance(html_content, str):
             return []
         items = []
-        matches = re.findall(r'<a\s+href="(/service/board/cm_car/\d+[^"]*)"[^>]*class="[^"]*subject_fixed[^"]*"[^>]*>(.*?)</a>', html_content, re.IGNORECASE | re.DOTALL)
-        for href, raw_title in matches:
+        seen_urls: Set[str] = set()
+        matches = re.findall(
+            r'<a\b([^>]*\bhref=["\'](/service/board/cm_car/\d+[^"\']*)["\'][^>]*)>(.*?)</a>',
+            html_content,
+            re.IGNORECASE | re.DOTALL,
+        )
+        for attrs, href, raw_title in matches:
+            if "subject_fixed" not in attrs and "subject_fixed" not in raw_title and "list_subject" not in attrs:
+                continue
             clean_title = clean_html_text(raw_title)
             if not clean_title or len(clean_title) < 4:
                 continue
             full_url = normalize_scraper_url(href, CLIEN_BASE_URL)
-            if not full_url:
+            if not full_url or full_url in seen_urls:
                 continue
+            seen_urls.add(full_url)
             items.append({
                 "platform": "clien",
                 "board_name": "클리앙 굴러간당",
@@ -300,7 +320,7 @@ class CafeForumMiner:
         # Slang extraction
         raw_slang = raw_data.get("slang_terms")
         if isinstance(raw_slang, list) and raw_slang:
-            slang_terms = raw_slang
+            slang_terms = [str(s).strip() for s in raw_slang if s is not None and str(s).strip()]
         else:
             slang_terms = extract_slang_terms(f"{post_title}\n{raw_quote}\n{defect_topic}", self.slang_dict)
 

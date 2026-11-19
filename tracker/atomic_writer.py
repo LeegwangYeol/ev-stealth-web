@@ -413,6 +413,8 @@ class FileLock:
             raise
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        if self._instance_depth == 0 and self._thread_lock_depth == 0:
+            return
         try:
             depth = getattr(self._local, "depths", {}).get(self.lock_path, 0)
             if depth > 1:
@@ -690,9 +692,10 @@ def quarantine_corrupted_file(
                             suffix=".stage",
                         ) as qsf:
                             staging_path = Path(qsf.name)
-                            shutil.copyfile(str(p), str(staging_path))
-                            qsf.flush()
-                            durable_fsync(qsf.fileno())
+                        shutil.copyfile(str(p), str(staging_path))
+                        with open(staging_path, "rb+") as qsf_sync:
+                            qsf_sync.flush()
+                            durable_fsync(qsf_sync.fileno())
                         os.chmod(str(staging_path), 0o644)
                         os.replace(str(staging_path), str(quarantine_path))
                         staging_path = None
@@ -777,7 +780,7 @@ def sanitize_nan_inf(obj: Any, seen: Optional[set[int]] = None) -> Any:
     elif isinstance(obj, Path):
         return str(obj)
     elif isinstance(obj, Enum):
-        return obj.value
+        return sanitize_nan_inf(obj.value, seen)
     elif isinstance(obj, uuid.UUID):
         return str(obj)
 
@@ -805,7 +808,7 @@ def sanitize_nan_inf(obj: Any, seen: Optional[set[int]] = None) -> Any:
                     sanitized_k = str(k)
                 elif isinstance(k, (bytes, bytearray)):
                     sanitized_k = k.decode("utf-8", errors="replace")
-                elif isinstance(k, (complex, tuple)):
+                elif isinstance(k, (complex, tuple, frozenset)):
                     sanitized_k = str(k)
                 else:
                     sanitized_k = k
@@ -838,7 +841,7 @@ def _json_default(obj: Any) -> Any:
     if isinstance(obj, (set, frozenset)):
         return [sanitize_nan_inf(v) for v in obj]
     if isinstance(obj, Enum):
-        return obj.value
+        return sanitize_nan_inf(obj.value)
     if isinstance(obj, Decimal):
         if obj.is_nan() or obj.is_infinite():
             return 0.0
@@ -1025,9 +1028,10 @@ def atomic_write_json(
                                 suffix=".stage",
                             ) as sf:
                                 staging_name = sf.name
-                                shutil.copyfile(temp_name, staging_name)
-                                sf.flush()
-                                durable_fsync(sf.fileno())
+                            shutil.copyfile(temp_name, staging_name)
+                            with open(staging_name, "rb+") as sf_sync:
+                                sf_sync.flush()
+                                durable_fsync(sf_sync.fileno())
                             os.chmod(staging_name, target_mode)
                             os.replace(staging_name, dest)
                             staging_name = None
@@ -1060,10 +1064,15 @@ def atomic_write_json(
 
             temp_name = None  # Replaced or copied successfully
 
-            if preserve_mtime is not None:
+            if (
+                preserve_mtime is not None
+                and isinstance(preserve_mtime, (int, float))
+                and not isinstance(preserve_mtime, bool)
+                and not (math.isnan(preserve_mtime) or math.isinf(preserve_mtime))
+            ):
                 try:
                     os.utime(dest, (preserve_mtime, preserve_mtime))
-                except OSError:
+                except (OSError, ValueError, OverflowError, TypeError):
                     pass
 
             # Directory fsync to commit the replacement to disk with leak-proof fd lifecycle
@@ -1286,9 +1295,10 @@ def atomic_write_text(
                                 suffix=".stage",
                             ) as sf:
                                 staging_name = sf.name
-                                shutil.copyfile(temp_name, staging_name)
-                                sf.flush()
-                                durable_fsync(sf.fileno())
+                            shutil.copyfile(temp_name, staging_name)
+                            with open(staging_name, "rb+") as sf_sync:
+                                sf_sync.flush()
+                                durable_fsync(sf_sync.fileno())
                             os.chmod(staging_name, target_mode)
                             os.replace(staging_name, dest)
                             staging_name = None
@@ -1320,10 +1330,15 @@ def atomic_write_text(
 
             temp_name = None
 
-            if preserve_mtime is not None:
+            if (
+                preserve_mtime is not None
+                and isinstance(preserve_mtime, (int, float))
+                and not isinstance(preserve_mtime, bool)
+                and not (math.isnan(preserve_mtime) or math.isinf(preserve_mtime))
+            ):
                 try:
                     os.utime(dest, (preserve_mtime, preserve_mtime))
-                except OSError:
+                except (OSError, ValueError, OverflowError, TypeError):
                     pass
 
             if os.name != "nt":

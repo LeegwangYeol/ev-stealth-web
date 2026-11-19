@@ -405,13 +405,17 @@ export default function DepreciationCalculatorClient({
   }, [customPriceInput]);
 
   const isPriceNaN = parsedCustomPrice !== null && !Number.isFinite(parsedCustomPrice);
-  const isPriceNegative = parsedCustomPrice !== null && (Number(customPriceInput) < 0);
-  const isPriceExceeded = parsedCustomPrice !== null && (Number(customPriceInput) > 10_000_000_000);
+  const isPriceNegative =
+    parsedCustomPrice !== null && Number.isFinite(parsedCustomPrice) && Number(customPriceInput) < 0;
+  const isPriceExceeded =
+    parsedCustomPrice !== null &&
+    Number.isFinite(parsedCustomPrice) &&
+    Number(customPriceInput) > 10_000_000_000;
   const hasPriceError = isPriceNaN || isPriceNegative || isPriceExceeded;
 
   const currentPurchasePrice = useMemo(() => {
     if (parsedCustomPrice !== null && Number.isFinite(parsedCustomPrice) && parsedCustomPrice >= 0) {
-      return Math.min(10_000_000_000, Math.floor(parsedCustomPrice));
+      return Math.min(10_000_000_000, Math.floor(parsedCustomPrice)) || 0;
     }
     const defaultNet =
       Number.isFinite(selectedModel?.net_purchase_price_krw) && selectedModel.net_purchase_price_krw >= 0
@@ -458,14 +462,14 @@ export default function DepreciationCalculatorClient({
 
   const effectiveLocalSubsidy = useMemo(() => {
     if (parsedLocalSubsidy !== null && Number.isFinite(parsedLocalSubsidy) && parsedLocalSubsidy >= 0) {
-      return Math.min(100_000_000, Math.floor(parsedLocalSubsidy));
+      return Math.min(100_000_000, Math.floor(parsedLocalSubsidy)) || 0;
     }
     return defaultLocalSubsidy;
   }, [parsedLocalSubsidy, defaultLocalSubsidy]);
 
   const effectiveNationalSubsidy = useMemo(() => {
     if (parsedNationalSubsidy !== null && Number.isFinite(parsedNationalSubsidy) && parsedNationalSubsidy >= 0) {
-      return Math.min(100_000_000, Math.floor(parsedNationalSubsidy));
+      return Math.min(100_000_000, Math.floor(parsedNationalSubsidy)) || 0;
     }
     return defaultNationalSubsidy;
   }, [parsedNationalSubsidy, defaultNationalSubsidy]);
@@ -490,6 +494,7 @@ export default function DepreciationCalculatorClient({
   // Keyboard navigation for Brand Tabs (WAI-ARIA APG pattern)
   const handleBrandTabKeyDown = useCallback((e: React.KeyboardEvent, currentIndex: number) => {
     const count = brands.length;
+    if (count === 0) return;
     let nextIndex = -1;
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       e.preventDefault();
@@ -553,19 +558,29 @@ export default function DepreciationCalculatorClient({
   // 3. CORE CALCULATIONS
   // ----------------------------------------------------
   // A. Depreciation Calculation
+  const depreciationOptions = useMemo(() => {
+    return {
+      adjustmentFactors: initialDatabase?.adjustment_factors,
+      baselineAnnualMileageKm: initialDatabase?.metadata?.baseline_annual_mileage_km,
+    };
+  }, [initialDatabase?.adjustment_factors, initialDatabase?.metadata?.baseline_annual_mileage_km]);
+
   const totalMileage = useMemo(() => holdingYears * annualMileageKm, [holdingYears, annualMileageKm]);
 
   const depResult = useMemo(() => {
-    return calculateDepreciation({
-      model: selectedModel,
-      modelId: selectedModel.id,
-      years: holdingYears,
-      mileageKm: totalMileage,
-      winterSeason,
-      priceBasis,
-      customPurchasePriceKrw: currentPurchasePrice,
-    });
-  }, [selectedModel, holdingYears, totalMileage, winterSeason, priceBasis, currentPurchasePrice]);
+    return calculateDepreciation(
+      {
+        model: selectedModel,
+        modelId: selectedModel.id,
+        years: holdingYears,
+        mileageKm: totalMileage,
+        winterSeason,
+        priceBasis,
+        customPurchasePriceKrw: currentPurchasePrice,
+      },
+      depreciationOptions
+    );
+  }, [selectedModel, holdingYears, totalMileage, winterSeason, priceBasis, currentPurchasePrice, depreciationOptions]);
 
   // Dynamic multi-year benchmarks for current holdingYears
   const currentEvBenchmark = useMemo(() => {
@@ -595,15 +610,18 @@ export default function DepreciationCalculatorClient({
   const baseMultiYearProjection = useMemo(() => {
     const yearsArr = [1, 2, 3, 4, 5];
     return yearsArr.map((y) => {
-      const dep = calculateDepreciation({
-        model: selectedModel,
-        modelId: selectedModel.id,
-        years: y,
-        mileageKm: y * annualMileageKm,
-        winterSeason,
-        priceBasis,
-        customPurchasePriceKrw: currentPurchasePrice,
-      });
+      const dep = calculateDepreciation(
+        {
+          model: selectedModel,
+          modelId: selectedModel.id,
+          years: y,
+          mileageKm: y * annualMileageKm,
+          winterSeason,
+          priceBasis,
+          customPurchasePriceKrw: currentPurchasePrice,
+        },
+        depreciationOptions
+      );
 
       // EV Class Average residual rate benchmark
       const evClassAvgPct = Math.max(
@@ -635,6 +653,7 @@ export default function DepreciationCalculatorClient({
     winterSeason,
     priceBasis,
     currentPurchasePrice,
+    depreciationOptions,
   ]);
 
   const multiYearProjection = useMemo(() => {
@@ -653,7 +672,8 @@ export default function DepreciationCalculatorClient({
     const ambientTempC = winterSeason ? -5 : 22;
     const modelChemistry = selectedModel.battery_specs?.chemistry ?? 'NCM_811';
     const modelCapacity = selectedModel.battery_specs?.capacity_kwh ?? 77.4;
-    const cacheKey = `${selectedModel.id}_${modelChemistry}_${holdingYears}_${totalMileage}_${annualMileageKm}_${dcfcRatioVal}_${ambientTempC}_${modelCapacity}`;
+    const dbVersion = initialDatabase?.metadata?.version ?? 'default';
+    const cacheKey = `${dbVersion}_${selectedModel.id}_${modelChemistry}_${holdingYears}_${totalMileage}_${annualMileageKm}_${dcfcRatioVal}_${ambientTempC}_${modelCapacity}`;
 
     const cached = batterySimulationCache.current.get(cacheKey);
     if (cached) {
@@ -663,17 +683,21 @@ export default function DepreciationCalculatorClient({
       return cached;
     }
 
-    const simResult = simulateBatteryHealth({
-      modelId: selectedModel.id,
-      chemistry: modelChemistry,
-      years: holdingYears,
-      totalKm: totalMileage,
-      annualKm: annualMileageKm,
-      dcfcRatio: dcfcRatioVal,
-      storageSoc: 0.6,
-      ambientTempC,
-      packCapacityKwh: modelCapacity,
-    });
+    const simResult = simulateBatteryHealth(
+      {
+        modelId: selectedModel.id,
+        chemistry: modelChemistry,
+        years: holdingYears,
+        totalKm: totalMileage,
+        annualKm: annualMileageKm,
+        dcfcRatio: dcfcRatioVal,
+        storageSoc: 0.6,
+        ambientTempC,
+        packCapacityKwh: modelCapacity,
+      },
+      initialDatabase?.chemistries,
+      initialDatabase?.battery_replacement_costs
+    );
 
     // Bounded cache eviction: cap at 100 entries using true LRU eviction
     if (batterySimulationCache.current.size >= MAX_BATTERY_SIMULATION_CACHE_ENTRIES) {
@@ -686,6 +710,9 @@ export default function DepreciationCalculatorClient({
     batterySimulationCache.current.set(cacheKey, simResult);
     return simResult;
   }, [
+    initialDatabase?.metadata?.version,
+    initialDatabase?.chemistries,
+    initialDatabase?.battery_replacement_costs,
     selectedModel.id,
     selectedModel.battery_specs?.chemistry,
     selectedModel.battery_specs?.capacity_kwh,
@@ -713,21 +740,30 @@ export default function DepreciationCalculatorClient({
       heldMonths,
       effectiveLocalSubsidy,
       transferType,
-      effectiveNationalSubsidy
+      effectiveNationalSubsidy,
+      initialDatabase?.subsidy_clawback_schedule?.tiers
     );
-  }, [heldMonths, effectiveLocalSubsidy, transferType, effectiveNationalSubsidy]);
+  }, [
+    heldMonths,
+    effectiveLocalSubsidy,
+    transferType,
+    effectiveNationalSubsidy,
+    initialDatabase?.subsidy_clawback_schedule?.tiers,
+  ]);
 
   // D. 5-Year TCO Comparison
   const tcoResult = useMemo(() => {
     const slowRatio = (100 - dcfcRatio) / 100;
+    const baseEvEff = initialDatabase?.tco_parameters?.efficiency_baselines?.ev_efficiency_km_per_kwh ?? 5.2;
     return calculateTcoComparison(
       annualMileageKm,
       holdingYears,
-      5.2, // EV efficiency baseline
+      baseEvEff,
       slowRatio,
-      iceDisplacementCc
+      iceDisplacementCc,
+      initialDatabase?.tco_parameters
     );
-  }, [annualMileageKm, holdingYears, dcfcRatio, iceDisplacementCc]);
+  }, [annualMileageKm, holdingYears, dcfcRatio, iceDisplacementCc, initialDatabase?.tco_parameters]);
 
   // Robust NaN / edge-case guards for state and calculated outputs
   const safeSohPct = useMemo(() => {
@@ -846,7 +882,7 @@ export default function DepreciationCalculatorClient({
             <button
               type="button"
               onClick={() => applyPreset('commute')}
-              className="px-3 py-1.5 min-h-[44px] flex items-center rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="px-3 py-1.5 min-h-[44px] flex items-center rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               aria-label="🚗 출퇴근 표준 프리셋 (3년 보유, 연 1.5만 km, 급속 20%)"
             >
               🚗 출퇴근 표준 (3년/1.5만 km)
@@ -854,7 +890,7 @@ export default function DepreciationCalculatorClient({
             <button
               type="button"
               onClick={() => applyPreset('business')}
-              className="px-3 py-1.5 min-h-[44px] flex items-center rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="px-3 py-1.5 min-h-[44px] flex items-center rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               aria-label="🚛 장거리 영업 프리셋 (4년 보유, 연 3.5만 km, 급속 65%)"
             >
               🚛 장거리 영업 (4년/3.5만 km)
@@ -862,7 +898,7 @@ export default function DepreciationCalculatorClient({
             <button
               type="button"
               onClick={() => applyPreset('leisure')}
-              className="px-3 py-1.5 min-h-[44px] flex items-center rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="px-3 py-1.5 min-h-[44px] flex items-center rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               aria-label="🏖️ 주말 레저 프리셋 (2년 보유, 연 8,000 km, 급속 15%)"
             >
               🏖️ 주말 레저 (2년/8,000 km)
@@ -870,7 +906,7 @@ export default function DepreciationCalculatorClient({
             <button
               type="button"
               onClick={() => applyPreset('earlySell')}
-              className="px-3 py-1.5 min-h-[44px] flex items-center rounded-lg text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="px-3 py-1.5 min-h-[44px] flex items-center rounded-lg text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               aria-label="⚠️ 보조금 환수 점검 프리셋 (18개월 보유, 관외 이전)"
             >
               ⚠️ 보조금 환수 점검 (18개월 보유)
@@ -951,7 +987,7 @@ export default function DepreciationCalculatorClient({
           role="tabpanel"
           aria-labelledby={`brand-tab-${activeBrand}`}
           tabIndex={0}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[380px] overflow-y-auto pr-1 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[380px] overflow-y-auto pr-1 rounded-xl focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
         >
           {filteredModels.length === 0 ? (
             <div className="col-span-full py-12 px-4 text-center text-slate-700 bg-slate-50 rounded-xl border border-dashed border-slate-300">
@@ -965,7 +1001,7 @@ export default function DepreciationCalculatorClient({
                     setSearchQuery('');
                     setSelectedBrand('all');
                   }}
-                  className="mt-3 px-3.5 py-1.5 min-h-[44px] inline-flex items-center justify-center text-xs font-semibold text-blue-700 bg-white hover:bg-blue-50 rounded-lg transition border border-slate-300 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="mt-3 px-3.5 py-1.5 min-h-[44px] inline-flex items-center justify-center text-xs font-semibold text-blue-700 bg-white hover:bg-blue-50 rounded-lg transition border border-slate-300 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                 >
                   검색어 및 제조사 필터 초기화
                 </button>
@@ -1041,7 +1077,7 @@ export default function DepreciationCalculatorClient({
               onKeyDown={(e) => handleSliderKeyDown(e, holdingYears, 1, 5, 0.5, 1.0, handleYearsChange)}
               onChange={(e) => {
                 const val = parseFloat(e.target.value);
-                if (Number.isFinite(val)) handleYearsChange(val);
+                if (Number.isFinite(val)) handleYearsChange(Math.max(1, Math.min(5, val)));
               }}
               className="w-full min-h-[44px] h-11 py-2 accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="보유 기간 설정 (1년에서 5년)"
@@ -1099,7 +1135,7 @@ export default function DepreciationCalculatorClient({
               onKeyDown={(e) => handleSliderKeyDown(e, annualMileageKm, 5000, 50000, 1000, 5000, setAnnualMileageKm)}
               onChange={(e) => {
                 const val = parseInt(e.target.value, 10);
-                if (Number.isFinite(val)) setAnnualMileageKm(Math.max(1000, Math.min(100000, val)));
+                if (Number.isFinite(val)) setAnnualMileageKm(Math.max(5000, Math.min(50000, val)));
               }}
               className="w-full min-h-[44px] h-11 py-2 accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
               aria-label="연간 주행거리 설정 (5,000km에서 50,000km)"
@@ -1179,7 +1215,7 @@ export default function DepreciationCalculatorClient({
               <button
                 type="button"
                 onClick={() => setCustomPriceInput(null)}
-                className="text-[11px] text-blue-700 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none min-h-[44px] px-2 inline-flex items-center"
+                className="text-[11px] text-blue-700 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded outline-none min-h-[44px] px-2 inline-flex items-center"
                 aria-label="기본값 복원: 차량 기본 가격으로 초기화"
               >
                 기본값 복원
@@ -1440,7 +1476,7 @@ export default function DepreciationCalculatorClient({
                 const y = 30 + i * 50;
                 const pct = 100 - i * 20;
                 const priceVal = Math.round((currentPurchasePrice * pct) / 100 / 10000);
-                const priceLabel = priceVal >= 100000 ? `${Math.round(priceVal / 10000)}억` : `${priceVal}만`;
+                const priceLabel = priceVal >= 100000 ? `${Math.round(priceVal / 10000).toLocaleString()}억` : `${priceVal.toLocaleString()}만`;
                 return (
                   <g key={i}>
                     <line
@@ -1519,7 +1555,7 @@ export default function DepreciationCalculatorClient({
                       height={Math.max(2, 230 - yEv)}
                       rx="4"
                       fill={isSelectedYear ? '#3b82f6' : '#2563eb'}
-                      className="transition-all duration-300 hover:opacity-90"
+                      className="transition-all duration-300 motion-reduce:transition-none hover:opacity-90"
                     >
                       <title>{`${selectedModel.model_name} ${pt.year}년차: ${chartViewMode === 'price' ? `${Math.round(pt.evResidualPriceKrw / 10000).toLocaleString()}만 원` : `${pt.evResidualPct.toFixed(0)}%`}`}</title>
                     </rect>
@@ -1544,7 +1580,7 @@ export default function DepreciationCalculatorClient({
                       height={Math.max(2, 230 - yEvAvg)}
                       rx="4"
                       fill="#10b981"
-                      className="transition-all duration-300 hover:opacity-90"
+                      className="transition-all duration-300 motion-reduce:transition-none hover:opacity-90"
                     >
                       <title>{`${pt.year}년차 전기차 전체 평균: ${chartViewMode === 'price' ? `${Math.round(pt.evClassAvgPrice / 10000).toLocaleString()}만 원` : `${pt.evClassAvgPct.toFixed(0)}%`}`}</title>
                     </rect>
@@ -1557,7 +1593,7 @@ export default function DepreciationCalculatorClient({
                       height={Math.max(2, 230 - yIce)}
                       rx="4"
                       fill="#94a3b8"
-                      className="transition-all duration-300 hover:opacity-90"
+                      className="transition-all duration-300 motion-reduce:transition-none hover:opacity-90"
                     >
                       <title>{`${pt.year}년차 동급 내연기관(가솔린): ${chartViewMode === 'price' ? `${Math.round(pt.iceBenchmarkPrice / 10000).toLocaleString()}만 원` : `${pt.iceBenchmarkPct.toFixed(0)}%`}`}</title>
                     </rect>
@@ -1765,7 +1801,7 @@ export default function DepreciationCalculatorClient({
                   strokeDasharray="263.89"
                   strokeDashoffset={263.89 * (1 - safeSohPct / 100)}
                   strokeLinecap="round"
-                  className="transition-all duration-700 ease-out"
+                  className="transition-all duration-700 ease-out motion-reduce:transition-none"
                 />
               </svg>
 
@@ -1988,7 +2024,7 @@ export default function DepreciationCalculatorClient({
                 const val = parseInt(e.target.value, 10);
                 if (Number.isFinite(val)) {
                   setSyncMonthsWithYears(false);
-                  setHeldMonths(val);
+                  setHeldMonths(Math.max(0, Math.min(36, val)));
                 }
               }}
               className="w-full min-h-[44px] h-11 py-2 accent-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
@@ -2014,7 +2050,7 @@ export default function DepreciationCalculatorClient({
                   setSyncMonthsWithYears(true);
                   setHeldMonths(Math.min(36, Math.max(0, Math.round(holdingYears * 12))));
                 }}
-                className="text-blue-700 hover:underline text-[11px] font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded outline-none min-h-[44px] px-2 inline-flex items-center"
+                className="text-blue-700 hover:underline text-[11px] font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded outline-none min-h-[44px] px-2 inline-flex items-center"
                 aria-label={`보유 기간(${holdingYears}년)과 동기화: 상단 연수와 개월 수 맞춤`}
               >
                 보유 기간({holdingYears}년)과 동기화
@@ -2069,7 +2105,7 @@ export default function DepreciationCalculatorClient({
                       setCustomLocalSubsidyInput(null);
                       setCustomNationalSubsidyInput(null);
                     }}
-                    className="text-[11px] text-blue-400 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded min-h-[44px] px-2 inline-flex items-center"
+                    className="text-[11px] text-blue-400 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded min-h-[44px] px-2 inline-flex items-center"
                     aria-label="보조금 기본값 복원: 차량 기본 보조금으로 초기화"
                   >
                     기본값 복원

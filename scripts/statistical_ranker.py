@@ -168,7 +168,6 @@ class StatisticalRanker:
         """Tokenize documents, populate frequency matrices, and calculate document-level DSI."""
         if records is not None:
             self.records = records
-            self.num_docs = len(records)
 
         self.doc_freq.clear()
         self.term_freq.clear()
@@ -177,12 +176,19 @@ class StatisticalRanker:
         self.term_sample_quotes.clear()
         self.term_dsi_values.clear()
 
+        seen_quotes_by_stem: Dict[str, Set[str]] = defaultdict(set)
+        valid_doc_count = 0
+
         for rec in self.records:
             if not isinstance(rec, dict):
                 continue
-            title = rec.get("post_title") or ""
-            quote = rec.get("raw_quote") or ""
-            topic = rec.get("defect_topic") or ""
+            valid_doc_count += 1
+            raw_t = rec.get("post_title")
+            raw_q = rec.get("raw_quote")
+            raw_top = rec.get("defect_topic")
+            title = str(raw_t) if raw_t is not None else ""
+            quote = str(raw_q) if raw_q is not None else ""
+            topic = str(raw_top) if raw_top is not None else ""
             full_text = f"{title} {topic} {quote}"
 
             # Calculate DSI
@@ -201,7 +207,8 @@ class StatisticalRanker:
                 doc_stems.append(stem)
                 self.term_freq[stem] += 1
                 self.term_dsi_values[stem].append(dsi)
-                if quote and quote not in self.term_sample_quotes[stem]:
+                if quote and quote not in seen_quotes_by_stem[stem]:
+                    seen_quotes_by_stem[stem].add(quote)
                     self.term_sample_quotes[stem].append(quote)
 
             self.tokenized_docs.append(doc_stems)
@@ -209,6 +216,8 @@ class StatisticalRanker:
             # Update Document Frequency (DF)
             for unique_stem in set(doc_stems):
                 self.doc_freq[unique_stem] += 1
+
+        self.num_docs = valid_doc_count
 
     def compute_tfidf(self, term: str) -> float:
         """
@@ -232,7 +241,14 @@ class StatisticalRanker:
         Extract N-grams and score with Pointwise Mutual Information (PMI).
         Returns: List of ((w1, w2, ...), count, pmi_score)
         """
-        if n < 1 or top_k <= 0:
+        if (
+            not isinstance(n, int)
+            or isinstance(n, bool)
+            or n < 1
+            or not isinstance(top_k, int)
+            or isinstance(top_k, bool)
+            or top_k <= 0
+        ):
             return []
         ngram_counts: Counter = Counter()
         total_ngrams = 0
@@ -332,10 +348,13 @@ class StatisticalRanker:
                 for rec in self.records:
                     if not isinstance(rec, dict):
                         continue
-                    txt = (rec.get("raw_quote") or "") + " " + (rec.get("defect_topic") or "")
+                    q_str = str(rec.get("raw_quote") or "")
+                    t_str = str(rec.get("defect_topic") or "")
+                    txt = f"{q_str} {t_str}"
                     if any(a in txt for a in alias_terms):
                         raw_count += 1
-                        quotes_pool.append(rec.get("raw_quote") or "")
+                        if q_str:
+                            quotes_pool.append(q_str)
 
             # Ensure baseline counts proportional to topic relevance
             if raw_count == 0:

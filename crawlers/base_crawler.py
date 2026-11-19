@@ -6,17 +6,48 @@ for community forum web scrapers (BobaeDream, DCInside, etc.).
 from __future__ import annotations
 
 import abc
+import html
 import json
 import logging
 import math
 import os
+import re
 import urllib.parse
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
-from utils.http_client import SafeHttpClient
+from utils.http_client import SafeHttpClient, is_safe_url
 
 logger = logging.getLogger("BaseCrawler")
+
+MAX_POST_CACHE_SIZE: int = 500
+_RE_SEMICOLON_HTML_ENTITY = re.compile(r"&(?:#\d+|#x[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]+);")
+
+
+def _unescape_url_entities(raw_url: str) -> str:
+    """Decode semicolon-terminated HTML entities in URLs without mutating bare query params like &copy=."""
+    if not raw_url or "&" not in raw_url:
+        return raw_url
+    return _RE_SEMICOLON_HTML_ENTITY.sub(lambda m: html.unescape(m.group(0)), raw_url)
+
+
+def _sanitize_referer(referer: Optional[str]) -> Optional[str]:
+    """Strip CR/LF control characters from Referer header values."""
+    if not referer or not isinstance(referer, str):
+        return None
+    cleaned = referer.replace("\r", "").replace("\n", "").strip()
+    return cleaned or None
+
+
+def _is_safe_client_url(client: Any, url: str) -> Tuple[bool, str]:
+    """Validate URL safety against SSRF, respecting real bool/set overrides on client."""
+    raw_allow = getattr(client, "allow_private_ips", False) if client is not None else False
+    allow_private = raw_allow if isinstance(raw_allow, bool) else False
+    raw_ports = getattr(client, "allowed_ports", None) if client is not None else None
+    allowed_ports: Optional[Set[int]] = (
+        set(raw_ports) if isinstance(raw_ports, (set, frozenset)) else None
+    )
+    return is_safe_url(url, allow_private_ips=allow_private, allowed_ports=allowed_ports)
 
 
 def _positive_float(value: Any, default: float) -> float:
@@ -145,13 +176,18 @@ class BaseCrawler(abc.ABC):
             base_url = None
         target_url = (base_url if isinstance(base_url, str) else None) or self.base_url
         if (not self._warmed_up or force) and target_url and isinstance(target_url, str):
+            target_clean = target_url.strip()
+            is_safe, reason = _is_safe_client_url(self.client, target_clean)
+            if not is_safe:
+                logger.warning(f"Blocked unsafe warm-up URL {target_clean!r}: {reason}")
+                return False
             success = True
             try:
                 if self.client and hasattr(self.client, "warm_up_session"):
-                    res = self.client.warm_up_session(target_url)
+                    res = self.client.warm_up_session(target_clean)
                     success = bool(res) if res is not None else True
             except Exception as e:
-                logger.warning(f"Error during session warm up on {target_url}: {e}")
+                logger.warning(f"Error during session warm up on {target_clean}: {e}")
                 success = False
             self._warmed_up = True
             return success
@@ -325,8 +361,8 @@ class BaseCrawler(abc.ABC):
             logger.warning(f"Invalid post_url provided to fetch_post: {post_url!r}")
             return None
 
-        eff_url = post_url.strip()
-        if any(ord(c) < 32 or ord(c) == 127 for c in eff_url):
+        eff_url = _unescape_url_entities(post_url.strip())
+        if not eff_url or any(ord(c) < 32 or ord(c) == 127 for c in eff_url):
             logger.warning(f"Unsafe control characters in post_url: {post_url!r}")
             return None
 
@@ -347,11 +383,17 @@ class BaseCrawler(abc.ABC):
                 path_clean = eff_url.lstrip("/")
                 eff_url = f"{base_clean}/{path_clean}"
 
-        self.ensure_warm_up(base_url)
+        is_safe, reason = _is_safe_client_url(self.client, eff_url)
+        if not is_safe:
+            logger.warning(f"SSRF defense blocked fetch_post URL {eff_url!r}: {reason}")
+            return None
+
         if not self.client:
             logger.warning(f"No HTTP client configured on {self.__class__.__name__}")
             return None
+        self.ensure_warm_up(base_url)
 
+        eff_referer = _sanitize_referer(referer)
         timeout = kwargs.get("timeout")
         if timeout is None:
             timeout = (
@@ -359,7 +401,7 @@ class BaseCrawler(abc.ABC):
                 _positive_float(kwargs.get("read_timeout"), getattr(self, "read_timeout", 15.0)),
             )
         try:
-            resp = self.client.get(eff_url, referer=referer, timeout=timeout)
+            resp = self.client.get(eff_url, referer=eff_referer, timeout=timeout)
             if not resp or not isinstance(resp, (tuple, list)) or len(resp) < 2:
                 logger.warning(f"Failed to fetch post: {eff_url} (empty or invalid response)")
                 if self.cache_fallback and eff_url in self._post_cache:
@@ -409,6 +451,10 @@ class BaseCrawler(abc.ABC):
             ):
                 return None
             if self.enable_cache:
+                if eff_url not in self._post_cache and len(self._post_cache) >= MAX_POST_CACHE_SIZE:
+                    # Evict oldest entry to keep in-memory cache bounded
+                    oldest_key = next(iter(self._post_cache))
+                    del self._post_cache[oldest_key]
                 self._post_cache[eff_url] = detail
             return detail
         except Exception as e:

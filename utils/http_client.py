@@ -90,6 +90,11 @@ DEFAULT_FALLBACK_USER_AGENT: str = (
 )
 
 
+_NAT64_WELL_KNOWN_PREFIX = ipaddress.IPv6Network("64:ff9b::/96")
+_NAT64_LOCAL_PREFIX = ipaddress.IPv6Network("64:ff9b:1::/48")
+_RE_URL_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+
+
 def is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
     """Check if an IP address is publicly routable and safe from SSRF."""
     if (
@@ -103,18 +108,20 @@ def is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
     ):
         return False
     # Check IPv4-mapped IPv6 addresses (e.g. ::ffff:127.0.0.1 or ::ffff:169.254.169.254)
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
-        mapped = ip.ipv4_mapped
-        if (
-            not mapped.is_global
-            or mapped.is_loopback
-            or mapped.is_private
-            or mapped.is_link_local
-            or mapped.is_multicast
-            or mapped.is_reserved
-            or mapped.is_unspecified
-        ):
+    if isinstance(ip, ipaddress.IPv6Address):
+        if ip.ipv4_mapped and not is_safe_ip(ip.ipv4_mapped):
             return False
+        if ip.sixtofour and not is_safe_ip(ip.sixtofour):
+            return False
+        if ip.teredo:
+            for teredo_ip in ip.teredo:
+                if not is_safe_ip(teredo_ip):
+                    return False
+        # NAT64 prefixes embed IPv4 in the lowest 32 bits
+        if ip in _NAT64_WELL_KNOWN_PREFIX or ip in _NAT64_LOCAL_PREFIX:
+            embedded_v4 = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+            if not is_safe_ip(embedded_v4):
+                return False
     # Cloud metadata IPs (AWS / GCP / Azure / Alibaba)
     if str(ip) in ("169.254.169.254", "100.100.100.200"):
         return False
@@ -137,6 +144,8 @@ def is_safe_url(
     url_str = url.strip()
     if not url_str:
         return False, "Empty URL"
+    if _RE_URL_CONTROL_CHARS.search(url_str):
+        return False, "SSRF blocked: URL contains control characters"
 
     try:
         parsed = urllib.parse.urlsplit(url_str)
@@ -168,10 +177,14 @@ def is_safe_url(
         if host_lower.endswith(suffix):
             return False, f"SSRF blocked: Hostname '{host_lower}' matches disallowed internal suffix '{suffix}'"
 
-    # 4. Port validation
+    # 4. Port validation (accessing parsed.port raises ValueError on invalid/out-of-range ports)
     ports_set = allowed_ports if allowed_ports is not None else STANDARD_SAFE_PORTS
-    if parsed.port is not None and parsed.port not in ports_set:
-        return False, f"SSRF blocked: Disallowed port {parsed.port}"
+    try:
+        port = parsed.port
+    except ValueError as e:
+        return False, f"SSRF blocked: Invalid port in URL ({e})"
+    if port is not None and port not in ports_set:
+        return False, f"SSRF blocked: Disallowed port {port}"
 
     # 5. IP Address Check (literal IP, octal/hex/decimal representations)
     try:
@@ -425,7 +438,13 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
             raise urllib.error.HTTPError(
                 newurl, 403, f"SSRF Blocked: Unsafe redirect target ({reason})", headers, fp
             )
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
+        new_req = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new_req is not None:
+            if hasattr(req, "_connect_timeout"):
+                new_req._connect_timeout = req._connect_timeout
+            if hasattr(req, "_read_timeout"):
+                new_req._read_timeout = req._read_timeout
+        return new_req
 
 
 class ResilientHTTPHandler(urllib.request.HTTPHandler):
@@ -496,9 +515,18 @@ class CircuitBreaker:
         cooldown_seconds: float = 30.0,
         half_open_max_probes: int = 1,
     ):
-        self.failure_threshold = max(1, int(failure_threshold))
-        self.cooldown_seconds = max(0.01, float(cooldown_seconds))
-        self.half_open_max_probes = max(1, int(half_open_max_probes))
+        try:
+            ft = int(failure_threshold) if failure_threshold is not None and not isinstance(failure_threshold, bool) else 3
+        except (ValueError, TypeError, OverflowError):
+            ft = 3
+        self.failure_threshold = max(1, ft)
+        self.cooldown_seconds = _normalize_timeout(cooldown_seconds, 30.0)
+        self.cooldown_seconds = max(0.01, self.cooldown_seconds)
+        try:
+            hp = int(half_open_max_probes) if half_open_max_probes is not None and not isinstance(half_open_max_probes, bool) else 1
+        except (ValueError, TypeError, OverflowError):
+            hp = 1
+        self.half_open_max_probes = max(1, hp)
         self._lock = threading.Lock()
         self._hosts: Dict[str, Dict[str, Any]] = {}
 
@@ -553,6 +581,37 @@ class CircuitBreaker:
             if state == CircuitBreakerState.HALF_OPEN:
                 return info.get("probe_count", 0) < self.half_open_max_probes
             return True
+
+    def acquire_request_slot(self, url_or_host: str) -> Tuple[bool, bool]:
+        """Atomically check availability and reserve a HALF_OPEN probe slot if applicable.
+
+        Returns:
+            Tuple[bool, bool]: (is_available, is_half_open_probe)
+        """
+        host = self._extract_host(url_or_host)
+        if not host:
+            return True, False
+        with self._lock:
+            info = self._hosts.get(host)
+            if not info:
+                return True, False
+            state = info.get("state", CircuitBreakerState.CLOSED)
+            if state == CircuitBreakerState.CLOSED:
+                return True, False
+            now = time.time()
+            if state == CircuitBreakerState.OPEN:
+                if now >= info.get("tripped_until", 0.0):
+                    info["state"] = CircuitBreakerState.HALF_OPEN
+                    info["probe_count"] = 1
+                    return True, True
+                return False, False
+            if state == CircuitBreakerState.HALF_OPEN:
+                probes = info.get("probe_count", 0)
+                if probes < self.half_open_max_probes:
+                    info["probe_count"] = probes + 1
+                    return True, True
+                return False, False
+            return True, False
 
     def is_open(self, url_or_host: str) -> bool:
         """Returns True if the circuit breaker is OPEN for this host."""
@@ -759,18 +818,27 @@ class SafeHttpClient:
         allow_private_ips: bool = False,
         allowed_ports: Optional[Set[int]] = None,
     ):
-        self.min_delay = min_delay
-        self.max_delay = max_delay
-        self.max_retries = max_retries
+        self.min_delay = _normalize_timeout(min_delay, 0.0) if min_delay != 0 else 0.0
+        self.max_delay = _normalize_timeout(max_delay, 0.0) if max_delay != 0 else 0.0
+        try:
+            self.max_retries = max(1, int(max_retries)) if max_retries is not None and not isinstance(max_retries, bool) else 3
+        except (ValueError, TypeError, OverflowError):
+            self.max_retries = 3
         self.timeout = timeout
         self.enable_jitter = enable_jitter
-        self.max_response_size = max_response_size
-        self.max_cookies = max_cookies
+        try:
+            self.max_response_size = max(0, int(max_response_size)) if max_response_size is not None and not isinstance(max_response_size, bool) else MAX_RESPONSE_BYTES
+        except (ValueError, TypeError, OverflowError):
+            self.max_response_size = MAX_RESPONSE_BYTES
+        try:
+            self.max_cookies = max(0, int(max_cookies)) if max_cookies is not None and not isinstance(max_cookies, bool) else MAX_COOKIEJAR_ENTRIES
+        except (ValueError, TypeError, OverflowError):
+            self.max_cookies = MAX_COOKIEJAR_ENTRIES
         self.default_headers = dict(default_headers) if default_headers else {}
         self.user_agent = user_agent
         self.rotate_user_agent = rotate_user_agent
-        self.backoff_factor = float(backoff_factor) if backoff_factor > 0 else 1.5
-        self.max_backoff = float(max_backoff) if max_backoff > 0 else 30.0
+        self.backoff_factor = _normalize_timeout(backoff_factor, 1.5)
+        self.max_backoff = _normalize_timeout(max_backoff, 30.0)
         self.verify_ssl = verify_ssl
         self.enable_cache = enable_cache
         self.cache_fallback = cache_fallback
@@ -1139,8 +1207,9 @@ class SafeHttpClient:
         method_upper = (method or "GET").strip().upper() or "GET"
         is_cacheable_method = method_upper == "GET"
 
-        # Host-level Circuit Breaker guard
-        if not self.circuit_breaker.is_available(norm_url):
+        # Host-level Circuit Breaker guard (atomic check + HALF_OPEN probe reservation)
+        cb_allowed, is_half_open_probe = self.circuit_breaker.acquire_request_slot(norm_url)
+        if not cb_allowed:
             logger.warning(
                 f"Circuit breaker is OPEN for {norm_url} (tripped due to repeated 403/429/503 errors). "
                 f"Fast-failing request."
@@ -1154,11 +1223,6 @@ class SafeHttpClient:
                     self.last_response_from_cache = True
                     return cached
             return 503, "", b""
-
-        # Record in-flight probe if in HALF_OPEN state
-        is_half_open_probe = self.circuit_breaker.get_state(norm_url) == CircuitBreakerState.HALF_OPEN
-        if is_half_open_probe:
-            self.circuit_breaker.record_probe(norm_url)
 
         self.last_response_from_cache = False
         self._sleep_with_jitter()
@@ -1327,14 +1391,16 @@ class SafeHttpClient:
                         retry_after = self._parse_retry_after(he) if he.code in (429, 503) else None
                         backoff = self._calc_backoff(attempt, retry_after=retry_after)
                         if he.code == 429:
-                            self._rate_limited_until = time.time() + backoff
+                            with self._rate_lock:
+                                self._rate_limited_until = max(self._rate_limited_until, time.time() + backoff)
                         logger.info(f"Backing off for {backoff:.2f}s before retry (status {he.code})...")
                         time.sleep(backoff)
                     else:
                         retry_after = self._parse_retry_after(he) if he.code in (429, 503) else None
                         if he.code == 429:
                             backoff = self._calc_backoff(attempt, retry_after=retry_after)
-                            self._rate_limited_until = time.time() + backoff
+                            with self._rate_lock:
+                                self._rate_limited_until = max(self._rate_limited_until, time.time() + backoff)
                         if he.code in (403, 429, 503) or (
                             is_half_open_probe
                             and he.code in (408, 500, 502, 504, 520, 521, 522, 523, 524)
@@ -1363,6 +1429,8 @@ class SafeHttpClient:
                                 raw_bytes = he.read(self.max_response_size)
                             except TypeError:
                                 raw_bytes = he.read()
+                                if self.max_response_size > 0 and isinstance(raw_bytes, (bytes, bytearray)) and len(raw_bytes) > self.max_response_size:
+                                    raw_bytes = bytes(raw_bytes[:self.max_response_size])
                             decoded_text = robust_decode(raw_bytes, declared_encoding=encoding or "utf-8")
                             return he.code, decoded_text, raw_bytes
                         except Exception:

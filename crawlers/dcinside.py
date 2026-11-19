@@ -16,7 +16,13 @@ import re
 import urllib.parse
 from typing import Any, Dict, List, Optional
 
-from crawlers.base_crawler import BaseCrawler, _positive_float
+from crawlers.base_crawler import (
+    BaseCrawler,
+    _is_safe_client_url,
+    _positive_float,
+    _sanitize_referer,
+    _unescape_url_entities,
+)
 from utils.http_client import SafeHttpClient, clean_html_text
 
 logger = logging.getLogger("DCInsideCrawler")
@@ -55,7 +61,7 @@ DC_GALLERIES: Dict[str, Dict[str, str]] = {
 
 # Pre-compiled regular expressions for maximum throughput and memory efficiency
 RE_HTML_COMMENTS = re.compile(r"<!--.*?-->", re.DOTALL)
-RE_SCRIPT_STYLE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
+RE_SCRIPT_STYLE = re.compile(r"<(script|style)[^>]*>.*?</\1\s*>", re.DOTALL | re.IGNORECASE)
 RE_UB_CONTENT_ROW = re.compile(
     r'<tr\b(?=[^>]*\bub-content\b)[^>]*\bdata-no=["\']?(\d+)["\']?[^>]*>(.*?)</tr>',
     re.DOTALL | re.IGNORECASE,
@@ -96,6 +102,8 @@ def extract_container_content(html_str: str, tag_name: str, class_name: str) -> 
     )
     match = pattern.search(masked)
     if not match:
+        return ""
+    if match.group(0).rstrip(">").rstrip().endswith("/"):
         return ""
 
     start_idx = match.end()
@@ -379,10 +387,15 @@ class DCInsideCrawler(BaseCrawler):
             base_url = None
         target_url = (base_url if isinstance(base_url, str) else None) or DC_BASE_URL
         if (not self._warmed_up or force) and target_url:
+            target_clean = target_url.strip()
+            is_safe, reason = _is_safe_client_url(self.client, target_clean)
+            if not is_safe:
+                logger.warning(f"Blocked unsafe DCInside warm-up URL {target_clean!r}: {reason}")
+                return False
             success = True
             try:
                 if self.client and hasattr(self.client, "warm_up_session"):
-                    res = self.client.warm_up_session(target_url)
+                    res = self.client.warm_up_session(target_clean)
                     success = bool(res) if res is not None else True
             except Exception as e:
                 logger.warning(f"DCInside warm_up_session notice: {e}")
@@ -418,7 +431,8 @@ class DCInsideCrawler(BaseCrawler):
             eff_page = max(1, int(float(page)))
         except (ValueError, TypeError, OverflowError):
             eff_page = 1
-        encoded_kw = urllib.parse.quote(str(keyword or ""))
+        kw_str = str(keyword) if keyword is not None else ""
+        encoded_kw = urllib.parse.quote(kw_str, safe="")
         return (
             f"{DC_BASE_URL}/{prefix}/lists/?"
             f"id={gid}&s_type=search_subject_memo&s_keyword={encoded_kw}&page={eff_page}"
@@ -660,11 +674,15 @@ class DCInsideCrawler(BaseCrawler):
         Fetch dynamic comments via DCInside internal AJAX comment endpoint:
         POST https://gall.dcinside.com/{prefix}/comment/
         """
-        if not e_s_n_o or not post_id or not gallery_id:
+        if not e_s_n_o or post_id is None or str(post_id).strip() == "" or not gallery_id:
             return []
 
         prefix = self.get_gallery_prefix(gallery_id)
         ajax_url = f"{DC_BASE_URL}/{prefix}/comment/"
+        is_safe, reason = _is_safe_client_url(self.client, ajax_url)
+        if not is_safe:
+            logger.warning(f"SSRF defense blocked DC AJAX comment URL {ajax_url!r}: {reason}")
+            return []
 
         form_data = {
             "id": str(gallery_id),
@@ -675,9 +693,10 @@ class DCInsideCrawler(BaseCrawler):
             "comment_page": "1",
         }
 
+        eff_referer = _sanitize_referer(post_url) or f"{DC_BASE_URL}/"
         headers = {
             "X-Requested-With": "XMLHttpRequest",
-            "Referer": post_url,
+            "Referer": eff_referer,
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
             "Accept": "application/json, text/javascript, */*; q=0.01",
         }
@@ -689,7 +708,7 @@ class DCInsideCrawler(BaseCrawler):
                 ajax_url,
                 data=form_data,
                 headers=headers,
-                referer=post_url,
+                referer=eff_referer,
                 timeout=timeout,
             )
             if resp and isinstance(resp, (tuple, list)) and len(resp) >= 2:
@@ -721,25 +740,40 @@ class DCInsideCrawler(BaseCrawler):
             if not isinstance(items, list):
                 return comments
 
-            for item in items:
-                if not isinstance(item, dict):
-                    continue
-                # Skip deleted comments
-                if item.get("del_yn") == "Y" or item.get("is_delete"):
-                    continue
+            def _is_deleted_comment(entry: Dict[str, Any]) -> bool:
+                if str(entry.get("del_yn") or "").strip().upper() == "Y":
+                    return True
+                is_del = entry.get("is_delete")
+                if isinstance(is_del, bool):
+                    return is_del
+                if isinstance(is_del, (int, float)):
+                    return is_del != 0
+                if isinstance(is_del, str):
+                    return is_del.strip().lower() in ("1", "y", "yes", "true")
+                return False
 
-                memo = str(item.get("memo") or item.get("comment_memo") or item.get("msg") or item.get("content") or "")
+            def _extract_valid_comment(entry: Dict[str, Any]) -> Optional[str]:
+                if _is_deleted_comment(entry):
+                    return None
+                memo = str(entry.get("memo") or entry.get("comment_memo") or entry.get("msg") or entry.get("content") or "")
                 cleaned = clean_html_text(memo)
                 if cleaned and "&" in cleaned and re.search(r"&[a-zA-Z#0-9]+;", cleaned):
                     cleaned = html.unescape(cleaned)
-
                 if (
                     cleaned
                     and len(cleaned) >= 2
                     and not cleaned.strip().startswith(("보이스리플", "[보이스리플]", "(보이스리플)"))
                     and "삭제된 댓글입니다" not in cleaned
                 ):
-                    comments.append(cleaned)
+                    return cleaned
+                return None
+
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                valid_text = _extract_valid_comment(item)
+                if valid_text:
+                    comments.append(valid_text)
 
                 # Check sub_comments or replies
                 sub_items = item.get("sub_comments") or item.get("replies")
@@ -749,19 +783,9 @@ class DCInsideCrawler(BaseCrawler):
                     for sub in sub_items:
                         if not isinstance(sub, dict):
                             continue
-                        if sub.get("del_yn") == "Y" or sub.get("is_delete"):
-                            continue
-                        sub_memo = str(sub.get("memo") or sub.get("comment_memo") or sub.get("msg") or sub.get("content") or "")
-                        sub_cleaned = clean_html_text(sub_memo)
-                        if sub_cleaned and "&" in sub_cleaned and re.search(r"&[a-zA-Z#0-9]+;", sub_cleaned):
-                            sub_cleaned = html.unescape(sub_cleaned)
-                        if (
-                            sub_cleaned
-                            and len(sub_cleaned) >= 2
-                            and not sub_cleaned.strip().startswith(("보이스리플", "[보이스리플]", "(보이스리플)"))
-                            and "삭제된 댓글입니다" not in sub_cleaned
-                        ):
-                            comments.append(sub_cleaned)
+                        sub_valid = _extract_valid_comment(sub)
+                        if sub_valid:
+                            comments.append(sub_valid)
         except Exception as e:
             logger.debug(f"JSON comment parse notice: {e}")
 
@@ -1009,8 +1033,8 @@ class DCInsideCrawler(BaseCrawler):
             referer = gallery_id
             gallery_id = "car_new1"
 
-        # Defensively normalize relative URLs and HTML entities
-        eff_url = html.unescape(post_url.strip())
+        # Defensively normalize relative URLs and semicolon-terminated HTML entities
+        eff_url = _unescape_url_entities(post_url.strip())
         if not eff_url or any(ord(c) < 32 or ord(c) == 127 for c in eff_url):
             logger.warning(f"Unsafe DCInside post_url provided: {post_url!r}")
             return None
@@ -1026,18 +1050,23 @@ class DCInsideCrawler(BaseCrawler):
         elif not eff_url.lower().startswith(("http://", "https://")):
             eff_url = f"{DC_BASE_URL}/{eff_url}"
 
+        is_safe, reason = _is_safe_client_url(self.client, eff_url)
+        if not is_safe:
+            logger.warning(f"SSRF defense blocked DCInside post_url {eff_url!r}: {reason}")
+            return None
+
+        if not self.client:
+            return None
+
         base_url = kwargs.get("base_url")
         self.ensure_warm_up(base_url)
-        eff_referer = referer or f"{DC_BASE_URL}/"
+        eff_referer = _sanitize_referer(referer) or f"{DC_BASE_URL}/"
         timeout = kwargs.get("timeout")
         if timeout is None:
             timeout = (
                 _positive_float(kwargs.get("connect_timeout"), self.connect_timeout),
                 _positive_float(kwargs.get("read_timeout"), self.read_timeout),
             )
-
-        if not self.client:
-            return None
 
         try:
             resp = self.client.get(eff_url, referer=eff_referer, timeout=timeout)
@@ -1049,7 +1078,7 @@ class DCInsideCrawler(BaseCrawler):
             logger.warning(f"Network error fetching DCInside post {eff_url}: {e}")
             status, text = 0, ""
 
-        effective_post_id = str(post_id or "").strip()
+        effective_post_id = str(post_id).strip() if post_id is not None else ""
         if not effective_post_id and eff_url:
             m_no = RE_POST_NO.search(eff_url)
             if not m_no:
@@ -1078,7 +1107,9 @@ class DCInsideCrawler(BaseCrawler):
             # Try fallback to mobile view URL on desktop 404/empty or layout anomalies
             if effective_post_id:
                 # Canonical mobile route: m.dcinside.com/board/{gallery_id}/{post_id}
-                mobile_url = f"{DC_MOBILE_BASE_URL}/board/{effective_gallery_id}/{effective_post_id}"
+                safe_gid = urllib.parse.quote(effective_gallery_id, safe="")
+                safe_pid = urllib.parse.quote(effective_post_id, safe="")
+                mobile_url = f"{DC_MOBILE_BASE_URL}/board/{safe_gid}/{safe_pid}"
                 try:
                     m_resp = self.client.get(
                         mobile_url,
@@ -1189,6 +1220,8 @@ class DCInsideCrawler(BaseCrawler):
         self.ensure_warm_up()
         results: List[Dict[str, Any]] = []
         seen_pids = set()
+        consecutive_failures = 0
+        MAX_CONSECUTIVE_FAILURES = 5
         try:
             eff_pages = max(1, int(float(pages)))
         except (ValueError, TypeError, OverflowError):
@@ -1231,8 +1264,6 @@ class DCInsideCrawler(BaseCrawler):
                 logger.info(f"Page {page} of DCInside [{gallery_id}] repeated previously seen posts. Halting pagination loop.")
                 break
 
-            consecutive_failures = 0
-            MAX_CONSECUTIVE_FAILURES = 5
             halt_crawl = False
 
             for item in items:
@@ -1242,7 +1273,7 @@ class DCInsideCrawler(BaseCrawler):
                 if pid:
                     seen_pids.add(pid)
 
-                post = self.fetch_post(item.get("url", ""), gallery_id=gallery_id, post_id=pid)
+                post = self.fetch_post(item.get("url", ""), gallery_id=gallery_id, post_id=pid, referer=url)
                 if post:
                     results.append(post)
                     consecutive_failures = 0
@@ -1281,6 +1312,8 @@ class DCInsideCrawler(BaseCrawler):
         self.ensure_warm_up()
         results: List[Dict[str, Any]] = []
         seen_pids = set()
+        consecutive_failures = 0
+        MAX_CONSECUTIVE_FAILURES = 5
         try:
             eff_pages = max(1, int(float(pages)))
         except (ValueError, TypeError, OverflowError):
@@ -1323,8 +1356,6 @@ class DCInsideCrawler(BaseCrawler):
                 logger.info(f"Search page {page} of DCInside [{gallery_id}] repeated previously seen posts. Halting loop.")
                 break
 
-            consecutive_failures = 0
-            MAX_CONSECUTIVE_FAILURES = 5
             halt_crawl = False
 
             for item in items:
@@ -1334,7 +1365,7 @@ class DCInsideCrawler(BaseCrawler):
                 if pid:
                     seen_pids.add(pid)
 
-                post = self.fetch_post(item.get("url", ""), gallery_id=gallery_id, post_id=pid)
+                post = self.fetch_post(item.get("url", ""), gallery_id=gallery_id, post_id=pid, referer=url)
                 if post:
                     results.append(post)
                     consecutive_failures = 0
@@ -1370,17 +1401,19 @@ class DCInsideCrawler(BaseCrawler):
 
         target_galleries = list(galleries) if galleries is not None else ["car_new1", "electriccar"]
         all_posts: List[Dict[str, Any]] = []
-        seen_pids = set()
+        seen_keys = set()
 
         for gall in target_galleries:
             remaining_limit = (limit - len(all_posts)) if limit is not None else None
             gall_posts = self.search_gallery(gall, keyword, pages=max_pages, limit=remaining_limit)
             for p in gall_posts:
-                pid = p.get("post_id", "")
-                if pid and pid in seen_pids:
-                    continue
+                pid = str(p.get("post_id") or "")
+                gid = str(p.get("gallery_id") or gall)
                 if pid:
-                    seen_pids.add(pid)
+                    key = (gid, pid)
+                    if key in seen_keys:
+                        continue
+                    seen_keys.add(key)
                 all_posts.append(p)
                 if limit and len(all_posts) >= limit:
                     return all_posts[:limit]

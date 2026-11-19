@@ -176,6 +176,9 @@ RE_CLAUSE_SPLIT: re.Pattern[str] = re.compile(r"[,;.\n]+")
 RE_TOKENS: re.Pattern[str] = re.compile(r"[\w가-힣]+")
 RE_HANGUL: re.Pattern[str] = re.compile(r"[가-힣]")
 RE_AS_KEYWORD: re.Pattern[str] = re.compile(r"(?:\b|[^a-zA-Z])(?:as|a/s)(?:\b|[^a-zA-Z])", re.IGNORECASE)
+_RE_ATTACHED_EOPDA: re.Pattern[str] = re.compile(
+    r"없(?:습니다|네요|어요|었음|었어|었던|었습|더라|는지|는데|지만|군요|이|는|다|고|음|네|어|죠|지)"
+)
 _RE_GAE_INTENSIFIER: re.Pattern[str] = re.compile(
     r"(?<![가-힣0-9a-zA-Z])개(?!(?:선|인|발|정|시|업|통|최|편|방|념|요|괄|혁|수|월|별|체|입|관|막|장|축|량|조|척|학|화|회|국|근|녕|념|로|에서|부터|까지|랑|와|과|의|에|도|는|은|를|이|가|\s*$))"
     r"|(?<![가-힣0-9a-zA-Z])개(?=\s|$)"
@@ -411,7 +414,8 @@ class DefectClassifier:
         excluded_patterns = [
             "안전", "불안", "어처구니없", "어이없", "말도 안", "말도안",
             "납득이 안", "납득안", "안정", "안심", "안내", "안락",
-            "대책 없", "대책없", "답이 없", "답없"
+            "대책 없", "대책없", "답이 없", "답없",
+            "형편없", "쓸데없", "터무니없", "어림없", "정신없", "부질없", "보잘것없",
         ]
         for j, w in enumerate(window):
             w_strip = str(w or "").strip()
@@ -449,6 +453,11 @@ class DefectClassifier:
                     "풀리고", "풀려", "풀림", "풀린다", "풀리",
                     "줄어들고", "줄어들어", "줄어듦", "줄어든다", "줄어",
                     "멈추고", "멈춰", "멈춤", "멈춘다",
+                    "밟히", "밟혀", "밟힘", "밟힌",
+                    "뽑히", "뽑혀", "뽑힘", "뽑힌",
+                    "닦이", "닦여", "닦임", "닦인",
+                    "들어오", "들어와", "들어옴", "들어온",
+                    "움직이", "움직여", "움직임", "움직인",
                 )
                 if j + 1 < len(window):
                     if any(window[j + 1].startswith(mv) for mv in malfunction_verbs):
@@ -465,7 +474,7 @@ class DefectClassifier:
                 continue
 
             # Double-negation / persistent defect: '안 없어지고', '안 없어져요', '없어지지 않고'
-            if w_strip.startswith(("없어지", "없어져", "없어졌", "없어진")):
+            if w_strip.startswith(("없어지", "없어져", "없어졌", "없어진")) or "없어지" in w_strip or "없어졌" in w_strip:
                 if j > 0 and window[j - 1] == "안":
                     continue
                 if j + 1 < len(window) and any(
@@ -473,8 +482,8 @@ class DefectClassifier:
                 ):
                     continue
 
-            # 1. Any inflection of '없다' (e.g. 없다, 없고, 없음, 없네, 없습니다, 없네요, 없어서, 없더군요, 없더라고요, 없었던, 없었어요, 없는, 없으므로)
-            if w_strip.startswith("없"):
+            # 1. Any inflection of '없다' (standalone or attached, e.g. 없다, 단차없습니다, 결함없는)
+            if w_strip.startswith("없") or _RE_ATTACHED_EOPDA.search(w_strip):
                 return True
 
             # Perception verb negation (e.g. 안들림, 안들려, 안들립니다, 안보임, 안보여, 안보입니다, 안느껴짐, 안느껴져, 안남, 안나요, 안납니다)
@@ -915,11 +924,15 @@ class DefectClassifier:
             c_clean = sanitize_text(raw_comments, max_len=10_000)
             safe_comments = [c_clean] if c_clean else []
         elif isinstance(raw_comments, (list, tuple, set)):
-            safe_comments = [
-                cleaned
-                for cleaned in (sanitize_text(c, max_len=10_000) for c in raw_comments)
-                if cleaned
-            ]
+            safe_comments = []
+            acc_len = len(combined_text)
+            for c in raw_comments:
+                cleaned = sanitize_text(c, max_len=10_000)
+                if cleaned:
+                    safe_comments.append(cleaned)
+                    acc_len += len(cleaned) + 1
+                    if acc_len >= MAX_TEXT_LENGTH:
+                        break
         else:
             safe_comments = []
 

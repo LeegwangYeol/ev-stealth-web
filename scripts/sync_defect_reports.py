@@ -74,10 +74,14 @@ def find_repo_root() -> Path:
 REPO_ROOT = find_repo_root()
 WEB_ROOT = REPO_ROOT / "ev-stealth-web" if (REPO_ROOT / "ev-stealth-web").is_dir() else REPO_ROOT
 
-# Ensure tracker modules can be imported
-for sys_dir in (str(REPO_ROOT), str(WEB_ROOT)):
+# Ensure tracker modules can be imported (keep local WEB_ROOT / package root highest priority)
+_LOCAL_PKG_ROOT = Path(__file__).resolve().parent.parent
+for sys_dir in (str(REPO_ROOT), str(WEB_ROOT), str(_LOCAL_PKG_ROOT)):
     if sys_dir not in sys.path:
         sys.path.insert(0, sys_dir)
+if str(_LOCAL_PKG_ROOT) in sys.path:
+    sys.path.remove(str(_LOCAL_PKG_ROOT))
+sys.path.insert(0, str(_LOCAL_PKG_ROOT))
 
 try:
     from tracker.atomic_writer import (
@@ -215,9 +219,11 @@ def merge_report_records(existing: Dict[str, Any], incoming: Dict[str, Any]) -> 
     ):
         inc_val = incoming.get(text_key)
         ex_val = merged.get(text_key)
-        if (not ex_val or str(ex_val).strip() == "") and inc_val:
+        inc_str = str(inc_val).strip() if inc_val is not None else ""
+        ex_str = str(ex_val).strip() if ex_val is not None else ""
+        if not ex_str and inc_str:
             merged[text_key] = inc_val
-        elif inc_val and ex_val and len(str(inc_val).strip()) > len(str(ex_val).strip()):
+        elif inc_str and ex_str and len(inc_str) > len(ex_str):
             merged[text_key] = inc_val
 
     # 2. Date / Created_at: take the most detailed timestamp
@@ -290,7 +296,7 @@ def merge_report_records(existing: Dict[str, Any], incoming: Dict[str, Any]) -> 
             merged["dsi_breakdown"] = merged_dsi
 
     # 6. Authenticity flag
-    if "is_authentic_defect" in incoming:
+    if incoming.get("is_authentic_defect") is not None:
         merged["is_authentic_defect"] = bool(incoming["is_authentic_defect"])
 
     return merged
@@ -453,15 +459,15 @@ def normalize_report_item(item: Dict[str, Any], default_idx: int = 1) -> Dict[st
 
     # Required: slang_tags (string[])
     tags = item.get("slang_tags")
-    if isinstance(tags, list):
-        normalized["slang_tags"] = [str(t).strip() for t in tags if str(t).strip()]
+    if isinstance(tags, (list, tuple, set)):
+        normalized["slang_tags"] = [str(t).strip() for t in tags if t is not None and str(t).strip()]
     else:
         normalized["slang_tags"] = []
 
     # Optional: slang_terms_detected (string[])
     terms = item.get("slang_terms_detected")
-    if isinstance(terms, list):
-        normalized["slang_terms_detected"] = [str(t).strip() for t in terms if str(t).strip()]
+    if isinstance(terms, (list, tuple, set)):
+        normalized["slang_terms_detected"] = [str(t).strip() for t in terms if t is not None and str(t).strip()]
 
     # Required: sentiment_score (number, float)
     raw_score = item.get("sentiment_score")
@@ -618,7 +624,7 @@ def build_canonical_payload(
 
     payload: Dict[str, Any] = {
         "generated_at": generated_at,
-        "pipeline_version": existing.get("pipeline_version", "1.0.0"),
+        "pipeline_version": existing.get("pipeline_version") or "1.0.0",
         "statistics": stats,
         "total_complaints_today": len(normalized_reports),
         "top_defect_categories": top_categories,
@@ -672,9 +678,12 @@ def get_default_known_paths(
     """Determine root_reports_path, web_reports_path, and public mirrors."""
     repo_root = REPO_ROOT
 
+    has_root_dir = bool(root_dir and str(root_dir).strip())
+    has_web_dir = bool(web_dir and str(web_dir).strip())
+
     # 1. Root reports path
-    if root_dir:
-        rp = Path(root_dir)
+    if has_root_dir:
+        rp = Path(str(root_dir).strip())
         root_path = rp / "daily_reports.json" if (rp.is_dir() or rp.suffix != ".json") else rp
     elif (repo_root / "data").is_dir():
         root_path = repo_root / "data" / "daily_reports.json"
@@ -682,8 +691,8 @@ def get_default_known_paths(
         root_path = Path.cwd() / "data" / "daily_reports.json"
 
     # 2. Web reports path (src/data/)
-    if web_dir:
-        w = Path(web_dir)
+    if has_web_dir:
+        w = Path(str(web_dir).strip())
         if (w / "src" / "data").is_dir():
             web_path = w / "src" / "data" / "daily_reports.json"
         elif w.name == "data" and w.parent.name == "src":
@@ -700,17 +709,17 @@ def get_default_known_paths(
         web_path = Path.cwd() / "src" / "data" / "daily_reports.json"
 
     # 3. Additional targets
-    is_custom_run = (root_dir is not None) or (web_dir is not None)
+    is_custom_run = has_root_dir or has_web_dir
     if is_custom_run:
         additional: List[Path] = []
-        if web_dir:
-            w_parent = Path(web_dir).parent
+        if has_web_dir:
+            w_parent = Path(str(web_dir).strip()).parent
             if (w_parent / "public" / "data").is_dir():
                 additional.append(w_parent / "public" / "data" / "daily_reports.json")
             if (w_parent / "data").is_dir():
                 additional.append(w_parent / "data" / "daily_reports.json")
-        if root_dir:
-            r_parent = Path(root_dir).parent
+        if has_root_dir:
+            r_parent = Path(str(root_dir).strip()).parent
             if (r_parent / "public" / "data").is_dir():
                 additional.append(r_parent / "public" / "data" / "daily_reports.json")
     else:
@@ -882,7 +891,8 @@ def sync_defect_reports(
                 # Fsync parent directory to persist directory entry
                 dir_fd = -1
                 try:
-                    dir_fd = os.open(str(dst.parent), os.O_RDONLY)
+                    dir_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+                    dir_fd = os.open(str(dst.parent), dir_flags)
                     os.fsync(dir_fd)
                 except OSError:
                     pass

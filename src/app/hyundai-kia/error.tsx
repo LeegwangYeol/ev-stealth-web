@@ -19,7 +19,11 @@ export default function HyundaiKiaGuideError({ error, reset }: ErrorProps) {
   const handleRetry = () => {
     try {
       startTransition(() => {
-        reset();
+        if (typeof reset === 'function') {
+          reset();
+        } else if (typeof window !== 'undefined') {
+          window.location.reload();
+        }
       });
     } catch {
       if (typeof window !== 'undefined') {
@@ -105,21 +109,21 @@ export default function HyundaiKiaGuideError({ error, reset }: ErrorProps) {
           <Link
             href="/reliability-analytics"
             prefetch={false}
-            className="hover:text-blue-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+            className="hover:text-blue-700 transition inline-flex items-center gap-1 px-3 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">📊</span> 결함 통계
           </Link>
           <Link
             href="/subsidy-tracker"
             prefetch={true}
-            className="hover:text-amber-800 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
+            className="hover:text-amber-800 transition inline-flex items-center gap-1 px-3 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">⚡</span> 보조금 추적기
           </Link>
           <Link
             href="/recall-portal"
             prefetch={false}
-            className="hover:text-rose-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
+            className="hover:text-rose-700 transition inline-flex items-center gap-1 px-3 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">🚨</span> 리콜 포털
           </Link>

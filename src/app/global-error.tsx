@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, startTransition } from 'react';
+import './globals.css';
 
 interface GlobalErrorProps {
   error: Error & { digest?: string };

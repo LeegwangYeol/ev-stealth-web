@@ -17,6 +17,7 @@ import {
   verifyVinChecksum,
   getDistinctBrands,
   getModelsForBrand,
+  normalizeManufacturer,
   DEFAULT_RECALL_METADATA,
   sortRecallsByDate,
 } from '@/lib/recallCalculations';
@@ -180,7 +181,10 @@ function resolveModelAndBrand(
       matchedCandidate = candidates.find((c) => {
         if (!c?.model || typeof c.model !== 'string') return false;
         const cLower = c.model.toLowerCase();
-        const brandMatch = !resolvedBrand || c.brand === resolvedBrand;
+        const brandMatch =
+          !resolvedBrand ||
+          c.brand === resolvedBrand ||
+          normalizeManufacturer(c.brand) === resolvedBrand;
         return brandMatch && cLower === v;
       });
       if (matchedCandidate) break;
@@ -192,7 +196,10 @@ function resolveModelAndBrand(
         matchedCandidate = candidates.find((c) => {
           if (!c?.model || typeof c.model !== 'string') return false;
           const cLower = c.model.toLowerCase();
-          const brandMatch = !resolvedBrand || c.brand === resolvedBrand;
+          const brandMatch =
+            !resolvedBrand ||
+            c.brand === resolvedBrand ||
+            normalizeManufacturer(c.brand) === resolvedBrand;
           return brandMatch && (cLower.startsWith(v) || v.startsWith(cLower));
         });
         if (matchedCandidate) break;
@@ -205,7 +212,10 @@ function resolveModelAndBrand(
         matchedCandidate = candidates.find((c) => {
           if (!c?.model || typeof c.model !== 'string') return false;
           const cLower = c.model.toLowerCase();
-          const brandMatch = !resolvedBrand || c.brand === resolvedBrand;
+          const brandMatch =
+            !resolvedBrand ||
+            c.brand === resolvedBrand ||
+            normalizeManufacturer(c.brand) === resolvedBrand;
           return brandMatch && (cLower.includes(v) || v.includes(cLower));
         });
         if (matchedCandidate) break;
@@ -683,7 +693,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
         const tokenMatch =
           tokens.length > 0 &&
           tokens.every(
-            (tok, idx) => entry.combinedRaw.includes(tok) || entry.combinedNorm.includes(normTokens[idx])
+            (tok, idx) =>
+              entry.combinedRaw.includes(tok) ||
+              (Boolean(normTokens[idx]) && entry.combinedNorm.includes(normTokens[idx]))
           );
         if (!rawMatch && !normMatch && !tokenMatch) {
           continue;
@@ -708,6 +720,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
         const combinedRaw = `${recall.campaign_no || ''} ${recall.brand || ''} ${recall.target_model || ''} ${recall.defect_title || ''} ${recall.defect_detail || ''} ${recall.risk_level_ko || ''} ${recall.remedy_type_ko || ''}`.toLowerCase();
         return {
           recall,
+          canonicalBrand: normalizeManufacturer(recall.brand),
           brandLower: (recall.brand || '').toLowerCase(),
           combinedRaw,
           combinedNorm: normalizeSearchText(combinedRaw),
@@ -728,6 +741,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
       const r = entry.recall;
       if (
         selectedRecallBrandFilter !== 'ALL' &&
+        entry.canonicalBrand !== selectedRecallBrandFilter &&
         !entry.brandLower.includes(brandFilterLower) &&
         r.brand !== selectedRecallBrandFilter
       ) {
@@ -745,7 +759,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
         const tokenMatch =
           tokens.length > 0 &&
           tokens.every(
-            (tok, idx) => entry.combinedRaw.includes(tok) || entry.combinedNorm.includes(normTokens[idx])
+            (tok, idx) =>
+              entry.combinedRaw.includes(tok) ||
+              (Boolean(normTokens[idx]) && entry.combinedNorm.includes(normTokens[idx]))
           );
         if (!rawMatch && !normMatch && !tokenMatch) {
           continue;
@@ -798,6 +814,14 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     document.getElementById('recall-catalog-search-input')?.focus();
   }, []);
 
+  const cancelPendingVinSearch = useCallback(() => {
+    if (vinDebounceTimerRef.current) {
+      clearTimeout(vinDebounceTimerRef.current);
+      vinDebounceTimerRef.current = null;
+    }
+    setIsSearchingVin(false);
+  }, []);
+
   const handleModeKeyDown = (e: React.KeyboardEvent, currentMode: 'VIN' | 'MODEL') => {
     let nextMode: 'VIN' | 'MODEL' | null = null;
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
@@ -814,11 +838,13 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
       nextMode = 'MODEL';
     } else if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
       e.preventDefault();
+      cancelPendingVinSearch();
       setActiveCheckerMode(currentMode);
       setCheckResult(null);
       return;
     }
     if (nextMode && nextMode !== currentMode) {
+      cancelPendingVinSearch();
       setActiveCheckerMode(nextMode);
       setCheckResult(null);
       const nextId = nextMode === 'VIN' ? 'vin-checker-tab' : 'model-checker-tab';
@@ -946,6 +972,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               tabIndex={activeCheckerMode === 'VIN' ? 0 : -1}
               onKeyDown={(e) => handleModeKeyDown(e, 'VIN')}
               onClick={() => {
+                cancelPendingVinSearch();
                 setActiveCheckerMode('VIN');
                 setCheckResult(null);
               }}
@@ -969,6 +996,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               tabIndex={activeCheckerMode === 'MODEL' ? 0 : -1}
               onKeyDown={(e) => handleModeKeyDown(e, 'MODEL')}
               onClick={() => {
+                cancelPendingVinSearch();
                 setActiveCheckerMode('MODEL');
                 setCheckResult(null);
               }}
@@ -1026,7 +1054,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     autoComplete="off"
                     spellCheck={false}
                     autoCapitalize="characters"
-                    className={`w-full bg-slate-900 border rounded-xl px-4 py-3.5 min-h-[44px] text-base font-mono tracking-wider text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus-visible:ring-2 transition ${
+                    className={`w-full bg-slate-900 border rounded-xl px-4 py-3.5 min-h-[44px] text-base pr-20 font-mono tracking-wider text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus-visible:ring-2 transition ${
                       vinError
                         ? 'border-red-500 focus:ring-red-500/50 focus-visible:ring-red-500/50'
                         : 'border-slate-700 focus:ring-blue-500/50 focus-visible:ring-blue-500/50 focus:border-blue-500'
@@ -1080,7 +1108,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   disabled={isSearchingVin}
                   aria-busy={isSearchingVin}
                   aria-label="차대번호로 리콜 및 배터리 진단"
-                  className="w-full sm:w-auto px-6 py-3 min-h-[44px] rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-semibold text-sm transition shadow-lg flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                  className="w-full sm:w-auto px-6 py-3 min-h-[44px] rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-semibold text-sm transition shadow-lg flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                 >
                   <svg className="w-4 h-4" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -1235,7 +1263,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 <button
                   type="submit"
                   aria-label="선택 차종 결함 및 리콜 진단"
-                  className="w-full sm:w-auto px-6 py-3 min-h-[44px] rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm transition shadow-lg flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                  className="w-full sm:w-auto px-6 py-3 min-h-[44px] rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm transition shadow-lg flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                 >
                   <svg className="w-4 h-4" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -1515,9 +1543,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       </div>
                     </div>
                   ) : (
-                    checkResult.recalls.map((campaign) => (
+                    checkResult.recalls.map((campaign, idx) => (
                       <RecallCard
-                        key={campaign.id}
+                        key={campaign.id || `${campaign.campaign_no}-${idx}`}
                         campaign={campaign}
                         isExpanded={expandedRecallIds.has(campaign.id)}
                         toggleRecallExpansion={toggleRecallExpansion}
@@ -1704,8 +1732,8 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               </div>
             ) : (
               <>
-                {displayedBatteryProfiles.map((p) => (
-                  <BatterySafetyCard key={p.model_id} profile={p} />
+                {displayedBatteryProfiles.map((p, idx) => (
+                  <BatterySafetyCard key={p.model_id || `${p.brand}-${p.model_name}-${idx}`} profile={p} />
                 ))}
                 {filteredBatteryProfiles.length > visibleBatteryCount && (
                   <div className="col-span-full pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -1928,9 +1956,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               </div>
             ) : (
               <>
-                {displayedRecalls.map((campaign) => (
+                {displayedRecalls.map((campaign, idx) => (
                   <RecallCard
-                    key={campaign.id}
+                    key={campaign.id || `${campaign.campaign_no}-${idx}`}
                     campaign={campaign}
                     isExpanded={expandedRecallIds.has(campaign.id)}
                     toggleRecallExpansion={toggleRecallExpansion}
@@ -2235,11 +2263,11 @@ export const BatterySafetyTableView = React.memo(function BatterySafetyTableView
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800/80">
-          {profiles.map((p) => {
+          {profiles.map((p, idx) => {
             const isCritical = p.fire_incident_status === 'CRITICAL_MONITORING';
             return (
               <tr
-                key={p.model_id}
+                key={p.model_id || `${p.brand}-${p.model_name}-${idx}`}
                 className={`transition hover:bg-slate-900/60 ${
                   isCritical ? 'bg-red-950/20' : ''
                 }`}
@@ -2267,7 +2295,7 @@ export const BatterySafetyTableView = React.memo(function BatterySafetyTableView
                 <td className="p-3.5 text-center font-bold text-blue-300 whitespace-nowrap">
                   {typeof p.recommended_soc_limit === 'number' ? `${p.recommended_soc_limit}%` : '100%'}
                 </td>
-                <td className="p-3.5 text-xs text-slate-300 max-w-xs truncate" title={p.underground_parking_advisory || ''}>
+                <td className="p-3.5 text-xs text-slate-300 min-w-[220px] max-w-sm whitespace-normal leading-relaxed">
                   {p.underground_parking_advisory || '화재 예방 수칙 준수'}
                 </td>
               </tr>
@@ -2320,12 +2348,12 @@ export const RecallTableView = React.memo(function RecallTableView({
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800/80">
-          {recalls.map((campaign) => {
+          {recalls.map((campaign, idx) => {
             const isExpanded = expandedRecallIds.has(campaign.id);
             const safeLink = sanitizeSafeUrl(campaign.official_link);
             const isExternal = isExternalUrl(safeLink);
             return (
-              <React.Fragment key={campaign.id}>
+              <React.Fragment key={campaign.id || `${campaign.campaign_no}-${idx}`}>
                 <tr className={`transition hover:bg-slate-900/60 ${isExpanded ? 'bg-slate-900/40' : ''}`}>
                   <th scope="row" className="p-3.5 font-mono text-blue-300 font-bold whitespace-nowrap">
                     {campaign.campaign_no || '미부여'}

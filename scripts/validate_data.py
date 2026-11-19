@@ -35,9 +35,15 @@ def _find_repo_root() -> Path:
             return p
     return Path(__file__).resolve().parent.parent
 
+_LOCAL_ROOT = Path(__file__).resolve().parent.parent
 _REPO_ROOT = _find_repo_root()
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+for _p in (_REPO_ROOT, _LOCAL_ROOT):
+    _p_str = str(_p)
+    if _p_str not in sys.path:
+        sys.path.insert(0, _p_str)
+if str(_LOCAL_ROOT) in sys.path:
+    sys.path.remove(str(_LOCAL_ROOT))
+sys.path.insert(0, str(_LOCAL_ROOT))
 
 from scrapers.common_utils import (
     VALID_CATEGORIES,
@@ -93,8 +99,9 @@ def validate_database(
         "category_counts": {},
         "platform_counts": {},
         "slang_terms_count": 0,
-        "unique_vehicles": set(),
+        "unique_vehicles": [],
     }
+    unique_vehicles_set: set = set()
 
     # 1. Validate Slang Dictionary
     if not os.path.exists(slang_path):
@@ -176,14 +183,15 @@ def validate_database(
 
         # Quote Uniqueness
         quote_sample = rec.raw_quote[:40]
-        if quote_sample in seen_quotes:
+        if quote_sample and quote_sample in seen_quotes:
             errors.append(f"{prefix} Duplicate quote text detected")
-        seen_quotes.add(quote_sample)
+        if quote_sample:
+            seen_quotes.add(quote_sample)
 
         # Accumulate stats
         stats["category_counts"][rec.category] = stats["category_counts"].get(rec.category, 0) + 1
         stats["platform_counts"][rec.platform] = stats["platform_counts"].get(rec.platform, 0) + 1
-        stats["unique_vehicles"].add(rec.target_vehicle)
+        unique_vehicles_set.add(rec.target_vehicle)
 
     # 3. Check Totals & Category Thresholds
     if stats["total_cases"] < min_total:
@@ -199,7 +207,7 @@ def validate_database(
     if len(stats["platform_counts"]) < 3:
         errors.append(f"Insufficient platform diversity: only {len(stats['platform_counts'])} platforms present")
 
-    stats["unique_vehicles"] = list(stats["unique_vehicles"])
+    stats["unique_vehicles"] = list(unique_vehicles_set)
     is_valid = len(errors) == 0
     return is_valid, errors, stats
 
@@ -467,8 +475,9 @@ def validate_models_matrix(file_path: Union[str, Path]) -> Tuple[bool, List[str]
     stats: Dict[str, Any] = {
         "file_path": str(file_path),
         "total_models": 0,
-        "manufacturers": set(),
+        "manufacturers": [],
     }
+    manufacturers_set: set = set()
     path = Path(file_path)
     if not path.exists():
         errors.append(f"Models matrix file not found: {path}")
@@ -520,7 +529,7 @@ def validate_models_matrix(file_path: Union[str, Path]) -> Tuple[bool, List[str]
             errors.append(f"{prefix} National subsidy must be finite >= 0 KRW, got {sub}")
 
         if m.get("manufacturer"):
-            stats["manufacturers"].add(m["manufacturer"])
+            manufacturers_set.add(m["manufacturer"])
 
         price = m.get("base_price_krw")
         ratio = m.get("price_subsidy_ratio")
@@ -536,7 +545,7 @@ def validate_models_matrix(file_path: Union[str, Path]) -> Tuple[bool, List[str]
             elif price > 85_000_000 and ratio != 0.0:
                 errors.append(f"{prefix} Price > 85M but ratio {ratio} != 0.0")
 
-    stats["manufacturers"] = sorted(list(stats["manufacturers"]))
+    stats["manufacturers"] = sorted(list(manufacturers_set))
     is_valid = len(errors) == 0
     return is_valid, errors, stats
 
@@ -552,9 +561,11 @@ def validate_daily_reports(file_path: Union[str, Path]) -> Tuple[bool, List[str]
         "file_path": str(file_path),
         "total_reports": 0,
         "critical_reports": 0,
-        "sources": set(),
-        "categories": set(),
+        "sources": [],
+        "categories": [],
     }
+    sources_set: set = set()
+    categories_set: set = set()
     path = Path(file_path)
     if not path.exists():
         errors.append(f"Daily reports file not found: {path}")
@@ -619,9 +630,9 @@ def validate_daily_reports(file_path: Union[str, Path]) -> Tuple[bool, List[str]
             errors.append(f"{prefix} sentiment_score must be a finite number, got {r['sentiment_score']}")
 
         if r.get("source"):
-            stats["sources"].add(str(r["source"]))
+            sources_set.add(str(r["source"]))
         if r.get("defect_category"):
-            stats["categories"].add(str(r["defect_category"]))
+            categories_set.add(str(r["defect_category"]))
         sev = str(r.get("severity", "")).upper()
         valid_sevs = {"LOW", "MEDIUM", "HIGH", "CRITICAL", "HEALTHY", "CAUTION", "WARNING", "DEPLETED"}
         if sev and sev not in valid_sevs:
@@ -629,8 +640,8 @@ def validate_daily_reports(file_path: Union[str, Path]) -> Tuple[bool, List[str]
         if sev == "CRITICAL":
             stats["critical_reports"] += 1
 
-    stats["sources"] = sorted(list(stats["sources"]))
-    stats["categories"] = sorted(list(stats["categories"]))
+    stats["sources"] = sorted(list(sources_set))
+    stats["categories"] = sorted(list(categories_set))
     is_valid = len(errors) == 0
     return is_valid, errors, stats
 
@@ -689,7 +700,10 @@ def validate_data_parity(
             if fp.is_file() and fp.stat().st_size > 0:
                 try:
                     content = fp.read_bytes()
-                    parsed = json.loads(content.decode("utf-8-sig"))
+                    parsed = json.loads(
+                        content.decode("utf-8-sig"),
+                        parse_constant=lambda c: (_ for _ in ()).throw(ValueError(f"Non-standard JSON constant: {c}")),
+                    )
                     h = hashlib.sha256(content).hexdigest()
                     hashes[label] = h
                     prio = _parity_candidate_priority(fname, parsed)
@@ -731,6 +745,19 @@ def validate_data_parity(
                         os.chmod(tmp_repair, 0o644)
                         os.replace(tmp_repair, fp)
                         tmp_repair = None
+                        dir_fd = -1
+                        try:
+                            dir_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+                            dir_fd = os.open(str(d), dir_flags)
+                            os.fsync(dir_fd)
+                        except OSError:
+                            pass
+                        finally:
+                            if dir_fd >= 0:
+                                try:
+                                    os.close(dir_fd)
+                                except OSError:
+                                    pass
                         if auth_stat is not None:
                             try:
                                 os.utime(fp, (auth_stat.st_atime, auth_stat.st_mtime))

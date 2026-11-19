@@ -321,16 +321,31 @@ export function isOpenRedirect(raw: string): boolean {
  */
 export function isPrototypePollutionKey(key: string): boolean {
   if (!key || typeof key !== 'string') return false;
+  const cleanRaw = key.replace(/[\x00-\x1f\x7f]/g, '');
   // Raw check
-  if (PROTOTYPE_POLLUTION_REGEX.test(key)) return true;
-  // Decoded check to uncover percent-encoded keys (%5f%5fproto%5f%5f, %63onstructor, etc.)
+  if (PROTOTYPE_POLLUTION_REGEX.test(cleanRaw)) return true;
+  // Decoded check to uncover percent-encoded keys (%5f%5fproto%5f%5f, %63onstructor, __proto__%00, etc.)
   try {
-    const decoded = safeDecodePercent(key);
+    const decoded = safeDecodePercent(key).replace(/[\x00-\x1f\x7f]/g, '');
     if (PROTOTYPE_POLLUTION_REGEX.test(decoded)) return true;
   } catch {
     // Malformed encoding in key
   }
   return false;
+}
+
+function removePrototypePollutionParams(params: URLSearchParams): boolean {
+  const keysToRemove = new Set<string>();
+  for (const key of params.keys()) {
+    if (isPrototypePollutionKey(key)) {
+      keysToRemove.add(key);
+    }
+  }
+  if (keysToRemove.size === 0) return false;
+  for (const key of keysToRemove) {
+    params.delete(key);
+  }
+  return true;
 }
 
 /**
@@ -346,21 +361,7 @@ export function stripPrototypePollutionQueryParams(url: string): string {
       const parsed = new URL(url);
       if (!parsed.search) return url;
       const params = new URLSearchParams(parsed.search);
-      let mutated = false;
-      const keysToRemove: string[] = [];
-
-      for (const key of params.keys()) {
-        if (isPrototypePollutionKey(key)) {
-          keysToRemove.push(key);
-          mutated = true;
-        }
-      }
-
-      if (!mutated) return url;
-
-      for (const key of keysToRemove) {
-        params.delete(key);
-      }
+      if (!removePrototypePollutionParams(params)) return url;
 
       parsed.search = params.toString();
       return parsed.toString();
@@ -375,21 +376,7 @@ export function stripPrototypePollutionQueryParams(url: string): string {
     const parsed = new URL(url, dummyBase);
     if (!parsed.search) return url;
     const params = new URLSearchParams(parsed.search);
-    let mutated = false;
-    const keysToRemove: string[] = [];
-
-    for (const key of params.keys()) {
-      if (isPrototypePollutionKey(key)) {
-        keysToRemove.push(key);
-        mutated = true;
-      }
-    }
-
-    if (!mutated) return url;
-
-    for (const key of keysToRemove) {
-      params.delete(key);
-    }
+    if (!removePrototypePollutionParams(params)) return url;
 
     const searchStr = params.toString() ? '?' + params.toString() : '';
     const hashStr = parsed.hash || '';
@@ -613,8 +600,8 @@ export function sanitizeSafeUrl(url?: unknown, options?: SanitizeUrlOptions): st
     return stripPrototypePollutionQueryParams(trimmed);
   }
 
-  // 12. mailto:
-  if (/^mailto:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i.test(trimmed)) {
+  // 12. mailto: (disjoint label/dot regex prevents ReDoS backtracking)
+  if (/^mailto:[a-zA-Z0-9._%+-]+@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/i.test(trimmed)) {
     return trimmed;
   }
 
@@ -623,8 +610,8 @@ export function sanitizeSafeUrl(url?: unknown, options?: SanitizeUrlOptions): st
     return trimmed;
   }
 
-  // 14. Absolute web URLs: must be http or https with valid hostname
-  if (/^https?:\/\//i.test(trimmed) && !/[\s<>"'\\]/.test(trimmed)) {
+  // 14. Absolute web URLs: must be http or https with valid hostname and no authority userinfo
+  if (/^https?:\/\//i.test(trimmed) && !/[\s<>"'\\]/.test(trimmed) && !/^https?:\/\/[^/?#]*@/i.test(trimmed)) {
     try {
       const parsed = new URL(trimmed);
       if (parsed.username || parsed.password) {

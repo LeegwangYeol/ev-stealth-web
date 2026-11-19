@@ -541,7 +541,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     const brandParam = searchParams.get('brand');
     if (brandParam) {
       const resolved = resolveBrandId(brandParam, brands);
-      if (resolved) {
+      if (resolved && (resolved === 'ALL' || brands.some((b) => b.id === resolved))) {
         setSelectedBrand(resolved);
       }
     }
@@ -685,20 +685,22 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     deferredSearchQuery,
   ]);
 
-  // Sorted models
+  // Sorted models with deterministic tie-breakers
   const sortedModels = useMemo(() => {
     const sorted = [...filteredModels];
     if (sortBy === 'DSI_DESC') {
       sorted.sort((a, b) => {
         const dsiA = Number.isFinite(a.avg_dsi) ? a.avg_dsi : 0;
         const dsiB = Number.isFinite(b.avg_dsi) ? b.avg_dsi : 0;
-        return dsiB - dsiA;
+        if (dsiB !== dsiA) return dsiB - dsiA;
+        return (a.name || '').localeCompare(b.name || '', 'ko');
       });
     } else if (sortBy === 'DSI_ASC') {
       sorted.sort((a, b) => {
         const dsiA = Number.isFinite(a.avg_dsi) ? a.avg_dsi : 0;
         const dsiB = Number.isFinite(b.avg_dsi) ? b.avg_dsi : 0;
-        return dsiA - dsiB;
+        if (dsiA !== dsiB) return dsiA - dsiB;
+        return (a.name || '').localeCompare(b.name || '', 'ko');
       });
     } else if (sortBy === 'GRADE') {
       const gradeOrder: Record<string, number> = {
@@ -709,10 +711,14 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
         D: 5,
         F: 6,
       };
-      sorted.sort(
-        (a, b) =>
-          (gradeOrder[a.overall_grade] || 99) - (gradeOrder[b.overall_grade] || 99)
-      );
+      sorted.sort((a, b) => {
+        const diff = (gradeOrder[a.overall_grade] || 99) - (gradeOrder[b.overall_grade] || 99);
+        if (diff !== 0) return diff;
+        const dsiA = Number.isFinite(a.avg_dsi) ? a.avg_dsi : 0;
+        const dsiB = Number.isFinite(b.avg_dsi) ? b.avg_dsi : 0;
+        if (dsiA !== dsiB) return dsiA - dsiB;
+        return (a.name || '').localeCompare(b.name || '', 'ko');
+      });
     } else if (sortBy === 'NAME') {
       sorted.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
     }
@@ -746,7 +752,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
   // Brand SVG dynamic dimensions and accessible description
   const brandSvgHeight = useMemo(() => {
-    return Math.max(140, 30 + sortedBrands.length * 28 + 45);
+    return Math.max(140, 30 + sortedBrands.length * 34 + 45);
   }, [sortedBrands.length]);
 
   const brandSvgDesc = useMemo(() => {
@@ -766,13 +772,18 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     [brands, compareBrandB]
   );
 
+  const RADAR_CX = 250;
+  const RADAR_CY = 235;
+  const RADAR_RADIUS = 118;
+  const RADAR_MAX_VAL = 55;
+
   // Radar chart axes and coordinates computation
   const radarAxes = useMemo(() => {
     if (!categories.length) return [];
-    const cx = 250;
-    const cy = 230;
-    const radius = 140;
-    const maxVal = 55; // 55% percentage ceiling
+    const cx = RADAR_CX;
+    const cy = RADAR_CY;
+    const radius = RADAR_RADIUS;
+    const maxVal = RADAR_MAX_VAL; // 55% percentage ceiling
 
     return categories.map((cat, i) => {
       const angle = (i * 2 * Math.PI) / categories.length - Math.PI / 2;
@@ -798,7 +809,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       const rB = (Math.min(maxVal, Math.max(0, shareB)) / maxVal) * radius;
       const rInd = (Math.min(maxVal, Math.max(0, indShare)) / maxVal) * radius;
 
-      let labelX = cx + (radius + 26) * cos;
+      let labelX = cx + (radius + 24) * cos;
       const labelY = cy + (radius + 20) * sin;
       let textAnchor: 'start' | 'middle' | 'end' = 'middle';
       if (cos > 0.3) {
@@ -839,10 +850,10 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
   const radarRings = useMemo(() => {
     if (!categories.length) return [];
-    const cx = 250;
-    const cy = 230;
-    const radius = 140;
-    const maxVal = 55;
+    const cx = RADAR_CX;
+    const cy = RADAR_CY;
+    const radius = RADAR_RADIUS;
+    const maxVal = RADAR_MAX_VAL;
     const steps = [10, 20, 30, 40, 50];
 
     return steps.map((pct) => {
@@ -977,6 +988,20 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [hoveredCell, activeChartTab, handleCloseCell]);
+
+  // Escape key listener to unpin active radar category
+  useEffect(() => {
+    if ((!pinnedRadarCategory && !hoveredRadarCategory) || activeChartTab !== 'brand_compare') return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setPinnedRadarCategory(null);
+        setHoveredRadarCategory(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pinnedRadarCategory, hoveredRadarCategory, activeChartTab]);
 
   const handleBrandToggle = useCallback((brandId: string) => {
     setSelectedBrand((prev) => (prev === brandId ? 'ALL' : brandId));
@@ -1299,7 +1324,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     </span>
                     <span className="text-slate-300 hidden sm:inline">주요 결함: {cellPreview.primaryDefect}</span>
                   </div>
-                  <span className="text-[11px] text-blue-400 font-medium">클릭 시 리콜 상세 및 공임 열람 ↵</span>
+                  <span className="text-[11px] text-blue-300 font-medium">클릭 시 리콜 상세 및 공임 열람 ↵</span>
                 </div>
               )}
 
@@ -1407,9 +1432,15 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   tabIndex={0}
                   role="region"
                   aria-label="브랜드별 DSI 결함 심각도 지수 시각화 차트 스크롤 영역"
+                  onMouseLeave={() => setHoveredSvgBrand(null)}
+                  onBlur={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                      setHoveredSvgBrand(null);
+                    }
+                  }}
                   className="w-full overflow-x-auto table-scroll-container border border-slate-800 rounded-2xl p-4 sm:p-6 bg-slate-900 text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 shadow-inner"
                 >
-                  <div className="sm:hidden flex items-center justify-between pb-2 mb-2 text-[11px] font-medium text-slate-400 border-b border-slate-800 select-none" aria-hidden="true"><span>← 좌우로 밀어서 9대 브랜드 비교</span><span className="text-[10px] text-blue-400 font-semibold">차트 스크롤 ↔</span></div>
+                  <div className="sm:hidden flex items-center justify-between pb-2 mb-2 text-[11px] font-medium text-slate-300 border-b border-slate-800 select-none" aria-hidden="true"><span>← 좌우로 밀어서 9대 브랜드 비교</span><span className="text-[10px] text-blue-300 font-semibold">차트 스크롤 ↔</span></div>
                   <svg
                     className="w-full min-w-[560px] h-auto select-none"
                     viewBox={`0 0 680 ${brandSvgHeight}`}
@@ -1444,7 +1475,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                               x={x}
                               y={brandSvgHeight - 25}
                               textAnchor="middle"
-                              fill="#94a3b8"
+                              fill="#cbd5e1"
                               fontSize="10"
                               fontWeight="bold"
                             >
@@ -1457,7 +1488,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
                     {/* Horizontal Bars */}
                     {sortedBrands.map((brand, i) => {
-                      const y = 20 + i * 28;
+                      const y = 20 + i * 34;
                       const safeDsi = Number.isFinite(brand.overall_dsi)
                         ? Math.min(100, Math.max(0, brand.overall_dsi))
                         : 0;
@@ -1480,9 +1511,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           aria-pressed={selectedBrand === brand.id}
                           aria-label={`${brand.name_ko} (${brand.name_en}), DSI ${safeDsi}점, 치명 결함율 ${Number.isFinite(brand.critical_issue_rate) ? brand.critical_issue_rate : 0}%, 총 ${(brand.total_reports || 0).toLocaleString('ko-KR')}건 제보`}
                           onMouseEnter={() => setHoveredSvgBrand(brand)}
-                          onMouseLeave={() => setHoveredSvgBrand(null)}
                           onFocus={() => setHoveredSvgBrand(brand)}
-                          onBlur={() => setHoveredSvgBrand(null)}
                           onClick={() => handleBrandToggle(brand.id)}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
@@ -1492,6 +1521,13 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           }}
                           className="transition-opacity hover:opacity-90 cursor-pointer focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 focus-visible:outline-offset-2"
                         >
+                          <rect
+                            x="0"
+                            y={y - 6}
+                            width="680"
+                            height="30"
+                            fill="transparent"
+                          />
                           <text
                             x="110"
                             y={y + 13}
@@ -1621,6 +1657,12 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 두 제조사의 6대 결함 부문(배터리, 구동계, 소프트웨어, 조립품질, 수리비, 혹한기) 점유율과 DSI 결함 심각도를 방사형 레이더 차트로 정밀 대조합니다.
               </div>
 
+              {brands.length === 0 || categories.length === 0 ? (
+                <div className="p-8 text-center text-slate-300 bg-slate-900 border border-slate-800 rounded-2xl text-sm">
+                  브랜드 1:1 레이더 비교를 위한 브랜드 또는 결함 부문 데이터가 없습니다.
+                </div>
+              ) : (
+                <>
               {/* Brand Comparison Selectors */}
               <div className="p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1696,8 +1738,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     <span className="w-3.5 h-3.5 rounded-full bg-rose-500 inline-block shadow-sm ring-2 ring-white/20" aria-hidden="true" />
                     <span className="text-rose-300">{brandBObj?.name_ko || '브랜드 B'} (DSI {brandBObj && Number.isFinite(brandBObj.overall_dsi) ? brandBObj.overall_dsi : 0}점)</span>
                   </li>
-                  <li className="flex items-center gap-2 text-slate-400">
-                    <span className="w-5 h-0.5 border-t-2 border-dashed border-slate-400 inline-block" aria-hidden="true" />
+                  <li className="flex items-center gap-2 text-slate-300">
+                    <span className="w-5 h-0.5 border-t-2 border-dashed border-slate-300 inline-block" aria-hidden="true" />
                     <span>산업 평균</span>
                   </li>
                 </ul>
@@ -1709,7 +1751,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   aria-label="브랜드 1:1 결함 프로파일 레이더 비교 차트 스크롤 영역"
                   className="w-full overflow-x-auto table-scroll-container focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
-                  <div className="sm:hidden flex items-center justify-between pb-2 mb-2 text-[11px] font-medium text-slate-400 border-b border-slate-800 select-none" aria-hidden="true"><span>← 좌우로 밀어서 레이더 차트 비교</span><span className="text-[10px] text-blue-400 font-semibold">차트 스크롤 ↔</span></div>
+                  <div className="sm:hidden flex items-center justify-between pb-2 mb-2 text-[11px] font-medium text-slate-300 border-b border-slate-800 select-none" aria-hidden="true"><span>← 좌우로 밀어서 레이더 차트 비교</span><span className="text-[10px] text-blue-300 font-semibold">차트 스크롤 ↔</span></div>
                 <svg
                   className="w-full min-w-[460px] max-w-[520px] mx-auto h-auto select-none mt-2"
                   viewBox="0 0 500 480"
@@ -1735,10 +1777,10 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           strokeDasharray="3 3"
                         />
                         <text
-                          x="250"
-                          y={230 - ring.r - 3}
+                          x={RADAR_CX}
+                          y={RADAR_CY - ring.r - 3}
                           textAnchor="middle"
-                          fill="#94a3b8"
+                          fill="#cbd5e1"
                           fontSize="9"
                           fontWeight="bold"
                         >
@@ -1750,8 +1792,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     {radarAxes.map((axis) => (
                       <line
                         key={`line-${axis.code}`}
-                        x1="250"
-                        y1="230"
+                        x1={RADAR_CX}
+                        y1={RADAR_CY}
                         x2={axis.axisX}
                         y2={axis.axisY}
                         stroke="#334155"
@@ -1790,10 +1832,11 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     </>
                   )}
 
-                  {/* Interactive Vertex Nodes and Labels */}
+                  {/* Interactive Vertex Nodes and Labels (1 focusable group per axis with 44px touch hit targets) */}
                   {radarAxes.map((axis) => {
                     const isActive = activeRadarCode === axis.code;
                     const isPinned = pinnedRadarCategory === axis.code;
+                    const isOverlapping = Math.hypot(axis.xA - axis.xB, axis.yA - axis.yB) < 8;
                     const togglePin = () =>
                       setPinnedRadarCategory((prev) => (prev === axis.code ? null : axis.code));
                     const handleVertexKeyDown = (e: React.KeyboardEvent<SVGElement>) => {
@@ -1807,71 +1850,59 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       }
                     };
                     return (
-                      <g key={`nodes-${axis.code}`}>
+                      <g
+                        key={`nodes-${axis.code}`}
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={isPinned}
+                        aria-label={`${axis.label} 결함 비중 비교 (${brandAObj?.name_ko || '브랜드 A'} ${axis.shareA.toFixed(1)}%, ${brandBObj?.name_ko || '브랜드 B'} ${axis.shareB.toFixed(1)}%, 산업 평균 ${axis.indShare.toFixed(1)}%)`}
+                        className="cursor-pointer focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 focus-visible:outline-offset-2"
+                        onMouseEnter={() => setHoveredRadarCategory(axis.code)}
+                        onMouseLeave={() => setHoveredRadarCategory((prev) => (prev === axis.code ? null : prev))}
+                        onFocus={() => setHoveredRadarCategory(axis.code)}
+                        onBlur={() => setHoveredRadarCategory((prev) => (prev === axis.code ? null : prev))}
+                        onClick={togglePin}
+                        onKeyDown={handleVertexKeyDown}
+                      >
+                        {/* 44px transparent hit targets for touch & mouse */}
+                        <circle cx={axis.labelX} cy={axis.labelY - 4} r={22} fill="transparent" />
+                        <circle cx={axis.xA} cy={axis.yA} r={22} fill="transparent" />
+                        <circle cx={axis.xB} cy={axis.yB} r={22} fill="transparent" />
+
                         {/* Category Axis Label */}
                         <text
                           x={axis.labelX}
                           y={axis.labelY}
                           textAnchor={axis.textAnchor}
-                          fill={isActive ? '#60a5fa' : '#f8fafc'}
+                          fill={isActive ? '#93c5fd' : '#f8fafc'}
                           fontSize="11"
                           fontWeight={isActive ? 'bold' : '600'}
-                          role="button"
-                          tabIndex={0}
-                          aria-pressed={isPinned}
-                          aria-label={`${axis.label} 결함 비중 비교 상세 보기`}
-                          className="cursor-pointer transition-colors focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 focus-visible:outline-offset-2"
-                          onMouseEnter={() => setHoveredRadarCategory(axis.code)}
-                          onMouseLeave={() => setHoveredRadarCategory((prev) => (prev === axis.code ? null : prev))}
-                          onFocus={() => setHoveredRadarCategory(axis.code)}
-                          onBlur={() => setHoveredRadarCategory((prev) => (prev === axis.code ? null : prev))}
-                          onClick={togglePin}
-                          onKeyDown={handleVertexKeyDown}
+                          className="transition-colors"
                         >
                           {axis.label}
                         </text>
 
-                        {/* Brand A vertex circle */}
+                        {/* Brand A vertex circle (enlarged ring when overlapping Brand B) */}
                         <circle
                           cx={axis.xA}
                           cy={axis.yA}
-                          r={isActive ? 7 : 5}
+                          r={isOverlapping ? (isActive ? 9 : 7) : (isActive ? 7 : 5)}
                           fill="#3b82f6"
                           stroke="#ffffff"
                           strokeWidth="1.5"
-                          role="button"
-                          tabIndex={0}
-                          aria-pressed={isPinned}
-                          aria-label={`${brandAObj?.name_ko || '브랜드 A'} ${axis.label}: ${axis.shareA.toFixed(1)}%`}
-                          onMouseEnter={() => setHoveredRadarCategory(axis.code)}
-                          onMouseLeave={() => setHoveredRadarCategory((prev) => (prev === axis.code ? null : prev))}
-                          onFocus={() => setHoveredRadarCategory(axis.code)}
-                          onBlur={() => setHoveredRadarCategory((prev) => (prev === axis.code ? null : prev))}
-                          onClick={togglePin}
-                          onKeyDown={handleVertexKeyDown}
-                          className="cursor-pointer transition-all focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 focus-visible:outline-offset-2"
-                        ></circle>
+                          className="transition-all"
+                        />
 
                         {/* Brand B vertex circle */}
                         <circle
                           cx={axis.xB}
                           cy={axis.yB}
-                          r={isActive ? 7 : 5}
+                          r={isOverlapping ? (isActive ? 6 : 4.5) : (isActive ? 7 : 5)}
                           fill="#f43f5e"
                           stroke="#ffffff"
                           strokeWidth="1.5"
-                          role="button"
-                          tabIndex={0}
-                          aria-pressed={isPinned}
-                          aria-label={`${brandBObj?.name_ko || '브랜드 B'} ${axis.label}: ${axis.shareB.toFixed(1)}%`}
-                          onMouseEnter={() => setHoveredRadarCategory(axis.code)}
-                          onMouseLeave={() => setHoveredRadarCategory((prev) => (prev === axis.code ? null : prev))}
-                          onFocus={() => setHoveredRadarCategory(axis.code)}
-                          onBlur={() => setHoveredRadarCategory((prev) => (prev === axis.code ? null : prev))}
-                          onClick={togglePin}
-                          onKeyDown={handleVertexKeyDown}
-                          className="cursor-pointer transition-all focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400 focus-visible:outline-offset-2"
-                        ></circle>
+                          className="transition-all"
+                        />
                       </g>
                     );
                   })}
@@ -1885,15 +1916,30 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     aria-live="polite"
                     className="mt-4 p-4 bg-slate-800 text-white rounded-xl border border-slate-700 shadow-xl text-xs space-y-2 animate-fade-in motion-reduce:animate-none"
                   >
-                    <div className="flex items-center justify-between border-b border-slate-700 pb-2">
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-700 pb-2">
                       <span className="font-bold text-sm text-blue-300">
                         {activeRadarItem.label} 결함 비중 분석
                       </span>
-                      <span className="text-[11px] text-slate-400">
-                        산업 평균: {activeRadarItem.indShare.toFixed(1)}%
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-slate-300">
+                          산업 평균: {activeRadarItem.indShare.toFixed(1)}%
+                        </span>
+                        {pinnedRadarCategory === activeRadarItem.code && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPinnedRadarCategory(null);
+                              setHoveredRadarCategory(null);
+                            }}
+                            aria-label={`${activeRadarItem.label} 상세 고정 해제`}
+                            className="min-h-[44px] min-w-[44px] px-2.5 py-1 inline-flex items-center justify-center rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                          >
+                            고정 해제
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-slate-300 text-xs">{activeRadarItem.description}</p>
+                    <p className="text-slate-200 text-xs">{activeRadarItem.description}</p>
                     <div className="grid grid-cols-2 gap-3 pt-1">
                       <div className="p-2.5 rounded-lg bg-blue-950/60 border border-blue-800">
                         <div className="font-bold text-blue-300">{brandAObj?.name_ko}</div>
@@ -1910,7 +1956,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         </div>
                       </div>
                     </div>
-                    <div className="text-[11px] text-slate-300 pt-1">
+                    <div className="text-[11px] text-slate-200 pt-1">
                       {activeRadarItem.shareA < activeRadarItem.shareB ? (
                         <span className="text-emerald-300 font-semibold">
                           ✓ {brandAObj?.name_ko}의 해당 결함 비중이 {(activeRadarItem.shareB - activeRadarItem.shareA).toFixed(1)}%p 더 낮아 상대적으로 안전합니다.
@@ -2152,6 +2198,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   </div>
                 );
               })()}
+                </>
+              )}
             </div>
           )}
 
@@ -2780,13 +2828,19 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
         </div>
 
         {/* Authentic Owner Quote */}
-        {model.year_evaluations?.[0]?.raw_quote && (
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-xs text-slate-700 italic">
-            <span className="text-slate-700 font-serif mr-1">&ldquo;</span>
-            {model.year_evaluations[0].raw_quote}
-            <span className="text-slate-700 font-serif ml-1">&rdquo;</span>
-          </div>
-        )}
+        {(() => {
+          const firstQuote = model.year_evaluations?.find(
+            (y) => y && typeof y.raw_quote === 'string' && y.raw_quote.trim().length > 0
+          )?.raw_quote;
+          if (!firstQuote) return null;
+          return (
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-xs text-slate-700 italic">
+              <span className="text-slate-700 font-serif mr-1">&ldquo;</span>
+              {firstQuote}
+              <span className="text-slate-700 font-serif ml-1">&rdquo;</span>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Card Action Link */}

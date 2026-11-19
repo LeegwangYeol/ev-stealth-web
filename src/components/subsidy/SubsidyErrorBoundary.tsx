@@ -32,6 +32,16 @@ export default class SubsidyErrorBoundary extends Component<Props, State> {
     console.error('Subsidy Component Error Boundary caught exception:', error, errorInfo);
   }
 
+  public componentDidMount() {
+    if (this.state.hasError) {
+      if (this.retryButtonRef.current) {
+        this.retryButtonRef.current.focus();
+      } else if (this.containerRef.current) {
+        this.containerRef.current.focus();
+      }
+    }
+  }
+
   public componentDidUpdate(_prevProps: Props, prevState: State) {
     // When entering error state, shift programmatic focus to retry button or container for screen reader & keyboard accessibility
     if (!prevState.hasError && this.state.hasError) {

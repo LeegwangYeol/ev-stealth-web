@@ -25,7 +25,9 @@ from scrapers.common_utils import (
     COMMON_VEHICLE_PATTERNS,
     ComplaintRecord,
     SafeHttpClient,
+    bounded_cache_set,
     clean_html_text,
+    extract_balanced_tag_content,
     extract_slang_terms,
     normalize_scraper_url,
     polite_delay,
@@ -176,7 +178,11 @@ class BlindScraper:
         items = []
 
         # Try extracting Next.js SSR __NEXT_DATA__
-        next_data_match = re.search(r'<script\s+id="__NEXT_DATA__"\s+type="application/json">(.*?)</script>', html_content, re.DOTALL)
+        next_data_match = re.search(
+            r'<script\b[^>]*\bid=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>',
+            html_content,
+            re.IGNORECASE | re.DOTALL,
+        )
         if next_data_match:
             try:
                 data = json.loads(next_data_match.group(1))
@@ -191,8 +197,15 @@ class BlindScraper:
                         continue
                     post_id = str(p.get("id") or p.get("article_id") or "")
                     title = str(p.get("title") or "")
-                    slug = str(p.get("slug") or post_id or "")
-                    raw_url = slug if slug.lower().startswith(("http://", "https://")) else f"{BLIND_KR_URL}/post/{slug}-{post_id}"
+                    slug = str(p.get("slug") or "")
+                    if slug.lower().startswith(("http://", "https://")) or slug.startswith("/"):
+                        raw_url = slug
+                    elif slug and post_id and not slug.endswith(f"-{post_id}") and slug != post_id:
+                        raw_url = f"{BLIND_KR_URL}/post/{slug}-{post_id}"
+                    elif slug or post_id:
+                        raw_url = f"{BLIND_KR_URL}/post/{slug or post_id}"
+                    else:
+                        continue
                     url = normalize_scraper_url(raw_url, BLIND_BASE_URL)
                     if not url:
                         continue
@@ -212,8 +225,8 @@ class BlindScraper:
                 logger.debug(f"Next.js SSR parsing notice for topic feed: {e}")
 
         # Fallback to DOM regex extraction
-        # Pattern: <a href="/kr/post/..." ...>
-        pattern = r'<a\s+href="(/kr/post/[^"]+)"[^>]*>(.*?)</a>'
+        # Pattern: <a ... href="/kr/post/..." ...>
+        pattern = r'<a\b[^>]*\bhref=["\'](/kr/post/[^"\']+)["\'][^>]*>(.*?)</a>'
         matches = re.findall(pattern, html_content, re.IGNORECASE | re.DOTALL)
         seen_urls = set()
 
@@ -261,7 +274,7 @@ class BlindScraper:
         try:
             detail = self.parse_post_detail(text, norm_url)
             if detail:
-                self.post_cache[norm_url] = detail
+                bounded_cache_set(self.post_cache, norm_url, detail)
             return detail
         except Exception as e:
             logger.warning(f"Error parsing Blind post detail ({norm_url}): {e}")
@@ -278,7 +291,11 @@ class BlindScraper:
         if not html_content or not isinstance(html_content, str):
             return {}
         # 1. Attempt Next.js SSR JSON Extraction
-        next_data_match = re.search(r'<script\s+id="__NEXT_DATA__"\s+type="application/json">(.*?)</script>', html_content, re.DOTALL)
+        next_data_match = re.search(
+            r'<script\b[^>]*\bid=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>',
+            html_content,
+            re.IGNORECASE | re.DOTALL,
+        )
         if next_data_match:
             try:
                 data = json.loads(next_data_match.group(1))
@@ -345,13 +362,19 @@ class BlindScraper:
                 company = comp_clean
 
         body = ""
-        body_match = re.search(r'<div[^>]*class="[^"]*article-content[^"]*"[^>]*>(.*?)</div>', html_content, re.DOTALL)
-        if not body_match:
-            body_match = re.search(r'<div[^>]*class="[^"]*post-desc[^"]*"[^>]*>(.*?)</div>', html_content, re.DOTALL)
-        if not body_match:
-            body_match = re.search(r'<meta property="og:description" content="([^"]*)"', html_content)
-        if body_match:
-            body = clean_html_text(body_match.group(1))
+        for open_pat in (
+            r'<div\b[^>]*\bclass=["\'][^"\']*\barticle-content\b[^"\']*["\'][^>]*>',
+            r'<div\b[^>]*\bclass=["\'][^"\']*\bpost-desc\b[^"\']*["\'][^>]*>',
+        ):
+            inner_html = extract_balanced_tag_content(html_content, open_pat, tag_name="div")
+            if inner_html:
+                body = clean_html_text(inner_html)
+                if body:
+                    break
+        if not body:
+            body_match = re.search(r'<meta\b[^>]*\bproperty=["\']og:description["\'][^>]*\bcontent=["\']([^"\']*)["\']', html_content, re.IGNORECASE)
+            if body_match:
+                body = clean_html_text(body_match.group(1))
 
         comments = []
         comment_matches = re.findall(r'<div[^>]*class="[^"]*comment-item[^"]*"[^>]*>(.*?)</div>\s*<!--\s*//comment-item', html_content, re.DOTALL)

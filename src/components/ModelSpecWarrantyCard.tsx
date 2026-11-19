@@ -33,7 +33,7 @@ export const ModelSpecWarrantyCard = memo(function ModelSpecWarrantyCard({
     <div
       role="region"
       aria-label={`${modelName} 핵심 제원 및 공식 보증 가이드`}
-      className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-sm space-y-3.5 transition-all hover:border-slate-300"
+      className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-sm space-y-3.5 transition-colors hover:border-slate-300"
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
         <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2 min-w-0">
@@ -54,9 +54,9 @@ export const ModelSpecWarrantyCard = memo(function ModelSpecWarrantyCard({
         {/* Pricing Guide Card */}
         <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-3 sm:p-3.5 space-y-1.5 flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-blue-900 flex items-center gap-1">
+            <h4 className="text-xs font-bold text-blue-900 flex items-center gap-1">
               <span aria-hidden="true">🏷️</span> 가격 가이드 (신차/중고)
-            </span>
+            </h4>
           </div>
           <dl className="text-xs space-y-1 text-slate-700">
             <div className="flex justify-between items-baseline gap-2">
@@ -79,9 +79,9 @@ export const ModelSpecWarrantyCard = memo(function ModelSpecWarrantyCard({
         {/* Battery & Powertrain Specs Card */}
         <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-3 sm:p-3.5 space-y-1.5 flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-900 flex items-center gap-1">
+            <h4 className="text-xs font-bold text-emerald-900 flex items-center gap-1">
               <span aria-hidden="true">🔋</span> 배터리 &amp; 주행 스펙
-            </span>
+            </h4>
           </div>
           <dl className="text-xs space-y-1 text-slate-700">
             <div className="flex justify-between items-baseline gap-2">
@@ -90,13 +90,13 @@ export const ModelSpecWarrantyCard = memo(function ModelSpecWarrantyCard({
             </div>
             <div className="flex justify-between items-baseline gap-2">
               <dt className="text-slate-600 font-medium shrink-0">양극재 / 셀:</dt>
-              <dd className="font-semibold text-slate-900 text-right break-keep leading-tight min-w-0" title={batterySpecs.chemistry}>
+              <dd className="font-semibold text-slate-900 text-right break-keep leading-tight min-w-0">
                 {batterySpecs.chemistry}
               </dd>
             </div>
             <div className="flex justify-between items-baseline gap-2">
               <dt className="text-slate-600 font-medium shrink-0">충전 시스템:</dt>
-              <dd className="font-semibold text-slate-900 text-right break-keep leading-tight min-w-0" title={batterySpecs.voltage}>
+              <dd className="font-semibold text-slate-900 text-right break-keep leading-tight min-w-0">
                 {batterySpecs.voltage}
               </dd>
             </div>
@@ -110,9 +110,9 @@ export const ModelSpecWarrantyCard = memo(function ModelSpecWarrantyCard({
         {/* Official Factory Warranty Card */}
         <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 sm:p-3.5 space-y-1.5 flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-indigo-900 flex items-center gap-1">
+            <h4 className="text-xs font-bold text-indigo-900 flex items-center gap-1">
               <span aria-hidden="true">🛡️</span> 제조사 공식 보증 (워런티)
-            </span>
+            </h4>
           </div>
           <dl className="text-xs space-y-1 text-slate-700">
             <div className="flex justify-between items-baseline gap-2">

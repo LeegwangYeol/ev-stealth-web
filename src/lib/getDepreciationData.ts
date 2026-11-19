@@ -1,424 +1,93 @@
 import rawDepreciationData from '../data/ev_depreciation_data.json' with { type: 'json' };
+import type {
+  BatteryChemistryType,
+  ResaleDefenseTier,
+  SoftwareOtaLevel,
+  BatteryRiskGrade,
+  TransferType,
+  PriceBasis,
+  DepreciationCurvePoint,
+  DepreciationCurve,
+  BatterySpecs,
+  WarrantyInfo,
+  FactorWeights,
+  EvModelDepreciation,
+  BatteryReplacementTierCosts,
+  BatteryReplacementTier,
+  BatteryChemistryProfile,
+  WarrantyCliffAdjustment,
+  BatteryChemistryAdjustment,
+  FaceliftHardwareAdjustment,
+  MileageSensitivityAdjustment,
+  AdjustmentFactors,
+  PartialAdjustmentFactors,
+  ClawbackTier,
+  SubsidyTransferRule,
+  SubsidyClawbackSchedule,
+  IceDisplacementTier,
+  TcoFuelTariffs,
+  TcoTaxParameters,
+  TcoAuxiliaryBenefits,
+  TcoEfficiencyBaselines,
+  TcoParameters,
+  PartialTcoParameters,
+  DepreciationDatabase,
+  DepreciationCalculationInput,
+  FactorAdjustmentsBreakdown,
+  WarrantyStatus,
+  DepreciationCalculationResult,
+  BatterySimulationInput,
+  BatteryHealthResult,
+  ClawbackResult,
+  TcoYearBreakdown,
+  TcoResult,
+  CalculateDepreciationOptions,
+} from '../types/depreciation.ts';
 
-// ==========================================
-// 1. DOMAIN ENUMS & BASIC TYPES
-// ==========================================
-
-export type BatteryChemistryType = 'LFP' | 'NCM_622' | 'NCM_811' | 'NCMA' | 'NCA';
-export type ResaleDefenseTier = 'S' | 'A' | 'A-' | 'B+' | 'B' | 'B-' | 'C+' | 'C' | 'D';
-export type SoftwareOtaLevel = 'FULL_STACK' | 'ADVANCED_CCB' | 'INFOTAINMENT_ONLY' | 'BASIC';
-export type BatteryRiskGrade = 'GRADE_A' | 'GRADE_B' | 'GRADE_C' | 'CRITICAL';
-export type TransferType = 'intra' | 'inter' | 'export';
-export type PriceBasis = 'msrp' | 'effective';
-
-// ==========================================
-// 2. DATABASE SCHEMA INTERFACES
-// ==========================================
-
-export interface DepreciationCurvePoint {
-  residual_pct_msrp: number;
-  depreciation_pct_msrp: number;
-  residual_pct_effective: number;
-  avg_used_price_krw: number;
-  annual_drop_pct: number;
-}
-
-export interface DepreciationCurve {
-  year_1: DepreciationCurvePoint;
-  year_2: DepreciationCurvePoint;
-  year_3: DepreciationCurvePoint;
-  year_4: DepreciationCurvePoint;
-  year_5: DepreciationCurvePoint;
-  [key: string]: DepreciationCurvePoint;
-}
-
-export interface BatterySpecs {
-  capacity_kwh: number;
-  chemistry: string;
-  cell_supplier: string;
-  voltage_architecture: '400V' | '800V' | string;
-}
-
-export interface WarrantyInfo {
-  years: number;
-  km: number;
-  guarantee_retention_pct: number;
-}
-
-export interface FactorWeights {
-  warranty_cliff: number;
-  chemistry_aging: number;
-  architecture_800v: number;
-  ota_maturity: number;
-  net_factor_adjustment: number;
-}
-
-export interface EvModelDepreciation {
-  id: string;
-  brand_id: string;
-  brand_name_en: string;
-  brand_name_ko: string;
-  model_name: string;
-  segment: string;
-  msrp_krw_baseline: number;
-  avg_subsidy_krw: number;
-  net_purchase_price_krw: number;
-  battery_specs: BatterySpecs;
-  warranty: WarrantyInfo;
-  factor_weights: FactorWeights;
-  software_ota_level: SoftwareOtaLevel;
-  resale_defense_tier: ResaleDefenseTier;
-  depreciation_curve: DepreciationCurve;
-  key_pros_resale: string;
-  key_cons_resale: string;
-}
-
-export interface BatteryReplacementTierCosts {
-  new_pack_krw: number;
-  new_pack_usd: number;
-  reman_pack_krw: number | null;
-  reman_pack_usd: number | null;
-  labor_coolant_krw: number;
-  labor_coolant_usd: number;
-  total_new_installed_krw: number;
-  total_new_installed_usd: number;
-  total_reman_installed_krw: number | null;
-  total_reman_installed_usd: number | null;
-  cost_per_kwh_usd: number;
-}
-
-export interface BatteryReplacementTier {
-  tier_id: string;
-  segment_name: string;
-  pack_size_kwh_nominal: number;
-  pack_size_range: string;
-  representative_models: string[];
-  costs: BatteryReplacementTierCosts;
-}
-
-export interface BatteryChemistryProfile {
-  id: BatteryChemistryType;
-  name: string;
-  cathode_structure: string;
-  nominal_cell_voltage_v: number;
-  voltage_cutoff_v: number;
-  energy_density_wh_kg: number;
-  cycle_life_to_80_soh: number;
-  calendar_baseline_annual_loss_pct: number;
-  calendar_arrhenius_ea_j_mol: number;
-  soc_stress_coefficient_beta: number;
-  calendar_time_exponent_z: number;
-  cyclic_exponent_w: number;
-  dod_exponent_u: number;
-  dcfc_acceleration_multiplier_max: number;
-  cold_charge_sensitivity_gamma: number;
-  thermal_runaway_temp_c: number;
-  ocv_profile_type: string;
-  cell_balancing_requirement: string;
-}
-
-export interface AdjustmentFactors {
-  warranty_cliff: {
-    safe_period_multiplier: number;
-    approaching_cliff_1_2_years_penalty: number;
-    expired_warranty_penalty: number;
-    description: string;
-  };
-  battery_chemistry: Record<
-    string,
-    {
-      cycle_life_bonus_yr3_5: number;
-      winter_seasonal_discount: number;
-      fire_safety_reputation_bonus: number;
-      description: string;
-    }
-  >;
-  facelift_hardware?: {
-    platform_800V_premium: number;
-    platform_400V_penalty: number;
-    major_facelift_compute_shift_penalty: number;
-    description: string;
-  };
-  hardware_platform?: {
-    architecture_800v_bonus: number;
-    architecture_400v_penalty: number;
-    description: string;
-  };
-  software_ota?:
-    | Record<string, number>
-    | {
-        full_stack_fota_bonus: number;
-        legacy_infotainment_penalty: number;
-        description: string;
-      };
-  mileage_sensitivity: {
-    base_km_per_year?: number;
-    baseline_annual_km?: number;
-    penalty_per_10000km_excess: number;
-    bonus_per_10000km_deficit: number;
-    max_mileage_discount_cap?: number;
-    description?: string;
-  };
-}
-
-export interface PartialAdjustmentFactors {
-  warranty_cliff?: Partial<AdjustmentFactors['warranty_cliff']>;
-  battery_chemistry?: Record<
-    string,
-    Partial<{
-      cycle_life_bonus_yr3_5: number;
-      winter_seasonal_discount: number;
-      fire_safety_reputation_bonus: number;
-      description: string;
-    }>
-  >;
-  facelift_hardware?: Partial<NonNullable<AdjustmentFactors['facelift_hardware']>>;
-  hardware_platform?: Partial<NonNullable<AdjustmentFactors['hardware_platform']>>;
-  software_ota?: AdjustmentFactors['software_ota'];
-  mileage_sensitivity?: Partial<AdjustmentFactors['mileage_sensitivity']>;
-}
-
-export interface ClawbackTier {
-  min_months: number;
-  max_months_exclusive: number | null;
-  clawback_rate: number;
-  label_ko: string;
-}
-
-export interface SubsidyTransferRule {
-  scenario: string;
-  clawback_local: boolean;
-  clawback_national: boolean;
-  description: string;
-}
-
-export interface SubsidyClawbackSchedule {
-  mandatory_operation_months: number;
-  legal_basis: string;
-  tiers: ClawbackTier[];
-  transfer_rules: Record<TransferType, SubsidyTransferRule>;
-}
-
-export interface IceDisplacementTier {
-  max_cc: number | null;
-  rate_per_cc_krw: number;
-  name: string;
-}
-
-export interface TcoFuelTariffs {
-  ev_slow_charging_krw_per_kwh: number;
-  ev_fast_charging_krw_per_kwh: number;
-  ice_gasoline_krw_per_liter: number;
-  ice_diesel_krw_per_liter: number;
-}
-
-export interface TcoTaxParameters {
-  ev_annual_tax_krw: number;
-  ev_base_tax_krw: number;
-  ev_education_tax_krw: number;
-  ice_displacement_tiers: IceDisplacementTier[];
-  education_tax_multiplier: number;
-  ice_age_discount_start_year: number;
-  ice_age_discount_rate_per_year: number;
-  ice_age_discount_max: number;
-}
-
-export interface TcoAuxiliaryBenefits {
-  expressway_toll_discount_rate: number;
-  annual_toll_savings_krw: number;
-  public_parking_discount_rate: number;
-  annual_parking_savings_krw: number;
-  maintenance_annual_savings_krw: number;
-}
-
-export interface TcoEfficiencyBaselines {
-  ev_efficiency_km_per_kwh: number;
-  ice_gasoline_economy_km_per_liter: number;
-  ice_diesel_economy_km_per_liter: number;
-}
-
-export interface TcoParameters {
-  fuel_tariffs: TcoFuelTariffs;
-  efficiency_baselines: TcoEfficiencyBaselines;
-  tax_parameters: TcoTaxParameters;
-  auxiliary_benefits: TcoAuxiliaryBenefits;
-}
-
-export interface PartialTcoParameters {
-  fuel_tariffs?: Partial<TcoFuelTariffs>;
-  efficiency_baselines?: Partial<TcoEfficiencyBaselines>;
-  tax_parameters?: Partial<TcoTaxParameters>;
-  auxiliary_benefits?: Partial<TcoAuxiliaryBenefits>;
-}
-
-export interface DepreciationDatabase {
-  metadata: {
-    version: string;
-    generated_at: string;
-    total_models: number;
-    brands_count: number;
-    currency: string;
-    baseline_annual_mileage_km: number;
-    sources: string[];
-  };
-  market_context: {
-    korean_market_status: string;
-    cheongna_fire_impact_summary: string;
-    subsidy_clawback_rules: string;
-  };
-  adjustment_factors: AdjustmentFactors;
-  chemistries: Record<BatteryChemistryType, BatteryChemistryProfile>;
-  battery_replacement_costs: BatteryReplacementTier[];
-  subsidy_clawback_schedule: SubsidyClawbackSchedule;
-  tco_parameters: TcoParameters;
-  models: EvModelDepreciation[];
-}
-
-// ==========================================
-// 3. CALCULATION INPUT & RESULT INTERFACES
-// ==========================================
-
-export interface DepreciationCalculationInput {
-  modelId?: string;
-  years: number; // e.g. 1.0 to 5.0
-  mileageKm?: number; // defaults to 15,000 * years
-  winterSeason?: boolean; // apply seasonal low temp penalty
-  priceBasis?: PriceBasis; // 'msrp' | 'effective' (default 'msrp')
-  customPurchasePriceKrw?: number; // override base purchase price
-  model?: EvModelDepreciation;
-}
-
-export interface FactorAdjustmentsBreakdown {
-  warrantyCliffPenalty: number;
-  batteryChemistryBonus: number;
-  architectureAdjustment: number;
-  otaAdjustment: number;
-  mileageAdjustment: number;
-  winterAdjustment: number;
-  totalAdjustmentPct: number;
-}
-
-export interface WarrantyStatus {
-  isApproachingCliff: boolean;
-  isExpired: boolean;
-  remainingYears: number;
-  remainingKm: number;
-}
-
-export interface DepreciationCalculationResult {
-  model: EvModelDepreciation;
-  years: number;
-  mileageKm: number;
-  priceBasis: PriceBasis;
-  basePurchasePriceKrw: number;
-  baselineResidualPct: number;
-  adjustedResidualPct: number;
-  estimatedResidualPriceKrw: number;
-  depreciationAmountKrw: number;
-  defenseTier: ResaleDefenseTier;
-  factorAdjustments: FactorAdjustmentsBreakdown;
-  warrantyStatus: WarrantyStatus;
-  keyPros: string;
-  keyCons: string;
-}
-
-export interface BatterySimulationInput {
-  chemistry?: BatteryChemistryType | string;
-  modelId?: string;
-  model?: EvModelDepreciation;
-  years?: number;
-  totalKm?: number;
-  annualKm?: number;
-  dcfcRatio?: number; // 0.0 to 1.0 (fraction of DC fast charging)
-  storageSoc?: number; // 0.0 to 1.0 (average state of charge during parking)
-  ambientTempC?: number; // Celsius ambient temperature
-  packCapacityKwh?: number;
-  vehicleEfficiencyKmPerKwh?: number;
-}
-
-export interface BatteryHealthResult {
-  chemistry: BatteryChemistryType;
-  chemistryName: string;
-  years: number;
-  totalKm: number;
-  equivalentFullCycles: number;
-  calendarLossPct: number;
-  cyclicLossPct: number;
-  totalLossPct: number;
-  sohPct: number; // 0.0 to 100.0%
-  grade: BatteryRiskGrade;
-  gradeLabel: string;
-  badgeColor: string;
-  failureRiskPct: number;
-  winterRangeRetentionPct: number;
-  usedMarketValuationFactor: number;
-  usedMarketValuationText: string;
-  actionRecommendation: string;
-  replacementCostEstimate: {
-    tierId: string;
-    segmentName: string;
-    newPackKrw: number;
-    remanPackKrw: number | null;
-    laborCoolantKrw: number;
-    totalNewInstalledKrw: number;
-    totalRemanInstalledKrw: number | null;
-    estimatedCostKrw: number;
-  };
-}
-
-export interface ClawbackResult {
-  heldMonths: number;
-  tierLabel: string;
-  statutoryClawbackRate: number; // e.g. 0.70 down to 0.00
-  effectiveClawbackRate: number;
-  localSubsidyReceivedKrw: number;
-  nationalSubsidyReceivedKrw: number;
-  localClawbackKrw: number;
-  nationalClawbackKrw: number;
-  totalClawbackKrw: number;
-  transferType: TransferType;
-  isExempt: boolean;
-  remainingMonthsOfObligation: number;
-  explanation: string;
-}
-
-export interface TcoYearBreakdown {
-  year: number;
-  cumulativeKm: number;
-  evElectricityCostKrw: number;
-  iceFuelCostKrw: number;
-  evAutomobileTaxKrw: number;
-  iceAutomobileTaxKrw: number;
-  tollSavingsKrw: number;
-  parkingSavingsKrw: number;
-  maintenanceSavingsKrw: number;
-  annualNetSavingsKrw: number;
-  cumulativeNetSavingsKrw: number;
-}
-
-export interface TcoResult {
-  annualKm: number;
-  years: number;
-  totalKm: number;
-  evEfficiencyKmPerKwh: number;
-  iceFuelEconomyKmPerLiter: number;
-  blendedElectricityTariffKrwPerKwh: number;
-  gasolinePriceKrwPerLiter: number;
-  evFuelCostPerKm: number;
-  iceFuelCostPerKm: number;
-  evTotalFuelCostKrw: number;
-  iceTotalFuelCostKrw: number;
-  fuelSavingsKrw: number;
-  evTotalTaxKrw: number;
-  iceTotalTaxKrw: number;
-  taxSavingsKrw: number;
-  tollSavingsKrw: number;
-  parkingSavingsKrw: number;
-  maintenanceSavingsKrw: number;
-  totalAuxiliarySavingsKrw: number;
-  totalCumulativeSavingsKrw: number;
-  yearlyBreakdown: TcoYearBreakdown[];
-}
+export type {
+  BatteryChemistryType,
+  ResaleDefenseTier,
+  SoftwareOtaLevel,
+  BatteryRiskGrade,
+  TransferType,
+  PriceBasis,
+  DepreciationCurvePoint,
+  DepreciationCurve,
+  BatterySpecs,
+  WarrantyInfo,
+  FactorWeights,
+  EvModelDepreciation,
+  BatteryReplacementTierCosts,
+  BatteryReplacementTier,
+  BatteryChemistryProfile,
+  WarrantyCliffAdjustment,
+  BatteryChemistryAdjustment,
+  FaceliftHardwareAdjustment,
+  MileageSensitivityAdjustment,
+  AdjustmentFactors,
+  PartialAdjustmentFactors,
+  ClawbackTier,
+  SubsidyTransferRule,
+  SubsidyClawbackSchedule,
+  IceDisplacementTier,
+  TcoFuelTariffs,
+  TcoTaxParameters,
+  TcoAuxiliaryBenefits,
+  TcoEfficiencyBaselines,
+  TcoParameters,
+  PartialTcoParameters,
+  DepreciationDatabase,
+  DepreciationCalculationInput,
+  FactorAdjustmentsBreakdown,
+  WarrantyStatus,
+  DepreciationCalculationResult,
+  BatterySimulationInput,
+  BatteryHealthResult,
+  ClawbackResult,
+  TcoYearBreakdown,
+  TcoResult,
+  CalculateDepreciationOptions,
+};
 
 // ==========================================
 // 4. CORE DATA ACCESS FUNCTIONS
@@ -786,29 +455,144 @@ export const DEFAULT_FALLBACK_DEPRECIATION_DATABASE: DepreciationDatabase = {
   ],
 };
 
+function normalizeZero(val: number): number {
+  return val === 0 ? 0 : val;
+}
+
+function roundTo(val: number, decimals: number = 0): number {
+  if (!Number.isFinite(val)) return 0;
+  const factor = decimals === 0 ? 1 : decimals === 1 ? 10 : decimals === 2 ? 100 : Math.pow(10, decimals);
+  return normalizeZero(Math.round(val * factor) / factor);
+}
+
+function isPlainRecord(val: unknown): val is Record<string, unknown> {
+  return val !== null && typeof val === 'object' && !Array.isArray(val);
+}
+
+let cachedDatabase: DepreciationDatabase | null = null;
+
 /**
  * Returns the complete EV depreciation database.
  */
 export function getDepreciationDatabase(): DepreciationDatabase {
+  if (cachedDatabase) return cachedDatabase;
   try {
     if (
-      rawDepreciationData &&
-      typeof rawDepreciationData === 'object' &&
-      Array.isArray((rawDepreciationData as Record<string, unknown>).models)
+      isPlainRecord(rawDepreciationData) &&
+      Array.isArray(rawDepreciationData.models) &&
+      rawDepreciationData.models.length > 0
     ) {
-      return rawDepreciationData as unknown as DepreciationDatabase;
+      const fb = DEFAULT_FALLBACK_DEPRECIATION_DATABASE;
+      const hasAllSections =
+        isPlainRecord(rawDepreciationData.metadata) &&
+        isPlainRecord(rawDepreciationData.market_context) &&
+        isPlainRecord(rawDepreciationData.adjustment_factors) &&
+        isPlainRecord(rawDepreciationData.chemistries) &&
+        Array.isArray(rawDepreciationData.battery_replacement_costs) &&
+        rawDepreciationData.battery_replacement_costs.length > 0 &&
+        isPlainRecord(rawDepreciationData.subsidy_clawback_schedule) &&
+        Array.isArray(rawDepreciationData.subsidy_clawback_schedule.tiers) &&
+        rawDepreciationData.subsidy_clawback_schedule.tiers.length > 0 &&
+        isPlainRecord(rawDepreciationData.tco_parameters) &&
+        isPlainRecord(rawDepreciationData.tco_parameters.fuel_tariffs) &&
+        isPlainRecord(rawDepreciationData.tco_parameters.efficiency_baselines) &&
+        isPlainRecord(rawDepreciationData.tco_parameters.tax_parameters) &&
+        isPlainRecord(rawDepreciationData.tco_parameters.auxiliary_benefits);
+
+      if (hasAllSections) {
+        cachedDatabase = rawDepreciationData as unknown as DepreciationDatabase;
+        return cachedDatabase;
+      }
+
+      const rawTco: Record<string, unknown> = isPlainRecord(rawDepreciationData.tco_parameters)
+        ? rawDepreciationData.tco_parameters
+        : {};
+      const rawClawback: Record<string, unknown> = isPlainRecord(rawDepreciationData.subsidy_clawback_schedule)
+        ? rawDepreciationData.subsidy_clawback_schedule
+        : {};
+
+      cachedDatabase = {
+        metadata: isPlainRecord(rawDepreciationData.metadata)
+          ? (rawDepreciationData.metadata as unknown as DepreciationDatabase['metadata'])
+          : fb.metadata,
+        market_context: isPlainRecord(rawDepreciationData.market_context)
+          ? (rawDepreciationData.market_context as unknown as DepreciationDatabase['market_context'])
+          : fb.market_context,
+        adjustment_factors: isPlainRecord(rawDepreciationData.adjustment_factors)
+          ? (rawDepreciationData.adjustment_factors as unknown as AdjustmentFactors)
+          : fb.adjustment_factors,
+        chemistries: isPlainRecord(rawDepreciationData.chemistries)
+          ? (rawDepreciationData.chemistries as unknown as DepreciationDatabase['chemistries'])
+          : fb.chemistries,
+        battery_replacement_costs:
+          Array.isArray(rawDepreciationData.battery_replacement_costs) &&
+          rawDepreciationData.battery_replacement_costs.length > 0
+            ? (rawDepreciationData.battery_replacement_costs as unknown as BatteryReplacementTier[])
+            : fb.battery_replacement_costs,
+        subsidy_clawback_schedule: {
+          ...fb.subsidy_clawback_schedule,
+          ...(rawClawback as Partial<SubsidyClawbackSchedule>),
+          tiers:
+            Array.isArray(rawClawback.tiers) && rawClawback.tiers.length > 0
+              ? (rawClawback.tiers as unknown as ClawbackTier[])
+              : fb.subsidy_clawback_schedule.tiers,
+        },
+        tco_parameters: {
+          fuel_tariffs: isPlainRecord(rawTco.fuel_tariffs)
+            ? ({ ...fb.tco_parameters.fuel_tariffs, ...rawTco.fuel_tariffs } as TcoFuelTariffs)
+            : fb.tco_parameters.fuel_tariffs,
+          efficiency_baselines: isPlainRecord(rawTco.efficiency_baselines)
+            ? ({ ...fb.tco_parameters.efficiency_baselines, ...rawTco.efficiency_baselines } as TcoEfficiencyBaselines)
+            : fb.tco_parameters.efficiency_baselines,
+          tax_parameters: isPlainRecord(rawTco.tax_parameters)
+            ? ({ ...fb.tco_parameters.tax_parameters, ...rawTco.tax_parameters } as TcoTaxParameters)
+            : fb.tco_parameters.tax_parameters,
+          auxiliary_benefits: isPlainRecord(rawTco.auxiliary_benefits)
+            ? ({ ...fb.tco_parameters.auxiliary_benefits, ...rawTco.auxiliary_benefits } as TcoAuxiliaryBenefits)
+            : fb.tco_parameters.auxiliary_benefits,
+        },
+        models: rawDepreciationData.models as unknown as EvModelDepreciation[],
+      };
+      return cachedDatabase;
     }
-    return DEFAULT_FALLBACK_DEPRECIATION_DATABASE;
+    cachedDatabase = DEFAULT_FALLBACK_DEPRECIATION_DATABASE;
+    return cachedDatabase;
   } catch (err) {
     console.error('Failed to load depreciation database, using fallback:', err);
-    return DEFAULT_FALLBACK_DEPRECIATION_DATABASE;
+    cachedDatabase = DEFAULT_FALLBACK_DEPRECIATION_DATABASE;
+    return cachedDatabase;
   }
 }
 
 const DATABASE: DepreciationDatabase = getDepreciationDatabase();
 
+interface ModelIndex {
+  exact: Map<string, EvModelDepreciation>;
+  normalized: Map<string, EvModelDepreciation>;
+}
+
+const modelIndexCache = new WeakMap<readonly EvModelDepreciation[], ModelIndex>();
+
+function getModelIndex(models: readonly EvModelDepreciation[]): ModelIndex {
+  const cached = modelIndexCache.get(models);
+  if (cached) return cached;
+
+  const exact = new Map<string, EvModelDepreciation>();
+  const normalized = new Map<string, EvModelDepreciation>();
+  for (const m of models) {
+    if (!isPlainRecord(m) || typeof m.id !== 'string' || !m.id) continue;
+    const lower = m.id.toLowerCase();
+    if (!exact.has(lower)) exact.set(lower, m as unknown as EvModelDepreciation);
+    const norm = lower.replace(/[-_\s]/g, '');
+    if (norm && !normalized.has(norm)) normalized.set(norm, m as unknown as EvModelDepreciation);
+  }
+  const index: ModelIndex = { exact, normalized };
+  modelIndexCache.set(models, index);
+  return index;
+}
+
 /**
- * Returns all 15 EV depreciation models.
+ * Returns all EV depreciation models.
  */
 export function getAllModels(): EvModelDepreciation[] {
   return Array.isArray(DATABASE?.models) && DATABASE.models.length > 0
@@ -822,15 +606,9 @@ export function getAllModels(): EvModelDepreciation[] {
 export function getModelById(id: string): EvModelDepreciation | undefined {
   if (!id || typeof id !== 'string') return undefined;
   const models = getAllModels();
-  const lower = id.toLowerCase().trim();
-  if (!lower) return undefined;
-  const normalized = lower.replace(/[-_\s]/g, '');
   return (
-    models.find((m) => typeof m?.id === 'string' && (m.id.toLowerCase() === lower || m.id === id)) ||
-    models.find((m) => typeof m?.id === 'string' && m.id.toLowerCase().replace(/[-_\s]/g, '') === normalized) ||
-    DEFAULT_FALLBACK_DEPRECIATION_DATABASE.models.find(
-      (m) => typeof m?.id === 'string' && (m.id.toLowerCase() === lower || m.id.toLowerCase().replace(/[-_\s]/g, '') === normalized)
-    )
+    findModelById(models, id) ||
+    findModelById(DEFAULT_FALLBACK_DEPRECIATION_DATABASE.models, id)
   );
 }
 
@@ -841,15 +619,15 @@ export function getAllBrands(): { id: string; name_ko: string; name_en: string; 
   const brandMap = new Map<string, { id: string; name_ko: string; name_en: string; count: number }>();
   const models = getAllModels();
   for (const model of models) {
-    if (!model?.brand_id) continue;
+    if (!isPlainRecord(model) || typeof model.brand_id !== 'string' || !model.brand_id.trim()) continue;
     const existing = brandMap.get(model.brand_id);
     if (existing) {
       existing.count += 1;
     } else {
       brandMap.set(model.brand_id, {
         id: model.brand_id,
-        name_ko: model.brand_name_ko || model.brand_id,
-        name_en: model.brand_name_en || model.brand_id,
+        name_ko: typeof model.brand_name_ko === 'string' && model.brand_name_ko ? model.brand_name_ko : model.brand_id,
+        name_en: typeof model.brand_name_en === 'string' && model.brand_name_en ? model.brand_name_en : model.brand_id,
         count: 1,
       });
     }
@@ -879,7 +657,9 @@ export function getClawbackSchedule(): ClawbackTier[] {
  * Returns TCO fuel tariffs, tax rates, and auxiliary savings parameters.
  */
 export function getTcoParameters(): TcoParameters {
-  return DATABASE?.tco_parameters ?? DEFAULT_FALLBACK_DEPRECIATION_DATABASE.tco_parameters;
+  return isPlainRecord(DATABASE?.tco_parameters)
+    ? DATABASE.tco_parameters
+    : DEFAULT_FALLBACK_DEPRECIATION_DATABASE.tco_parameters;
 }
 
 // ==========================================
@@ -887,21 +667,23 @@ export function getTcoParameters(): TcoParameters {
 // ==========================================
 
 export function clamp(val: number, min: number, max: number): number {
-  const safeMin = Number.isFinite(min) ? min : 0;
-  const safeMax = Number.isFinite(max) ? max : safeMin;
-  const trueMin = Math.min(safeMin, safeMax);
-  const trueMax = Math.max(safeMin, safeMax);
+  const safeMin = Number.isFinite(min) ? normalizeZero(min) : 0;
+  const safeMax = Number.isFinite(max) ? normalizeZero(max) : safeMin;
+  const trueMin = normalizeZero(Math.min(safeMin, safeMax));
+  const trueMax = normalizeZero(Math.max(safeMin, safeMax));
   if (val === Infinity) return trueMax;
   if (!Number.isFinite(val)) return trueMin;
-  return Math.min(Math.max(val, trueMin), trueMax);
+  return normalizeZero(Math.min(Math.max(val, trueMin), trueMax));
 }
 
 function finiteOr(val: unknown, fallback: number): number {
-  return typeof val === 'number' && Number.isFinite(val) ? val : fallback;
+  return typeof val === 'number' && Number.isFinite(val) ? normalizeZero(val) : normalizeZero(fallback);
 }
 
 function finiteNonNegOr(val: unknown, fallback: number): number {
-  return typeof val === 'number' && Number.isFinite(val) && val >= 0 ? val : fallback;
+  return typeof val === 'number' && Number.isFinite(val) && val >= 0
+    ? normalizeZero(val)
+    : normalizeZero(fallback);
 }
 
 function finitePosOr(val: unknown, fallback: number): number {
@@ -909,29 +691,33 @@ function finitePosOr(val: unknown, fallback: number): number {
 }
 
 function parseNumericInput(val: unknown): number {
-  if (typeof val === 'number') return val;
+  if (typeof val === 'number') return normalizeZero(val);
   if (typeof val === 'string') {
     const trimmed = val.trim();
-    if (trimmed !== '') return Number(trimmed);
+    if (trimmed !== '') return normalizeZero(Number(trimmed));
   }
   return NaN;
 }
 
+const VALID_DEFENSE_TIERS: ReadonlySet<string> = new Set([
+  'S', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'D',
+]);
+
+function sanitizeDefenseTier(tier: unknown): ResaleDefenseTier {
+  return typeof tier === 'string' && VALID_DEFENSE_TIERS.has(tier)
+    ? (tier as ResaleDefenseTier)
+    : 'B';
+}
+
 function findModelById(models: EvModelDepreciation[] | undefined, modelId: unknown): EvModelDepreciation | undefined {
-  if (!Array.isArray(models) || typeof modelId !== 'string') return undefined;
+  if (!Array.isArray(models) || models.length === 0 || typeof modelId !== 'string') return undefined;
   const searchId = modelId.toLowerCase().trim();
   if (!searchId) return undefined;
+  const { exact, normalized } = getModelIndex(models);
+  const direct = exact.get(searchId);
+  if (direct) return direct;
   const searchNorm = searchId.replace(/[-_\s]/g, '');
-  return (
-    models.find(
-      (m) => typeof m?.id === 'string' && (m.id.toLowerCase() === searchId || m.id === modelId)
-    ) ||
-    models.find(
-      (m) =>
-        typeof m?.id === 'string' &&
-        m.id.toLowerCase().replace(/[-_\s]/g, '') === searchNorm
-    )
-  );
+  return searchNorm ? normalized.get(searchNorm) : undefined;
 }
 
 export function normalizeChemistry(chem?: string | null): BatteryChemistryType {
@@ -986,13 +772,6 @@ export function interpolateBaselineResidual(curve: DepreciationCurve, years: num
 // 6. DEPRECIATION CALCULATOR
 // ==========================================
 
-export interface CalculateDepreciationOptions {
-  model?: EvModelDepreciation;
-  models?: EvModelDepreciation[];
-  baselineAnnualMileageKm?: number;
-  adjustmentFactors?: PartialAdjustmentFactors;
-}
-
 /**
  * Calculates empirical depreciation and adjusted residual value for an EV.
  * Accounts for vehicle age, mileage, warranty cliff, chemistry, 800V architecture, and OTA status.
@@ -1001,30 +780,40 @@ export function calculateDepreciation(
   input: DepreciationCalculationInput,
   options?: CalculateDepreciationOptions
 ): DepreciationCalculationResult {
-  const safeInput = input && typeof input === 'object' ? input : ({} as DepreciationCalculationInput);
-  const parsedYears = parseNumericInput(safeInput.years);
+  const safeInput = isPlainRecord(input) ? (input as unknown as DepreciationCalculationInput) : ({} as DepreciationCalculationInput);
+  const safeOptions = isPlainRecord(options) ? (options as unknown as CalculateDepreciationOptions) : undefined;
+
+  const rawYearsInput = safeInput.years !== undefined ? safeInput.years : safeInput.heldYears;
+  const parsedYears = parseNumericInput(rawYearsInput);
   const years = Number.isFinite(parsedYears) ? clamp(parsedYears, 0, 100) : 0;
 
-  const rawFactors =
-    options?.adjustmentFactors && typeof options.adjustmentFactors === 'object'
-      ? options.adjustmentFactors
-      : undefined;
+  const rawFactors = isPlainRecord(safeOptions?.adjustmentFactors)
+    ? safeOptions.adjustmentFactors
+    : undefined;
+  const rawMileageSens = isPlainRecord(rawFactors?.mileage_sensitivity)
+    ? rawFactors.mileage_sensitivity
+    : undefined;
+  const rawWarrantyCliff = isPlainRecord(rawFactors?.warranty_cliff)
+    ? rawFactors.warranty_cliff
+    : undefined;
+
   const defaultBaselineAnnualMileage = finitePosOr(
     DATABASE?.metadata?.baseline_annual_mileage_km,
     15000
   );
   const baselineAnnualMileage = finitePosOr(
-    options?.baselineAnnualMileageKm,
+    safeOptions?.baselineAnnualMileageKm ?? safeOptions?.annualAverageKm,
     finitePosOr(
-      rawFactors?.mileage_sensitivity?.baseline_annual_km,
+      rawMileageSens?.baseline_annual_km,
       finitePosOr(
-        rawFactors?.mileage_sensitivity?.base_km_per_year,
+        rawMileageSens?.base_km_per_year,
         defaultBaselineAnnualMileage
       )
     )
   );
-  const parsedMileage = parseNumericInput(safeInput.mileageKm);
-  const defaultMileage = years * baselineAnnualMileage;
+  const rawMileageInput = safeInput.mileageKm !== undefined ? safeInput.mileageKm : safeInput.totalKm;
+  const parsedMileage = parseNumericInput(rawMileageInput);
+  const defaultMileage = normalizeZero(years * baselineAnnualMileage);
   const mileageKm = Number.isFinite(parsedMileage)
     ? clamp(parsedMileage, 0, 10_000_000)
     : defaultMileage;
@@ -1032,19 +821,17 @@ export function calculateDepreciation(
   const {
     modelId,
     winterSeason = false,
-    customPurchasePriceKrw,
   } = safeInput;
   const priceBasis: PriceBasis = safeInput.priceBasis === 'effective' ? 'effective' : 'msrp';
 
-  const explicitModel =
-    safeInput.model && typeof safeInput.model === 'object'
-      ? safeInput.model
-      : options?.model && typeof options.model === 'object'
-      ? options.model
-      : undefined;
+  const explicitModel = isPlainRecord(safeInput.model)
+    ? (safeInput.model as EvModelDepreciation)
+    : isPlainRecord(safeOptions?.model)
+    ? (safeOptions.model as EvModelDepreciation)
+    : undefined;
   const model =
     explicitModel ||
-    (options?.models && modelId ? findModelById(options.models, modelId) : undefined) ||
+    (safeOptions?.models && modelId ? findModelById(safeOptions.models, modelId) : undefined) ||
     (modelId ? getModelById(modelId) : undefined) ||
     DATABASE?.models?.[0] ||
     DEFAULT_FALLBACK_DEPRECIATION_DATABASE.models[0];
@@ -1055,13 +842,19 @@ export function calculateDepreciation(
 
   // 1. Mileage Adjustment
   const defaultAdjFactors = DEFAULT_FALLBACK_DEPRECIATION_DATABASE.adjustment_factors;
-  const adjFactors = DATABASE?.adjustment_factors ?? defaultAdjFactors;
-  const mileageSens = adjFactors?.mileage_sensitivity ?? defaultAdjFactors.mileage_sensitivity;
-  const warrantyCliff = adjFactors?.warranty_cliff ?? defaultAdjFactors.warranty_cliff;
+  const adjFactors = isPlainRecord(DATABASE?.adjustment_factors)
+    ? DATABASE.adjustment_factors
+    : defaultAdjFactors;
+  const mileageSens = isPlainRecord(adjFactors?.mileage_sensitivity)
+    ? adjFactors.mileage_sensitivity
+    : defaultAdjFactors.mileage_sensitivity;
+  const warrantyCliff = isPlainRecord(adjFactors?.warranty_cliff)
+    ? adjFactors.warranty_cliff
+    : defaultAdjFactors.warranty_cliff;
 
   const excessPenaltyRate = clamp(
     finiteOr(
-      rawFactors?.mileage_sensitivity?.penalty_per_10000km_excess,
+      rawMileageSens?.penalty_per_10000km_excess,
       finiteOr(mileageSens?.penalty_per_10000km_excess, -0.018)
     ),
     -1e6,
@@ -1069,7 +862,7 @@ export function calculateDepreciation(
   );
   const deficitBonusRate = clamp(
     finiteOr(
-      rawFactors?.mileage_sensitivity?.bonus_per_10000km_deficit,
+      rawMileageSens?.bonus_per_10000km_deficit,
       finiteOr(mileageSens?.bonus_per_10000km_deficit, 0.012)
     ),
     -1e6,
@@ -1077,7 +870,7 @@ export function calculateDepreciation(
   );
   const maxDiscountCap = clamp(
     finiteOr(
-      rawFactors?.mileage_sensitivity?.max_mileage_discount_cap,
+      rawMileageSens?.max_mileage_discount_cap,
       finiteOr(mileageSens?.max_mileage_discount_cap, -0.15)
     ),
     -1e6,
@@ -1085,7 +878,7 @@ export function calculateDepreciation(
   );
   const approachingCliffPenalty = clamp(
     finiteOr(
-      rawFactors?.warranty_cliff?.approaching_cliff_1_2_years_penalty,
+      rawWarrantyCliff?.approaching_cliff_1_2_years_penalty,
       finiteOr(warrantyCliff?.approaching_cliff_1_2_years_penalty, -0.06)
     ),
     -1e6,
@@ -1093,7 +886,7 @@ export function calculateDepreciation(
   );
   const expiredWarrantyPenalty = clamp(
     finiteOr(
-      rawFactors?.warranty_cliff?.expired_warranty_penalty,
+      rawWarrantyCliff?.expired_warranty_penalty,
       finiteOr(warrantyCliff?.expired_warranty_penalty, -0.14)
     ),
     -1e6,
@@ -1105,13 +898,14 @@ export function calculateDepreciation(
   let mileageAdjustment = 0;
   if (deltaMileage > 0) {
     const rawPenalty = (deltaMileage / 10000) * excessPenaltyRate;
+    const cappedPenalty = Math.max(maxDiscountCap, rawPenalty);
     if (mileageKm >= 500000) {
       mileageAdjustment = rawPenalty;
     } else if (mileageKm > 300000) {
       const progress = (mileageKm - 300000) / 200000;
-      mileageAdjustment = maxDiscountCap * (1 - progress) + rawPenalty * progress;
+      mileageAdjustment = cappedPenalty * (1 - progress) + rawPenalty * progress;
     } else {
-      mileageAdjustment = Math.max(maxDiscountCap, rawPenalty);
+      mileageAdjustment = cappedPenalty;
     }
   } else {
     mileageAdjustment = Math.min(0.06, (Math.abs(deltaMileage) / 10000) * deficitBonusRate);
@@ -1149,11 +943,7 @@ export function calculateDepreciation(
   // 4. Winter Season Adjustment
   let winterAdjustment = 0;
   if (winterSeason) {
-    if (isLfp) {
-      winterAdjustment = -0.035;
-    } else {
-      winterAdjustment = -0.015;
-    }
+    winterAdjustment = isLfp ? -0.035 : -0.015;
   }
 
   // 5. Hardware Architecture & OTA
@@ -1181,12 +971,16 @@ export function calculateDepreciation(
     100;
 
   const adjustedResidualPct = clamp(
-    Math.round((baselineResidualPct + totalAdjustmentPct) * 10) / 10,
+    roundTo(baselineResidualPct + totalAdjustmentPct, 1),
     5.0,
     99.0
   );
 
-  const parsedCustomPrice = parseNumericInput(customPurchasePriceKrw);
+  const rawCustomPriceInput =
+    safeInput.customPurchasePriceKrw !== undefined
+      ? safeInput.customPurchasePriceKrw
+      : safeOptions?.customPurchasePriceKrw;
+  const parsedCustomPrice = parseNumericInput(rawCustomPriceInput);
 
   const rawBasePurchasePrice =
     Number.isFinite(parsedCustomPrice) && parsedCustomPrice >= 0
@@ -1195,7 +989,7 @@ export function calculateDepreciation(
           ? finiteNonNegOr(model?.net_purchase_price_krw, 48_000_000)
           : finiteNonNegOr(model?.msrp_krw_baseline, 55_000_000));
 
-  const basePurchasePriceKrw = Math.min(10_000_000_000, Math.max(0, rawBasePurchasePrice));
+  const basePurchasePriceKrw = normalizeZero(Math.min(10_000_000_000, Math.max(0, rawBasePurchasePrice)));
 
   const rawEstimatedResidual = Math.round((basePurchasePriceKrw * adjustedResidualPct) / 100);
   const estimatedResidualPriceKrw = clamp(
@@ -1215,32 +1009,32 @@ export function calculateDepreciation(
     mileageKm,
     priceBasis,
     basePurchasePriceKrw,
-    baselineResidualPct: Math.round(baselineResidualPct * 10) / 10,
+    baselineResidualPct: roundTo(baselineResidualPct, 1),
     adjustedResidualPct,
     estimatedResidualPriceKrw,
     depreciationAmountKrw,
-    defenseTier: model?.resale_defense_tier ?? 'B',
+    defenseTier: sanitizeDefenseTier(model?.resale_defense_tier),
     factorAdjustments: {
-      warrantyCliffPenalty: Math.round(warrantyCliffPenalty * 1000) / 10,
-      batteryChemistryBonus: Math.round(batteryChemistryBonus * 1000) / 10,
-      architectureAdjustment: Math.round(architectureAdjustment * 1000) / 10,
-      otaAdjustment: Math.round(otaAdjustment * 1000) / 10,
-      mileageAdjustment: Math.round(mileageAdjustment * 1000) / 10,
-      winterAdjustment: Math.round(winterAdjustment * 1000) / 10,
-      totalAdjustmentPct: Math.round(totalAdjustmentPct * 10) / 10,
+      warrantyCliffPenalty: roundTo(warrantyCliffPenalty * 100, 1),
+      batteryChemistryBonus: roundTo(batteryChemistryBonus * 100, 1),
+      architectureAdjustment: roundTo(architectureAdjustment * 100, 1),
+      otaAdjustment: roundTo(otaAdjustment * 100, 1),
+      mileageAdjustment: roundTo(mileageAdjustment * 100, 1),
+      winterAdjustment: roundTo(winterAdjustment * 100, 1),
+      totalAdjustmentPct: roundTo(totalAdjustmentPct, 1),
     },
     warrantyStatus: {
       isApproachingCliff,
       isExpired,
       remainingYears: Number.isFinite(remainingWarrantyYears)
-        ? Math.max(0, Math.round(remainingWarrantyYears * 10) / 10)
+        ? Math.max(0, roundTo(remainingWarrantyYears, 1))
         : 0,
       remainingKm: Number.isFinite(remainingWarrantyKm)
-        ? Math.max(0, Math.round(remainingWarrantyKm))
+        ? Math.max(0, roundTo(remainingWarrantyKm, 0))
         : 0,
     },
-    keyPros: model?.key_pros_resale ?? '데이터 동기화 완료',
-    keyCons: model?.key_cons_resale ?? '정기 점검 필요',
+    keyPros: typeof model?.key_pros_resale === 'string' ? model.key_pros_resale : '데이터 동기화 완료',
+    keyCons: typeof model?.key_cons_resale === 'string' ? model.key_cons_resale : '정기 점검 필요',
   };
 }
 
@@ -1258,19 +1052,25 @@ export function simulateBatteryHealth(
   customReplacementCosts?: BatteryReplacementTier[],
   options?: { models?: EvModelDepreciation[]; model?: EvModelDepreciation }
 ): BatteryHealthResult {
-  const safeParams = params && typeof params === 'object' ? params : ({} as BatterySimulationInput);
+  const safeParams = isPlainRecord(params) ? (params as unknown as BatterySimulationInput) : ({} as BatterySimulationInput);
+  const safeOptions = isPlainRecord(options) ? options : undefined;
   const {
     chemistry: chemInput,
     modelId,
     totalKm: inputTotalKm,
     annualKm = 15000,
-    dcfcRatio = 0.25,
     storageSoc = 0.50,
     ambientTempC = 25.0,
     vehicleEfficiencyKmPerKwh = 5.2,
   } = safeParams;
+  const rawDcfcRatio =
+    safeParams.dcfcRatio !== undefined
+      ? safeParams.dcfcRatio
+      : safeParams.fastChargingRatioPct !== undefined
+      ? parseNumericInput(safeParams.fastChargingRatioPct) / 100
+      : 0.25;
 
-  const rawYears = safeParams.years as unknown;
+  const rawYears = (safeParams.years !== undefined ? safeParams.years : safeParams.heldYears) as unknown;
   const parsedYears = parseNumericInput(rawYears);
   const isInvalidYears =
     rawYears === undefined ||
@@ -1279,14 +1079,13 @@ export function simulateBatteryHealth(
     parsedYears < 0;
   const safeYears = isInvalidYears ? 3 : clamp(parsedYears, 0, 100);
 
-  let model: EvModelDepreciation | undefined =
-    safeParams.model && typeof safeParams.model === 'object'
-      ? safeParams.model
-      : options?.model && typeof options.model === 'object'
-      ? options.model
-      : undefined;
-  if (!model && options?.models && modelId) {
-    model = findModelById(options.models, modelId);
+  let model: EvModelDepreciation | undefined = isPlainRecord(safeParams.model)
+    ? (safeParams.model as EvModelDepreciation)
+    : isPlainRecord(safeOptions?.model)
+    ? (safeOptions.model as EvModelDepreciation)
+    : undefined;
+  if (!model && Array.isArray(safeOptions?.models) && modelId) {
+    model = findModelById(safeOptions.models as EvModelDepreciation[], modelId);
   }
   if (!model && typeof modelId === 'string' && modelId.trim() !== '') {
     model = getModelById(modelId);
@@ -1299,10 +1098,14 @@ export function simulateBatteryHealth(
   const hardFallbackChem =
     DEFAULT_FALLBACK_DEPRECIATION_DATABASE.chemistries[chemistryKey] ||
     DEFAULT_FALLBACK_DEPRECIATION_DATABASE.chemistries.NCM_811;
+  const dbChems = isPlainRecord(DATABASE?.chemistries) ? DATABASE.chemistries : undefined;
   const dbChem =
-    DATABASE?.chemistries?.[chemistryKey] ||
-    DATABASE?.chemistries?.NCM_811;
-  const defaultChem: BatteryChemistryProfile = dbChem && typeof dbChem === 'object'
+    dbChems && Object.prototype.hasOwnProperty.call(dbChems, chemistryKey)
+      ? dbChems[chemistryKey]
+      : dbChems && Object.prototype.hasOwnProperty.call(dbChems, 'NCM_811')
+      ? dbChems.NCM_811
+      : undefined;
+  const defaultChem: BatteryChemistryProfile = isPlainRecord(dbChem)
     ? {
         ...hardFallbackChem,
         ...dbChem,
@@ -1319,13 +1122,13 @@ export function simulateBatteryHealth(
       }
     : hardFallbackChem;
   const rawCustomChem =
-    customChemistries &&
-    typeof customChemistries === 'object' &&
+    isPlainRecord(customChemistries) &&
     Object.prototype.hasOwnProperty.call(customChemistries, chemistryKey)
       ? customChemistries[chemistryKey]
       : undefined;
-  const chemProfile =
-    rawCustomChem && typeof rawCustomChem === 'object' ? rawCustomChem : defaultChem;
+  const chemProfile = isPlainRecord(rawCustomChem)
+    ? (rawCustomChem as Partial<BatteryChemistryProfile>)
+    : defaultChem;
 
   const modelCapacityFallback = finitePosOr(model?.battery_specs?.capacity_kwh, 77.4);
   const parsedPackCapacity =
@@ -1340,7 +1143,7 @@ export function simulateBatteryHealth(
   const parsedAnnualKm = parseNumericInput(annualKm);
   const safeAnnualKm =
     Number.isFinite(parsedAnnualKm) && parsedAnnualKm >= 0
-      ? Math.min(10_000_000, parsedAnnualKm)
+      ? normalizeZero(Math.min(10_000_000, parsedAnnualKm))
       : 15000;
 
   const parsedInputTotalKm = parseNumericInput(inputTotalKm);
@@ -1360,7 +1163,7 @@ export function simulateBatteryHealth(
   const parsedStorageSoc = parseNumericInput(storageSoc);
   const safeStorageSoc = Number.isFinite(parsedStorageSoc) ? clamp(parsedStorageSoc, 0.0, 1.0) : 0.50;
 
-  const parsedDcfcRatio = parseNumericInput(dcfcRatio);
+  const parsedDcfcRatio = parseNumericInput(rawDcfcRatio);
   const safeDcfcRatio = Number.isFinite(parsedDcfcRatio) ? clamp(parsedDcfcRatio, 0.0, 1.0) : 0.25;
   const tempK = Math.max(1.0, safeTempC + 273.15);
 
@@ -1368,21 +1171,22 @@ export function simulateBatteryHealth(
     chemProfile?.calendar_arrhenius_ea_j_mol,
     defaultChem.calendar_arrhenius_ea_j_mol
   );
-  const arrheniusFactor = Math.exp(
-    (-arrheniusEa / R_GAS) * (1.0 / tempK - 1.0 / T_REF_K)
-  );
+  const arrheniusExponent = clamp((-arrheniusEa / R_GAS) * (1.0 / tempK - 1.0 / T_REF_K), -500, 500);
+  const arrheniusFactor = Math.exp(arrheniusExponent);
   const socBeta = finiteOr(
     chemProfile?.soc_stress_coefficient_beta,
     defaultChem.soc_stress_coefficient_beta
   );
-  const socFactor = Math.exp(socBeta * (safeStorageSoc - SOC_REF));
+  const socExponent = clamp(socBeta * (safeStorageSoc - SOC_REF), -500, 500);
+  const socFactor = Math.exp(socExponent);
   const baselineAnnualLoss = finiteNonNegOr(
     chemProfile?.calendar_baseline_annual_loss_pct,
     defaultChem.calendar_baseline_annual_loss_pct
   );
-  const calendarTimeExp = finiteNonNegOr(
-    chemProfile?.calendar_time_exponent_z,
-    defaultChem.calendar_time_exponent_z
+  const calendarTimeExp = clamp(
+    finiteNonNegOr(chemProfile?.calendar_time_exponent_z, defaultChem.calendar_time_exponent_z),
+    0,
+    20
   );
   const qLossCal =
     safeYears > 0 && baselineAnnualLoss > 0
@@ -1399,21 +1203,27 @@ export function simulateBatteryHealth(
 
   const energyThroughputKwh = safeMileage / Math.max(1.0, safeEfficiency);
   const equivalentFullCycles = energyThroughputKwh / Math.max(10.0, safeCapacity);
-  const safeCycles = Number.isFinite(equivalentFullCycles) ? Math.max(0, equivalentFullCycles) : 0;
+  const safeCycles = Number.isFinite(equivalentFullCycles) ? normalizeZero(Math.max(0, equivalentFullCycles)) : 0;
 
-  const dodExp = finiteNonNegOr(chemProfile?.dod_exponent_u, defaultChem.dod_exponent_u);
+  const dodExp = clamp(
+    finiteNonNegOr(chemProfile?.dod_exponent_u, defaultChem.dod_exponent_u),
+    0,
+    20
+  );
   const fDod = Math.pow(0.85, dodExp);
-  const dcfcMax = Math.max(
+  const dcfcMax = clamp(
+    finiteOr(chemProfile?.dcfc_acceleration_multiplier_max, defaultChem.dcfc_acceleration_multiplier_max),
     1.0,
-    finiteOr(chemProfile?.dcfc_acceleration_multiplier_max, defaultChem.dcfc_acceleration_multiplier_max)
+    1000.0
   );
   const fDcfc = 1.0 + (dcfcMax - 1.0) * safeDcfcRatio;
 
   let fTempCyc = 1.0;
   if (safeTempC < 0) {
-    const coldSensitivity = finiteNonNegOr(
-      chemProfile?.cold_charge_sensitivity_gamma,
-      defaultChem.cold_charge_sensitivity_gamma
+    const coldSensitivity = clamp(
+      finiteNonNegOr(chemProfile?.cold_charge_sensitivity_gamma, defaultChem.cold_charge_sensitivity_gamma),
+      0,
+      1000
     );
     const coldFraction = Math.min(1.0, Math.abs(safeTempC) / 15.0);
     fTempCyc = 1.0 + coldSensitivity * coldFraction;
@@ -1423,28 +1233,28 @@ export function simulateBatteryHealth(
     100,
     finitePosOr(chemProfile?.cycle_life_to_80_soh, defaultChem.cycle_life_to_80_soh)
   );
-  const cyclicExp = finiteNonNegOr(chemProfile?.cyclic_exponent_w, defaultChem.cyclic_exponent_w);
+  const cyclicExp = clamp(
+    finiteNonNegOr(chemProfile?.cyclic_exponent_w, defaultChem.cyclic_exponent_w),
+    0,
+    20
+  );
   const qLossCyc =
     safeCycles > 0
-      ? (0.20 / Math.pow(baseCycles, cyclicExp)) *
-        fDod *
-        fDcfc *
-        fTempCyc *
-        Math.pow(safeCycles, cyclicExp)
+      ? 0.20 * fDod * fDcfc * fTempCyc * Math.pow(safeCycles / baseCycles, cyclicExp)
       : 0;
 
   // C. Sub-additive Coupling (p = 1.25)
   const P_COUPLING = 1.25;
-  const safeQLossCal = Number.isNaN(qLossCal) ? 0 : Math.min(100, Math.max(0, qLossCal));
-  const safeQLossCyc = Number.isNaN(qLossCyc) ? 0 : Math.min(100, Math.max(0, qLossCyc));
+  const safeQLossCal = Number.isFinite(qLossCal) ? clamp(qLossCal, 0, 100) : qLossCal === Infinity ? 100 : 0;
+  const safeQLossCyc = Number.isFinite(qLossCyc) ? clamp(qLossCyc, 0, 100) : qLossCyc === Infinity ? 100 : 0;
   const qLossTotal = Math.pow(
     Math.pow(safeQLossCal, P_COUPLING) + Math.pow(safeQLossCyc, P_COUPLING),
     1.0 / P_COUPLING
   );
 
-  const finiteQLossTotal = Number.isNaN(qLossTotal) ? 0 : Math.min(100, Math.max(0, qLossTotal));
+  const finiteQLossTotal = Number.isFinite(qLossTotal) ? clamp(qLossTotal, 0, 100) : 0;
   const rawSoh = (1.0 - finiteQLossTotal) * 100;
-  const sohPct = clamp(Math.round(rawSoh * 10) / 10, 0.0, 100.0);
+  const sohPct = clamp(roundTo(rawSoh, 1), 0.0, 100.0);
 
   // D. Grade Determination
   let grade: BatteryRiskGrade = 'GRADE_A';
@@ -1463,7 +1273,7 @@ export function simulateBatteryHealth(
     grade = 'CRITICAL';
     gradeLabel = 'Critical (수명 만료 / 교체 대상)';
     badgeColor = 'red';
-    failureRiskPct = Math.min(99.9, Math.round((42.0 + (70.0 - sohPct) * 0.8) * 10) / 10);
+    failureRiskPct = Math.min(99.9, roundTo(42.0 + (70.0 - sohPct) * 0.8, 1));
     winterRangeRetentionPct = Math.max(0, Math.round(36 * (sohPct / 70.0)));
     usedMarketValuationFactor = 0.30;
     usedMarketValuationText = '-60% ~ -80% 시세 폭락 (폐차/전손 기준 가치)';
@@ -1498,26 +1308,35 @@ export function simulateBatteryHealth(
   const replacementCosts = Array.isArray(candidateCosts) && candidateCosts.length > 0
     ? candidateCosts
     : DEFAULT_FALLBACK_DEPRECIATION_DATABASE.battery_replacement_costs;
-  const fallbackTier = replacementCosts[0] || DEFAULT_FALLBACK_DEPRECIATION_DATABASE.battery_replacement_costs[0];
+  const fallbackTier = isPlainRecord(replacementCosts[0])
+    ? (replacementCosts[0] as BatteryReplacementTier)
+    : DEFAULT_FALLBACK_DEPRECIATION_DATABASE.battery_replacement_costs[0];
 
-  let targetTier = replacementCosts[1] || fallbackTier;
+  const pickTier = (idx: number): BatteryReplacementTier => {
+    const candidate = replacementCosts[idx];
+    return isPlainRecord(candidate) ? (candidate as BatteryReplacementTier) : fallbackTier;
+  };
+
+  let targetTier = pickTier(1);
   if (packCapacityKwh <= 65) {
-    targetTier = replacementCosts[0] || fallbackTier;
+    targetTier = pickTier(0);
   } else if (packCapacityKwh >= 89) {
-    targetTier = replacementCosts[2] || replacementCosts[replacementCosts.length - 1] || fallbackTier;
+    targetTier = isPlainRecord(replacementCosts[2])
+      ? (replacementCosts[2] as BatteryReplacementTier)
+      : pickTier(replacementCosts.length - 1);
   }
 
   const defaultCosts = DEFAULT_FALLBACK_DEPRECIATION_DATABASE.battery_replacement_costs[1].costs;
-  const tierCosts = targetTier?.costs ?? defaultCosts;
-  const newPackKrw = finiteNonNegOr(tierCosts?.new_pack_krw, defaultCosts.new_pack_krw);
-  const laborCoolantKrw = finiteNonNegOr(tierCosts?.labor_coolant_krw, defaultCosts.labor_coolant_krw);
+  const tierCosts = isPlainRecord(targetTier?.costs) ? targetTier.costs : defaultCosts;
+  const newPackKrw = Math.min(1e12, finiteNonNegOr(tierCosts?.new_pack_krw, defaultCosts.new_pack_krw));
+  const laborCoolantKrw = Math.min(1e12, finiteNonNegOr(tierCosts?.labor_coolant_krw, defaultCosts.labor_coolant_krw));
   const fallbackTotalNew =
     typeof tierCosts?.new_pack_krw === 'number' && Number.isFinite(tierCosts.new_pack_krw) && tierCosts.new_pack_krw >= 0
-      ? newPackKrw + laborCoolantKrw
+      ? Math.min(1e12, newPackKrw + laborCoolantKrw)
       : defaultCosts.total_new_installed_krw;
-  const totalNewInstalledKrw = finiteNonNegOr(
-    tierCosts?.total_new_installed_krw,
-    fallbackTotalNew
+  const totalNewInstalledKrw = Math.min(
+    1e12,
+    finiteNonNegOr(tierCosts?.total_new_installed_krw, fallbackTotalNew)
   );
   const remanPackKrw =
     tierCosts?.reman_pack_krw === null
@@ -1525,7 +1344,7 @@ export function simulateBatteryHealth(
       : typeof tierCosts?.reman_pack_krw === 'number' &&
         Number.isFinite(tierCosts.reman_pack_krw) &&
         tierCosts.reman_pack_krw >= 0
-      ? tierCosts.reman_pack_krw
+      ? normalizeZero(Math.min(1e12, tierCosts.reman_pack_krw))
       : null;
   const totalRemanInstalledKrw =
     tierCosts?.total_reman_installed_krw === null
@@ -1533,7 +1352,7 @@ export function simulateBatteryHealth(
       : typeof tierCosts?.total_reman_installed_krw === 'number' &&
         Number.isFinite(tierCosts.total_reman_installed_krw) &&
         tierCosts.total_reman_installed_krw >= 0
-      ? tierCosts.total_reman_installed_krw
+      ? normalizeZero(Math.min(1e12, tierCosts.total_reman_installed_krw))
       : null;
 
   return {
@@ -1545,10 +1364,10 @@ export function simulateBatteryHealth(
       '전기차 배터리',
     years: safeYears,
     totalKm: safeMileage,
-    equivalentFullCycles: Math.round(safeCycles),
-    calendarLossPct: clamp(Math.round(safeQLossCal * 1000) / 10, 0.0, 100.0),
-    cyclicLossPct: clamp(Math.round(safeQLossCyc * 1000) / 10, 0.0, 100.0),
-    totalLossPct: clamp(Math.round(finiteQLossTotal * 1000) / 10, 0.0, 100.0),
+    equivalentFullCycles: normalizeZero(Math.round(safeCycles)),
+    calendarLossPct: clamp(roundTo(safeQLossCal * 100, 1), 0.0, 100.0),
+    cyclicLossPct: clamp(roundTo(safeQLossCyc * 100, 1), 0.0, 100.0),
+    totalLossPct: clamp(roundTo(finiteQLossTotal * 100, 1), 0.0, 100.0),
     sohPct,
     grade,
     gradeLabel,
@@ -1635,7 +1454,7 @@ export function calculateSubsidyClawback(
 
   let matchedTier: ClawbackTier | undefined;
   for (const t of tiers) {
-    if (!t || typeof t !== 'object') continue;
+    if (!isPlainRecord(t)) continue;
     const minM = finiteNonNegOr(t.min_months, 0);
     if (
       t.max_months_exclusive === null ||
@@ -1643,7 +1462,7 @@ export function calculateSubsidyClawback(
       t.max_months_exclusive === Infinity
     ) {
       if (normalizedMonths >= minM) {
-        matchedTier = t;
+        matchedTier = t as unknown as ClawbackTier;
         break;
       }
     } else if (
@@ -1651,13 +1470,19 @@ export function calculateSubsidyClawback(
       Number.isFinite(t.max_months_exclusive)
     ) {
       if (normalizedMonths >= minM && normalizedMonths < t.max_months_exclusive) {
-        matchedTier = t;
+        matchedTier = t as unknown as ClawbackTier;
         break;
       }
     }
   }
   if (!matchedTier) {
-    matchedTier = normalizedMonths >= 24 ? defaultTier : (tiers[tiers.length - 1] ?? defaultTier);
+    const lastTier = tiers[tiers.length - 1];
+    matchedTier =
+      normalizedMonths >= 24
+        ? defaultTier
+        : isPlainRecord(lastTier)
+        ? (lastTier as unknown as ClawbackTier)
+        : defaultTier;
   }
 
   const rawStatutoryRate = matchedTier?.clawback_rate;
@@ -1683,14 +1508,14 @@ export function calculateSubsidyClawback(
   } else if (transferType === 'inter') {
     isExempt = statutoryRate === 0;
     effectiveRate = statutoryRate;
-    localClawbackKrw = Math.round(safeLocalSubsidy * effectiveRate);
+    localClawbackKrw = normalizeZero(Math.round(safeLocalSubsidy * effectiveRate));
     nationalClawbackKrw = 0; // 국비는 국내 운행 유지 시 환수 면제
     explanation = `타 지자체 관외 이전: 매도인이 수령한 지자체 지방비 보조금(${Math.round(safeLocalSubsidy).toLocaleString()}원)에 대해 사용기간별 회수요율(${(statutoryRate * 100).toFixed(0)}%)이 적용되어 ${localClawbackKrw.toLocaleString()}원이 환수 고지됩니다 (국비는 면제).`;
   } else if (transferType === 'export') {
     isExempt = false;
     effectiveRate = statutoryRate;
-    localClawbackKrw = Math.round(safeLocalSubsidy * effectiveRate);
-    nationalClawbackKrw = Math.round(safeNationalSubsidy * effectiveRate);
+    localClawbackKrw = normalizeZero(Math.round(safeLocalSubsidy * effectiveRate));
+    nationalClawbackKrw = normalizeZero(Math.round(safeNationalSubsidy * effectiveRate));
     explanation = `해외 수출 말소: 국내 대기질 개선 취지 상실로 국비와 지방비를 합산한 총 보조금에 회수요율(${(statutoryRate * 100).toFixed(0)}%)이 전액 적용됩니다.`;
   }
 
@@ -1698,25 +1523,25 @@ export function calculateSubsidyClawback(
     explanation = '알 수 없거나 미지정된 이전 유형입니다.';
   }
 
-  const totalClawbackKrw = localClawbackKrw + nationalClawbackKrw;
+  const totalClawbackKrw = normalizeZero(localClawbackKrw + nationalClawbackKrw);
   const remainingMonths = Math.max(0, 24 - normalizedMonths);
 
   return {
-    heldMonths: normalizedMonths,
+    heldMonths: normalizeZero(normalizedMonths),
     tierLabel:
       typeof matchedTier?.label_ko === 'string' && matchedTier.label_ko
         ? matchedTier.label_ko
         : defaultTier.label_ko,
     statutoryClawbackRate: statutoryRate,
     effectiveClawbackRate: effectiveRate,
-    localSubsidyReceivedKrw: safeLocalSubsidy,
-    nationalSubsidyReceivedKrw: safeNationalSubsidy,
+    localSubsidyReceivedKrw: normalizeZero(safeLocalSubsidy),
+    nationalSubsidyReceivedKrw: normalizeZero(safeNationalSubsidy),
     localClawbackKrw,
     nationalClawbackKrw,
     totalClawbackKrw,
     transferType,
     isExempt,
-    remainingMonthsOfObligation: Math.round(remainingMonths * 10) / 10,
+    remainingMonthsOfObligation: roundTo(remainingMonths, 1),
     explanation,
   };
 }
@@ -1738,13 +1563,24 @@ export function calculateTcoComparison(
   customParams?: PartialTcoParameters
 ): TcoResult {
   const hardFallbackTco = DEFAULT_FALLBACK_DEPRECIATION_DATABASE.tco_parameters;
-  const fallbackTco = DATABASE?.tco_parameters ?? hardFallbackTco;
-  const params = customParams && typeof customParams === 'object' ? customParams : fallbackTco;
+  const fallbackTco = isPlainRecord(DATABASE?.tco_parameters)
+    ? DATABASE.tco_parameters
+    : hardFallbackTco;
+  const params: PartialTcoParameters = isPlainRecord(customParams)
+    ? (customParams as PartialTcoParameters)
+    : fallbackTco;
+  const rawFuelTariffs = isPlainRecord(params.fuel_tariffs) ? params.fuel_tariffs : undefined;
+  const rawEfficiencyBaselines = isPlainRecord(params.efficiency_baselines)
+    ? params.efficiency_baselines
+    : undefined;
+  const rawAuxBenefits = isPlainRecord(params.auxiliary_benefits)
+    ? params.auxiliary_benefits
+    : undefined;
   const fuelTariffs = {
     ev_slow_charging_krw_per_kwh: Math.min(
       1e12,
       finiteNonNegOr(
-        params?.fuel_tariffs?.ev_slow_charging_krw_per_kwh,
+        rawFuelTariffs?.ev_slow_charging_krw_per_kwh,
         finiteNonNegOr(
           fallbackTco?.fuel_tariffs?.ev_slow_charging_krw_per_kwh,
           hardFallbackTco.fuel_tariffs.ev_slow_charging_krw_per_kwh
@@ -1754,7 +1590,7 @@ export function calculateTcoComparison(
     ev_fast_charging_krw_per_kwh: Math.min(
       1e12,
       finiteNonNegOr(
-        params?.fuel_tariffs?.ev_fast_charging_krw_per_kwh,
+        rawFuelTariffs?.ev_fast_charging_krw_per_kwh,
         finiteNonNegOr(
           fallbackTco?.fuel_tariffs?.ev_fast_charging_krw_per_kwh,
           hardFallbackTco.fuel_tariffs.ev_fast_charging_krw_per_kwh
@@ -1764,7 +1600,7 @@ export function calculateTcoComparison(
     ice_gasoline_krw_per_liter: Math.min(
       1e12,
       finiteNonNegOr(
-        params?.fuel_tariffs?.ice_gasoline_krw_per_liter,
+        rawFuelTariffs?.ice_gasoline_krw_per_liter,
         finiteNonNegOr(
           fallbackTco?.fuel_tariffs?.ice_gasoline_krw_per_liter,
           hardFallbackTco.fuel_tariffs.ice_gasoline_krw_per_liter
@@ -1774,7 +1610,7 @@ export function calculateTcoComparison(
     ice_diesel_krw_per_liter: Math.min(
       1e12,
       finiteNonNegOr(
-        params?.fuel_tariffs?.ice_diesel_krw_per_liter,
+        rawFuelTariffs?.ice_diesel_krw_per_liter,
         finiteNonNegOr(
           fallbackTco?.fuel_tariffs?.ice_diesel_krw_per_liter,
           hardFallbackTco.fuel_tariffs.ice_diesel_krw_per_liter
@@ -1783,13 +1619,13 @@ export function calculateTcoComparison(
     ),
   };
   const iceFuelEconomy = finitePosOr(
-    params?.efficiency_baselines?.ice_gasoline_economy_km_per_liter,
+    rawEfficiencyBaselines?.ice_gasoline_economy_km_per_liter,
     finitePosOr(
       fallbackTco?.efficiency_baselines?.ice_gasoline_economy_km_per_liter,
       hardFallbackTco.efficiency_baselines.ice_gasoline_economy_km_per_liter
     )
   );
-  const rawTaxParams = params?.tax_parameters;
+  const rawTaxParams = isPlainRecord(params.tax_parameters) ? params.tax_parameters : undefined;
   const fallbackTaxParams = fallbackTco?.tax_parameters ?? hardFallbackTco.tax_parameters;
   const taxParameters = {
     ev_annual_tax_krw: Math.min(
@@ -1837,7 +1673,7 @@ export function calculateTcoComparison(
   const auxiliaryBenefits = {
     expressway_toll_discount_rate: clamp(
       finiteNonNegOr(
-        params?.auxiliary_benefits?.expressway_toll_discount_rate,
+        rawAuxBenefits?.expressway_toll_discount_rate,
         finiteNonNegOr(
           fallbackTco?.auxiliary_benefits?.expressway_toll_discount_rate,
           hardFallbackTco.auxiliary_benefits.expressway_toll_discount_rate
@@ -1849,7 +1685,7 @@ export function calculateTcoComparison(
     annual_toll_savings_krw: Math.min(
       1e12,
       finiteNonNegOr(
-        params?.auxiliary_benefits?.annual_toll_savings_krw,
+        rawAuxBenefits?.annual_toll_savings_krw,
         finiteNonNegOr(
           fallbackTco?.auxiliary_benefits?.annual_toll_savings_krw,
           hardFallbackTco.auxiliary_benefits.annual_toll_savings_krw
@@ -1858,7 +1694,7 @@ export function calculateTcoComparison(
     ),
     public_parking_discount_rate: clamp(
       finiteNonNegOr(
-        params?.auxiliary_benefits?.public_parking_discount_rate,
+        rawAuxBenefits?.public_parking_discount_rate,
         finiteNonNegOr(
           fallbackTco?.auxiliary_benefits?.public_parking_discount_rate,
           hardFallbackTco.auxiliary_benefits.public_parking_discount_rate
@@ -1870,7 +1706,7 @@ export function calculateTcoComparison(
     annual_parking_savings_krw: Math.min(
       1e12,
       finiteNonNegOr(
-        params?.auxiliary_benefits?.annual_parking_savings_krw,
+        rawAuxBenefits?.annual_parking_savings_krw,
         finiteNonNegOr(
           fallbackTco?.auxiliary_benefits?.annual_parking_savings_krw,
           hardFallbackTco.auxiliary_benefits.annual_parking_savings_krw
@@ -1880,7 +1716,7 @@ export function calculateTcoComparison(
     maintenance_annual_savings_krw: Math.min(
       1e12,
       finiteNonNegOr(
-        params?.auxiliary_benefits?.maintenance_annual_savings_krw,
+        rawAuxBenefits?.maintenance_annual_savings_krw,
         finiteNonNegOr(
           fallbackTco?.auxiliary_benefits?.maintenance_annual_savings_krw,
           hardFallbackTco.auxiliary_benefits.maintenance_annual_savings_krw
@@ -1894,16 +1730,17 @@ export function calculateTcoComparison(
   const fastChargingRatio = 1.0 - safeSlowRatio;
 
   // 1. Blended electricity rate
-  const blendedTariff =
+  const blendedTariff = normalizeZero(
     safeSlowRatio * fuelTariffs.ev_slow_charging_krw_per_kwh +
-    fastChargingRatio * fuelTariffs.ev_fast_charging_krw_per_kwh;
+      fastChargingRatio * fuelTariffs.ev_fast_charging_krw_per_kwh
+  );
 
   const parsedEvEff = parseNumericInput(evEfficiencyKmPerKwh);
   const safeEvEff =
     Number.isFinite(parsedEvEff) && parsedEvEff > 0
       ? parsedEvEff
       : finitePosOr(
-          params?.efficiency_baselines?.ev_efficiency_km_per_kwh,
+          rawEfficiencyBaselines?.ev_efficiency_km_per_kwh,
           finitePosOr(
             fallbackTco?.efficiency_baselines?.ev_efficiency_km_per_kwh,
             hardFallbackTco.efficiency_baselines.ev_efficiency_km_per_kwh
@@ -1911,27 +1748,29 @@ export function calculateTcoComparison(
         );
   const safeIceEff = finitePosOr(iceFuelEconomy, 12.0);
 
-  const evCostPerKm = blendedTariff / Math.max(1.0, safeEvEff);
-  const iceCostPerKm = fuelTariffs.ice_gasoline_krw_per_liter / Math.max(1.0, safeIceEff);
+  const evCostPerKm = normalizeZero(blendedTariff / Math.max(1.0, safeEvEff));
+  const iceCostPerKm = normalizeZero(
+    fuelTariffs.ice_gasoline_krw_per_liter / Math.max(1.0, safeIceEff)
+  );
 
-  // 2. Base ICE Tax Calculation Function
-  const calculateIceAnnualTax = (yearIndex: number): number => {
-    const parsedCc = parseNumericInput(iceDisplacementCc);
-    const safeCc = Number.isFinite(parsedCc) && parsedCc > 0 ? Math.min(100_000, parsedCc) : 1998;
-    let ratePerCc = safeCc <= 1000 ? 80 : safeCc <= 1600 ? 140 : 200;
-    for (const tier of taxParameters.ice_displacement_tiers) {
-      if (!tier || typeof tier !== 'object') continue;
-      if (tier.max_cc === null || tier.max_cc === undefined || tier.max_cc === Infinity) {
-        ratePerCc = Math.min(1e9, finiteNonNegOr(tier.rate_per_cc_krw, ratePerCc));
-        break;
-      }
-      if (typeof tier.max_cc === 'number' && Number.isFinite(tier.max_cc) && safeCc <= tier.max_cc) {
-        ratePerCc = Math.min(1e9, finiteNonNegOr(tier.rate_per_cc_krw, ratePerCc));
-        break;
-      }
+  // 2. Base ICE Tax Calculation (hoisted outside yearly loop)
+  const parsedCc = parseNumericInput(iceDisplacementCc);
+  const safeCc = Number.isFinite(parsedCc) && parsedCc > 0 ? Math.min(100_000, parsedCc) : 1998;
+  let ratePerCc = safeCc <= 1000 ? 80 : safeCc <= 1600 ? 140 : 200;
+  for (const tier of taxParameters.ice_displacement_tiers) {
+    if (!isPlainRecord(tier)) continue;
+    if (tier.max_cc === null || tier.max_cc === undefined || tier.max_cc === Infinity) {
+      ratePerCc = Math.min(1e9, finiteNonNegOr(tier.rate_per_cc_krw, ratePerCc));
+      break;
     }
-    const baseNominalTax = safeCc * ratePerCc * (1 + taxParameters.education_tax_multiplier);
+    if (typeof tier.max_cc === 'number' && Number.isFinite(tier.max_cc) && safeCc <= tier.max_cc) {
+      ratePerCc = Math.min(1e9, finiteNonNegOr(tier.rate_per_cc_krw, ratePerCc));
+      break;
+    }
+  }
+  const baseNominalIceTax = safeCc * ratePerCc * (1 + taxParameters.education_tax_multiplier);
 
+  const calculateIceAnnualTax = (yearIndex: number): number => {
     let discount = 0.0;
     if (yearIndex >= taxParameters.ice_age_discount_start_year) {
       const rawDiscount =
@@ -1939,7 +1778,7 @@ export function calculateTcoComparison(
         taxParameters.ice_age_discount_rate_per_year;
       discount = clamp(rawDiscount, 0, taxParameters.ice_age_discount_max);
     }
-    return Math.round(baseNominalTax * (1 - discount));
+    return normalizeZero(Math.round(baseNominalIceTax * (1 - discount)));
   };
 
   const evAnnualTax = taxParameters.ev_annual_tax_krw;
@@ -1955,13 +1794,16 @@ export function calculateTcoComparison(
   let maintenanceTotalSavings = 0;
 
   const parsedAnnualKm = parseNumericInput(annualKm);
-  const safeAnnualKm = Number.isFinite(parsedAnnualKm) && parsedAnnualKm >= 0 ? Math.min(10_000_000, parsedAnnualKm) : 15000;
+  const safeAnnualKm =
+    Number.isFinite(parsedAnnualKm) && parsedAnnualKm >= 0
+      ? normalizeZero(Math.min(10_000_000, parsedAnnualKm))
+      : 15000;
   const parsedYears = parseNumericInput(years);
 
   const rawYears = Math.min(30, Number.isFinite(parsedYears) && parsedYears > 0 ? parsedYears : 1);
   const safeYears = Math.max(1, Math.round(rawYears));
   const fullYears = Math.floor(rawYears);
-  const fractionalRemainder = Math.round((rawYears - fullYears) * 10000) / 10000;
+  const fractionalRemainder = roundTo(rawYears - fullYears, 4);
   const totalLoops =
     fullYears === 0
       ? 1
@@ -1979,19 +1821,19 @@ export function calculateTcoComparison(
         : fullYears === 0
         ? rawYears
         : 1.0;
-    const currentKm = Math.round(safeAnnualKm * fraction);
-    runningKm += currentKm;
+    const currentKm = normalizeZero(Math.round(safeAnnualKm * fraction));
+    runningKm = normalizeZero(runningKm + currentKm);
 
-    const evFuel = Math.round(currentKm * evCostPerKm);
-    const iceFuel = Math.round(currentKm * iceCostPerKm);
-    const evTax = Math.round(evAnnualTax * fraction);
-    const iceTax = Math.round(calculateIceAnnualTax(y) * fraction);
-    const toll = Math.round(auxiliaryBenefits.annual_toll_savings_krw * fraction);
-    const parking = Math.round(auxiliaryBenefits.annual_parking_savings_krw * fraction);
-    const maintenance = Math.round(auxiliaryBenefits.maintenance_annual_savings_krw * fraction);
+    const evFuel = normalizeZero(Math.round(currentKm * evCostPerKm));
+    const iceFuel = normalizeZero(Math.round(currentKm * iceCostPerKm));
+    const evTax = normalizeZero(Math.round(evAnnualTax * fraction));
+    const iceTax = normalizeZero(Math.round(calculateIceAnnualTax(y) * fraction));
+    const toll = normalizeZero(Math.round(auxiliaryBenefits.annual_toll_savings_krw * fraction));
+    const parking = normalizeZero(Math.round(auxiliaryBenefits.annual_parking_savings_krw * fraction));
+    const maintenance = normalizeZero(Math.round(auxiliaryBenefits.maintenance_annual_savings_krw * fraction));
 
-    const annualSavings = (iceFuel - evFuel) + (iceTax - evTax) + toll + parking + maintenance;
-    cumulativeSavings += annualSavings;
+    const annualSavings = normalizeZero((iceFuel - evFuel) + (iceTax - evTax) + toll + parking + maintenance);
+    cumulativeSavings = normalizeZero(cumulativeSavings + annualSavings);
 
     evTotalFuel += evFuel;
     iceTotalFuel += iceFuel;
@@ -2022,20 +1864,20 @@ export function calculateTcoComparison(
     totalKm: runningKm,
     evEfficiencyKmPerKwh: safeEvEff,
     iceFuelEconomyKmPerLiter: safeIceEff,
-    blendedElectricityTariffKrwPerKwh: Math.round(blendedTariff * 100) / 100,
+    blendedElectricityTariffKrwPerKwh: roundTo(blendedTariff, 2),
     gasolinePriceKrwPerLiter: fuelTariffs.ice_gasoline_krw_per_liter,
-    evFuelCostPerKm: Math.round(evCostPerKm * 100) / 100,
-    iceFuelCostPerKm: Math.round(iceCostPerKm * 100) / 100,
-    evTotalFuelCostKrw: evTotalFuel,
-    iceTotalFuelCostKrw: iceTotalFuel,
-    fuelSavingsKrw: iceTotalFuel - evTotalFuel,
-    evTotalTaxKrw: evTotalTax,
-    iceTotalTaxKrw: iceTotalTax,
-    taxSavingsKrw: iceTotalTax - evTotalTax,
-    tollSavingsKrw: tollTotalSavings,
-    parkingSavingsKrw: parkingTotalSavings,
-    maintenanceSavingsKrw: maintenanceTotalSavings,
-    totalAuxiliarySavingsKrw: tollTotalSavings + parkingTotalSavings + maintenanceTotalSavings,
+    evFuelCostPerKm: roundTo(evCostPerKm, 2),
+    iceFuelCostPerKm: roundTo(iceCostPerKm, 2),
+    evTotalFuelCostKrw: normalizeZero(evTotalFuel),
+    iceTotalFuelCostKrw: normalizeZero(iceTotalFuel),
+    fuelSavingsKrw: normalizeZero(iceTotalFuel - evTotalFuel),
+    evTotalTaxKrw: normalizeZero(evTotalTax),
+    iceTotalTaxKrw: normalizeZero(iceTotalTax),
+    taxSavingsKrw: normalizeZero(iceTotalTax - evTotalTax),
+    tollSavingsKrw: normalizeZero(tollTotalSavings),
+    parkingSavingsKrw: normalizeZero(parkingTotalSavings),
+    maintenanceSavingsKrw: normalizeZero(maintenanceTotalSavings),
+    totalAuxiliarySavingsKrw: normalizeZero(tollTotalSavings + parkingTotalSavings + maintenanceTotalSavings),
     totalCumulativeSavingsKrw: cumulativeSavings,
     yearlyBreakdown,
   };

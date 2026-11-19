@@ -70,12 +70,26 @@ export function parseSafeDate(rawDate?: string): number {
   // 1. Cross-browser normalizer: replace dots and slashes with hyphens (e.g. 2026.09.08 -> 2026-09-08)
   const normalized = cleaned.replace(/\./g, '-').replace(/\//g, '-');
 
-  // 2. Date-only format "YYYY-M-D" or "YYYY-MM-DD" -> pad & parse consistently as UTC midnight across all browsers
+  // 2. Date-only format "YYYY-M-D" or "YYYY-MM-DD" -> pad & parse consistently as UTC midnight across all browsers, rejecting invalid calendar rollovers
   const ymdOnly = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (ymdOnly) {
+    const year = Number(ymdOnly[1]);
+    const month = Number(ymdOnly[2]);
+    const day = Number(ymdOnly[3]);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return 0;
     const padded = `${ymdOnly[1]}-${ymdOnly[2].padStart(2, '0')}-${ymdOnly[3].padStart(2, '0')}`;
-    const timestamp = new Date(`${padded}T00:00:00Z`).getTime();
-    if (Number.isFinite(timestamp) && timestamp > 0) return timestamp;
+    const d = new Date(`${padded}T00:00:00Z`);
+    const timestamp = d.getTime();
+    if (
+      Number.isFinite(timestamp) &&
+      timestamp > 0 &&
+      d.getUTCFullYear() === year &&
+      d.getUTCMonth() === month - 1 &&
+      d.getUTCDate() === day
+    ) {
+      return timestamp;
+    }
+    return 0;
   }
 
   // 3. Normalize "YYYY-MM-DD HH:mm:ss" -> ISO format
@@ -455,7 +469,11 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
       const lastElement = focusableElements[focusableElements.length - 1];
 
       if (e.shiftKey) {
-        if (document.activeElement === firstElement || !modalRef.current.contains(document.activeElement)) {
+        if (
+          document.activeElement === firstElement ||
+          document.activeElement === modalRef.current ||
+          !modalRef.current.contains(document.activeElement)
+        ) {
           e.preventDefault();
           lastElement.focus();
         }
@@ -576,14 +594,16 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         const maskedSummary = maskSensitiveData(stripHtmlTags(r.summary || '결함 상세 내용 요약'));
         const maskedQuote = maskSensitiveData(stripHtmlTags(r.verbatim_quote || '원문 없음'));
         const maskedAuthor = r.author ? maskAuthor(stripHtmlTags(r.author)) : '익명 제보자';
+        const cleanModel = maskSensitiveData(stripHtmlTags(r.vehicle_model || '')).trim() || '미상 모델';
         const normBrand = normalizeBrand(r.vehicle_brand);
+        const cleanBrand = maskSensitiveData(stripHtmlTags(r.vehicle_brand || '')).trim() || normBrand;
 
         const searchTokens = [
           maskedTitle,
           maskedSummary,
           maskedQuote,
-          r.vehicle_model || '',
-          r.vehicle_brand || '',
+          cleanModel,
+          cleanBrand,
           normBrand,
           maskedAuthor,
           r.id ? String(r.id) : '',
@@ -593,12 +613,16 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         const searchIndex = searchTokens.join(' ').toLowerCase();
         const spacelessIndex = searchIndex.replace(/\s+/g, '');
 
-        // Standardize clean display date YYYY-MM-DD
+        // Standardize clean display date YYYY-MM-DD (validating calendar bounds)
         const rawDateStr = String(r.date || (r.created_at ? r.created_at.slice(0, 10) : '')).trim();
         const ymdMatch = rawDateStr.match(/^(\d{4})[.\-/\s년]+(\d{1,2})[.\-/\s월]+(\d{1,2})/);
-        const displayDate = ymdMatch
-          ? `${ymdMatch[1]}-${ymdMatch[2].padStart(2, '0')}-${ymdMatch[3].padStart(2, '0')}`
-          : (parsed > 0 ? new Date(parsed).toISOString().slice(0, 10) : '2026-09-30');
+        let displayDate = parsed > 0 ? new Date(parsed).toISOString().slice(0, 10) : '날짜 미상';
+        if (ymdMatch) {
+          const candidateYmd = `${ymdMatch[1]}-${ymdMatch[2].padStart(2, '0')}-${ymdMatch[3].padStart(2, '0')}`;
+          if (parseSafeDate(candidateYmd) > 0) {
+            displayDate = candidateYmd;
+          }
+        }
 
         return {
           ...r,
@@ -608,8 +632,8 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           url: sanitizeReportUrl(r.url),
           defect_category: catCode,
           defect_category_ko: catKo,
-          vehicle_model: r.vehicle_model || '미상 모델',
-          vehicle_brand: r.vehicle_brand || normBrand,
+          vehicle_model: cleanModel,
+          vehicle_brand: cleanBrand,
           title: maskedTitle,
           summary: maskedSummary,
           verbatim_quote: maskedQuote,
@@ -763,6 +787,10 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
   // Filtered and sorted reports with fast precomputed index and optimized tokenization
   const filteredReports = useMemo(() => {
     const rawQuery = deferredSearchQuery.trim().toLowerCase().slice(0, 200);
+    const selectedCategoryLabel =
+      selectedCategory !== 'ALL'
+        ? CATEGORY_TABS.find((c) => c.code === selectedCategory)?.label
+        : undefined;
 
     // Precompute query tokens ONCE outside the report loop for high-performance large list filtering
     const queryTokens = rawQuery
@@ -782,8 +810,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         if (selectedCategory !== 'ALL') {
           const catMatch =
             report.defect_category === selectedCategory ||
-            report.defect_category_ko ===
-              CATEGORY_TABS.find((c) => c.code === selectedCategory)?.label;
+            (selectedCategoryLabel !== undefined && report.defect_category_ko === selectedCategoryLabel);
           if (!catMatch) return false;
         }
 
@@ -1416,7 +1443,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                       <span>{src.label}</span>
                       <span
                         className={`text-[10px] px-1 rounded ${
-                          isSelected ? 'bg-blue-700 text-blue-100' : 'bg-slate-100 text-slate-700'
+                          isSelected ? 'bg-blue-800 text-white' : 'bg-slate-100 text-slate-700'
                         }`}
                       >
                         {count}
@@ -1483,7 +1510,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             >
               결과 <strong className="text-slate-900 font-bold">{filteredReports.length}</strong>건
               {duplicatesRemovedCount > 0 && (
-                <span className="text-[11px] text-cyan-700 ml-1.5 font-semibold">
+                <span className="text-[11px] text-cyan-800 ml-1.5 font-semibold">
                   (중복 {duplicatesRemovedCount}건 필터링 완료)
                 </span>
               )}

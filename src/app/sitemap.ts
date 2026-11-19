@@ -7,7 +7,10 @@ function getBaseUrl(): string {
   for (const candidate of candidates) {
     const raw = (candidate || '').trim().replace(/\/+$/, '');
     if (raw) {
-      const normalized = raw.startsWith('http://') || raw.startsWith('https://') ? raw : `https://${raw}`;
+      const normalized =
+        /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw) || raw.startsWith('//')
+          ? raw
+          : `https://${raw}`;
       try {
         const parsed = new URL(normalized);
         if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {

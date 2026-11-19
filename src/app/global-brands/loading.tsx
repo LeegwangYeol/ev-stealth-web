@@ -3,6 +3,7 @@ export default function GlobalBrandsLoading() {
     <div
       role="status"
       aria-live="polite"
+      aria-busy="true"
       aria-label="글로벌 브랜드 연식별 구매 가이드 로딩 중"
       className="space-y-8 py-6 sm:py-10 max-w-4xl mx-auto animate-pulse motion-reduce:animate-none"
     >

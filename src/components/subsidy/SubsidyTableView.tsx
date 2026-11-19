@@ -1,7 +1,7 @@
 'use client';
 
 import React, { memo, useCallback, useMemo, useState, useEffect } from 'react';
-import { RegionEntry, CategoryMetrics, AlertSeverity } from '@/types/subsidy';
+import { RegionEntry, CategoryMetrics, AlertSeverity, MunicipalityMetrics } from '@/types/subsidy';
 import { resolveAlertSeverity } from '@/lib/subsidyCalculations';
 import type { RegionSortOption } from '@/lib/subsidyCalculations';
 import SubsidyBadge, { getStatusLabel } from './SubsidyBadge';
@@ -21,6 +21,7 @@ export interface SubsidyTableViewProps {
 
 // Module-level frozen fallbacks (Zero-GC pressure)
 const EMPTY_REGIONS: readonly RegionEntry[] = Object.freeze([]);
+const EMPTY_MUNIS: readonly MunicipalityMetrics[] = Object.freeze([]);
 const EMPTY_EXPANDED: Readonly<Record<string, boolean>> = Object.freeze({});
 
 const FALLBACK_CATEGORY_METRICS: Readonly<CategoryMetrics> = Object.freeze({
@@ -39,29 +40,30 @@ function getSortAria(
   col: 'NAME' | 'REMAINING' | 'DEPLETION' | 'LOCAL_SUBSIDY',
   sortOption: SortOption
 ): 'ascending' | 'descending' | 'none' {
+  const normSort = String(sortOption || 'DEPLETION_DESC').toUpperCase();
   switch (col) {
     case 'NAME':
-      return sortOption === 'NAME_ASC'
+      return normSort === 'NAME_ASC'
         ? 'ascending'
-        : sortOption === 'NAME_DESC'
+        : normSort === 'NAME_DESC'
         ? 'descending'
         : 'none';
     case 'REMAINING':
-      return sortOption === 'REMAINING_ASC'
+      return normSort === 'REMAINING_ASC'
         ? 'ascending'
-        : sortOption === 'REMAINING_DESC'
+        : normSort === 'REMAINING_DESC'
         ? 'descending'
         : 'none';
     case 'DEPLETION':
-      return sortOption === 'DEPLETION_DESC'
+      return normSort === 'DEPLETION_DESC'
         ? 'descending'
-        : sortOption === 'DEPLETION_ASC'
+        : normSort === 'DEPLETION_ASC'
         ? 'ascending'
         : 'none';
     case 'LOCAL_SUBSIDY':
-      return sortOption === 'LOCAL_SUBSIDY_DESC'
+      return normSort === 'LOCAL_SUBSIDY_DESC'
         ? 'descending'
-        : sortOption === 'LOCAL_SUBSIDY_ASC'
+        : normSort === 'LOCAL_SUBSIDY_ASC'
         ? 'ascending'
         : 'none';
     default:
@@ -99,17 +101,23 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
   const maxLocalSubsidy = Number.isFinite(cat?.max_local_subsidy_krw) ? Math.max(0, cat.max_local_subsidy_krw) : 0;
   const maxTotalSubsidy = Number.isFinite(cat?.max_total_subsidy_krw) ? Math.max(0, cat.max_total_subsidy_krw) : 0;
 
-  const munis = useMemo(
-    () => (Array.isArray(region?.municipalities) ? region.municipalities : []),
-    [region?.municipalities]
-  );
+  const munis = Array.isArray(region?.municipalities) ? region.municipalities : EMPTY_MUNIS;
   const hasMunis = munis.length > 0;
   const regionName = region?.name_ko || '해당 지역';
-  const regionId = region?.region_id || '';
+  const regionId = region?.region_id || region?.iso_code || region?.name_ko || 'unknown';
   const categoryLabel = selectedCategory === 'passenger' ? '전기승용' : selectedCategory === 'commercial' ? '전기화물' : '전기승합';
   const rawStatus = typeof cat?.status === 'string' ? cat.status.trim() : '';
+  const upperStatus = rawStatus.toUpperCase();
   const effectiveStatus = rawStatus ? rawStatus : resolveAlertSeverity(undefined, depletionRate);
-  const isDepleted = effectiveStatus.toUpperCase() === 'DEPLETED' || depletionRate >= 100;
+  const isDepleted =
+    upperStatus === 'DEPLETED' ||
+    upperStatus === 'EXHAUSTED' ||
+    upperStatus === 'CLOSED' ||
+    upperStatus === 'END' ||
+    depletionRate >= 100;
+  const isCriticalStatus = upperStatus === 'CRITICAL' || upperStatus === 'DANGER' || upperStatus === 'EMERGENCY';
+  const isWarningStatus = upperStatus === 'WARNING';
+  const isCautionStatus = upperStatus === 'CAUTION';
 
   // Memoized stable row handlers to prevent recreating closures on every render
   const handleToggle = useCallback(() => {
@@ -215,11 +223,11 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
               className={`font-extrabold font-mono ${
                 isDepleted
                   ? 'text-slate-300'
-                  : depletionRate >= 95
+                  : isCriticalStatus || depletionRate >= 95
                   ? 'text-rose-400'
-                  : depletionRate >= 80
+                  : isWarningStatus || depletionRate >= 80
                   ? 'text-orange-400'
-                  : depletionRate >= 60
+                  : isCautionStatus || depletionRate >= 60
                   ? 'text-amber-400'
                   : 'text-emerald-400'
               }`}
@@ -241,11 +249,11 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
                 className={`h-full ${
                   isDepleted
                     ? 'bg-slate-500'
-                    : depletionRate >= 95
+                    : isCriticalStatus || depletionRate >= 95
                     ? 'bg-rose-500'
-                    : depletionRate >= 80
+                    : isWarningStatus || depletionRate >= 80
                     ? 'bg-orange-500'
-                    : depletionRate >= 60
+                    : isCautionStatus || depletionRate >= 60
                     ? 'bg-amber-400'
                     : 'bg-emerald-400'
                 }`}
@@ -276,7 +284,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
               aria-expanded={isExpanded}
               aria-controls={'muni-details-table-' + regionId}
               aria-label={`${regionName} 세부 시·군·구 ${munis.length}개 현황 ${isExpanded ? '접기' : '보기'}`}
-              className="px-2.5 py-1.5 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium border border-slate-500 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              className="px-2.5 py-1.5 min-h-[44px] min-w-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium border border-slate-500 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
               {isExpanded ? '접기 ▲' : `${munis.length}개 시·군 ▼`}
             </button>
@@ -291,7 +299,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
             type="button"
             onClick={handleSelectCalc}
             aria-label={`${regionName} 보조금으로 계산기 설정`}
-            className="px-3 py-1.5 min-h-[44px] inline-flex items-center justify-center gap-1 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+            className="px-3 py-1.5 min-h-[44px] min-w-[44px] inline-flex items-center justify-center gap-1 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
           >
             계산 <span aria-hidden="true">⚡</span>
           </button>
@@ -371,34 +379,39 @@ export const SubsidyTableView = memo(function SubsidyTableView({
   onToggleExpand,
   onSelectForCalc,
 }: SubsidyTableViewProps) {
+  const normSort = String(sortOption || 'DEPLETION_DESC').toUpperCase();
+
   const handleSortName = useCallback(() => {
-    onSortChange(sortOption === 'NAME_ASC' ? 'NAME_DESC' : 'NAME_ASC');
-  }, [sortOption, onSortChange]);
+    onSortChange(normSort === 'NAME_ASC' ? 'NAME_DESC' : 'NAME_ASC');
+  }, [normSort, onSortChange]);
 
   const handleSortRemaining = useCallback(() => {
-    onSortChange(sortOption === 'REMAINING_ASC' ? 'REMAINING_DESC' : 'REMAINING_ASC');
-  }, [sortOption, onSortChange]);
+    onSortChange(normSort === 'REMAINING_ASC' ? 'REMAINING_DESC' : 'REMAINING_ASC');
+  }, [normSort, onSortChange]);
 
   const handleToggleDepletionSort = useCallback(() => {
-    onSortChange(sortOption === 'DEPLETION_DESC' ? 'DEPLETION_ASC' : 'DEPLETION_DESC');
-  }, [sortOption, onSortChange]);
+    onSortChange(normSort === 'DEPLETION_DESC' ? 'DEPLETION_ASC' : 'DEPLETION_DESC');
+  }, [normSort, onSortChange]);
 
   const handleSortLocalSubsidy = useCallback(() => {
-    onSortChange(sortOption === 'LOCAL_SUBSIDY_DESC' ? 'LOCAL_SUBSIDY_ASC' : 'LOCAL_SUBSIDY_DESC');
-  }, [sortOption, onSortChange]);
+    onSortChange(normSort === 'LOCAL_SUBSIDY_DESC' ? 'LOCAL_SUBSIDY_ASC' : 'LOCAL_SUBSIDY_DESC');
+  }, [normSort, onSortChange]);
 
   // Performance & Stability: Memoization of filtered/sorted rows to prevent unnecessary DOM mutations
   const renderedRows = useMemo(() => {
-    return (regions || EMPTY_REGIONS).map((region) => (
-      <SubsidyTableRow
-        key={region.region_id || region.iso_code || region.name_ko}
-        region={region}
-        selectedCategory={selectedCategory}
-        isExpanded={Boolean(expandedRegions[region.region_id])}
-        onToggleExpand={onToggleExpand}
-        onSelectForCalc={onSelectForCalc}
-      />
-    ));
+    return (regions || EMPTY_REGIONS).map((region) => {
+      const regionKey = region.region_id || region.iso_code || region.name_ko || 'unknown';
+      return (
+        <SubsidyTableRow
+          key={regionKey}
+          region={region}
+          selectedCategory={selectedCategory}
+          isExpanded={Boolean(expandedRegions[regionKey])}
+          onToggleExpand={onToggleExpand}
+          onSelectForCalc={onSelectForCalc}
+        />
+      );
+    });
   }, [regions, selectedCategory, expandedRegions, onToggleExpand, onSelectForCalc]);
 
   return (
@@ -431,12 +444,12 @@ export const SubsidyTableView = memo(function SubsidyTableView({
               <button
                 type="button"
                 onClick={handleSortName}
-                aria-label={`지역명 ${sortOption === 'NAME_ASC' ? '내림차순(ㅎ~ㄱ)으로 정렬' : '오름차순(ㄱ~ㅎ)으로 정렬'}`}
-                className="min-h-[44px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5"
+                aria-label={`지역명 ${normSort === 'NAME_ASC' ? '내림차순(ㅎ~ㄱ)으로 정렬' : '오름차순(ㄱ~ㅎ)으로 정렬'}`}
+                className="min-h-[44px] min-w-[44px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5"
               >
                 <span>지역명</span>
                 <span aria-hidden="true" className="text-slate-300 text-xs">
-                  {sortOption === 'NAME_ASC' ? '▲' : sortOption === 'NAME_DESC' ? '▼' : '↕'}
+                  {normSort === 'NAME_ASC' ? '▲' : normSort === 'NAME_DESC' ? '▼' : '↕'}
                 </span>
               </button>
             </th>
@@ -454,12 +467,12 @@ export const SubsidyTableView = memo(function SubsidyTableView({
               <button
                 type="button"
                 onClick={handleSortRemaining}
-                aria-label={`잔여 대수 ${sortOption === 'REMAINING_ASC' ? '많은 순(내림차순)으로 정렬' : '적은 순(오름차순)으로 정렬'}`}
-                className="min-h-[44px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5 ml-auto"
+                aria-label={`잔여 대수 ${normSort === 'REMAINING_ASC' ? '많은 순(내림차순)으로 정렬' : '적은 순(오름차순)으로 정렬'}`}
+                className="min-h-[44px] min-w-[44px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5 ml-auto"
               >
                 <span>잔여 대수</span>
                 <span aria-hidden="true" className="text-slate-300 text-xs">
-                  {sortOption === 'REMAINING_ASC' ? '▲' : sortOption === 'REMAINING_DESC' ? '▼' : '↕'}
+                  {normSort === 'REMAINING_ASC' ? '▲' : normSort === 'REMAINING_DESC' ? '▼' : '↕'}
                 </span>
               </button>
             </th>
@@ -471,12 +484,12 @@ export const SubsidyTableView = memo(function SubsidyTableView({
               <button
                 type="button"
                 onClick={handleToggleDepletionSort}
-                aria-label={`소진율 ${sortOption === 'DEPLETION_DESC' ? '낮은 순(오름차순)으로 정렬' : '높은 순(내림차순)으로 정렬'}`}
-                className="min-h-[44px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5"
+                aria-label={`소진율 ${normSort === 'DEPLETION_DESC' ? '낮은 순(오름차순)으로 정렬' : '높은 순(내림차순)으로 정렬'}`}
+                className="min-h-[44px] min-w-[44px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5"
               >
                 <span>소진율</span>
                 <span aria-hidden="true" className="text-slate-300 text-xs">
-                  {sortOption === 'DEPLETION_DESC' ? '▼' : sortOption === 'DEPLETION_ASC' ? '▲' : '↕'}
+                  {normSort === 'DEPLETION_DESC' ? '▼' : normSort === 'DEPLETION_ASC' ? '▲' : '↕'}
                 </span>
               </button>
             </th>
@@ -488,12 +501,12 @@ export const SubsidyTableView = memo(function SubsidyTableView({
               <button
                 type="button"
                 onClick={handleSortLocalSubsidy}
-                aria-label={`지방비 지원금 ${sortOption === 'LOCAL_SUBSIDY_DESC' ? '낮은 순(오름차순)으로 정렬' : '높은 순(내림차순)으로 정렬'}`}
-                className="min-h-[44px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5 ml-auto"
+                aria-label={`지방비 지원금 ${normSort === 'LOCAL_SUBSIDY_DESC' ? '낮은 순(오름차순)으로 정렬' : '높은 순(내림차순)으로 정렬'}`}
+                className="min-h-[44px] min-w-[44px] inline-flex items-center gap-1.5 hover:text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded px-1.5 ml-auto"
               >
                 <span>지방비 최대</span>
                 <span aria-hidden="true" className="text-slate-300 text-xs">
-                  {sortOption === 'LOCAL_SUBSIDY_DESC' ? '▼' : sortOption === 'LOCAL_SUBSIDY_ASC' ? '▲' : '↕'}
+                  {normSort === 'LOCAL_SUBSIDY_DESC' ? '▼' : normSort === 'LOCAL_SUBSIDY_ASC' ? '▲' : '↕'}
                 </span>
               </button>
             </th>

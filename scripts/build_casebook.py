@@ -78,10 +78,10 @@ def build_slang_dictionary_section(slang_dict: Dict[str, Any]) -> str:
     for term, data in slang_dict.items():
         if not isinstance(data, dict):
             continue
-        category = data.get("category") or ""
-        meaning = (data.get("meaning") or "").replace("\n", " ")
-        context = (data.get("context") or "").replace("\n", " ")
-        example = (data.get("example") or "").replace("\n", " ")
+        category = str(data.get("category") or "")
+        meaning = str(data.get("meaning") or "").replace("\n", " ")
+        context = str(data.get("context") or "").replace("\n", " ")
+        example = str(data.get("example") or "").replace("\n", " ")
         lines.append(f"| **{term}** | `{category}` | {meaning} | {context} | *\"{example}\"* |")
 
     lines.extend([
@@ -151,7 +151,13 @@ def build_case_studies_section(category_key: str, category_title: str, complaint
         topic = c.get("defect_topic", "")
         quote = c.get("raw_quote", "")
         severity = c.get("severity", "functional_failure")
-        slangs = c.get("slang_terms") or []
+        raw_slangs = c.get("slang_terms")
+        if isinstance(raw_slangs, (list, tuple, set)):
+            slangs = [str(s) for s in raw_slangs if s is not None and str(s).strip()]
+        elif isinstance(raw_slangs, str) and raw_slangs.strip():
+            slangs = [raw_slangs.strip()]
+        else:
+            slangs = []
         slang_display = ", ".join([f"`{s}`" for s in slangs]) if slangs else "해당 없음 (일반 불만)"
 
         lines.extend([

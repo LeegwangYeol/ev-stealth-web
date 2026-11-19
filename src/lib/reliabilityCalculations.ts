@@ -74,13 +74,15 @@ export type {
  */
 export function parseFiniteNumber(val: unknown): number | null {
   if (typeof val === 'number') {
-    return Number.isFinite(val) ? val : null;
+    if (!Number.isFinite(val)) return null;
+    return val === 0 ? 0 : val;
   }
   if (typeof val === 'string') {
     const trimmed = val.trim();
     if (trimmed === '') return null;
     const num = Number(trimmed);
-    return Number.isFinite(num) ? num : null;
+    if (!Number.isFinite(num)) return null;
+    return num === 0 ? 0 : num;
   }
   return null;
 }
@@ -336,7 +338,15 @@ export function calculateTrendDirection(
   }
 
   // Normal calculation: ((current - previous) / Math.abs(safePrevious)) * 100
-  const rawPctChange = ((safeCurrent - safePrevious) / Math.abs(safePrevious)) * 100;
+  const absPrev = Math.abs(safePrevious);
+  let rawPctChange = ((safeCurrent - safePrevious) / absPrev) * 100;
+  if (!Number.isFinite(rawPctChange)) {
+    // Avoid spurious overflow in (safeCurrent - safePrevious) for extreme opposite-sign magnitudes
+    const ratioPct = ((safeCurrent / absPrev) - Math.sign(safePrevious)) * 100;
+    if (Number.isFinite(ratioPct)) {
+      rawPctChange = ratioPct;
+    }
+  }
   const pctChange = Number.isFinite(rawPctChange)
     ? Math.round(rawPctChange * 10) / 10 + 0
     : rawPctChange > 0
@@ -478,6 +488,47 @@ export function calculateReliabilityKPIs(data?: ReliabilityTrendsDatabase | null
 // 3. MODEL & BRAND RETRIEVAL UTILITIES
 // ==========================================
 
+function enrichModelItem(brand: BrandReliability, model: ModelReliability): EnrichedModelItem {
+  const safeBrandId = typeof brand.id === 'string' ? brand.id : '';
+  return {
+    ...model,
+    id: typeof model.id === 'string' ? model.id : '',
+    name: typeof model.name === 'string' ? model.name : '',
+    segment: typeof model.segment === 'string' ? model.segment : '',
+    brand_id: typeof model.brand_id === 'string' && model.brand_id ? model.brand_id : safeBrandId,
+    overall_grade: sanitizeGrade(model.overall_grade),
+    avg_dsi: normalizeReliabilityScore(model.avg_dsi, 0),
+    top_category: sanitizeCategoryKey(model.top_category),
+    year_evaluations: Array.isArray(model.year_evaluations)
+      ? model.year_evaluations
+          .filter((y): y is YearEvaluation => Boolean(y && typeof y === 'object'))
+          .map((y) => {
+            const parsedYear = parseFiniteNumber(y.year);
+            const parsedIncident = parseFiniteNumber(y.incident_rate);
+            return {
+              ...y,
+              year: parsedYear !== null ? Math.floor(parsedYear) + 0 : 0,
+              dsi_score: normalizeReliabilityScore(y.dsi_score, 0),
+              incident_rate:
+                parsedIncident !== null
+                  ? Math.max(0, Math.min(100, parsedIncident)) + 0
+                  : 0,
+              primary_defect: typeof y.primary_defect === 'string' ? y.primary_defect : '',
+              estimated_repair_cost:
+                typeof y.estimated_repair_cost === 'string' ? y.estimated_repair_cost : '',
+              chronic_symptoms: Array.isArray(y.chronic_symptoms)
+                ? y.chronic_symptoms.filter((s): s is string => typeof s === 'string')
+                : [],
+              raw_quote: typeof y.raw_quote === 'string' ? y.raw_quote : '',
+            };
+          })
+      : [],
+    brand_name_ko: typeof brand.name_ko === 'string' ? brand.name_ko : '',
+    brand_name_en: typeof brand.name_en === 'string' ? brand.name_en : '',
+    brand_country: typeof brand.country === 'string' ? brand.country : '',
+  };
+}
+
 /**
  * Returns a flattened array of all models enriched with brand information from a given database.
  * Pure function: operates directly on the provided data without importing raw JSON.
@@ -489,47 +540,10 @@ export function getAllEnrichedModels(data?: ReliabilityTrendsDatabase | null): E
 
   for (const brand of brands) {
     if (!brand || typeof brand !== 'object') continue;
-    const safeBrandId = typeof brand.id === 'string' ? brand.id : '';
     const models = Array.isArray(brand.models) ? brand.models : [];
     for (const model of models) {
       if (!model || typeof model !== 'object') continue;
-      result.push({
-        ...model,
-        id: typeof model.id === 'string' ? model.id : '',
-        name: typeof model.name === 'string' ? model.name : '',
-        segment: typeof model.segment === 'string' ? model.segment : '',
-        brand_id: typeof model.brand_id === 'string' && model.brand_id ? model.brand_id : safeBrandId,
-        overall_grade: sanitizeGrade(model.overall_grade),
-        avg_dsi: normalizeReliabilityScore(model.avg_dsi, 0),
-        top_category: sanitizeCategoryKey(model.top_category),
-        year_evaluations: Array.isArray(model.year_evaluations)
-          ? model.year_evaluations
-              .filter((y): y is YearEvaluation => Boolean(y && typeof y === 'object'))
-              .map((y) => {
-                const parsedYear = parseFiniteNumber(y.year);
-                const parsedIncident = parseFiniteNumber(y.incident_rate);
-                return {
-                  ...y,
-                  year: parsedYear !== null ? Math.floor(parsedYear) : 0,
-                  dsi_score: normalizeReliabilityScore(y.dsi_score, 0),
-                  incident_rate:
-                    parsedIncident !== null
-                      ? Math.max(0, Math.min(100, parsedIncident))
-                      : 0,
-                  primary_defect: typeof y.primary_defect === 'string' ? y.primary_defect : '',
-                  estimated_repair_cost:
-                    typeof y.estimated_repair_cost === 'string' ? y.estimated_repair_cost : '',
-                  chronic_symptoms: Array.isArray(y.chronic_symptoms)
-                    ? y.chronic_symptoms.filter((s): s is string => typeof s === 'string')
-                    : [],
-                  raw_quote: typeof y.raw_quote === 'string' ? y.raw_quote : '',
-                };
-              })
-          : [],
-        brand_name_ko: typeof brand.name_ko === 'string' ? brand.name_ko : '',
-        brand_name_en: typeof brand.name_en === 'string' ? brand.name_en : '',
-        brand_country: typeof brand.country === 'string' ? brand.country : '',
-      });
+      result.push(enrichModelItem(brand, model));
     }
   }
 
@@ -672,36 +686,43 @@ export function getModelReliabilityById(
   modelId: string,
   data?: ReliabilityTrendsDatabase | null
 ): EnrichedModelItem | undefined {
-  if (!modelId || typeof modelId !== 'string') return undefined;
+  if (!modelId || typeof modelId !== 'string' || !data || !Array.isArray(data.brands)) return undefined;
   const normalized = modelId.trim().toLowerCase().replace(/[\s\-_]+/g, '');
   if (!normalized) return undefined;
-  const allModels = getAllEnrichedModels(data);
 
-  // Priority 1: Exact ID match
-  const exactId = allModels.find((m) => {
-    const mIdNorm = (typeof m?.id === 'string' ? m.id : '').toLowerCase().replace(/[\s\-_]+/g, '');
-    return mIdNorm === normalized;
-  });
-  if (exactId) return exactId;
+  let exactNameMatch: { brand: BrandReliability; model: ModelReliability } | undefined;
+  let partialMatch: { brand: BrandReliability; model: ModelReliability } | undefined;
 
-  // Priority 2: Exact Name match
-  const exactName = allModels.find((m) => {
-    const mNameNorm = (typeof m?.name === 'string' ? m.name : '').toLowerCase().replace(/[\s\-_]+/g, '');
-    return mNameNorm === normalized;
-  });
-  if (exactName) return exactName;
+  for (const brand of data.brands) {
+    if (!brand || typeof brand !== 'object' || !Array.isArray(brand.models)) continue;
+    for (const model of brand.models) {
+      if (!model || typeof model !== 'object') continue;
+      const mIdNorm = (typeof model.id === 'string' ? model.id : '').toLowerCase().replace(/[\s\-_]+/g, '');
+      // Priority 1: Exact ID match
+      if (mIdNorm === normalized) {
+        return enrichModelItem(brand, model);
+      }
 
-  // Priority 3: Fallback substring match
-  return allModels.find((m) => {
-    const mIdNorm = (typeof m?.id === 'string' ? m.id : '').toLowerCase().replace(/[\s\-_]+/g, '');
-    const mNameNorm = (typeof m?.name === 'string' ? m.name : '').toLowerCase().replace(/[\s\-_]+/g, '');
-    return (
-      (mIdNorm.length > 0 &&
-        (mIdNorm.includes(normalized) || normalized.includes(mIdNorm))) ||
-      (mNameNorm.length > 0 &&
-        (mNameNorm.includes(normalized) || normalized.includes(mNameNorm)))
-    );
-  });
+      const mNameNorm = (typeof model.name === 'string' ? model.name : '').toLowerCase().replace(/[\s\-_]+/g, '');
+      // Priority 2: Exact Name match
+      if (!exactNameMatch && mNameNorm === normalized) {
+        exactNameMatch = { brand, model };
+        continue;
+      }
+
+      // Priority 3: Fallback substring match
+      if (
+        !partialMatch &&
+        ((mIdNorm.length > 0 && (mIdNorm.includes(normalized) || normalized.includes(mIdNorm))) ||
+          (mNameNorm.length > 0 && (mNameNorm.includes(normalized) || normalized.includes(mNameNorm))))
+      ) {
+        partialMatch = { brand, model };
+      }
+    }
+  }
+
+  const chosen = exactNameMatch ?? partialMatch;
+  return chosen ? enrichModelItem(chosen.brand, chosen.model) : undefined;
 }
 
 /**
@@ -1008,17 +1029,17 @@ export function calculateStealthScore(input?: StealthScoreInput | null): Stealth
   }
 
   let wDsi = !hasInvalidWeight && typeof rawWDsi === 'number' && Number.isFinite(rawWDsi) && rawWDsi >= 0
-    ? rawWDsi
+    ? rawWDsi + 0
     : DEFAULT_STEALTH_SCORE_WEIGHTS.dsiWeight;
   let wInc = !hasInvalidWeight && typeof rawWInc === 'number' && Number.isFinite(rawWInc) && rawWInc >= 0
-    ? rawWInc
+    ? rawWInc + 0
     : DEFAULT_STEALTH_SCORE_WEIGHTS.incidentWeight;
   let wCrit = !hasInvalidWeight && typeof rawWCrit === 'number' && Number.isFinite(rawWCrit) && rawWCrit >= 0
-    ? rawWCrit
+    ? rawWCrit + 0
     : DEFAULT_STEALTH_SCORE_WEIGHTS.criticalWeight;
 
   const totalWeight = wDsi + wInc + wCrit;
-  if (totalWeight <= 0 || hasInvalidWeight) {
+  if (totalWeight <= 0 || !Number.isFinite(totalWeight) || hasInvalidWeight) {
     wDsi = DEFAULT_STEALTH_SCORE_WEIGHTS.dsiWeight;
     wInc = DEFAULT_STEALTH_SCORE_WEIGHTS.incidentWeight;
     wCrit = DEFAULT_STEALTH_SCORE_WEIGHTS.criticalWeight;
@@ -1126,6 +1147,23 @@ export function getModelYearEvaluation(
   };
 }
 
+const BRAND_ALIAS_TO_ID: Readonly<Record<string, string>> = Object.freeze({
+  현대차: 'hyundai',
+  현대자동차: 'hyundai',
+  hyundaimotors: 'hyundai',
+  기아차: 'kia',
+  기아자동차: 'kia',
+  kiamotors: 'kia',
+  벤츠: 'mercedes-benz',
+  메르세데스: 'mercedes-benz',
+  mercedesbenz: 'mercedes-benz',
+  비야디: 'byd',
+  쉐보레: 'gm-chevrolet',
+  chevy: 'gm-chevrolet',
+  chevrolet: 'gm-chevrolet',
+  한국지엠: 'gm-chevrolet',
+});
+
 /**
  * Safe fuzzy brand resolver that matches ID, Korean name, English name, or standard alias.
  * Returns undefined for unknown brands.
@@ -1155,13 +1193,24 @@ export function resolveBrandReliability(
   );
   if (nameExact) return nameExact;
 
-  // Substring match
+  // Canonical alias match (handles e.g. '현대차', 'chevy', '기아차')
+  const compactKey = clean.replace(/[\s\-_/()[\]+.,&]+/g, '');
+  const mappedId = Object.prototype.hasOwnProperty.call(BRAND_ALIAS_TO_ID, compactKey)
+    ? BRAND_ALIAS_TO_ID[compactKey]
+    : undefined;
+  if (mappedId) {
+    const aliasMatch = brands.find((b) => typeof b.id === 'string' && b.id.trim().toLowerCase() === mappedId);
+    if (aliasMatch) return aliasMatch;
+  }
+
+  // Substring match (require length >= 2 to prevent 1-char false positives)
+  if (clean.length < 2) return undefined;
   return brands.find((b) => {
     const en = typeof b.name_en === 'string' ? b.name_en.trim().toLowerCase() : '';
     const ko = typeof b.name_ko === 'string' ? b.name_ko.trim().toLowerCase() : '';
     return (
-      (en.length > 0 && (en.includes(clean) || clean.includes(en))) ||
-      (ko.length > 0 && (ko.includes(clean) || clean.includes(ko)))
+      (en.length >= 2 && (en.includes(clean) || clean.includes(en))) ||
+      (ko.length >= 2 && (ko.includes(clean) || clean.includes(ko)))
     );
   });
 }
@@ -1262,6 +1311,90 @@ function parseValidDateString(dateVal: unknown): string | null {
   return null;
 }
 
+function isValidCalendarDate(year: number, month: number, day: number): boolean {
+  if (year < 1990 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return false;
+  }
+  const d = new Date(Date.UTC(year, month - 1, day));
+  return (
+    !Number.isNaN(d.getTime()) &&
+    d.getUTCFullYear() === year &&
+    d.getUTCMonth() === month - 1 &&
+    d.getUTCDate() === day
+  );
+}
+
+function parsePeriodicDate(
+  dateVal: unknown
+): { year: number; month?: number; quarter?: 1 | 2 | 3 | 4 } | null {
+  const dateStr = parseValidDateString(dateVal);
+  if (!dateStr) return null;
+
+  // 1. Quarter format: "2024-Q1", "2024 Q2", "2024년 1분기", "2024년 Q1"
+  const qMatch =
+    dateStr.match(/^(\d{4})(?:[-/. ]*|년\s*)Q([1-4])/i) ||
+    dateStr.match(/^(\d{4})\s*년?\s*([1-4])\s*분기$/);
+  if (qMatch) {
+    const parsedY = Number(qMatch[1]);
+    if (parsedY >= 1990 && parsedY <= 2100) {
+      return { year: parsedY, quarter: Number(qMatch[2]) as 1 | 2 | 3 | 4 };
+    }
+    return null;
+  }
+
+  // 2. Full or partial delimited date: YYYY-MM-DD, YYYY.MM.DD, YYYY/MM/DD, YYYY-MM
+  const fullMatch = dateStr.match(
+    /^(\d{4})[-/. ](\d{1,2})(?:[-/. ](\d{1,2})(?:$|T|\s+.*))?$/
+  );
+  if (fullMatch) {
+    const parsedY = Number(fullMatch[1]);
+    const parsedM = Number(fullMatch[2]);
+    if (parsedY < 1990 || parsedY > 2100 || parsedM < 1 || parsedM > 12) return null;
+    if (fullMatch[3] !== undefined) {
+      const parsedD = Number(fullMatch[3]);
+      if (!isValidCalendarDate(parsedY, parsedM, parsedD)) return null;
+    }
+    return {
+      year: parsedY,
+      month: parsedM,
+      quarter: Math.ceil(parsedM / 3) as 1 | 2 | 3 | 4,
+    };
+  }
+
+  // 3. Korean date: YYYY년 MM월 (DD일)
+  const krMatch = dateStr.match(/^(\d{4})년\s*(\d{1,2})월(?:\s*(\d{1,2})일)?$/);
+  if (krMatch) {
+    const parsedY = Number(krMatch[1]);
+    const parsedM = Number(krMatch[2]);
+    if (parsedY < 1990 || parsedY > 2100 || parsedM < 1 || parsedM > 12) return null;
+    if (krMatch[3] !== undefined) {
+      const parsedD = Number(krMatch[3]);
+      if (!isValidCalendarDate(parsedY, parsedM, parsedD)) return null;
+    }
+    return {
+      year: parsedY,
+      month: parsedM,
+      quarter: Math.ceil(parsedM / 3) as 1 | 2 | 3 | 4,
+    };
+  }
+
+  // 4. Compact YYYYMMDD
+  const compactMatch = dateStr.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (compactMatch) {
+    const parsedY = Number(compactMatch[1]);
+    const parsedM = Number(compactMatch[2]);
+    const parsedD = Number(compactMatch[3]);
+    if (!isValidCalendarDate(parsedY, parsedM, parsedD)) return null;
+    return {
+      year: parsedY,
+      month: parsedM,
+      quarter: Math.ceil(parsedM / 3) as 1 | 2 | 3 | 4,
+    };
+  }
+
+  return null;
+}
+
 function parsePeriodicMetrics(item: PeriodicDefectInput): {
   parsedCount: number;
   parsedDsi: number | null;
@@ -1280,7 +1413,8 @@ function parsePeriodicMetrics(item: PeriodicDefectInput): {
     (typeof item.category === 'string' && item.category.trim()) ||
     (typeof item.defectCategory === 'string' && item.defectCategory.trim()) ||
     'UNKNOWN';
-  const catKey = trimmedCat.toUpperCase();
+  const upperCat = trimmedCat.toUpperCase();
+  const catKey = FORBIDDEN_RECORD_KEYS.has(upperCat.toLowerCase()) ? 'UNKNOWN' : upperCat;
 
   return { parsedCount, parsedDsi, catKey };
 }
@@ -1427,26 +1561,10 @@ export function aggregateQuarterlyDefectBreakdown(
 
     // 3. Date string or Date object parsing
     if ((year === null || quarter === null) && item.date) {
-      const dateStr = parseValidDateString(item.date);
-      if (dateStr) {
-        const qMatch = dateStr.match(/^(\d{4})[-/. ]*Q([1-4])/i);
-        if (qMatch) {
-          const parsedY = Number(qMatch[1]);
-          if (parsedY >= 1990 && parsedY <= 2100) {
-            if (year === null) year = parsedY;
-            if (quarter === null) quarter = Number(qMatch[2]) as 1 | 2 | 3 | 4;
-          }
-        } else {
-          const dMatch = dateStr.match(/^(\d{4})[-/. ](\d{1,2})/);
-          if (dMatch) {
-            const parsedY = Number(dMatch[1]);
-            const m = Number(dMatch[2]);
-            if (parsedY >= 1990 && parsedY <= 2100 && m >= 1 && m <= 12) {
-              if (year === null) year = parsedY;
-              if (quarter === null) quarter = Math.ceil(m / 3) as 1 | 2 | 3 | 4;
-            }
-          }
-        }
+      const parsedDate = parsePeriodicDate(item.date);
+      if (parsedDate) {
+        if (year === null) year = parsedDate.year;
+        if (quarter === null && parsedDate.quarter) quarter = parsedDate.quarter;
       }
     }
 
@@ -1519,17 +1637,10 @@ export function aggregateMonthlyDefectBreakdown(
     }
 
     if ((year === null || month === null) && item.date) {
-      const dateStr = parseValidDateString(item.date);
-      if (dateStr) {
-        const dMatch = dateStr.match(/^(\d{4})[-/. ](\d{1,2})/);
-        if (dMatch) {
-          const parsedY = Number(dMatch[1]);
-          const m = Number(dMatch[2]);
-          if (parsedY >= 1990 && parsedY <= 2100 && m >= 1 && m <= 12) {
-            if (year === null) year = parsedY;
-            if (month === null) month = m;
-          }
-        }
+      const parsedDate = parsePeriodicDate(item.date);
+      if (parsedDate) {
+        if (year === null) year = parsedDate.year;
+        if (month === null && parsedDate.month) month = parsedDate.month;
       }
     }
 
@@ -1601,20 +1712,30 @@ export function calculateModelYearDefectTrajectory(
     }
   }
 
-  const validEvals: YearEvaluation[] = [];
+  const evalByYear = new Map<number, YearEvaluation>();
   for (const e of evals) {
     if (!e || typeof e !== 'object') continue;
     const parsedYear = parseFiniteNumber(e.year);
     if (parsedYear === null) continue;
+    const yr = Math.floor(parsedYear) + 0;
+    if (yr < 1900 || yr > 2100) continue;
     const parsedIncident = parseFiniteNumber(e.incident_rate);
-    validEvals.push({
+    const currSymptoms = Array.isArray(e.chronic_symptoms)
+      ? e.chronic_symptoms.filter((s): s is string => typeof s === 'string')
+      : [];
+    const existing = evalByYear.get(yr);
+    const mergedSymptoms = existing
+      ? Array.from(new Set([...(existing.chronic_symptoms || []), ...currSymptoms]))
+      : currSymptoms;
+    evalByYear.set(yr, {
       ...e,
-      year: Math.floor(parsedYear) + 0,
+      year: yr,
       dsi_score: normalizeReliabilityScore(e.dsi_score, 50.0),
-      incident_rate: parsedIncident !== null ? Math.max(0, Math.min(100, parsedIncident)) : 0,
+      incident_rate: parsedIncident !== null ? Math.max(0, Math.min(100, parsedIncident)) + 0 : 0,
+      chronic_symptoms: mergedSymptoms,
     });
   }
-  validEvals.sort((a, b) => a.year - b.year);
+  const validEvals = Array.from(evalByYear.values()).sort((a, b) => a.year - b.year);
 
   if (validEvals.length === 0) {
     return {

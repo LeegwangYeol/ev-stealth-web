@@ -195,10 +195,13 @@ class SentimentEngine:
                 concessive_multiplier = 1.5
                 continue
 
-            # 2. Intensifier Check
+            # 2. Intensifier / Diminisher Check
             if raw in self.INTENSIFIERS or stem in self.INTENSIFIERS:
                 factor = self.INTENSIFIERS.get(raw, self.INTENSIFIERS.get(stem, 1.0))
-                current_multiplier = max(current_multiplier, factor)
+                if factor < 1.0:
+                    current_multiplier = factor if current_multiplier == 1.0 else current_multiplier * factor
+                else:
+                    current_multiplier = max(current_multiplier, factor) if current_multiplier >= 1.0 else current_multiplier * factor
                 continue
 
             # 3. Negator Check

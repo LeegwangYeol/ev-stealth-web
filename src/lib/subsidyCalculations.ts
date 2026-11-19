@@ -263,6 +263,21 @@ export function getPriceSubsidyRatio(msrpKrw: number): number {
 // 4. PURE LIST LOOKUP FUNCTIONS
 // ==========================================
 
+const REGION_SUFFIX_RE = /(특별시|광역시|특별자치시|특별자치도|도)$/;
+const MODEL_CLEAN_RE = /[\s\-_]+/g;
+const DATE_ONLY_RE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})$/;
+const DATETIME_RE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})[T ](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:([Zz])|([+-])(\d{2}):?(\d{2}))?$/;
+const LEADING_SIGN_RE = /^([+-])?\s*(.*)$/;
+const EOK_RE = /([\d.,]+)\s*억/;
+const CHEON_MAN_RE = /([\d.,]+)\s*천\s*만/;
+const MAN_RE = /([\d.,]+)\s*만/;
+const CHEON_RE = /([\d.,]+)\s*천(?!\s*만)/;
+const COMMA_RE = /,/g;
+const CURRENCY_STRIP_RE = /[,원₩\sKRWkrw]/g;
+
+const KO_COLLATOR = new Intl.Collator('ko');
+const DEFAULT_COLLATOR = new Intl.Collator();
+
 /**
  * Pure region resolver from a supplied array of regions.
  * Matches by region_id, iso_code, Korean name, English name, canonical alias,
@@ -274,62 +289,78 @@ export function getRegionByIdFromList(
   regionId: string
 ): RegionEntry | undefined {
   if (!regionId || typeof regionId !== 'string' || !Array.isArray(regions)) return undefined;
-  const normalized = regionId.trim().toLowerCase();
+  const trimmed = regionId.trim();
+  const normalized = trimmed.toLowerCase();
   if (!normalized) return undefined;
-
-  const validRegions = regions.filter((r): r is RegionEntry => Boolean(r && typeof r === 'object'));
 
   // 1. Direct alias resolution
   const rawAlias = Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, normalized)
     ? REGION_ALIAS_MAP[normalized]
-    : Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, regionId.trim())
-    ? REGION_ALIAS_MAP[regionId.trim()]
+    : Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, trimmed)
+    ? REGION_ALIAS_MAP[trimmed]
     : undefined;
   const aliasedId = typeof rawAlias === 'string' ? rawAlias.toLowerCase() : undefined;
   if (aliasedId) {
-    const matched = validRegions.find(
-      (r) =>
+    for (let i = 0; i < regions.length; i++) {
+      const r = regions[i];
+      if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
+      if (
         (typeof r.region_id === 'string' && r.region_id.toLowerCase() === aliasedId) ||
         (typeof r.iso_code === 'string' && r.iso_code.toLowerCase() === aliasedId)
-    );
-    if (matched) return matched;
+      ) {
+        return r;
+      }
+    }
   }
 
   // 2. Direct exact match on ID, ISO code, or localized names
-  const exact = validRegions.find(
-    (r) =>
+  for (let i = 0; i < regions.length; i++) {
+    const r = regions[i];
+    if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
+    if (
       (typeof r.region_id === 'string' && r.region_id.toLowerCase() === normalized) ||
       (typeof r.iso_code === 'string' && r.iso_code.toLowerCase() === normalized) ||
       (typeof r.name_ko === 'string' && r.name_ko.toLowerCase() === normalized) ||
       (typeof r.name_en === 'string' && r.name_en.toLowerCase() === normalized)
-  );
-  if (exact) return exact;
+    ) {
+      return r;
+    }
+  }
 
   // 3. 2-letter provincial abbreviation / stripped administrative suffix match
-  const stripped = normalized.replace(/(특별시|광역시|특별자치시|특별자치도|도)$/, '');
+  const stripped = normalized.replace(REGION_SUFFIX_RE, '');
   if (stripped) {
     const rawStrippedAlias = Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, stripped)
       ? REGION_ALIAS_MAP[stripped]
       : undefined;
     const strippedAliasedId = typeof rawStrippedAlias === 'string' ? rawStrippedAlias.toLowerCase() : undefined;
     if (strippedAliasedId) {
-      const matched = validRegions.find(
-        (r) =>
+      for (let i = 0; i < regions.length; i++) {
+        const r = regions[i];
+        if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
+        if (
           (typeof r.region_id === 'string' && r.region_id.toLowerCase() === strippedAliasedId) ||
           (typeof r.iso_code === 'string' && r.iso_code.toLowerCase() === strippedAliasedId)
-      );
-      if (matched) return matched;
+        ) {
+          return r;
+        }
+      }
     }
 
-    return validRegions.find((r) => {
-      if (!r.name_ko || typeof r.name_ko !== 'string') return false;
-      const rStripped = r.name_ko.toLowerCase().replace(/(특별시|광역시|특별자치시|특별자치도|도)$/, '');
-      return Boolean(
+    for (let i = 0; i < regions.length; i++) {
+      const r = regions[i];
+      if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
+      if (!r.name_ko || typeof r.name_ko !== 'string') continue;
+      const lowerKo = r.name_ko.toLowerCase();
+      const rStripped = lowerKo.replace(REGION_SUFFIX_RE, '');
+      if (
         (rStripped && rStripped === stripped) ||
-        (stripped.length >= 2 && r.name_ko.toLowerCase().includes(stripped)) ||
+        (stripped.length >= 2 && lowerKo.includes(stripped)) ||
         (rStripped && stripped.length >= 2 && stripped.includes(rStripped))
-      );
-    });
+      ) {
+        return r;
+      }
+    }
   }
 
   return undefined;
@@ -348,38 +379,53 @@ export function getModelByIdFromList(
   const normalized = modelId.trim().toLowerCase();
   if (!normalized) return undefined;
 
-  const validModels = models.filter((m): m is PopularModelEntry => Boolean(m && typeof m === 'object' && !Array.isArray(m)));
-
   // 1a. Exact match on model_id or name_ko
-  const exactMatch = validModels.find(
-    (m) =>
+  for (let i = 0; i < models.length; i++) {
+    const m = models[i];
+    if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
+    if (
       (typeof m.model_id === 'string' && m.model_id.trim().toLowerCase() === normalized) ||
       (typeof m.name_ko === 'string' && m.name_ko.trim().toLowerCase() === normalized)
-  );
-  if (exactMatch) return exactMatch;
+    ) {
+      return m;
+    }
+  }
 
   // 1b. Substring match on name_ko
-  const substringMatch = validModels.find(
-    (m) => typeof m.name_ko === 'string' && m.name_ko.toLowerCase().includes(normalized)
-  );
-  if (substringMatch) return substringMatch;
+  for (let i = 0; i < models.length; i++) {
+    const m = models[i];
+    if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
+    if (typeof m.name_ko === 'string' && m.name_ko.toLowerCase().includes(normalized)) {
+      return m;
+    }
+  }
 
   // 2. Normalize by stripping whitespace, hyphens, and punctuation
-  const cleanQuery = normalized.replace(/[\s\-_]+/g, '');
+  const cleanQuery = normalized.replace(MODEL_CLEAN_RE, '');
   if (!cleanQuery) return undefined;
 
-  const cleanExactMatch = validModels.find((m) => {
-    const cleanId = (typeof m.model_id === 'string' ? m.model_id : '').toLowerCase().replace(/[\s\-_]+/g, '');
-    const cleanKo = (typeof m.name_ko === 'string' ? m.name_ko : '').toLowerCase().replace(/[\s\-_]+/g, '');
-    return cleanId === cleanQuery || cleanKo === cleanQuery;
-  });
-  if (cleanExactMatch) return cleanExactMatch;
+  let firstCleanSubstring: PopularModelEntry | undefined;
+  for (let i = 0; i < models.length; i++) {
+    const m = models[i];
+    if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
+    const cleanId = typeof m.model_id === 'string'
+      ? m.model_id.toLowerCase().replace(MODEL_CLEAN_RE, '')
+      : '';
+    const cleanKo = typeof m.name_ko === 'string'
+      ? m.name_ko.toLowerCase().replace(MODEL_CLEAN_RE, '')
+      : '';
+    if (cleanId === cleanQuery || cleanKo === cleanQuery) {
+      return m;
+    }
+    if (
+      firstCleanSubstring === undefined &&
+      ((cleanId && cleanId.includes(cleanQuery)) || (cleanKo && cleanKo.includes(cleanQuery)))
+    ) {
+      firstCleanSubstring = m;
+    }
+  }
 
-  return validModels.find((m) => {
-    const cleanId = (typeof m.model_id === 'string' ? m.model_id : '').toLowerCase().replace(/[\s\-_]+/g, '');
-    const cleanKo = (typeof m.name_ko === 'string' ? m.name_ko : '').toLowerCase().replace(/[\s\-_]+/g, '');
-    return (cleanId && cleanId.includes(cleanQuery)) || (cleanKo && cleanKo.includes(cleanQuery));
-  });
+  return firstCleanSubstring;
 }
 
 // ==========================================
@@ -424,22 +470,36 @@ export function calculateDepletionRate(
     return 0.0;
   }
 
-  let rate = (appliedCount / totalQuota) * 100;
-  if (options?.clamp100) {
-    rate = Math.min(100.0, rate);
-  }
-
-  const decimals = typeof options?.roundDecimals === 'number' && Number.isFinite(options.roundDecimals) && options.roundDecimals >= 0
-    ? Math.min(10, Math.floor(options.roundDecimals))
-    : 1;
-  const factor = Math.pow(10, decimals);
+  const numerator = appliedCount * 100;
+  let rate = Number.isFinite(numerator)
+    ? numerator / totalQuota
+    : (appliedCount / totalQuota) * 100;
   if (!Number.isFinite(rate) || rate < 0) {
     return 0.0;
   }
-  const scaled = rate * factor;
+  if (options?.clamp100 && rate > 100.0) {
+    rate = 100.0;
+  }
+
+  const decimals =
+    typeof options?.roundDecimals === 'number' &&
+    Number.isFinite(options.roundDecimals) &&
+    options.roundDecimals >= 0
+      ? Math.min(10, Math.floor(options.roundDecimals))
+      : 1;
+  const factor = Math.pow(10, decimals);
+
+  // Scale numerator before dividing by totalQuota when finite to avoid IEEE-754 truncation (e.g. 14.049999999999999)
+  const scaledNumerator = appliedCount * 100 * factor;
+  const scaled =
+    options?.clamp100 && rate >= 100.0
+      ? 100.0 * factor
+      : Number.isFinite(scaledNumerator)
+      ? scaledNumerator / totalQuota
+      : rate * factor;
   const rounded = Number.isFinite(scaled) ? Math.round(scaled) / factor : rate;
 
-  return Number.isFinite(rounded) && rounded >= 0 ? rounded : 0.0;
+  return Number.isFinite(rounded) && rounded > 0 ? rounded : 0.0;
 }
 
 /**
@@ -565,8 +625,9 @@ export function calculateDepletionVelocity(
     return 0.0;
   }
   const diff = Math.max(0, appliedEnd - appliedStart);
-  const velocity = Math.round((diff / days) * 100) / 100;
-  return Number.isFinite(velocity) && velocity >= 0 ? velocity : 0.0;
+  const raw = Number.isFinite(diff * 100) ? (diff * 100) / days : (diff / days) * 100;
+  const velocity = Number.isFinite(raw) ? Math.round(raw) / 100 : 0.0;
+  return Number.isFinite(velocity) && velocity > 0 ? velocity : 0.0;
 }
 
 /**
@@ -590,20 +651,63 @@ export function predictExhaustionDays(
   if (remainingUnits <= 0) return 0;
   if (dailyVelocity <= 0) return null;
   const days = Math.ceil(remainingUnits / dailyVelocity);
-  return Number.isFinite(days) && days >= 0 ? days : null;
+  return Number.isFinite(days) && days >= 0 ? (days === 0 ? 0 : days) : null;
+}
+
+function buildValidatedUtcDate(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second: number,
+  ms: number
+): Date | null {
+  if (
+    !Number.isInteger(year) ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31 ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59 ||
+    second < 0 ||
+    second > 59 ||
+    ms < 0 ||
+    ms > 999
+  ) {
+    return null;
+  }
+  const dt = new Date(0);
+  dt.setUTCFullYear(year, month - 1, day);
+  dt.setUTCHours(hour, minute, second, ms);
+  if (
+    Number.isNaN(dt.getTime()) ||
+    dt.getUTCFullYear() !== year ||
+    dt.getUTCMonth() !== month - 1 ||
+    dt.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return dt;
 }
 
 /**
  * Parses a Date or string strictly into a UTC Date, avoiding local-timezone shifts
- * on YYYY/MM/DD, YYYY.MM.DD, or timezone-less YYYY-MM-DD HH:mm:ss inputs and
- * rejecting silent calendar rollovers (e.g., 2026-02-30).
+ * on YYYY/MM/DD, YYYY.MM.DD, or timezone-less YYYY-MM-DD HH:mm:ss(.ffffff) inputs and
+ * rejecting silent calendar rollovers (e.g., 2026-02-30 or 2026-02-30T12:00:00Z).
  */
-function parseUtcStartDate(startDate?: Date | string | null): Date {
+function parseUtcStartDate(startDate?: Date | string | null): Date | null {
+  if (startDate === undefined || startDate === null) {
+    return new Date();
+  }
   if (startDate instanceof Date) {
-    return Number.isNaN(startDate.getTime()) ? new Date() : new Date(startDate.getTime());
+    return Number.isNaN(startDate.getTime()) ? null : new Date(startDate.getTime());
   }
   if (typeof startDate !== 'string') {
-    return new Date();
+    return null;
   }
   const s = startDate.trim();
   if (!s) {
@@ -611,51 +715,50 @@ function parseUtcStartDate(startDate?: Date | string | null): Date {
   }
 
   // Date-only formats: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD
-  const dateOnly = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(s);
+  const dateOnly = DATE_ONLY_RE.exec(s);
   if (dateOnly) {
     const year = Number(dateOnly[1]);
-    const month = Number(dateOnly[2]);
-    const day = Number(dateOnly[3]);
-    const dt = new Date(Date.UTC(year, month - 1, day));
-    dt.setUTCFullYear(year);
-    if (
-      !Number.isNaN(dt.getTime()) &&
-      dt.getUTCFullYear() === year &&
-      dt.getUTCMonth() === month - 1 &&
-      dt.getUTCDate() === day
-    ) {
-      return dt;
-    }
-    return new Date();
+    const month = Number(dateOnly[3]);
+    const day = Number(dateOnly[4]);
+    return buildValidatedUtcDate(year, month, day, 0, 0, 0, 0);
   }
 
-  // Datetime without timezone offset: YYYY-MM-DD[T ]HH:mm(:ss(.sss)?)? -> treat as UTC
-  const naiveDt = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})[T ](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/.exec(s);
-  if (naiveDt) {
-    const year = Number(naiveDt[1]);
-    const month = Number(naiveDt[2]);
-    const day = Number(naiveDt[3]);
-    const hour = Number(naiveDt[4]);
-    const minute = Number(naiveDt[5]);
-    const second = naiveDt[6] ? Number(naiveDt[6]) : 0;
-    const ms = naiveDt[7] ? Number(naiveDt[7].padEnd(3, '0')) : 0;
-    if (hour <= 23 && minute <= 59 && second <= 59) {
-      const dt = new Date(Date.UTC(year, month - 1, day, hour, minute, second, ms));
-      dt.setUTCFullYear(year);
-      if (
-        !Number.isNaN(dt.getTime()) &&
-        dt.getUTCFullYear() === year &&
-        dt.getUTCMonth() === month - 1 &&
-        dt.getUTCDate() === day
-      ) {
-        return dt;
+  // Datetime formats (naive treated as UTC, or explicit Z / ±HH:MM / ±HHMM)
+  const dtMatch = DATETIME_RE.exec(s);
+  if (dtMatch) {
+    const year = Number(dtMatch[1]);
+    const month = Number(dtMatch[3]);
+    const day = Number(dtMatch[4]);
+    const hour = Number(dtMatch[5]);
+    const minute = Number(dtMatch[6]);
+    const second = dtMatch[7] ? Number(dtMatch[7]) : 0;
+    const ms = dtMatch[8] ? Number(dtMatch[8].slice(0, 3).padEnd(3, '0')) : 0;
+
+    let offsetMinutes = 0;
+    if (dtMatch[10]) {
+      const tzHour = Number(dtMatch[11]);
+      const tzMin = Number(dtMatch[12]);
+      if (tzHour > 23 || tzMin > 59) {
+        return null;
+      }
+      offsetMinutes = (dtMatch[10] === '+' ? 1 : -1) * (tzHour * 60 + tzMin);
+    }
+
+    const dt = buildValidatedUtcDate(year, month, day, hour, minute, second, ms);
+    if (!dt) {
+      return null;
+    }
+    if (offsetMinutes !== 0) {
+      dt.setTime(dt.getTime() - offsetMinutes * 60_000);
+      if (Number.isNaN(dt.getTime())) {
+        return null;
       }
     }
-    return new Date();
+    return dt;
   }
 
   const parsed = new Date(s);
-  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 /**
@@ -670,6 +773,9 @@ export function predictExhaustionDate(
   if (days === null) return null;
   try {
     const baseDt = parseUtcStartDate(startDate);
+    if (!baseDt) {
+      return null;
+    }
     baseDt.setUTCDate(baseDt.getUTCDate() + days);
     if (Number.isNaN(baseDt.getTime())) {
       return null;
@@ -759,16 +865,21 @@ export function parseSubsidyNumber(
     return fallback;
   }
 
-  const isNeg = /^\s*-/.test(raw);
-  const clean = raw.replace(/^[+\-\s]+/, '');
+  const signMatch = LEADING_SIGN_RE.exec(raw);
+  const sign = signMatch?.[1] ?? '';
+  const clean = signMatch?.[2] ?? raw;
+  if (!clean || /^[+-]/.test(clean)) {
+    return fallback;
+  }
+  const isNeg = sign === '-';
 
   let total = 0;
   let matchedKoreanUnit = false;
 
   // 1. Match '억'
-  const eokMatch = clean.match(/([\d.,]+)\s*억/);
+  const eokMatch = EOK_RE.exec(clean);
   if (eokMatch) {
-    const val = parseFloat(eokMatch[1].replace(/,/g, ''));
+    const val = parseFloat(eokMatch[1].replace(COMMA_RE, ''));
     if (Number.isFinite(val)) {
       total += val * 100_000_000;
       matchedKoreanUnit = true;
@@ -776,18 +887,18 @@ export function parseSubsidyNumber(
   }
 
   // 2. Match '천만' (e.g. 5천만원)
-  const cheonManMatch = clean.match(/([\d.,]+)\s*천\s*만/);
+  const cheonManMatch = CHEON_MAN_RE.exec(clean);
   if (cheonManMatch) {
-    const val = parseFloat(cheonManMatch[1].replace(/,/g, ''));
+    const val = parseFloat(cheonManMatch[1].replace(COMMA_RE, ''));
     if (Number.isFinite(val)) {
       total += val * 10_000_000;
       matchedKoreanUnit = true;
     }
   } else {
     // 3. Match '만' (e.g. 650만원, 5,500만 원, 650만)
-    const manMatch = clean.match(/([\d.,]+)\s*만/);
+    const manMatch = MAN_RE.exec(clean);
     if (manMatch) {
-      const val = parseFloat(manMatch[1].replace(/,/g, ''));
+      const val = parseFloat(manMatch[1].replace(COMMA_RE, ''));
       if (Number.isFinite(val)) {
         total += val * 10_000;
         matchedKoreanUnit = true;
@@ -796,9 +907,9 @@ export function parseSubsidyNumber(
   }
 
   // 4. Match standalone '천' (not followed by '만', e.g. 5천원)
-  const cheonMatch = clean.match(/([\d.,]+)\s*천(?!\s*만)/);
+  const cheonMatch = CHEON_RE.exec(clean);
   if (cheonMatch) {
-    const val = parseFloat(cheonMatch[1].replace(/,/g, ''));
+    const val = parseFloat(cheonMatch[1].replace(COMMA_RE, ''));
     if (Number.isFinite(val)) {
       total += val * 1_000;
       matchedKoreanUnit = true;
@@ -807,7 +918,7 @@ export function parseSubsidyNumber(
 
   // 5. If no Korean unit was matched, parse as standard raw number with commas/currency symbols
   if (!matchedKoreanUnit) {
-    const stripped = clean.replace(/[,원₩\sKRWkrw]/g, '');
+    const stripped = clean.replace(CURRENCY_STRIP_RE, '');
     const val = parseFloat(stripped);
     if (Number.isFinite(val)) {
       total = val;
@@ -874,7 +985,8 @@ function safeNonEmptyString(value: unknown, fallback: string): string {
 function round1Safe(value: number): number {
   if (!Number.isFinite(value)) return value;
   const scaled = value * 10;
-  return Number.isFinite(scaled) ? Math.round(scaled) / 10 : value;
+  const rounded = Number.isFinite(scaled) ? Math.round(scaled) / 10 : value;
+  return rounded === 0 ? 0 : rounded;
 }
 
 function parseFiniteNonNegNumber(value: unknown): number {
@@ -1055,6 +1167,31 @@ export function safeCompareNumbers(
 
 
 
+function extractRegionSortMetric(
+  region: RegionEntry,
+  normalizedSort: string,
+  categoryKey: SubsidyCategoryKey
+): number {
+  const cat = getSafeCategory(region.categories, categoryKey);
+  switch (normalizedSort) {
+    case 'DEPLETION_DESC':
+    case 'DEPLETION_ASC':
+      return typeof cat?.depletion_rate === 'number' && !Number.isNaN(cat.depletion_rate)
+        ? Math.max(0, cat.depletion_rate)
+        : calculateDepletionRate(cat?.applied_units, cat?.announced_units);
+    case 'REMAINING_ASC':
+    case 'REMAINING_DESC':
+      return typeof cat?.remaining_units === 'number' && !Number.isNaN(cat.remaining_units)
+        ? Math.max(0, cat.remaining_units)
+        : calculateRemainingUnits(cat?.applied_units, cat?.announced_units);
+    case 'LOCAL_SUBSIDY_DESC':
+    case 'LOCAL_SUBSIDY_ASC':
+      return parseSubsidyNumber(cat?.max_local_subsidy_krw, { defaultKrw: 0 });
+    default:
+      return 0;
+  }
+}
+
 /**
  * Deterministic, NaN-safe region comparator.
  */
@@ -1068,71 +1205,34 @@ export function compareRegions(
   if (!a) return 1;
   if (!b) return -1;
 
-  const catA = getSafeCategory(a.categories, categoryKey);
-  const catB = getSafeCategory(b.categories, categoryKey);
-
-  const normalizedSort = String(sortOption || 'DEPLETION_DESC').toUpperCase();
+  const normalizedSort = typeof sortOption === 'string' && sortOption.trim()
+    ? sortOption.trim().toUpperCase()
+    : 'DEPLETION_DESC';
 
   let cmp = 0;
   switch (normalizedSort) {
-    case 'DEPLETION_DESC': {
-      const rateA = typeof catA?.depletion_rate === 'number' && !Number.isNaN(catA.depletion_rate)
-        ? Math.max(0, catA.depletion_rate)
-        : calculateDepletionRate(catA?.applied_units, catA?.announced_units);
-      const rateB = typeof catB?.depletion_rate === 'number' && !Number.isNaN(catB.depletion_rate)
-        ? Math.max(0, catB.depletion_rate)
-        : calculateDepletionRate(catB?.applied_units, catB?.announced_units);
-      cmp = safeCompareNumbers(rateA, rateB, 'desc');
-      break;
-    }
-    case 'DEPLETION_ASC': {
-      const rateA = typeof catA?.depletion_rate === 'number' && !Number.isNaN(catA.depletion_rate)
-        ? Math.max(0, catA.depletion_rate)
-        : calculateDepletionRate(catA?.applied_units, catA?.announced_units);
-      const rateB = typeof catB?.depletion_rate === 'number' && !Number.isNaN(catB.depletion_rate)
-        ? Math.max(0, catB.depletion_rate)
-        : calculateDepletionRate(catB?.applied_units, catB?.announced_units);
-      cmp = safeCompareNumbers(rateA, rateB, 'asc');
-      break;
-    }
-    case 'REMAINING_ASC': {
-      const remA = typeof catA?.remaining_units === 'number' && !Number.isNaN(catA.remaining_units)
-        ? Math.max(0, catA.remaining_units)
-        : calculateRemainingUnits(catA?.applied_units, catA?.announced_units);
-      const remB = typeof catB?.remaining_units === 'number' && !Number.isNaN(catB.remaining_units)
-        ? Math.max(0, catB.remaining_units)
-        : calculateRemainingUnits(catB?.applied_units, catB?.announced_units);
-      cmp = safeCompareNumbers(remA, remB, 'asc');
-      break;
-    }
-    case 'REMAINING_DESC': {
-      const remA = typeof catA?.remaining_units === 'number' && !Number.isNaN(catA.remaining_units)
-        ? Math.max(0, catA.remaining_units)
-        : calculateRemainingUnits(catA?.applied_units, catA?.announced_units);
-      const remB = typeof catB?.remaining_units === 'number' && !Number.isNaN(catB.remaining_units)
-        ? Math.max(0, catB.remaining_units)
-        : calculateRemainingUnits(catB?.applied_units, catB?.announced_units);
-      cmp = safeCompareNumbers(remA, remB, 'desc');
-      break;
-    }
+    case 'DEPLETION_DESC':
+    case 'REMAINING_DESC':
     case 'LOCAL_SUBSIDY_DESC': {
-      const subA = parseSubsidyNumber(catA?.max_local_subsidy_krw, { defaultKrw: 0 });
-      const subB = parseSubsidyNumber(catB?.max_local_subsidy_krw, { defaultKrw: 0 });
-      cmp = safeCompareNumbers(subA, subB, 'desc');
+      const valA = extractRegionSortMetric(a, normalizedSort, categoryKey);
+      const valB = extractRegionSortMetric(b, normalizedSort, categoryKey);
+      cmp = safeCompareNumbers(valA, valB, 'desc');
       break;
     }
+    case 'DEPLETION_ASC':
+    case 'REMAINING_ASC':
     case 'LOCAL_SUBSIDY_ASC': {
-      const subA = parseSubsidyNumber(catA?.max_local_subsidy_krw, { defaultKrw: 0 });
-      const subB = parseSubsidyNumber(catB?.max_local_subsidy_krw, { defaultKrw: 0 });
-      cmp = safeCompareNumbers(subA, subB, 'asc');
+      const valA = extractRegionSortMetric(a, normalizedSort, categoryKey);
+      const valB = extractRegionSortMetric(b, normalizedSort, categoryKey);
+      cmp = safeCompareNumbers(valA, valB, 'asc');
       break;
     }
     case 'NAME_ASC': {
-      cmp = safeString(a.name_ko).localeCompare(safeString(b.name_ko), 'ko');
+      cmp = KO_COLLATOR.compare(safeString(a.name_ko), safeString(b.name_ko));
       break;
     }
     case 'NAME_DESC': {
-      cmp = safeString(b.name_ko).localeCompare(safeString(a.name_ko), 'ko');
+      cmp = KO_COLLATOR.compare(safeString(b.name_ko), safeString(a.name_ko));
       break;
     }
     default:
@@ -1141,9 +1241,9 @@ export function compareRegions(
 
   if (cmp !== 0) return cmp;
   // Deterministic tie-breaker by name then region_id
-  const nameTie = safeString(a.name_ko).localeCompare(safeString(b.name_ko), 'ko');
+  const nameTie = KO_COLLATOR.compare(safeString(a.name_ko), safeString(b.name_ko));
   if (nameTie !== 0) return nameTie;
-  return safeString(a.region_id).localeCompare(safeString(b.region_id));
+  return DEFAULT_COLLATOR.compare(safeString(a.region_id), safeString(b.region_id));
 }
 
 /**
@@ -1155,8 +1255,59 @@ export function sortRegions<T extends RegionEntry>(
   categoryKey: 'passenger' | 'commercial' | 'bus' = 'passenger'
 ): T[] {
   if (!Array.isArray(regions)) return [];
-  const valid = regions.filter((r): r is T => Boolean(r && typeof r === 'object'));
-  return [...valid].sort((a, b) => compareRegions(a, b, sortOption, categoryKey));
+  const normalizedSort = typeof sortOption === 'string' && sortOption.trim()
+    ? sortOption.trim().toUpperCase()
+    : 'DEPLETION_DESC';
+
+  const isNameAsc = normalizedSort === 'NAME_ASC';
+  const isNameDesc = normalizedSort === 'NAME_DESC';
+  const isDesc =
+    normalizedSort === 'DEPLETION_DESC' ||
+    normalizedSort === 'REMAINING_DESC' ||
+    normalizedSort === 'LOCAL_SUBSIDY_DESC';
+  const isNumericSort =
+    isDesc ||
+    normalizedSort === 'DEPLETION_ASC' ||
+    normalizedSort === 'REMAINING_ASC' ||
+    normalizedSort === 'LOCAL_SUBSIDY_ASC';
+
+  const decorated: Array<{ item: T; metric: number; nameKo: string; regionId: string }> = [];
+  for (let i = 0; i < regions.length; i++) {
+    const r = regions[i];
+    if (!isPlainObject(r)) continue;
+    decorated.push({
+      item: r as T,
+      metric: isNumericSort ? extractRegionSortMetric(r as T, normalizedSort, categoryKey) : 0,
+      nameKo: safeString(r.name_ko),
+      regionId: safeString(r.region_id),
+    });
+  }
+
+  if (decorated.length <= 1) {
+    return decorated.map((d) => d.item);
+  }
+
+  const direction = isDesc ? 'desc' : 'asc';
+  decorated.sort((a, b) => {
+    let cmp = 0;
+    if (isNumericSort) {
+      cmp = safeCompareNumbers(a.metric, b.metric, direction);
+    } else if (isNameAsc) {
+      cmp = KO_COLLATOR.compare(a.nameKo, b.nameKo);
+    } else if (isNameDesc) {
+      cmp = KO_COLLATOR.compare(b.nameKo, a.nameKo);
+    }
+    if (cmp !== 0) return cmp;
+    const nameTie = KO_COLLATOR.compare(a.nameKo, b.nameKo);
+    if (nameTie !== 0) return nameTie;
+    return DEFAULT_COLLATOR.compare(a.regionId, b.regionId);
+  });
+
+  const result = new Array<T>(decorated.length);
+  for (let i = 0; i < decorated.length; i++) {
+    result[i] = decorated[i].item;
+  }
+  return result;
 }
 
 
@@ -1214,6 +1365,29 @@ export function rankRegionsByDepletion(
 
 
 
+function extractModelSortMetric(
+  model: PopularModelEntry,
+  normalizedSort: string
+): number {
+  switch (normalizedSort) {
+    case 'PRICE_ASC':
+    case 'NET_PRICE_ASC':
+    case 'PRICE_DESC':
+    case 'NET_PRICE_DESC':
+      return parseSubsidyNumber(model.base_price_krw, { defaultKrw: 54_100_000 });
+    case 'SUBSIDY_DESC':
+    case 'SUBSIDY_ASC':
+      return parseSubsidyNumber(model.national_subsidy_krw, { defaultKrw: 0 });
+    case 'RANGE_DESC':
+    case 'RANGE_ASC':
+      return typeof model.rated_range_km === 'number' && Number.isFinite(model.rated_range_km)
+        ? model.rated_range_km
+        : 0;
+    default:
+      return 0;
+  }
+}
+
 /**
  * Deterministic, NaN-safe vehicle model comparator.
  */
@@ -1226,54 +1400,36 @@ export function compareModels(
   if (!a) return 1;
   if (!b) return -1;
 
-  const normalizedSort = String(sortOption || 'PRICE_ASC').toUpperCase();
+  const normalizedSort = typeof sortOption === 'string' && sortOption.trim()
+    ? sortOption.trim().toUpperCase()
+    : 'PRICE_ASC';
 
   let cmp = 0;
   switch (normalizedSort) {
     case 'PRICE_ASC':
-    case 'NET_PRICE_ASC': {
-      const priceA = parseSubsidyNumber(a.base_price_krw, { defaultKrw: 54_100_000 });
-      const priceB = parseSubsidyNumber(b.base_price_krw, { defaultKrw: 54_100_000 });
-      cmp = safeCompareNumbers(priceA, priceB, 'asc');
+    case 'NET_PRICE_ASC':
+    case 'SUBSIDY_ASC':
+    case 'RANGE_ASC': {
+      const valA = extractModelSortMetric(a, normalizedSort);
+      const valB = extractModelSortMetric(b, normalizedSort);
+      cmp = safeCompareNumbers(valA, valB, 'asc');
       break;
     }
     case 'PRICE_DESC':
-    case 'NET_PRICE_DESC': {
-      const priceA = parseSubsidyNumber(a.base_price_krw, { defaultKrw: 54_100_000 });
-      const priceB = parseSubsidyNumber(b.base_price_krw, { defaultKrw: 54_100_000 });
-      cmp = safeCompareNumbers(priceA, priceB, 'desc');
-      break;
-    }
-    case 'SUBSIDY_DESC': {
-      const subA = parseSubsidyNumber(a.national_subsidy_krw, { defaultKrw: 0 });
-      const subB = parseSubsidyNumber(b.national_subsidy_krw, { defaultKrw: 0 });
-      cmp = safeCompareNumbers(subA, subB, 'desc');
-      break;
-    }
-    case 'SUBSIDY_ASC': {
-      const subA = parseSubsidyNumber(a.national_subsidy_krw, { defaultKrw: 0 });
-      const subB = parseSubsidyNumber(b.national_subsidy_krw, { defaultKrw: 0 });
-      cmp = safeCompareNumbers(subA, subB, 'asc');
-      break;
-    }
+    case 'NET_PRICE_DESC':
+    case 'SUBSIDY_DESC':
     case 'RANGE_DESC': {
-      const rangeA = typeof a.rated_range_km === 'number' && Number.isFinite(a.rated_range_km) ? a.rated_range_km : 0;
-      const rangeB = typeof b.rated_range_km === 'number' && Number.isFinite(b.rated_range_km) ? b.rated_range_km : 0;
-      cmp = safeCompareNumbers(rangeA, rangeB, 'desc');
-      break;
-    }
-    case 'RANGE_ASC': {
-      const rangeA = typeof a.rated_range_km === 'number' && Number.isFinite(a.rated_range_km) ? a.rated_range_km : 0;
-      const rangeB = typeof b.rated_range_km === 'number' && Number.isFinite(b.rated_range_km) ? b.rated_range_km : 0;
-      cmp = safeCompareNumbers(rangeA, rangeB, 'asc');
+      const valA = extractModelSortMetric(a, normalizedSort);
+      const valB = extractModelSortMetric(b, normalizedSort);
+      cmp = safeCompareNumbers(valA, valB, 'desc');
       break;
     }
     case 'NAME_ASC': {
-      cmp = safeString(a.name_ko).localeCompare(safeString(b.name_ko), 'ko');
+      cmp = KO_COLLATOR.compare(safeString(a.name_ko), safeString(b.name_ko));
       break;
     }
     case 'NAME_DESC': {
-      cmp = safeString(b.name_ko).localeCompare(safeString(a.name_ko), 'ko');
+      cmp = KO_COLLATOR.compare(safeString(b.name_ko), safeString(a.name_ko));
       break;
     }
     default:
@@ -1281,7 +1437,7 @@ export function compareModels(
   }
 
   if (cmp !== 0) return cmp;
-  return safeString(a.model_id).localeCompare(safeString(b.model_id));
+  return DEFAULT_COLLATOR.compare(safeString(a.model_id), safeString(b.model_id));
 }
 
 /**
@@ -1292,13 +1448,89 @@ export function sortModels<T extends PopularModelEntry>(
   sortOption: ModelSortOption = 'PRICE_ASC'
 ): T[] {
   if (!Array.isArray(models)) return [];
-  const valid = models.filter((m): m is T => Boolean(m && typeof m === 'object'));
-  return [...valid].sort((a, b) => compareModels(a, b, sortOption));
+  const normalizedSort = typeof sortOption === 'string' && sortOption.trim()
+    ? sortOption.trim().toUpperCase()
+    : 'PRICE_ASC';
+
+  const isNameAsc = normalizedSort === 'NAME_ASC';
+  const isNameDesc = normalizedSort === 'NAME_DESC';
+  const isDesc =
+    normalizedSort === 'PRICE_DESC' ||
+    normalizedSort === 'NET_PRICE_DESC' ||
+    normalizedSort === 'SUBSIDY_DESC' ||
+    normalizedSort === 'RANGE_DESC';
+  const isNumericSort =
+    isDesc ||
+    normalizedSort === 'PRICE_ASC' ||
+    normalizedSort === 'NET_PRICE_ASC' ||
+    normalizedSort === 'SUBSIDY_ASC' ||
+    normalizedSort === 'RANGE_ASC';
+
+  const decorated: Array<{ item: T; metric: number; nameKo: string; modelId: string }> = [];
+  for (let i = 0; i < models.length; i++) {
+    const m = models[i];
+    if (!isPlainObject(m)) continue;
+    decorated.push({
+      item: m as T,
+      metric: isNumericSort ? extractModelSortMetric(m as T, normalizedSort) : 0,
+      nameKo: safeString(m.name_ko),
+      modelId: safeString(m.model_id),
+    });
+  }
+
+  if (decorated.length <= 1) {
+    return decorated.map((d) => d.item);
+  }
+
+  const direction = isDesc ? 'desc' : 'asc';
+  decorated.sort((a, b) => {
+    let cmp = 0;
+    if (isNumericSort) {
+      cmp = safeCompareNumbers(a.metric, b.metric, direction);
+    } else if (isNameAsc) {
+      cmp = KO_COLLATOR.compare(a.nameKo, b.nameKo);
+    } else if (isNameDesc) {
+      cmp = KO_COLLATOR.compare(b.nameKo, a.nameKo);
+    }
+    if (cmp !== 0) return cmp;
+    return DEFAULT_COLLATOR.compare(a.modelId, b.modelId);
+  });
+
+  const result = new Array<T>(decorated.length);
+  for (let i = 0; i < decorated.length; i++) {
+    result[i] = decorated[i].item;
+  }
+  return result;
 }
 
 // ==========================================
 // 5. PURE SUBSIDY CALCULATION ENGINE
 // ==========================================
+
+const DEFAULT_PURE_MODEL: PopularModelEntry = Object.freeze({
+  model_id: 'unknown-model',
+  name_ko: '기본 모델',
+  manufacturer: '기타',
+  battery_type: 'NCM 삼원계',
+  battery_capacity_kwh: 84.0,
+  rated_range_km: 485,
+  base_price_krw: 54_100_000,
+  national_subsidy_krw: 0,
+  price_subsidy_ratio: 1.0,
+});
+
+const DEFAULT_PURE_REGION: RegionEntry = Object.freeze({
+  region_id: 'unknown-region',
+  iso_code: 'KR-00',
+  name_ko: '전국 평균',
+  name_en: 'Nationwide',
+  tier: 'special_city',
+  overall_depletion_rate: 0,
+  overall_status: 'HEALTHY',
+  residency_requirement_days: 30,
+  supplementary_budget_added: false,
+  categories: DEFAULT_NATIONWIDE_SUMMARY.category_totals,
+}) as RegionEntry;
 
 /**
  * Computes net subsidy, matching municipal grant, statutory price cap reduction,
@@ -1310,70 +1542,13 @@ export function calculateNetSubsidyPure(
   customMsrp?: number | string | null,
   options?: SubsidyCalculatorOptions
 ): SubsidyCalculationResult {
-  const safeModel: PopularModelEntry =
-    model && typeof model === 'object'
-      ? model
-      : {
-          model_id: 'unknown-model',
-          name_ko: '기본 모델',
-          manufacturer: '기타',
-          battery_type: 'NCM 삼원계',
-          battery_capacity_kwh: 84.0,
-          rated_range_km: 485,
-          base_price_krw: 54_100_000,
-          national_subsidy_krw: 0,
-          price_subsidy_ratio: 1.0,
-        };
+  const safeModel: PopularModelEntry = isPlainObject(model)
+    ? (model as PopularModelEntry)
+    : DEFAULT_PURE_MODEL;
 
-  const safeRegion: RegionEntry =
-    region && typeof region === 'object'
-      ? region
-      : ({
-          region_id: 'unknown-region',
-          iso_code: 'KR-00',
-          name_ko: '전국 평균',
-          name_en: 'Nationwide',
-          tier: 'special_city',
-          overall_depletion_rate: 0,
-          overall_status: 'HEALTHY',
-          residency_requirement_days: 30,
-          supplementary_budget_added: false,
-          categories: {
-            passenger: {
-              announced_units: 0,
-              applied_units: 0,
-              delivered_units: 0,
-              remaining_units: 0,
-              depletion_rate: 0,
-              delivery_rate: 0,
-              status: 'HEALTHY',
-              max_local_subsidy_krw: 0,
-              max_total_subsidy_krw: 0,
-            },
-            commercial: {
-              announced_units: 0,
-              applied_units: 0,
-              delivered_units: 0,
-              remaining_units: 0,
-              depletion_rate: 0,
-              delivery_rate: 0,
-              status: 'HEALTHY',
-              max_local_subsidy_krw: 0,
-              max_total_subsidy_krw: 0,
-            },
-            bus: {
-              announced_units: 0,
-              applied_units: 0,
-              delivered_units: 0,
-              remaining_units: 0,
-              depletion_rate: 0,
-              delivery_rate: 0,
-              status: 'HEALTHY',
-              max_local_subsidy_krw: 0,
-              max_total_subsidy_krw: 0,
-            },
-          },
-        } as RegionEntry);
+  const safeRegion: RegionEntry = isPlainObject(region)
+    ? (region as RegionEntry)
+    : DEFAULT_PURE_REGION;
 
   const passengerCategory = getSafeCategory(safeRegion.categories, 'passenger');
 
@@ -1387,11 +1562,13 @@ export function calculateNetSubsidyPure(
     customMsrp !== undefined && customMsrp !== null ? customMsrp : options?.customMsrp;
 
   let activeMsrp: number;
+  let parsedCustomMsrp = 0;
   if (effectiveCustomMsrp === Infinity) {
     activeMsrp = 10_000_000_000;
+    parsedCustomMsrp = 10_000_000_000;
   } else if (effectiveCustomMsrp !== undefined && effectiveCustomMsrp !== null) {
-    const parsed = parseSubsidyNumber(effectiveCustomMsrp, { maxKrw: 10_000_000_000 });
-    activeMsrp = parsed > 0 ? parsed : (safeModelPrice > 0 ? safeModelPrice : 54_100_000);
+    parsedCustomMsrp = parseSubsidyNumber(effectiveCustomMsrp, { maxKrw: 10_000_000_000 });
+    activeMsrp = parsedCustomMsrp > 0 ? parsedCustomMsrp : (safeModelPrice > 0 ? safeModelPrice : 54_100_000);
   } else {
     activeMsrp = safeModelPrice > 0 ? safeModelPrice : 54_100_000;
   }
@@ -1409,11 +1586,7 @@ export function calculateNetSubsidyPure(
   const validNationalSubsidy = parseFiniteNonNegNumber(safeModel.national_subsidy_krw);
   let nationalSubsidyKrw = 0;
   if (ratio > 0) {
-    const parsedCustom =
-      effectiveCustomMsrp !== undefined && effectiveCustomMsrp !== null
-        ? parseSubsidyNumber(effectiveCustomMsrp)
-        : 0;
-    if (parsedCustom > 0) {
+    if (parsedCustomMsrp > 0) {
       const baseRatio = typeof safeModel.price_subsidy_ratio === 'number' && Number.isFinite(safeModel.price_subsidy_ratio) && safeModel.price_subsidy_ratio > 0
         ? safeModel.price_subsidy_ratio
         : 1.0;
@@ -1551,10 +1724,12 @@ export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> |
     budgetDisbursed = Math.round((summary.disbursed_budget_krw / 1_000_000_000) * 10) / 10;
   }
 
-  const rawExecRate = budgetTotal > 0 && budgetDisbursed >= 0 ? (budgetDisbursed / budgetTotal) * 1000 : 0;
-  const budgetExecutionRatePct = Number.isFinite(rawExecRate)
-    ? Math.round(rawExecRate) / 10
-    : 0.0;
+  const rawExecNumerator = budgetTotal > 0 && budgetDisbursed >= 0 ? budgetDisbursed * 1000 : 0;
+  const rawExecRate = budgetTotal > 0 && budgetDisbursed >= 0
+    ? (Number.isFinite(rawExecNumerator) ? rawExecNumerator / budgetTotal : (budgetDisbursed / budgetTotal) * 1000)
+    : 0;
+  const roundedExec = Number.isFinite(rawExecRate) ? Math.round(rawExecRate) / 10 : 0.0;
+  const budgetExecutionRatePct = roundedExec > 0 ? roundedExec : 0.0;
 
   // Extract regions >= 95% and >= 100%
   const criticalList: Array<{ regionId: string; nameKo: string; depletionRate: number; remainingUnits: number }> = [];
@@ -1612,7 +1787,7 @@ export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> |
   criticalList.sort((a, b) => {
     const cmp = safeCompareNumbers(a.depletionRate, b.depletionRate, 'desc');
     if (cmp !== 0) return cmp;
-    return safeString(a.nameKo).localeCompare(safeString(b.nameKo), 'ko');
+    return KO_COLLATOR.compare(safeString(a.nameKo), safeString(b.nameKo));
   });
 
   const cat = summary?.category_totals;
@@ -1826,6 +2001,12 @@ export function classifyRegionGroup(
     if ((METROPOLITAN_CITY_CODES as readonly string[]).includes(canonical)) return 'metropolitan_cities';
     if ((PROVINCE_CODES as readonly string[]).includes(canonical)) return 'provinces';
     for (const city of METROPOLITAN_CITIES) {
+      if (ident.startsWith(city)) return 'metropolitan_cities';
+    }
+    for (const prov of PROVINCES) {
+      if (ident.startsWith(prov)) return 'provinces';
+    }
+    for (const city of METROPOLITAN_CITIES) {
       if (ident.includes(city)) return 'metropolitan_cities';
     }
     for (const prov of PROVINCES) {
@@ -1844,7 +2025,13 @@ export function classifyRegionGroup(
   if ((METROPOLITAN_CITY_CODES as readonly string[]).includes(code)) return 'metropolitan_cities';
   if ((PROVINCE_CODES as readonly string[]).includes(code)) return 'provinces';
 
-  const nameKo = safeString(region.name_ko);
+  const nameKo = safeString(region.name_ko).trim();
+  for (const city of METROPOLITAN_CITIES) {
+    if (nameKo.startsWith(city)) return 'metropolitan_cities';
+  }
+  for (const prov of PROVINCES) {
+    if (nameKo.startsWith(prov)) return 'provinces';
+  }
   for (const city of METROPOLITAN_CITIES) {
     if (nameKo.includes(city)) return 'metropolitan_cities';
   }
@@ -1892,9 +2079,9 @@ export function groupRegionsByType<T extends RegionEntry>(
   if (!Array.isArray(regions)) return result;
 
   for (const r of regions) {
-    if (!r || typeof r !== 'object') continue;
-    const grp = classifyRegionGroup(r);
-    result[grp].push(r);
+    if (!isPlainObject(r)) continue;
+    const grp = classifyRegionGroup(r as T);
+    result[grp].push(r as T);
   }
   return result;
 }

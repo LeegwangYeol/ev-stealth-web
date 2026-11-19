@@ -3,7 +3,9 @@ import type {
   EVSubsidyDataset,
   PopularModelEntry,
   RegionEntry,
+  RegionTier,
   CategoryMetrics,
+  MunicipalityMetrics,
   AlertThresholdConfig,
   SubsidyCalculationResult,
   SubsidyCalculatorOptions,
@@ -26,6 +28,7 @@ import {
   resolveAlertSeverity,
   getRegionByIdFromList,
   getModelByIdFromList,
+  DEFAULT_SUBSIDY_THRESHOLDS,
   DEFAULT_NATIONWIDE_SUMMARY,
   safeCompareNumbers,
   compareRegions,
@@ -111,68 +114,22 @@ export {
 };
 
 // Robust typed fallback in case raw JSON is missing or malformed
-const fallbackDataset: EVSubsidyDataset = {
-  metadata: {
+const fallbackDataset: EVSubsidyDataset = Object.freeze({
+  metadata: Object.freeze({
     version: '1.0.0',
     generated_at: new Date().toISOString(),
     policy_year: 2026,
-    data_sources: [
+    data_sources: Object.freeze([
       '환경부 무공해차 통합누리집 (ev.or.kr)',
       '한국환경공단 (KECO) CleanSys',
       '17개 광역시도 무공해차 보급 촉진 고시공고',
-    ],
+    ]) as unknown as string[],
     total_regions_tracked: 17,
     total_municipalities_tracked: 73,
     currency: 'KRW',
-  },
-  alert_thresholds: {
-    HEALTHY: {
-      min_percent: 0.0,
-      max_percent: 59.9,
-      label_ko: '원활 (신청 여유)',
-      severity: 'HEALTHY',
-      color_hex: '#10B981',
-      badge_class: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-      recommended_action: '보조금 잔여량이 충분하여 신청 접수 후 통상 1~2주 내 교부 결정됩니다.',
-    },
-    CAUTION: {
-      min_percent: 60.0,
-      max_percent: 79.9,
-      label_ko: '주의 (소진 가속)',
-      severity: 'CAUTION',
-      color_hex: '#F59E0B',
-      badge_class: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-      recommended_action: '출고 예정 시기가 1~2개월 이내인 경우 조속한 서류 접수를 권장합니다.',
-    },
-    WARNING: {
-      min_percent: 80.0,
-      max_percent: 94.9,
-      label_ko: '경고 (마감 임박)',
-      severity: 'WARNING',
-      color_hex: '#F97316',
-      badge_class: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
-      recommended_action: '잔여 예산 소진이 임박했습니다. 즉시 출고 가능한 실재고 매칭이 필요합니다.',
-    },
-    CRITICAL: {
-      min_percent: 95.0,
-      max_percent: 99.9,
-      label_ko: '위험 (잔여 극소)',
-      severity: 'CRITICAL',
-      color_hex: '#EF4444',
-      badge_class: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-      recommended_action: '선착순 마감 직전입니다. 담당 지자체 문의 및 추경 예산 편성 여부를 확인하세요.',
-    },
-    DEPLETED: {
-      min_percent: 100.0,
-      max_percent: 999.0,
-      label_ko: '마감 (접수 종료)',
-      severity: 'DEPLETED',
-      color_hex: '#6B7280',
-      badge_class: 'bg-slate-800 text-slate-200 border-slate-600',
-      recommended_action: '2026년 공고 예산이 전액 소진되었습니다. 취소분 대기 접수 또는 차년도 사업을 준비하세요.',
-    },
-  },
-  nationwide_summary: {
+  }),
+  alert_thresholds: DEFAULT_SUBSIDY_THRESHOLDS as Record<AlertSeverity, AlertThresholdConfig>,
+  nationwide_summary: Object.freeze({
     total_announced_units: 148510,
     total_applied_units: 132766,
     total_delivered_units: 122515,
@@ -180,52 +137,52 @@ const fallbackDataset: EVSubsidyDataset = {
     nationwide_depletion_rate: 89.4,
     total_budget_billion_krw: 2105.1,
     disbursed_budget_billion_krw: 1893.4,
-    category_totals: {
-      passenger: {
+    category_totals: Object.freeze({
+      passenger: Object.freeze({
         announced_units: 110400,
         applied_units: 97035,
         delivered_units: 88960,
         remaining_units: 13365,
         depletion_rate: 87.9,
         delivery_rate: 80.6,
-        status: 'WARNING',
+        status: 'WARNING' as AlertSeverity,
         max_local_subsidy_krw: 3500000,
         max_total_subsidy_krw: 10000000,
-      },
-      commercial: {
+      }),
+      commercial: Object.freeze({
         announced_units: 34800,
         applied_units: 32754,
         delivered_units: 30780,
         remaining_units: 2046,
         depletion_rate: 94.1,
         delivery_rate: 88.4,
-        status: 'WARNING',
+        status: 'WARNING' as AlertSeverity,
         max_local_subsidy_krw: 6000000,
         max_total_subsidy_krw: 16500000,
-      },
-      bus: {
+      }),
+      bus: Object.freeze({
         announced_units: 3310,
         applied_units: 2977,
         delivered_units: 2775,
         remaining_units: 333,
         depletion_rate: 89.9,
         delivery_rate: 83.8,
-        status: 'WARNING',
+        status: 'WARNING' as AlertSeverity,
         max_local_subsidy_krw: 35000000,
         max_total_subsidy_krw: 105000000,
-      },
-    },
-    alert_region_counts: {
+      }),
+    }),
+    alert_region_counts: Object.freeze({
       healthy: 0,
       caution: 1,
       warning: 12,
       critical: 4,
       depleted: 0,
-    },
-  },
-  regions: [],
-  popular_models_matrix: [],
-};
+    }),
+  }),
+  regions: Object.freeze([]) as unknown as RegionEntry[],
+  popular_models_matrix: Object.freeze([]) as unknown as PopularModelEntry[],
+}) as EVSubsidyDataset;
 
 const ALERT_SEVERITIES: readonly AlertSeverity[] = [
   'HEALTHY',
@@ -237,16 +194,34 @@ const ALERT_SEVERITIES: readonly AlertSeverity[] = [
 
 const CATEGORY_KEYS: readonly SubsidyCategoryKey[] = ['passenger', 'commercial', 'bus'];
 
+const VALID_REGION_TIERS: ReadonlySet<RegionTier> = new Set([
+  'special_city',
+  'metropolitan_city',
+  'special_self_governing_city',
+  'province',
+  'special_self_governing_province',
+]);
+
+const FORBIDDEN_PROTO_KEYS: ReadonlySet<string> = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+]);
+
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
 function safeNonNegNum(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback;
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? (value === 0 ? 0 : value)
+    : fallback;
 }
 
 function safeNonEmptyStr(value: unknown, fallback: string): string {
-  return typeof value === 'string' && value.trim().length > 0 ? value : fallback;
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
 }
 
 function normalizeCategoryMetricsObj(raw: unknown, fb: CategoryMetrics): CategoryMetrics {
@@ -261,6 +236,11 @@ function normalizeCategoryMetricsObj(raw: unknown, fb: CategoryMetrics): Categor
   const deliveryRate = safeNonNegNum(raw.delivery_rate, calculateDeliveryRate(delivered, announced));
   const status = resolveAlertSeverity(raw.status, depletionRate);
 
+  const maxLocal = safeNonNegNum(raw.max_local_subsidy_krw, -1);
+  const maxTotal = safeNonNegNum(raw.max_total_subsidy_krw, -1);
+  const totalBudget = safeNonNegNum(raw.total_budget_krw, -1);
+  const remainingBudget = safeNonNegNum(raw.remaining_budget_krw, -1);
+
   return {
     announced_units: announced,
     applied_units: applied,
@@ -269,22 +249,132 @@ function normalizeCategoryMetricsObj(raw: unknown, fb: CategoryMetrics): Categor
     depletion_rate: depletionRate,
     delivery_rate: deliveryRate,
     status,
-    ...(typeof raw.max_local_subsidy_krw === 'number' && Number.isFinite(raw.max_local_subsidy_krw) && raw.max_local_subsidy_krw >= 0
-      ? { max_local_subsidy_krw: raw.max_local_subsidy_krw }
+    ...(maxLocal >= 0
+      ? { max_local_subsidy_krw: maxLocal }
       : fb.max_local_subsidy_krw !== undefined
       ? { max_local_subsidy_krw: fb.max_local_subsidy_krw }
       : {}),
-    ...(typeof raw.max_total_subsidy_krw === 'number' && Number.isFinite(raw.max_total_subsidy_krw) && raw.max_total_subsidy_krw >= 0
-      ? { max_total_subsidy_krw: raw.max_total_subsidy_krw }
+    ...(maxTotal >= 0
+      ? { max_total_subsidy_krw: maxTotal }
       : fb.max_total_subsidy_krw !== undefined
       ? { max_total_subsidy_krw: fb.max_total_subsidy_krw }
       : {}),
-    ...(typeof raw.total_budget_krw === 'number' && Number.isFinite(raw.total_budget_krw) && raw.total_budget_krw >= 0
-      ? { total_budget_krw: raw.total_budget_krw }
+    ...(totalBudget >= 0 ? { total_budget_krw: totalBudget } : {}),
+    ...(remainingBudget >= 0 ? { remaining_budget_krw: remainingBudget } : {}),
+  };
+}
+
+function normalizeMunicipalityMetrics(raw: unknown): MunicipalityMetrics | null {
+  if (!isPlainRecord(raw)) return null;
+  const announced = safeNonNegNum(raw.announced_units, 0);
+  const applied = safeNonNegNum(raw.applied_units, 0);
+  const remaining = safeNonNegNum(raw.remaining_units, calculateRemainingUnits(applied, announced));
+  const depletionRate = safeNonNegNum(raw.depletion_rate, calculateDepletionRate(applied, announced));
+  const localSubsidy = safeNonNegNum(raw.local_subsidy_krw, 0);
+  const delivered = safeNonNegNum(raw.delivered_units, -1);
+  const totalSubsidy = safeNonNegNum(raw.total_subsidy_krw, -1);
+
+  return {
+    name_ko: safeNonEmptyStr(raw.name_ko, safeNonEmptyStr(raw.name_en, '미상 지자체')),
+    announced_units: announced,
+    applied_units: applied,
+    remaining_units: remaining,
+    depletion_rate: depletionRate,
+    status: resolveAlertSeverity(raw.status, depletionRate),
+    local_subsidy_krw: localSubsidy,
+    ...(typeof raw.muni_id === 'string' && raw.muni_id.trim() ? { muni_id: raw.muni_id.trim() } : {}),
+    ...(typeof raw.name_en === 'string' && raw.name_en.trim() ? { name_en: raw.name_en.trim() } : {}),
+    ...(typeof raw.category === 'string' && raw.category.trim() ? { category: raw.category.trim() } : {}),
+    ...(delivered >= 0 ? { delivered_units: delivered } : {}),
+    ...(totalSubsidy >= 0 ? { total_subsidy_krw: totalSubsidy } : {}),
+  };
+}
+
+function normalizeRegionEntry(raw: unknown): RegionEntry | null {
+  if (!isPlainRecord(raw)) return null;
+  const rawCats = isPlainRecord(raw.categories) ? raw.categories : {};
+  const fbCats = DEFAULT_NATIONWIDE_SUMMARY.category_totals;
+  const passenger = normalizeCategoryMetricsObj(rawCats.passenger, fbCats.passenger);
+  const commercial = normalizeCategoryMetricsObj(rawCats.commercial, fbCats.commercial);
+  const bus = normalizeCategoryMetricsObj(rawCats.bus, fbCats.bus);
+
+  const overallRate = safeNonNegNum(raw.overall_depletion_rate, passenger.depletion_rate);
+  const regionId = safeNonEmptyStr(raw.region_id, safeNonEmptyStr(raw.iso_code, 'unknown-region'));
+  const isoCode = safeNonEmptyStr(raw.iso_code, regionId);
+  const nameKo = safeNonEmptyStr(raw.name_ko, safeNonEmptyStr(raw.name_en, '미상 지역'));
+  const nameEn = safeNonEmptyStr(raw.name_en, nameKo);
+  const tier: RegionTier =
+    typeof raw.tier === 'string' && VALID_REGION_TIERS.has(raw.tier as RegionTier)
+      ? (raw.tier as RegionTier)
+      : 'province';
+
+  let municipalities: MunicipalityMetrics[] | undefined;
+  if (Array.isArray(raw.municipalities)) {
+    municipalities = [];
+    for (let i = 0; i < raw.municipalities.length; i++) {
+      const m = normalizeMunicipalityMetrics(raw.municipalities[i]);
+      if (m) municipalities.push(m);
+    }
+  }
+
+  return {
+    region_id: regionId,
+    iso_code: isoCode,
+    ...(typeof raw.code === 'string' && raw.code.trim() ? { code: raw.code.trim() } : {}),
+    name_ko: nameKo,
+    name_en: nameEn,
+    tier,
+    overall_depletion_rate: overallRate,
+    overall_status: resolveAlertSeverity(raw.overall_status, overallRate),
+    residency_requirement_days: safeNonNegNum(raw.residency_requirement_days, 30),
+    supplementary_budget_added: typeof raw.supplementary_budget_added === 'boolean' ? raw.supplementary_budget_added : false,
+    categories: { passenger, commercial, bus },
+    ...(municipalities ? { municipalities } : {}),
+    ...(typeof raw.notes === 'string' ? { notes: raw.notes } : {}),
+    ...(typeof raw.last_updated === 'string' && raw.last_updated.trim() ? { last_updated: raw.last_updated.trim() } : {}),
+  };
+}
+
+function normalizePopularModelEntry(raw: unknown): PopularModelEntry | null {
+  if (!isPlainRecord(raw)) return null;
+  const basePrice = safeNonNegNum(raw.base_price_krw, parseSubsidyNumber(raw.base_price_krw, { defaultKrw: 54_100_000 }));
+  const rawRatio = raw.price_subsidy_ratio;
+  const ratio =
+    typeof rawRatio === 'number' && Number.isFinite(rawRatio) && rawRatio >= 0
+      ? Math.min(1.0, rawRatio === 0 ? 0 : rawRatio)
+      : getPriceSubsidyRatio(basePrice);
+
+  let samples: PopularModelEntry['regional_subsidy_samples'];
+  if (isPlainRecord(raw.regional_subsidy_samples)) {
+    const cleanSamples: NonNullable<PopularModelEntry['regional_subsidy_samples']> = {};
+    for (const key of Object.keys(raw.regional_subsidy_samples)) {
+      if (FORBIDDEN_PROTO_KEYS.has(key)) continue;
+      const sample = raw.regional_subsidy_samples[key];
+      if (!isPlainRecord(sample)) continue;
+      const localSub = safeNonNegNum(sample.local_subsidy_krw, -1);
+      cleanSamples[key] = {
+        ...(localSub >= 0 ? { local_subsidy_krw: localSub } : {}),
+        total_subsidy_krw: safeNonNegNum(sample.total_subsidy_krw, 0),
+        net_price_krw: safeNonNegNum(sample.net_price_krw, 0),
+      };
+    }
+    samples = cleanSamples;
+  }
+
+  return {
+    model_id: safeNonEmptyStr(raw.model_id, 'unknown-model'),
+    name_ko: safeNonEmptyStr(raw.name_ko, '기본 모델'),
+    manufacturer: safeNonEmptyStr(raw.manufacturer, '기타'),
+    ...(typeof raw.manufacturer_ko === 'string' && raw.manufacturer_ko.trim()
+      ? { manufacturer_ko: raw.manufacturer_ko.trim() }
       : {}),
-    ...(typeof raw.remaining_budget_krw === 'number' && Number.isFinite(raw.remaining_budget_krw) && raw.remaining_budget_krw >= 0
-      ? { remaining_budget_krw: raw.remaining_budget_krw }
-      : {}),
+    battery_type: safeNonEmptyStr(raw.battery_type, 'NCM 삼원계'),
+    battery_capacity_kwh: safeNonNegNum(raw.battery_capacity_kwh, 0),
+    rated_range_km: safeNonNegNum(raw.rated_range_km, 0),
+    base_price_krw: basePrice,
+    price_subsidy_ratio: ratio,
+    national_subsidy_krw: safeNonNegNum(raw.national_subsidy_krw, 0),
+    ...(samples ? { regional_subsidy_samples: samples } : {}),
   };
 }
 
@@ -307,29 +397,31 @@ export function normalizeSubsidyDataset(data: unknown): EVSubsidyDataset {
         ? Math.floor(rawMeta.policy_year)
         : fbMeta.policy_year,
     data_sources: Array.isArray(rawMeta.data_sources)
-      ? rawMeta.data_sources.filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
-      : fbMeta.data_sources,
-    total_regions_tracked: safeNonNegNum(rawMeta.total_regions_tracked, fbMeta.total_regions_tracked),
+      ? rawMeta.data_sources
+          .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+          .map((s) => s.trim())
+      : [...fbMeta.data_sources],
+    total_regions_tracked: safeNonNegNum(rawMeta.total_regions_tracked, data.regions.length),
     total_municipalities_tracked: safeNonNegNum(
       rawMeta.total_municipalities_tracked,
-      fbMeta.total_municipalities_tracked
+      0
     ),
     currency: safeNonEmptyStr(rawMeta.currency, fbMeta.currency),
   };
   if (metadata.data_sources.length === 0) {
-    metadata.data_sources = fbMeta.data_sources;
+    metadata.data_sources = [...fbMeta.data_sources];
   }
 
   const rawThresholds = isPlainRecord(data.alert_thresholds) ? data.alert_thresholds : {};
   const alertThresholds = {} as Record<AlertSeverity, AlertThresholdConfig>;
   for (const sev of ALERT_SEVERITIES) {
-    const fbCfg = fallbackDataset.alert_thresholds[sev];
+    const fbCfg = DEFAULT_SUBSIDY_THRESHOLDS[sev];
     const rawCfg = Object.prototype.hasOwnProperty.call(rawThresholds, sev) && isPlainRecord(rawThresholds[sev])
       ? (rawThresholds[sev] as Record<string, unknown>)
       : {};
     alertThresholds[sev] = {
-      min_percent: typeof rawCfg.min_percent === 'number' && Number.isFinite(rawCfg.min_percent) ? rawCfg.min_percent : fbCfg.min_percent,
-      max_percent: typeof rawCfg.max_percent === 'number' && Number.isFinite(rawCfg.max_percent) ? rawCfg.max_percent : fbCfg.max_percent,
+      min_percent: typeof rawCfg.min_percent === 'number' && Number.isFinite(rawCfg.min_percent) ? (rawCfg.min_percent === 0 ? 0 : rawCfg.min_percent) : fbCfg.min_percent,
+      max_percent: typeof rawCfg.max_percent === 'number' && Number.isFinite(rawCfg.max_percent) ? (rawCfg.max_percent === 0 ? 0 : rawCfg.max_percent) : fbCfg.max_percent,
       label_ko: safeNonEmptyStr(rawCfg.label_ko, fbCfg.label_ko),
       severity: sev,
       color_hex: safeNonEmptyStr(rawCfg.color_hex, fbCfg.color_hex),
@@ -339,51 +431,59 @@ export function normalizeSubsidyDataset(data: unknown): EVSubsidyDataset {
   }
 
   const rawSummary = isPlainRecord(data.nationwide_summary) ? data.nationwide_summary : {};
-  const fbSummary = fallbackDataset.nationwide_summary;
+  const zeroSummary = DEFAULT_NATIONWIDE_SUMMARY;
   const rawCatTotals = isPlainRecord(rawSummary.category_totals) ? rawSummary.category_totals : {};
   const rawAlertCounts = isPlainRecord(rawSummary.alert_region_counts) ? rawSummary.alert_region_counts : {};
 
+  const totalBudgetKrw = safeNonNegNum(rawSummary.total_budget_krw, -1);
+  const disbursedBudgetKrw = safeNonNegNum(rawSummary.disbursed_budget_krw, -1);
+
   const nationwideSummary: EVSubsidyDataset['nationwide_summary'] = {
-    total_announced_units: safeNonNegNum(rawSummary.total_announced_units, fbSummary.total_announced_units),
-    total_applied_units: safeNonNegNum(rawSummary.total_applied_units, fbSummary.total_applied_units),
-    total_delivered_units: safeNonNegNum(rawSummary.total_delivered_units, fbSummary.total_delivered_units),
-    total_remaining_units: safeNonNegNum(rawSummary.total_remaining_units, fbSummary.total_remaining_units),
+    total_announced_units: safeNonNegNum(rawSummary.total_announced_units, zeroSummary.total_announced_units),
+    total_applied_units: safeNonNegNum(rawSummary.total_applied_units, zeroSummary.total_applied_units),
+    total_delivered_units: safeNonNegNum(rawSummary.total_delivered_units, zeroSummary.total_delivered_units),
+    total_remaining_units: safeNonNegNum(rawSummary.total_remaining_units, zeroSummary.total_remaining_units),
     nationwide_depletion_rate: safeNonNegNum(
       rawSummary.nationwide_depletion_rate,
-      fbSummary.nationwide_depletion_rate
+      zeroSummary.nationwide_depletion_rate
     ),
     total_budget_billion_krw: safeNonNegNum(
       rawSummary.total_budget_billion_krw,
-      fbSummary.total_budget_billion_krw
+      zeroSummary.total_budget_billion_krw
     ),
     disbursed_budget_billion_krw: safeNonNegNum(
       rawSummary.disbursed_budget_billion_krw,
-      fbSummary.disbursed_budget_billion_krw
+      zeroSummary.disbursed_budget_billion_krw
     ),
-    ...(typeof rawSummary.total_budget_krw === 'number' && Number.isFinite(rawSummary.total_budget_krw) && rawSummary.total_budget_krw >= 0
-      ? { total_budget_krw: rawSummary.total_budget_krw }
-      : {}),
-    ...(typeof rawSummary.disbursed_budget_krw === 'number' && Number.isFinite(rawSummary.disbursed_budget_krw) && rawSummary.disbursed_budget_krw >= 0
-      ? { disbursed_budget_krw: rawSummary.disbursed_budget_krw }
-      : {}),
+    ...(totalBudgetKrw >= 0 ? { total_budget_krw: totalBudgetKrw } : {}),
+    ...(disbursedBudgetKrw >= 0 ? { disbursed_budget_krw: disbursedBudgetKrw } : {}),
     category_totals: {
-      passenger: normalizeCategoryMetricsObj(rawCatTotals.passenger, fbSummary.category_totals.passenger),
-      commercial: normalizeCategoryMetricsObj(rawCatTotals.commercial, fbSummary.category_totals.commercial),
-      bus: normalizeCategoryMetricsObj(rawCatTotals.bus, fbSummary.category_totals.bus),
+      passenger: normalizeCategoryMetricsObj(rawCatTotals.passenger, zeroSummary.category_totals.passenger),
+      commercial: normalizeCategoryMetricsObj(rawCatTotals.commercial, zeroSummary.category_totals.commercial),
+      bus: normalizeCategoryMetricsObj(rawCatTotals.bus, zeroSummary.category_totals.bus),
     },
     alert_region_counts: {
-      healthy: safeNonNegNum(rawAlertCounts.healthy, fbSummary.alert_region_counts.healthy),
-      caution: safeNonNegNum(rawAlertCounts.caution, fbSummary.alert_region_counts.caution),
-      warning: safeNonNegNum(rawAlertCounts.warning, fbSummary.alert_region_counts.warning),
-      critical: safeNonNegNum(rawAlertCounts.critical, fbSummary.alert_region_counts.critical),
-      depleted: safeNonNegNum(rawAlertCounts.depleted, fbSummary.alert_region_counts.depleted),
+      healthy: safeNonNegNum(rawAlertCounts.healthy, zeroSummary.alert_region_counts.healthy),
+      caution: safeNonNegNum(rawAlertCounts.caution, zeroSummary.alert_region_counts.caution),
+      warning: safeNonNegNum(rawAlertCounts.warning, zeroSummary.alert_region_counts.warning),
+      critical: safeNonNegNum(rawAlertCounts.critical, zeroSummary.alert_region_counts.critical),
+      depleted: safeNonNegNum(rawAlertCounts.depleted, zeroSummary.alert_region_counts.depleted),
     },
   };
 
-  const regions: RegionEntry[] = data.regions.filter((r): r is RegionEntry => isPlainRecord(r));
-  const popularModels: PopularModelEntry[] = Array.isArray(data.popular_models_matrix)
-    ? data.popular_models_matrix.filter((m): m is PopularModelEntry => isPlainRecord(m))
-    : fallbackDataset.popular_models_matrix;
+  const regions: RegionEntry[] = [];
+  for (let i = 0; i < data.regions.length; i++) {
+    const normalizedRegion = normalizeRegionEntry(data.regions[i]);
+    if (normalizedRegion) regions.push(normalizedRegion);
+  }
+
+  const popularModels: PopularModelEntry[] = [];
+  if (Array.isArray(data.popular_models_matrix)) {
+    for (let i = 0; i < data.popular_models_matrix.length; i++) {
+      const normalizedModel = normalizePopularModelEntry(data.popular_models_matrix[i]);
+      if (normalizedModel) popularModels.push(normalizedModel);
+    }
+  }
 
   const trajectory: HistoricalTrajectoryPoint[] | undefined = Array.isArray(data.historical_depletion_trajectory)
     ? data.historical_depletion_trajectory
@@ -457,6 +557,49 @@ export function getModelById(modelId: string): PopularModelEntry | undefined {
 }
 
 
+const DEFAULT_CALCULATOR_MODEL: PopularModelEntry = Object.freeze({
+  model_id: 'ioniq-5-2026',
+  name_ko: '현대 아이오닉 5 롱레인지 2WD (2026)',
+  manufacturer: '현대자동차',
+  battery_type: 'NCM 삼원계 (84kWh)',
+  battery_capacity_kwh: 84.0,
+  rated_range_km: 485,
+  base_price_krw: 54100000,
+  price_subsidy_ratio: 1.0,
+  national_subsidy_krw: 6500000,
+});
+
+const DEFAULT_CALCULATOR_REGION: RegionEntry = Object.freeze({
+  region_id: 'KR-11',
+  iso_code: 'KR-11',
+  name_ko: '서울특별시',
+  name_en: 'Seoul',
+  tier: 'special_city',
+  overall_depletion_rate: 0,
+  overall_status: 'HEALTHY',
+  residency_requirement_days: 30,
+  supplementary_budget_added: false,
+  categories: DEFAULT_NATIONWIDE_SUMMARY.category_totals,
+}) as RegionEntry;
+
+function resolveFallbackModel(models: readonly PopularModelEntry[]): PopularModelEntry {
+  for (let i = 0; i < models.length; i++) {
+    if (isPlainRecord(models[i])) return models[i];
+  }
+  return DEFAULT_CALCULATOR_MODEL;
+}
+
+function resolveFallbackRegion(regions: readonly RegionEntry[]): RegionEntry {
+  let firstValid: RegionEntry | undefined;
+  for (let i = 0; i < regions.length; i++) {
+    const r = regions[i];
+    if (!isPlainRecord(r)) continue;
+    if (r.region_id === 'KR-11') return r;
+    if (!firstValid) firstValid = r;
+  }
+  return firstValid || DEFAULT_CALCULATOR_REGION;
+}
+
 /**
  * Calculates the comprehensive net subsidy and out-of-pocket purchase price
  * for a chosen vehicle model in a designated administrative region.
@@ -470,34 +613,8 @@ export function calculateNetSubsidy(
 ): SubsidyCalculationResult {
   const models = getAllModels();
   const regions = getAllRegions();
-  const defaultModel: PopularModelEntry = models.find((m): m is PopularModelEntry => Boolean(m && typeof m === 'object')) || {
-    model_id: 'ioniq-5-2026',
-    name_ko: '현대 아이오닉 5 롱레인지 2WD (2026)',
-    manufacturer: '현대자동차',
-    battery_type: 'NCM 삼원계 (84kWh)',
-    battery_capacity_kwh: 84.0,
-    rated_range_km: 485,
-    base_price_krw: 54100000,
-    price_subsidy_ratio: 1.0,
-    national_subsidy_krw: 6500000,
-  };
-  const defaultRegion: RegionEntry =
-    regions.find((r): r is RegionEntry => Boolean(r && typeof r === 'object' && r.region_id === 'KR-11')) ||
-    regions.find((r): r is RegionEntry => Boolean(r && typeof r === 'object')) || {
-      region_id: 'KR-11',
-      iso_code: 'KR-11',
-      name_ko: '서울특별시',
-      name_en: 'Seoul',
-      tier: 'special_city',
-      overall_depletion_rate: 0,
-      overall_status: 'HEALTHY',
-      residency_requirement_days: 30,
-      supplementary_budget_added: false,
-      categories: DEFAULT_NATIONWIDE_SUMMARY.category_totals,
-    };
-
-  const model = getModelByIdFromList(models, modelId) || defaultModel;
-  const region = getRegionByIdFromList(regions, regionId) || defaultRegion;
+  const model = getModelByIdFromList(models, modelId) || resolveFallbackModel(models);
+  const region = getRegionByIdFromList(regions, regionId) || resolveFallbackRegion(regions);
   return calculateNetSubsidyPure(model, region, customMsrp, options);
 }
 
@@ -553,10 +670,10 @@ export function getCategoryDepletion(
     : calculateDepletionRate(applied, announced);
   const status: AlertSeverity = resolveAlertSeverity(category?.status, rate);
 
-  const safeAnnounced = Number.isFinite(announced) ? announced : 0;
-  const safeApplied = Number.isFinite(applied) ? applied : 0;
-  const safeRemaining = Number.isFinite(remaining) ? remaining : 0;
-  const safeRate = Number.isFinite(rate) ? rate : 0.0;
+  const safeAnnounced = Number.isFinite(announced) && announced > 0 ? announced : 0;
+  const safeApplied = Number.isFinite(applied) && applied > 0 ? applied : 0;
+  const safeRemaining = Number.isFinite(remaining) && remaining > 0 ? remaining : 0;
+  const safeRate = Number.isFinite(rate) && rate > 0 ? rate : 0.0;
 
   return {
     announcedUnits: safeAnnounced,

@@ -166,10 +166,10 @@ def _resolve_public_reports_path(custom_web_dir: Optional[Union[str, Path]] = No
     if custom_web_dir:
         raw_web = str(custom_web_dir).strip()
         if raw_web and raw_web != ".":
-            custom_public = Path(raw_web).parent / "public" / "data" / "daily_reports.json"
-            candidates.insert(0, custom_public)
-            custom_public_2 = Path(raw_web).parent.parent / "public" / "data" / "daily_reports.json"
-            candidates.insert(1, custom_public_2)
+            w_path = Path(raw_web)
+            candidates.insert(0, w_path / "public" / "data" / "daily_reports.json")
+            candidates.insert(1, w_path.parent / "public" / "data" / "daily_reports.json")
+            candidates.insert(2, w_path.parent.parent / "public" / "data" / "daily_reports.json")
     for c in candidates:
         if c.parent.exists():
             return c.resolve()
@@ -193,10 +193,15 @@ def _resolve_root_reports_path() -> Path:
 def _atomic_copy_file(src_path: Union[str, Path], dest_path: Union[str, Path]) -> str:
     """Atomically copy a file to dest_path using tempfile + os.replace."""
     dest = Path(dest_path).resolve()
+    src_p = Path(src_path)
+    try:
+        if src_p.resolve() == dest and dest.is_file():
+            return str(dest)
+    except OSError:
+        pass
     dest.parent.mkdir(parents=True, exist_ok=True)
     temp_name = None
     try:
-        src_p = Path(src_path)
         src_stat = src_p.stat()
         with tempfile.NamedTemporaryFile("wb", dir=str(dest.parent), delete=False, prefix=".tmp_sync_") as tf:
             temp_name = tf.name
@@ -209,6 +214,7 @@ def _atomic_copy_file(src_path: Union[str, Path], dest_path: Union[str, Path]) -
         except OSError:
             pass
         os.replace(temp_name, dest)
+        temp_name = None
         try:
             os.utime(dest, (src_stat.st_atime, src_stat.st_mtime))
         except OSError:
@@ -408,13 +414,19 @@ class ScraperPipeline:
         cache_dir: Optional[Union[str, Path]] = None,
     ):
         try:
-            val_conn = float(connect_timeout) if connect_timeout is not None else 5.0
-            self.connect_timeout = val_conn if (math.isfinite(val_conn) and val_conn > 0) else 5.0
+            if isinstance(connect_timeout, bool) or connect_timeout is None:
+                self.connect_timeout = 5.0
+            else:
+                val_conn = float(connect_timeout)
+                self.connect_timeout = val_conn if (math.isfinite(val_conn) and val_conn > 0) else 5.0
         except (ValueError, TypeError):
             self.connect_timeout = 5.0
         try:
-            val_read = float(read_timeout) if read_timeout is not None else 15.0
-            self.read_timeout = val_read if (math.isfinite(val_read) and val_read > 0) else 15.0
+            if isinstance(read_timeout, bool) or read_timeout is None:
+                self.read_timeout = 15.0
+            else:
+                val_read = float(read_timeout)
+                self.read_timeout = val_read if (math.isfinite(val_read) and val_read > 0) else 15.0
         except (ValueError, TypeError):
             self.read_timeout = 15.0
         self.enable_cache = enable_cache
@@ -590,11 +602,12 @@ class ScraperPipeline:
                     f"Harvest yielded 0 posts from remote sources (unreachable or 5xx). "
                     f"Falling back to {len(cached_posts)} cached posts from previous harvest."
                 )
+                valid_cached = [p for p in cached_posts if isinstance(p, dict)]
                 filtered = [
-                    p for p in cached_posts
-                    if isinstance(p, dict) and p.get("platform") in selected_sources
+                    p for p in valid_cached
+                    if p.get("platform") in selected_sources
                 ]
-                raw_posts = (filtered if filtered else cached_posts)[:clamped_limit]
+                raw_posts = (filtered if filtered else valid_cached)[:clamped_limit]
                 stats["bobaedream"] = sum(1 for p in raw_posts if p.get("platform") == "bobaedream")
                 stats["dcinside"] = sum(1 for p in raw_posts if p.get("platform") == "dcinside")
 

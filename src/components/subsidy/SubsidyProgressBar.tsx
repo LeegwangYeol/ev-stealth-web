@@ -24,15 +24,15 @@ export interface SubsidyProgressBarProps {
  * - Healthy (< 60% or 'HEALTHY' / 'AVAILABLE'): emerald-400 text, bg-emerald-500 bar
  */
 export const getDepletionColor = (rate: number, status?: string) => {
-  const norm = (status || '').toUpperCase();
-  if (norm === 'DEPLETED' || rate >= 100) {
+  const norm = (status || '').trim().toUpperCase();
+  if (norm === 'DEPLETED' || norm === 'EXHAUSTED' || norm === 'CLOSED' || norm === 'END' || rate >= 100) {
     return {
       text: 'text-slate-300',
       bar: 'bg-slate-500',
       dot: 'bg-slate-500',
     };
   }
-  if (norm === 'CRITICAL' || rate >= 95) {
+  if (norm === 'CRITICAL' || norm === 'DANGER' || norm === 'EMERGENCY' || rate >= 95) {
     return {
       text: 'text-rose-400',
       bar: 'bg-rose-500',

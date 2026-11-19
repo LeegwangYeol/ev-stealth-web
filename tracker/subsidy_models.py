@@ -14,11 +14,11 @@ from typing import Any, Dict, List, Optional, Union
 
 
 def _safe_int(val: Any, default: int = 0) -> int:
-    """Safely convert value to int, catching None, NaN, Inf, ValueError, TypeError, and OverflowError.
+    """Safely convert value to int, catching None, bool, NaN, Inf, ValueError, TypeError, and OverflowError.
     
     Also sanitizes formatted numeric strings containing thousands separators (e.g. '1,500,000').
     """
-    if val is None:
+    if val is None or isinstance(val, bool):
         return default
     if type(val) is int:
         return val
@@ -36,12 +36,18 @@ def _safe_int(val: Any, default: int = 0) -> int:
 
 
 def _safe_float(val: Any, default: float = 0.0) -> float:
-    """Safely convert value to float, catching None, NaN, Inf, ValueError, TypeError, and OverflowError.
+    """Safely convert value to float, catching None, bool, NaN, Inf, ValueError, TypeError, and OverflowError.
     
     Also sanitizes formatted numeric strings containing thousands separators (e.g. '1,500.50').
     """
-    if val is None:
+    if val is None or isinstance(val, bool):
         return default
+    if type(val) is float:
+        if math.isnan(val) or math.isinf(val):
+            return default
+        return 0.0 if val == 0.0 else val
+    if type(val) is int:
+        return float(val)
     if isinstance(val, str):
         val = val.strip().replace(",", "")
         if not val:
@@ -50,7 +56,7 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
         f = float(val)
         if math.isnan(f) or math.isinf(f):
             return default
-        return f
+        return 0.0 if f == 0.0 else f
     except (ValueError, TypeError, OverflowError):
         return default
 
@@ -83,9 +89,10 @@ def _mapping_getitem(obj: Any, key: Any) -> Any:
                     return meta[key]
                 except (KeyError, TypeError):
                     pass
-    d = obj.to_dict()
-    if key in d:
-        return d[key]
+    if type(obj).__module__ != __name__:
+        d = obj.to_dict()
+        if key in d:
+            return d[key]
     raise KeyError(key)
 
 
@@ -109,7 +116,9 @@ def _mapping_contains(obj: Any, key: Any) -> bool:
                 return True
             if hasattr(meta, "__contains__") and key in meta:
                 return True
-    return key in obj.to_dict()
+    if type(obj).__module__ != __name__:
+        return key in obj.to_dict()
+    return False
 
 
 class AlertSeverity(str, Enum):
@@ -664,6 +673,53 @@ class RegionRecord:
         )
 
 
+_ISO_ALIAS_MAP: Dict[str, str] = {
+    "KR-11": "seoul",
+    "KR-26": "busan",
+    "KR-27": "daegu",
+    "KR-28": "incheon",
+    "KR-29": "gwangju",
+    "KR-30": "daejeon",
+    "KR-31": "ulsan",
+    "KR-36": "sejong",
+    "KR-50": "sejong",
+    "KR-41": "gyeonggi",
+    "KR-42": "gangwon",
+    "KR-43": "chungbuk",
+    "KR-44": "chungnam",
+    "KR-45": "jeonbuk",
+    "KR-46": "jeonnam",
+    "KR-47": "gyeongbuk",
+    "KR-48": "gyeongnam",
+    "KR-49": "jeju",
+}
+
+_KO_REGION_ALIAS_MAP: Dict[str, str] = {
+    "서울": "seoul",
+    "경기": "gyeonggi",
+    "인천": "incheon",
+    "부산": "busan",
+    "대구": "daegu",
+    "광주": "gwangju",
+    "대전": "daejeon",
+    "울산": "ulsan",
+    "세종": "sejong",
+    "강원": "gangwon",
+    "충북": "chungbuk",
+    "충남": "chungnam",
+    "전북": "jeonbuk",
+    "전남": "jeonnam",
+    "경북": "gyeongbuk",
+    "경남": "gyeongnam",
+    "제주": "jeju",
+}
+
+_EN_TO_ISO_CODES: Dict[str, tuple[str, ...]] = {}
+for _iso, _en in _ISO_ALIAS_MAP.items():
+    _EN_TO_ISO_CODES.setdefault(_en, ())
+    _EN_TO_ISO_CODES[_en] = _EN_TO_ISO_CODES[_en] + (_iso.lower(),)
+
+
 @dataclass
 class PopularModelEntry:
     """EV model specification, pricing, and regional subsidy samples."""
@@ -738,57 +794,21 @@ class PopularModelEntry:
                     entry = v
                     break
         if entry is None:
-            iso_alias_map = {
-                "KR-11": "seoul",
-                "KR-26": "busan",
-                "KR-27": "daegu",
-                "KR-28": "incheon",
-                "KR-29": "gwangju",
-                "KR-30": "daejeon",
-                "KR-31": "ulsan",
-                "KR-36": "sejong",
-                "KR-50": "sejong",
-                "KR-41": "gyeonggi",
-                "KR-42": "gangwon",
-                "KR-43": "chungbuk",
-                "KR-44": "chungnam",
-                "KR-45": "jeonbuk",
-                "KR-46": "jeonnam",
-                "KR-47": "gyeongbuk",
-                "KR-48": "gyeongnam",
-                "KR-49": "jeju",
-            }
-            alias_map = {
-                "서울": "seoul",
-                "경기": "gyeonggi",
-                "인천": "incheon",
-                "부산": "busan",
-                "대구": "daegu",
-                "광주": "gwangju",
-                "대전": "daejeon",
-                "울산": "ulsan",
-                "세종": "sejong",
-                "강원": "gangwon",
-                "충북": "chungbuk",
-                "충남": "chungnam",
-                "전북": "jeonbuk",
-                "전남": "jeonnam",
-                "경북": "gyeongbuk",
-                "경남": "gyeongnam",
-                "제주": "jeju",
-            }
             code_str = str(region_code).strip()
-            mapped_en = iso_alias_map.get(code_str.upper())
+            code_lower = code_str.lower()
+            mapped_en = _ISO_ALIAS_MAP.get(code_str.upper())
             if mapped_en:
                 for k, v in self.regional_subsidy_samples.items():
                     if mapped_en in str(k).lower():
                         entry = v
                         break
             if entry is None:
-                for ko_key, en_key in alias_map.items():
-                    if ko_key in code_str or en_key in code_str.lower():
+                for ko_key, en_key in _KO_REGION_ALIAS_MAP.items():
+                    if ko_key in code_str or en_key in code_lower:
+                        iso_cands = _EN_TO_ISO_CODES.get(en_key, ())
                         for k, v in self.regional_subsidy_samples.items():
-                            if en_key in str(k).lower():
+                            k_lower = str(k).strip().lower()
+                            if en_key in k_lower or ko_key in k_lower or k_lower in iso_cands:
                                 entry = v
                                 break
                         if entry is not None:
@@ -798,13 +818,13 @@ class PopularModelEntry:
         if isinstance(entry, (int, float, str)) and not isinstance(entry, bool):
             return max(0, _safe_int(entry, 0))
         if isinstance(entry, dict):
-            if subsidy_type in entry:
+            if entry.get(subsidy_type) is not None:
                 return max(0, _safe_int(entry.get(subsidy_type), 0))
-            if "local_subsidy_krw" in entry:
+            if entry.get("local_subsidy_krw") is not None:
                 return max(0, _safe_int(entry.get("local_subsidy_krw"), 0))
-            if "subsidy_krw" in entry:
+            if entry.get("subsidy_krw") is not None:
                 return max(0, _safe_int(entry.get("subsidy_krw"), 0))
-            if subsidy_type == "local_subsidy_krw" and "total_subsidy_krw" in entry:
+            if subsidy_type == "local_subsidy_krw" and entry.get("total_subsidy_krw") is not None:
                 tot = max(0, _safe_int(entry.get("total_subsidy_krw"), 0))
                 nat = max(0, _safe_int(self.national_subsidy_krw, 0))
                 return max(0, tot - nat)
@@ -893,9 +913,9 @@ class HistoricalTrajectoryPoint:
             data = {}
         return cls(
             date=str(data.get("date") or ""),
-            passenger_rate=_safe_float(data.get("passenger_rate", 0.0)),
-            commercial_rate=_safe_float(data.get("commercial_rate", 0.0)),
-            overall_rate=_safe_float(data.get("overall_rate", 0.0)),
+            passenger_rate=max(0.0, _safe_float(data.get("passenger_rate", 0.0))),
+            commercial_rate=max(0.0, _safe_float(data.get("commercial_rate", 0.0))),
+            overall_rate=max(0.0, _safe_float(data.get("overall_rate", 0.0))),
         )
 
 
@@ -1129,8 +1149,8 @@ class SubsidyMetadata:
             generated_at=str(data.get("generated_at") or ""),
             policy_year=_safe_int(data.get("policy_year", 2026), default=2026),
             data_sources=data_sources,
-            total_regions_tracked=_safe_int(data.get("total_regions_tracked", 17), default=17),
-            total_municipalities_tracked=_safe_int(data.get("total_municipalities_tracked", 0)),
+            total_regions_tracked=max(0, _safe_int(data.get("total_regions_tracked", 17), default=17)),
+            total_municipalities_tracked=max(0, _safe_int(data.get("total_municipalities_tracked", 0))),
             currency=str(data.get("currency") or "KRW"),
         )
 

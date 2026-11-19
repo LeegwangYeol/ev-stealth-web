@@ -70,7 +70,7 @@ export default function NotFound() {
           <Link
             href="/"
             prefetch={false}
-            aria-label="메인 대시보드 홈으로 이동"
+            aria-label="메인 홈으로 이동 (대시보드)"
             className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">🏠</span> 메인 홈으로 이동

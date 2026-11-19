@@ -495,7 +495,7 @@ class ResilientHTTPSConnection(http.client.HTTPSConnection):
                 self.sock.settimeout(self._read_timeout)
             if self._tunnel_host:
                 self._tunnel()
-            server_hostname = self.host if ssl.HAS_SNI else None
+            server_hostname = (self._tunnel_host or self.host) if ssl.HAS_SNI else None
             self.sock = self._context.wrap_socket(self.sock, server_hostname=server_hostname)
         except Exception:
             if self.sock is not None:
@@ -635,6 +635,32 @@ class CircuitBreaker:
             info = self._hosts.get(host)
             if info and info.get("state") == CircuitBreakerState.HALF_OPEN:
                 info["probe_count"] = info.get("probe_count", 0) + 1
+
+    def try_acquire(self, url_or_host: str) -> bool:
+        """Atomically check availability and reserve a HALF_OPEN canary probe slot if applicable."""
+        host = self._extract_host(url_or_host)
+        if not host:
+            return True
+        with self._lock:
+            info = self._hosts.get(host)
+            if not info:
+                return True
+            state = info.get("state", CircuitBreakerState.CLOSED)
+            if state == CircuitBreakerState.CLOSED:
+                return True
+            now = time.time()
+            if state == CircuitBreakerState.OPEN:
+                if now >= info.get("tripped_until", 0.0):
+                    info["state"] = CircuitBreakerState.HALF_OPEN
+                    info["probe_count"] = 1
+                    return True
+                return False
+            if state == CircuitBreakerState.HALF_OPEN:
+                if info.get("probe_count", 0) < self.half_open_max_probes:
+                    info["probe_count"] = info.get("probe_count", 0) + 1
+                    return True
+                return False
+            return True
 
     def is_available(self, url_or_host: str) -> bool:
         """Returns True if requests can be dispatched to this host."""
@@ -865,6 +891,7 @@ class SafeHttpClient:
         self.last_response_from_cache = False
         self._memory_cache: Dict[str, Dict[str, Any]] = {}
         self._cache_lock = threading.Lock()
+        self._rate_lock = threading.Lock()
         eff_cooldown = cooldown_seconds if cooldown_seconds is not None else circuit_cooldown
         self.circuit_breaker = circuit_breaker or CircuitBreaker(
             failure_threshold=failure_threshold,
@@ -962,6 +989,9 @@ class SafeHttpClient:
                             "time": data.get("time", time.time()),
                             "url": url,
                         }
+                        if len(self._memory_cache) > 500:
+                            oldest_k = min(self._memory_cache, key=lambda k: self._memory_cache[k].get("time", 0))
+                            del self._memory_cache[oldest_k]
                     return status, text, raw_bytes
                 except Exception as e:
                     logger.debug(f"Cache read error for {url}: {e}")
@@ -1132,18 +1162,33 @@ class SafeHttpClient:
         min_d = min(raw_min, raw_max)
         max_d = max(raw_min, raw_max)
         if max_d <= 0:
-            self.last_request_time = time.time()
-            self.request_count += 1
+            with self._rate_lock:
+                self.last_request_time = time.time()
+                self.request_count += 1
             return
 
-        now = time.time()
-        elapsed = now - self.last_request_time
+        with self._rate_lock:
+            now = time.time()
+            elapsed = now - self.last_request_time
+            req_num = self.request_count
+            self.request_count += 1
 
-        # Cooldown trigger (every 18 requests, pause 5-8s)
-        if self.cooldown_interval and self.cooldown_interval > 0 and self.request_count > 0 and self.request_count % self.cooldown_interval == 0:
-            extra_cooldown = random.uniform(5.0, 8.0)
-            logger.info(f"Cooldown triggered after {self.request_count} requests. Sleeping {extra_cooldown:.2f}s...")
-            time.sleep(extra_cooldown)
+        # Cooldown trigger (every cooldown_interval requests)
+        if (
+            self.cooldown_interval
+            and not isinstance(self.cooldown_interval, bool)
+            and self.cooldown_interval > 0
+            and req_num > 0
+            and req_num % int(self.cooldown_interval) == 0
+        ):
+            try:
+                ct = float(self.cooldown_time)
+            except (ValueError, TypeError):
+                ct = 6.0
+            if math.isfinite(ct) and ct > 0:
+                extra_cooldown = random.uniform(ct * 0.8, ct * 1.3)
+                logger.info(f"Cooldown triggered after {req_num} requests. Sleeping {extra_cooldown:.2f}s...")
+                time.sleep(extra_cooldown)
 
         # Standard jittered delay (1.5s - 3.5s)
         target_delay = random.uniform(min_d, max_d)
@@ -1151,8 +1196,8 @@ class SafeHttpClient:
             sleep_duration = target_delay - elapsed
             time.sleep(sleep_duration)
 
-        self.last_request_time = time.time()
-        self.request_count += 1
+        with self._rate_lock:
+            self.last_request_time = time.time()
 
     def warm_up_session(self, base_url: str, referer: Optional[str] = None) -> bool:
         """
@@ -1183,6 +1228,7 @@ class SafeHttpClient:
             req._read_timeout = self._read_timeout
             resp = self.opener.open(req, timeout=self._read_timeout)
             _ = resp.read(1024)
+            self.circuit_breaker.record_success(norm_url)
             logger.info(f"Session warmed up successfully on {norm_url}. Cookies in jar: {len(self.cookie_jar)}")
             return True
         except urllib.error.HTTPError as he:
@@ -1281,8 +1327,13 @@ class SafeHttpClient:
             logger.warning(f"SSRF defense blocked request to {norm_url}: {reason}")
             return 0, "", b""
 
-        # Host-level Circuit Breaker guard
-        if not self.circuit_breaker.is_available(norm_url):
+        # Host-level Circuit Breaker guard (atomic check + HALF_OPEN probe reservation)
+        cb_allowed = (
+            self.circuit_breaker.try_acquire(norm_url)
+            if hasattr(self.circuit_breaker, "try_acquire")
+            else self.circuit_breaker.is_available(norm_url)
+        )
+        if not cb_allowed:
             logger.warning(
                 f"Circuit breaker is OPEN for {norm_url} (tripped due to repeated 403/429/503 errors). "
                 f"Fast-failing request."
@@ -1297,9 +1348,13 @@ class SafeHttpClient:
                     return cached
             return 503, "", b""
 
-        # Record in-flight probe if in HALF_OPEN state
-        if self.circuit_breaker.get_state(norm_url) == CircuitBreakerState.HALF_OPEN:
-            self.circuit_breaker.record_probe(norm_url)
+        if not hasattr(self.circuit_breaker, "try_acquire"):
+            if self.circuit_breaker.get_state(norm_url) == CircuitBreakerState.HALF_OPEN:
+                self.circuit_breaker.record_probe(norm_url)
+
+        if self.opener is None:
+            logger.error("SafeHttpClient opener is not initialized.")
+            return 0, "", b""
 
         self.last_response_from_cache = False
         self._sleep_with_jitter()
@@ -1316,7 +1371,8 @@ class SafeHttpClient:
         if data is not None:
             if isinstance(data, dict):
                 payload_bytes = urllib.parse.urlencode(data).encode("utf-8")
-                req_headers.setdefault("Content-Type", "application/x-www-form-urlencoded")
+                if not any(str(k).lower() == "content-type" for k in req_headers):
+                    req_headers["Content-Type"] = "application/x-www-form-urlencoded"
             elif isinstance(data, bytes):
                 payload_bytes = data
             elif isinstance(data, str):
@@ -1347,22 +1403,28 @@ class SafeHttpClient:
         except (ValueError, TypeError, OverflowError):
             eff_retries = 3
 
+        eff_method = (method or "GET").upper()
         for attempt in range(1, eff_retries + 1):
             if attempt > 1:
-                current_ua = req_headers.get("User-Agent")
+                ua_keys = [k for k in req_headers if str(k).lower() == "user-agent"]
+                current_ua = req_headers.get(ua_keys[0]) if ua_keys else None
+                for k in ua_keys:
+                    del req_headers[k]
                 req_headers["User-Agent"] = self.get_random_user_agent(exclude=current_ua)
             try:
                 req = urllib.request.Request(
                     norm_url,
                     data=payload_bytes,
                     headers=req_headers,
-                    method=method.upper()
+                    method=eff_method,
                 )
                 req._connect_timeout = eff_connect_timeout
                 req._read_timeout = eff_read_timeout
                 resp = self.opener.open(req, timeout=eff_timeout)
                 try:
                     status_code = resp.getcode()
+                    if status_code is None:
+                        status_code = getattr(resp, "status", None) or 200
 
                     if hasattr(resp, "fp") and resp.fp and hasattr(resp.fp, "raw") and hasattr(resp.fp.raw, "_sock"):
                         try:
@@ -1397,10 +1459,12 @@ class SafeHttpClient:
                             if attempt < eff_retries:
                                 raise
                             break
-                        if not chunk or not isinstance(chunk, (bytes, str)):
+                        if not chunk or not isinstance(chunk, (bytes, bytearray, memoryview, str)):
                             break
                         if isinstance(chunk, str):
                             chunk = chunk.encode("utf-8")
+                        elif isinstance(chunk, (bytearray, memoryview)):
+                            chunk = bytes(chunk)
                         chunks.append(chunk)
                         bytes_read += len(chunk)
                         if self.max_response_size > 0 and bytes_read >= self.max_response_size:
@@ -1414,19 +1478,23 @@ class SafeHttpClient:
                     if self.max_response_size > 0 and len(raw_bytes) > self.max_response_size:
                         raw_bytes = raw_bytes[: self.max_response_size]
 
-                    # Detect charset from response headers
-                    content_type_hdr = (
-                        resp.headers.get("Content-Type", "")
-                        if hasattr(resp, "headers") and resp.headers
-                        else ""
-                    )
+                    # Detect charset from response headers (case-insensitive for plain dicts)
+                    content_type_hdr = ""
+                    if hasattr(resp, "headers") and resp.headers:
+                        if hasattr(resp.headers, "get"):
+                            content_type_hdr = resp.headers.get("Content-Type", "")
+                            if not content_type_hdr and hasattr(resp.headers, "items"):
+                                for hk, hv in resp.headers.items():
+                                    if str(hk).lower() == "content-type":
+                                        content_type_hdr = hv
+                                        break
                     content_type = str(content_type_hdr) if content_type_hdr is not None else ""
                     detected_encoding = encoding or self._detect_encoding(content_type, raw_bytes)
                     decoded_text = robust_decode(raw_bytes, declared_encoding=detected_encoding)
 
-                    if status_code == 200:
+                    if 200 <= status_code < 400:
                         self.circuit_breaker.record_success(norm_url)
-                        if decoded_text:
+                        if status_code == 200 and decoded_text:
                             self.set_cached_response(norm_url, status_code, decoded_text, raw_bytes)
 
                     return status_code, decoded_text, raw_bytes
@@ -1445,7 +1513,10 @@ class SafeHttpClient:
             except urllib.error.HTTPError as he:
                 logger.warning(f"HTTPError {he.code} on {norm_url} (Attempt {attempt}/{eff_retries}): {he.reason}")
                 try:
-                    retryable_codes = [408, 429, 403, 500, 502, 503, 504, 520, 521, 522, 523, 524]
+                    if isinstance(getattr(he, "reason", None), str) and he.reason.startswith("SSRF Blocked:"):
+                        logger.warning(f"SSRF redirect aborted immediately for {norm_url}: {he.reason}")
+                        return 0, "", b""
+                    retryable_codes = (408, 429, 403, 500, 502, 503, 504, 520, 521, 522, 523, 524)
                     if he.code in retryable_codes and attempt < eff_retries:
                         if he.code in (403, 429):
                             self.clear_cookies()
@@ -1458,7 +1529,7 @@ class SafeHttpClient:
                         time.sleep(backoff)
                     else:
                         retry_after = self._parse_retry_after(he) if he.code in (429, 503) else None
-                        if he.code in (403, 429, 503):
+                        if he.code in (403, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524):
                             tripped = self.circuit_breaker.record_failure(
                                 norm_url, status_code=he.code, retry_after=retry_after
                             )
@@ -1466,7 +1537,9 @@ class SafeHttpClient:
                                 logger.warning(
                                     f"Circuit breaker tripped OPEN for {norm_url} on HTTP {he.code}."
                                 )
-                        if he.code in [403, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524] and self.cache_fallback:
+                        elif self.circuit_breaker.get_state(norm_url) == CircuitBreakerState.HALF_OPEN:
+                            self.circuit_breaker.record_success(norm_url)
+                        if he.code in (403, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524) and self.cache_fallback:
                             cached = self.get_cached_response(norm_url)
                             if cached is not None:
                                 logger.warning(
@@ -1479,6 +1552,14 @@ class SafeHttpClient:
                                 raw_bytes = he.read(self.max_response_size)
                             except TypeError:
                                 raw_bytes = he.read()
+                            if raw_bytes is None:
+                                raw_bytes = b""
+                            elif isinstance(raw_bytes, str):
+                                raw_bytes = raw_bytes.encode("utf-8")
+                            elif isinstance(raw_bytes, (bytearray, memoryview)):
+                                raw_bytes = bytes(raw_bytes)
+                            if self.max_response_size > 0 and len(raw_bytes) > self.max_response_size:
+                                raw_bytes = raw_bytes[: self.max_response_size]
                             decoded_text = robust_decode(raw_bytes, declared_encoding=encoding or "utf-8")
                             return he.code, decoded_text, raw_bytes
                         except Exception:
@@ -1611,15 +1692,79 @@ def robust_decode(raw_bytes: Union[bytes, bytearray, memoryview, str, None], dec
     if not isinstance(raw_bytes, bytes) or not raw_bytes:
         return ""
 
-    encodings_to_try = [declared_encoding, "utf-8", "cp949", "euc-kr", "latin-1"]
+    norm_declared = None
+    if declared_encoding and isinstance(declared_encoding, str):
+        norm_declared = declared_encoding.strip().lower()
+        if norm_declared in ("x-windows-949", "windows-949", "ms949"):
+            norm_declared = "cp949"
+        elif norm_declared in ("ks_c_5601-1987", "ksc5601", "euc_kr"):
+            norm_declared = "euc-kr"
+
+    if raw_bytes.startswith(b"\xef\xbb\xbf") and (not norm_declared or norm_declared in ("utf-8", "utf8", "utf-8-sig")):
+        try:
+            return raw_bytes.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            pass
+
+    encodings_to_try: List[Optional[str]] = [norm_declared, "utf-8", "cp949", "euc-kr"]
+    if norm_declared in ("latin-1", "latin1", "iso-8859-1", "iso8859-1"):
+        encodings_to_try.append("latin-1")
+
+    seen: Set[str] = set()
     for enc in encodings_to_try:
-        if not enc or not isinstance(enc, str):
+        if not enc or not isinstance(enc, str) or enc in seen:
             continue
+        seen.add(enc)
         try:
             return raw_bytes.decode(enc)
         except (UnicodeDecodeError, LookupError):
             continue
-    return raw_bytes.decode("utf-8", errors="replace")
+
+    fallback_enc = norm_declared if norm_declared in ("cp949", "euc-kr") else "utf-8"
+    return raw_bytes.decode(fallback_enc, errors="replace")
+
+
+def extract_balanced_tag_content(
+    html_content: str,
+    open_tag_pattern: str,
+    tag_name: str = "div",
+) -> str:
+    """Extract inner HTML of a balanced container tag matched by open_tag_pattern."""
+    if not html_content or not isinstance(html_content, str):
+        return ""
+    m = re.search(open_tag_pattern, html_content, re.IGNORECASE | re.DOTALL)
+    if not m:
+        return ""
+    start = m.end()
+    tag_re = re.compile(rf"<(/?){re.escape(tag_name)}\b[^>]*>", re.IGNORECASE)
+    depth = 1
+    for tm in tag_re.finditer(html_content, start):
+        token = tm.group(0)
+        if tm.group(1) == "/":
+            depth -= 1
+            if depth == 0:
+                return html_content[start : tm.start()]
+        elif not token.rstrip().endswith("/>"):
+            depth += 1
+    # Unclosed tag fallback: up to first closing tag or end
+    close_m = re.search(rf"</{re.escape(tag_name)}\s*>", html_content[start:], re.IGNORECASE)
+    if close_m:
+        return html_content[start : start + close_m.start()]
+    return html_content[start:]
+
+
+def bounded_cache_set(cache: Dict[str, Any], key: str, value: Any, max_size: int = 500) -> None:
+    """Store key/value in an in-memory cache dict with FIFO eviction beyond max_size."""
+    if key in cache:
+        cache[key] = value
+        return
+    if max_size > 0 and len(cache) >= max_size:
+        try:
+            oldest_key = next(iter(cache))
+            del cache[oldest_key]
+        except StopIteration:
+            pass
+    cache[key] = value
 
 
 def encode_euc_kr_query(params: Dict[str, Any]) -> bytes:

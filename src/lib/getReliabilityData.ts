@@ -198,12 +198,26 @@ function createDefaultFallbackDatabase(): ReliabilityTrendsDatabase {
   };
 }
 
+let cachedTrendsDatabase: ReliabilityTrendsDatabase | null = null;
+
+function cloneTrendsDatabaseShallow(db: ReliabilityTrendsDatabase): ReliabilityTrendsDatabase {
+  return {
+    metadata: { ...db.metadata },
+    categories: Array.isArray(db.categories) ? [...db.categories] : [],
+    repair_cost_matrix: Array.isArray(db.repair_cost_matrix) ? [...db.repair_cost_matrix] : [],
+    brands: Array.isArray(db.brands) ? [...db.brands] : [],
+  };
+}
+
 /**
  * Safely loads the master EV Reliability & Defect Trends database.
  * Strictly guarantees non-null, valid array/object shapes with defensive fallbacks
- * and bounds all DSI scores between [0, 100].
+ * and bounds all DSI scores between [0, 100]. Caches normalized payload for reuse.
  */
 export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
+  if (cachedTrendsDatabase) {
+    return cloneTrendsDatabaseShallow(cachedTrendsDatabase);
+  }
   try {
     if (!rawTrendsData || typeof rawTrendsData !== 'object' || Array.isArray(rawTrendsData)) {
       return createDefaultFallbackDatabase();
@@ -258,7 +272,7 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
                                 dsi_score: normalizeReliabilityScore(y.dsi_score, 50.0),
                                 incident_rate:
                                   parsedIncident !== null
-                                    ? Math.max(0, Math.min(100, parsedIncident))
+                                    ? Math.max(0, Math.min(100, parsedIncident)) + 0
                                     : 0,
                                 primary_defect:
                                   typeof y.primary_defect === 'string' ? y.primary_defect : '',
@@ -374,12 +388,13 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
           }))
       : [];
 
-    return {
+    cachedTrendsDatabase = {
       metadata,
       categories,
       repair_cost_matrix,
       brands,
     };
+    return cloneTrendsDatabaseShallow(cachedTrendsDatabase);
   } catch (error) {
     console.error('[getReliabilityTrendsData] Failed to load trends data safely:', error);
     return createDefaultFallbackDatabase();

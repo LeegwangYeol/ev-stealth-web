@@ -11,13 +11,20 @@ from __future__ import annotations
 import datetime
 import html
 import logging
+import math
 import random
 import re
 import time
 import urllib.parse
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from crawlers.base_crawler import BaseCrawler, _positive_float
+from crawlers.base_crawler import (
+    BaseCrawler,
+    _is_safe_client_url,
+    _positive_float,
+    _sanitize_referer,
+    _unescape_url_entities,
+)
 from utils.http_client import SafeHttpClient, clean_html_text, encode_euc_kr_query
 
 logger = logging.getLogger("BobaeDreamCrawler")
@@ -40,7 +47,36 @@ TARGET_BOARDS = {
 
 
 RE_HTML_COMMENTS = re.compile(r"<!--.*?-->", re.DOTALL)
-RE_SCRIPT_STYLE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
+RE_SCRIPT_STYLE = re.compile(r"<(script|style)[^>]*>.*?</\1\s*>", re.DOTALL | re.IGNORECASE)
+
+
+def _canonicalize_bobaedream_href(raw_href: str) -> Optional[str]:
+    """Validate and canonicalize a BobaeDream href, blocking unsafe schemes and external hosts."""
+    if not raw_href or not isinstance(raw_href, str):
+        return None
+    full_href = _unescape_url_entities(raw_href.strip())
+    if not full_href or any(ord(c) < 32 or ord(c) == 127 for c in full_href):
+        return None
+    parsed_in = urllib.parse.urlsplit(full_href)
+    if parsed_in.scheme and parsed_in.scheme.lower() not in ("http", "https"):
+        return None
+
+    if full_href.startswith("//"):
+        full_url = f"https:{full_href}"
+    elif full_href.lower().startswith(("http://", "https://")):
+        full_url = full_href
+    elif full_href.startswith("/"):
+        full_url = f"{BOBAE_BASE_URL}{full_href}"
+    else:
+        full_url = f"{BOBAE_BASE_URL}/{full_href}"
+
+    parsed_out = urllib.parse.urlsplit(full_url)
+    host = (parsed_out.hostname or "").lower().rstrip(".")
+    if not (host == "bobaedream.co.kr" or host.endswith(".bobaedream.co.kr")):
+        return None
+    if parsed_out.port not in (None, 80, 443):
+        return None
+    return full_url
 
 
 def extract_container_content(html_str: str, tag_name: str, class_name: str) -> str:
@@ -67,6 +103,8 @@ def extract_container_content(html_str: str, tag_name: str, class_name: str) -> 
     )
     match = pattern.search(masked)
     if not match:
+        return ""
+    if match.group(0).rstrip(">").rstrip().endswith("/"):
         return ""
 
     start_idx = match.end()
@@ -439,9 +477,14 @@ class BobaeDreamCrawler(BaseCrawler):
 
     def sleep_with_jitter(self, min_s: Optional[float] = None, max_s: Optional[float] = None) -> None:
         """Apply polite delay with uniform jitter between crawler requests."""
-        low = min_s if min_s is not None else self.min_delay
-        high = max_s if max_s is not None else self.max_delay
-        if high > 0 and low <= high:
+        raw_low = min_s if min_s is not None else self.min_delay
+        raw_high = max_s if max_s is not None else self.max_delay
+        try:
+            low = max(0.0, float(raw_low))
+            high = max(0.0, float(raw_high))
+        except (ValueError, TypeError):
+            return
+        if math.isfinite(low) and math.isfinite(high) and high > 0 and low <= high:
             time.sleep(random.uniform(low, high))
 
     def ensure_warm_up(self, base_url: Optional[Union[str, bool]] = None, force: bool = False) -> bool:
@@ -451,10 +494,15 @@ class BobaeDreamCrawler(BaseCrawler):
             base_url = None
         target_url = (base_url if isinstance(base_url, str) else None) or BOBAE_BASE_URL
         if (not self._warmed_up or force) and target_url:
+            target_clean = target_url.strip()
+            is_safe, reason = _is_safe_client_url(self.client, target_clean)
+            if not is_safe:
+                logger.warning(f"Blocked unsafe BobaeDream warm-up URL {target_clean!r}: {reason}")
+                return False
             success = True
             try:
                 if self.client and hasattr(self.client, "warm_up_session"):
-                    res = self.client.warm_up_session(target_url)
+                    res = self.client.warm_up_session(target_clean)
                     success = bool(res) if res is not None else True
             except Exception as e:
                 logger.warning(f"BobaeDream warm_up_session notice: {e}")
@@ -478,13 +526,16 @@ class BobaeDreamCrawler(BaseCrawler):
         Build search URL with EUC-KR percent-encoded keyword parameter.
         URL format: https://www.bobaedream.co.kr/list?code={board_code}&s_cate=&s_key={s_key}&search={encoded_kw}&page={page}
         """
-        code = urllib.parse.quote(str(board_code or "national").strip(), safe="")
+        raw_code = str(board_code).strip() if board_code is not None else ""
+        code = urllib.parse.quote(raw_code or "national", safe="")
         try:
             eff_page = max(1, int(float(page)))
         except (ValueError, TypeError, OverflowError):
             eff_page = 1
-        encoded_kw = encode_euc_kr_query(keyword or "")
-        key = urllib.parse.quote(str(s_key or "sub_bod").strip(), safe="")
+        kw_str = str(keyword).strip() if keyword is not None else ""
+        encoded_kw = encode_euc_kr_query(kw_str)
+        raw_key = str(s_key).strip() if s_key is not None else ""
+        key = urllib.parse.quote(raw_key or "sub_bod", safe="")
         return (
             f"{BOBAE_LIST_URL}?code={code}&s_cate=&s_key={key}"
             f"&search={encoded_kw}&page={eff_page}"
@@ -495,7 +546,8 @@ class BobaeDreamCrawler(BaseCrawler):
         Build general list URL without search filters.
         URL format: https://www.bobaedream.co.kr/list?code={board_code}&page={page}
         """
-        code = urllib.parse.quote(str(board_code or "national").strip(), safe="")
+        raw_code = str(board_code).strip() if board_code is not None else ""
+        code = urllib.parse.quote(raw_code or "national", safe="")
         try:
             eff_page = max(1, int(float(page)))
         except (ValueError, TypeError, OverflowError):
@@ -521,43 +573,14 @@ class BobaeDreamCrawler(BaseCrawler):
         items: List[Dict[str, Any]] = []
         seen_nos = set()
 
-        # Resilient link pattern matching desktop, PHP script, and mobile view URLs
-        link_pattern = re.compile(
-            r'<a\b[^>]*href=["\']?([^"\'\s>]*view(?:\.php)?\?[^"\'\s>]*|[^"\'\s>]*/(?:bbs_view|view)/[^"\'\s>]*)["\']?[^>]*>(.*?)</a>',
-            re.IGNORECASE | re.DOTALL,
-        )
+        def _append_item(raw_href_val: str, post_no_val: str, code_val: str, raw_title_val: str) -> None:
+            if not post_no_val or post_no_val in seen_nos:
+                return
+            full_url = _canonicalize_bobaedream_href(raw_href_val)
+            if not full_url:
+                return
 
-        for match in link_pattern.finditer(html_content):
-            raw_href = match.group(1)
-            raw_title = match.group(2)
-
-            full_href = html.unescape(raw_href.strip())
-            if full_href.lower().startswith(("javascript:", "data:", "vbscript:", "mailto:")):
-                continue
-
-            # Extract post_no from query param (No=, no=, b_no=, bm_no=) or path (/bbs_view/.../123, /view/123)
-            no_match = re.search(
-                r"(?:[?&](?:b_|bm_)?no=(\d+)|/(?:bbs_view/[^/]+/|view/)(\d+))",
-                full_href,
-                re.IGNORECASE,
-            )
-            if not no_match:
-                continue
-            post_no = no_match.group(1) or no_match.group(2)
-
-            if post_no in seen_nos:
-                continue
-            seen_nos.add(post_no)
-
-            # Extract board code from query param or path
-            code_match = re.search(r"[?&]code=([a-zA-Z0-9_]+)", full_href, re.IGNORECASE)
-            if not code_match:
-                code_match = re.search(r"/(?:bbs_view|list)/([a-zA-Z0-9_]+)/", full_href, re.IGNORECASE)
-            extracted_code = code_match.group(1) if code_match else board_code
-
-            # Sanitize title, decode entities (&nbsp;, &amp;, &lt;, &gt;), trim whitespace
-            clean_title = clean_title_text(raw_title)
-
+            clean_title = clean_title_text(raw_title_val)
             # Strip trailing comment count badges e.g. "(14)", "[28]" in list titles
             clean_title = re.sub(r"\s*[\[\(]\s*\d+\s*[\]\)]\s*$", "", clean_title).strip()
 
@@ -568,28 +591,48 @@ class BobaeDreamCrawler(BaseCrawler):
                 or clean_title in ("공지", "필독", "안내")
                 or clean_title.startswith(("[공지]", "공지 ", "[필독]", "필독 ", "[안내]", "안내 "))
                 or "공지사항" in clean_title
-                or "<b>공지</b>" in raw_title
-                or '<b class="notice">' in raw_title
+                or "<b>공지</b>" in raw_title_val
+                or '<b class="notice">' in raw_title_val
                 or re.match(r"^\s*\[?(?:공지|필독|운영안내)\]?", clean_title)
             ):
-                continue
+                return
 
-            # Build canonical full URL
-            if full_href.startswith("//"):
-                full_url = f"https:{full_href}"
-            elif full_href.startswith("http://") or full_href.startswith("https://"):
-                full_url = full_href
-            elif full_href.startswith("/"):
-                full_url = f"{BOBAE_BASE_URL}{full_href}"
-            else:
-                full_url = f"{BOBAE_BASE_URL}/{full_href}"
-
+            seen_nos.add(post_no_val)
             items.append({
-                "post_id": post_no,
-                "board_code": extracted_code,
+                "post_id": post_no_val,
+                "board_code": code_val or board_code,
                 "url": full_url,
                 "title": clean_title,
             })
+
+        # Resilient link pattern matching desktop, PHP script, and mobile view URLs
+        link_pattern = re.compile(
+            r'<a\b[^>]*href=["\']?([^"\'\s>]*view(?:\.php)?\?[^"\'\s>]*|[^"\'\s>]*/(?:bbs_view|view)/[^"\'\s>]*)["\']?[^>]*>(.*?)</a>',
+            re.IGNORECASE | re.DOTALL,
+        )
+
+        for match in link_pattern.finditer(html_content):
+            raw_href = match.group(1)
+            raw_title = match.group(2)
+
+            full_href = _unescape_url_entities(raw_href.strip())
+            # Extract post_no from query param (No=, no=, b_no=, bm_no=) or path (/bbs_view/.../123, /view/123)
+            no_match = re.search(
+                r"(?:[?&](?:b_|bm_)?no=(\d+)|/(?:bbs_view/[^/]+/|view/)(\d+))",
+                full_href,
+                re.IGNORECASE,
+            )
+            if not no_match:
+                continue
+            post_no = no_match.group(1) or no_match.group(2)
+
+            # Extract board code from query param or path
+            code_match = re.search(r"[?&]code=([a-zA-Z0-9_]+)", full_href, re.IGNORECASE)
+            if not code_match:
+                code_match = re.search(r"/(?:bbs_view|list)/([a-zA-Z0-9_]+)/", full_href, re.IGNORECASE)
+            extracted_code = code_match.group(1) if code_match else board_code
+
+            _append_item(raw_href, post_no, extracted_code, raw_title)
 
         # Fallback regex if href parameters were ordered differently or single quotes
         if not items:
@@ -598,37 +641,7 @@ class BobaeDreamCrawler(BaseCrawler):
                 re.IGNORECASE | re.DOTALL,
             )
             for full_href_raw, post_no, code, raw_title in alt_pattern.findall(html_content):
-                if post_no in seen_nos:
-                    continue
-                seen_nos.add(post_no)
-                clean_title = clean_title_text(raw_title)
-                clean_title = re.sub(r"\s*[\[\(]\s*\d+\s*[\]\)]\s*$", "", clean_title).strip()
-                if (
-                    not clean_title
-                    or len(clean_title) < 2
-                    or clean_title in ("공지", "필독", "안내")
-                    or clean_title.startswith(("[공지]", "공지 ", "[필독]", "필독 ", "[안내]", "안내 "))
-                    or "공지사항" in clean_title
-                    or "<b>공지</b>" in raw_title
-                    or '<b class="notice">' in raw_title
-                    or re.match(r"^\s*\[?(?:공지|필독|운영안내)\]?", clean_title)
-                ):
-                    continue
-                full_href = html.unescape(full_href_raw.strip())
-                if full_href.startswith("//"):
-                    full_url = f"https:{full_href}"
-                elif full_href.startswith("http://") or full_href.startswith("https://"):
-                    full_url = full_href
-                elif full_href.startswith("/"):
-                    full_url = f"{BOBAE_BASE_URL}{full_href}"
-                else:
-                    full_url = f"{BOBAE_BASE_URL}/{full_href}"
-                items.append({
-                    "post_id": post_no,
-                    "board_code": code or board_code,
-                    "url": full_url,
-                    "title": clean_title,
-                })
+                _append_item(full_href_raw, post_no, code, raw_title)
 
         return items
 
@@ -675,7 +688,7 @@ class BobaeDreamCrawler(BaseCrawler):
             re.IGNORECASE,
         )
         if match:
-            path = html.unescape(match.group(1))
+            path = _unescape_url_entities(match.group(1))
             return f"{BOBAE_BASE_URL}{path}" if path.startswith("/") else path
 
         # Alternative: match direct comment_list.php URL in any script or data attr
@@ -685,7 +698,7 @@ class BobaeDreamCrawler(BaseCrawler):
             re.IGNORECASE,
         )
         if alt_match:
-            path = html.unescape(alt_match.group(1))
+            path = _unescape_url_entities(alt_match.group(1))
             return f"{BOBAE_BASE_URL}{path}" if path.startswith("/") else path
 
         return None
@@ -697,14 +710,24 @@ class BobaeDreamCrawler(BaseCrawler):
         timeout: Optional[float] = None,
     ) -> List[str]:
         """Fetch and parse dynamic comments from comment_list.php."""
-        if not ajax_url or not isinstance(ajax_url, str):
+        if not ajax_url or not isinstance(ajax_url, str) or not self.client:
             return []
+        eff_url = _unescape_url_entities(ajax_url.strip())
+        if not eff_url or any(ord(c) < 32 or ord(c) == 127 for c in eff_url):
+            return []
+        if eff_url.startswith("//"):
+            eff_url = f"https:{eff_url}"
+        elif eff_url.startswith("/"):
+            eff_url = f"{BOBAE_BASE_URL}{eff_url}"
+        is_safe, reason = _is_safe_client_url(self.client, eff_url)
+        if not is_safe:
+            logger.warning(f"SSRF defense blocked AJAX comment URL {eff_url!r}: {reason}")
+            return []
+        eff_referer = _sanitize_referer(referer) or f"{BOBAE_BASE_URL}/"
         try:
-            if not self.client:
-                return []
             resp = self.client.get(
-                ajax_url,
-                referer=referer,
+                eff_url,
+                referer=eff_referer,
                 headers={"X-Requested-With": "XMLHttpRequest"},
                 timeout=timeout,
             )
@@ -891,8 +914,8 @@ class BobaeDreamCrawler(BaseCrawler):
             referer = board_code
             board_code = "national"
 
-        # Defensively normalize relative URLs and HTML entities (&amp; -> &)
-        eff_url = html.unescape(post_url.strip())
+        # Defensively normalize relative URLs and semicolon-terminated HTML entities (&amp; -> &)
+        eff_url = _unescape_url_entities(post_url.strip())
         if not eff_url or any(ord(c) < 32 or ord(c) == 127 for c in eff_url):
             logger.warning(f"Unsafe BobaeDream post_url provided: {post_url!r}")
             return None
@@ -908,11 +931,16 @@ class BobaeDreamCrawler(BaseCrawler):
         elif not eff_url.lower().startswith(("http://", "https://")):
             eff_url = f"{BOBAE_BASE_URL}/{eff_url}"
 
-        base_url = kwargs.get("base_url")
-        self.ensure_warm_up(base_url)
+        is_safe, reason = _is_safe_client_url(self.client, eff_url)
+        if not is_safe:
+            logger.warning(f"SSRF defense blocked BobaeDream post_url {eff_url!r}: {reason}")
+            return None
+
         if not self.client:
             return None
-        eff_referer = referer or f"{BOBAE_BASE_URL}/"
+        base_url = kwargs.get("base_url")
+        self.ensure_warm_up(base_url)
+        eff_referer = _sanitize_referer(referer) or f"{BOBAE_BASE_URL}/"
         timeout = kwargs.get("timeout")
         if timeout is None:
             timeout = (
@@ -992,6 +1020,8 @@ class BobaeDreamCrawler(BaseCrawler):
         self.ensure_warm_up()
         results: List[Dict[str, Any]] = []
         visited_nos: Set[str] = set()
+        consecutive_failures = 0
+        MAX_CONSECUTIVE_FAILURES = 5
 
         for page in range(1, eff_pages + 1):
             url = self.build_list_url(board_code, page=page)
@@ -1030,17 +1060,19 @@ class BobaeDreamCrawler(BaseCrawler):
             if page_nos and page_nos.issubset(visited_nos):
                 logger.info(f"Page {page} of [{board_code}] repeated previously seen posts. Halting pagination loop.")
                 break
-            visited_nos.update(page_nos)
 
-            consecutive_failures = 0
-            MAX_CONSECUTIVE_FAILURES = 5
             halt_crawl = False
 
             for item in items:
+                pid = item.get("post_id", "")
+                if pid and pid in visited_nos:
+                    continue
+                if pid:
+                    visited_nos.add(pid)
                 post = self.fetch_post(
                     item.get("url", ""),
                     board_code=board_code,
-                    post_id=item.get("post_id", ""),
+                    post_id=pid,
                     referer=url,
                 )
                 if post:
@@ -1087,6 +1119,8 @@ class BobaeDreamCrawler(BaseCrawler):
         self.ensure_warm_up()
         results: List[Dict[str, Any]] = []
         visited_nos: Set[str] = set()
+        consecutive_failures = 0
+        MAX_CONSECUTIVE_FAILURES = 5
 
         for page in range(1, eff_pages + 1):
             url = self.build_search_url(board_code, keyword, page=page, s_key=s_key)
@@ -1125,17 +1159,19 @@ class BobaeDreamCrawler(BaseCrawler):
             if page_nos and page_nos.issubset(visited_nos):
                 logger.info(f"Search page {page} of [{board_code}] repeated previously seen posts. Halting loop.")
                 break
-            visited_nos.update(page_nos)
 
-            consecutive_failures = 0
-            MAX_CONSECUTIVE_FAILURES = 5
             halt_crawl = False
 
             for item in items:
+                pid = item.get("post_id", "")
+                if pid and pid in visited_nos:
+                    continue
+                if pid:
+                    visited_nos.add(pid)
                 post = self.fetch_post(
                     item.get("url", ""),
                     board_code=board_code,
-                    post_id=item.get("post_id", ""),
+                    post_id=pid,
                     referer=url,
                 )
                 if post:
@@ -1173,13 +1209,22 @@ class BobaeDreamCrawler(BaseCrawler):
 
         target_boards = list(boards) if boards is not None else ["national", "import", "electric"]
         all_posts: List[Dict[str, Any]] = []
+        seen_keys: Set[Tuple[str, str]] = set()
 
         for board in target_boards:
             remaining_limit = (limit - len(all_posts)) if limit is not None else None
             board_posts = self.search_board(board, keyword, pages=max_pages, limit=remaining_limit)
-            all_posts.extend(board_posts)
-            if limit and len(all_posts) >= limit:
-                return all_posts[:limit]
+            for p in board_posts:
+                pid = str(p.get("post_id") or "")
+                bcode = str(p.get("board_code") or board)
+                if pid:
+                    key = (bcode, pid)
+                    if key in seen_keys:
+                        continue
+                    seen_keys.add(key)
+                all_posts.append(p)
+                if limit and len(all_posts) >= limit:
+                    return all_posts[:limit]
 
         return all_posts
 

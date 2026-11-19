@@ -44,6 +44,7 @@ RE_INVALID_CHARS: re.Pattern[str] = re.compile(
     r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u200b-\u200d\u202a-\u202e\u2060\u2066-\u2069\ud800-\udfff\ufeff\ufffe\uffff]"
 )
 RE_UNICODE_SPACES: re.Pattern[str] = re.compile(r"[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]")
+RE_HANGUL: re.Pattern[str] = re.compile(r"[\uac00-\ud7a3]")
 FULLWIDTH_TRANS: Dict[int, int] = {i: i - 0xFEE0 for i in range(0xFF01, 0xFF5F)}
 
 
@@ -489,7 +490,7 @@ class SpamFilter:
         # -----------------------------------------------------------------
         # 2. Foreign Language (Posts lacking Korean Hangul characters)
         # -----------------------------------------------------------------
-        if not re.search(r"[\uac00-\ud7a3]", text_str):
+        if not RE_HANGUL.search(text_str):
             return True, "Foreign language without Korean context"
 
         # -----------------------------------------------------------------

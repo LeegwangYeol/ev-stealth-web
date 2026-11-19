@@ -13,12 +13,12 @@ from datetime import datetime, timezone
 import math
 from typing import Any, Dict, List, Optional, Union
 
-from tracker.subsidy_models import PopularModelEntry, RegionRecord, SubsidyPayload
+from tracker.subsidy_models import AlertSeverity, PopularModelEntry, RegionRecord, SubsidyPayload
 
 
 def _safe_int_val(val: Any, default: int = 0) -> int:
-    """Safely convert value to int, catching None, NaN, Inf, ValueError, TypeError, OverflowError."""
-    if val is None:
+    """Safely convert value to int, catching None, bool, NaN, Inf, ValueError, TypeError, OverflowError."""
+    if val is None or isinstance(val, bool):
         return default
     if type(val) is int:
         return val
@@ -36,9 +36,13 @@ def _safe_int_val(val: Any, default: int = 0) -> int:
 
 
 def _safe_float_val(val: Any, default: float = 0.0) -> float:
-    """Safely convert value to float, catching None, NaN, Inf, ValueError, TypeError, OverflowError."""
-    if val is None:
+    """Safely convert value to float, catching None, bool, NaN, Inf, ValueError, TypeError, OverflowError."""
+    if val is None or isinstance(val, bool):
         return default
+    if isinstance(val, str):
+        val = val.strip().replace(",", "")
+        if not val:
+            return default
     try:
         f = float(val)
         if math.isnan(f) or math.isinf(f):
@@ -105,8 +109,12 @@ def format_currency_krw(amount: Any, unit: str = "auto") -> str:
     Returns:
         Formatted string, e.g. '1,150만 원', '1,893.4억 원', '0원'.
     """
-    if amount is None:
+    if amount is None or isinstance(amount, bool):
         return "0원"
+    if isinstance(amount, str):
+        amount = amount.strip().replace(",", "")
+        if not amount:
+            return "0원"
     try:
         f = float(amount)
         if math.isnan(f) or math.isinf(f):
@@ -209,6 +217,8 @@ class ReportGenerator:
             st_raw = _get_field(r, "overall_status", "")
             status_val = getattr(st_raw, "value", st_raw)
             status_raw = str(status_val or "").split(".")[-1].strip().upper()
+            if not status_raw:
+                status_raw = AlertSeverity.from_rate(rate_val).value
 
             label = f"{name} ({rate_val}%, 잔여: {rem_units:,}대)"
             if status_raw in ("CRITICAL", "DEPLETED"):
@@ -328,6 +338,13 @@ class ReportGenerator:
             "KR-36": "세종특별자치시",
             "KR-50": "세종특별자치시",
             "KR-41": "경기도",
+            "KR-42": "강원특별자치도",
+            "KR-43": "충청북도",
+            "KR-44": "충청남도",
+            "KR-45": "전북특별자치도",
+            "KR-46": "전라남도",
+            "KR-47": "경상북도",
+            "KR-48": "경상남도",
             "KR-49": "제주특별자치도",
         }
         reg_name = region_names.get(target_region, target_region)
@@ -348,8 +365,8 @@ class ReportGenerator:
         for m in models:
             if not m:
                 continue
-            maker = str(_get_field(m, "manufacturer") or _get_field(m, "brand") or "미지정")
-            name = str(_get_field(m, "name_ko") or _get_field(m, "name") or "미지정 차종")
+            maker = str(_get_field(m, "manufacturer") or _get_field(m, "brand") or "미지정").replace("|", "/").replace("\n", " ").replace("\r", " ")
+            name = str(_get_field(m, "name_ko") or _get_field(m, "name") or "미지정 차종").replace("|", "/").replace("\n", " ").replace("\r", " ")
             base_price = max(0, _safe_int_val(_get_field(m, "base_price_krw", _get_field(m, "price", 0))))
             nat_sub = max(0, _safe_int_val(_get_field(m, "national_subsidy_krw", _get_field(m, "national_subsidy", 0))))
 
@@ -399,7 +416,7 @@ class ReportGenerator:
         if critical_count is None:
             critical_count = sum(1 for r in reports if _safe_sev(r) >= 7.0)
         else:
-            critical_count = _safe_int_val(critical_count, 0)
+            critical_count = max(0, _safe_int_val(critical_count, 0))
 
         raw_avg_neg = _get_field(stats, "avg_negativity_score")
         avg_negativity = _safe_float_val(raw_avg_neg, 0.0)
@@ -484,9 +501,10 @@ class ReportGenerator:
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
             dsi = _get_field(rec, "severity_index")
-            if dsi is not None:
+            if dsi is not None and not isinstance(dsi, bool):
                 try:
-                    f_dsi = float(dsi)
+                    dsi_val = dsi.strip().replace(",", "") if isinstance(dsi, str) else dsi
+                    f_dsi = float(dsi_val)
                     if not (math.isnan(f_dsi) or math.isinf(f_dsi)):
                         severity_scores.append(f_dsi)
                 except (ValueError, TypeError, OverflowError):

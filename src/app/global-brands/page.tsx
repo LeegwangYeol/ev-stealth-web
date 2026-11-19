@@ -685,14 +685,15 @@ export default function GlobalEvPage() {
           <Link
             href="/reliability-analytics"
             prefetch={false}
-            aria-label="글로벌 9대 브랜드 스텔스 품질 점수(DSI) 비교 바로가기"
+            aria-labelledby="cta-global-reliability-title"
+            aria-describedby="cta-global-reliability-desc"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
           >
-            <h3 className="flex items-center gap-2 text-blue-700 font-bold text-base mb-1">
+            <h3 id="cta-global-reliability-title" className="flex items-center gap-2 text-blue-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📊</span>
               <span>글로벌 9대 브랜드 스텔스 품질 점수(DSI) 비교</span>
             </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
+            <p id="cta-global-reliability-desc" className="text-xs text-slate-600 leading-relaxed">
               벤츠, BMW, 폭스바겐, 볼보, 폴스타의 결함 심각도 지수와 보증 외 고전압 배터리 교체비 매트릭스를 확인합니다.
             </p>
             <span className="inline-flex items-center gap-1 text-xs text-blue-700 font-semibold mt-3 group-hover:underline">
@@ -703,14 +704,15 @@ export default function GlobalEvPage() {
           <Link
             href="/recall-portal"
             prefetch={false}
-            aria-label="수입차 VIN 및 통합 리콜 현황 조회 바로가기"
+            aria-labelledby="cta-global-recall-title"
+            aria-describedby="cta-global-recall-desc"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-rose-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-2"
           >
-            <h3 className="flex items-center gap-2 text-rose-700 font-bold text-base mb-1">
+            <h3 id="cta-global-recall-title" className="flex items-center gap-2 text-rose-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">🚨</span>
               <span>수입차 VIN 및 통합 리콜 현황 조회</span>
             </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
+            <p id="cta-global-recall-desc" className="text-xs text-slate-600 leading-relaxed">
               17자리 차대번호로 파라시스, CATL, LG에너지솔루션 등 실제 탑재 배터리 제조사와 국토부 공식 리콜을 조회합니다.
             </p>
             <span className="inline-flex items-center gap-1 text-xs text-rose-700 font-semibold mt-3 group-hover:underline">
@@ -721,14 +723,15 @@ export default function GlobalEvPage() {
           <Link
             href="/depreciation-calculator"
             prefetch={true}
-            aria-label="수입 EV 감가상각 시뮬레이터 & 배터리 잔존가치 계산기 바로가기"
+            aria-labelledby="cta-global-depreciation-title"
+            aria-describedby="cta-global-depreciation-desc"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
           >
-            <h3 className="flex items-center gap-2 text-emerald-700 font-bold text-base mb-1">
+            <h3 id="cta-global-depreciation-title" className="flex items-center gap-2 text-emerald-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📉</span>
               <span>수입 EV 감가상각 시뮬레이터 &amp; 배터리 잔존가치</span>
             </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
+            <p id="cta-global-depreciation-desc" className="text-xs text-slate-600 leading-relaxed">
               독일 프리미엄 브랜드의 급격한 중고차 감가 곡선과 보증 만료 후 5년 TCO 유지비를 정밀 산출합니다.
             </p>
             <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-semibold mt-3 group-hover:underline">
@@ -739,14 +742,15 @@ export default function GlobalEvPage() {
           <Link
             href="/subsidy-tracker"
             prefetch={true}
-            aria-label="수입 전기차 보조금 실시간 소진율 및 상한제 시뮬레이터 바로가기"
+            aria-labelledby="cta-global-subsidy-title"
+            aria-describedby="cta-global-subsidy-desc"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2"
           >
-            <h3 className="flex items-center gap-2 text-amber-800 font-bold text-base mb-1">
+            <h3 id="cta-global-subsidy-title" className="flex items-center gap-2 text-amber-800 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">⚡</span>
               <span>수입 전기차 보조금 실시간 소진율</span>
             </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
+            <p id="cta-global-subsidy-desc" className="text-xs text-slate-600 leading-relaxed">
               출고가 5,500만 원(100%), 8,500만 원(50%), 8,500만 원 초과(0%) 기준 실질 지자체 보조금을 비교합니다.
             </p>
             <span className="inline-flex items-center gap-1 text-xs text-amber-800 font-semibold mt-3 group-hover:underline">

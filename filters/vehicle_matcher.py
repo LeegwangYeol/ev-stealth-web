@@ -161,7 +161,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
         re.IGNORECASE,
     ), "Model Y", BRAND_TESLA),
     (re.compile(
-        r"(모델\s*(?:s|에스)|model\s*s|모에스|모\s*[s에스]"
+        r"(모델\s*(?:s|에스)|model\s*s|(?<![가-힣a-zA-Z0-9])(?:모에스|모\s*(?:s|에스))(?![a-zA-Z0-9])"
         r"|(?:테슬라\s*|tesla\s*)ms"
         r"|(?<!\d\s)(?<!\d)(?<![a-zA-Z0-9])ms(?=[은는이가을를의에과와도만로랑처조마나한께보부까]|으로|보다|부터|까지|처럼|조차|마저|한테|입|했|하|인|임|일)"
         r"|(?<!\d\s)(?<!\d)(?<![a-zA-Z0-9])ms\s*(?:플래드|plaid|롱레인지|롱레|퍼포먼스|차주|오너|출고|인도|계약|단차|결함|승차감)"
@@ -170,7 +170,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
         re.IGNORECASE,
     ), "Model S", BRAND_TESLA),
     (re.compile(
-        r"(모델\s*(?:x|엑스|익스)|model\s*x|모엑스|모\s*[x엑스]"
+        r"(모델\s*(?:x|엑스|익스)|model\s*x|(?<![가-힣a-zA-Z0-9])(?:모엑스|모\s*(?:x|엑스))(?![a-zA-Z0-9])"
         r"|(?:테슬라\s*|tesla\s*)mx"
         r"|(?<![a-zA-Z0-9])mx(?=[은는이가을를의에과와도만로랑처조마나한께보부까]|으로|보다|부터|까지|처럼|조차|마저|한테|입|했|하|인|임|일)"
         r"|(?<![a-zA-Z0-9])mx\s*(?:플래드|plaid|롱레인지|롱레|팔콘윙|falcon|차주|오너|출고|인도|계약|단차|결함|승차감)"
@@ -179,7 +179,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
         re.IGNORECASE,
     ), "Model X", BRAND_TESLA),
     (re.compile(
-        r"(사이버트럭|cybertruck|(?:테슬라\s*)?[사싸]트(?=\s*(?:오너|차주|출고|인도|계약|단차|결함|전기차|주행|승차감|충전|배터리)|" + PARTICLE_LOOKAHEAD + r"))",
+        r"(사이버트럭|cybertruck|(?:테슬라\s*[사싸]트|(?<![가-힣a-zA-Z0-9])[사싸]트)(?=\s*(?:오너|차주|출고|인도|계약|단차|결함|전기차|주행|승차감|충전|배터리)|" + PARTICLE_LOOKAHEAD + r"))",
         re.IGNORECASE,
     ), "Cybertruck", BRAND_TESLA),
     (re.compile(r"(모델\s*(?:2|투)|model\s*2)" + PARTICLE_LOOKAHEAD, re.IGNORECASE), "Model 2", BRAND_TESLA),
@@ -354,17 +354,22 @@ def extract_vehicle_info(title: str, content: str = "") -> Tuple[str, str]:
 
     combined_text = f"{title_str} {content_str}".strip()
 
-    # 3. Model not found, search for brand keywords
-    for pattern, brand in BRAND_KEYWORDS:
-        if pattern.search(title_str) or pattern.search(combined_text):
-            default_model = {
-                BRAND_HYUNDAI: "현대 전기차",
-                BRAND_KIA: "기아 전기차",
-                BRAND_TESLA: "테슬라",
-                BRAND_BYD: "BYD 전기차",
-                BRAND_OTHER: "기타 전기차",
-            }.get(brand, "전기차")
-            return brand, default_model
+    # 3. Model not found, search for brand keywords (title takes priority over content)
+    _brand_defaults = {
+        BRAND_HYUNDAI: "현대 전기차",
+        BRAND_KIA: "기아 전기차",
+        BRAND_TESLA: "테슬라",
+        BRAND_BYD: "BYD 전기차",
+        BRAND_OTHER: "기타 전기차",
+    }
+    if title_str:
+        for pattern, brand in BRAND_KEYWORDS:
+            if pattern.search(title_str):
+                return brand, _brand_defaults.get(brand, "전기차")
+    if combined_text:
+        for pattern, brand in BRAND_KEYWORDS:
+            if pattern.search(combined_text):
+                return brand, _brand_defaults.get(brand, "전기차")
 
     # 4. Fallback
     return BRAND_OTHER, "전기차"

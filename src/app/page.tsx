@@ -8,16 +8,20 @@ const rawSiteUrl =
   (process.env.NEXT_PUBLIC_SITE_URL || "").trim().replace(/\/+$/, "") ||
   "https://ev-stealth-web.vercel.app";
 const normalizedSiteUrl =
-  rawSiteUrl.startsWith("http://") || rawSiteUrl.startsWith("https://")
+  /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawSiteUrl) || rawSiteUrl.startsWith("//")
     ? rawSiteUrl
     : `https://${rawSiteUrl}`;
 
 function resolveSiteUrl(url: string): string {
   try {
-    return new URL(url).origin;
+    const parsed = new URL(url);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.origin;
+    }
   } catch {
-    return "https://ev-stealth-web.vercel.app";
+    // fallback below
   }
+  return "https://ev-stealth-web.vercel.app";
 }
 
 const SITE_URL = resolveSiteUrl(normalizedSiteUrl);

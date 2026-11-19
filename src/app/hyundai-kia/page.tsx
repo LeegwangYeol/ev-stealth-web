@@ -411,7 +411,8 @@ export default function HyundaiKiaPage() {
                   기아 EV9 (Kia EV9)
                 </th>
                 <td className="py-3 px-4 text-slate-600 font-medium">
-                  <span className="sr-only">해당 사항 없음 </span>-
+                  <span className="sr-only">해당 사항 없음</span>
+                  <span aria-hidden="true">-</span>
                 </td>
                 <td className="py-3 px-4">
                   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-900">
@@ -619,14 +620,15 @@ export default function HyundaiKiaPage() {
           <Link
             href="/reliability-analytics?brand=hyundai"
             prefetch={false}
-            aria-label="현대·기아 스텔스 품질 점수 & 결함 통계 (DSI) 바로가기"
+            aria-labelledby="cta-hyundai-reliability-title"
+            aria-describedby="cta-hyundai-reliability-desc"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
           >
-            <h3 className="flex items-center gap-2 text-blue-700 font-bold text-base mb-1">
+            <h3 id="cta-hyundai-reliability-title" className="flex items-center gap-2 text-blue-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📊</span>
               <span>현대·기아 스텔스 품질 점수 &amp; 결함 통계 (DSI)</span>
             </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
+            <p id="cta-hyundai-reliability-desc" className="text-xs text-slate-600 leading-relaxed">
               아이오닉5 ICCU, EV6 구동축 등 연식별 결함 심각도 지수와 보증 외 예상 수리비 매트릭스를 확인합니다.
             </p>
             <span className="inline-flex items-center gap-1 text-xs text-blue-700 font-semibold mt-3 group-hover:underline">
@@ -637,14 +639,15 @@ export default function HyundaiKiaPage() {
           <Link
             href="/recall-portal?brand=hyundai"
             prefetch={false}
-            aria-label="현대·기아 통합 리콜 현황 & 배터리 조회 바로가기"
+            aria-labelledby="cta-hyundai-recall-title"
+            aria-describedby="cta-hyundai-recall-desc"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-rose-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-2"
           >
-            <h3 className="flex items-center gap-2 text-rose-700 font-bold text-base mb-1">
+            <h3 id="cta-hyundai-recall-title" className="flex items-center gap-2 text-rose-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">🚨</span>
               <span>현대·기아 통합 리콜 현황 &amp; 배터리 조회</span>
             </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
+            <p id="cta-hyundai-recall-desc" className="text-xs text-slate-600 leading-relaxed">
               차대번호(VIN) 17자리 또는 모델명으로 국토교통부 공식 리콜 조치 여부 및 탑재 배터리 제조사를 즉시 조회합니다.
             </p>
             <span className="inline-flex items-center gap-1 text-xs text-rose-700 font-semibold mt-3 group-hover:underline">
@@ -655,14 +658,15 @@ export default function HyundaiKiaPage() {
           <Link
             href="/depreciation-calculator"
             prefetch={true}
-            aria-label="전기차 감가상각 시뮬레이터 & 배터리 수명 계산기 바로가기"
+            aria-labelledby="cta-hyundai-depreciation-title"
+            aria-describedby="cta-hyundai-depreciation-desc"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
           >
-            <h3 className="flex items-center gap-2 text-emerald-700 font-bold text-base mb-1">
+            <h3 id="cta-hyundai-depreciation-title" className="flex items-center gap-2 text-emerald-700 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">📉</span>
               <span>전기차 감가상각 시뮬레이터 &amp; 배터리 수명 계산기</span>
             </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
+            <p id="cta-hyundai-depreciation-desc" className="text-xs text-slate-600 leading-relaxed">
               보조금 수령 후 5년간의 잔존가치, 배터리 잔존성능(SoH), 연차별 총소유비용(TCO)을 정밀 시뮬레이션합니다.
             </p>
             <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-semibold mt-3 group-hover:underline">
@@ -673,14 +677,15 @@ export default function HyundaiKiaPage() {
           <Link
             href="/subsidy-tracker"
             prefetch={true}
-            aria-label="전국 지자체 보조금 실시간 소진율 조회 바로가기"
+            aria-labelledby="cta-hyundai-subsidy-title"
+            aria-describedby="cta-hyundai-subsidy-desc"
             className="group block p-5 rounded-2xl border border-slate-200 bg-white hover:border-amber-400 hover:shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2"
           >
-            <h3 className="flex items-center gap-2 text-amber-800 font-bold text-base mb-1">
+            <h3 id="cta-hyundai-subsidy-title" className="flex items-center gap-2 text-amber-800 font-bold text-base mb-1">
               <span className="text-xl" aria-hidden="true">⚡</span>
               <span>전국 지자체 보조금 실시간 소진율</span>
             </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
+            <p id="cta-hyundai-subsidy-desc" className="text-xs text-slate-600 leading-relaxed">
               환경부 및 17개 광역시도별 보조금 소진율, 마감 임박 경보, 5,500만 원 상한제 차등 지급액을 확인합니다.
             </p>
             <span className="inline-flex items-center gap-1 text-xs text-amber-800 font-semibold mt-3 group-hover:underline">

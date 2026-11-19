@@ -26,9 +26,15 @@ import SubsidyBadge from '@/components/subsidy/SubsidyBadge';
 import SubsidyProgressBar from '@/components/subsidy/SubsidyProgressBar';
 
 // Pure Helper: Normalize status aliases to canonical 5-tier AlertSeverity
-const normalizeAlertSeverity = (status?: AlertSeverity | string | null): AlertSeverity => {
+const normalizeAlertSeverity = (
+  status?: AlertSeverity | string | null,
+  fallbackRate = 0
+): AlertSeverity => {
   const normalized = typeof status === 'string' ? status.trim().toUpperCase() : '';
   switch (normalized) {
+    case 'HEALTHY':
+    case 'AVAILABLE':
+      return 'HEALTHY';
     case 'CAUTION':
       return 'CAUTION';
     case 'WARNING':
@@ -42,10 +48,8 @@ const normalizeAlertSeverity = (status?: AlertSeverity | string | null): AlertSe
     case 'CLOSED':
     case 'END':
       return 'DEPLETED';
-    case 'HEALTHY':
-    case 'AVAILABLE':
     default:
-      return 'HEALTHY';
+      return resolveAlertSeverity(undefined, fallbackRate);
   }
 };
 
@@ -297,7 +301,7 @@ const TrackerHeader = React.memo(function TrackerHeader({
 }: TrackerHeaderProps) {
   return (
     <section aria-labelledby="tracker-heading" className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-amber-500/10 via-blue-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
+      <div aria-hidden="true" className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-amber-500/10 via-blue-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
 
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -405,7 +409,7 @@ const TrackerHeader = React.memo(function TrackerHeader({
           <div className="flex flex-wrap items-center gap-2 text-rose-200">
             <div role="alert" className="flex items-center gap-1.5">
               <span className="text-base" aria-hidden="true">🚨</span>
-              <strong className="text-rose-100 font-semibold">마감 임박 특보 (소진율 95% 초과):</strong>
+              <strong className="text-rose-100 font-semibold">마감 임박 특보 (소진율 95% 이상):</strong>
             </div>
             <div className="flex flex-wrap gap-1.5 ml-1">
               {criticalRegions.map((crit) => {
@@ -483,7 +487,7 @@ const AlertLegendSection = React.memo(function AlertLegendSection({
               onClick={() => onSelectAlertFilter(key)}
               className={`p-3 min-h-[44px] rounded-xl border text-left transition flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                 isSelected
-                  ? 'ring-2 ring-amber-400 ' + getBadgeStyle(key)
+                  ? 'ring-2 ring-amber-400 ' + getBadgeStyle(key).replace(' animate-pulse motion-reduce:animate-none', '')
                   : 'bg-slate-950 hover:bg-slate-800 border-slate-600 text-slate-300'
               }`}
             >
@@ -524,6 +528,10 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   const [expandedRegions, setExpandedRegions] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
+    if (searchQuery === '') {
+      setDebouncedQuery('');
+      return;
+    }
     const timer = setTimeout(() => {
       setDebouncedQuery(searchQuery);
     }, 150);
@@ -589,7 +597,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         : 0;
       const status =
         typeof catMetrics.status === 'string' && catMetrics.status.trim()
-          ? normalizeAlertSeverity(catMetrics.status)
+          ? normalizeAlertSeverity(catMetrics.status, rate)
           : resolveAlertSeverity(undefined, rate);
       if (alertFilter !== 'ALL' && status !== alertFilter) {
         return false;
@@ -634,7 +642,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
       const rate = Number.isFinite(cat.depletion_rate) ? Math.max(0, cat.depletion_rate) : ann > 0 ? (app / ann) * 100 : 0;
       const normalized =
         typeof cat.status === 'string' && cat.status.trim()
-          ? normalizeAlertSeverity(cat.status)
+          ? normalizeAlertSeverity(cat.status, rate)
           : resolveAlertSeverity(undefined, rate);
       return (
         normalized === 'CRITICAL' ||
@@ -684,7 +692,11 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   }, []);
 
   const handleSelectCriticalRegion = useCallback((nameKo: string, regionId: string) => {
+    setZoneFilter('ALL');
+    setAlertFilter('ALL');
+    setSupplementaryOnly(false);
     setSearchQuery(nameKo);
+    setDebouncedQuery(nameKo);
     handleSelectRegionForCalc(regionId);
   }, [handleSelectRegionForCalc]);
 
@@ -694,6 +706,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
 
   const handleClearSearch = useCallback(() => {
     setSearchQuery('');
+    setDebouncedQuery('');
   }, []);
 
   const handleClearZoneFilter = useCallback(() => {
@@ -720,6 +733,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
     setZoneFilter('ALL');
     setAlertFilter('ALL');
     setSearchQuery('');
+    setDebouncedQuery('');
     setSupplementaryOnly(false);
   }, []);
 
@@ -754,16 +768,19 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
 
   // Performance & Stability: Memoized regional cards to prevent re-render cascades
   const renderedGridCards = useMemo(() => {
-    return filteredRegions.map((regionItem) => (
-      <RegionCard
-        key={regionItem.region_id || regionItem.iso_code || regionItem.name_ko}
-        region={regionItem}
-        selectedCategory={selectedCategory}
-        isExpanded={Boolean(expandedRegions[regionItem.region_id])}
-        toggleRegionExpand={toggleRegionExpand}
-        onSelectForCalc={handleSelectRegionForCalc}
-      />
-    ));
+    return filteredRegions.map((regionItem) => {
+      const regionKey = regionItem.region_id || regionItem.iso_code || regionItem.name_ko || 'unknown';
+      return (
+        <RegionCard
+          key={regionKey}
+          region={regionItem}
+          selectedCategory={selectedCategory}
+          isExpanded={Boolean(expandedRegions[regionKey])}
+          toggleRegionExpand={toggleRegionExpand}
+          onSelectForCalc={handleSelectRegionForCalc}
+        />
+      );
+    });
   }, [filteredRegions, selectedCategory, expandedRegions, toggleRegionExpand, handleSelectRegionForCalc]);
 
   return (
@@ -882,7 +899,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 aria-pressed={zoneFilter === zone.id}
                 aria-label={`${zone.label} 권역 필터 ${zoneFilter === zone.id ? '해제' : '적용'}`}
                 onClick={() => handleSelectZone(zone.id)}
-                className={`px-2.5 py-1.5 min-h-[44px] flex items-center justify-center rounded-lg border font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
+                className={`px-2.5 py-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg border font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                   zoneFilter === zone.id
                     ? 'bg-blue-600 text-white border-blue-400'
                     : 'bg-slate-950 text-slate-300 border-slate-600 hover:bg-slate-800'
@@ -925,7 +942,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || searchQuery || supplementaryOnly) ? (
               <>필터 적용 중: 총 <strong>{filteredRegions.length}</strong>개 지역 표시 중 ({SORT_OPTION_LABELS[sortOption] || ''})</>
             ) : (
-              <>전체 <strong>{regions.length}</strong>개 지역 표시 중 ({SORT_OPTION_LABELS[sortOption] || ''})</>
+              <>전체 <strong>{filteredRegions.length}</strong>개 지역 표시 중 ({SORT_OPTION_LABELS[sortOption] || ''})</>
             )}
           </span>
           {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || searchQuery || supplementaryOnly) && (
@@ -1144,10 +1161,10 @@ const RegionCard = React.memo(function RegionCard({
     : Math.max(0, announcedUnits - safeApplied);
 
   const rawStatus = typeof cat?.status === 'string' ? cat.status.trim() : '';
-  const effectiveStatus = rawStatus ? rawStatus : resolveAlertSeverity(undefined, safeDepletion);
+  const effectiveStatus = rawStatus ? normalizeAlertSeverity(rawStatus, safeDepletion) : resolveAlertSeverity(undefined, safeDepletion);
 
   const regionName = region?.name_ko || '해당 지역';
-  const regionId = region?.region_id || '';
+  const regionId = region?.region_id || region?.iso_code || region?.name_ko || 'unknown';
   const munis = useMemo(
     () => (Array.isArray(region?.municipalities) ? region.municipalities : []),
     [region?.municipalities]
@@ -1268,7 +1285,7 @@ const RegionCard = React.memo(function RegionCard({
         {/* Eligibility & Notes */}
         <div className="flex flex-wrap gap-1.5 pt-1 text-[11px]">
           <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-            거주 요건: {Number.isFinite(region?.residency_requirement_days) ? region.residency_requirement_days : 30}일 이상
+            거주 요건: {Number.isFinite(region?.residency_requirement_days) ? Math.max(0, region.residency_requirement_days) : 30}일 이상
           </span>
           {region?.supplementary_budget_added && (
             <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/40 font-semibold">
@@ -1288,7 +1305,7 @@ const RegionCard = React.memo(function RegionCard({
           <div className="pt-2">
             <button
               type="button"
-              onClick={() => toggleRegionExpand(region.region_id)}
+              onClick={() => toggleRegionExpand(region.region_id || regionId)}
               aria-expanded={isExpanded}
               aria-controls={'muni-details-' + region.region_id}
               aria-label={`${region.name_ko} 세부 시·군·구 ${munis.length}개 현황 ${isExpanded ? '접기' : '보기'}`}
@@ -1301,11 +1318,11 @@ const RegionCard = React.memo(function RegionCard({
             {/* Preserved in DOM with hidden attribute so aria-controls never breaks */}
             <div
               id={'muni-details-' + region.region_id}
-              data-card-id={'muni-details-card-' + region.region_id}
+              data-card-id={'muni-details-card-' + regionId}
               hidden={!isExpanded}
               tabIndex={0}
               role="region"
-              aria-label={`${region.name_ko} 세부 시·군·구 보조금 현황 목록`}
+              aria-label={`${regionName} 세부 시·군·구 보조금 현황 목록`}
               className={`${!isExpanded ? 'hidden' : ''} mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded-lg`}
             >
               {renderedMunis}
@@ -1391,7 +1408,13 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
   }, [onSelectRegionId]);
 
   const handleCustomMsrpChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setCustomMsrpInput(e.target.value.replace(/[^0-9]/g, '').slice(0, 11));
+    const digits = e.target.value.replace(/[^0-9]/g, '').slice(0, 11);
+    if (!digits) {
+      setCustomMsrpInput('');
+      return;
+    }
+    const parsed = parseInt(digits, 10);
+    setCustomMsrpInput(Number.isFinite(parsed) && parsed > 10_000_000_000 ? '10000000000' : digits);
   }, []);
 
   const handleSetPresetMsrp = useCallback((msrp: string) => {
@@ -1582,7 +1605,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                     aria-pressed={isSelected}
                     aria-label={`${m.name_ko || displayName} 모델 선택`}
                     onClick={() => onSelectModelId(m.model_id)}
-                    className={`px-2.5 py-1 min-h-[44px] flex items-center justify-center rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
+                    className={`px-2.5 py-1 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                       isSelected
                         ? 'bg-blue-600 text-white'
                         : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-slate-600'
@@ -1628,7 +1651,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               )}
             </select>
             <p id="region-residency-note" className="text-xs text-amber-300 flex items-center gap-1.5 pt-0.5">
-              <span aria-hidden="true">ℹ️</span> 해당 지자체 최소 <strong>{Number.isFinite(activeRegionForCalc?.residency_requirement_days) ? activeRegionForCalc.residency_requirement_days : 30}일 이상</strong> 연속 거주 요건 필요
+              <span aria-hidden="true">ℹ️</span> 해당 지자체 최소 <strong>{Number.isFinite(activeRegionForCalc?.residency_requirement_days) ? Math.max(0, activeRegionForCalc.residency_requirement_days) : 30}일 이상</strong> 연속 거주 요건 필요
             </p>
           </div>
 
@@ -1677,11 +1700,12 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                 </div>
                 <p
                   id="custom-msrp-hint"
+                  aria-live="polite"
                   className={`text-[11px] ${hasInvalidCustomMsrp ? 'text-rose-300 font-medium' : 'text-slate-300'}`}
                 >
                   {hasInvalidCustomMsrp
                     ? '1원 이상의 유효한 출고가를 입력해 주세요. 현재는 선택 모델 기본 출고가로 계산 중입니다.'
-                    : '미입력 시 선택 모델의 기본 출고가가 자동 적용됩니다.'}
+                    : '미입력 시 선택 모델의 기본 출고가가 자동 적용됩니다. (최대 100억 원)'}
                 </p>
                 <div role="group" aria-label="출고가 구간별 빠른 입력 프리셋" className="flex flex-wrap gap-2 text-[11px]">
                   <button

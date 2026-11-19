@@ -26,26 +26,31 @@ import tempfile
 import threading
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
-# Ensure repository root and tracker package are on sys.path
+# Ensure repository root and tracker package are on sys.path (with _CURRENT_DIR highest priority)
 _CURRENT_DIR = Path(__file__).resolve().parent
 _POSSIBLE_ROOTS = [
     _CURRENT_DIR,
-    _CURRENT_DIR.parent,
     _CURRENT_DIR / "ev-stealth-web",
-    _CURRENT_DIR.parent / "ev-stealth-web",
     Path.cwd(),
     Path.cwd() / "ev-stealth-web",
+    _CURRENT_DIR.parent,
+    _CURRENT_DIR.parent / "ev-stealth-web",
 ]
-for root_path in _POSSIBLE_ROOTS:
+for root_path in reversed(_POSSIBLE_ROOTS):
     try:
         resolved_root = root_path.resolve()
-        for cand in (root_path, resolved_root):
+        for cand in (resolved_root, root_path):
             cand_str = str(cand)
-            if cand.exists() and cand_str not in sys.path:
+            if cand.exists():
+                if cand_str in sys.path:
+                    sys.path.remove(cand_str)
                 sys.path.insert(0, cand_str)
     except (OSError, RuntimeError):
-        if root_path.exists() and str(root_path) not in sys.path:
-            sys.path.insert(0, str(root_path))
+        if root_path.exists():
+            cand_str = str(root_path)
+            if cand_str in sys.path:
+                sys.path.remove(cand_str)
+            sys.path.insert(0, cand_str)
 
 from tracker.subsidy_models import SubsidyPayload
 from tracker.subsidy_tracker import SubsidyTracker
@@ -419,7 +424,7 @@ def sync_defect_reports(
                 return []
 
             for tgt in target_paths:
-                if tgt.exists():
+                if tgt.is_file():
                     if is_corrupted_or_quarantined_filename(tgt):
                         continue
                     try:
@@ -454,6 +459,7 @@ def sync_defect_reports(
                     except OSError:
                         pass
                     os.replace(temp_name, tgt)
+                    temp_name = None
                     # Preserve original source timestamp to prevent oscillation
                     try:
                         os.utime(tgt, (source_stat.st_atime, source_stat.st_mtime))
@@ -462,7 +468,8 @@ def sync_defect_reports(
                     # Directory fsync to commit new target file with leak-proof fd lifecycle
                     dir_fd = -1
                     try:
-                        dir_fd = os.open(str(tgt.parent), os.O_RDONLY)
+                        dir_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+                        dir_fd = os.open(str(tgt.parent), dir_flags)
                         os.fsync(dir_fd)
                     except OSError:
                         pass
@@ -557,16 +564,22 @@ def auto_heal_mirrored_parity(repo_root: Optional[Path] = None) -> List[str]:
         hashes: Dict[Path, str] = {}
         for d in active_dirs:
             fp = d / fname
-            if fp.is_file() and fp.stat().st_size > 0:
+            if fp.is_file():
                 try:
+                    fp_stat = fp.stat()
+                    if fp_stat.st_size <= 0:
+                        continue
                     content = fp.read_bytes()
-                    parsed = json.loads(content.decode("utf-8-sig"))
+                    parsed = json.loads(
+                        content.decode("utf-8-sig"),
+                        parse_constant=lambda c: (_ for _ in ()).throw(ValueError(f"Non-standard JSON constant: {c}")),
+                    )
                     h = hashlib.sha256(content).hexdigest()
                     hashes[fp] = h
                     priority = _mirrored_candidate_priority(fname, parsed)
                     if priority < 0:
                         continue
-                    score = (priority, fp.stat().st_mtime)
+                    score = (priority, fp_stat.st_mtime)
                     if best_cand is None or score > (best_cand[0], best_cand[1]):
                         best_cand = (score[0], score[1], fp, h, content)
                 except Exception:
@@ -602,7 +615,8 @@ def auto_heal_mirrored_parity(repo_root: Optional[Path] = None) -> List[str]:
                                 pass
                         dir_fd = -1
                         try:
-                            dir_fd = os.open(str(d), os.O_RDONLY)
+                            dir_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+                            dir_fd = os.open(str(d), dir_flags)
                             os.fsync(dir_fd)
                         except OSError:
                             pass
@@ -741,8 +755,12 @@ def parse_arguments(args: Optional[List[str]] = None) -> argparse.Namespace:
         raw_out_str = str(parsed.output).strip()
         if not raw_out_str or raw_out_str == ".":
             parsed.output = DEFAULT_PRIMARY_OUTPUT
-        elif parsed.output.is_dir() or raw_out_str.endswith(("/", "\\")):
-            parsed.output = Path(raw_out_str) / "ev_subsidy_data.json"
+        else:
+            cand_out = Path(raw_out_str)
+            if cand_out.is_dir() or raw_out_str.endswith(("/", "\\")):
+                parsed.output = cand_out / "ev_subsidy_data.json"
+            else:
+                parsed.output = cand_out
     else:
         parsed.output = DEFAULT_PRIMARY_OUTPUT
 

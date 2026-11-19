@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Mapping
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import hashlib
 import json
 import math
@@ -85,9 +85,29 @@ def _extract_record_date(record: Optional[Mapping[str, Any]]) -> str:
         return ""
     for field in ("date", "created_at", "timestamp"):
         val = record.get(field)
-        if not val:
+        if val is None or val == "" or isinstance(val, bool):
             continue
+        if isinstance(val, datetime):
+            validated = _validate_ymd(val.year, val.month, val.day)
+            if validated:
+                return validated
+        elif isinstance(val, date):
+            validated = _validate_ymd(val.year, val.month, val.day)
+            if validated:
+                return validated
+        elif isinstance(val, (int, float)):
+            try:
+                ts = float(val)
+                if math.isfinite(ts):
+                    if 1_000_000_000 <= ts <= 2_500_000_000:
+                        return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
+                    if 1_000_000_000_000 <= ts <= 2_500_000_000_000:
+                        return datetime.fromtimestamp(ts / 1000.0, tz=timezone.utc).strftime("%Y-%m-%d")
+            except (ValueError, OverflowError, OSError):
+                pass
         val_str = str(val).strip()
+        if not val_str:
+            continue
         match_4 = _DATE_4DIGIT_RE.search(val_str) or _DATE_KO_RE.search(val_str)
         if match_4:
             validated = _validate_ymd(int(match_4.group(1)), int(match_4.group(2)), int(match_4.group(3)))
@@ -164,6 +184,15 @@ def format_daily_report_payload(
             sev_idx = _safe_float(record_dict.get("severity_index"), 0.0)
             if "severity_index" in record_dict:
                 record_dict["severity_index"] = sev_idx
+            if "sentiment_polarity" in record_dict:
+                record_dict["sentiment_polarity"] = _safe_float(record_dict.get("sentiment_polarity"), 0.0)
+            if "confidence_score" in record_dict:
+                record_dict["confidence_score"] = _safe_float(record_dict.get("confidence_score"), 0.0)
+            if isinstance(record_dict.get("dsi_breakdown"), Mapping):
+                record_dict["dsi_breakdown"] = {
+                    k: _safe_float(v, 0.0) if isinstance(v, (int, float)) or v is None else v
+                    for k, v in record_dict["dsi_breakdown"].items()
+                }
             raw_sev = str(record_dict.get("severity") or record_dict.get("severity_tier") or "").strip().upper()
             is_critical = (raw_sev == "CRITICAL" or sev_idx >= 8.0)
             raw_cat = record_dict.get("defect_category")
@@ -327,9 +356,22 @@ def write_daily_reports(
         seen_urls = set()
         merged_reports: List[Dict[str, Any]] = []
 
+        def _safe_dedup_key(raw_key: Any) -> Optional[str]:
+            if raw_key is None:
+                return None
+            if isinstance(raw_key, str):
+                return raw_key if raw_key else None
+            if isinstance(raw_key, (int, float, bool)):
+                return str(raw_key)
+            try:
+                hash(raw_key)
+                return str(raw_key)
+            except TypeError:
+                return None
+
         for nr in new_reports:
-            nid = nr.get("id")
-            nurl = nr.get("url")
+            nid = _safe_dedup_key(nr.get("id"))
+            nurl = _safe_dedup_key(nr.get("url"))
             if (nid and nid in seen_ids) or (nurl and nurl in seen_urls):
                 continue
             if nid:
@@ -341,8 +383,8 @@ def write_daily_reports(
         for er in existing_reports:
             if not isinstance(er, dict):
                 continue
-            eid = er.get("id")
-            eurl = er.get("url")
+            eid = _safe_dedup_key(er.get("id"))
+            eurl = _safe_dedup_key(er.get("url"))
             if (eid and eid in seen_ids) or (eurl and eurl in seen_urls):
                 continue
             if eid:

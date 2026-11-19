@@ -47,16 +47,20 @@ const rawSiteUrl =
   (process.env.NEXT_PUBLIC_SITE_URL || "").trim().replace(/\/+$/, "") ||
   "https://ev-stealth-web.vercel.app";
 const normalizedSiteUrl =
-  rawSiteUrl.startsWith("http://") || rawSiteUrl.startsWith("https://")
+  /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawSiteUrl) || rawSiteUrl.startsWith("//")
     ? rawSiteUrl
     : `https://${rawSiteUrl}`;
 
 function safeMetadataBase(url: string): URL {
   try {
-    return new URL(url);
+    const parsed = new URL(url);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed;
+    }
   } catch {
-    return new URL("https://ev-stealth-web.vercel.app");
+    // fallback below
   }
+  return new URL("https://ev-stealth-web.vercel.app");
 }
 
 const METADATA_BASE = safeMetadataBase(normalizedSiteUrl);
@@ -282,7 +286,7 @@ export default function RootLayout({
                 <Link
                   href="/subsidy-tracker"
                   prefetch={true}
-                  aria-label="보조금 실시간 소진율 (전국 지자체 추적기)"
+                  aria-label="[실시간] 보조금 실시간 소진율 (전국 지자체 추적기)"
                   className="px-3 py-2 min-h-[44px] rounded-lg bg-amber-950/60 border border-amber-500/50 text-amber-300 hover:text-white font-semibold transition flex items-center justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 aria-[current=page]:ring-2 aria-[current=page]:ring-amber-400"
                 >
                   <span className="flex items-center gap-2">

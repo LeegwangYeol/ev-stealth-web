@@ -81,10 +81,10 @@ DEFAULT_ALERT_THRESHOLDS: Dict[str, AlertThresholdConfig] = {
 
 
 def _safe_int_val(val: Any, default: int = 0) -> int:
-    """Safely convert value to int, catching None, NaN, Inf, ValueError, TypeError, and OverflowError."""
-    if val is None:
+    """Safely convert value to int, catching None, bool, NaN, Inf, ValueError, TypeError, and OverflowError."""
+    if val is None or isinstance(val, bool):
         return default
-    if isinstance(val, int):
+    if type(val) is int:
         return val
     if isinstance(val, str):
         val = val.strip().replace(",", "")
@@ -101,17 +101,20 @@ def _safe_int_val(val: Any, default: int = 0) -> int:
 
 def calculate_price_cap_ratio(msrp: Union[int, float, str, None]) -> float:
     """Statutory 2026 Korean EV subsidy ratio tiers: 1.0 (<=55M), 0.5 (55M-85M), 0.0 (>85M)."""
-    try:
-        if msrp is None:
-            return 0.0
-        if isinstance(msrp, str):
-            msrp = msrp.strip().replace(",", "")
-        f_msrp = float(msrp)
-        if math.isnan(f_msrp) or math.isinf(f_msrp):
-            return 0.0
-        safe_msrp = int(f_msrp)
-    except (ValueError, TypeError, OverflowError):
+    if msrp is None or isinstance(msrp, bool):
         return 0.0
+    if type(msrp) is int:
+        safe_msrp = msrp
+    else:
+        try:
+            if isinstance(msrp, str):
+                msrp = msrp.strip().replace(",", "")
+            f_msrp = float(msrp)
+            if math.isnan(f_msrp) or math.isinf(f_msrp):
+                return 0.0
+            safe_msrp = int(f_msrp)
+        except (ValueError, TypeError, OverflowError):
+            return 0.0
 
     if safe_msrp <= 0:
         return 0.0
@@ -122,6 +125,23 @@ def calculate_price_cap_ratio(msrp: Union[int, float, str, None]) -> float:
     return 0.0
 
 
+def _coerce_non_negative_int(v: Any) -> int:
+    """Fast coercion to non-negative int, guarding None, bool, NaN, Inf, and comma strings."""
+    if v is None or isinstance(v, bool):
+        return 0
+    if type(v) is int:
+        return v if v > 0 else 0
+    try:
+        if isinstance(v, str):
+            v = v.strip().replace(",", "")
+        f = float(v)
+        if math.isnan(f) or math.isinf(f) or f <= 0.0:
+            return 0
+        return int(f)
+    except (ValueError, TypeError, OverflowError):
+        return 0
+
+
 def calculate_net_subsidy(
     model_national: Union[int, float, str, None],
     max_national: Union[int, float, str, None],
@@ -129,39 +149,18 @@ def calculate_net_subsidy(
     msrp: Union[int, float, str, None],
 ) -> Dict[str, Union[int, float]]:
     """Calculate national subsidy, local subsidy, total subsidy, and net consumer purchase price."""
-    def _clean_val(v: Any) -> Any:
-        if isinstance(v, str):
-            return v.strip().replace(",", "")
-        return v
-
-    try:
-        if msrp is None:
-            safe_msrp = 0
-        else:
-            f_msrp = float(_clean_val(msrp))
-            safe_msrp = 0 if (math.isnan(f_msrp) or math.isinf(f_msrp)) else max(0, int(f_msrp))
-    except (ValueError, TypeError, OverflowError):
-        safe_msrp = 0
-
-    try:
-        safe_model_nat = max(0, int(float(_clean_val(model_national)))) if model_national is not None else 0
-    except (ValueError, TypeError, OverflowError):
-        safe_model_nat = 0
-
-    try:
-        safe_max_nat = max(0, int(float(_clean_val(max_national)))) if max_national is not None else 0
-    except (ValueError, TypeError, OverflowError):
-        safe_max_nat = 0
-
-    try:
-        safe_max_loc = max(0, int(float(_clean_val(max_local)))) if max_local is not None else 0
-    except (ValueError, TypeError, OverflowError):
-        safe_max_loc = 0
+    safe_msrp = _coerce_non_negative_int(msrp)
+    safe_model_nat = _coerce_non_negative_int(model_national)
+    safe_max_nat = _coerce_non_negative_int(max_national)
+    safe_max_loc = _coerce_non_negative_int(max_local)
 
     ratio = calculate_price_cap_ratio(safe_msrp)
     effective_national = int(round(safe_model_nat * ratio))
     if safe_max_nat > 0:
-        local_ratio = min(1.0, max(0.0, safe_model_nat / safe_max_nat))
+        try:
+            local_ratio = min(1.0, max(0.0, safe_model_nat / safe_max_nat))
+        except OverflowError:
+            local_ratio = 1.0
     else:
         local_ratio = 0.0
     effective_local = int(round(safe_max_loc * local_ratio * ratio))
@@ -920,7 +919,7 @@ def build_initial_baseline(regions: Optional[List[Any]] = None) -> SubsidyPayloa
             "한국환경공단 (KECO) CleanSys",
             "17개 광역시도 무공해차 보급 촉진 고시공고",
         ],
-        total_regions_tracked=len(regions),
+        total_regions_tracked=sum(1 for r in regions if r is not None),
         total_municipalities_tracked=total_municipalities,
         currency="KRW",
     )

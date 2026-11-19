@@ -26,7 +26,9 @@ from scrapers.common_utils import (
     COMMON_VEHICLE_PATTERNS,
     ComplaintRecord,
     SafeHttpClient,
+    bounded_cache_set,
     clean_html_text,
+    extract_balanced_tag_content,
     extract_slang_terms,
     normalize_scraper_url,
     polite_delay,
@@ -212,17 +214,25 @@ class DCInsideScraper:
         is_minor = GALLERIES.get(gallery_id, {}).get("is_minor", True)
         board_prefix = "mgallery/board" if is_minor else "board"
 
-        # Match table rows in DC desktop list view
+        # Match table rows in DC desktop list view without bleeding across </tr> boundaries
         # <tr class="ub-content us-post" data-no="12345">
         # <td class="gall_tit ub-word"><a href="...">제목</a>
-        row_pattern = r'<tr([^>]*)data-no="(\d+)"([^>]*)>.*?<td[^>]*class="[^"]*gall_tit[^"]*"[^>]*>.*?<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>'
-        matches = re.findall(row_pattern, html_content, re.IGNORECASE | re.DOTALL)
+        tr_pattern = r'<tr\b([^>]*)\bdata-no=["\'](\d+)["\']([^>]*)>(.*?)</tr>'
+        tit_pattern = r'<td[^>]*class=["\'][^"\']*\bgall_tit\b[^"\']*["\'][^>]*>.*?<a\b[^>]*\bhref=["\']([^"\']+)["\'][^>]*>(.*?)</a>'
+        rows = re.findall(tr_pattern, html_content, re.IGNORECASE | re.DOTALL)
 
-        for tr_pre, post_no, tr_post, href, raw_title in matches:
+        for tr_pre, post_no, tr_post, row_body in rows:
             if "ub-notice" in (tr_pre + tr_post).lower():
                 continue
+            tit_match = re.search(tit_pattern, row_body, re.IGNORECASE | re.DOTALL)
+            if not tit_match:
+                continue
+            href, raw_title = tit_match.group(1), tit_match.group(2)
             clean_title = clean_html_text(raw_title)
-            if not clean_title or "공지" in clean_title:
+            if (
+                not clean_title
+                or re.match(r"^(?:\[공지\]|공지(?:\s|$|:|-)|\[필독\])", clean_title)
+            ):
                 continue
 
             full_url = normalize_scraper_url(href, DC_BASE_URL)
@@ -362,7 +372,7 @@ class DCInsideScraper:
                         ajax_comments = self.fetch_comments_ajax(gid_clean, pid_clean, e_s_n_o=e_s_n_o, is_minor=is_minor)
                         if ajax_comments:
                             post_data["comments"] = ajax_comments
-                    self.post_cache[cache_key] = post_data
+                    bounded_cache_set(self.post_cache, cache_key, post_data)
                     return post_data
         except Exception as e:
             logger.warning(f"Error fetching DC desktop post ({desktop_url}): {e}")
@@ -387,11 +397,10 @@ class DCInsideScraper:
                 try:
                     res = self.parse_post_detail(text, mobile_url, gid_clean, pid_clean, is_desktop=False)
                     if res:
-                        self.post_cache[cache_key] = res
-                    return res
+                        bounded_cache_set(self.post_cache, cache_key, res)
+                        return res
                 except Exception as e:
                     logger.warning(f"Error parsing DC mobile post detail ({mobile_url}): {e}")
-                    return {}
         except Exception as e:
             logger.warning(f"Error fetching DC mobile post ({mobile_url}): {e}")
 
@@ -426,7 +435,11 @@ class DCInsideScraper:
         # Author / IP Badge extraction
         author_badge = ""
         author_type = "dc_fixed_nick"
-        writer_match = re.search(r'<td class="gall_writer[^"]*"[^>]*>.*?<span class="nickname"[^>]*>(.*?)</span>', html_content, re.DOTALL)
+        writer_match = re.search(
+            r'<td class="gall_writer[^"]*"[^>]*>(?:(?!</td>).)*?<span class="nickname"[^>]*>(.*?)</span>',
+            html_content,
+            re.DOTALL,
+        )
         if writer_match:
             author_badge = clean_html_text(writer_match.group(1))
         ip_match = re.search(r'<span class="ip"[^>]*>\(([0-9.*]+)\)</span>', html_content)
@@ -468,21 +481,30 @@ class DCInsideScraper:
             except ValueError:
                 pass
 
-        # e_s_n_o token for comment AJAX
+        # e_s_n_o token for comment AJAX (handles arbitrary attribute ordering and quotes)
         e_s_n_o = ""
-        token_match = re.search(r'<input\s+type="hidden"\s+id="e_s_n_o"\s+name="e_s_n_o"\s+value="([^"]+)"', html_content)
-        if token_match:
-            e_s_n_o = token_match.group(1)
+        token_tag = re.search(r'<input\b[^>]*\b(?:id|name)=["\']e_s_n_o["\'][^>]*>', html_content, re.IGNORECASE)
+        if token_tag:
+            val_match = re.search(r'\bvalue=["\']([^"\']+)["\']', token_tag.group(0), re.IGNORECASE)
+            if val_match:
+                e_s_n_o = html.unescape(val_match.group(1))
 
         # Body extraction
         body_text = ""
         body_match = re.search(r'<div class="writing_view_box"[^>]*>(.*?)</div>\s*<!--\s*//writing_view_box', html_content, re.DOTALL)
-        if not body_match:
-            body_match = re.search(r'<div class="write_div"[^>]*>(.*?)</div>', html_content, re.DOTALL)
-        if not body_match:
-            body_match = re.search(r'<div class="thum-txt[^"]*"[^>]*>(.*?)</div>', html_content, re.DOTALL)
         if body_match:
             body_text = clean_html_text(body_match.group(1))
+        else:
+            for open_pat in (
+                r'<div\b[^>]*\bclass=["\'][^"\']*\bwriting_view_box\b[^"\']*["\'][^>]*>',
+                r'<div\b[^>]*\bclass=["\'][^"\']*\bwrite_div\b[^"\']*["\'][^>]*>',
+                r'<div\b[^>]*\bclass=["\'][^"\']*\bthum-txt[^"\']*["\'][^>]*>',
+            ):
+                inner_html = extract_balanced_tag_content(html_content, open_pat, tag_name="div")
+                if inner_html:
+                    body_text = clean_html_text(inner_html)
+                    if body_text:
+                        break
 
         # Comments extraction from DOM
         comments = []

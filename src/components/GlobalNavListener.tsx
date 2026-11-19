@@ -46,7 +46,10 @@ export const GlobalNavListener = memo(function GlobalNavListener() {
         const href = link.getAttribute('href');
         if (!href || !href.startsWith('/')) return;
         const linkPath = normalizePath(href);
-        const isCurrent = linkPath === '/' ? currentPath === '/' : currentPath === linkPath;
+        const isCurrent =
+          linkPath === '/'
+            ? currentPath === '/'
+            : currentPath === linkPath || currentPath.startsWith(`${linkPath}/`);
 
         if (isCurrent) {
           link.setAttribute('aria-current', 'page');
@@ -138,6 +141,8 @@ export const GlobalNavListener = memo(function GlobalNavListener() {
       }
     };
 
+    let skipLinkRafId: number | null = null;
+
     // Cross-browser programmatic focus transfer for skip-to-content links
     const handleSkipLink = (e: MouseEvent) => {
       const rawTarget = e.target as Node | null;
@@ -147,8 +152,12 @@ export const GlobalNavListener = memo(function GlobalNavListener() {
         const main = document.getElementById('main-content');
         if (main) {
           main.focus();
+          if (skipLinkRafId !== null) {
+            cancelAnimationFrame(skipLinkRafId);
+          }
           // Re-verify focus after native hash navigation completes in Safari/WebKit
-          requestAnimationFrame(() => {
+          skipLinkRafId = requestAnimationFrame(() => {
+            skipLinkRafId = null;
             if (document.activeElement !== main) {
               main.focus({ preventScroll: true });
             }
@@ -241,6 +250,10 @@ export const GlobalNavListener = memo(function GlobalNavListener() {
     window.addEventListener('popstate', handlePopState);
 
     return () => {
+      if (skipLinkRafId !== null) {
+        cancelAnimationFrame(skipLinkRafId);
+        skipLinkRafId = null;
+      }
       if (initialDrawer) {
         initialDrawer.removeEventListener('toggle', syncAriaExpanded);
       }

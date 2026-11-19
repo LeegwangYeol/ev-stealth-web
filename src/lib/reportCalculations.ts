@@ -231,6 +231,91 @@ export function maskSensitiveData(text?: unknown): string {
   return maskSensitiveTokens(maskInternalPaths(text));
 }
 
+const REPORT_SENSITIVE_QUERY_KEYS = new Set([
+  'token',
+  'access_token',
+  'access-token',
+  'refresh_token',
+  'id_token',
+  'auth',
+  'auth_token',
+  'authorization',
+  'api_key',
+  'api-key',
+  'apikey',
+  'x-api-key',
+  'key',
+  'secret',
+  'client_secret',
+  'client-secret',
+  'password',
+  'passwd',
+  'pwd',
+  'session',
+  'session_id',
+  'sessionid',
+  'jwt',
+]);
+
+function isPrivateOrInternalHost(rawHost: string): boolean {
+  const host = rawHost.toLowerCase().replace(/\.+$/, '');
+  if (!host) return true;
+  if (host.includes('%')) return true;
+
+  const bareHost = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+  if (
+    bareHost === 'localhost' ||
+    bareHost.endsWith('.localhost') ||
+    bareHost === '0.0.0.0' ||
+    bareHost === '::1' ||
+    bareHost === '::' ||
+    bareHost.endsWith('.local') ||
+    bareHost.endsWith('.localdomain') ||
+    bareHost.endsWith('.internal') ||
+    bareHost.endsWith('.intranet') ||
+    bareHost.endsWith('.corp') ||
+    bareHost.endsWith('.arpa') ||
+    bareHost.endsWith('.lan') ||
+    bareHost.endsWith('.home') ||
+    bareHost.endsWith('.private')
+  ) {
+    return true;
+  }
+
+  // IPv6 reserved, loopback, unspecified, IPv4-mapped/compatible (::/96), NAT64, 6to4, discard, ULA, link-local
+  if (host.startsWith('[') || bareHost.includes(':')) {
+    if (
+      bareHost.startsWith('::') ||
+      bareHost.startsWith('0:') ||
+      /^(?:64:ff9b(?::1)?|100|2001:db8|2002|fe[89ab][0-9a-f]|f[cd][0-9a-f]{2}):/i.test(bareHost)
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  // Require at least one dot for non-IPv6 hostnames to block single-label internal services (e.g. http://redis:6379)
+  if (!bareHost.includes('.')) {
+    return true;
+  }
+
+  // IPv4 private, loopback, link-local, CGNAT, benchmark, TEST-NET, and multicast/reserved ranges
+  return (
+    /^0\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(bareHost) ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(bareHost) ||
+    /^169\.254\.\d{1,3}\.\d{1,3}$/.test(bareHost) ||
+    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(bareHost) ||
+    /^172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(bareHost) ||
+    /^192\.168\.\d{1,3}\.\d{1,3}$/.test(bareHost) ||
+    /^192\.0\.[02]\.\d{1,3}$/.test(bareHost) ||
+    /^198\.1[89]\.\d{1,3}\.\d{1,3}$/.test(bareHost) ||
+    /^198\.51\.100\.\d{1,3}$/.test(bareHost) ||
+    /^203\.0\.113\.\d{1,3}$/.test(bareHost) ||
+    /^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}$/.test(bareHost) ||
+    /^(?:22[4-9]|23\d|24\d|25[0-5])\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(bareHost)
+  );
+}
+
 /**
  * Safely sanitizes external URLs to prevent javascript:, data:, vbscript: or other XSS injections,
  * blocks internal/private network addresses (SSRF protection), and strips sensitive query parameters.
@@ -242,76 +327,27 @@ export function sanitizeReportUrl(rawUrl?: unknown): string {
   if (/^(?:javascript|data|vbscript):/i.test(trimmed)) {
     return '#';
   }
-  // Catch percent-encoded schemes like %6a%61%76%61%73%63%72%69%70%74:
-  try {
-    const decoded = decodeURIComponent(trimmed).replace(/\s+/g, '').toLowerCase();
-    if (/^(?:javascript|data|vbscript|blob|file|about):/.test(decoded)) {
-      return '#';
-    }
-  } catch {
-    // Malformed URI encoding
+  // Reject XSS/attribute breakout characters before URL parsing/re-serialization
+  const safeBase = sanitizeSafeUrl(trimmed);
+  if (safeBase === '#') {
+    return '#';
   }
 
   // Block internal hostnames, loopbacks, userinfo credentials, and private/reserved IPv4 & IPv6 ranges
   try {
-    if (/^https?:\/\//i.test(trimmed)) {
-      const urlObj = new URL(trimmed);
+    if (/^https?:\/\//i.test(safeBase)) {
+      const urlObj = new URL(safeBase);
       if (urlObj.username || urlObj.password) {
         return '#';
       }
-      const host = urlObj.hostname.toLowerCase().replace(/\.+$/, '');
-      if (
-        host === 'localhost' ||
-        host.endsWith('.localhost') ||
-        host === '0.0.0.0' ||
-        host === '::1' ||
-        host === '[::1]' ||
-        host === '::' ||
-        host === '[::]' ||
-        host.includes('%') ||
-        host.endsWith('.local') ||
-        host.endsWith('.internal') ||
-        host.endsWith('.corp') ||
-        host.endsWith('.arpa') ||
-        /^0\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
-        /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
-        /^169\.254\.\d{1,3}\.\d{1,3}$/.test(host) ||
-        /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
-        /^172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host) ||
-        /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
-        /^192\.0\.0\.\d{1,3}$/.test(host) ||
-        /^198\.1[89]\.\d{1,3}\.\d{1,3}$/.test(host) ||
-        /^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}$/.test(host) ||
-        /^(?:22[4-9]|23\d|24\d|25[0-5])\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
-        /^\[?(?:::ffff:|64:ff9b:|fe[89ab][0-9a-f]:|(?:fc|fd)[0-9a-f]{2}:)/i.test(host)
-      ) {
+      if (isPrivateOrInternalHost(urlObj.hostname)) {
         return '#';
       }
 
       // Strip sensitive tokens/credentials from query parameters (case-insensitive)
-      const sensitiveKeys = new Set([
-        'token',
-        'access_token',
-        'refresh_token',
-        'id_token',
-        'auth',
-        'auth_token',
-        'api_key',
-        'apikey',
-        'key',
-        'secret',
-        'client_secret',
-        'password',
-        'passwd',
-        'pwd',
-        'session',
-        'session_id',
-        'sessionid',
-        'jwt',
-      ]);
       let modified = false;
       for (const paramKey of Array.from(urlObj.searchParams.keys())) {
-        if (sensitiveKeys.has(paramKey.toLowerCase())) {
+        if (REPORT_SENSITIVE_QUERY_KEYS.has(paramKey.toLowerCase())) {
           urlObj.searchParams.delete(paramKey);
           modified = true;
         }
@@ -321,10 +357,10 @@ export function sanitizeReportUrl(rawUrl?: unknown): string {
       }
     }
   } catch {
-    // Non-standard or relative URL
+    return '#';
   }
 
-  return sanitizeSafeUrl(trimmed);
+  return safeBase;
 }
 
 /**
@@ -388,7 +424,7 @@ function canonicalizeReportUrlForDedup(rawUrl: string): string {
       const cleanVal = rawVal.replace(/\?[a-zA-Z0-9_]+=.*$/, '');
       keptParams.push([key, cleanVal]);
     }
-    keptParams.sort((a, b) => (a[0] === b[0] ? a[1].localeCompare(b[1]) : a[0].localeCompare(b[0])));
+    keptParams.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0));
     const queryStr = keptParams.length > 0
       ? '?' + keptParams.map(([k, v]) => `${k}=${v}`).join('&')
       : '';
@@ -428,7 +464,13 @@ export function deduplicateReports(
     if (!idKey && !urlKey) {
       const model = (normalized.vehicle_model || '').trim().toLowerCase();
       const cat = (normalized.defect_category || '').trim().toUpperCase();
-      const titleClean = (normalized.title || '').trim().toLowerCase().replace(/[^\w\s가-힣]/g, '').slice(0, 40);
+      const titleClean = (normalized.title || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^\w\s가-힣ㄱ-ㅎㅏ-ㅣ]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 40);
       fpKey = `fp:${model}:${cat}:${titleClean}`;
     }
 

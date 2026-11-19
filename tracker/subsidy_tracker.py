@@ -16,6 +16,7 @@ from pathlib import Path
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from tracker.atomic_writer import (
@@ -34,6 +35,8 @@ from tracker.subsidy_baseline import (
     build_baseline_regions,
     build_initial_baseline,
     build_popular_models,
+    calculate_net_subsidy,
+    calculate_price_cap_ratio,
 )
 from tracker.subsidy_models import (
     AlertSeverity,
@@ -257,7 +260,12 @@ def calculate_depletion_rate(
     """
     try:
         target_quota = quota if quota is not None else announced
-        if target_quota is None or applied is None:
+        if (
+            target_quota is None
+            or applied is None
+            or isinstance(target_quota, bool)
+            or isinstance(applied, bool)
+        ):
             return 0.0
         quota_val = float(_clean_num(target_quota))
         applied_val = float(_clean_num(applied))
@@ -271,7 +279,7 @@ def calculate_depletion_rate(
         rate = max(0.0, rate)
         if clamp_100 or clamp:
             rate = min(100.0, rate)
-        if max_rate is not None:
+        if max_rate is not None and not isinstance(max_rate, bool):
             try:
                 mr = float(_clean_num(max_rate))
                 if not math.isnan(mr) and not math.isinf(mr) and mr >= 0.0:
@@ -286,7 +294,7 @@ def calculate_depletion_rate(
 def is_depletion_over_exhausted(depletion_rate: Union[int, float, str, None]) -> bool:
     """Return True if depletion rate strictly exceeds 100.0% (over-exhaustion / waitlisted)."""
     try:
-        if depletion_rate is None:
+        if depletion_rate is None or isinstance(depletion_rate, bool):
             return False
         r = float(_clean_num(depletion_rate))
         return not (math.isnan(r) or math.isinf(r)) and r > 100.0
@@ -311,7 +319,12 @@ def calculate_remaining_units(
     """
     try:
         target_quota = quota if quota is not None else announced
-        if target_quota is None or applied is None:
+        if (
+            target_quota is None
+            or applied is None
+            or isinstance(target_quota, bool)
+            or isinstance(applied, bool)
+        ):
             return 0
         quota_f = float(_clean_num(target_quota))
         applied_f = float(_clean_num(applied))
@@ -332,7 +345,12 @@ def calculate_waitlist_units(
     """Calculate waitlisted/over-subscribed units beyond announced quota: max(0, applied - quota)."""
     try:
         target_quota = quota if quota is not None else announced
-        if target_quota is None or applied is None:
+        if (
+            target_quota is None
+            or applied is None
+            or isinstance(target_quota, bool)
+            or isinstance(applied, bool)
+        ):
             return 0
         quota_f = float(_clean_num(target_quota))
         applied_f = float(_clean_num(applied))
@@ -370,7 +388,12 @@ def calculate_pending_deliveries(
 ) -> int:
     """Calculate pending delivery units (applied - delivered) clamped at zero."""
     try:
-        if applied is None or delivered is None:
+        if (
+            applied is None
+            or delivered is None
+            or isinstance(applied, bool)
+            or isinstance(delivered, bool)
+        ):
             return 0
         applied_f = float(_clean_num(applied))
         delivered_f = float(_clean_num(delivered))
@@ -407,7 +430,14 @@ def calculate_depletion_velocity(
         Returns 0.0 if days <= 0 or invalid inputs provided. Never raises ZeroDivisionError.
     """
     try:
-        if applied_start is None or applied_end is None or days is None:
+        if (
+            applied_start is None
+            or applied_end is None
+            or days is None
+            or isinstance(applied_start, bool)
+            or isinstance(applied_end, bool)
+            or isinstance(days, bool)
+        ):
             return 0.0
         f_start = float(_clean_num(applied_start))
         f_end = float(_clean_num(applied_end))
@@ -445,7 +475,12 @@ def predict_exhaustion_days(
         Non-negative integer days remaining, or None if velocity is non-positive.
     """
     try:
-        if remaining_units is None or daily_velocity is None:
+        if (
+            remaining_units is None
+            or daily_velocity is None
+            or isinstance(remaining_units, bool)
+            or isinstance(daily_velocity, bool)
+        ):
             return None
         f_rem = float(_clean_num(remaining_units))
         f_vel = float(_clean_num(daily_velocity))
@@ -616,76 +651,6 @@ def classify_alert_tier(depletion_rate: float) -> str:
     return AlertSeverity.from_rate(depletion_rate).value
 
 
-def calculate_price_cap_ratio(msrp: Union[int, float, str, None]) -> float:
-    """Statutory 2026 Korean EV subsidy ratio tiers: 1.0 (<=55M), 0.5 (55M-85M), 0.0 (>85M)."""
-    try:
-        if msrp is None:
-            return 0.0
-        f_msrp = float(_clean_num(msrp))
-        if math.isnan(f_msrp) or math.isinf(f_msrp):
-            return 0.0
-        safe_msrp = int(f_msrp)
-    except (ValueError, TypeError, OverflowError):
-        return 0.0
-
-    if safe_msrp <= 0:
-        return 0.0
-    elif safe_msrp <= 55_000_000:
-        return 1.0
-    elif safe_msrp <= 85_000_000:
-        return 0.5
-    return 0.0
-
-
-def calculate_net_subsidy(
-    model_national: Union[int, float, str, None],
-    max_national: Union[int, float, str, None],
-    max_local: Union[int, float, str, None],
-    msrp: Union[int, float, str, None],
-) -> Dict[str, Union[int, float]]:
-    """Calculate national subsidy, local subsidy, total subsidy, and net consumer purchase price."""
-    try:
-        if msrp is None:
-            safe_msrp = 0
-        else:
-            f_msrp = float(_clean_num(msrp))
-            safe_msrp = 0 if (math.isnan(f_msrp) or math.isinf(f_msrp)) else max(0, int(f_msrp))
-    except (ValueError, TypeError, OverflowError):
-        safe_msrp = 0
-
-    try:
-        safe_model_nat = max(0, int(float(_clean_num(model_national)))) if model_national is not None else 0
-    except (ValueError, TypeError, OverflowError):
-        safe_model_nat = 0
-
-    try:
-        safe_max_nat = max(0, int(float(_clean_num(max_national)))) if max_national is not None else 0
-    except (ValueError, TypeError, OverflowError):
-        safe_max_nat = 0
-
-    try:
-        safe_max_loc = max(0, int(float(_clean_num(max_local)))) if max_local is not None else 0
-    except (ValueError, TypeError, OverflowError):
-        safe_max_loc = 0
-
-    ratio = calculate_price_cap_ratio(safe_msrp)
-    effective_national = int(round(safe_model_nat * ratio))
-    if safe_max_nat > 0:
-        local_ratio = min(1.0, max(0.0, safe_model_nat / safe_max_nat))
-    else:
-        local_ratio = 0.0
-    effective_local = int(round(safe_max_loc * local_ratio * ratio))
-    total_subsidy = effective_national + effective_local
-    net_price = max(0, safe_msrp - total_subsidy)
-    return {
-        "national_subsidy_krw": effective_national,
-        "local_subsidy_krw": effective_local,
-        "total_subsidy_krw": total_subsidy,
-        "net_price_krw": net_price,
-        "price_cap_ratio": ratio,
-    }
-
-
 def _metric_val(metric: Any, key: str, default: Any = 0) -> Any:
     """Safely extract metric attribute or dict key, supporting dict, Mapping, and dataclass instances."""
     if metric is None:
@@ -698,11 +663,11 @@ def _metric_val(metric: Any, key: str, default: Any = 0) -> Any:
 
 
 def _safe_int_metric(val: Any, default: int = 0) -> int:
-    """Safely cast value to int, gracefully handling NaN, Inf, None, float strings, commas, and invalid types."""
+    """Safely cast value to int, gracefully handling NaN, Inf, None, bool, float strings, commas, and invalid types."""
+    if val is None or isinstance(val, bool):
+        return default
     if type(val) is int:
         return val
-    if val is None:
-        return default
     try:
         f = float(_clean_num(val))
         if math.isnan(f) or math.isinf(f):
@@ -802,9 +767,14 @@ class SubsidyTracker:
 
             safe_total_budget = max(0, _safe_int_metric(_metric_val(cat, "total_budget_krw", 0), 0))
             if safe_total_budget > 0 and safe_ann > 0:
-                unit_budget = safe_total_budget / safe_ann
-                rem_budget = safe_total_budget - (safe_app * unit_budget)
-                safe_rem_budget = min(safe_total_budget, max(0, _safe_int_metric(rem_budget, 0)))
+                rem_ratio_units = max(0, safe_ann - safe_app)
+                if rem_ratio_units == 0:
+                    safe_rem_budget = 0
+                else:
+                    safe_rem_budget = min(
+                        safe_total_budget,
+                        max(0, int(round((safe_total_budget * rem_ratio_units) / safe_ann))),
+                    )
             else:
                 cat_rem = max(0, _safe_int_metric(_metric_val(cat, "remaining_budget_krw", 0), 0))
                 safe_rem_budget = min(safe_total_budget, cat_rem) if safe_total_budget > 0 else cat_rem
@@ -974,8 +944,13 @@ class SubsidyTracker:
         backoff_base: float = 0.05,
     ) -> Optional[Dict[str, Any]]:
         """Attempt to fetch live data from remote endpoint with 3-attempt exponential backoff retry."""
-        if not self.endpoint_url:
+        if not self.endpoint_url or not isinstance(self.endpoint_url, str):
             logger.debug("No endpoint URL configured. Using validated baseline engine.")
+            return None
+
+        parsed_url = urllib.parse.urlparse(self.endpoint_url.strip())
+        if parsed_url.scheme.lower() not in ("http", "https") or not parsed_url.netloc:
+            logger.warning("Refusing non-HTTP(S) endpoint URL: %s", self.endpoint_url)
             return None
 
         logger.info("Attempting live poll from %s (timeout=%.1fs)...", self.endpoint_url, self.timeout_seconds)
@@ -1344,6 +1319,7 @@ class SubsidyTracker:
                     seen_paths.add(resolved_key)
                     unique_destinations.append(dst)
 
+            primary.parent.mkdir(parents=True, exist_ok=True)
             sync_lock = primary.parent / ".subsidy_sync.lock"
             cleanup_stale_lock_files(primary.parent, max_age_seconds=3600.0)
             with FileLock(sync_lock):

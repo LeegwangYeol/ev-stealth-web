@@ -3,6 +3,7 @@ export default function Latest2026Loading() {
     <div
       role="status"
       aria-live="polite"
+      aria-busy="true"
       aria-label="2026 최신 결함 리포트 로딩 중"
       className="space-y-8 py-6 sm:py-10 max-w-4xl mx-auto animate-pulse motion-reduce:animate-none"
     >

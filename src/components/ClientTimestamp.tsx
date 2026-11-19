@@ -98,13 +98,17 @@ function ClientTimestampBase({
         if (!mounted) {
           return { formattedText: fallbackText, validIso: iso };
         }
-        if (format === 'date') {
-          return { formattedText: date.toLocaleDateString(locale, options), validIso: iso };
+        try {
+          if (format === 'date') {
+            return { formattedText: date.toLocaleDateString(locale, options), validIso: iso };
+          }
+          if (format === 'time') {
+            return { formattedText: date.toLocaleTimeString(locale, options), validIso: iso };
+          }
+          return { formattedText: date.toLocaleString(locale, options), validIso: iso };
+        } catch {
+          return { formattedText: fallbackText, validIso: iso };
         }
-        if (format === 'time') {
-          return { formattedText: date.toLocaleTimeString(locale, options), validIso: iso };
-        }
-        return { formattedText: date.toLocaleString(locale, options), validIso: iso };
       }
     } catch {
       return { formattedText: fallbackText, validIso: undefined };

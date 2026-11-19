@@ -40,10 +40,11 @@ def generate_statistical_report_content(
     """Generate the complete publication-grade STATISTICAL_REPORT.md document."""
 
     # 1. Run Pipeline Analysis
-    top30_keywords = ranker.compute_top_keywords(records, top_n=30)
+    clean_records = [r for r in (records or []) if isinstance(r, dict)]
+    top30_keywords = ranker.compute_top_keywords(clean_records, top_n=30)
     ngrams_bi = ranker.extract_ngrams(n=2, min_freq=2, top_k=10)
     ngrams_tri = ranker.extract_ngrams(n=3, min_freq=2, top_k=8)
-    agg_results = aggregator.analyze(records)
+    agg_results = aggregator.analyze(clean_records)
 
     platforms = agg_results["platforms"]
     brands = agg_results["brands"]
@@ -51,7 +52,7 @@ def generate_statistical_report_content(
     temporal = agg_results["temporal"]
     contingency = agg_results["contingency"]
 
-    total_records = len(records)
+    total_records = len(clean_records)
     total_tokens = sum(ranker.term_freq.values()) or 1
 
     # 2. Build Document Sections
@@ -391,7 +392,7 @@ def main():
         print(f"[ERROR] Input dataset not found: {args.input}")
         sys.exit(1)
 
-    with open(args.input, "r", encoding="utf-8") as f:
+    with open(args.input, "r", encoding="utf-8-sig") as f:
         records = json.load(f)
 
     # Initialize NLP & Analytics Engines

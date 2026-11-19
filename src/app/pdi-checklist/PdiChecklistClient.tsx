@@ -279,6 +279,8 @@ export function loadChecklistFromStorage(defaultItems: ChecklistItem[]): Checkli
   return defaultItems;
 }
 
+let lastActiveStorageMedium: 'localStorage' | 'sessionStorage' | 'memory' | null = null;
+
 /**
  * Safely writes checklist state to storage with QuotaExceeded recovery and private browsing fallbacks.
  * 1. Writes to localStorage.
@@ -301,6 +303,7 @@ export function saveChecklistToStorage(items: ChecklistItem[]): boolean {
     if (window.localStorage) {
       try {
         window.localStorage.setItem(STORAGE_KEY, serialized);
+        lastActiveStorageMedium = 'localStorage';
         return true;
       } catch (err) {
         if (isQuotaExceededError(err)) {
@@ -315,6 +318,7 @@ export function saveChecklistToStorage(items: ChecklistItem[]): boolean {
           // Retry write after purge
           try {
             window.localStorage.setItem(STORAGE_KEY, serialized);
+            lastActiveStorageMedium = 'localStorage';
             return true;
           } catch {
             // Fall through to sessionStorage
@@ -335,12 +339,14 @@ export function saveChecklistToStorage(items: ChecklistItem[]): boolean {
       } catch {
         // Ignore cleanup failure in restricted environments
       }
+      lastActiveStorageMedium = 'sessionStorage';
       return true;
     }
   } catch {
     // In-memory fallback will preserve state for active React session
   }
 
+  lastActiveStorageMedium = 'memory';
   return false;
 }
 
@@ -485,7 +491,10 @@ export default function PdiChecklistClient() {
     }
     syncedItemsRef.current = null;
     saveChecklistToStorage(items);
-  }, [items, mounted]);
+    if (lastActiveStorageMedium && lastActiveStorageMedium !== storageType) {
+      setStorageType(lastActiveStorageMedium);
+    }
+  }, [items, mounted, storageType]);
 
   const [actionAnnouncement, setActionAnnouncement] = useState<string>('');
 
@@ -499,7 +508,10 @@ export default function PdiChecklistClient() {
   }, []);
 
   const resetChecklist = useCallback(() => {
-    if (typeof window !== 'undefined' && window.confirm('체크리스트 상태를 초기화하시겠습니까?')) {
+    if (
+      typeof window !== 'undefined' &&
+      (typeof window.confirm !== 'function' || window.confirm('체크리스트 상태를 초기화하시겠습니까?'))
+    ) {
       setItems(INITIAL_PDI_ITEMS.map((item) => ({ ...item })));
       clearChecklistFromStorage();
       setActionAnnouncement('체크리스트가 초기화되었습니다. ');
@@ -779,7 +791,7 @@ export default function PdiChecklistClient() {
           const isCategoryActive = selectedCategory === 'ALL' || selectedCategory === category;
           const isCollapsed = Boolean(collapsedCategories[category]);
           const contentId = `pdi-category-items-${idx}`;
-          const headerId = `pdi-cat-${category}`;
+          const buttonId = `pdi-cat-btn-${idx}`;
           return (
             <fieldset
               key={category}
@@ -792,6 +804,7 @@ export default function PdiChecklistClient() {
                 className="bg-slate-50 print:bg-slate-100 border-b border-gray-200 text-xl font-bold text-slate-800 print:text-black print:text-sm print:border-black print:break-after-avoid"
               >
                 <button
+                  id={buttonId}
                   type="button"
                   onClick={() => toggleCategoryCollapse(category)}
                   aria-expanded={!isCollapsed}
@@ -818,7 +831,7 @@ export default function PdiChecklistClient() {
               <div
                 id={contentId}
                 role="region"
-                aria-labelledby={headerId}
+                aria-labelledby={buttonId}
                 className={`divide-y divide-gray-100 ${isCollapsed ? 'hidden print:block' : 'block'}`}
               >
                 {(itemsByCategory.get(category) || []).map((item) => (

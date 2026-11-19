@@ -25,8 +25,10 @@ from scrapers.common_utils import (
     COMMON_VEHICLE_PATTERNS,
     ComplaintRecord,
     SafeHttpClient,
+    bounded_cache_set,
     clean_html_text,
     encode_euc_kr_query,
+    extract_balanced_tag_content,
     extract_slang_terms,
     normalize_scraper_url,
     polite_delay,
@@ -206,7 +208,7 @@ class BobaedreamScraper:
             return []
         items = []
         # Match table rows or list entries with view links
-        pattern = r'<a\s+href="([^"]*view\?code=[^"]*No=(\d+)[^"]*)"[^>]*>(.*?)</a>'
+        pattern = r'<a\b[^>]*\bhref=["\']([^"\']*view\?[^"\']*code=[^"\']*[?&](?:amp;)?[Nn]o=(\d+)[^"\']*)["\'][^>]*>(.*?)</a>'
         matches = re.findall(pattern, html_content, re.IGNORECASE | re.DOTALL)
 
         seen_nos = set()
@@ -216,7 +218,11 @@ class BobaedreamScraper:
             seen_nos.add(post_no)
 
             clean_title = clean_html_text(raw_title)
-            if not clean_title or len(clean_title) < 2 or "공지" in clean_title:
+            if (
+                not clean_title
+                or len(clean_title) < 2
+                or re.match(r"^(?:\[공지\]|공지(?:\s|$|:|-)|\[필독\])", clean_title)
+            ):
                 continue
 
             full_url = normalize_scraper_url(href, BOBAE_BASE_URL)
@@ -289,7 +295,7 @@ class BobaedreamScraper:
         if not html_content or not isinstance(html_content, str):
             return []
         items = []
-        pattern = r'<dt[^>]*>\s*<a\s+href="([^"]*view\?[^"]*)"[^>]*>(.*?)</a>'
+        pattern = r'<dt[^>]*>\s*<a\b[^>]*\bhref=["\']([^"\']*view\?[^"\']*)["\'][^>]*>(.*?)</a>'
         matches = re.findall(pattern, html_content, re.IGNORECASE | re.DOTALL)
 
         for href, raw_title in matches:
@@ -300,8 +306,8 @@ class BobaedreamScraper:
             full_url = normalize_scraper_url(href, BOBAE_BASE_URL)
             if not full_url:
                 continue
-            code_match = re.search(r"code=([a-zA-Z0-9_]+)", href)
-            no_match = re.search(r"No=([0-9]+)", href)
+            code_match = re.search(r"code=([a-zA-Z0-9_]+)", full_url)
+            no_match = re.search(r"[?&]no=([0-9]+)", full_url, re.IGNORECASE)
             board_code = code_match.group(1) if code_match else "community"
             post_no = no_match.group(1) if no_match else ""
 
@@ -341,7 +347,7 @@ class BobaedreamScraper:
         try:
             detail = self.parse_post_detail(text, norm_url)
             if detail:
-                self.post_cache[norm_url] = detail
+                bounded_cache_set(self.post_cache, norm_url, detail)
             return detail
         except Exception as e:
             logger.warning(f"Error parsing Bobaedream post detail ({norm_url}): {e}")
@@ -396,14 +402,19 @@ class BobaedreamScraper:
         # Body extraction
         body_text = ""
         body_match = re.search(r'<div class="bodyCont"[^>]*>(.*?)</div>\s*<!--\s*//bodyCont', html_content, re.DOTALL)
-        if not body_match:
-            body_match = re.search(r'<div class="bodyCont"[^>]*>(.*?)</div>', html_content, re.DOTALL)
-        if not body_match:
-            body_match = re.search(r'<div id="print_area"[^>]*>(.*?)</div>', html_content, re.DOTALL)
-        if not body_match:
-            body_match = re.search(r'<div class="content01"[^>]*>(.*?)</div>', html_content, re.DOTALL)
         if body_match:
             body_text = clean_html_text(body_match.group(1))
+        else:
+            for open_pat in (
+                r'<div\b[^>]*\bclass=["\'][^"\']*\bbodyCont\b[^"\']*["\'][^>]*>',
+                r'<div\b[^>]*\bid=["\']print_area["\'][^>]*>',
+                r'<div\b[^>]*\bclass=["\'][^"\']*\bcontent01\b[^"\']*["\'][^>]*>',
+            ):
+                inner_html = extract_balanced_tag_content(html_content, open_pat, tag_name="div")
+                if inner_html:
+                    body_text = clean_html_text(inner_html)
+                    if body_text:
+                        break
 
         # Comments extraction
         comments = []

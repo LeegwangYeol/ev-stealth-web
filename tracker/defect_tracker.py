@@ -9,6 +9,7 @@ Provides clean OOP abstractions for:
 from __future__ import annotations
 
 from collections import OrderedDict
+from collections.abc import Mapping
 import dataclasses
 import hashlib
 import json
@@ -44,18 +45,30 @@ def _extract_val(obj: Any, key: str, default: Any = None) -> Any:
 
 def _to_record_dict(obj: Any) -> Dict[str, Any]:
     """Convert a defect record (dict or domain object) safely to a dictionary."""
-    if isinstance(obj, dict):
+    if obj is None:
+        return {}
+    if isinstance(obj, Mapping):
         return dict(obj)
     if hasattr(obj, "to_admin_report_dict") and callable(getattr(obj, "to_admin_report_dict")):
         return obj.to_admin_report_dict()
     if hasattr(obj, "to_dict") and callable(getattr(obj, "to_dict")):
         return obj.to_dict()
-    if dataclasses.is_dataclass(obj):
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         return dataclasses.asdict(obj)
     try:
         return dict(obj)
     except Exception:
-        return {k: getattr(obj, k) for k in dir(obj) if not k.startswith("_")}
+        out: Dict[str, Any] = {}
+        for k in dir(obj):
+            if k.startswith("_"):
+                continue
+            try:
+                val = getattr(obj, k)
+            except Exception:
+                continue
+            if not callable(val):
+                out[k] = val
+        return out
 
 
 _CURRENT_DIR = Path(__file__).resolve().parent
@@ -195,6 +208,7 @@ class DefectTracker:
         self._cached_reports_mtime: Optional[float] = None
         self._cached_reports_sig: Optional[Tuple[int, int]] = None
         self._cached_reports_path: Optional[Path] = None
+        self._cached_is_primary: bool = False
         self._cached_reports: Optional[List[Dict[str, Any]]] = None
         self._category_index: Dict[str, List[Dict[str, Any]]] = {}
         self._query_cache: OrderedDict[Tuple[Any, ...], List[Dict[str, Any]]] = OrderedDict()
@@ -264,17 +278,21 @@ class DefectTracker:
         if self.reports_file and self.validate_report_file(self.reports_file):
             return self.reports_file
 
-        candidates = [
-            p for p in [self.get_root_reports_path(), self.get_web_reports_path(), self.get_public_reports_path()]
-            if p is not None and self.validate_report_file(p)
-        ]
-        if not candidates:
-            return None
-        try:
-            candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-        except Exception:
-            pass
-        return candidates[0]
+        existing: List[Tuple[float, Path]] = []
+        for p in (self.get_root_reports_path(), self.get_web_reports_path(), self.get_public_reports_path()):
+            if p is None:
+                continue
+            try:
+                if p.is_file():
+                    existing.append((p.stat().st_mtime, p))
+            except OSError:
+                continue
+
+        existing.sort(key=lambda item: item[0], reverse=True)
+        for _, cand in existing:
+            if self.validate_report_file(cand):
+                return cand
+        return None
 
     def load_full_report_data(
         self,
@@ -282,24 +300,25 @@ class DefectTracker:
         quarantine_corrupted: bool = True,
     ) -> Dict[str, Any]:
         """Load complete defect report dataset including statistics and metadata."""
-        from tracker.atomic_writer import quarantine_corrupted_file
+        from tracker.atomic_writer import is_corrupted_or_quarantined_filename, quarantine_corrupted_file
 
         target = Path(file_path) if file_path else self.resolve_primary_reports_path()
         if not target or not target.exists():
             logger.warning("No defect report file found to load.")
             return {"reports": [], "statistics": {}}
 
-        if not self.validate_report_file(target):
-            logger.error("Target defect report file %s failed schema validation.", target)
-            if quarantine_corrupted:
-                quarantine_corrupted_file(target)
+        if is_corrupted_or_quarantined_filename(target):
+            logger.error("Target defect report file %s is marked as corrupted/quarantined.", target)
             return {"reports": [], "statistics": {}}
 
         try:
+            if not target.is_file() or target.stat().st_size == 0:
+                raise ValueError(f"Defect report file {target} is missing, a directory, or empty.")
             with open(target, "r", encoding="utf-8-sig") as f:
                 data = json.load(f)
             if (
                 not isinstance(data, dict)
+                or "reports" not in data
                 or not isinstance(data.get("reports"), list)
                 or not all(isinstance(r, dict) for r in data["reports"])
             ):
@@ -317,6 +336,7 @@ class DefectTracker:
             self._cached_reports_mtime = None
             self._cached_reports_sig = None
             self._cached_reports_path = None
+            self._cached_is_primary = False
             self._cached_reports = None
             self._category_index.clear()
             self._query_cache.clear()
@@ -337,7 +357,15 @@ class DefectTracker:
 
     def load_reports(self, file_path: Optional[Union[str, Path]] = None) -> List[Dict[str, Any]]:
         """Load and return list of defect reports from target or primary path with mtime caching."""
-        target = Path(file_path) if file_path else self.resolve_primary_reports_path()
+        is_primary = file_path is None
+        raw_target = Path(file_path) if file_path is not None else self.resolve_primary_reports_path()
+        target: Optional[Path] = None
+        if raw_target is not None:
+            try:
+                target = raw_target.resolve()
+            except OSError:
+                target = raw_target
+
         if target and target.exists():
             try:
                 st = target.stat()
@@ -350,6 +378,8 @@ class DefectTracker:
                         and self._cached_reports_mtime == current_mtime
                         and self._cached_reports_sig == current_sig
                     ):
+                        if is_primary:
+                            self._cached_is_primary = True
                         return [_to_record_dict(r) for r in self._cached_reports]
             except OSError:
                 pass
@@ -364,14 +394,17 @@ class DefectTracker:
                     self._cached_reports_mtime = st.st_mtime
                     self._cached_reports_sig = (st.st_mtime_ns, st.st_size)
                     self._cached_reports_path = target
+                    self._cached_is_primary = is_primary
                 except OSError:
                     self._cached_reports_mtime = None
                     self._cached_reports_sig = None
                     self._cached_reports_path = None
+                    self._cached_is_primary = False
             else:
                 self._cached_reports_mtime = None
                 self._cached_reports_sig = None
                 self._cached_reports_path = None
+                self._cached_is_primary = False
 
             self._cached_reports = reports
             self._build_category_index(reports)
@@ -396,7 +429,7 @@ class DefectTracker:
                 norm_limit = int(limit)
                 if norm_limit <= 0:
                     return []
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, OverflowError):
                 norm_limit = None
 
         norm_min_sev: Optional[float] = None
@@ -404,7 +437,7 @@ class DefectTracker:
             try:
                 f_sev = float(min_severity)
                 norm_min_sev = f_sev if not (math.isnan(f_sev) or math.isinf(f_sev)) else None
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, OverflowError):
                 norm_min_sev = None
 
         if reports is None:
@@ -421,11 +454,21 @@ class DefectTracker:
         model_lower = vehicle_model.strip().lower() if (vehicle_model and isinstance(vehicle_model, str) and vehicle_model.strip()) else None
         kw_lower = keyword.strip().lower() if (keyword and isinstance(keyword, str) and keyword.strip()) else None
 
+        resolved_req_path: Optional[Path] = None
+        if file_path is not None:
+            try:
+                resolved_req_path = Path(file_path).resolve()
+            except OSError:
+                resolved_req_path = Path(file_path)
+
         cache_key: Optional[Tuple[Any, ...]] = None
         if use_cache:
             with self._cache_lock:
                 # Verify cache wasn't invalidated or swapped to a different file by another thread
-                target_mismatch = file_path is not None and self._cached_reports_path != Path(file_path)
+                target_mismatch = (
+                    (resolved_req_path is not None and self._cached_reports_path != resolved_req_path)
+                    or (resolved_req_path is None and not self._cached_is_primary)
+                )
                 if self._cached_reports is None or target_mismatch:
                     use_cache = False
                     candidate_pool = list(candidate_source)
@@ -446,10 +489,11 @@ class DefectTracker:
                         return [dict(r) for r in self._query_cache[cache_key]]
 
                     # Category-level pre-filtering: use pre-indexed category bucket if specified
+                    # Always source candidate_pool from the same atomic cache snapshot as cache_key
                     if cat_upper is not None:
                         candidate_pool = list(self._category_index.get(cat_upper, []))
                     else:
-                        candidate_pool = list(candidate_source)
+                        candidate_pool = list(self._cached_reports)
         else:
             candidate_pool = list(candidate_source)
 
@@ -483,7 +527,7 @@ class DefectTracker:
                         effective_sev = float(sev)
                         if math.isnan(effective_sev) or math.isinf(effective_sev):
                             effective_sev = None
-                    except (ValueError, TypeError):
+                    except (ValueError, TypeError, OverflowError):
                         effective_sev = None
 
                 if effective_sev is None:
@@ -607,6 +651,7 @@ class DefectTracker:
                     if isinstance(reports, list):
                         for r in reports:
                             raw_cat = _get_val(r, "defect_category", None) or _get_val(r, "category", None)
+                            raw_cat = getattr(raw_cat, "value", raw_cat)
                             cat = str(raw_cat).strip() if (raw_cat and str(raw_cat).strip()) else "UNKNOWN"
                             cat_dist[cat] = cat_dist.get(cat, 0) + 1
 
@@ -627,6 +672,7 @@ class DefectTracker:
             raw_cat = _get_val(r, "defect_category", None)
             if raw_cat is None:
                 raw_cat = _get_val(r, "category", None)
+            raw_cat = getattr(raw_cat, "value", raw_cat)
             cat = str(raw_cat).strip() if (raw_cat and str(raw_cat).strip()) else "UNKNOWN"
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
@@ -733,6 +779,7 @@ class DefectTracker:
         from tracker.atomic_writer import (
             FileLock,
             cleanup_stale_lock_files,
+            durable_fsync,
             is_corrupted_or_quarantined_filename,
             quarantine_corrupted_file,
         )
@@ -849,7 +896,7 @@ class DefectTracker:
                             temp_name = tf.name
                             tf.write(source_bytes)
                             tf.flush()
-                            os.fsync(tf.fileno())
+                            durable_fsync(tf.fileno())
                         try:
                             os.chmod(temp_name, 0o644)
                         except OSError:
@@ -862,14 +909,18 @@ class DefectTracker:
                         except OSError:
                             pass
                         # Directory fsync to commit new target file
-                        try:
-                            dir_fd = os.open(str(tgt.parent), os.O_RDONLY)
+                        if os.name != "nt":
+                            dir_flags = os.O_RDONLY
+                            if hasattr(os, "O_DIRECTORY"):
+                                dir_flags |= os.O_DIRECTORY
                             try:
-                                os.fsync(dir_fd)
-                            finally:
-                                os.close(dir_fd)
-                        except OSError:
-                            pass
+                                dir_fd = os.open(str(tgt.parent), dir_flags)
+                                try:
+                                    durable_fsync(dir_fd)
+                                finally:
+                                    os.close(dir_fd)
+                            except OSError:
+                                pass
 
                         written_paths.append(str(tgt))
                         logger.info("  ✓ Successfully synchronized defect reports: %s -> %s", source_path, tgt)
