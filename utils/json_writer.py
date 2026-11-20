@@ -52,7 +52,7 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
     except (ValueError, TypeError, OverflowError):
         safe_default = 0.0
 
-    if val is None:
+    if val is None or isinstance(val, bool):
         return safe_default
     try:
         clean_val = val.strip().replace(",", "") if isinstance(val, str) else val
@@ -357,11 +357,14 @@ def write_daily_reports(
         merged_reports: List[Dict[str, Any]] = []
 
         def _safe_dedup_key(raw_key: Any) -> Optional[str]:
-            if raw_key is None:
+            if raw_key is None or isinstance(raw_key, bool):
                 return None
             if isinstance(raw_key, str):
-                return raw_key if raw_key else None
-            if isinstance(raw_key, (int, float, bool)):
+                s_key = raw_key.strip()
+                return s_key if s_key else None
+            if isinstance(raw_key, float):
+                return str(raw_key) if math.isfinite(raw_key) else None
+            if isinstance(raw_key, int):
                 return str(raw_key)
             try:
                 hash(raw_key)
@@ -413,7 +416,7 @@ def write_daily_reports(
                 complaints=items_to_write,
                 total_scraped=total_scraped,
                 pipeline_version=pipeline_version,
-                generated_at=generated_at,
+                generated_at=new_payload.generated_at,
             )
 
         data = payload.to_dict()
@@ -476,11 +479,11 @@ def read_daily_reports(
                 return {"reports": [], "statistics": {}}
             try:
                 return _read_data()
-            except (json.JSONDecodeError, OSError, ValueError):
+            except (json.JSONDecodeError, OSError, ValueError, TypeError, RecursionError):
                 quarantine_corrupted_file(p)
                 return {"reports": [], "statistics": {}}
     else:
         try:
             return _read_data()
-        except (json.JSONDecodeError, OSError, ValueError):
+        except (json.JSONDecodeError, OSError, ValueError, TypeError, RecursionError):
             return {"reports": [], "statistics": {}}

@@ -91,21 +91,21 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     # -----------------------------------------------------------------
     # Hyundai EV Models & Electrified Genesis
     # -----------------------------------------------------------------
-    (re.compile(r"(아이오닉\s*5\s*N|ioniq\s*5\s*n)", re.IGNORECASE), "아이오닉5 N", BRAND_HYUNDAI),
-    (re.compile(r"(아이오닉\s*5|ioniq\s*5)", re.IGNORECASE), "아이오닉5", BRAND_HYUNDAI),
-    (re.compile(r"(아이오닉\s*6\s*N|ioniq\s*6\s*n)", re.IGNORECASE), "아이오닉6 N", BRAND_HYUNDAI),
-    (re.compile(r"(아이오닉\s*6|ioniq\s*6)", re.IGNORECASE), "아이오닉6", BRAND_HYUNDAI),
+    (re.compile(r"(아이오닉\s*5\s*N|ioniq\s*5\s*n)(?![a-zA-Z0-9])", re.IGNORECASE), "아이오닉5 N", BRAND_HYUNDAI),
+    (re.compile(r"(아이오닉\s*5|ioniq\s*5)(?![0-9])", re.IGNORECASE), "아이오닉5", BRAND_HYUNDAI),
+    (re.compile(r"(아이오닉\s*6\s*N|ioniq\s*6\s*n)(?![a-zA-Z0-9])", re.IGNORECASE), "아이오닉6 N", BRAND_HYUNDAI),
+    (re.compile(r"(아이오닉\s*6|ioniq\s*6)(?![0-9])", re.IGNORECASE), "아이오닉6", BRAND_HYUNDAI),
     (re.compile(r"(아이오닉\s*메기|조선\s*메기)", re.IGNORECASE), "아이오닉6", BRAND_HYUNDAI),
-    (re.compile(r"(아이오닉\s*9|ioniq\s*9)", re.IGNORECASE), "아이오닉9", BRAND_HYUNDAI),
-    (re.compile(r"(아이오닉\s*7|ioniq\s*7)", re.IGNORECASE), "아이오닉7", BRAND_HYUNDAI),
+    (re.compile(r"(아이오닉\s*9|ioniq\s*9)(?![0-9])", re.IGNORECASE), "아이오닉9", BRAND_HYUNDAI),
+    (re.compile(r"(아이오닉\s*7|ioniq\s*7)(?![0-9])", re.IGNORECASE), "아이오닉7", BRAND_HYUNDAI),
     (re.compile(r"(아이오닉\s*(?:일렉트릭|ev|전기차)?|ioniq(?:\s*(?:ev|electric))?)" + PARTICLE_LOOKAHEAD, re.IGNORECASE), "아이오닉", BRAND_HYUNDAI),
     (re.compile(r"(코나\s*(?:일렉트릭|일렉|ev|전기차|electric)|kona\s*(?:ev|electric))", re.IGNORECASE), "코나 EV", BRAND_HYUNDAI),
     (re.compile(r"(캐스퍼\s*일렉트릭\s*크로스|casper\s*cross)", re.IGNORECASE), "캐스퍼 일렉트릭", BRAND_HYUNDAI),
     (re.compile(r"(캐스퍼\s*(?:일렉트릭|일렉|ev|전기차|electric)|casper\s*(?:electric|ev))", re.IGNORECASE), "캐스퍼 일렉트릭", BRAND_HYUNDAI),
     (re.compile(r"(포터\s*(?:일렉트릭|일렉|ev|전기차)|porter\s*ev)", re.IGNORECASE), "포터 EV", BRAND_HYUNDAI),
     (re.compile(r"(?<![a-zA-Z0-9])ST1(?![a-zA-Z0-9])", re.IGNORECASE), "ST1", BRAND_HYUNDAI),
-    (re.compile(r"((?:제네시스\s*)?(?:(?:electrified|일렉트리파이드)\s*gv\s*90|gv\s*90))", re.IGNORECASE), "GV90", BRAND_HYUNDAI),
-    (re.compile(r"((?:제네시스\s*)?(?:(?:electrified|일렉트리파이드)\s*gv\s*60|gv\s*60))", re.IGNORECASE), "GV60", BRAND_HYUNDAI),
+    (re.compile(r"((?:제네시스\s*)?(?:(?:electrified|일렉트리파이드)\s*gv\s*90|gv\s*90))(?![0-9])", re.IGNORECASE), "GV90", BRAND_HYUNDAI),
+    (re.compile(r"((?:제네시스\s*)?(?:(?:electrified|일렉트리파이드)\s*gv\s*60|gv\s*60))(?![0-9])", re.IGNORECASE), "GV60", BRAND_HYUNDAI),
     (re.compile(r"((?:제네시스\s*)?(?:(?:electrified|일렉트리파이드)\s*gv\s*70|gv\s*70\s*(?:전동화|ev|일렉트릭|전기차))|(?<![a-zA-Z0-9])gv\s*70e(?![a-zA-Z0-9]))", re.IGNORECASE), "GV70 EV", BRAND_HYUNDAI),
     (re.compile(r"((?:제네시스\s*)?(?:(?:electrified|일렉트리파이드)\s*g\s*80|g\s*80\s*(?:전동화|ev|일렉트릭|전기차))|(?<![a-zA-Z0-9])g\s*80e(?![a-zA-Z0-9]))", re.IGNORECASE), "G80 EV", BRAND_HYUNDAI),
     (re.compile(r"(제네시스\s*(?:전기차|ev|일렉트릭|전동화)|(?:electrified|일렉트리파이드)\s*제네시스|genesis\s*(?:ev|electric))", re.IGNORECASE), "제네시스 EV", BRAND_HYUNDAI),
@@ -130,18 +130,18 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     # -----------------------------------------------------------------
     # BMW M3 (Precedes Tesla Model 3 to prevent M3 Competition collision)
     # -----------------------------------------------------------------
-    (re.compile(r"(bmw\s*m3|비엠\s*m3|\bm3\s*컴페티션|bmw의\s*m3|비엠더블유\s*m3)", re.IGNORECASE), "BMW M3", BRAND_OTHER),
+    (re.compile(r"((?:bmw|비엠더블유|비엠)\s*(?:의\s*|신형\s*|구형\s*|g80\s*|f80\s*|e92\s*|e46\s*)?m3(?![a-zA-Z0-9])|\bm3\s*(?:컴페티션|투어링|cs)\b)", re.IGNORECASE), "BMW M3", BRAND_OTHER),
 
     # -----------------------------------------------------------------
     # Tesla Models & Colloquialisms
     # -----------------------------------------------------------------
     (re.compile(r"(모델\s*(?:3|쓰리|스리)\s*하이랜드|model\s*3\s*highland|m3\s*(?:highland|하이랜드)|(?<![가-힣a-zA-Z0-9])하이랜드" + PARTICLE_LOOKAHEAD + r"|(?<![a-zA-Z0-9])highland(?![a-zA-Z0-9]))", re.IGNORECASE), "Model 3 Highland", BRAND_TESLA),
     (re.compile(
-        r"(모델\s*(?:3|쓰리|스리)|model\s*3|(?:테슬라\s*(?:모삼|모\s*3)|(?<![가-힣a-zA-Z0-9])(?:모삼|모\s*3))"
+        r"(모델\s*(?:3|쓰리|스리)(?![0-9])|model\s*3(?![0-9])|(?:테슬라\s*(?:모삼|모\s*3(?![0-9]))|(?<![가-힣a-zA-Z0-9])(?:모삼|모\s*3(?![0-9])))"
         r"|(?:테슬라\s*)?삼식이"
-        r"|(?:테슬라\s*)?메기\s*3"
+        r"|(?:테슬라\s*)?메기\s*3(?![0-9])"
         r"|(?:테슬라\s+)메기"
-        r"|(?:테슬라\s*|tesla\s*)m3"
+        r"|(?:테슬라\s*|tesla\s*)m3(?![0-9])"
         r"|(?<!bmw\s)(?<!bmw)(?<!비엠\s)(?<!비엠)(?<!비엠더블유\s)(?<!비엠더블유)(?<!sm)(?<!애플\s)(?<!애플)(?<!맥\s)(?<!맥)(?<!맥북\s)(?<!맥북)(?<!아이맥\s)(?<!아이맥)(?<!아이패드\s)(?<!아이패드)(?<!mac\s)(?<!mac)(?<!macbook\s)(?<!macbook)(?<!imac\s)(?<!imac)(?<!ipad\s)(?<!ipad)"
         r"(?<![a-zA-Z0-9])m3(?=[은는이가을를의에과와도만로랑처조마나한께보부까]|으로|보다|부터|까지|처럼|조차|마저|한테|입|했|하|인|임|일)"
         r"|(?<!bmw\s)(?<!bmw)(?<!비엠\s)(?<!비엠)(?<!비엠더블유\s)(?<!비엠더블유)(?<!sm)(?<!애플\s)(?<!애플)(?<!맥\s)(?<!맥)(?<!맥북\s)(?<!맥북)(?<!아이맥\s)(?<!아이맥)(?<!아이패드\s)(?<!아이패드)(?<!mac\s)(?<!mac)(?<!macbook\s)(?<!macbook)(?<!imac\s)(?<!imac)(?<!ipad\s)(?<!ipad)"
@@ -198,7 +198,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
         re.IGNORECASE,
     ), "씰", BRAND_BYD),
     (re.compile(r"([시씨]라이언\s*0?7?|sealion\s*0?7?)", re.IGNORECASE), "시라이언", BRAND_BYD),
-    (re.compile(r"((?:byd|비야디)\s*(?:한|han))" + PARTICLE_LOOKAHEAD, re.IGNORECASE), "한", BRAND_BYD),
+    (re.compile(r"((?:byd|비야디)\s*(?:한|han))(?!\s*(?:대|번|개|명|달|해|두|쪽|가지|시간|분|초|살|층|권|장|잔|병|통)(?![a-zA-Z0-9가-힣]))" + PARTICLE_LOOKAHEAD, re.IGNORECASE), "한", BRAND_BYD),
     (re.compile(r"((?:byd|비야디)\s*(?:탕|tang))" + PARTICLE_LOOKAHEAD, re.IGNORECASE), "탕", BRAND_BYD),
 
     # -----------------------------------------------------------------
@@ -206,10 +206,10 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     # -----------------------------------------------------------------
     (re.compile(r"(토레스\s*(?:evx|ev|전기차)|torres\s*(?:evx|ev))", re.IGNORECASE), "토레스 EVX", BRAND_OTHER),
     (re.compile(r"(타이칸|taycan)", re.IGNORECASE), "타이칸", BRAND_OTHER),
-    (re.compile(r"(폴스타\s*2|polestar\s*2)", re.IGNORECASE), "폴스타 2", BRAND_OTHER),
-    (re.compile(r"(폴스타\s*4|polestar\s*4)", re.IGNORECASE), "폴스타 4", BRAND_OTHER),
-    (re.compile(r"(폴스타\s*3|polestar\s*3)", re.IGNORECASE), "폴스타 3", BRAND_OTHER),
-    (re.compile(r"(폴스타\s*5|polestar\s*5)", re.IGNORECASE), "폴스타 5", BRAND_OTHER),
+    (re.compile(r"(폴스타\s*2|polestar\s*2)(?![0-9])", re.IGNORECASE), "폴스타 2", BRAND_OTHER),
+    (re.compile(r"(폴스타\s*4|polestar\s*4)(?![0-9])", re.IGNORECASE), "폴스타 4", BRAND_OTHER),
+    (re.compile(r"(폴스타\s*3|polestar\s*3)(?![0-9])", re.IGNORECASE), "폴스타 3", BRAND_OTHER),
+    (re.compile(r"(폴스타\s*5|polestar\s*5)(?![0-9])", re.IGNORECASE), "폴스타 5", BRAND_OTHER),
     (re.compile(r"(폴스타|polestar)" + PARTICLE_LOOKAHEAD, re.IGNORECASE), "폴스타", BRAND_OTHER),
     (re.compile(r"(?:벤츠\s*|mercedes(?:\s*-?\s*benz)?\s*)?(?<![a-zA-Z0-9])(eqe\s*(?:350\+?|53|suv)?)(?![a-zA-Z0-9])", re.IGNORECASE), "EQE", BRAND_OTHER),
     (re.compile(r"(?:벤츠\s*|mercedes(?:\s*-?\s*benz)?\s*)?(?<![a-zA-Z0-9])(eqs\s*(?:450\+?|580|suv)?)(?![a-zA-Z0-9])", re.IGNORECASE), "EQS", BRAND_OTHER),
@@ -227,7 +227,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     (re.compile(r"(e-tron|이 트론|이트론|q4\s*e-tron)", re.IGNORECASE), "Audi e-tron", BRAND_OTHER),
     (re.compile(r"(볼트\s*(?:ev|euv)|bolt\s*ev)", re.IGNORECASE), "볼트 EV", BRAND_OTHER),
     (re.compile(r"(?<![a-zA-Z0-9])(ex\s*30|c40|xc40\s*recharge)(?![a-zA-Z0-9])", re.IGNORECASE), "Volvo EV", BRAND_OTHER),
-    (re.compile(r"(리비안|rivian|r1t|r1s)", re.IGNORECASE), "Rivian", BRAND_OTHER),
+    (re.compile(r"(리비안|rivian|(?<![a-zA-Z0-9])(?:r1t|r1s)(?![a-zA-Z0-9]))", re.IGNORECASE), "Rivian", BRAND_OTHER),
     (re.compile(r"(루시드\s*에어|lucid\s*air|루시드)", re.IGNORECASE), "Lucid Air", BRAND_OTHER),
     (re.compile(r"(샤오미\s*su7|(?<![a-zA-Z0-9])su7(?![a-zA-Z0-9]))", re.IGNORECASE), "샤오미 SU7", BRAND_OTHER),
     (re.compile(r"(폭스바겐\s*id\s*\.?\s*4|vw\s*id\s*\.?\s*4|(?<![a-zA-Z0-9])id\s*\.?\s*4(?![a-zA-Z0-9]))", re.IGNORECASE), "Volkswagen ID.4", BRAND_OTHER),
@@ -250,9 +250,9 @@ BRAND_KEYWORDS: List[Tuple[Pattern[str], str]] = [
     (re.compile(r"(테슬라|tesla|테슬람|개슬라|개스라|기가상하이|테쪽이)", re.IGNORECASE), BRAND_TESLA),
     (re.compile(r"(현대자동차|현대차|현대\s*전기차|현기차|현기충|흉기차|흉기|블루핸즈|e-gmp|이피트|아이오닉|ioniq)", re.IGNORECASE), BRAND_HYUNDAI),
     (re.compile(r"(제네시스|genesis|(?:(?:electrified|일렉트리파이드)\s*)?(?:gv\s*60|gv\s*70|g\s*80))", re.IGNORECASE), BRAND_HYUNDAI),
-    (re.compile(r"(기아차|기아\s*전기차|기아|오토큐|기아\s*(?:ev|이[븨브]이?))", re.IGNORECASE), BRAND_KIA),
-    (re.compile(r"(byd|비야디|짱깨차|짱차|중국\s*전기차)", re.IGNORECASE), BRAND_BYD),
-    (re.compile(r"(벤츠|mercedes|mercedes-benz|bmw|비엠더블유|비엠|아우디|audi|포르쉐|porsche|폴스타|polestar|볼보|volvo|쉐보레|chevrolet|chevy|캐딜락|cadillac|폭스바겐|volkswagen|vw|리비안|rivian|루시드|lucid|샤오미|xiaomi|쌍용|쌍용차|(?<![a-zA-Z0-9])kgm(?![a-zA-Z0-9])|케이지엠|kg\s*모빌리티|르노|renault|르노코리아|푸조|peugeot|지프|jeep)", re.IGNORECASE), BRAND_OTHER),
+    (re.compile(r"(기아차|기아\s*전기차|(?<![가-힣a-zA-Z0-9])기아|오토큐|기아\s*(?:ev|이[븨브]이?))", re.IGNORECASE), BRAND_KIA),
+    (re.compile(r"((?<![a-zA-Z0-9])byd(?![a-zA-Z0-9])|비야디|짱깨차|짱차|중국\s*전기차)", re.IGNORECASE), BRAND_BYD),
+    (re.compile(r"(벤츠|mercedes|mercedes-benz|(?<![a-zA-Z0-9])bmw(?![a-zA-Z0-9])|비엠더블유|비엠|아우디|audi|포르쉐|porsche|폴스타|polestar|볼보|volvo|쉐보레|chevrolet|chevy|캐딜락|cadillac|폭스바겐|volkswagen|(?<![a-zA-Z0-9])vw(?![a-zA-Z0-9])|리비안|rivian|루시드|lucid|샤오미|xiaomi|쌍용|쌍용차|(?<![a-zA-Z0-9])kgm(?![a-zA-Z0-9])|케이지엠|kg\s*모빌리티|르노|renault|르노코리아|푸조|peugeot|지프|jeep)", re.IGNORECASE), BRAND_OTHER),
 ]
 
 
@@ -273,9 +273,14 @@ def _find_and_resolve_candidates(text: str) -> Optional[Tuple[str, str]]:
     if not text:
         return None
 
+    _non_tesla_m3_prefixes = ("맥북", "macbook", "애플", "apple", "아이맥", "imac", "아이패드", "ipad", "bmw", "비엠")
     raw_candidates: List[_MatchCandidate] = []
     for idx, (pattern, model_name, brand) in enumerate(MODEL_RULES):
         for m in pattern.finditer(text):
+            if model_name == "Model 3" and m.group(0).strip().lower().startswith("m3"):
+                prefix = text[max(0, m.start() - 25):m.start()].lower()
+                if any(p in prefix for p in _non_tesla_m3_prefixes) and "테슬라" not in prefix and "tesla" not in prefix:
+                    continue
             raw_candidates.append(_MatchCandidate(m.start(), m.end(), model_name, brand, idx))
 
     if not raw_candidates:

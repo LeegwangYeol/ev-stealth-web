@@ -355,7 +355,11 @@ class BlindScraper:
         company = "블라인드 인증유저"
         company_match = re.search(r'<span[^>]*class="[^"]*company[^"]*"[^>]*>(.*?)</span>', html_content, re.DOTALL)
         if not company_match:
-            company_match = re.search(r'<div[^>]*class="[^"]*author-info[^"]*"[^>]*>.*?<span>(.*?)</span>', html_content, re.DOTALL)
+            company_match = re.search(
+                r'<div[^>]*class="[^"]*author-info[^"]*"[^>]*>(?:(?!</div>).)*?<span>(.*?)</span>',
+                html_content,
+                re.DOTALL,
+            )
         if company_match:
             comp_clean = clean_html_text(company_match.group(1))
             if comp_clean:
@@ -377,7 +381,11 @@ class BlindScraper:
                 body = clean_html_text(body_match.group(1))
 
         comments = []
-        comment_matches = re.findall(r'<div[^>]*class="[^"]*comment-item[^"]*"[^>]*>(.*?)</div>\s*<!--\s*//comment-item', html_content, re.DOTALL)
+        comment_matches = re.findall(
+            r'<div[^>]*class="[^"]*comment-item[^"]*"[^>]*>((?:(?!<div\b[^>]*\bcomment-item\b).)*?)</div>\s*<!--\s*//comment-item',
+            html_content,
+            re.DOTALL,
+        )
         if not comment_matches:
             comment_matches = re.findall(r'<p[^>]*class="[^"]*comment-text[^"]*"[^>]*>(.*?)</p>', html_content, re.DOTALL)
 

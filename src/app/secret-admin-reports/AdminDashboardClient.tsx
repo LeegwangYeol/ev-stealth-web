@@ -43,6 +43,17 @@ export function normalizeBrand(rawBrand?: string): string {
   return clean;
 }
 
+function isValidUtcCalendarDate(year: number, month: number, day: number): boolean {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const d = new Date(Date.UTC(year, month - 1, day));
+  return (
+    d.getUTCFullYear() === year &&
+    d.getUTCMonth() === month - 1 &&
+    d.getUTCDate() === day
+  );
+}
+
 /**
  * Cross-browser safe date parser compatible with Safari/WebKit, ISO timestamps, and dot-separated Korean dates.
  */
@@ -51,55 +62,60 @@ export function parseSafeDate(rawDate?: string): number {
   const trimmed = rawDate.trim();
   if (!trimmed) return 0;
 
-  // 0. Preserve ISO 8601 timestamps (including fractional seconds and timezone offsets) before separator normalization
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(trimmed)) {
-    const hasTz = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(trimmed);
-    const isoCandidate = hasTz ? trimmed : `${trimmed}Z`;
-    const timestamp = new Date(isoCandidate).getTime();
-    if (Number.isFinite(timestamp) && timestamp > 0) return timestamp;
-  }
-
-  // Clean Korean date separators (e.g. "2026. 09. 08.", "2026년 9월 8일")
+  // Clean Korean date separators (e.g. "2026. 09. 08.", "2026년 9월 8일 14:30:00") while keeping space before time
   const cleaned = trimmed
     .replace(/년\s*/g, '-')
     .replace(/월\s*/g, '-')
-    .replace(/일\s*/g, '')
-    .replace(/\s*([./-])\s*/g, '-')
-    .replace(/-+$/, '');
+    .replace(/일\s*/g, ' ')
+    .trim();
 
-  // 1. Cross-browser normalizer: replace dots and slashes with hyphens (e.g. 2026.09.08 -> 2026-09-08)
-  const normalized = cleaned.replace(/\./g, '-').replace(/\//g, '-');
+  // Normalize dot/slash Y-M-D date separators (e.g. 2026. 09. 08. -> 2026-09-08) without mangling timezone offsets
+  const normalized = cleaned
+    .replace(/(\d{4})\s*[./-]\s*(\d{1,2})\s*[./-]\s*(\d{1,2})\.?/g, '$1-$2-$3')
+    .replace(/\s+/g, ' ')
+    .trim();
 
-  // 2. Date-only format "YYYY-M-D" or "YYYY-MM-DD" -> pad & parse consistently as UTC midnight across all browsers, rejecting invalid calendar rollovers
-  const ymdOnly = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (ymdOnly) {
-    const year = Number(ymdOnly[1]);
-    const month = Number(ymdOnly[2]);
-    const day = Number(ymdOnly[3]);
-    if (month < 1 || month > 12 || day < 1 || day > 31) return 0;
-    const padded = `${ymdOnly[1]}-${ymdOnly[2].padStart(2, '0')}-${ymdOnly[3].padStart(2, '0')}`;
-    const d = new Date(`${padded}T00:00:00Z`);
-    const timestamp = d.getTime();
-    if (
-      Number.isFinite(timestamp) &&
-      timestamp > 0 &&
-      d.getUTCFullYear() === year &&
-      d.getUTCMonth() === month - 1 &&
-      d.getUTCDate() === day
-    ) {
-      return timestamp;
+  // Match Y-M-D with optional time (HH:MM[:SS[.sss]]) and optional TZ (Z|[+-]HH[:]MM), rejecting calendar rollovers
+  const dtMatch = normalized.match(
+    /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s]+(\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?\s*(Z|[+-]\d{2}:?\d{2})?)?$/i
+  );
+  if (dtMatch) {
+    const year = Number(dtMatch[1]);
+    const month = Number(dtMatch[2]);
+    const day = Number(dtMatch[3]);
+    if (!isValidUtcCalendarDate(year, month, day)) return 0;
+
+    const yyyy = dtMatch[1];
+    const mm = dtMatch[2].padStart(2, '0');
+    const dd = dtMatch[3].padStart(2, '0');
+
+    if (dtMatch[4] === undefined) {
+      const ts = new Date(`${yyyy}-${mm}-${dd}T00:00:00Z`).getTime();
+      return Number.isFinite(ts) && ts > 0 ? ts : 0;
     }
-    return 0;
+
+    const hour = Number(dtMatch[4]);
+    const minute = Number(dtMatch[5]);
+    const second = dtMatch[6] !== undefined ? Number(dtMatch[6]) : 0;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) {
+      return 0;
+    }
+
+    const hh = dtMatch[4].padStart(2, '0');
+    const mi = dtMatch[5];
+    const ss = (dtMatch[6] ?? '00').padStart(2, '0');
+    const frac = dtMatch[7] ? `.${dtMatch[7].slice(0, 3)}` : '';
+    let tz = dtMatch[8] ? dtMatch[8].toUpperCase() : 'Z';
+    if (/^[+-]\d{4}$/.test(tz)) {
+      tz = `${tz.slice(0, 3)}:${tz.slice(3)}`;
+    }
+    const iso = `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}${frac}${tz}`;
+    const ts = new Date(iso).getTime();
+    return Number.isFinite(ts) && ts > 0 ? ts : 0;
   }
 
-  // 3. Normalize "YYYY-MM-DD HH:mm:ss" -> ISO format
-  if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(normalized)) {
-    const isoLike = normalized.replace(/\s+/, 'T') + (normalized.includes('+') || normalized.endsWith('Z') ? '' : 'Z');
-    const timestamp = new Date(isoLike).getTime();
-    if (Number.isFinite(timestamp) && timestamp > 0) return timestamp;
-  }
-
-  // 4. Full ISO 8601 strings or standard date fallback
+  // Fallback for RFC 2822 / standard date strings (reject bare integer strings like "2026")
+  if (/^\d+$/.test(normalized)) return 0;
   const timestamp = new Date(normalized).getTime();
   if (Number.isFinite(timestamp) && timestamp > 0) {
     return timestamp;
@@ -400,7 +416,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
   // Accessible Modal Dialog State & Focus Management
   const [activeModalReport, setActiveModalReport] = useState<DefectReportWithTimestamp | null>(null);
-  const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const triggerButtonRef = useRef<HTMLElement | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -414,10 +430,9 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     };
   }, []);
 
-  const handleOpenModal = useCallback((report: DefectReportWithTimestamp, triggerEl?: HTMLButtonElement) => {
-    if (triggerEl) {
-      triggerButtonRef.current = triggerEl;
-    }
+  const handleOpenModal = useCallback((report: DefectReportWithTimestamp, triggerEl?: HTMLElement) => {
+    triggerButtonRef.current =
+      triggerEl || (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     setActiveModalReport(report);
   }, []);
 
@@ -430,11 +445,13 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     focusReturnTimerRef.current = setTimeout(() => {
       if (triggerButtonRef.current?.isConnected) {
         triggerButtonRef.current?.focus();
+      } else {
+        searchInputRef.current?.focus();
       }
     }, 0);
   }, []);
 
-  // Window-level Escape key listener to close modal from anywhere in the document
+  // Window-level Escape key listener & focus containment guard while modal is open
   useEffect(() => {
     if (!activeModalReport) return;
 
@@ -445,9 +462,19 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
       }
     };
 
+    const handleDocumentFocusIn = (e: FocusEvent) => {
+      const target = e.target as Node | null;
+      if (modalRef.current && target && !modalRef.current.contains(target)) {
+        e.stopPropagation();
+        (closeButtonRef.current ?? modalRef.current).focus();
+      }
+    };
+
     window.addEventListener('keydown', handleWindowKeyDown);
+    document.addEventListener('focusin', handleDocumentFocusIn);
     return () => {
       window.removeEventListener('keydown', handleWindowKeyDown);
+      document.removeEventListener('focusin', handleDocumentFocusIn);
     };
   }, [activeModalReport, handleCloseModal]);
 
@@ -455,15 +482,23 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
   const handleModalKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') {
       e.preventDefault();
+      e.stopPropagation();
       handleCloseModal();
       return;
     }
 
     if (e.key === 'Tab' && modalRef.current) {
-      const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      );
-      if (focusableElements.length === 0) return;
+      const focusableElements = Array.from(
+        modalRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => el.offsetParent !== null || el === document.activeElement);
+
+      if (focusableElements.length === 0) {
+        e.preventDefault();
+        modalRef.current.focus();
+        return;
+      }
 
       const firstElement = focusableElements[0];
       const lastElement = focusableElements[focusableElements.length - 1];
@@ -550,8 +585,10 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     return dedupedReports
       .filter((r): r is AdminDefectReportItem => Boolean(r && typeof r === 'object'))
       .map((r, idx) => {
-        const rawDate = r.created_at || r.date;
-        const parsed = parseSafeDate(rawDate);
+        const rawCreatedAt = typeof r.created_at === 'string' ? r.created_at : '';
+        const rawDateField = typeof r.date === 'string' ? r.date : '';
+        const parsedCreatedAt = parseSafeDate(rawCreatedAt);
+        const parsed = parsedCreatedAt > 0 ? parsedCreatedAt : parseSafeDate(rawDateField);
         const catInfo = resolveCategory(r.defect_category, r.defect_category_ko);
         const catCode = catInfo.code;
         const catKo = catInfo.ko;
@@ -614,7 +651,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         const spacelessIndex = searchIndex.replace(/\s+/g, '');
 
         // Standardize clean display date YYYY-MM-DD (validating calendar bounds)
-        const rawDateStr = String(r.date || (r.created_at ? r.created_at.slice(0, 10) : '')).trim();
+        const rawDateStr = (rawDateField || (rawCreatedAt ? rawCreatedAt.slice(0, 10) : '')).trim();
         const ymdMatch = rawDateStr.match(/^(\d{4})[.\-/\s년]+(\d{1,2})[.\-/\s월]+(\d{1,2})/);
         let displayDate = parsed > 0 ? new Date(parsed).toISOString().slice(0, 10) : '날짜 미상';
         if (ymdMatch) {
@@ -2086,7 +2123,7 @@ const DefectReportCard = memo(function DefectReportCard({
                   key={`tag-${idx}-${tagStr}`}
                   onClick={() => onTagClick(tagStr)}
                   aria-label={`'${tagStr}' 키워드로 검색 필터링`}
-                  className="px-2.5 py-1 min-h-[44px] inline-flex items-center rounded-full bg-slate-100 text-slate-800 text-[11px] font-semibold border border-slate-200 hover:bg-blue-50 hover:text-blue-800 hover:border-blue-300 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+                  className="px-2.5 py-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-full bg-slate-100 text-slate-800 text-[11px] font-semibold border border-slate-200 hover:bg-blue-50 hover:text-blue-800 hover:border-blue-300 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
                   title={`'${tagStr}' 키워드로 검색 필터링`}
                 >
                   #{tagStr}

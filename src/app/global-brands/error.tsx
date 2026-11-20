@@ -73,7 +73,7 @@ export default function GlobalBrandsGuideError({ error, reset }: ErrorProps) {
           </p>
           {error?.digest && (
             <p className="text-xs text-slate-700 font-mono pt-1">
-              오류 참조 코드: <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">{error.digest}</span>
+              오류 참조 코드: <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200 break-all">{error.digest}</span>
             </p>
           )}
         </div>

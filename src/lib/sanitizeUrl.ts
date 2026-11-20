@@ -174,6 +174,7 @@ export const PROTOTYPE_POLLUTION_REGEX = /(?:^|[.[\]\s])(?:__proto__|constructor
  */
 export function decodeHtmlEntities(str: string): string {
   if (!str || typeof str !== 'string') return '';
+  if (!str.includes('&')) return str;
   return str
     .replace(/&#x([0-9a-fA-F]+);?/gi, (_, hex) => {
       try {
@@ -211,33 +212,36 @@ export function decodeHtmlEntities(str: string): string {
  */
 export function safeDecodePercent(str: string): string {
   if (!str || typeof str !== 'string') return '';
+  if (!str.includes('%')) return str;
   let prev = str;
-  // Decode legacy %uXXXX encoding if present
-  if (/%u[0-9a-fA-F]{4}/i.test(prev)) {
-    prev = prev.replace(/%u([0-9a-fA-F]{4})/gi, (_, hex) => {
-      try {
-        return String.fromCharCode(parseInt(hex, 16));
-      } catch {
-        return '';
-      }
-    });
-  }
 
   for (let i = 0; i < 5; i++) {
+    let working = prev;
+    // Decode legacy %uXXXX encoding on each pass to catch multi-layer encodings (e.g. %25u0073)
+    if (/%u[0-9a-fA-F]{4}/i.test(working)) {
+      working = working.replace(/%u([0-9a-fA-F]{4})/gi, (_, hex) => {
+        try {
+          return String.fromCharCode(parseInt(hex, 16));
+        } catch {
+          return '';
+        }
+      });
+    }
     try {
-      const decoded = decodeURIComponent(prev);
+      const decoded = decodeURIComponent(working);
       if (decoded === prev) break;
       prev = decoded;
     } catch {
       // Decode individual %XX tokens if full decodeURIComponent threw (e.g. malformed trailing byte)
       try {
-        const partialDecoded = prev.replace(/%([0-9a-fA-F]{2})/g, (match, hex) => {
+        const partialDecoded = working.replace(/%([0-9a-fA-F]{2})/g, (match, hex) => {
           const byte = parseInt(hex, 16);
           return byte < 128 ? String.fromCharCode(byte) : match;
         });
         if (partialDecoded === prev) break;
         prev = partialDecoded;
       } catch {
+        prev = working;
         break;
       }
     }
@@ -245,16 +249,7 @@ export function safeDecodePercent(str: string): string {
   return prev;
 }
 
-/**
- * Normalizes and extracts the URI scheme if one is present, uncovering obfuscated or encoded schemes.
- * Uses a two-pass decode in case percent decoding reveals newly formed HTML entities.
- */
-export function extractAndNormalizeScheme(raw: string): string {
-  if (!raw || typeof raw !== 'string') return '';
-  let decoded = safeDecodePercent(decodeHtmlEntities(raw));
-  // Second pass: uncover nested entity sequences like %26colon; or %26%23x3a%3b
-  decoded = safeDecodePercent(decodeHtmlEntities(decoded));
-
+function extractSchemeFromDecoded(decoded: string): string {
   const stripped = decoded
     .replace(/\\0|\\x00|\\u0000|\\u\{0+\}/gi, '')
     .replace(/[\s\x00-\x1f\x7f-\x9f\u00ad\u200b-\u200f\ufeff\u200e\u200f\u2028-\u202f\u2060-\u206f]/gi, '')
@@ -285,14 +280,19 @@ export function extractAndNormalizeScheme(raw: string): string {
 }
 
 /**
- * Checks if a candidate URL is a malicious open redirect vector (protocol-relative, backslash, or encoded slashes).
+ * Normalizes and extracts the URI scheme if one is present, uncovering obfuscated or encoded schemes.
+ * Uses a two-pass decode in case percent decoding reveals newly formed HTML entities.
  */
-export function isOpenRedirect(raw: string): boolean {
-  if (!raw || typeof raw !== 'string') return false;
+export function extractAndNormalizeScheme(raw: string): string {
+  if (!raw || typeof raw !== 'string') return '';
   let decoded = safeDecodePercent(decodeHtmlEntities(raw));
+  // Second pass: uncover nested entity sequences like %26colon; or %26%23x3a%3b
   decoded = safeDecodePercent(decodeHtmlEntities(decoded));
+  return extractSchemeFromDecoded(decoded);
+}
+
+function isOpenRedirectWithDecoded(trimmedRaw: string, decoded: string): boolean {
   const trimmedDecoded = decoded.trim();
-  const trimmedRaw = raw.trim();
 
   // Protocol relative or multiple leading slashes/backslashes (e.g. //evil.com, \\\evil.com)
   if (/^[/\\]{2,}/.test(trimmedDecoded) || /^[/\\]{2,}/.test(trimmedRaw)) {
@@ -314,6 +314,16 @@ export function isOpenRedirect(raw: string): boolean {
     return true;
   }
   return false;
+}
+
+/**
+ * Checks if a candidate URL is a malicious open redirect vector (protocol-relative, backslash, or encoded slashes).
+ */
+export function isOpenRedirect(raw: string): boolean {
+  if (!raw || typeof raw !== 'string') return false;
+  let decoded = safeDecodePercent(decodeHtmlEntities(raw));
+  decoded = safeDecodePercent(decodeHtmlEntities(decoded));
+  return isOpenRedirectWithDecoded(raw.trim(), decoded);
 }
 
 /**
@@ -348,6 +358,15 @@ function removePrototypePollutionParams(params: URLSearchParams): boolean {
   return true;
 }
 
+function stripPrototypePollutionFromParsedUrl(parsed: URL, originalUrl: string): string {
+  if (!parsed.search) return originalUrl;
+  const params = new URLSearchParams(parsed.search);
+  if (!removePrototypePollutionParams(params)) return originalUrl;
+
+  parsed.search = params.toString();
+  return parsed.toString();
+}
+
 /**
  * Strips dangerous prototype pollution query parameters from an absolute URL or relative path.
  * Retains all legitimate query parameters, paths, and anchors.
@@ -358,13 +377,7 @@ export function stripPrototypePollutionQueryParams(url: string): string {
   // Case 1: Absolute URL
   if (/^https?:\/\//i.test(url)) {
     try {
-      const parsed = new URL(url);
-      if (!parsed.search) return url;
-      const params = new URLSearchParams(parsed.search);
-      if (!removePrototypePollutionParams(params)) return url;
-
-      parsed.search = params.toString();
-      return parsed.toString();
+      return stripPrototypePollutionFromParsedUrl(new URL(url), url);
     } catch {
       return url;
     }
@@ -378,9 +391,11 @@ export function stripPrototypePollutionQueryParams(url: string): string {
     const params = new URLSearchParams(parsed.search);
     if (!removePrototypePollutionParams(params)) return url;
 
+    // Collapse multiple leading slashes after dot-segment resolution so relative paths never become protocol-relative //host
+    const safePath = parsed.pathname.replace(/^\/{2,}/, '/');
     const searchStr = params.toString() ? '?' + params.toString() : '';
     const hashStr = parsed.hash || '';
-    return parsed.pathname + searchStr + hashStr;
+    return safePath + searchStr + hashStr;
   } catch {
     return url;
   }
@@ -434,19 +449,18 @@ export function parseSafeQueryParams(input?: unknown): Record<string, string> {
 export function extractHostname(urlOrHost?: unknown): string {
   if (!urlOrHost || typeof urlOrHost !== 'string') return '';
   const trimmed = urlOrHost.trim();
-  if (!trimmed) return '';
+  if (!trimmed || trimmed.includes('\\')) return '';
 
   // Bare hostname without protocol or slashes
-  if (!trimmed.includes('/') && !trimmed.includes(':') && /^[a-zA-Z0-9.\-]+$/.test(trimmed)) {
+  if (!trimmed.includes('/') && !trimmed.includes(':') && !trimmed.includes('@') && /^[a-zA-Z0-9.\-]+$/.test(trimmed)) {
     return trimmed.toLowerCase().replace(/\.+$/, '');
   }
 
   try {
-    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) {
-      const parsed = new URL(trimmed);
-      return (parsed.hostname || '').toLowerCase().replace(/\.+$/, '');
-    }
-    const parsed = new URL('http://' + trimmed);
+    const parsed = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)
+      ? new URL(trimmed)
+      : new URL('http://' + trimmed);
+    if (parsed.username || parsed.password) return '';
     return (parsed.hostname || '').toLowerCase().replace(/\.+$/, '');
   } catch {
     return '';
@@ -558,59 +572,64 @@ export function sanitizeSafeUrl(url?: unknown, options?: SanitizeUrlOptions): st
     return '#';
   }
 
-  // 6. Multi-pass decode entities and percent-encodings to detect nested/obfuscated control characters
+  // 6. Multi-pass decode entities and percent-encodings to detect nested/obfuscated control characters & HTML null entities
+  if (/&#(?:0+|x0+)(?:;|[^0-9a-fA-F]|$)/i.test(trimmed)) {
+    return '#';
+  }
   const decodedPass1 = safeDecodePercent(decodeHtmlEntities(trimmed));
+  if (/&#(?:0+|x0+)(?:;|[^0-9a-fA-F]|$)/i.test(decodedPass1)) {
+    return '#';
+  }
   const decodedCheck = safeDecodePercent(decodeHtmlEntities(decodedPass1));
   if (/[\x00-\x1f\x7f-\x9f\u00ad\u200b-\u200f\u2028-\u202f\u2060-\u206f\ufeff]/u.test(decodedCheck)) {
     return '#';
   }
 
-  // 7. Explicit check for forbidden schemes (javascript:, data:, vbscript:)
+  // 7. Extract scheme once from decodedCheck and verify against forbidden/allowed schemes
+  const normalizedScheme = extractSchemeFromDecoded(decodedCheck);
   if (
     /(?:javascript|data|vbscript)\s*:/i.test(trimmed) ||
     /(?:javascript|data|vbscript)\s*:/i.test(decodedCheck)
   ) {
-    const extracted = extractAndNormalizeScheme(trimmed);
-    if (!extracted || extracted === 'javascript' || extracted === 'data' || extracted === 'vbscript' || FORBIDDEN_SCHEMES.has(extracted)) {
+    if (!normalizedScheme || normalizedScheme === 'javascript' || normalizedScheme === 'data' || normalizedScheme === 'vbscript' || FORBIDDEN_SCHEMES.has(normalizedScheme)) {
       return '#';
     }
   }
 
-  // 8. Extract scheme and check against allowed and forbidden schemes
-  const normalizedScheme = extractAndNormalizeScheme(trimmed);
   if (normalizedScheme) {
     if (FORBIDDEN_SCHEMES.has(normalizedScheme) || !ALLOWED_SCHEMES.has(normalizedScheme)) {
       return '#';
     }
   }
 
-  // 9. Block protocol-relative URLs and backslash redirects
-  if (isOpenRedirect(trimmed)) {
+  // 8. Block protocol-relative URLs and backslash redirects
+  if (isOpenRedirectWithDecoded(trimmed, decodedCheck)) {
     return '#';
   }
 
-  // 10. Anchor links (#...)
+  // 9. Anchor links (#...)
   if (/^#[a-zA-Z0-9_\-.:]*$/.test(trimmed)) {
     return trimmed;
   }
 
-  // 11. Safe internal relative routes (must start with / and not followed by / or \ or encoded slashes, no backslashes anywhere in path)
+  // 10. Safe internal relative routes (must start with / and not followed by / or \ or encoded slashes, no backslashes anywhere in path)
   if (/^\/(?![/\\])/.test(trimmed) && !/[\s<>"'\\]/.test(trimmed) && !/^\/(?:%2f|%5c)/i.test(trimmed)) {
     // Strip any prototype pollution from internal relative query params
-    return stripPrototypePollutionQueryParams(trimmed);
+    const cleaned = stripPrototypePollutionQueryParams(trimmed);
+    return isOpenRedirectWithDecoded(cleaned, cleaned) ? '#' : cleaned;
   }
 
-  // 12. mailto: (disjoint label/dot regex prevents ReDoS backtracking)
+  // 11. mailto: (disjoint label/dot regex prevents ReDoS backtracking)
   if (/^mailto:[a-zA-Z0-9._%+-]+@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/i.test(trimmed)) {
     return trimmed;
   }
 
-  // 13. tel:
+  // 12. tel:
   if (/^tel:[+0-9\-#*().]+$/i.test(trimmed)) {
     return trimmed;
   }
 
-  // 14. Absolute web URLs: must be http or https with valid hostname and no authority userinfo
+  // 13. Absolute web URLs: must be http or https with valid hostname and no authority userinfo
   if (/^https?:\/\//i.test(trimmed) && !/[\s<>"'\\]/.test(trimmed) && !/^https?:\/\/[^/?#]*@/i.test(trimmed)) {
     try {
       const parsed = new URL(trimmed);
@@ -635,7 +654,7 @@ export function sanitizeSafeUrl(url?: unknown, options?: SanitizeUrlOptions): st
         }
 
         // Clean query parameters of any prototype pollution keys
-        return stripPrototypePollutionQueryParams(trimmed);
+        return parsed.search ? stripPrototypePollutionFromParsedUrl(parsed, trimmed) : trimmed;
       }
     } catch {
       return '#';

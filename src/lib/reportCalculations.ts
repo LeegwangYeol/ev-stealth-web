@@ -282,12 +282,12 @@ function isPrivateOrInternalHost(rawHost: string): boolean {
     return true;
   }
 
-  // IPv6 reserved, loopback, unspecified, IPv4-mapped/compatible (::/96), NAT64, 6to4, discard, ULA, link-local
+  // IPv6 reserved, loopback, unspecified, IPv4-mapped/compatible (::/96), NAT64, Teredo, benchmarking, ORCHID, 6to4, 6bone, discard, ULA, link/site-local, multicast
   if (host.startsWith('[') || bareHost.includes(':')) {
     if (
       bareHost.startsWith('::') ||
-      bareHost.startsWith('0:') ||
-      /^(?:64:ff9b(?::1)?|100|2001:db8|2002|fe[89ab][0-9a-f]|f[cd][0-9a-f]{2}):/i.test(bareHost)
+      /^0+:/.test(bareHost) ||
+      /^(?:64:ff9b(?::1)?:|100:|2001:(?::|0:|2:|1[0-9a-f]:|2[0-9a-f]:|0?db8:)|2002:|3ffe:|fe[89a-f][0-9a-f]:|f[cd][0-9a-f]{2}:|ff[0-9a-f]{2}:)/i.test(bareHost)
     ) {
       return true;
     }
@@ -299,7 +299,7 @@ function isPrivateOrInternalHost(rawHost: string): boolean {
     return true;
   }
 
-  // IPv4 private, loopback, link-local, CGNAT, benchmark, TEST-NET, and multicast/reserved ranges
+  // IPv4 private, loopback, link-local, CGNAT, benchmark, 6to4-relay, TEST-NET, and multicast/reserved ranges
   return (
     /^0\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(bareHost) ||
     /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(bareHost) ||
@@ -308,6 +308,7 @@ function isPrivateOrInternalHost(rawHost: string): boolean {
     /^172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(bareHost) ||
     /^192\.168\.\d{1,3}\.\d{1,3}$/.test(bareHost) ||
     /^192\.0\.[02]\.\d{1,3}$/.test(bareHost) ||
+    /^192\.88\.99\.\d{1,3}$/.test(bareHost) ||
     /^198\.1[89]\.\d{1,3}\.\d{1,3}$/.test(bareHost) ||
     /^198\.51\.100\.\d{1,3}$/.test(bareHost) ||
     /^203\.0\.113\.\d{1,3}$/.test(bareHost) ||
@@ -454,9 +455,9 @@ export function deduplicateReports(
     // Always normalize to guarantee URL sanitization, PII masking, and field invariants
     const normalized = normalizeReport(item as Record<string, unknown>, idx);
 
-    // Deterministic deduplication keys (ID + canonical URL, or semantic fingerprint fallback):
+    // Deterministic deduplication keys (source-scoped ID + canonical URL, or semantic fingerprint fallback):
     const id = String(normalized.id || '').trim();
-    const idKey = id && !id.startsWith('report_') ? `id:${id}` : '';
+    const idKey = id && !id.startsWith('report_') ? `id:${normalized.source}:${id}` : '';
     const urlKey = normalized.url && normalized.url !== '#'
       ? `url:${canonicalizeReportUrlForDedup(normalized.url)}`
       : '';
@@ -505,6 +506,7 @@ export function deduplicateReports(
  */
 export function normalizeReport(raw: Record<string, unknown>, index: number): DefectReportItem {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) raw = {};
+  const safeIndex = typeof index === 'number' && Number.isFinite(index) && index >= 0 ? Math.floor(index) : 0;
 
   const catInfo = resolveCategory(
     raw.defect_category || raw.category || raw.defect_category_key,
@@ -587,8 +589,13 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
     safeDate = new Date().toISOString().split('T')[0];
   }
 
+  const rawIdCandidate =
+    raw.id !== undefined && raw.id !== null && String(raw.id).trim() !== ''
+      ? raw.id
+      : raw.post_id ?? '';
+
   return {
-    id: sanitizeText(raw.id ?? raw.post_id ?? '') || `report_${index + 1}`,
+    id: sanitizeText(rawIdCandidate) || `report_${safeIndex + 1}`,
     source: sanitizeText(raw.source || raw.platform || '').toLowerCase() || 'bobaedream',
     url: sanitizeReportUrl(raw.url || raw.post_url || '#'),
     title: maskSensitiveData(sanitizeText(raw.title || raw.post_title || '')) || '전기차 결함 제보',
@@ -701,7 +708,7 @@ export function calculateKPIs(
       ? getSafeSentimentScore(existingStats.avg_negativity_score, avgScore)
       : avgScore,
     critical_defect_count: typeof existingStats?.critical_defect_count === 'number' && Number.isFinite(existingStats.critical_defect_count)
-      ? Math.max(0, existingStats.critical_defect_count)
+      ? Math.min(totalFiltered, Math.max(0, existingStats.critical_defect_count))
       : criticalCount,
     top_model: existingTopModel || topModelDisplay,
     top_platform: existingTopPlatform || topPlatformDisplay,

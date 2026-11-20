@@ -409,7 +409,7 @@ export const PdiItemRow = memo(function PdiItemRow({ item, onToggle }: PdiItemRo
         aria-describedby={item.warning ? `pdi-warning-${item.id}` : undefined}
         onChange={() => onToggle(item.id)}
         onKeyDown={handleKeyDown}
-        className="mt-1 w-6 h-6 text-blue-600 bg-gray-100 border-slate-400 hover:border-slate-500 rounded focus:ring-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500 print:accent-blue-600 print:border-2 print:border-black print:rounded-none print:w-5 print:h-5 print:bg-white cursor-pointer"
+        className="mt-1 w-6 h-6 text-blue-600 bg-gray-100 border-slate-500 hover:border-slate-700 rounded focus:ring-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500 print:accent-blue-600 print:border-2 print:border-black print:rounded-none print:w-5 print:h-5 print:bg-white cursor-pointer"
       />
       <span className="ml-4 flex-1">
         <span
@@ -459,6 +459,7 @@ export default function PdiChecklistClient() {
         return;
       }
       if (e.key === STORAGE_KEY) {
+        setStorageType('localStorage');
         if (!e.newValue) {
           // Another tab cleared or reset storage -> synchronize to initial defaults with fresh reference
           const resetItems = INITIAL_PDI_ITEMS.map((item) => ({ ...item }));
@@ -491,10 +492,10 @@ export default function PdiChecklistClient() {
     }
     syncedItemsRef.current = null;
     saveChecklistToStorage(items);
-    if (lastActiveStorageMedium && lastActiveStorageMedium !== storageType) {
-      setStorageType(lastActiveStorageMedium);
-    }
-  }, [items, mounted, storageType]);
+    setStorageType((prev) =>
+      lastActiveStorageMedium && lastActiveStorageMedium !== prev ? lastActiveStorageMedium : prev
+    );
+  }, [items, mounted]);
 
   const [actionAnnouncement, setActionAnnouncement] = useState<string>('');
 
@@ -710,7 +711,7 @@ export default function PdiChecklistClient() {
           aria-valuemax={100}
           aria-label="신차 출고 전 점검(PDI) 진행률"
           aria-valuetext={`${progressPercentage}% 검수 완료 (총 ${items.length}개 중 ${checkedCount}개 확인)`}
-          className="w-full bg-slate-200 border border-slate-300 rounded-full h-3 overflow-hidden"
+          className="w-full bg-slate-200 border border-slate-500 rounded-full h-3 overflow-hidden"
         >
           <div
             className={`h-3 rounded-full transition-all duration-500 ease-out motion-reduce:transition-none ${
@@ -740,7 +741,7 @@ export default function PdiChecklistClient() {
                 tabIndex={isSelected ? 0 : -1}
                 onKeyDown={(e) => handleTabKeyDown(e, 0)}
                 onClick={() => setSelectedCategory('ALL')}
-                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg text-xs font-semibold border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+                className={`px-3 py-1.5 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-xs font-semibold border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                   isSelected
                     ? 'bg-blue-700 text-white border-blue-700'
                     : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
@@ -767,7 +768,7 @@ export default function PdiChecklistClient() {
                 tabIndex={isSelected ? 0 : -1}
                 onKeyDown={(e) => handleTabKeyDown(e, tabIndex)}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 min-h-[44px] inline-flex items-center rounded-lg text-xs font-semibold border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+                className={`px-3 py-1.5 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-xs font-semibold border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                   isSelected
                     ? 'bg-blue-700 text-white border-blue-700'
                     : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
@@ -810,7 +811,7 @@ export default function PdiChecklistClient() {
                   aria-expanded={!isCollapsed}
                   aria-controls={contentId}
                   aria-label={`${category} (${categoryStats[category]?.checked || 0}/${categoryStats[category]?.total || 0} 완료)`}
-                  className="w-full p-4 flex items-center justify-between text-left text-slate-800 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-t-2xl transition print:p-2 print:hover:text-black print:cursor-default"
+                  className="w-full p-4 min-h-[44px] flex items-center justify-between text-left text-slate-800 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-t-2xl transition print:p-2 print:hover:text-black print:cursor-default"
                 >
                   <span>{category}</span>
                   <span className="flex items-center gap-2 text-xs font-normal text-slate-600 print:hidden">

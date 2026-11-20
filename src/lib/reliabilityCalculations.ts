@@ -119,7 +119,17 @@ export function sanitizeCategoryKey(
   return fallback;
 }
 
-const FORBIDDEN_RECORD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const FORBIDDEN_RECORD_KEYS = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+  'tostring',
+  'valueof',
+  'hasownproperty',
+  'isprototypeof',
+  'propertyisenumerable',
+  'tolocalestring',
+]);
 
 /**
  * Normalizes a raw reliability or DSI score to the strictly bounded [0, 100] interval.
@@ -347,13 +357,16 @@ export function calculateTrendDirection(
       rawPctChange = ratioPct;
     }
   }
-  const pctChange = Number.isFinite(rawPctChange)
-    ? Math.round(rawPctChange * 10) / 10 + 0
-    : rawPctChange > 0
-      ? 100
-      : rawPctChange < 0
-        ? -100
-        : 0;
+  const scaledPct = rawPctChange * 10;
+  const pctChange = Number.isFinite(scaledPct)
+    ? Math.round(scaledPct) / 10 + 0
+    : Number.isFinite(rawPctChange)
+      ? rawPctChange + 0
+      : rawPctChange > 0
+        ? 100
+        : rawPctChange < 0
+          ? -100
+          : 0;
 
   if (Math.abs(pctChange) <= safeThreshold) {
     return {
@@ -452,7 +465,7 @@ export function calculateReliabilityKPIs(data?: ReliabilityTrendsDatabase | null
       }
     }
 
-    if (totalDsiWeight > 0) {
+    if (totalDsiWeight > 0 && Number.isFinite(totalDsiWeight) && Number.isFinite(weightedDsiSum)) {
       industryAvgDsi = Math.round((weightedDsiSum / totalDsiWeight) * 10) / 10 + 0;
     } else if (validDsiCount > 0) {
       industryAvgDsi = Math.round((simpleDsiSum / validDsiCount) * 10) / 10 + 0;
@@ -822,10 +835,11 @@ export function calculateReliabilityConfidence(
       : 50;
 
   // Logarithmic asymptotic saturation
-  const sampleConfidence = Math.min(
-    1.0,
-    Math.log(1 + safeComplaints) / Math.log(1 + threshold)
-  );
+  const denom = Math.log(1 + threshold);
+  const sampleConfidence =
+    denom > 0 && Number.isFinite(denom)
+      ? Math.min(1.0, Math.log(1 + safeComplaints) / denom)
+      : 1.0;
 
   // Year coverage factor (if specified)
   let yearFactor = 1.0;
@@ -903,9 +917,11 @@ export function calculateWeightedDefectFrequency(
   if (customWeights && typeof customWeights === 'object') {
     for (const [k, v] of Object.entries(customWeights)) {
       if (typeof k === 'string') {
+        const trimmedKey = k.trim();
+        if (!trimmedKey || FORBIDDEN_RECORD_KEYS.has(trimmedKey.toLowerCase())) continue;
         const parsedWeight = parseFiniteNumber(v);
         if (parsedWeight !== null && parsedWeight > 0) {
-          weights.set(k.trim().toUpperCase(), parsedWeight);
+          weights.set(trimmedKey.toUpperCase(), parsedWeight);
         }
       }
     }
@@ -1332,7 +1348,7 @@ function parsePeriodicDate(
 
   // 1. Quarter format: "2024-Q1", "2024 Q2", "2024년 1분기", "2024년 Q1"
   const qMatch =
-    dateStr.match(/^(\d{4})(?:[-/. ]*|년\s*)Q([1-4])/i) ||
+    dateStr.match(/^(\d{4})(?:[-/. ]*|년\s*)Q([1-4])$/i) ||
     dateStr.match(/^(\d{4})\s*년?\s*([1-4])\s*분기$/);
   if (qMatch) {
     const parsedY = Number(qMatch[1]);
@@ -1354,6 +1370,20 @@ function parsePeriodicDate(
       const parsedD = Number(fullMatch[3]);
       if (!isValidCalendarDate(parsedY, parsedM, parsedD)) return null;
     }
+    return {
+      year: parsedY,
+      month: parsedM,
+      quarter: Math.ceil(parsedM / 3) as 1 | 2 | 3 | 4,
+    };
+  }
+
+  // 2b. Korean spaced dot notation: "2024. 3. 18." or "2024. 03. 18"
+  const spacedDotMatch = dateStr.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?$/);
+  if (spacedDotMatch) {
+    const parsedY = Number(spacedDotMatch[1]);
+    const parsedM = Number(spacedDotMatch[2]);
+    const parsedD = Number(spacedDotMatch[3]);
+    if (!isValidCalendarDate(parsedY, parsedM, parsedD)) return null;
     return {
       year: parsedY,
       month: parsedM,

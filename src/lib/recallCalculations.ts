@@ -56,6 +56,12 @@ const DANGEROUS_PROTO_KEYS: ReadonlySet<string> = new Set([
   '__proto__',
   'constructor',
   'prototype',
+  'tostring',
+  'valueof',
+  'hasownproperty',
+  'isprototypeof',
+  'propertyisenumerable',
+  'tolocalestring',
 ]);
 
 const ENGLISH_MONTH_MAP: Readonly<Record<string, number>> = Object.freeze({
@@ -661,12 +667,12 @@ export function isModelMatchForCampaign(queryModel: string, campaignTargetModel:
   }
 
   // Safely extracts model designation digits while ignoring drivetrains (2WD/4WD),
-  // generation counters (1세대, 2세대), 4-digit years (2020-2030), and battery capacities (77.4kWh)
+  // generation counters (1세대, 2세대), 4-digit years (2020-2030, 2024MY), and battery capacities (77.4kWh)
   const extractModelDigits = (str: string): string[] => {
     const stripped = str
-      .replace(/\b(?:19|20)\d{2}\b/g, '')
+      .replace(/\b(?:19|20)\d{2}(?:my)?\b/gi, '')
       .replace(/\b[24]wd\b/gi, '')
-      .replace(/\d+\s*세대(?![a-zA-Z0-9])/g, '')
+      .replace(/(?<![0-9])\d+\s*세대(?![0-9])/g, '')
       .replace(/\b\d+(?:\.\d+)?\s*kwh\b/gi, '');
     return stripped.match(/\d+/g) || [];
   };
@@ -699,13 +705,13 @@ export function isModelMatchForCampaign(queryModel: string, campaignTargetModel:
     targetNums: string[]
   ): boolean => {
     // 1. Number collision check: e.g. "아이오닉 5" vs "아이오닉 6", "EV6" vs "EV9"
-    if (candidateNums.length > 0 && targetNums.length > 0 && candidateNums.join('') !== targetNums.join('')) {
+    if (candidateNums.length > 0 && targetNums.length > 0 && candidateNums.join(',') !== targetNums.join(',')) {
       return false;
     }
 
     // 2. EV / Electric vs Numbered EV check (e.g. "아이오닉 EV" vs "아이오닉 5")
-    const candidateHasEv = /\bev\b|일렉트릭/i.test(candidate);
-    const targetHasEv = /\bev\b|일렉트릭/i.test(target);
+    const candidateHasEv = /\bev(?:\b|(?=\d+\s*세대))|일렉트릭/i.test(candidate);
+    const targetHasEv = /\bev(?:\b|(?=\d+\s*세대))|일렉트릭/i.test(target);
     if (!candidateHasEv && candidateNums.length > 0 && !targetNums.length && targetHasEv) {
       return false;
     }
@@ -895,7 +901,7 @@ export function parseRecallDate(dateStr?: string | null): Date | null {
 
   // 5. Fallback to standard Date.parse only for explicit RFC/ISO timestamps with a 4-digit year
   // Guards against V8 Date.parse quirks where "아이오닉 5" or "12" parse as year 2001,
-  // and rejects V8 calendar rollover (e.g. "Feb 31, 2024 GMT").
+  // and rejects V8 calendar rollover (e.g. "Feb 31, 2024 GMT", "2024-02-31 12:00:00 GMT", "2024-Feb-31").
   const hasFourDigitYear = /(?:19|20)\d{2}/.test(clean);
   const looksLikeIsoOrEnglishDate =
     /^\d{4}-\d{2}-\d{2}[T ]/.test(clean) ||
@@ -904,14 +910,40 @@ export function parseRecallDate(dateStr?: string | null): Date | null {
     return null;
   }
 
+  const leadingNumericDate = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?![0-9])/);
+  if (leadingNumericDate) {
+    if (
+      !buildValidatedUtcDate(
+        parseInt(leadingNumericDate[1], 10),
+        parseInt(leadingNumericDate[2], 10),
+        parseInt(leadingNumericDate[3], 10)
+      )
+    ) {
+      return null;
+    }
+  }
+
   const rfcMonthDay =
-    clean.match(/\b([a-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})\b/i) ||
-    clean.match(/\b(\d{1,2})\s+([a-z]{3,9})\.?,?\s+(\d{4})\b/i);
+    clean.match(/\b([a-z]{3,9})[\s\-/.,]+(\d{1,2})(?:st|nd|rd|th)?[\s\-/.,]+(\d{4})\b/i) ||
+    clean.match(/\b(\d{1,2})(?:st|nd|rd|th)?[\s\-/.,]+([a-z]{3,9})[\s\-/.,]+(\d{4})\b/i) ||
+    clean.match(/\b(\d{4})[\s\-/.,]+([a-z]{3,9})[\s\-/.,]+(\d{1,2})(?:st|nd|rd|th)?\b/i);
   if (rfcMonthDay) {
-    const isMonthFirst = /^[a-z]/i.test(rfcMonthDay[1]);
-    const mKey = (isMonthFirst ? rfcMonthDay[1] : rfcMonthDay[2]).toLowerCase();
-    const dayNum = parseInt(isMonthFirst ? rfcMonthDay[2] : rfcMonthDay[1], 10);
-    const yearNum = parseInt(rfcMonthDay[3], 10);
+    let mKey: string;
+    let dayNum: number;
+    let yearNum: number;
+    if (/^\d{4}$/.test(rfcMonthDay[1])) {
+      yearNum = parseInt(rfcMonthDay[1], 10);
+      mKey = rfcMonthDay[2].toLowerCase();
+      dayNum = parseInt(rfcMonthDay[3], 10);
+    } else if (/^[a-z]/i.test(rfcMonthDay[1])) {
+      mKey = rfcMonthDay[1].toLowerCase();
+      dayNum = parseInt(rfcMonthDay[2], 10);
+      yearNum = parseInt(rfcMonthDay[3], 10);
+    } else {
+      dayNum = parseInt(rfcMonthDay[1], 10);
+      mKey = rfcMonthDay[2].toLowerCase();
+      yearNum = parseInt(rfcMonthDay[3], 10);
+    }
     const monthNum = Object.prototype.hasOwnProperty.call(ENGLISH_MONTH_MAP, mKey)
       ? ENGLISH_MONTH_MAP[mKey]
       : undefined;
@@ -1108,8 +1140,8 @@ export function isYearMatchForCampaign(year?: number, targetModelYears?: string)
   }
   if (!targetModelYears || typeof targetModelYears !== 'string' || !targetModelYears.trim()) return true;
 
-  // Clean target string: remove Korean particle "년"
-  const cleanTarget = targetModelYears.replace(/년/g, '').trim();
+  // Clean target string: remove Korean year particle "년", "년식", "년형"
+  const cleanTarget = targetModelYears.replace(/년(?:식|형)?/g, '').trim();
 
   // Split disjoint segments separated by comma or semicolon
   const segments = cleanTarget.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
@@ -1175,21 +1207,31 @@ export function isYearMatchForCampaign(year?: number, targetModelYears?: string)
 
 const SORTED_VIN_PREFIX_CACHE = new WeakMap<
   VinPrefixMapping[],
-  Array<{ entry: VinPrefixMapping; prefixUpper: string }>
+  {
+    snapshot: Array<{ ref: VinPrefixMapping; prefix: unknown }>;
+    sorted: Array<{ entry: VinPrefixMapping; prefixUpper: string }>;
+  }
 >();
 
 function getSortedVinPrefixes(
   vinPrefixes: VinPrefixMapping[]
 ): Array<{ entry: VinPrefixMapping; prefixUpper: string }> {
   const cached = SORTED_VIN_PREFIX_CACHE.get(vinPrefixes);
-  if (cached) return cached;
+  if (
+    cached &&
+    cached.snapshot.length === vinPrefixes.length &&
+    cached.snapshot.every((s, idx) => s.ref === vinPrefixes[idx] && s.prefix === vinPrefixes[idx]?.prefix)
+  ) {
+    return cached.sorted;
+  }
 
+  const snapshot = vinPrefixes.map((entry) => ({ ref: entry, prefix: entry?.prefix }));
   const sorted = vinPrefixes
     .filter((p) => p && typeof p.prefix === 'string' && p.prefix.trim().length > 0)
     .map((entry) => ({ entry, prefixUpper: entry.prefix.trim().toUpperCase() }))
     .sort((a, b) => b.prefixUpper.length - a.prefixUpper.length);
 
-  SORTED_VIN_PREFIX_CACHE.set(vinPrefixes, sorted);
+  SORTED_VIN_PREFIX_CACHE.set(vinPrefixes, { snapshot, sorted });
   return sorted;
 }
 
@@ -1651,8 +1693,9 @@ export function getModelsForBrand(brand: string, db?: RecallDatabase): string[] 
           const cleanModel = tm.replace(/\s*\([^)]*\)/g, '').trim();
           if (cleanModel) {
             if (canonicalBrand === '제네시스') {
-              if (cleanModel.includes('제네시스') || /^g(?:v|80|90)/i.test(cleanModel)) {
-                models.add(cleanModel.replace(/^제네시스\s*/, ''));
+              if (cleanModel.includes('제네시스') || /^g(?:v|70|80|90)/i.test(cleanModel)) {
+                const stripped = cleanModel.replace(/^제네시스\s*/, '').trim();
+                if (stripped) models.add(stripped);
                 models.add(cleanModel);
               }
             } else {

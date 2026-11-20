@@ -300,7 +300,12 @@ class DefectTracker:
         quarantine_corrupted: bool = True,
     ) -> Dict[str, Any]:
         """Load complete defect report dataset including statistics and metadata."""
-        from tracker.atomic_writer import is_corrupted_or_quarantined_filename, quarantine_corrupted_file
+        from tracker.atomic_writer import (
+            FileLock,
+            get_lock_path,
+            is_corrupted_or_quarantined_filename,
+            quarantine_corrupted_file,
+        )
 
         target = Path(file_path) if file_path else self.resolve_primary_reports_path()
         if not target or not target.exists():
@@ -311,7 +316,7 @@ class DefectTracker:
             logger.error("Target defect report file %s is marked as corrupted/quarantined.", target)
             return {"reports": [], "statistics": {}}
 
-        try:
+        def _read_and_validate() -> Dict[str, Any]:
             if not target.is_file() or target.stat().st_size == 0:
                 raise ValueError(f"Defect report file {target} is missing, a directory, or empty.")
             with open(target, "r", encoding="utf-8-sig") as f:
@@ -324,10 +329,19 @@ class DefectTracker:
             ):
                 raise ValueError(f"Defect report file {target} failed post-read schema validation.")
             return data
+
+        try:
+            return _read_and_validate()
         except Exception as exc:
             logger.error("Failed to read defect report %s: %s", target, exc)
             if quarantine_corrupted:
-                quarantine_corrupted_file(target)
+                lock_file = get_lock_path(target)
+                with FileLock(lock_file, timeout=5.0, fail_on_timeout=False):
+                    if target.exists() and not is_corrupted_or_quarantined_filename(target):
+                        try:
+                            return _read_and_validate()
+                        except Exception:
+                            quarantine_corrupted_file(target)
             return {"reports": [], "statistics": {}}
 
     def invalidate_cache(self) -> None:
@@ -424,7 +438,7 @@ class DefectTracker:
     ) -> List[Dict[str, Any]]:
         """Query and filter defect reports with category pre-filtering and query caching."""
         norm_limit: Optional[int] = None
-        if limit is not None:
+        if limit is not None and not isinstance(limit, bool):
             try:
                 norm_limit = int(limit)
                 if norm_limit <= 0:
@@ -433,7 +447,7 @@ class DefectTracker:
                 norm_limit = None
 
         norm_min_sev: Optional[float] = None
-        if min_severity is not None:
+        if min_severity is not None and not isinstance(min_severity, bool):
             try:
                 f_sev = float(min_severity)
                 norm_min_sev = f_sev if not (math.isnan(f_sev) or math.isinf(f_sev)) else None
@@ -522,7 +536,7 @@ class DefectTracker:
             if norm_min_sev is not None:
                 sev = _extract_val(r, "severity_index")
                 effective_sev: Optional[float] = None
-                if sev is not None:
+                if sev is not None and not isinstance(sev, bool):
                     try:
                         effective_sev = float(sev)
                         if math.isnan(effective_sev) or math.isinf(effective_sev):
@@ -604,21 +618,27 @@ class DefectTracker:
             for int_key in ("total_filtered_defects", "critical_defect_count"):
                 raw_cnt = stat_copy.get(int_key)
                 if raw_cnt is not None:
-                    try:
-                        f_cnt = float(raw_cnt)
-                        stat_copy[int_key] = 0 if (math.isnan(f_cnt) or math.isinf(f_cnt)) else int(f_cnt)
-                    except (ValueError, TypeError, OverflowError):
+                    if isinstance(raw_cnt, bool):
                         stat_copy[int_key] = 0
+                    else:
+                        try:
+                            f_cnt = float(raw_cnt)
+                            stat_copy[int_key] = 0 if (math.isnan(f_cnt) or math.isinf(f_cnt)) else int(f_cnt)
+                        except (ValueError, TypeError, OverflowError):
+                            stat_copy[int_key] = 0
             raw_avg = stat_copy.get("avg_negativity_score")
             if raw_avg is not None:
-                try:
-                    f_avg = float(raw_avg)
-                    if math.isnan(f_avg) or math.isinf(f_avg):
-                        stat_copy["avg_negativity_score"] = 0.0
-                    else:
-                        stat_copy["avg_negativity_score"] = round(f_avg, 2)
-                except (ValueError, TypeError, OverflowError):
+                if isinstance(raw_avg, bool):
                     stat_copy["avg_negativity_score"] = 0.0
+                else:
+                    try:
+                        f_avg = float(raw_avg)
+                        if math.isnan(f_avg) or math.isinf(f_avg):
+                            stat_copy["avg_negativity_score"] = 0.0
+                        else:
+                            stat_copy["avg_negativity_score"] = round(f_avg, 2)
+                    except (ValueError, TypeError, OverflowError):
+                        stat_copy["avg_negativity_score"] = 0.0
 
             # Ensure category_distribution is always populated
             if "category_distribution" not in stat_copy or not isinstance(stat_copy["category_distribution"], dict):
@@ -626,8 +646,12 @@ class DefectTracker:
                 fd_dist = _get_val(full_data, "category_distribution")
                 if fd_dist and isinstance(fd_dist, dict):
                     for k, v in fd_dist.items():
+                        if isinstance(v, bool):
+                            continue
                         try:
-                            cat_dist[str(k)] = int(v)
+                            f_v = float(v)
+                            if not (math.isnan(f_v) or math.isinf(f_v)):
+                                cat_dist[str(k)] = int(f_v)
                         except (ValueError, TypeError, OverflowError):
                             pass
                 elif _get_val(full_data, "top_defect_categories"):
@@ -635,14 +659,23 @@ class DefectTracker:
                     if isinstance(top_cats, list):
                         for item in top_cats:
                             if isinstance(item, dict) and "category" in item and "count" in item:
+                                raw_item_cnt = item["count"]
+                                if isinstance(raw_item_cnt, bool):
+                                    continue
                                 try:
-                                    cat_dist[str(item["category"])] = int(item["count"])
+                                    f_v = float(raw_item_cnt)
+                                    if not (math.isnan(f_v) or math.isinf(f_v)):
+                                        cat_dist[str(item["category"])] = int(f_v)
                                 except (ValueError, TypeError, OverflowError):
                                     pass
                     elif isinstance(top_cats, dict):
                         for k, v in top_cats.items():
+                            if isinstance(v, bool):
+                                continue
                             try:
-                                cat_dist[str(k)] = int(v)
+                                f_v = float(v)
+                                if not (math.isnan(f_v) or math.isinf(f_v)):
+                                    cat_dist[str(k)] = int(f_v)
                             except (ValueError, TypeError, OverflowError):
                                 pass
 
@@ -678,7 +711,7 @@ class DefectTracker:
 
             dsi = _get_val(r, "severity_index")
             effective_dsi: Optional[float] = None
-            if dsi is not None:
+            if dsi is not None and not isinstance(dsi, bool):
                 try:
                     f_dsi = float(dsi)
                     if not (math.isnan(f_dsi) or math.isinf(f_dsi)):
@@ -696,7 +729,7 @@ class DefectTracker:
                 critical_count += 1
 
             neg = _get_val(r, "negativity_score")
-            if neg is not None:
+            if neg is not None and not isinstance(neg, bool):
                 try:
                     f_neg = float(neg)
                     if not (math.isnan(f_neg) or math.isinf(f_neg)):
@@ -715,10 +748,12 @@ class DefectTracker:
             "category_distribution": category_counts,
         }
 
-    def filter_raw_posts(self, raw_posts: List[Any]) -> List[Any]:
+    def filter_raw_posts(self, raw_posts: Optional[List[Any]]) -> List[Any]:
         """Process raw posts through ContextualDefectFilter and return authentic defect complaints."""
         if not self.filter_engine:
             raise RuntimeError("ContextualDefectFilter is not available in environment.")
+        if not raw_posts:
+            return []
 
         filtered_defects: List[Any] = []
         for post_item in raw_posts:
@@ -747,7 +782,11 @@ class DefectTracker:
                 if is_auth:
                     filtered_defects.append(record)
             except Exception as exc:
-                p_id = getattr(post_item, "post_id", getattr(post_item, "id", None)) if not isinstance(post_item, dict) else (post_item.get("post_id") or post_item.get("id"))
+                p_id = (
+                    (post_item.get("post_id") or post_item.get("id"))
+                    if isinstance(post_item, Mapping)
+                    else getattr(post_item, "post_id", getattr(post_item, "id", None))
+                )
                 logger.warning("Error filtering post %s: %s", p_id, exc)
 
         return filtered_defects

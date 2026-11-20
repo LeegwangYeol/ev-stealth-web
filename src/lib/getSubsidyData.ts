@@ -337,7 +337,11 @@ function normalizeRegionEntry(raw: unknown): RegionEntry | null {
 
 function normalizePopularModelEntry(raw: unknown): PopularModelEntry | null {
   if (!isPlainRecord(raw)) return null;
-  const basePrice = safeNonNegNum(raw.base_price_krw, parseSubsidyNumber(raw.base_price_krw, { defaultKrw: 54_100_000 }));
+  const rawNumPrice = safeNonNegNum(raw.base_price_krw, 0);
+  const parsedPrice = rawNumPrice > 0
+    ? rawNumPrice
+    : parseSubsidyNumber(raw.base_price_krw, { defaultKrw: 0 });
+  const basePrice = parsedPrice > 0 ? parsedPrice : 54_100_000;
   const rawRatio = raw.price_subsidy_ratio;
   const ratio =
     typeof rawRatio === 'number' && Number.isFinite(rawRatio) && rawRatio >= 0
@@ -387,6 +391,12 @@ export function normalizeSubsidyDataset(data: unknown): EVSubsidyDataset {
     return fallbackDataset;
   }
 
+  const regions: RegionEntry[] = [];
+  for (let i = 0; i < data.regions.length; i++) {
+    const normalizedRegion = normalizeRegionEntry(data.regions[i]);
+    if (normalizedRegion) regions.push(normalizedRegion);
+  }
+
   const rawMeta = isPlainRecord(data.metadata) ? data.metadata : {};
   const fbMeta = fallbackDataset.metadata;
   const metadata: EVSubsidyDataset['metadata'] = {
@@ -401,7 +411,7 @@ export function normalizeSubsidyDataset(data: unknown): EVSubsidyDataset {
           .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
           .map((s) => s.trim())
       : [...fbMeta.data_sources],
-    total_regions_tracked: safeNonNegNum(rawMeta.total_regions_tracked, data.regions.length),
+    total_regions_tracked: safeNonNegNum(rawMeta.total_regions_tracked, regions.length),
     total_municipalities_tracked: safeNonNegNum(
       rawMeta.total_municipalities_tracked,
       0
@@ -437,15 +447,21 @@ export function normalizeSubsidyDataset(data: unknown): EVSubsidyDataset {
 
   const totalBudgetKrw = safeNonNegNum(rawSummary.total_budget_krw, -1);
   const disbursedBudgetKrw = safeNonNegNum(rawSummary.disbursed_budget_krw, -1);
+  const totalAnnouncedUnits = safeNonNegNum(rawSummary.total_announced_units, zeroSummary.total_announced_units);
+  const totalAppliedUnits = safeNonNegNum(rawSummary.total_applied_units, zeroSummary.total_applied_units);
+  const totalDeliveredUnits = safeNonNegNum(rawSummary.total_delivered_units, zeroSummary.total_delivered_units);
 
   const nationwideSummary: EVSubsidyDataset['nationwide_summary'] = {
-    total_announced_units: safeNonNegNum(rawSummary.total_announced_units, zeroSummary.total_announced_units),
-    total_applied_units: safeNonNegNum(rawSummary.total_applied_units, zeroSummary.total_applied_units),
-    total_delivered_units: safeNonNegNum(rawSummary.total_delivered_units, zeroSummary.total_delivered_units),
-    total_remaining_units: safeNonNegNum(rawSummary.total_remaining_units, zeroSummary.total_remaining_units),
+    total_announced_units: totalAnnouncedUnits,
+    total_applied_units: totalAppliedUnits,
+    total_delivered_units: totalDeliveredUnits,
+    total_remaining_units: safeNonNegNum(
+      rawSummary.total_remaining_units,
+      calculateRemainingUnits(totalAppliedUnits, totalAnnouncedUnits)
+    ),
     nationwide_depletion_rate: safeNonNegNum(
       rawSummary.nationwide_depletion_rate,
-      zeroSummary.nationwide_depletion_rate
+      calculateDepletionRate(totalAppliedUnits, totalAnnouncedUnits)
     ),
     total_budget_billion_krw: safeNonNegNum(
       rawSummary.total_budget_billion_krw,
@@ -470,12 +486,6 @@ export function normalizeSubsidyDataset(data: unknown): EVSubsidyDataset {
       depleted: safeNonNegNum(rawAlertCounts.depleted, zeroSummary.alert_region_counts.depleted),
     },
   };
-
-  const regions: RegionEntry[] = [];
-  for (let i = 0; i < data.regions.length; i++) {
-    const normalizedRegion = normalizeRegionEntry(data.regions[i]);
-    if (normalizedRegion) regions.push(normalizedRegion);
-  }
 
   const popularModels: PopularModelEntry[] = [];
   if (Array.isArray(data.popular_models_matrix)) {

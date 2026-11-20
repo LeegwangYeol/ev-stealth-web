@@ -240,6 +240,11 @@ def _atomic_copy_file(src_path: Union[str, Path], dest_path: Union[str, Path]) -
                 pass
 
 
+def _reject_json_constant(constant: str) -> Any:
+    """Reject non-standard JSON constants (NaN, Infinity, -Infinity)."""
+    raise ValueError(f"Non-standard JSON constant: {constant}")
+
+
 def _is_valid_daily_report(path: Union[str, Path]) -> bool:
     """Validate that path points to an uncorrupted daily reports JSON file with 'reports' list."""
     try:
@@ -247,8 +252,13 @@ def _is_valid_daily_report(path: Union[str, Path]) -> bool:
         if not p.is_file() or p.stat().st_size == 0:
             return False
         with open(p, "r", encoding="utf-8-sig") as f:
-            d = json.load(f)
-        return isinstance(d, dict) and "reports" in d and isinstance(d["reports"], list)
+            d = json.load(f, parse_constant=_reject_json_constant)
+        return (
+            isinstance(d, dict)
+            and "reports" in d
+            and isinstance(d["reports"], list)
+            and all(isinstance(r, dict) for r in d["reports"])
+        )
     except Exception:
         return False
 
@@ -564,7 +574,10 @@ class ScraperPipeline:
                 selected_sources.update(["bobaedream", "dcinside"])
 
         try:
-            clamped_limit = min(500, max(1, int(limit)))
+            if isinstance(limit, bool):
+                clamped_limit = 20
+            else:
+                clamped_limit = min(500, max(1, int(limit)))
         except (ValueError, TypeError, OverflowError):
             clamped_limit = 20
 
@@ -627,9 +640,9 @@ class ScraperPipeline:
         temp_file: Optional[Path] = None
         try:
             cache_file = self._get_harvest_cache_path()
-            temp_file = cache_file.with_suffix(f".tmp.{os.getpid()}")
+            temp_file = cache_file.with_suffix(f".tmp.{os.getpid()}.{threading.get_ident()}")
             with open(temp_file, "w", encoding="utf-8") as f:
-                json.dump(posts, f, ensure_ascii=False)
+                json.dump(posts, f, ensure_ascii=False, allow_nan=False)
             os.replace(temp_file, cache_file)
             temp_file = None
         except Exception as e:
@@ -743,7 +756,10 @@ class ScraperPipeline:
         """Execute end-to-end harvest, filter, and report publishing pipeline."""
         configure_logging(verbose)
         try:
-            clamped_limit = max(1, int(limit))
+            if isinstance(limit, bool):
+                clamped_limit = 20
+            else:
+                clamped_limit = max(1, int(limit))
         except (ValueError, TypeError, OverflowError):
             clamped_limit = 20
 

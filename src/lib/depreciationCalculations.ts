@@ -452,7 +452,9 @@ function normalizeZero(val: number): number {
 function roundTo(val: number, decimals: number = 0): number {
   if (!Number.isFinite(val)) return 0;
   const factor = decimals === 0 ? 1 : decimals === 1 ? 10 : decimals === 2 ? 100 : Math.pow(10, decimals);
-  return normalizeZero(Math.round(val * factor) / factor);
+  const scaled = val * factor;
+  if (!Number.isFinite(scaled)) return normalizeZero(val);
+  return normalizeZero(Math.round(scaled) / factor);
 }
 
 function isPlainRecord(val: unknown): val is Record<string, unknown> {
@@ -480,7 +482,7 @@ function finiteNonNegOr(val: unknown, fallback: number): number {
 }
 
 function finitePosOr(val: unknown, fallback: number): number {
-  return typeof val === 'number' && Number.isFinite(val) && val > 0 ? val : fallback;
+  return typeof val === 'number' && Number.isFinite(val) && val > 0 ? val : normalizeZero(fallback);
 }
 
 function parseNumericInput(val: unknown): number {
@@ -505,30 +507,32 @@ function sanitizeDefenseTier(tier: unknown): ResaleDefenseTier {
 interface ModelIndex {
   exact: Map<string, EvModelDepreciation>;
   normalized: Map<string, EvModelDepreciation>;
+  length: number;
 }
 
 const modelIndexCache = new WeakMap<readonly EvModelDepreciation[], ModelIndex>();
 
 function getModelIndex(models: readonly EvModelDepreciation[]): ModelIndex {
   const cached = modelIndexCache.get(models);
-  if (cached) return cached;
+  if (cached && cached.length === models.length) return cached;
 
   const exact = new Map<string, EvModelDepreciation>();
   const normalized = new Map<string, EvModelDepreciation>();
   for (const m of models) {
-    if (!isPlainRecord(m) || typeof m.id !== 'string' || !m.id) continue;
-    const lower = m.id.toLowerCase();
+    if (!isPlainRecord(m) || typeof m.id !== 'string') continue;
+    const lower = m.id.toLowerCase().trim();
+    if (!lower) continue;
     if (!exact.has(lower)) exact.set(lower, m as unknown as EvModelDepreciation);
     const norm = lower.replace(/[-_\s]/g, '');
     if (norm && !normalized.has(norm)) normalized.set(norm, m as unknown as EvModelDepreciation);
   }
-  const index: ModelIndex = { exact, normalized };
+  const index: ModelIndex = { exact, normalized, length: models.length };
   modelIndexCache.set(models, index);
   return index;
 }
 
 function findModelById(
-  models: EvModelDepreciation[] | undefined,
+  models: readonly EvModelDepreciation[] | undefined,
   modelId: unknown
 ): EvModelDepreciation | undefined {
   if (!Array.isArray(models) || models.length === 0 || typeof modelId !== 'string') {
@@ -561,7 +565,7 @@ export function interpolateBaselineResidual(
   const key = basis === 'effective' ? 'residual_pct_effective' : 'residual_pct_msrp';
 
   const numYears = parseNumericInput(years);
-  if (!Number.isFinite(numYears) || numYears <= 0) return 100.0;
+  if (numYears !== Infinity && (!Number.isFinite(numYears) || numYears <= 0)) return 100.0;
 
   const getPoint = (val: unknown, fallback: number): number =>
     typeof val === 'number' && Number.isFinite(val) ? clamp(val, 0.0, 100.0) : fallback;
@@ -571,6 +575,10 @@ export function interpolateBaselineResidual(
   const y3 = getPoint(curve?.year_3?.[key], y2);
   const y4 = getPoint(curve?.year_4?.[key], y3);
   const y5 = getPoint(curve?.year_5?.[key], y4 !== 100.0 ? y4 : 50.0);
+
+  if (numYears === Infinity) {
+    return clamp(Math.min(10.0, y5), 0.0, 100.0);
+  }
 
   if (numYears <= 1.0) {
     return clamp(100.0 - numYears * (100.0 - y1), 0.0, 100.0);
@@ -590,8 +598,9 @@ export function interpolateBaselineResidual(
 
   // Beyond 5 years: extrapolate with compounding 8% drop per additional year
   const excessYears = numYears - 5.0;
+  const floor = Math.min(10.0, y5);
   const extrapolated = y5 * Math.pow(0.92, excessYears);
-  const safeExtrapolated = Number.isFinite(extrapolated) ? Math.max(10.0, extrapolated) : 10.0;
+  const safeExtrapolated = Number.isFinite(extrapolated) ? Math.max(floor, extrapolated) : floor;
   return clamp(safeExtrapolated, 0.0, 100.0);
 }
 
@@ -610,7 +619,8 @@ export function calculateDepreciation(
   const safeInput = isPlainRecord(input) ? (input as unknown as DepreciationCalculationInput) : ({} as DepreciationCalculationInput);
   const safeOptions = isPlainRecord(options) ? (options as unknown as CalculateDepreciationOptions) : undefined;
 
-  const rawYearsInput = safeInput.years !== undefined ? safeInput.years : safeInput.heldYears;
+  const rawYearsInput =
+    safeInput.years !== undefined && safeInput.years !== null ? safeInput.years : safeInput.heldYears;
   const parsedYears = parseNumericInput(rawYearsInput);
   const years = Number.isFinite(parsedYears) ? clamp(parsedYears, 0, 100) : 0;
 
@@ -641,43 +651,44 @@ export function calculateDepreciation(
       rawWarrantyCliff?.approaching_cliff_1_2_years_penalty,
       defaultWarrantyCliff.approaching_cliff_1_2_years_penalty
     ),
-    -1e6,
-    1e6
+    -1.0,
+    0.0
   );
   const expiredWarrantyPenalty = clamp(
     finiteOr(
       rawWarrantyCliff?.expired_warranty_penalty,
       defaultWarrantyCliff.expired_warranty_penalty
     ),
-    -1e6,
-    1e6
+    -1.0,
+    0.0
   );
   const excessPenaltyRate = clamp(
     finiteOr(
       rawMileageSens?.penalty_per_10000km_excess,
       defaultMileageSens.penalty_per_10000km_excess
     ),
-    -1e6,
-    1e6
+    -1.0,
+    0.0
   );
   const deficitBonusRate = clamp(
     finiteOr(
       rawMileageSens?.bonus_per_10000km_deficit,
       defaultMileageSens.bonus_per_10000km_deficit
     ),
-    -1e6,
-    1e6
+    0.0,
+    1.0
   );
   const maxMileageDiscountCap = clamp(
     finiteOr(
       rawMileageSens?.max_mileage_discount_cap,
       defaultMileageSens.max_mileage_discount_cap ?? -0.15
     ),
-    -1e6,
-    1e6
+    -1.0,
+    0.0
   );
 
-  const rawMileageInput = safeInput.mileageKm !== undefined ? safeInput.mileageKm : safeInput.totalKm;
+  const rawMileageInput =
+    safeInput.mileageKm !== undefined && safeInput.mileageKm !== null ? safeInput.mileageKm : safeInput.totalKm;
   const parsedMileage = parseNumericInput(rawMileageInput);
   const defaultMileage = normalizeZero(years * baselineAnnualMileageKm);
   const mileageKm = Number.isFinite(parsedMileage)
@@ -752,7 +763,7 @@ export function calculateDepreciation(
   const rawChemBonus = model?.factor_weights?.chemistry_aging;
   let batteryChemistryBonus =
     typeof rawChemBonus === 'number' && Number.isFinite(rawChemBonus)
-      ? clamp(rawChemBonus, -1e6, 1e6)
+      ? clamp(rawChemBonus, -1.0, 1.0)
       : 0;
   if (isLfp) {
     // Smooth monotonic ramp from year 2.0 to 3.0 to ensure discrete chemistry bonuses never invert the depreciation curve
@@ -770,12 +781,12 @@ export function calculateDepreciation(
   const rawArchAdj = model?.factor_weights?.architecture_800v;
   const architectureAdjustment =
     typeof rawArchAdj === 'number' && Number.isFinite(rawArchAdj)
-      ? clamp(rawArchAdj, -1e6, 1e6)
+      ? clamp(rawArchAdj, -1.0, 1.0)
       : 0;
   const rawOtaAdj = model?.factor_weights?.ota_maturity;
   const otaAdjustment =
     typeof rawOtaAdj === 'number' && Number.isFinite(rawOtaAdj)
-      ? clamp(rawOtaAdj, -1e6, 1e6)
+      ? clamp(rawOtaAdj, -1.0, 1.0)
       : 0;
 
   mileageAdjustment = Number.isFinite(mileageAdjustment) ? clamp(mileageAdjustment, -1e6, 1e6) : 0;
@@ -797,7 +808,7 @@ export function calculateDepreciation(
   );
 
   const rawCustomPriceInput =
-    safeInput.customPurchasePriceKrw !== undefined
+    safeInput.customPurchasePriceKrw !== undefined && safeInput.customPurchasePriceKrw !== null
       ? safeInput.customPurchasePriceKrw
       : safeOptions?.customPurchasePriceKrw;
   const parsedCustomPrice = parseNumericInput(rawCustomPriceInput);
@@ -867,8 +878,8 @@ export function calculateDepreciation(
 export function simulateBatteryHealth(
   params: BatterySimulationInput,
   customChemistries?: Record<string, Partial<BatteryChemistryProfile>>,
-  customReplacementCosts?: BatteryReplacementTier[],
-  options?: { models?: EvModelDepreciation[]; model?: EvModelDepreciation }
+  customReplacementCosts?: readonly BatteryReplacementTier[],
+  options?: { models?: readonly EvModelDepreciation[]; model?: EvModelDepreciation }
 ): BatteryHealthResult {
   const safeParams = isPlainRecord(params) ? (params as unknown as BatterySimulationInput) : ({} as BatterySimulationInput);
   const safeOptions = isPlainRecord(options) ? options : undefined;
@@ -882,12 +893,14 @@ export function simulateBatteryHealth(
     vehicleEfficiencyKmPerKwh = 5.2,
   } = safeParams;
   const rawDcfcRatio =
-    safeParams.dcfcRatio !== undefined
+    safeParams.dcfcRatio !== undefined && safeParams.dcfcRatio !== null
       ? safeParams.dcfcRatio
-      : safeParams.fastChargingRatioPct !== undefined
+      : safeParams.fastChargingRatioPct !== undefined && safeParams.fastChargingRatioPct !== null
       ? parseNumericInput(safeParams.fastChargingRatioPct) / 100
       : 0.25;
-  const rawYears = (safeParams.years !== undefined ? safeParams.years : safeParams.heldYears) as unknown;
+  const rawYears = (
+    safeParams.years !== undefined && safeParams.years !== null ? safeParams.years : safeParams.heldYears
+  ) as unknown;
   const parsedYears = parseNumericInput(rawYears);
   const isInvalidYears =
     rawYears === undefined ||
@@ -961,21 +974,33 @@ export function simulateBatteryHealth(
   const safeDcfcRatio = Number.isFinite(parsedDcfcRatio) ? clamp(parsedDcfcRatio, 0.0, 1.0) : 0.25;
   const tempK = Math.max(1.0, safeTempC + 273.15);
 
-  const arrheniusEa = finiteNonNegOr(
-    chemProfile?.calendar_arrhenius_ea_j_mol,
-    defaultChem.calendar_arrhenius_ea_j_mol
+  const arrheniusEa = clamp(
+    finiteNonNegOr(
+      chemProfile?.calendar_arrhenius_ea_j_mol,
+      defaultChem.calendar_arrhenius_ea_j_mol
+    ),
+    0,
+    500_000
   );
   const arrheniusExponent = clamp((-arrheniusEa / R_GAS) * (1.0 / tempK - 1.0 / T_REF_K), -500, 500);
   const arrheniusFactor = Math.exp(arrheniusExponent);
-  const socBeta = finiteOr(
-    chemProfile?.soc_stress_coefficient_beta,
-    defaultChem.soc_stress_coefficient_beta
+  const socBeta = clamp(
+    finiteNonNegOr(
+      chemProfile?.soc_stress_coefficient_beta,
+      defaultChem.soc_stress_coefficient_beta
+    ),
+    0,
+    20
   );
   const socExponent = clamp(socBeta * (safeStorageSoc - SOC_REF), -500, 500);
   const socFactor = Math.exp(socExponent);
-  const baselineAnnualLoss = finiteNonNegOr(
-    chemProfile?.calendar_baseline_annual_loss_pct,
-    defaultChem.calendar_baseline_annual_loss_pct
+  const baselineAnnualLoss = clamp(
+    finiteNonNegOr(
+      chemProfile?.calendar_baseline_annual_loss_pct,
+      defaultChem.calendar_baseline_annual_loss_pct
+    ),
+    0,
+    100
   );
   const calendarTimeExp = clamp(
     finiteNonNegOr(chemProfile?.calendar_time_exponent_z, defaultChem.calendar_time_exponent_z),
@@ -1024,9 +1049,10 @@ export function simulateBatteryHealth(
     fTempCyc = 1.0 + coldSensitivity * coldFraction;
   }
 
-  const baseCycles = Math.max(
+  const baseCycles = clamp(
+    finitePosOr(chemProfile?.cycle_life_to_80_soh, defaultChem.cycle_life_to_80_soh),
     100,
-    finitePosOr(chemProfile?.cycle_life_to_80_soh, defaultChem.cycle_life_to_80_soh)
+    1_000_000
   );
   const cyclicExp = clamp(
     finiteNonNegOr(chemProfile?.cyclic_exponent_w, defaultChem.cyclic_exponent_w),
@@ -1102,12 +1128,12 @@ export function simulateBatteryHealth(
       ? customReplacementCosts
       : DEFAULT_REPLACEMENT_TIERS;
   const fallbackTier = isPlainRecord(replacementCosts[0])
-    ? (replacementCosts[0] as BatteryReplacementTier)
+    ? (replacementCosts[0] as unknown as BatteryReplacementTier)
     : DEFAULT_REPLACEMENT_TIERS[0];
 
   const pickTier = (idx: number): BatteryReplacementTier => {
     const candidate = replacementCosts[idx];
-    return isPlainRecord(candidate) ? (candidate as BatteryReplacementTier) : fallbackTier;
+    return isPlainRecord(candidate) ? (candidate as unknown as BatteryReplacementTier) : fallbackTier;
   };
 
   let targetTier = pickTier(1);
@@ -1115,7 +1141,7 @@ export function simulateBatteryHealth(
     targetTier = pickTier(0);
   } else if (packCapacityKwh >= 89) {
     targetTier = isPlainRecord(replacementCosts[2])
-      ? (replacementCosts[2] as BatteryReplacementTier)
+      ? (replacementCosts[2] as unknown as BatteryReplacementTier)
       : pickTier(replacementCosts.length - 1);
   }
 
@@ -1198,7 +1224,7 @@ export function calculateSubsidyClawback(
   localSubsidyKrw: number,
   transferType: TransferType,
   nationalSubsidyKrw: number = 0,
-  customTiers?: ClawbackTier[]
+  customTiers?: readonly ClawbackTier[]
 ): ClawbackResult {
   const parsedMonths = parseNumericInput(heldMonths);
   const normalizedMonths = Number.isFinite(parsedMonths)
@@ -1239,7 +1265,7 @@ export function calculateSubsidyClawback(
       totalClawbackKrw: 0,
       transferType,
       isExempt,
-      remainingMonthsOfObligation: Math.round(remainingMonths * 10) / 10,
+      remainingMonthsOfObligation: roundTo(remainingMonths, 1),
       explanation: '환수 요율 정보가 없습니다.',
     };
   }
@@ -1422,9 +1448,13 @@ export function calculateTcoComparison(
         defaultTaxParams.ice_age_discount_start_year
       )
     ),
-    ice_age_discount_rate_per_year: finiteNonNegOr(
-      rawTaxParams?.ice_age_discount_rate_per_year,
-      defaultTaxParams.ice_age_discount_rate_per_year
+    ice_age_discount_rate_per_year: clamp(
+      finiteNonNegOr(
+        rawTaxParams?.ice_age_discount_rate_per_year,
+        defaultTaxParams.ice_age_discount_rate_per_year
+      ),
+      0,
+      1
     ),
     ice_age_discount_max: clamp(
       finiteNonNegOr(rawTaxParams?.ice_age_discount_max, defaultTaxParams.ice_age_discount_max),
@@ -1490,14 +1520,17 @@ export function calculateTcoComparison(
   );
 
   const parsedEvEff = parseNumericInput(evEfficiencyKmPerKwh);
-  const safeEvEff =
+  const safeEvEff = clamp(
     Number.isFinite(parsedEvEff) && parsedEvEff > 0
       ? parsedEvEff
       : finitePosOr(
           rawEfficiencyBaselines?.ev_efficiency_km_per_kwh,
           DEFAULT_TCO_PARAMETERS.efficiency_baselines.ev_efficiency_km_per_kwh
-        );
-  const safeIceEff = finitePosOr(iceFuelEconomy, 12.0);
+        ),
+    0.5,
+    1000
+  );
+  const safeIceEff = clamp(finitePosOr(iceFuelEconomy, 12.0), 0.5, 1000);
 
   const evCostPerKm = normalizeZero(blendedTariff / Math.max(1.0, safeEvEff));
   const iceCostPerKm = normalizeZero(

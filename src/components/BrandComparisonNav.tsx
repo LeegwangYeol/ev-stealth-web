@@ -153,7 +153,7 @@ export const OtherBrandsCrossNav = memo(function OtherBrandsCrossNav({
               aria-label={`${brand.label}${brand.badge ? ` (${brand.badge})` : ''} 연식별 결함 가이드 보기`}
               className="w-full group p-3 sm:p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-md transition flex flex-col justify-between gap-2 min-h-[72px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
             >
-              <div className="flex items-center justify-between gap-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-1.5">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-2xl shrink-0" aria-hidden="true">{brand.icon}</span>
                   <span className="font-bold text-xs sm:text-sm text-slate-900 group-hover:text-blue-700 transition break-keep leading-snug">

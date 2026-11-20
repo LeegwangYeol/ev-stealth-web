@@ -232,22 +232,22 @@ export default function RootLayout({
               <Link href="/recall-portal" prefetch={false} aria-label="통합 리콜 현황 (국토부·NHTSA 공인 리콜 포털)" className="text-slate-200 hover:text-white font-medium transition flex items-center gap-1 min-h-[44px] px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
                 <span aria-hidden="true">🚨</span> 통합 리콜 현황
               </Link>
-              <Link href="/2026-latest" prefetch={false} aria-label="2026 최신 결함 분석" className="text-slate-200 hover:text-white font-medium transition min-h-[44px] inline-flex items-center px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
+              <Link href="/2026-latest" prefetch={false} aria-label="2026 최신 결함 분석" className="text-slate-200 hover:text-white font-medium transition min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
                 2026 최신 결함
               </Link>
-              <Link href="/pdi-checklist" prefetch={false} aria-label="신차 출고 전 점검(PDI) 체크리스트" className="text-slate-200 hover:text-white font-medium transition min-h-[44px] inline-flex items-center px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
+              <Link href="/pdi-checklist" prefetch={false} aria-label="신차 출고 전 점검(PDI) 체크리스트" className="text-slate-200 hover:text-white font-medium transition min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
                 PDI 체크리스트
               </Link>
-              <Link href="/hyundai-kia" prefetch={false} aria-label="현대/기아 연식별 피하기 가이드" className="text-slate-200 hover:text-white font-medium transition min-h-[44px] inline-flex items-center px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
+              <Link href="/hyundai-kia" prefetch={false} aria-label="현대/기아 연식별 피하기 가이드" className="text-slate-200 hover:text-white font-medium transition min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
                 현대/기아
               </Link>
-              <Link href="/tesla" prefetch={false} aria-label="테슬라 연식별 피하기 가이드" className="text-slate-200 hover:text-white font-medium transition min-h-[44px] inline-flex items-center px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
+              <Link href="/tesla" prefetch={false} aria-label="테슬라 연식별 피하기 가이드" className="text-slate-200 hover:text-white font-medium transition min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
                 테슬라
               </Link>
-              <Link href="/byd" prefetch={false} aria-label="BYD 연식별 피하기 가이드" className="text-slate-200 hover:text-white font-medium transition min-h-[44px] inline-flex items-center px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
+              <Link href="/byd" prefetch={false} aria-label="BYD 연식별 피하기 가이드" className="text-slate-200 hover:text-white font-medium transition min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
                 BYD
               </Link>
-              <Link href="/global-brands" prefetch={false} aria-label="기타 글로벌 브랜드 연식별 피하기 가이드" className="text-slate-200 hover:text-white font-medium transition min-h-[44px] inline-flex items-center px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
+              <Link href="/global-brands" prefetch={false} aria-label="기타 글로벌 브랜드 연식별 피하기 가이드" className="text-slate-200 hover:text-white font-medium transition min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
                 기타 글로벌
               </Link>
             </nav>
@@ -260,7 +260,7 @@ export default function RootLayout({
                 aria-haspopup="dialog"
                 aria-expanded="false"
                 aria-controls="mobile-nav-panel"
-                className="list-none [&::-webkit-details-marker]:hidden flex items-center gap-1.5 px-2.5 xs:px-3 py-2 min-h-[44px] rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-sm font-medium cursor-pointer border border-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 select-none"
+                className="list-none [&::-webkit-details-marker]:hidden flex items-center gap-1.5 px-2.5 xs:px-3 py-2 min-h-[44px] min-w-[44px] rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-sm font-medium cursor-pointer border border-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 select-none"
               >
                 <svg className="w-5 h-5 block group-open:hidden" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -357,7 +357,7 @@ export default function RootLayout({
             </details>
           </div>
         </header>
-        <main id="main-content" tabIndex={-1} role="main" className="w-full max-w-6xl mx-auto p-4 sm:p-6 min-h-screen min-h-[100dvh] outline-none focus:outline-none">
+        <main id="main-content" tabIndex={-1} role="main" className="w-full max-w-6xl mx-auto p-4 sm:p-6 scroll-mt-20 min-h-screen min-h-[100dvh] outline-none focus:outline-none">
           {children}
         </main>
         <SiteFooter />

@@ -200,12 +200,53 @@ function createDefaultFallbackDatabase(): ReliabilityTrendsDatabase {
 
 let cachedTrendsDatabase: ReliabilityTrendsDatabase | null = null;
 
-function cloneTrendsDatabaseShallow(db: ReliabilityTrendsDatabase): ReliabilityTrendsDatabase {
+function cloneCategoryDist(
+  dist: BrandReliability['category_distribution'] | undefined
+): BrandReliability['category_distribution'] {
+  const cloned: Record<string, { count: number; percentage: number }> = {};
+  if (dist && typeof dist === 'object') {
+    for (const [k, v] of Object.entries(dist)) {
+      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+      if (v && typeof v === 'object') {
+        cloned[k] = { count: v.count, percentage: v.percentage };
+      }
+    }
+  }
+  return cloned as BrandReliability['category_distribution'];
+}
+
+function cloneTrendsDatabase(db: ReliabilityTrendsDatabase): ReliabilityTrendsDatabase {
   return {
     metadata: { ...db.metadata },
-    categories: Array.isArray(db.categories) ? [...db.categories] : [],
-    repair_cost_matrix: Array.isArray(db.repair_cost_matrix) ? [...db.repair_cost_matrix] : [],
-    brands: Array.isArray(db.brands) ? [...db.brands] : [],
+    categories: Array.isArray(db.categories) ? db.categories.map((c) => ({ ...c })) : [],
+    repair_cost_matrix: Array.isArray(db.repair_cost_matrix)
+      ? db.repair_cost_matrix.map((r) => ({
+          ...r,
+          ...(Array.isArray(r.high_risk_models) ? { high_risk_models: [...r.high_risk_models] } : {}),
+          ...(Array.isArray(r.representative_models)
+            ? { representative_models: [...r.representative_models] }
+            : {}),
+        }))
+      : [],
+    brands: Array.isArray(db.brands)
+      ? db.brands.map((b) => ({
+          ...b,
+          category_distribution: cloneCategoryDist(b.category_distribution),
+          models: Array.isArray(b.models)
+            ? b.models.map((m) => ({
+                ...m,
+                year_evaluations: Array.isArray(m.year_evaluations)
+                  ? m.year_evaluations.map((y) => ({
+                      ...y,
+                      chronic_symptoms: Array.isArray(y.chronic_symptoms)
+                        ? [...y.chronic_symptoms]
+                        : [],
+                    }))
+                  : [],
+              }))
+            : [],
+        }))
+      : [],
   };
 }
 
@@ -216,7 +257,7 @@ function cloneTrendsDatabaseShallow(db: ReliabilityTrendsDatabase): ReliabilityT
  */
 export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
   if (cachedTrendsDatabase) {
-    return cloneTrendsDatabaseShallow(cachedTrendsDatabase);
+    return cloneTrendsDatabase(cachedTrendsDatabase);
   }
   try {
     if (!rawTrendsData || typeof rawTrendsData !== 'object' || Array.isArray(rawTrendsData)) {
@@ -394,7 +435,7 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
       repair_cost_matrix,
       brands,
     };
-    return cloneTrendsDatabaseShallow(cachedTrendsDatabase);
+    return cloneTrendsDatabase(cachedTrendsDatabase);
   } catch (error) {
     console.error('[getReliabilityTrendsData] Failed to load trends data safely:', error);
     return createDefaultFallbackDatabase();

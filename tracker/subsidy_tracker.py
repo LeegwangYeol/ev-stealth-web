@@ -8,11 +8,14 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import http.client
+import ipaddress
 import json
 import logging
 import math
 import os
 from pathlib import Path
+import re
+import socket
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import urllib.error
@@ -89,6 +92,152 @@ def _find_repo_root() -> Path:
 
 # Maximum bounded response read size (10MB) to prevent memory exhaustion
 MAX_RESPONSE_BYTES: int = 10 * 1024 * 1024
+
+_RE_URL_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+_DISALLOWED_ENDPOINT_HOSTS: Set[str] = {
+    "localhost",
+    "metadata.google.internal",
+    "metadata",
+    "instance-data",
+}
+_DISALLOWED_ENDPOINT_SUFFIXES: Tuple[str, ...] = (
+    ".localhost",
+    ".internal",
+    ".localdomain",
+    ".intranet",
+    ".lan",
+)
+_STANDARD_ENDPOINT_PORTS: Set[int] = {80, 443, 8080, 8443, 8000, 8888}
+_NAT64_WELL_KNOWN_PREFIX = ipaddress.IPv6Network("64:ff9b::/96")
+_NAT64_LOCAL_PREFIX = ipaddress.IPv6Network("64:ff9b:1::/48")
+
+try:
+    from utils.http_client import is_safe_ip as _is_safe_ip
+except ImportError:
+    def _is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
+        """Check if an IP address is publicly routable and safe from SSRF."""
+        if (
+            not ip.is_global
+            or ip.is_loopback
+            or ip.is_private
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            return False
+        if isinstance(ip, ipaddress.IPv6Address):
+            if ip.ipv4_mapped and not _is_safe_ip(ip.ipv4_mapped):
+                return False
+            if ip.sixtofour and not _is_safe_ip(ip.sixtofour):
+                return False
+            if ip.teredo:
+                for teredo_ip in ip.teredo:
+                    if not _is_safe_ip(teredo_ip):
+                        return False
+            if ip in _NAT64_WELL_KNOWN_PREFIX or ip in _NAT64_LOCAL_PREFIX:
+                embedded_v4 = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+                if not _is_safe_ip(embedded_v4):
+                    return False
+        if str(ip) in ("169.254.169.254", "100.100.100.200"):
+            return False
+        return True
+
+
+def _validate_endpoint_url(url: str, allow_private_ips: bool = False) -> Tuple[bool, str]:
+    """Validate live polling endpoint URL against SSRF, control chars, and invalid schemes/ports."""
+    if not url or not isinstance(url, str):
+        return False, "Empty or invalid URL"
+    url_str = url.strip()
+    if not url_str:
+        return False, "Empty URL"
+    if _RE_URL_CONTROL_CHARS.search(url_str):
+        return False, "URL contains control characters"
+    try:
+        parsed = urllib.parse.urlsplit(url_str)
+    except Exception as exc:
+        return False, f"URL parsing error: {exc}"
+
+    scheme = (parsed.scheme or "").lower()
+    if scheme not in ("http", "https"):
+        return False, f"Disallowed URL scheme: {scheme!r}"
+    if parsed.username is not None or parsed.password is not None:
+        return False, "Disallowed userinfo in endpoint URL"
+
+    hostname = parsed.hostname
+    if not hostname:
+        return False, "Missing hostname in URL"
+    host_lower = hostname.lower().strip().rstrip(".")
+    if not host_lower:
+        return False, "Missing hostname in URL"
+
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        return False, f"Invalid port in URL ({exc})"
+
+    if allow_private_ips:
+        return True, "Private IPs allowed by configuration"
+
+    if port is not None and port not in _STANDARD_ENDPOINT_PORTS:
+        return False, f"Disallowed port {port}"
+
+    if host_lower in _DISALLOWED_ENDPOINT_HOSTS:
+        return False, f"Disallowed hostname '{host_lower}'"
+    for suffix in _DISALLOWED_ENDPOINT_SUFFIXES:
+        if host_lower.endswith(suffix):
+            return False, f"Hostname '{host_lower}' matches disallowed internal suffix '{suffix}'"
+
+    try:
+        ip = ipaddress.ip_address(host_lower)
+        if not _is_safe_ip(ip):
+            return False, f"Unsafe IP address {ip}"
+        return True, "Safe public IP"
+    except ValueError:
+        pass
+
+    try:
+        packed = socket.inet_aton(host_lower)
+        ip4 = ipaddress.IPv4Address(packed)
+        if not _is_safe_ip(ip4):
+            return False, f"Unsafe encoded IP address {ip4}"
+        return True, "Safe public IP"
+    except (OSError, ValueError):
+        pass
+
+    try:
+        addr_info = socket.getaddrinfo(host_lower, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        for _family, _socktype, _proto, _canonname, sockaddr in addr_info:
+            ip_str = sockaddr[0]
+            try:
+                resolved_ip = ipaddress.ip_address(ip_str)
+                if not _is_safe_ip(resolved_ip):
+                    return False, f"Domain '{host_lower}' resolves to unsafe IP {resolved_ip}"
+            except ValueError:
+                continue
+    except socket.gaierror:
+        pass
+    except Exception as exc:
+        logger.debug("DNS check notice for %s: %s", host_lower, exc)
+
+    return True, "Safe URL"
+
+
+class _SafeEndpointRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Redirect handler that blocks 3xx redirects to SSRF-unsafe URLs."""
+
+    def __init__(self, allow_private_ips: bool = False) -> None:
+        super().__init__()
+        self.allow_private_ips = allow_private_ips
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        is_safe, reason = _validate_endpoint_url(newurl, allow_private_ips=self.allow_private_ips)
+        if not is_safe:
+            logger.warning("SSRF defense blocked redirect from %s to %s: %s", req.full_url, newurl, reason)
+            raise urllib.error.HTTPError(
+                newurl, 403, f"SSRF Blocked: Unsafe redirect target ({reason})", headers, fp
+            )
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 try:
     from utils.http_client import robust_decode
@@ -273,12 +422,19 @@ def calculate_depletion_rate(
             return 0.0
         if quota_val <= 0.0 or applied_val <= 0.0:
             return 0.0
-        rate = round((applied_val / quota_val) * 100.0, 1)
-        if math.isnan(rate) or math.isinf(rate):
+        scaled = applied_val * 100.0
+        raw_rate = (scaled / quota_val) if not math.isinf(scaled) else ((applied_val / quota_val) * 100.0)
+        if math.isnan(raw_rate):
             return 0.0
-        rate = max(0.0, rate)
-        if clamp_100 or clamp:
-            rate = min(100.0, rate)
+        if math.isinf(raw_rate):
+            if clamp_100 or clamp:
+                rate = 100.0
+            else:
+                return 0.0
+        else:
+            rate = max(0.0, round(raw_rate, 1))
+            if clamp_100 or clamp:
+                rate = min(100.0, rate)
         if max_rate is not None and not isinstance(max_rate, bool):
             try:
                 mr = float(_clean_num(max_rate))
@@ -326,6 +482,8 @@ def calculate_remaining_units(
             or isinstance(applied, bool)
         ):
             return 0
+        if type(target_quota) is int and type(applied) is int:
+            return max(0, max(0, target_quota) - max(0, applied))
         quota_f = float(_clean_num(target_quota))
         applied_f = float(_clean_num(applied))
         if math.isnan(quota_f) or math.isnan(applied_f) or math.isinf(quota_f) or math.isinf(applied_f):
@@ -352,6 +510,8 @@ def calculate_waitlist_units(
             or isinstance(applied, bool)
         ):
             return 0
+        if type(target_quota) is int and type(applied) is int:
+            return max(0, max(0, applied) - max(0, target_quota))
         quota_f = float(_clean_num(target_quota))
         applied_f = float(_clean_num(applied))
         if math.isnan(quota_f) or math.isnan(applied_f) or math.isinf(quota_f) or math.isinf(applied_f):
@@ -395,6 +555,8 @@ def calculate_pending_deliveries(
             or isinstance(delivered, bool)
         ):
             return 0
+        if type(applied) is int and type(delivered) is int:
+            return max(0, max(0, applied) - max(0, delivered))
         applied_f = float(_clean_num(applied))
         delivered_f = float(_clean_num(delivered))
         if math.isnan(applied_f) or math.isnan(delivered_f) or math.isinf(applied_f) or math.isinf(delivered_f):
@@ -542,9 +704,10 @@ def classify_region_group(region: Union[RegionRecord, Dict[str, Any], str, None]
         ident = region.strip()
         if not ident:
             return REGIONAL_GROUP_OTHER
-        if ident in METROPOLITAN_CITY_CODES:
+        ident_upper = ident.upper()
+        if ident_upper in METROPOLITAN_CITY_CODES or ident_upper == "KR-50":
             return REGIONAL_GROUP_METROPOLITAN
-        if ident in PROVINCE_CODES:
+        if ident_upper in PROVINCE_CODES:
             return REGIONAL_GROUP_PROVINCES
         for city in METROPOLITAN_CITIES:
             if city in ident:
@@ -560,10 +723,10 @@ def classify_region_group(region: Union[RegionRecord, Dict[str, Any], str, None]
         return REGIONAL_GROUP_OTHER
 
     iso_code = _metric_val(region, "iso_code", "") or _metric_val(region, "region_id", "")
-    iso_str = str(iso_code).strip()
-    if iso_str in METROPOLITAN_CITY_CODES:
+    iso_upper = str(iso_code).strip().upper()
+    if iso_upper in METROPOLITAN_CITY_CODES or iso_upper == "KR-50":
         return REGIONAL_GROUP_METROPOLITAN
-    if iso_str in PROVINCE_CODES:
+    if iso_upper in PROVINCE_CODES:
         return REGIONAL_GROUP_PROVINCES
 
     name_ko = str(_metric_val(region, "name_ko", "")).strip()
@@ -688,17 +851,22 @@ class SubsidyTracker:
         validate_cache: bool = False,
         quarantine_corrupted: bool = False,
         report_generator: Optional[ReportGenerator] = None,
+        allow_private_ips: bool = False,
     ) -> None:
         self.endpoint_url = endpoint_url
         try:
-            val = float(timeout_seconds) if timeout_seconds is not None else 5.0
-            self.timeout_seconds = val if (not math.isnan(val) and not math.isinf(val) and val > 0) else 5.0
+            if timeout_seconds is None or isinstance(timeout_seconds, bool):
+                self.timeout_seconds = 5.0
+            else:
+                val = float(timeout_seconds)
+                self.timeout_seconds = val if (not math.isnan(val) and not math.isinf(val) and val > 0) else 5.0
         except (ValueError, TypeError, OverflowError):
             self.timeout_seconds = 5.0
         self.cache_fallback_path = Path(cache_fallback_path) if cache_fallback_path else None
         self.validate_cache = validate_cache
         self.quarantine_corrupted = quarantine_corrupted
         self.report_generator = report_generator or ReportGenerator()
+        self.allow_private_ips = bool(allow_private_ips)
 
     def evaluate_status(self, depletion_rate: float) -> AlertSeverity:
         """Evaluate 5-tier alert severity from depletion percentage."""
@@ -879,12 +1047,23 @@ class SubsidyTracker:
             if "." in st_str:
                 st_str = st_str.split(".")[-1]
             st_key = st_str.lower()
-            if st_key in alert_counts:
-                alert_counts[st_key] += 1
-
             r_cats = (r.get("categories") if isinstance(r, dict) else getattr(r, "categories", None)) or {}
             if not isinstance(r_cats, dict):
                 r_cats = {}
+
+            if st_key not in alert_counts and (r_cats or (isinstance(r, dict) and "overall_depletion_rate" in r)):
+                raw_rate = _metric_val(r, "overall_depletion_rate", None)
+                if raw_rate is not None and not isinstance(raw_rate, bool):
+                    try:
+                        f_rate = float(_clean_num(raw_rate))
+                        if not math.isnan(f_rate) and not math.isinf(f_rate):
+                            st_key = self.evaluate_status(max(0.0, f_rate)).value.lower()
+                    except (ValueError, TypeError, OverflowError):
+                        pass
+
+            if st_key in alert_counts:
+                alert_counts[st_key] += 1
+
             for c_name, c_data in r_cats.items():
                 if c_name not in cat_counts:
                     cat_counts[c_name] = {"announced": 0, "applied": 0, "delivered": 0}
@@ -948,16 +1127,20 @@ class SubsidyTracker:
             logger.debug("No endpoint URL configured. Using validated baseline engine.")
             return None
 
-        parsed_url = urllib.parse.urlparse(self.endpoint_url.strip())
-        if parsed_url.scheme.lower() not in ("http", "https") or not parsed_url.netloc:
-            logger.warning("Refusing non-HTTP(S) endpoint URL: %s", self.endpoint_url)
+        clean_url = self.endpoint_url.strip()
+        is_safe, reason = _validate_endpoint_url(clean_url, allow_private_ips=self.allow_private_ips)
+        if not is_safe:
+            logger.warning("Refusing unsafe endpoint URL %s: %s", self.endpoint_url, reason)
             return None
 
-        logger.info("Attempting live poll from %s (timeout=%.1fs)...", self.endpoint_url, self.timeout_seconds)
+        logger.info("Attempting live poll from %s (timeout=%.1fs)...", clean_url, self.timeout_seconds)
         try:
-            safe_backoff = float(backoff_base) if backoff_base is not None else 0.05
-            if math.isnan(safe_backoff) or math.isinf(safe_backoff) or safe_backoff < 0.0:
+            if backoff_base is None or isinstance(backoff_base, bool):
                 safe_backoff = 0.05
+            else:
+                safe_backoff = float(backoff_base)
+                if math.isnan(safe_backoff) or math.isinf(safe_backoff) or safe_backoff < 0.0:
+                    safe_backoff = 0.05
         except (ValueError, TypeError, OverflowError):
             safe_backoff = 0.05
         closed_exc_ids: Set[int] = set()
@@ -965,13 +1148,28 @@ class SubsidyTracker:
         for attempt in range(1, safe_retries + 1):
             try:
                 req = urllib.request.Request(
-                    self.endpoint_url,
+                    clean_url,
                     headers={
                         "User-Agent": "MyECar-SubsidyTracker/1.0 (Automated Scheduled Task)",
                         "Accept-Encoding": "identity",
                     },
                 )
-                with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
+                if getattr(urllib.request.urlopen, "__module__", "") == "urllib.request":
+                    opener = urllib.request.build_opener(
+                        _SafeEndpointRedirectHandler(allow_private_ips=self.allow_private_ips)
+                    )
+                    ctx_mgr = opener.open(req, timeout=self.timeout_seconds)
+                else:
+                    ctx_mgr = urllib.request.urlopen(req, timeout=self.timeout_seconds)
+                with ctx_mgr as resp:
+                    final_url = getattr(resp, "geturl", lambda: None)()
+                    if isinstance(final_url, str) and final_url:
+                        final_safe, final_reason = _validate_endpoint_url(
+                            final_url, allow_private_ips=self.allow_private_ips
+                        )
+                        if not final_safe:
+                            logger.warning("SSRF defense blocked final URL %s: %s", final_url, final_reason)
+                            return None
                     resp_status = getattr(resp, "status", getattr(resp, "code", 200))
                     if resp_status == 200:
                         raw_bytes = resp.read(MAX_RESPONSE_BYTES)
@@ -1139,6 +1337,41 @@ class SubsidyTracker:
                 self.quarantine_corrupted_cache(target_path)
             return None
 
+    def _normalize_payload_collections(self, payload: SubsidyPayload) -> None:
+        """Ensure trajectory sorting/dedup, non-empty baseline collections, and metadata counts."""
+        if payload.historical_depletion_trajectory:
+            seen_dates: Set[str] = set()
+            sorted_pts = sorted(
+                payload.historical_depletion_trajectory,
+                key=lambda pt: str(getattr(pt, "date", "") or (pt.get("date", "") if isinstance(pt, dict) else "")),
+            )
+            deduped_history = []
+            for pt in sorted_pts:
+                d_val = getattr(pt, "date", "") or (pt.get("date", "") if isinstance(pt, dict) else "")
+                d = str(d_val).strip() if d_val is not None else ""
+                if d and d not in seen_dates:
+                    seen_dates.add(d)
+                    deduped_history.append(pt)
+            payload.historical_depletion_trajectory = (
+                deduped_history if len(deduped_history) >= 2 else build_initial_baseline().historical_depletion_trajectory
+            )
+        else:
+            payload.historical_depletion_trajectory = build_initial_baseline().historical_depletion_trajectory
+
+        if not payload.popular_models_matrix:
+            payload.popular_models_matrix = build_popular_models()
+        if not payload.alert_thresholds:
+            payload.alert_thresholds = build_initial_baseline().alert_thresholds
+
+        payload.metadata.total_regions_tracked = len(payload.regions)
+        total_munis = 0
+        for r in payload.regions:
+            munis = r.get("municipalities", []) if isinstance(r, dict) else getattr(r, "municipalities", [])
+            if isinstance(munis, (list, tuple)):
+                total_munis += len(munis)
+        if total_munis > 0 or payload.metadata.total_municipalities_tracked <= 0:
+            payload.metadata.total_municipalities_tracked = total_munis
+
     def execute_tracking_cycle(
         self,
         mock_network_failure: bool = False,
@@ -1167,31 +1400,7 @@ class SubsidyTracker:
                 for idx, r in enumerate(payload.regions):
                     payload.regions[idx] = self.update_region_metrics(r)
                 payload.nationwide_summary = self.compute_nationwide_summary(payload.regions)
-
-                # Ensure historical trajectory is chronologically sorted and deduplicated
-                if payload.historical_depletion_trajectory:
-                    seen_dates: Set[str] = set()
-                    sorted_pts = sorted(
-                        payload.historical_depletion_trajectory,
-                        key=lambda pt: str(getattr(pt, "date", "") or (pt.get("date", "") if isinstance(pt, dict) else "")),
-                    )
-                    deduped_history = []
-                    for pt in sorted_pts:
-                        d_val = getattr(pt, "date", "") or (pt.get("date", "") if isinstance(pt, dict) else "")
-                        d = str(d_val).strip() if d_val is not None else ""
-                        if d and d not in seen_dates:
-                            seen_dates.add(d)
-                            deduped_history.append(pt)
-                    payload.historical_depletion_trajectory = (
-                        deduped_history if len(deduped_history) >= 2 else build_initial_baseline().historical_depletion_trajectory
-                    )
-                else:
-                    payload.historical_depletion_trajectory = build_initial_baseline().historical_depletion_trajectory
-
-                if not payload.popular_models_matrix:
-                    payload.popular_models_matrix = build_popular_models()
-                if not payload.alert_thresholds:
-                    payload.alert_thresholds = build_initial_baseline().alert_thresholds
+                self._normalize_payload_collections(payload)
 
                 payload.metadata.generated_at = datetime.now(timezone.utc).isoformat()
                 logger.info("Successfully refreshed tracking data from live endpoint.")
@@ -1222,6 +1431,7 @@ class SubsidyTracker:
             for idx, r in enumerate(payload.regions):
                 payload.regions[idx] = self.update_region_metrics(r)
             payload.nationwide_summary = self.compute_nationwide_summary(payload.regions)
+            self._normalize_payload_collections(payload)
             payload.metadata.generated_at = datetime.now(timezone.utc).isoformat()
         except Exception as e:
             logger.warning("Structural anomaly updating region metrics: %s. Guaranteeing safe baseline fallback.", e)
@@ -1231,6 +1441,7 @@ class SubsidyTracker:
             for idx, r in enumerate(payload.regions):
                 payload.regions[idx] = self.update_region_metrics(r)
             payload.nationwide_summary = self.compute_nationwide_summary(payload.regions)
+            self._normalize_payload_collections(payload)
             payload.metadata.generated_at = datetime.now(timezone.utc).isoformat()
 
         return payload, True

@@ -207,12 +207,18 @@ class BobaedreamScraper:
         if not html_content or not isinstance(html_content, str):
             return []
         items = []
-        # Match table rows or list entries with view links
-        pattern = r'<a\b[^>]*\bhref=["\']([^"\']*view\?[^"\']*code=[^"\']*[?&](?:amp;)?[Nn]o=(\d+)[^"\']*)["\'][^>]*>(.*?)</a>'
+        # Match list entries with view links without polynomial regex backtracking
+        pattern = r'<a\b[^>]*\bhref=["\']([^"\'>\s]*view\?[^"\'>\s]*)["\'][^>]*>(.*?)</a>'
         matches = re.findall(pattern, html_content, re.IGNORECASE | re.DOTALL)
 
         seen_nos = set()
-        for href, post_no, raw_title in matches:
+        for href, raw_title in matches:
+            if not re.search(r"(?:^|[?&])(?:amp;)?code=[a-zA-Z0-9_]+", href, re.IGNORECASE):
+                continue
+            no_match = re.search(r"[?&](?:amp;)?no=(\d+)", href, re.IGNORECASE)
+            if not no_match:
+                continue
+            post_no = no_match.group(1)
             if post_no in seen_nos:
                 continue
             seen_nos.add(post_no)
@@ -418,9 +424,17 @@ class BobaedreamScraper:
 
         # Comments extraction
         comments = []
-        comment_matches = re.findall(r'<dd[^>]*class="[^"]*comment[^"]*"[^>]*>(.*?)</dd>', html_content, re.DOTALL)
+        comment_matches = re.findall(
+            r'<dd[^>]*class="[^"]*comment[^"]*"[^>]*>((?:(?!</?dd\b).)*?)</dd>',
+            html_content,
+            re.DOTALL,
+        )
         if not comment_matches:
-            comment_matches = re.findall(r'<dd id="cmt_\d+"[^>]*>(.*?)</dd>', html_content, re.DOTALL)
+            comment_matches = re.findall(
+                r'<dd id="cmt_\d+"[^>]*>((?:(?!</?dd\b).)*?)</dd>',
+                html_content,
+                re.DOTALL,
+            )
 
         for c_html in comment_matches:
             cleaned_c = clean_html_text(c_html)

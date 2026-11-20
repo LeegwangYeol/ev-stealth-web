@@ -195,6 +195,11 @@ def _is_project_data_dir(path: Path, cwd: Path) -> bool:
     return False
 
 
+def _reject_json_constant(constant: str) -> Any:
+    """Reject non-standard JSON constants (NaN, Infinity, -Infinity)."""
+    raise ValueError(f"Non-standard JSON constant: {constant}")
+
+
 def validate_defect_reports_file(file_path: Union[str, Path]) -> bool:
     """Validate that target file contains valid JSON syntax and expected schema ('reports' list key)."""
     from tracker.atomic_writer import is_corrupted_or_quarantined_filename
@@ -206,7 +211,7 @@ def validate_defect_reports_file(file_path: Union[str, Path]) -> bool:
         if not p.is_file() or p.stat().st_size == 0:
             return False
         with open(p, "r", encoding="utf-8-sig") as f:
-            data = json.load(f)
+            data = json.load(f, parse_constant=_reject_json_constant)
         if not isinstance(data, dict):
             return False
         if "reports" not in data or not isinstance(data["reports"], list):
@@ -254,7 +259,14 @@ def sync_defect_reports(
     is_custom_run = (root_dir is not None) or (web_dir is not None and not _is_project_data_dir(Path(web_dir), _CURRENT_DIR))
 
     if is_custom_run:
-        web_reports_path = Path(web_dir) / "daily_reports.json" if web_dir else (_CURRENT_DIR / "daily_reports.json")
+        if web_dir:
+            w_path = Path(web_dir)
+            if (w_path / "src" / "data").is_dir():
+                web_reports_path = w_path / "src" / "data" / "daily_reports.json"
+            else:
+                web_reports_path = w_path / "daily_reports.json"
+        else:
+            web_reports_path = _CURRENT_DIR / "daily_reports.json"
         if root_dir:
             root_reports_path = Path(root_dir) / "daily_reports.json"
         elif (_CURRENT_DIR / "data" / "daily_reports.json").exists():
@@ -356,7 +368,7 @@ def sync_defect_reports(
                     res = (False, 0, 0.0)
                 else:
                     with open(cand_path, "r", encoding="utf-8-sig") as f:
-                        d = json.load(f)
+                        d = json.load(f, parse_constant=_reject_json_constant)
                     if isinstance(d, dict) and "reports" in d and isinstance(d["reports"], list) and all(isinstance(r, dict) for r in d["reports"]):
                         r_list = d["reports"]
                         res = (True, len(r_list), cand_path.stat().st_mtime)
@@ -506,14 +518,20 @@ def _mirrored_candidate_priority(fname: str, parsed: Any) -> int:
     if fname == "daily_reports.json":
         if not isinstance(parsed, dict) or not isinstance(parsed.get("reports"), list):
             return -1
+        if not all(isinstance(r, dict) for r in parsed["reports"]):
+            return -1
         rep_count = len(parsed["reports"])
         return 2 if rep_count >= 4 else (1 if rep_count > 0 else 0)
     if fname in ("ev_subsidy_data.json", "subsidy_depletion_data.json"):
         if not isinstance(parsed, dict) or not isinstance(parsed.get("regions"), list):
             return -1
+        if not all(isinstance(r, dict) for r in parsed["regions"]):
+            return -1
         return 2 if len(parsed["regions"]) >= 17 else (1 if len(parsed["regions"]) > 0 else 0)
     if fname == "models_subsidy_matrix.json":
         if not isinstance(parsed, list):
+            return -1
+        if not all(isinstance(m, dict) for m in parsed):
             return -1
         return 2 if len(parsed) >= 15 else (1 if len(parsed) > 0 else -1)
     if isinstance(parsed, dict):
@@ -535,17 +553,26 @@ def auto_heal_mirrored_parity(repo_root: Optional[Path] = None) -> List[str]:
     - ev_reliability_trends.json
     - ev_depreciation_data.json
     """
+    from tracker.atomic_writer import FileLock, get_lock_path
+
     root = repo_root or _find_repo_root()
-    active_dirs = [
-        root / "data",
-        root / "ev-stealth-web" / "src" / "data",
-        root / "ev-stealth-web" / "public" / "data",
-    ]
+    if not (root / "ev-stealth-web").is_dir() and (root / "src" / "data").is_dir():
+        active_dirs = [
+            root / "data",
+            root / "src" / "data",
+            root / "public" / "data",
+        ]
+    else:
+        active_dirs = [
+            root / "data",
+            root / "ev-stealth-web" / "src" / "data",
+            root / "ev-stealth-web" / "public" / "data",
+        ]
     web_data = root / "ev-stealth-web" / "data"
     if web_data.is_dir():
         active_dirs.append(web_data)
     root_public = root / "public" / "data"
-    if root_public.is_dir():
+    if root_public.is_dir() and root_public not in active_dirs:
         active_dirs.append(root_public)
 
     target_files = [
@@ -558,84 +585,85 @@ def auto_heal_mirrored_parity(repo_root: Optional[Path] = None) -> List[str]:
         "ev_depreciation_data.json",
     ]
 
-    repaired = []
-    for fname in target_files:
-        best_cand: Optional[Tuple[int, float, Path, str, bytes]] = None
-        hashes: Dict[Path, str] = {}
-        for d in active_dirs:
-            fp = d / fname
-            if fp.is_file():
-                try:
-                    fp_stat = fp.stat()
-                    if fp_stat.st_size <= 0:
-                        continue
-                    content = fp.read_bytes()
-                    parsed = json.loads(
-                        content.decode("utf-8-sig"),
-                        parse_constant=lambda c: (_ for _ in ()).throw(ValueError(f"Non-standard JSON constant: {c}")),
-                    )
-                    h = hashlib.sha256(content).hexdigest()
-                    hashes[fp] = h
-                    priority = _mirrored_candidate_priority(fname, parsed)
-                    if priority < 0:
-                        continue
-                    score = (priority, fp_stat.st_mtime)
-                    if best_cand is None or score > (best_cand[0], best_cand[1]):
-                        best_cand = (score[0], score[1], fp, h, content)
-                except Exception:
-                    pass
-
-        if best_cand is not None:
-            auth_path, auth_hash, auth_bytes = best_cand[2], best_cand[3], best_cand[4]
-            try:
-                auth_stat = auth_path.stat()
-            except OSError:
-                auth_stat = None
+    repaired: List[str] = []
+    with FileLock(get_lock_path(root / ".parity_heal"), timeout=15.0, stale_timeout=60.0):
+        for fname in target_files:
+            best_cand: Optional[Tuple[int, float, Path, str, bytes]] = None
+            hashes: Dict[Path, str] = {}
             for d in active_dirs:
                 fp = d / fname
-                if not fp.exists() or hashes.get(fp) != auth_hash:
-                    temp_name: Optional[str] = None
+                if fp.is_file():
                     try:
-                        d.mkdir(parents=True, exist_ok=True)
-                        with tempfile.NamedTemporaryFile("wb", dir=str(d), delete=False, prefix=f".tmp_heal_{fname}_") as tf:
-                            temp_name = tf.name
-                            tf.write(auth_bytes)
-                            tf.flush()
-                            os.fsync(tf.fileno())
+                        fp_stat = fp.stat()
+                        if fp_stat.st_size <= 0:
+                            continue
+                        content = fp.read_bytes()
+                        parsed = json.loads(
+                            content.decode("utf-8-sig"),
+                            parse_constant=_reject_json_constant,
+                        )
+                        h = hashlib.sha256(content).hexdigest()
+                        hashes[fp] = h
+                        priority = _mirrored_candidate_priority(fname, parsed)
+                        if priority < 0:
+                            continue
+                        score = (priority, fp_stat.st_mtime)
+                        if best_cand is None or score > (best_cand[0], best_cand[1]):
+                            best_cand = (score[0], score[1], fp, h, content)
+                    except Exception:
+                        pass
+
+            if best_cand is not None:
+                auth_path, auth_hash, auth_bytes = best_cand[2], best_cand[3], best_cand[4]
+                try:
+                    auth_stat = auth_path.stat()
+                except OSError:
+                    auth_stat = None
+                for d in active_dirs:
+                    fp = d / fname
+                    if not fp.exists() or hashes.get(fp) != auth_hash:
+                        temp_name: Optional[str] = None
                         try:
-                            os.chmod(temp_name, 0o644)
-                        except OSError:
-                            pass
-                        os.replace(temp_name, fp)
-                        temp_name = None
-                        if auth_stat is not None:
+                            d.mkdir(parents=True, exist_ok=True)
+                            with tempfile.NamedTemporaryFile("wb", dir=str(d), delete=False, prefix=f".tmp_heal_{fname}_") as tf:
+                                temp_name = tf.name
+                                tf.write(auth_bytes)
+                                tf.flush()
+                                os.fsync(tf.fileno())
                             try:
-                                os.utime(fp, (auth_stat.st_atime, auth_stat.st_mtime))
+                                os.chmod(temp_name, 0o644)
                             except OSError:
                                 pass
-                        dir_fd = -1
-                        try:
-                            dir_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
-                            dir_fd = os.open(str(d), dir_flags)
-                            os.fsync(dir_fd)
-                        except OSError:
-                            pass
-                        finally:
-                            if dir_fd >= 0:
+                            os.replace(temp_name, fp)
+                            temp_name = None
+                            if auth_stat is not None:
                                 try:
-                                    os.close(dir_fd)
+                                    os.utime(fp, (auth_stat.st_atime, auth_stat.st_mtime))
                                 except OSError:
                                     pass
-                        repaired.append(f"{fname} -> {fp}")
-                        logger.info("Auto-healed mirror parity for %s in %s", fname, d)
-                    except Exception as e:
-                        logger.warning("Failed to auto-heal %s in %s: %s", fname, d, e)
-                    finally:
-                        if temp_name and os.path.exists(temp_name):
+                            dir_fd = -1
                             try:
-                                os.unlink(temp_name)
+                                dir_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+                                dir_fd = os.open(str(d), dir_flags)
+                                os.fsync(dir_fd)
                             except OSError:
                                 pass
+                            finally:
+                                if dir_fd >= 0:
+                                    try:
+                                        os.close(dir_fd)
+                                    except OSError:
+                                        pass
+                            repaired.append(f"{fname} -> {fp}")
+                            logger.info("Auto-healed mirror parity for %s in %s", fname, d)
+                        except Exception as e:
+                            logger.warning("Failed to auto-heal %s in %s: %s", fname, d, e)
+                        finally:
+                            if temp_name and os.path.exists(temp_name):
+                                try:
+                                    os.unlink(temp_name)
+                                except OSError:
+                                    pass
     return repaired
 
 
@@ -940,7 +968,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                         quarantine_corrupted=getattr(args, "quarantine_corrupted", True),
                     )
 
-            if args.sync_web or auto_bidirectional:
+            is_repo_web_target = (args.web_dir is None) or _is_project_data_dir(Path(args.web_dir), _CURRENT_DIR)
+            if (args.sync_web and is_repo_web_target) or auto_bidirectional:
                 healed = auto_heal_mirrored_parity(_find_repo_root())
                 if healed:
                     logger.info("Auto-healed %d dataset parity disparities across mirrors: %s", len(healed), healed)

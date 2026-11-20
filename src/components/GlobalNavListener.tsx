@@ -44,7 +44,7 @@ export const GlobalNavListener = memo(function GlobalNavListener() {
       );
       allNavLinks.forEach((link) => {
         const href = link.getAttribute('href');
-        if (!href || !href.startsWith('/')) return;
+        if (!href || !href.startsWith('/') || href.startsWith('//')) return;
         const linkPath = normalizePath(href);
         const isCurrent =
           linkPath === '/'

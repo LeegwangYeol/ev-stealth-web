@@ -40,25 +40,44 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
     
     Also sanitizes formatted numeric strings containing thousands separators (e.g. '1,500.50').
     """
+    if default is None or isinstance(default, bool):
+        safe_default = 0.0
+    elif isinstance(default, (int, float)):
+        f_def = float(default)
+        safe_default = 0.0 if (math.isnan(f_def) or math.isinf(f_def) or f_def == 0.0) else f_def
+    else:
+        safe_default = 0.0
+
     if val is None or isinstance(val, bool):
-        return default
+        return safe_default
     if type(val) is float:
         if math.isnan(val) or math.isinf(val):
-            return default
+            return safe_default
         return 0.0 if val == 0.0 else val
     if type(val) is int:
         return float(val)
     if isinstance(val, str):
         val = val.strip().replace(",", "")
         if not val:
-            return default
+            return safe_default
     try:
         f = float(val)
         if math.isnan(f) or math.isinf(f):
-            return default
+            return safe_default
         return 0.0 if f == 0.0 else f
     except (ValueError, TypeError, OverflowError):
-        return default
+        return safe_default
+
+
+def _safe_rate_percent(numerator: Union[int, float], denominator: Union[int, float]) -> float:
+    """Compute rounded percentage (1 decimal) scaling numerator first to avoid float drift."""
+    if denominator <= 0 or numerator <= 0:
+        return 0.0
+    scaled = numerator * 100.0
+    raw = (scaled / denominator) if not math.isinf(scaled) else ((numerator / denominator) * 100.0)
+    if math.isnan(raw) or math.isinf(raw):
+        return 0.0
+    return max(0.0, round(raw, 1))
 
 
 def _mapping_getitem(obj: Any, key: Any) -> Any:
@@ -281,17 +300,21 @@ class CategoryMetrics:
         app = max(0, _safe_int(data.get("applied_units", data.get("applied", 0))))
         deliv = max(0, _safe_int(data.get("delivered_units", data.get("delivered", 0))))
 
-        rem_raw = data.get("remaining_units") if "remaining_units" in data else data.get("remaining")
+        rem_raw = data.get("remaining_units")
+        if rem_raw is None:
+            rem_raw = data.get("remaining")
         if rem_raw is None:
             rem = max(0, ann - app)
         else:
             rem = max(0, _safe_int(rem_raw, 0))
 
-        rate_raw = data.get("depletion_rate") if "depletion_rate" in data else data.get("rate")
+        rate_raw = data.get("depletion_rate")
+        if rate_raw is None:
+            rate_raw = data.get("rate")
         if rate_raw is not None:
             dep_rate = max(0.0, _safe_float(rate_raw, 0.0))
         elif ann > 0 and app > 0:
-            dep_rate = max(0.0, round((app / ann) * 100.0, 1))
+            dep_rate = _safe_rate_percent(app, ann)
         else:
             dep_rate = 0.0
 
@@ -299,7 +322,7 @@ class CategoryMetrics:
         if deliv_rate_raw is not None:
             deliv_rate = max(0.0, _safe_float(deliv_rate_raw, 0.0))
         elif ann > 0 and deliv > 0:
-            deliv_rate = max(0.0, round((deliv / ann) * 100.0, 1))
+            deliv_rate = _safe_rate_percent(deliv, ann)
         else:
             deliv_rate = 0.0
 
@@ -394,17 +417,21 @@ class MunicipalityMetrics:
         app = max(0, _safe_int(data.get("applied_units", data.get("applied", 0))))
         deliv = max(0, _safe_int(data.get("delivered_units", data.get("delivered", 0))))
 
-        rem_raw = data.get("remaining_units") if "remaining_units" in data else data.get("remaining")
+        rem_raw = data.get("remaining_units")
+        if rem_raw is None:
+            rem_raw = data.get("remaining")
         if rem_raw is None:
             rem = max(0, ann - app)
         else:
             rem = max(0, _safe_int(rem_raw, 0))
 
-        rate_raw = data.get("depletion_rate") if "depletion_rate" in data else data.get("rate")
+        rate_raw = data.get("depletion_rate")
+        if rate_raw is None:
+            rate_raw = data.get("rate")
         if rate_raw is not None:
             dep_rate = max(0.0, _safe_float(rate_raw, 0.0))
         elif ann > 0 and app > 0:
-            dep_rate = max(0.0, round((app / ann) * 100.0, 1))
+            dep_rate = _safe_rate_percent(app, ann)
         else:
             dep_rate = 0.0
 
@@ -639,13 +666,15 @@ class RegionRecord:
                     munis.append(MunicipalityMetrics.from_dict(muni_data))
 
         code_val = str(data.get("code") or data.get("region_id") or data.get("id") or "")
-        rate_val = data.get("overall_depletion_rate") if "overall_depletion_rate" in data else data.get("depletion_rate")
+        rate_val = data.get("overall_depletion_rate")
+        if rate_val is None:
+            rate_val = data.get("depletion_rate")
         if rate_val is not None:
             overall_rate = max(0.0, _safe_float(rate_val, 0.0))
         elif cats:
-            tot_ann = sum(_safe_int(getattr(c, "announced_units", 0), 0) for c in cats.values())
-            tot_app = sum(_safe_int(getattr(c, "applied_units", 0), 0) for c in cats.values())
-            overall_rate = max(0.0, round((tot_app / tot_ann) * 100.0, 1)) if tot_ann > 0 and tot_app > 0 else 0.0
+            tot_ann = sum(max(0, _safe_int(getattr(c, "announced_units", 0), 0)) for c in cats.values())
+            tot_app = sum(max(0, _safe_int(getattr(c, "applied_units", 0), 0)) for c in cats.values())
+            overall_rate = _safe_rate_percent(tot_app, tot_ann) if tot_ann > 0 and tot_app > 0 else 0.0
         else:
             overall_rate = 0.0
 
@@ -654,6 +683,12 @@ class RegionRecord:
             overall_status = getattr(st_raw, "value", str(st_raw))
         else:
             overall_status = AlertSeverity.from_rate(overall_rate).value
+
+        supp_raw = data.get("supplementary_budget_added", False)
+        if isinstance(supp_raw, str):
+            supp_added = supp_raw.strip().lower() in ("true", "1", "yes", "y")
+        else:
+            supp_added = bool(supp_raw)
 
         return cls(
             region_id=str(data.get("region_id") or data.get("code") or data.get("id") or ""),
@@ -664,7 +699,7 @@ class RegionRecord:
             overall_depletion_rate=overall_rate,
             overall_status=overall_status,
             residency_requirement_days=max(0, _safe_int(data.get("residency_requirement_days", data.get("residency_days", 30)), default=30)),
-            supplementary_budget_added=bool(data.get("supplementary_budget_added", False)),
+            supplementary_budget_added=supp_added,
             categories=cats,
             municipalities=munis,
             notes=str(data.get("notes") or ""),
@@ -706,11 +741,17 @@ _KO_REGION_ALIAS_MAP: Dict[str, str] = {
     "세종": "sejong",
     "강원": "gangwon",
     "충북": "chungbuk",
+    "충청북": "chungbuk",
     "충남": "chungnam",
+    "충청남": "chungnam",
     "전북": "jeonbuk",
+    "전라북": "jeonbuk",
     "전남": "jeonnam",
+    "전라남": "jeonnam",
     "경북": "gyeongbuk",
+    "경상북": "gyeongbuk",
     "경남": "gyeongnam",
+    "경상남": "gyeongnam",
     "제주": "jeju",
 }
 
@@ -820,14 +861,15 @@ class PopularModelEntry:
         if isinstance(entry, dict):
             if entry.get(subsidy_type) is not None:
                 return max(0, _safe_int(entry.get(subsidy_type), 0))
-            if entry.get("local_subsidy_krw") is not None:
-                return max(0, _safe_int(entry.get("local_subsidy_krw"), 0))
-            if entry.get("subsidy_krw") is not None:
-                return max(0, _safe_int(entry.get("subsidy_krw"), 0))
-            if subsidy_type == "local_subsidy_krw" and entry.get("total_subsidy_krw") is not None:
-                tot = max(0, _safe_int(entry.get("total_subsidy_krw"), 0))
-                nat = max(0, _safe_int(self.national_subsidy_krw, 0))
-                return max(0, tot - nat)
+            if subsidy_type == "local_subsidy_krw":
+                if entry.get("local_subsidy_krw") is not None:
+                    return max(0, _safe_int(entry.get("local_subsidy_krw"), 0))
+                if entry.get("subsidy_krw") is not None:
+                    return max(0, _safe_int(entry.get("subsidy_krw"), 0))
+                if entry.get("total_subsidy_krw") is not None:
+                    tot = max(0, _safe_int(entry.get("total_subsidy_krw"), 0))
+                    nat = max(0, _safe_int(self.national_subsidy_krw, 0))
+                    return max(0, tot - nat)
             return 0
         return 0
 
@@ -1001,7 +1043,7 @@ class NationwideSummary:
     def disbursed_budget_krw(self) -> int:
         """Disbursed statutory budget in KRW (non-negative)."""
         val = self.disbursed_budget_billion_krw
-        if val is None:
+        if val is None or isinstance(val, bool):
             return 0
         try:
             f = float(val)
@@ -1015,7 +1057,7 @@ class NationwideSummary:
     def total_budget_krw(self) -> int:
         """Total statutory budget in KRW (non-negative)."""
         val = self.total_budget_billion_krw
-        if val is None:
+        if val is None or isinstance(val, bool):
             return 0
         try:
             f = float(val)
@@ -1051,32 +1093,40 @@ class NationwideSummary:
         total_app = max(0, _safe_int(data.get("total_applied_units", data.get("applied", 0))))
         total_del = max(0, _safe_int(data.get("total_delivered_units", data.get("delivered", 0))))
 
-        rem_raw = data.get("total_remaining_units") if "total_remaining_units" in data else data.get("remaining")
+        rem_raw = data.get("total_remaining_units")
+        if rem_raw is None:
+            rem_raw = data.get("remaining")
         if rem_raw is None:
             total_rem = max(0, total_ann - total_app)
         else:
             total_rem = max(0, _safe_int(rem_raw, 0))
 
-        rate_raw = data.get("nationwide_depletion_rate") if "nationwide_depletion_rate" in data else data.get("depletion_rate")
+        rate_raw = data.get("nationwide_depletion_rate")
+        if rate_raw is None:
+            rate_raw = data.get("depletion_rate")
         if rate_raw is not None:
             dep_rate = max(0.0, _safe_float(rate_raw, 0.0))
         elif total_ann > 0 and total_app > 0:
-            dep_rate = max(0.0, round((total_app / total_ann) * 100.0, 1))
+            dep_rate = _safe_rate_percent(total_app, total_ann)
         else:
             dep_rate = 0.0
 
-        tb_billion_raw = data.get("total_budget_billion_krw") if "total_budget_billion_krw" in data else data.get("total_budget")
+        tb_billion_raw = data.get("total_budget_billion_krw")
+        if tb_billion_raw is None:
+            tb_billion_raw = data.get("total_budget")
         if tb_billion_raw is not None:
             tb_billion = max(0.0, _safe_float(tb_billion_raw, 0.0))
-        elif "total_budget_krw" in data and data.get("total_budget_krw") is not None:
+        elif data.get("total_budget_krw") is not None:
             tb_billion = max(0.0, round(_safe_float(data.get("total_budget_krw"), 0.0) / 1_000_000_000, 1))
         else:
             tb_billion = 0.0
 
-        db_billion_raw = data.get("disbursed_budget_billion_krw") if "disbursed_budget_billion_krw" in data else data.get("disbursed_budget")
+        db_billion_raw = data.get("disbursed_budget_billion_krw")
+        if db_billion_raw is None:
+            db_billion_raw = data.get("disbursed_budget")
         if db_billion_raw is not None:
             db_billion = max(0.0, _safe_float(db_billion_raw, 0.0))
-        elif "disbursed_budget_krw" in data and data.get("disbursed_budget_krw") is not None:
+        elif data.get("disbursed_budget_krw") is not None:
             db_billion = max(0.0, round(_safe_float(data.get("disbursed_budget_krw"), 0.0) / 1_000_000_000, 1))
         else:
             db_billion = 0.0
@@ -1239,7 +1289,8 @@ class SubsidyPayload:
             "광주": ("kr-29", "광주광역시", "gwangju"),
             "대전": ("kr-30", "대전광역시", "daejeon"),
             "울산": ("kr-31", "울산광역시", "ulsan"),
-            "세종": ("kr-36", "세종특별자치시", "sejong"),
+            "세종": ("kr-36", "kr-50", "세종특별자치시", "sejong"),
+            "kr-50": ("kr-36", "세종특별자치시", "sejong"),
             "경기": ("kr-41", "경기도", "gyeonggi"),
             "강원": ("kr-42", "강원특별자치도", "gangwon"),
             "충북": ("kr-43", "충청북도", "chungbuk"),
@@ -1316,6 +1367,8 @@ class SubsidyPayload:
             return []
         res = []
         for r in self.regions:
+            if r is None:
+                continue
             st_raw = r.get("overall_status", "") if hasattr(r, "get") else getattr(r, "overall_status", "")
             st = getattr(st_raw, "value", st_raw)
             st_str = str(st).split(".")[-1].strip().upper()
@@ -1330,6 +1383,8 @@ class SubsidyPayload:
             return []
         res = []
         for r in self.regions:
+            if r is None:
+                continue
             st_raw = r.get("overall_status", "") if hasattr(r, "get") else getattr(r, "overall_status", "")
             st = getattr(st_raw, "value", st_raw)
             st_str = str(st).split(".")[-1].strip().upper()
@@ -1346,6 +1401,8 @@ class SubsidyPayload:
             return []
         res = []
         for r in self.regions:
+            if r is None:
+                continue
             st_raw = r.get("overall_status", "") if hasattr(r, "get") else getattr(r, "overall_status", "")
             st = getattr(st_raw, "value", st_raw)
             st_str = str(st).split(".")[-1].strip().upper()

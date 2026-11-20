@@ -22,6 +22,7 @@ from collections.abc import Iterable
 import re
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 import unicodedata
+import urllib.parse
 
 from filters.slang_lexicon import (
     LAUGHING_MARKERS,
@@ -97,7 +98,14 @@ RE_AS_KEYWORD: re.Pattern[str] = re.compile(r"(?:\b|[^a-zA-Z])(?:as|a/s)(?:\b|[^
 _RE_BOUNDED_CATEGORY_KEYWORDS: Dict[str, re.Pattern[str]] = {
     "ota": re.compile(r"(?<![a-zA-Z])ota(?![a-zA-Z])", re.IGNORECASE),
     "soc": re.compile(r"(?<![a-zA-Z])soc(?![a-zA-Z])", re.IGNORECASE),
+    "bms": re.compile(r"(?<![a-zA-Z0-9])bms(?![a-zA-Z])", re.IGNORECASE),
+    "iccu": re.compile(r"(?<![a-zA-Z0-9])iccu(?![a-zA-Z])", re.IGNORECASE),
+    "mcu": re.compile(r"(?<![a-zA-Z0-9])mcu(?![a-zA-Z])", re.IGNORECASE),
+    "tcam": re.compile(r"(?<![a-zA-Z0-9])tcam(?![a-zA-Z])", re.IGNORECASE),
+    "v2l": re.compile(r"(?<![a-zA-Z0-9])v2l(?![a-zA-Z])", re.IGNORECASE),
+    "12v": re.compile(r"(?<![a-zA-Z0-9])12v(?![a-zA-Z0-9])", re.IGNORECASE),
 }
+_RE_DEFECT_HAJA: re.Pattern[str] = re.compile(r"(?<![가-힣])하자(?!마자|고|면)")
 
 
 def matches_category_keyword(category: str, keyword: str, text_lower: str) -> bool:
@@ -440,7 +448,10 @@ class SpamFilter:
             if has_component:
                 break
 
-        has_defect_keyword = any(dk in text_lower for dk in DEFECT_QUESTION_KEYWORDS)
+        has_defect_keyword = any(
+            (_RE_DEFECT_HAJA.search(text_lower) is not None) if dk == "하자" else (dk in text_lower)
+            for dk in DEFECT_QUESTION_KEYWORDS
+        )
 
         try:
             slang_matches = find_matching_slang(text_str)
@@ -497,7 +508,20 @@ class SpamFilter:
         # 3. Journalistic News Detection
         # -----------------------------------------------------------------
         url_lower = url_str.lower()
-        if any(d in url_lower for d in NEWS_DOMAINS) and len(text_str) < 50:
+        is_news_domain = False
+        if url_lower:
+            try:
+                parsed_host = (urllib.parse.urlsplit(url_lower).hostname or "").rstrip(".")
+            except Exception:
+                parsed_host = ""
+            if parsed_host:
+                is_news_domain = any(
+                    parsed_host == d or parsed_host.endswith("." + d)
+                    for d in NEWS_DOMAINS
+                )
+            else:
+                is_news_domain = any(d in url_lower for d in NEWS_DOMAINS)
+        if is_news_domain and len(text_str) < 50:
             return True, "External news link share with minimal personal text"
 
         for pattern in self.news_regexes:

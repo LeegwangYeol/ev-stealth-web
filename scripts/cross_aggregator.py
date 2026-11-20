@@ -270,7 +270,7 @@ class CrossAggregator:
 
             # Sentiment percentages
             sent_pct = {
-                tier: round((grp["sentiment_counts"][tier] / cnt) * 100, 1)
+                tier: round((grp["sentiment_counts"][tier] / max(1, cnt)) * 100, 1)
                 for tier in ["POSITIVE", "NEUTRAL", "NEGATIVE", "STRONGLY_NEGATIVE"]
             }
 
@@ -610,7 +610,9 @@ class CrossAggregator:
         Pure Python implementation of Pearson's Chi-Square Test of Independence / Homogeneity.
         Returns: (chi2_statistic, degrees_of_freedom, p_value_approx)
         """
-        if not contingency_matrix:
+        if not contingency_matrix or not isinstance(contingency_matrix, (list, tuple)):
+            return 0.0, 0, 1.0
+        if not all(isinstance(row, (list, tuple)) for row in contingency_matrix):
             return 0.0, 0, 1.0
         num_rows = len(contingency_matrix)
         num_cols = min((len(row) for row in contingency_matrix), default=0)
@@ -618,20 +620,39 @@ class CrossAggregator:
         if num_rows <= 1 or num_cols <= 1:
             return 0.0, 0, 1.0
 
-        row_totals = [sum(row[:num_cols]) for row in contingency_matrix]
-        col_totals = [sum(contingency_matrix[r][c] for r in range(num_rows)) for c in range(num_cols)]
+        sanitized: List[List[float]] = []
+        for r in range(num_rows):
+            s_row: List[float] = []
+            for c in range(num_cols):
+                val = contingency_matrix[r][c]
+                if val is None or isinstance(val, bool):
+                    return 0.0, 0, 1.0
+                try:
+                    f_val = float(val)
+                except (ValueError, TypeError):
+                    return 0.0, 0, 1.0
+                if not math.isfinite(f_val) or f_val < 0.0:
+                    return 0.0, 0, 1.0
+                s_row.append(f_val)
+            sanitized.append(s_row)
+
+        row_totals = [sum(row) for row in sanitized]
+        col_totals = [sum(sanitized[r][c] for r in range(num_rows)) for c in range(num_cols)]
         grand_total = sum(row_totals)
 
-        if grand_total <= 0:
+        if not math.isfinite(grand_total) or grand_total <= 0:
             return 0.0, 0, 1.0
 
         chi2_stat = 0.0
         for r in range(num_rows):
             for c in range(num_cols):
-                observed = contingency_matrix[r][c]
+                observed = sanitized[r][c]
                 expected = (row_totals[r] * col_totals[c]) / grand_total
-                if expected > 0:
+                if expected > 0 and math.isfinite(expected):
                     chi2_stat += ((observed - expected) ** 2) / expected
+
+        if not math.isfinite(chi2_stat):
+            return 0.0, 0, 1.0
 
         dof = (num_rows - 1) * (num_cols - 1)
 

@@ -214,11 +214,11 @@ class DCInsideScraper:
         is_minor = GALLERIES.get(gallery_id, {}).get("is_minor", True)
         board_prefix = "mgallery/board" if is_minor else "board"
 
-        # Match table rows in DC desktop list view without bleeding across </tr> boundaries
+        # Match table rows in DC desktop list view without bleeding across <tr> or </td> boundaries
         # <tr class="ub-content us-post" data-no="12345">
         # <td class="gall_tit ub-word"><a href="...">제목</a>
-        tr_pattern = r'<tr\b([^>]*)\bdata-no=["\'](\d+)["\']([^>]*)>(.*?)</tr>'
-        tit_pattern = r'<td[^>]*class=["\'][^"\']*\bgall_tit\b[^"\']*["\'][^>]*>.*?<a\b[^>]*\bhref=["\']([^"\']+)["\'][^>]*>(.*?)</a>'
+        tr_pattern = r'<tr\b([^>]*)\bdata-no=["\'](\d+)["\']([^>]*)>((?:(?!<tr\b).)*?)</tr>'
+        tit_pattern = r'<td[^>]*class=["\'][^"\']*\bgall_tit\b[^"\']*["\'][^>]*>(?:(?!</td>).)*?<a\b[^>]*\bhref=["\']([^"\']+)["\'][^>]*>(.*?)</a>'
         rows = re.findall(tr_pattern, html_content, re.IGNORECASE | re.DOTALL)
 
         for tr_pre, post_no, tr_post, row_body in rows:
@@ -447,7 +447,11 @@ class DCInsideScraper:
             author_badge = f"{author_badge or 'ㅇㅇ'} ({ip_match.group(1)})"
             author_type = "dc_masked_ip"
         elif not author_badge:
-            mob_author = re.search(r'<span class="ginfo">.*?<span class="user">(.*?)</span>', html_content, re.DOTALL)
+            mob_author = re.search(
+                r'<span class="ginfo">(?:(?!</?(?:div|li|ul|section)\b).)*?<span class="user">(.*?)</span>',
+                html_content,
+                re.DOTALL,
+            )
             if mob_author:
                 author_badge = clean_html_text(mob_author.group(1))
             else:

@@ -84,7 +84,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
             </p>
             {error?.digest && (
               <p className="text-xs text-slate-300 font-mono pt-1">
-                오류 참조 코드: <span className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">{error.digest}</span>
+                오류 참조 코드: <span className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700 break-all">{error.digest}</span>
               </p>
             )}
           </div>
@@ -94,7 +94,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
               type="button"
               onClick={handleRetry}
               aria-label="애플리케이션 다시 시도"
-              className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
               <span aria-hidden="true">🔄</span> 다시 시도
             </button>

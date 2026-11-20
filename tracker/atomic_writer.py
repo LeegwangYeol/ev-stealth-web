@@ -37,6 +37,7 @@ except ImportError:
 
 import shutil
 import uuid
+import weakref
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +47,13 @@ _cleanup_meta_lock = threading.Lock()
 
 def is_pid_alive(pid: Any) -> bool:
     """Check if process with given PID is currently running."""
+    if isinstance(pid, bool):
+        return False
+    if isinstance(pid, float) and (math.isnan(pid) or math.isinf(pid)):
+        return False
     try:
         pid_int = int(pid)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         return False
     if pid_int <= 0:
         return False
@@ -113,7 +118,7 @@ class FileLock:
     """Re-entrant cross-process and thread-safe advisory file lock with timeout, stale lock breaking, and backoff."""
 
     _local = threading.local()
-    _process_locks: Dict[str, threading.RLock] = {}
+    _process_locks: "weakref.WeakValueDictionary[str, threading.RLock]" = weakref.WeakValueDictionary()
     _meta_lock = threading.Lock()
 
     def __init__(
@@ -127,11 +132,11 @@ class FileLock:
         if not lock_path or not str(lock_path).strip():
             raise ValueError("lock_path cannot be empty")
         self.lock_path = str(Path(lock_path).resolve())
-        t_val = float(timeout) if timeout is not None else 10.0
+        t_val = float(timeout) if (timeout is not None and not isinstance(timeout, bool)) else 10.0
         self.timeout = 10.0 if (math.isnan(t_val) or math.isinf(t_val)) else max(0.0, t_val)
-        p_val = float(poll_interval) if poll_interval is not None else 0.02
+        p_val = float(poll_interval) if (poll_interval is not None and not isinstance(poll_interval, bool)) else 0.02
         self.poll_interval = 0.02 if (math.isnan(p_val) or math.isinf(p_val)) else max(0.001, p_val)
-        s_val = float(stale_timeout) if stale_timeout is not None else 300.0
+        s_val = float(stale_timeout) if (stale_timeout is not None and not isinstance(stale_timeout, bool)) else 300.0
         self.stale_timeout = 300.0 if (math.isnan(s_val) or math.isinf(s_val)) else max(0.1, s_val)
         self.fail_on_timeout = fail_on_timeout
         self.fd: Optional[int] = None
@@ -139,9 +144,11 @@ class FileLock:
         self._thread_lock_depth: int = 0
         self._instance_depth: int = 0
         with self._meta_lock:
-            if self.lock_path not in self._process_locks:
-                self._process_locks[self.lock_path] = threading.RLock()
-            self._thread_lock = self._process_locks[self.lock_path]
+            lock_obj = self._process_locks.get(self.lock_path)
+            if lock_obj is None:
+                lock_obj = threading.RLock()
+                self._process_locks[self.lock_path] = lock_obj
+            self._thread_lock = lock_obj
 
     @property
     def _thread_locked(self) -> bool:
@@ -152,6 +159,28 @@ class FileLock:
     def is_locked(self) -> bool:
         """Return True if this lock is currently held by this thread."""
         return self.acquired and self.fd is not None
+
+    def _inspect_stale_lock(self) -> Tuple[bool, Optional[int], bool, float]:
+        """Inspect lock file metadata and mtime to determine whether it is stale."""
+        holder_pid, holder_ts = read_lock_metadata(self.lock_path)
+        now = time.time()
+        try:
+            mtime_age = max(0.0, now - os.path.getmtime(self.lock_path))
+        except OSError:
+            mtime_age = 0.0
+
+        is_dead_holder = holder_pid is not None and not is_pid_alive(holder_pid)
+        is_expired_holder = (
+            (holder_ts is not None and (now - holder_ts) > self.stale_timeout)
+            or (holder_ts is None and mtime_age > self.stale_timeout)
+        )
+        lock_age = max(0.0, mtime_age, (now - holder_ts) if holder_ts is not None else mtime_age)
+        should_break = (
+            (is_dead_holder and lock_age > self.stale_timeout)
+            or (is_expired_holder and lock_age > self.stale_timeout)
+            or (holder_pid is None and holder_ts is None and lock_age > self.stale_timeout)
+        )
+        return should_break, holder_pid, is_dead_holder, lock_age
 
     def __enter__(self) -> FileLock:
         acquired_thread = self._thread_lock.acquire(timeout=self.timeout)
@@ -189,6 +218,7 @@ class FileLock:
             self.fd = os.open(self.lock_path, flags, 0o644)
             if fcntl is not None:
                 start_time = time.monotonic()
+                stale_breaks = 0
                 while True:
                     try:
                         fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -240,25 +270,9 @@ class FileLock:
                             raise
 
                         # Check for stale lock from dead PID or expired timeout
-                        holder_pid, holder_ts = read_lock_metadata(self.lock_path)
-                        now = time.time()
-                        try:
-                            mtime_age = max(0.0, now - os.path.getmtime(self.lock_path))
-                        except OSError:
-                            mtime_age = 0.0
+                        should_break, holder_pid, is_dead_holder, lock_age = self._inspect_stale_lock()
 
-                        is_dead_holder = holder_pid is not None and not is_pid_alive(holder_pid)
-                        is_expired_holder = (
-                            (holder_ts is not None and (now - holder_ts) > self.stale_timeout)
-                            or (holder_ts is None and mtime_age > self.stale_timeout)
-                        )
-                        lock_age = max(0.0, mtime_age, (now - holder_ts) if holder_ts is not None else mtime_age)
-
-                        if (
-                            (is_dead_holder and lock_age > self.stale_timeout)
-                            or (is_expired_holder and lock_age > self.stale_timeout)
-                            or (holder_pid is None and holder_ts is None and lock_age > self.stale_timeout)
-                        ):
+                        if should_break:
                             logger.warning(
                                 "Breaking stale lock on %s (holder pid=%s alive=%s, age=%.1fs > %.1fs)",
                                 self.lock_path,
@@ -272,14 +286,36 @@ class FileLock:
                             except OSError:
                                 pass
                             self.fd = None
+                            unlink_ok = True
                             try:
                                 os.unlink(self.lock_path)
                             except OSError:
-                                pass
+                                unlink_ok = False
+                            if stale_breaks > 0 or not unlink_ok:
+                                if (time.monotonic() - start_time) >= self.timeout:
+                                    if self.fail_on_timeout:
+                                        raise TimeoutError(
+                                            f"Timeout ({self.timeout:.1f}s) acquiring lock on {self.lock_path}"
+                                        )
+                                    logger.warning(
+                                        "Timeout (%.1fs) acquiring lock on %s. Proceeding defensively.",
+                                        self.timeout,
+                                        self.lock_path,
+                                    )
+                                    self.acquired = False
+                                    break
+                                time.sleep(self.poll_interval)
+                            stale_breaks += 1
                             self.fd = os.open(self.lock_path, flags, 0o644)
                             continue
 
                         if (time.monotonic() - start_time) >= self.timeout:
+                            if self.fd is not None:
+                                try:
+                                    os.close(self.fd)
+                                except OSError:
+                                    pass
+                                self.fd = None
                             if self.fail_on_timeout:
                                 raise TimeoutError(
                                     f"Timeout ({self.timeout:.1f}s) acquiring lock on {self.lock_path}"
@@ -290,16 +326,11 @@ class FileLock:
                                 self.lock_path,
                             )
                             self.acquired = False
-                            if self.fd is not None:
-                                try:
-                                    os.close(self.fd)
-                                except OSError:
-                                    pass
-                                self.fd = None
                             break
                         time.sleep(self.poll_interval)
             elif msvcrt is not None:
                 start_time = time.monotonic()
+                stale_breaks = 0
                 while True:
                     try:
                         os.lseek(self.fd, 0, os.SEEK_SET)
@@ -315,26 +346,9 @@ class FileLock:
                     except (BlockingIOError, OSError) as exc:
                         if exc.errno not in (errno.EACCES, getattr(errno, "EDEADLK", 36), getattr(errno, "EAGAIN", 11)):
                             raise
-                        holder_pid, holder_ts = read_lock_metadata(self.lock_path)
-                        now = time.time()
-                        try:
-                            mtime_age = max(0.0, now - os.path.getmtime(self.lock_path))
-                        except OSError:
-                            mtime_age = 0.0
+                        should_break, holder_pid, is_dead_holder, lock_age = self._inspect_stale_lock()
 
-                        is_dead_holder = holder_pid is not None and not is_pid_alive(holder_pid)
-                        is_expired_holder = (
-                            (holder_ts is not None and (now - holder_ts) > self.stale_timeout)
-                            or (holder_ts is None and mtime_age > self.stale_timeout)
-                        )
-
-                        lock_age = max(0.0, mtime_age, (now - holder_ts) if holder_ts is not None else mtime_age)
-
-                        if (
-                            (is_dead_holder and lock_age > self.stale_timeout)
-                            or (is_expired_holder and lock_age > self.stale_timeout)
-                            or (holder_pid is None and holder_ts is None and lock_age > self.stale_timeout)
-                        ):
+                        if should_break:
                             logger.warning(
                                 "Breaking stale Windows lock on %s (pid %s dead=%s, age=%.1fs > %.1fs)",
                                 self.lock_path,
@@ -348,13 +362,35 @@ class FileLock:
                             except OSError:
                                 pass
                             self.fd = None
+                            unlink_ok = True
                             try:
                                 os.unlink(self.lock_path)
                             except OSError:
-                                pass
+                                unlink_ok = False
+                            if stale_breaks > 0 or not unlink_ok:
+                                if (time.monotonic() - start_time) >= self.timeout:
+                                    if self.fail_on_timeout:
+                                        raise TimeoutError(
+                                            f"Timeout ({self.timeout:.1f}s) acquiring Windows lock on {self.lock_path}"
+                                        )
+                                    logger.warning(
+                                        "Timeout (%.1fs) acquiring Windows lock on %s. Proceeding defensively.",
+                                        self.timeout,
+                                        self.lock_path,
+                                    )
+                                    self.acquired = False
+                                    break
+                                time.sleep(self.poll_interval)
+                            stale_breaks += 1
                             self.fd = os.open(self.lock_path, flags, 0o644)
                             continue
                         if (time.monotonic() - start_time) >= self.timeout:
+                            if self.fd is not None:
+                                try:
+                                    os.close(self.fd)
+                                except OSError:
+                                    pass
+                                self.fd = None
                             if self.fail_on_timeout:
                                 raise TimeoutError(
                                     f"Timeout ({self.timeout:.1f}s) acquiring Windows lock on {self.lock_path}"
@@ -365,12 +401,6 @@ class FileLock:
                                 self.lock_path,
                             )
                             self.acquired = False
-                            if self.fd is not None:
-                                try:
-                                    os.close(self.fd)
-                                except OSError:
-                                    pass
-                                self.fd = None
                             break
                         time.sleep(self.poll_interval)
             else:
@@ -383,17 +413,18 @@ class FileLock:
             return self
         except BaseException:
             if self.fd is not None:
-                if fcntl is not None:
-                    try:
-                        fcntl.flock(self.fd, fcntl.LOCK_UN)
-                    except OSError:
-                        pass
-                elif msvcrt is not None:
-                    try:
-                        os.lseek(self.fd, 0, os.SEEK_SET)
-                        msvcrt.locking(self.fd, msvcrt.LK_UNLCK, 1)
-                    except OSError:
-                        pass
+                if self.acquired:
+                    if fcntl is not None:
+                        try:
+                            fcntl.flock(self.fd, fcntl.LOCK_UN)
+                        except OSError:
+                            pass
+                    elif msvcrt is not None:
+                        try:
+                            os.lseek(self.fd, 0, os.SEEK_SET)
+                            msvcrt.locking(self.fd, msvcrt.LK_UNLCK, 1)
+                        except OSError:
+                            pass
                 try:
                     os.close(self.fd)
                 except OSError:
@@ -478,6 +509,19 @@ def get_lock_path(target_path: Union[str, Path]) -> Path:
     return Path(tempfile.gettempdir()) / f".ev_atomic_{digest}.lock"
 
 
+def _sanitize_max_age(max_age_seconds: Any, default: float = 3600.0) -> float:
+    """Normalize max_age_seconds to a non-negative float (falling back on NaN/negative/bool)."""
+    if max_age_seconds is None or isinstance(max_age_seconds, bool):
+        return default
+    try:
+        val = float(max_age_seconds)
+    except (ValueError, TypeError, OverflowError):
+        return default
+    if math.isnan(val) or val < 0.0:
+        return default
+    return val
+
+
 def cleanup_stale_temp_files(
     directory: Union[str, Path],
     prefix: Union[str, tuple[str, ...], list[str]] = (".tmp_", ".tmp_subsidy_", ".tmp_daily_"),
@@ -489,6 +533,7 @@ def cleanup_stale_temp_files(
     d = Path(directory)
     if not d.is_dir():
         return 0
+    safe_max_age = _sanitize_max_age(max_age_seconds)
     cleaned = 0
     now = time.time()
     prefixes = (prefix,) if isinstance(prefix, str) else tuple(prefix)
@@ -497,7 +542,7 @@ def cleanup_stale_temp_files(
             if any(entry.name.startswith(p) for p in prefixes):
                 try:
                     st = entry.lstat()
-                    if (now - st.st_mtime) > max_age_seconds:
+                    if (now - st.st_mtime) > safe_max_age:
                         entry.unlink(missing_ok=True)
                         cleaned += 1
                 except OSError:
@@ -519,6 +564,7 @@ def cleanup_stale_lock_files(
     d = Path(directory)
     if not d.is_dir():
         return 0
+    safe_max_age = _sanitize_max_age(max_age_seconds)
     cleaned = 0
     now = time.time()
     prefixes = (prefix,) if isinstance(prefix, str) else tuple(prefix)
@@ -536,8 +582,8 @@ def cleanup_stale_lock_files(
                 holder_pid, holder_ts = read_lock_metadata(entry)
                 is_dead_holder = holder_pid is not None and not is_pid_alive(holder_pid)
                 is_expired_holder = (
-                    (holder_ts is not None and (now - holder_ts) > max_age_seconds)
-                    or (holder_ts is None and age > max_age_seconds)
+                    (holder_ts is not None and (now - holder_ts) > safe_max_age)
+                    or (holder_ts is None and age > safe_max_age)
                 )
 
                 # Skip if file has an active, living holder
@@ -546,9 +592,9 @@ def cleanup_stale_lock_files(
 
                 # For locks without a confirmed dead holder, require expiration
                 if not is_dead_holder:
-                    if holder_ts is not None and (now - holder_ts) <= max_age_seconds:
+                    if holder_ts is not None and (now - holder_ts) <= safe_max_age:
                         continue
-                    if age <= max_age_seconds:
+                    if age <= safe_max_age:
                         continue
 
                 # Skip if not confirmed dead holder and not expired

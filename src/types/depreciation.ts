@@ -205,7 +205,14 @@ export interface PartialAdjustmentFactors {
   battery_chemistry?: Record<string, Partial<BatteryChemistryAdjustment>>;
   facelift_hardware?: Partial<FaceliftHardwareAdjustment>;
   hardware_platform?: Partial<NonNullable<AdjustmentFactors['hardware_platform']>>;
-  software_ota?: AdjustmentFactors['software_ota'];
+  software_ota?:
+    | Partial<Record<SoftwareOtaLevel, number>>
+    | Record<string, number>
+    | {
+        full_stack_fota_bonus?: number;
+        legacy_infotainment_penalty?: number;
+        description?: string;
+      };
   mileage_sensitivity?: Partial<MileageSensitivityAdjustment>;
 }
 
@@ -549,7 +556,7 @@ export interface TcoResult {
 
 export interface CalculateDepreciationOptions {
   model?: EvModelDepreciation;
-  models?: EvModelDepreciation[];
+  models?: readonly EvModelDepreciation[];
   baselineAnnualMileageKm?: number;
   annualAverageKm?: number;
   adjustmentFactors?: PartialAdjustmentFactors;

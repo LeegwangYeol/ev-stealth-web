@@ -488,7 +488,7 @@ const AlertLegendSection = React.memo(function AlertLegendSection({
               className={`p-3 min-h-[44px] rounded-xl border text-left transition flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                 isSelected
                   ? 'ring-2 ring-amber-400 ' + getBadgeStyle(key).replace(' animate-pulse motion-reduce:animate-none', '')
-                  : 'bg-slate-950 hover:bg-slate-800 border-slate-600 text-slate-300'
+                  : 'bg-slate-950 hover:bg-slate-800 border-slate-500 text-slate-300'
               }`}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -528,7 +528,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   const [expandedRegions, setExpandedRegions] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    if (searchQuery === '') {
+    if (searchQuery.trim() === '') {
       setDebouncedQuery('');
       return;
     }
@@ -538,12 +538,13 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Performance Optimization: Non-blocking search typing via useDeferredValue
+  // Performance Optimization: Non-blocking search filtering via useDeferredValue on debouncedQuery
   const deferredSearchQuery = useDeferredValue(debouncedQuery);
   const _legacyDeferredSearch = useDeferredValue(searchQuery);
   void _legacyDeferredSearch;
 
-  // Calculator State & Ref
+  // Search Input & Calculator Refs
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const calculatorRef = useRef<HTMLElement>(null);
   // Default to server baseline to eliminate hydration mismatch risks with query strings
   const [selectedModelId, setSelectedModelId] = useState<string>(
@@ -707,18 +708,22 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   const handleClearSearch = useCallback(() => {
     setSearchQuery('');
     setDebouncedQuery('');
+    searchInputRef.current?.focus();
   }, []);
 
   const handleClearZoneFilter = useCallback(() => {
     setZoneFilter('ALL');
+    searchInputRef.current?.focus();
   }, []);
 
   const handleClearAlertFilter = useCallback(() => {
     setAlertFilter('ALL');
+    searchInputRef.current?.focus();
   }, []);
 
   const handleClearSupplementaryFilter = useCallback(() => {
     setSupplementaryOnly(false);
+    searchInputRef.current?.focus();
   }, []);
 
   const handleToggleSupplementary = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -735,6 +740,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
     setSearchQuery('');
     setDebouncedQuery('');
     setSupplementaryOnly(false);
+    searchInputRef.current?.focus();
   }, []);
 
   const handleSetViewGrid = useCallback(() => setViewMode('grid'), []);
@@ -865,6 +871,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               🔍
             </div>
             <input
+              ref={searchInputRef}
               id="region-search-input"
               type="search"
               role="searchbox"
@@ -902,7 +909,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 className={`px-2.5 py-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg border font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                   zoneFilter === zone.id
                     ? 'bg-blue-600 text-white border-blue-400'
-                    : 'bg-slate-950 text-slate-300 border-slate-600 hover:bg-slate-800'
+                    : 'bg-slate-950 text-slate-300 border-slate-500 hover:bg-slate-800'
                 }`}
               >
                 {zone.label}
@@ -939,7 +946,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         {/* Active Filter Clear indicator with role="status" and aria-live (Persistent in DOM to satisfy aria-describedby) */}
         <div className="flex items-center justify-between text-xs text-slate-300 pt-2 border-t border-slate-800">
           <span id="filter-feedback-status" role="status" aria-live="polite">
-            {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || searchQuery || supplementaryOnly) ? (
+            {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || debouncedQuery.trim() !== '' || supplementaryOnly) ? (
               <>필터 적용 중: 총 <strong>{filteredRegions.length}</strong>개 지역 표시 중 ({SORT_OPTION_LABELS[sortOption] || ''})</>
             ) : (
               <>전체 <strong>{filteredRegions.length}</strong>개 지역 표시 중 ({SORT_OPTION_LABELS[sortOption] || ''})</>
@@ -1025,13 +1032,13 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
 
             {/* Diagnostic Filter Chips: Allows removing individual constraints */}
             <div className="flex flex-wrap items-center justify-center gap-2 pt-1 max-w-xl mx-auto">
-              {searchQuery && (
+              {debouncedQuery.trim() !== '' && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-200">
-                  <span>검색어: <strong>&ldquo;{searchQuery}&rdquo;</strong></span>
+                  <span>검색어: <strong>&ldquo;{debouncedQuery}&rdquo;</strong></span>
                   <button
                     type="button"
                     onClick={handleClearSearch}
-                    aria-label={`검색어 "${searchQuery}" 제거`}
+                    aria-label={`검색어 "${debouncedQuery}" 제거`}
                     className="ml-1 text-slate-300 hover:text-white font-bold p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                   >
                     ✕
@@ -1204,7 +1211,7 @@ const RegionCard = React.memo(function RegionCard({
         : 0;
       const muniLocalSubsidy = Number.isFinite(muni.local_subsidy_krw) ? Math.max(0, muni.local_subsidy_krw) : 0;
       const muniRawStatus = typeof muni.status === 'string' ? muni.status.trim() : '';
-      const muniStatus = muniRawStatus ? muniRawStatus : resolveAlertSeverity(undefined, muniDepletion);
+      const muniStatus = normalizeAlertSeverity(muniRawStatus, muniDepletion);
 
       return (
         <div
@@ -1309,7 +1316,7 @@ const RegionCard = React.memo(function RegionCard({
               aria-expanded={isExpanded}
               aria-controls={'muni-details-' + region.region_id}
               aria-label={`${region.name_ko} 세부 시·군·구 ${munis.length}개 현황 ${isExpanded ? '접기' : '보기'}`}
-              className="w-full py-2.5 px-3 min-h-[44px] rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-xs font-medium flex items-center justify-between transition border border-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              className="w-full py-2.5 px-3 min-h-[44px] rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-xs font-medium flex items-center justify-between transition border border-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
               <span>세부 시·군·구 {munis.length}개 현황 보기</span>
               <span aria-hidden="true">{isExpanded ? '▲ 접기' : '▼ 펼치기'}</span>
@@ -1608,7 +1615,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                     className={`px-2.5 py-1 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                       isSelected
                         ? 'bg-blue-600 text-white'
-                        : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-slate-600'
+                        : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-slate-500'
                     }`}
                   >
                     {displayName}
@@ -1643,11 +1650,16 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               {regions.length === 0 ? (
                 <option value="">등록된 지자체 데이터 없음</option>
               ) : (
-                regions.map((reg) => (
-                  <option key={reg.region_id} value={reg.region_id}>
-                    {reg.name_ko} ({(Number.isFinite(reg.categories?.passenger?.depletion_rate) ? reg.categories.passenger.depletion_rate : 0).toFixed(1)}% 소진, {getStatusLabel(reg.categories?.passenger?.status || 'available')})
-                  </option>
-                ))
+                regions.map((reg) => {
+                  const pCat = reg.categories?.passenger;
+                  const pRate = Number.isFinite(pCat?.depletion_rate) ? Math.max(0, pCat!.depletion_rate) : 0;
+                  const pStatus = normalizeAlertSeverity(pCat?.status, pRate);
+                  return (
+                    <option key={reg.region_id} value={reg.region_id}>
+                      {reg.name_ko} ({pRate.toFixed(1)}% 소진, {getStatusLabel(pStatus)})
+                    </option>
+                  );
+                })
               )}
             </select>
             <p id="region-residency-note" className="text-xs text-amber-300 flex items-center gap-1.5 pt-0.5">
@@ -1712,7 +1724,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                     type="button"
                     aria-label="차량 출고가 5,400만 원 (100% 구간) 프리셋 적용"
                     onClick={() => handleSetPresetMsrp('54000000')}
-                    className="px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                    className="px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-500 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     5,400만 원 (100% 구간)
                   </button>
@@ -1720,7 +1732,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                     type="button"
                     aria-label="차량 출고가 6,200만 원 (50% 감액 구간) 프리셋 적용"
                     onClick={() => handleSetPresetMsrp('62000000')}
-                    className="px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                    className="px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-500 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     6,200만 원 (50% 감액)
                   </button>
@@ -1728,7 +1740,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                     type="button"
                     aria-label="차량 출고가 8,600만 원 (보조금 0원 구간) 프리셋 적용"
                     onClick={() => handleSetPresetMsrp('86000000')}
-                    className="px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                    className="px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-500 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                   >
                     8,600만 원 (보조금 0원)
                   </button>
@@ -1743,7 +1755,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               3. 추가 지원금 &amp; 특별 가산 혜택 (해당 시 선택)
             </legend>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              <label htmlFor="grant-youth-buyer-checkbox" className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-slate-900 border border-slate-600 hover:bg-slate-800 cursor-pointer select-none">
+              <label htmlFor="grant-youth-buyer-checkbox" className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-slate-900 border border-slate-500 hover:bg-slate-800 cursor-pointer select-none">
                 <input
                   id="grant-youth-buyer-checkbox"
                   type="checkbox"
@@ -1755,7 +1767,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                 <span>청년 생애 최초 구매 (+20% 국비)</span>
               </label>
 
-              <label htmlFor="grant-small-business-checkbox" className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-slate-900 border border-slate-600 hover:bg-slate-800 cursor-pointer select-none">
+              <label htmlFor="grant-small-business-checkbox" className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-slate-900 border border-slate-500 hover:bg-slate-800 cursor-pointer select-none">
                 <input
                   id="grant-small-business-checkbox"
                   type="checkbox"
@@ -1767,7 +1779,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                 <span>소상공인 / 영업용 택시 (+30% 국비)</span>
               </label>
 
-              <label htmlFor="grant-multi-child-checkbox" className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-slate-900 border border-slate-600 hover:bg-slate-800 cursor-pointer select-none">
+              <label htmlFor="grant-multi-child-checkbox" className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-slate-900 border border-slate-500 hover:bg-slate-800 cursor-pointer select-none">
                 <input
                   id="grant-multi-child-checkbox"
                   type="checkbox"
@@ -1779,7 +1791,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                 <span>다자녀 가구 (+10% 국비)</span>
               </label>
 
-              <label htmlFor="grant-diesel-scrappage-checkbox" className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-slate-900 border border-slate-600 hover:bg-slate-800 cursor-pointer select-none">
+              <label htmlFor="grant-diesel-scrappage-checkbox" className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-slate-900 border border-slate-500 hover:bg-slate-800 cursor-pointer select-none">
                 <input
                   id="grant-diesel-scrappage-checkbox"
                   type="checkbox"

@@ -296,8 +296,12 @@ def merge_report_records(existing: Dict[str, Any], incoming: Dict[str, Any]) -> 
             merged["dsi_breakdown"] = merged_dsi
 
     # 6. Authenticity flag
-    if incoming.get("is_authentic_defect") is not None:
-        merged["is_authentic_defect"] = bool(incoming["is_authentic_defect"])
+    inc_auth = incoming.get("is_authentic_defect")
+    if inc_auth is not None:
+        if isinstance(inc_auth, str):
+            merged["is_authentic_defect"] = inc_auth.strip().lower() not in ("false", "0", "no", "off", "")
+        else:
+            merged["is_authentic_defect"] = bool(inc_auth)
 
     return merged
 
@@ -441,9 +445,9 @@ def normalize_report_item(item: Dict[str, Any], default_idx: int = 1) -> Dict[st
         "SERVICE_REPAIR_COST": "AS/수리비",
         "COLD_WEATHER": "저온/동절기",
     }
-    normalized["defect_category_ko"] = str(
-        item.get("defect_category_ko") or category_ko_map.get(cat, "기타 결함")
-    )
+    raw_ko = item.get("defect_category_ko")
+    ko_str = str(raw_ko).strip() if raw_ko is not None else ""
+    normalized["defect_category_ko"] = ko_str or category_ko_map.get(cat, "기타 결함")
 
     # Required: summary (string)
     summary = str(item.get("summary") or "").strip()
@@ -458,16 +462,13 @@ def normalize_report_item(item: Dict[str, Any], default_idx: int = 1) -> Dict[st
         normalized["raw_quote"] = quote
 
     # Required: slang_tags (string[])
-    tags = item.get("slang_tags")
-    if isinstance(tags, (list, tuple, set)):
-        normalized["slang_tags"] = [str(t).strip() for t in tags if t is not None and str(t).strip()]
-    else:
-        normalized["slang_tags"] = []
+    normalized["slang_tags"] = _coerce_str_list(item.get("slang_tags"))
 
     # Optional: slang_terms_detected (string[])
-    terms = item.get("slang_terms_detected")
-    if isinstance(terms, (list, tuple, set)):
-        normalized["slang_terms_detected"] = [str(t).strip() for t in terms if t is not None and str(t).strip()]
+    if "slang_terms_detected" in item and item.get("slang_terms_detected") is not None:
+        terms = _coerce_str_list(item.get("slang_terms_detected"))
+        if terms:
+            normalized["slang_terms_detected"] = terms
 
     # Required: sentiment_score (number, float)
     raw_score = item.get("sentiment_score")
@@ -537,14 +538,15 @@ def compute_report_statistics(
     raw_scraped_count: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Compute DailyReportStatistics adhering to TypeScript definition."""
-    total_defects = len(reports)
+    clean_reports = [r for r in (reports or []) if isinstance(r, dict)]
+    total_defects = len(clean_reports)
     safe_scraped_f = _safe_finite_float(raw_scraped_count, 0.0)
     safe_scraped = max(0, int(safe_scraped_f)) if safe_scraped_f is not None else 0
     total_scraped = max(safe_scraped, total_defects)
 
-    if reports:
+    if clean_reports:
         neg_scores = []
-        for r in reports:
+        for r in clean_reports:
             raw_neg = r.get("negativity_score")
             if raw_neg is None:
                 raw_neg = r.get("sentiment_score")
@@ -554,17 +556,17 @@ def compute_report_statistics(
     else:
         avg_negativity = 0.0
 
-    critical_count = sum(1 for r in reports if str(r.get("severity", "")).upper() == "CRITICAL")
+    critical_count = sum(1 for r in clean_reports if str(r.get("severity", "")).upper() == "CRITICAL")
 
     # Find top model and platform (guard against unhashable values)
     model_counter = Counter(
         str(r.get("vehicle_model"))
-        for r in reports
+        for r in clean_reports
         if isinstance(r.get("vehicle_model"), str) and r.get("vehicle_model").strip()
     )
     platform_counter = Counter(
         str(r.get("platform") or r.get("source"))
-        for r in reports
+        for r in clean_reports
         if isinstance(r.get("platform") or r.get("source"), str) and str(r.get("platform") or r.get("source")).strip()
     )
 
@@ -584,12 +586,13 @@ def compute_report_statistics(
 
 def compute_top_categories(reports: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Compute sorted top defect categories with frequency counts and ratios."""
-    if not reports:
+    clean_reports = [r for r in (reports or []) if isinstance(r, dict)]
+    if not clean_reports:
         return []
-    total = len(reports)
+    total = len(clean_reports)
     cat_counts = Counter(
         str(r.get("defect_category") or r.get("category") or "BUILD_QUALITY")
-        for r in reports
+        for r in clean_reports
     )
     categories_list = []
     for cat, count in cat_counts.most_common():
@@ -610,7 +613,7 @@ def build_canonical_payload(
     deduped_reports, _ = deduplicate_reports(reports)
     normalized_reports = [normalize_report_item(r, idx + 1) for idx, r in enumerate(deduped_reports)]
 
-    existing = existing_meta or {}
+    existing = existing_meta if isinstance(existing_meta, dict) else {}
     scraped_count = None
     if isinstance(existing.get("statistics"), dict):
         scraped_count = existing["statistics"].get("total_scraped")
@@ -619,12 +622,19 @@ def build_canonical_payload(
     top_categories = compute_top_categories(normalized_reports)
 
     generated_at = existing.get("generated_at")
-    if not generated_at or not isinstance(generated_at, str):
+    if not generated_at or not isinstance(generated_at, str) or not generated_at.strip():
         generated_at = datetime.now(timezone.utc).isoformat()
+
+    raw_pipeline_version = existing.get("pipeline_version")
+    pipeline_version = (
+        raw_pipeline_version.strip()
+        if isinstance(raw_pipeline_version, str) and raw_pipeline_version.strip()
+        else "1.0.0"
+    )
 
     payload: Dict[str, Any] = {
         "generated_at": generated_at,
-        "pipeline_version": existing.get("pipeline_version") or "1.0.0",
+        "pipeline_version": pipeline_version,
         "statistics": stats,
         "total_complaints_today": len(normalized_reports),
         "top_defect_categories": top_categories,

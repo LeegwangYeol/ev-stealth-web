@@ -37,19 +37,27 @@ def _safe_int_val(val: Any, default: int = 0) -> int:
 
 def _safe_float_val(val: Any, default: float = 0.0) -> float:
     """Safely convert value to float, catching None, bool, NaN, Inf, ValueError, TypeError, OverflowError."""
+    if default is None or isinstance(default, bool):
+        safe_default = 0.0
+    elif isinstance(default, (int, float)):
+        f_def = float(default)
+        safe_default = 0.0 if (math.isnan(f_def) or math.isinf(f_def) or f_def == 0.0) else f_def
+    else:
+        safe_default = 0.0
+
     if val is None or isinstance(val, bool):
-        return default
+        return safe_default
     if isinstance(val, str):
         val = val.strip().replace(",", "")
         if not val:
-            return default
+            return safe_default
     try:
         f = float(val)
         if math.isnan(f) or math.isinf(f):
-            return default
+            return safe_default
         return 0.0 if f == 0.0 else f
     except (ValueError, TypeError, OverflowError):
-        return default
+        return safe_default
 
 
 def _get_field(item: Any, key: str, default: Any = None) -> Any:
@@ -99,6 +107,16 @@ def _safe_sev(record: Any) -> float:
     return _safe_float_val(raw, 0.0)
 
 
+def _format_scaled_unit(scaled_val: float, unit_suffix: str) -> str:
+    """Format a scaled KRW value (in 만 or 억) without -0.0 or floating-point .0 drift."""
+    rounded = round(scaled_val, 1)
+    if rounded == 0.0:
+        rounded = 0.0
+    if rounded % 1 != 0:
+        return f"{rounded:,.1f}{unit_suffix}"
+    return f"{int(rounded):,}{unit_suffix}"
+
+
 def format_currency_krw(amount: Any, unit: str = "auto") -> str:
     """Format Korean Won (KRW) currency cleanly into '만 원' or '억 원' representations.
 
@@ -126,23 +144,16 @@ def format_currency_krw(amount: Any, unit: str = "auto") -> str:
 
     unit_lower = str(unit).strip().lower()
     if unit_lower in ("billion", "억 원", "억원", "eok"):
-        val_str = f"{f:,.1f}" if (f % 1 != 0) else f"{int(f):,}"
-        return f"{val_str}억 원"
+        return _format_scaled_unit(f, "억 원")
 
     if unit_lower in ("man", "만 원", "만원"):
-        man_val = f / 10_000
-        val_str = f"{man_val:,.1f}" if (man_val % 1 != 0) else f"{int(man_val):,}"
-        return f"{val_str}만 원"
+        return _format_scaled_unit(f / 10_000, "만 원")
 
     # auto mode
     if abs(f) >= 100_000_000:  # >= 1억 원
-        eok_val = f / 100_000_000
-        val_str = f"{eok_val:,.1f}" if (eok_val % 1 != 0) else f"{int(eok_val):,}"
-        return f"{val_str}억 원"
+        return _format_scaled_unit(f / 100_000_000, "억 원")
     elif abs(f) >= 10_000:  # >= 1만 원
-        man_val = f / 10_000
-        val_str = f"{man_val:,.1f}" if (man_val % 1 != 0) else f"{int(man_val):,}"
-        return f"{val_str}만 원"
+        return _format_scaled_unit(f / 10_000, "만 원")
     else:
         return f"{int(f):,}원"
 
@@ -150,13 +161,14 @@ def format_currency_krw(amount: Any, unit: str = "auto") -> str:
 def format_percentage(val: Any, decimals: int = 1) -> str:
     """Safely format percentage value with specified decimal precision."""
     f = _safe_float_val(val, 0.0)
-    if f == 0.0:
-        f = 0.0
     dec = max(0, _safe_int_val(decimals, 1))
+    rounded = round(f, dec)
+    if rounded == 0.0:
+        rounded = 0.0
     if dec <= 0:
-        return f"{int(round(f))}%"
+        return f"{int(rounded)}%"
     fmt = f"{{:,.{dec}f}}%"
-    return fmt.format(f)
+    return fmt.format(rounded)
 
 
 class ReportGenerator:
@@ -212,7 +224,7 @@ class ReportGenerator:
             if not r:
                 continue
             name = _get_field(r, 'name_ko', '') or _get_field(r, 'region_id', '') or '지자체'
-            rate_val = _safe_float_val(_get_field(r, 'overall_depletion_rate', 0.0))
+            rate_val = max(0.0, _safe_float_val(_get_field(r, 'overall_depletion_rate', 0.0)))
             rem_units = _get_passenger_remaining(r)
             st_raw = _get_field(r, "overall_status", "")
             status_val = getattr(st_raw, "value", st_raw)
@@ -221,9 +233,9 @@ class ReportGenerator:
                 status_raw = AlertSeverity.from_rate(rate_val).value
 
             label = f"{name} ({rate_val}%, 잔여: {rem_units:,}대)"
-            if status_raw in ("CRITICAL", "DEPLETED"):
+            if status_raw in ("CRITICAL", "DEPLETED") or rate_val >= 95.0:
                 critical_regions.append(label)
-            elif status_raw == "WARNING":
+            elif status_raw == "WARNING" or (80.0 <= rate_val < 95.0):
                 warning_regions.append(label)
 
         category_totals = _get_field(summary, "category_totals", {}) or {}
@@ -233,23 +245,25 @@ class ReportGenerator:
         c_info = category_totals.get("commercial", {})
         b_info = category_totals.get("bus", {})
 
-        tot_ann = _safe_int_val(_get_field(summary, "total_announced_units", 0))
-        tot_app = _safe_int_val(_get_field(summary, "total_applied_units", 0))
+        tot_ann = max(0, _safe_int_val(_get_field(summary, "total_announced_units", 0)))
+        tot_app = max(0, _safe_int_val(_get_field(summary, "total_applied_units", 0)))
 
-        disb_b = _safe_float_val(_get_field(summary, "disbursed_budget_billion_krw", 0.0))
-        tot_b = _safe_float_val(_get_field(summary, "total_budget_billion_krw", 0.0))
+        disb_b = max(0.0, _safe_float_val(_get_field(summary, "disbursed_budget_billion_krw", 0.0)))
+        tot_b = max(0.0, _safe_float_val(_get_field(summary, "total_budget_billion_krw", 0.0)))
         if disb_b == 0.0:
             disb_krw = _get_field(summary, "disbursed_budget_krw", 0)
-            if disb_krw:
-                disb_b = _safe_float_val(disb_krw) / 1_000_000_000
+            if disb_krw and not isinstance(disb_krw, bool):
+                disb_b = max(0.0, _safe_float_val(disb_krw) / 1_000_000_000)
         if tot_b == 0.0:
             tot_krw = _get_field(summary, "total_budget_krw", 0)
-            if tot_krw:
-                tot_b = _safe_float_val(tot_krw) / 1_000_000_000
+            if tot_krw and not isinstance(tot_krw, bool):
+                tot_b = max(0.0, _safe_float_val(tot_krw) / 1_000_000_000)
 
-        disb_str = f"{disb_b:,.1f}" if (disb_b % 1 != 0) else f"{int(disb_b):,}"
-        tot_str = f"{tot_b:,.1f}" if (tot_b % 1 != 0) else f"{int(tot_b):,}"
-        dep_rate = _safe_float_val(_get_field(summary, "nationwide_depletion_rate", _get_field(summary, "depletion_rate", 0.0)))
+        disb_r = round(disb_b, 1)
+        tot_r = round(tot_b, 1)
+        disb_str = f"{disb_r:,.1f}" if (disb_r % 1 != 0) else f"{int(disb_r):,}"
+        tot_str = f"{tot_r:,.1f}" if (tot_r % 1 != 0) else f"{int(tot_r):,}"
+        dep_rate = max(0.0, _safe_float_val(_get_field(summary, "nationwide_depletion_rate", _get_field(summary, "depletion_rate", 0.0))))
 
         p_ann = _safe_int_val(_metric_val(p_info, "announced_units", 0))
         p_app = _safe_int_val(_metric_val(p_info, "applied_units", 0))
@@ -323,7 +337,11 @@ class ReportGenerator:
         else:
             models = _get_field(payload_or_models, "popular_models_matrix", None)
             if models is None:
-                models = _get_field(payload_or_models, "vehicles", [])
+                models = _get_field(payload_or_models, "vehicles", None)
+            if models is None:
+                models = _get_field(payload_or_models, "popular_models", None)
+            if models is None:
+                models = _get_field(payload_or_models, "models", [])
         if not isinstance(models, (list, tuple)):
             models = []
 
@@ -411,6 +429,7 @@ class ReportGenerator:
                 stats = {}
             gen_time = _get_field(report_data, "generated_at", datetime.now(timezone.utc).isoformat())
 
+        reports = [r for r in (reports or []) if r is not None]
         total_reports = len(reports)
         critical_count = _get_field(stats, "critical_defect_count")
         if critical_count is None:
@@ -478,6 +497,7 @@ class ReportGenerator:
                 records = list(records)
             else:
                 records = []
+        records = [rec for rec in records if rec is not None]
         total_records = len(records)
         stats = summary_stats or {}
 
@@ -522,9 +542,12 @@ class ReportGenerator:
             "| 플랫폼 | 건수 | 점유율 (%) |",
             "|---|---|---|",
         ]
+        def _md_cell(val: str) -> str:
+            return val.replace("|", "/").replace("\n", " ").replace("\r", " ")
+
         for p, count in sorted(platform_counts.items(), key=lambda x: x[1], reverse=True):
             pct = (count / total_records * 100) if total_records > 0 else 0.0
-            lines.append(f"| {p} | {count:,} | {pct:.1f}% |")
+            lines.append(f"| {_md_cell(p)} | {count:,} | {pct:.1f}% |")
 
         lines.extend([
             "",
@@ -534,7 +557,7 @@ class ReportGenerator:
         ])
         for cat, count in sorted(category_counts.items(), key=lambda x: x[1], reverse=True):
             pct = (count / total_records * 100) if total_records > 0 else 0.0
-            lines.append(f"| {cat} | {count:,} | {pct:.1f}% |")
+            lines.append(f"| {_md_cell(cat)} | {count:,} | {pct:.1f}% |")
 
         lines.extend([
             "",
@@ -544,7 +567,7 @@ class ReportGenerator:
         ])
         for brand, count in sorted(brand_counts.items(), key=lambda x: x[1], reverse=True):
             pct = (count / total_records * 100) if total_records > 0 else 0.0
-            lines.append(f"| {brand} | {count:,} | {pct:.1f}% |")
+            lines.append(f"| {_md_cell(brand)} | {count:,} | {pct:.1f}% |")
 
         return "\n".join(lines)
 

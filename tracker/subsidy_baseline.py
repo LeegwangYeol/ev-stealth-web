@@ -104,23 +104,30 @@ def calculate_price_cap_ratio(msrp: Union[int, float, str, None]) -> float:
     if msrp is None or isinstance(msrp, bool):
         return 0.0
     if type(msrp) is int:
-        safe_msrp = msrp
-    else:
-        try:
-            if isinstance(msrp, str):
-                msrp = msrp.strip().replace(",", "")
-            f_msrp = float(msrp)
-            if math.isnan(f_msrp) or math.isinf(f_msrp):
-                return 0.0
-            safe_msrp = int(f_msrp)
-        except (ValueError, TypeError, OverflowError):
+        if msrp <= 0:
             return 0.0
-
-    if safe_msrp <= 0:
+        if msrp <= 55_000_000:
+            return 1.0
+        if msrp <= 85_000_000:
+            return 0.5
         return 0.0
-    elif safe_msrp <= 55_000_000:
+
+    try:
+        if isinstance(msrp, str):
+            msrp = msrp.strip().replace(",", "")
+            if not msrp:
+                return 0.0
+        f_msrp = float(msrp)
+        if math.isnan(f_msrp) or math.isinf(f_msrp):
+            return 0.0
+    except (ValueError, TypeError, OverflowError):
+        return 0.0
+
+    if f_msrp <= 0.0:
+        return 0.0
+    if f_msrp <= 55_000_000.0:
         return 1.0
-    elif safe_msrp <= 85_000_000:
+    if f_msrp <= 85_000_000.0:
         return 0.5
     return 0.0
 
@@ -134,6 +141,8 @@ def _coerce_non_negative_int(v: Any) -> int:
     try:
         if isinstance(v, str):
             v = v.strip().replace(",", "")
+            if not v:
+                return 0
         f = float(v)
         if math.isnan(f) or math.isinf(f) or f <= 0.0:
             return 0
@@ -154,16 +163,18 @@ def calculate_net_subsidy(
     safe_max_nat = _coerce_non_negative_int(max_national)
     safe_max_loc = _coerce_non_negative_int(max_local)
 
-    ratio = calculate_price_cap_ratio(safe_msrp)
+    ratio = calculate_price_cap_ratio(msrp)
     effective_national = int(round(safe_model_nat * ratio))
-    if safe_max_nat > 0:
-        try:
-            local_ratio = min(1.0, max(0.0, safe_model_nat / safe_max_nat))
-        except OverflowError:
-            local_ratio = 1.0
+    if safe_max_nat > 0 and safe_model_nat > 0:
+        if safe_model_nat >= safe_max_nat:
+            effective_local = int(round(safe_max_loc * ratio))
+        else:
+            try:
+                effective_local = int(round((safe_max_loc * safe_model_nat * ratio) / safe_max_nat))
+            except OverflowError:
+                effective_local = int(round(safe_max_loc * ratio))
     else:
-        local_ratio = 0.0
-    effective_local = int(round(safe_max_loc * local_ratio * ratio))
+        effective_local = 0
     total_subsidy = effective_national + effective_local
     net_price = max(0, safe_msrp - total_subsidy)
     return {
@@ -175,6 +186,17 @@ def calculate_net_subsidy(
     }
 
 
+def _calc_rate_percent(numerator: Union[int, float], denominator: Union[int, float]) -> float:
+    """Compute percentage rounded to 1 decimal place, scaling numerator first to prevent float drift."""
+    if denominator <= 0 or numerator <= 0:
+        return 0.0
+    scaled = numerator * 100.0
+    raw = (scaled / denominator) if not math.isinf(scaled) else ((numerator / denominator) * 100.0)
+    if math.isnan(raw) or math.isinf(raw):
+        return 0.0
+    return max(0.0, round(raw, 1))
+
+
 def _calc_cat(
     announced: int,
     applied: int,
@@ -184,8 +206,8 @@ def _calc_cat(
     avg_per_unit_budget: int = 10_000_000,
 ) -> CategoryMetrics:
     """Helper to construct verified CategoryMetrics with accurate math."""
-    depletion_rate = round((applied / announced * 100), 1) if announced > 0 else 0.0
-    delivery_rate = round((delivered / announced * 100), 1) if announced > 0 else 0.0
+    depletion_rate = _calc_rate_percent(applied, announced)
+    delivery_rate = _calc_rate_percent(delivered, announced)
     remaining_units = max(0, announced - applied)
     status = AlertSeverity.from_rate(depletion_rate).value
 
@@ -209,7 +231,7 @@ def _calc_cat(
 
 
 def _calc_muni(name: str, announced: int, applied: int, local_sub: int) -> MunicipalityMetrics:
-    rate = round((applied / announced * 100), 1) if announced > 0 else 0.0
+    rate = _calc_rate_percent(applied, announced)
     remaining = max(0, announced - applied)
     status = AlertSeverity.from_rate(rate).value
     return MunicipalityMetrics(
@@ -225,7 +247,7 @@ def _calc_muni(name: str, announced: int, applied: int, local_sub: int) -> Munic
 
 def build_baseline_regions() -> List[RegionRecord]:
     """Build authoritative 2026 data for all 17 administrative divisions."""
-    return [
+    regions = [
         RegionRecord(
             region_id="KR-11",
             iso_code="KR-11",
@@ -623,6 +645,12 @@ def build_baseline_regions() -> List[RegionRecord]:
             notes="렌터카 및 도민 보급 목표 99% 달성. 일반 승용 잔여 40대, 실질적 접수 마감.",
         ),
     ]
+    for reg in regions:
+        tot_ann = sum(c.announced_units for c in reg.categories.values())
+        tot_app = sum(c.applied_units for c in reg.categories.values())
+        reg.overall_depletion_rate = _calc_rate_percent(tot_app, tot_ann)
+        reg.overall_status = AlertSeverity.from_rate(reg.overall_depletion_rate).value
+    return regions
 
 
 def _calc_model_regional_samples(base_price: int, national_sub: int) -> Dict[str, Dict[str, int]]:
@@ -842,12 +870,12 @@ def build_initial_baseline(regions: Optional[List[Any]] = None) -> SubsidyPayloa
         status_val = r.get("overall_status") if isinstance(r, dict) else getattr(r, "overall_status", "")
         status_val = getattr(status_val, "value", status_val)
         status_key = str(status_val or "").split(".")[-1].strip().lower()
-        if status_key in alert_counts:
-            alert_counts[status_key] += 1
 
         cats = r.get("categories") if isinstance(r, dict) else getattr(r, "categories", {})
         if not isinstance(cats, dict):
             cats = {}
+        reg_ann = 0
+        reg_app = 0
         for c_name, c_metric in cats.items():
             if c_name not in cat_announced:
                 cat_announced[c_name] = 0
@@ -858,22 +886,29 @@ def build_initial_baseline(regions: Optional[List[Any]] = None) -> SubsidyPayloa
             app = max(0, _safe_int_val(c_metric.get("applied_units", 0) if isinstance(c_metric, dict) else getattr(c_metric, "applied_units", 0)))
             delivered = max(0, _safe_int_val(c_metric.get("delivered_units", 0) if isinstance(c_metric, dict) else getattr(c_metric, "delivered_units", 0)))
             tot_b = max(0, _safe_int_val(c_metric.get("total_budget_krw", 0) if isinstance(c_metric, dict) else getattr(c_metric, "total_budget_krw", 0)))
-            rem_b = max(0, _safe_int_val(c_metric.get("remaining_budget_krw", 0) if isinstance(c_metric, dict) else getattr(c_metric, "remaining_budget_krw", 0)))
+            rem_b_raw = max(0, _safe_int_val(c_metric.get("remaining_budget_krw", 0) if isinstance(c_metric, dict) else getattr(c_metric, "remaining_budget_krw", 0)))
+            rem_b = min(tot_b, rem_b_raw) if tot_b > 0 else rem_b_raw
 
             cat_announced[c_name] += ann
             cat_applied[c_name] += app
             cat_delivered[c_name] += delivered
 
+            reg_ann += ann
+            reg_app += app
             total_announced += ann
             total_applied += app
             total_delivered += delivered
             total_budget_sum += tot_b
             disbursed_budget_sum += max(0, tot_b - rem_b)
 
+        if status_key not in alert_counts and (cats or (isinstance(r, dict) and "overall_depletion_rate" in r)):
+            reg_rate = _calc_rate_percent(reg_app, reg_ann)
+            status_key = AlertSeverity.from_rate(reg_rate).value.lower()
+        if status_key in alert_counts:
+            alert_counts[status_key] += 1
+
     total_remaining = max(0, total_announced - total_applied)
-    nationwide_depletion_rate = (
-        round((total_applied / total_announced * 100), 1) if total_announced > 0 else 0.0
-    )
+    nationwide_depletion_rate = _calc_rate_percent(total_applied, total_announced)
 
     category_totals = {}
     standard_categories = ["passenger", "commercial", "bus"]
@@ -882,8 +917,8 @@ def build_initial_baseline(regions: Optional[List[Any]] = None) -> SubsidyPayloa
         c_ann = cat_announced.get(c_name, 0)
         c_app = cat_applied.get(c_name, 0)
         c_del = cat_delivered.get(c_name, 0)
-        c_rate = round((c_app / c_ann * 100), 1) if c_ann > 0 else 0.0
-        c_del_rate = round((c_del / c_ann * 100), 1) if c_ann > 0 else 0.0
+        c_rate = _calc_rate_percent(c_app, c_ann)
+        c_del_rate = _calc_rate_percent(c_del, c_ann)
         category_totals[c_name] = CategoryMetrics(
             announced_units=c_ann,
             applied_units=c_app,

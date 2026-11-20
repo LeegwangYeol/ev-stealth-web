@@ -67,14 +67,20 @@ def _parity_candidate_priority(fname: str, parsed: Any) -> int:
     if fname == "daily_reports.json":
         if not isinstance(parsed, dict) or not isinstance(parsed.get("reports"), list):
             return -1
+        if not all(isinstance(r, dict) for r in parsed["reports"]):
+            return -1
         rep_count = len(parsed["reports"])
         return 2 if rep_count >= 4 else (1 if rep_count > 0 else 0)
     if fname in ("ev_subsidy_data.json", "subsidy_depletion_data.json"):
         if not isinstance(parsed, dict) or not isinstance(parsed.get("regions"), list):
             return -1
+        if not all(isinstance(r, dict) for r in parsed["regions"]):
+            return -1
         return 2 if len(parsed["regions"]) >= 17 else (1 if len(parsed["regions"]) > 0 else 0)
     if fname == "models_subsidy_matrix.json":
         if not isinstance(parsed, list):
+            return -1
+        if not all(isinstance(m, dict) for m in parsed):
             return -1
         return 2 if len(parsed) >= 15 else (1 if len(parsed) > 0 else -1)
     if isinstance(parsed, (dict, list)):
@@ -335,13 +341,17 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
             errors.append(f"{prefix}: Expected dict, got {type(reg).__name__}")
             continue
 
-        iso = reg.get("iso_code") or reg.get("region_id") or ""
+        raw_iso = reg.get("iso_code") or reg.get("region_id") or ""
+        iso = raw_iso if isinstance(raw_iso, str) else ""
         prefix = f"Region [{idx}] ({iso or 'MISSING'}):"
-        if not iso:
+        if raw_iso and not isinstance(raw_iso, str):
+            errors.append(f"{prefix} Invalid iso_code/region_id type '{type(raw_iso).__name__}'")
+        elif not iso:
             errors.append(f"{prefix} Missing iso_code/region_id")
         elif iso in seen_iso:
             errors.append(f"{prefix} Duplicate ISO code '{iso}'")
-        seen_iso.add(iso)
+        if iso:
+            seen_iso.add(iso)
 
         if "name_ko" not in reg:
             errors.append(f"{prefix} Missing 'name_ko'")
@@ -506,13 +516,17 @@ def validate_models_matrix(file_path: Union[str, Path]) -> Tuple[bool, List[str]
             errors.append(f"Model [{idx}]: Expected dict, got {type(m).__name__}")
             continue
 
-        mid = m.get("model_id")
+        raw_mid = m.get("model_id")
+        mid = raw_mid if isinstance(raw_mid, str) else (str(raw_mid) if isinstance(raw_mid, int) and not isinstance(raw_mid, bool) else "")
         prefix = f"Model [{idx}] ({mid or 'MISSING'}):"
-        if not mid:
+        if raw_mid is not None and not isinstance(raw_mid, (str, int)) or isinstance(raw_mid, bool):
+            errors.append(f"{prefix} Invalid model_id type '{type(raw_mid).__name__}'")
+        elif not mid:
             errors.append(f"{prefix} Missing 'model_id'")
         elif mid in seen_ids:
             errors.append(f"{prefix} Duplicate model_id '{mid}'")
-        seen_ids.add(mid)
+        if mid:
+            seen_ids.add(mid)
 
         for rf in req_fields:
             if rf not in m:
@@ -528,8 +542,9 @@ def validate_models_matrix(file_path: Union[str, Path]) -> Tuple[bool, List[str]
         if "national_subsidy_krw" in m and (not _is_finite_number(sub) or sub < 0):
             errors.append(f"{prefix} National subsidy must be finite >= 0 KRW, got {sub}")
 
-        if m.get("manufacturer"):
-            manufacturers_set.add(m["manufacturer"])
+        mfg = m.get("manufacturer")
+        if isinstance(mfg, str) and mfg.strip():
+            manufacturers_set.add(mfg)
 
         price = m.get("base_price_krw")
         ratio = m.get("price_subsidy_ratio")
@@ -614,7 +629,7 @@ def validate_daily_reports(file_path: Union[str, Path]) -> Tuple[bool, List[str]
         prefix = f"Report [{idx}] ({rid or 'MISSING'}):"
         if not rid:
             errors.append(f"{prefix} Missing 'id'")
-        elif not isinstance(rid, (str, int)):
+        elif not isinstance(rid, (str, int)) or isinstance(rid, bool):
             errors.append(f"{prefix} Invalid id type '{type(rid).__name__}'")
         else:
             rid_key = str(rid)
@@ -689,106 +704,114 @@ def validate_data_parity(
     if errors:
         return False, errors, stats
 
-    for fname in target_files:
-        hashes: Dict[str, str] = {}
-        authoritative_path: Optional[Path] = None
-        auth_hash: Optional[str] = None
-        best_candidate: Optional[Tuple[int, float, Path, str]] = None
+    import contextlib
+    if repair:
+        from tracker.atomic_writer import FileLock, get_lock_path
+        repair_lock = FileLock(get_lock_path(Path(root_dir) / ".parity_repair"), timeout=15.0, stale_timeout=60.0)
+    else:
+        repair_lock = contextlib.nullcontext()
 
-        for label, d in dirs_to_check:
-            fp = d / fname
-            if fp.is_file() and fp.stat().st_size > 0:
-                try:
-                    content = fp.read_bytes()
-                    parsed = json.loads(
-                        content.decode("utf-8-sig"),
-                        parse_constant=lambda c: (_ for _ in ()).throw(ValueError(f"Non-standard JSON constant: {c}")),
-                    )
-                    h = hashlib.sha256(content).hexdigest()
-                    hashes[label] = h
-                    prio = _parity_candidate_priority(fname, parsed)
-                    if prio >= 0:
-                        score = (prio, fp.stat().st_mtime)
-                        if best_candidate is None or score > (best_candidate[0], best_candidate[1]):
-                            best_candidate = (score[0], score[1], fp, h)
-                except Exception as exc:
-                    errors.append(f"Failed to read/validate {label} ({fp}): {exc}")
-            else:
-                if not fp.exists():
-                    errors.append(f"File '{fname}' missing from {label} ({fp})")
-                elif not fp.is_file():
-                    errors.append(f"Path '{fname}' in {label} is not a regular file ({fp})")
-                else:
-                    errors.append(f"File '{fname}' is empty (0 bytes) in {label} ({fp})")
+    with repair_lock:
+        for fname in target_files:
+            hashes: Dict[str, str] = {}
+            authoritative_path: Optional[Path] = None
+            auth_hash: Optional[str] = None
+            best_candidate: Optional[Tuple[int, float, Path, str]] = None
 
-        if best_candidate is not None:
-            authoritative_path = best_candidate[2]
-            auth_hash = best_candidate[3]
-
-        # Automatic mirror repair if requested and authoritative file exists
-        if repair and authoritative_path is not None and auth_hash is not None:
-            try:
-                auth_stat = authoritative_path.stat()
-            except OSError:
-                auth_stat = None
             for label, d in dirs_to_check:
                 fp = d / fname
-                if not fp.exists() or hashes.get(label) != auth_hash:
-                    tmp_repair = None
+                if fp.is_file() and fp.stat().st_size > 0:
                     try:
-                        d.mkdir(parents=True, exist_ok=True)
-                        tmp_repair = d / f".tmp_repair_{fname}_{os.getpid()}_{uuid.uuid4().hex[:8]}"
-                        with open(authoritative_path, "rb") as sf, open(tmp_repair, "wb") as df:
-                            shutil.copyfileobj(sf, df)
-                            df.flush()
-                            os.fsync(df.fileno())
-                        os.chmod(tmp_repair, 0o644)
-                        os.replace(tmp_repair, fp)
+                        content = fp.read_bytes()
+                        parsed = json.loads(
+                            content.decode("utf-8-sig"),
+                            parse_constant=lambda c: (_ for _ in ()).throw(ValueError(f"Non-standard JSON constant: {c}")),
+                        )
+                        h = hashlib.sha256(content).hexdigest()
+                        hashes[label] = h
+                        prio = _parity_candidate_priority(fname, parsed)
+                        if prio >= 0:
+                            score = (prio, fp.stat().st_mtime)
+                            if best_candidate is None or score > (best_candidate[0], best_candidate[1]):
+                                best_candidate = (score[0], score[1], fp, h)
+                    except Exception as exc:
+                        errors.append(f"Failed to read/validate {label} ({fp}): {exc}")
+                else:
+                    if not fp.exists():
+                        errors.append(f"File '{fname}' missing from {label} ({fp})")
+                    elif not fp.is_file():
+                        errors.append(f"Path '{fname}' in {label} is not a regular file ({fp})")
+                    else:
+                        errors.append(f"File '{fname}' is empty (0 bytes) in {label} ({fp})")
+
+            if best_candidate is not None:
+                authoritative_path = best_candidate[2]
+                auth_hash = best_candidate[3]
+
+            # Automatic mirror repair if requested and authoritative file exists
+            if repair and authoritative_path is not None and auth_hash is not None:
+                try:
+                    auth_stat = authoritative_path.stat()
+                except OSError:
+                    auth_stat = None
+                for label, d in dirs_to_check:
+                    fp = d / fname
+                    if not fp.exists() or hashes.get(label) != auth_hash:
                         tmp_repair = None
-                        dir_fd = -1
                         try:
-                            dir_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
-                            dir_fd = os.open(str(d), dir_flags)
-                            os.fsync(dir_fd)
-                        except OSError:
-                            pass
-                        finally:
-                            if dir_fd >= 0:
+                            d.mkdir(parents=True, exist_ok=True)
+                            tmp_repair = d / f".tmp_repair_{fname}_{os.getpid()}_{uuid.uuid4().hex[:8]}"
+                            with open(authoritative_path, "rb") as sf, open(tmp_repair, "wb") as df:
+                                shutil.copyfileobj(sf, df)
+                                df.flush()
+                                os.fsync(df.fileno())
+                            os.chmod(tmp_repair, 0o644)
+                            os.replace(tmp_repair, fp)
+                            tmp_repair = None
+                            dir_fd = -1
+                            try:
+                                dir_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+                                dir_fd = os.open(str(d), dir_flags)
+                                os.fsync(dir_fd)
+                            except OSError:
+                                pass
+                            finally:
+                                if dir_fd >= 0:
+                                    try:
+                                        os.close(dir_fd)
+                                    except OSError:
+                                        pass
+                            if auth_stat is not None:
                                 try:
-                                    os.close(dir_fd)
+                                    os.utime(fp, (auth_stat.st_atime, auth_stat.st_mtime))
                                 except OSError:
                                     pass
-                        if auth_stat is not None:
-                            try:
-                                os.utime(fp, (auth_stat.st_atime, auth_stat.st_mtime))
-                            except OSError:
-                                pass
-                        hashes[label] = auth_hash
-                        # Clear matching errors for this repaired file
-                        errors = [
-                            e for e in errors
-                            if not (
-                                f"'{fname}' missing from {label}" in e
-                                or f"'{fname}' is empty (0 bytes) in {label}" in e
-                                or f"SHA-256 mismatch for '{fname}'" in e
-                                or f"Failed to read/validate {label} ({fp})" in e
-                            )
-                        ]
-                        logger.info("Repaired parity for %s in %s", fname, label)
-                    except Exception as re_exc:
-                        errors.append(f"Failed to repair parity for '{fname}' in {label}: {re_exc}")
-                    finally:
-                        if tmp_repair and tmp_repair.exists():
-                            try:
-                                tmp_repair.unlink(missing_ok=True)
-                            except OSError:
-                                pass
+                            hashes[label] = auth_hash
+                            # Clear matching errors for this repaired file
+                            errors = [
+                                e for e in errors
+                                if not (
+                                    f"'{fname}' missing from {label}" in e
+                                    or f"'{fname}' is empty (0 bytes) in {label}" in e
+                                    or f"SHA-256 mismatch for '{fname}'" in e
+                                    or f"Failed to read/validate {label} ({fp})" in e
+                                )
+                            ]
+                            logger.info("Repaired parity for %s in %s", fname, label)
+                        except Exception as re_exc:
+                            errors.append(f"Failed to repair parity for '{fname}' in {label}: {re_exc}")
+                        finally:
+                            if tmp_repair and tmp_repair.exists():
+                                try:
+                                    tmp_repair.unlink(missing_ok=True)
+                                except OSError:
+                                    pass
 
-        stats["checked_files"][fname] = hashes
-        unique_hashes = set(hashes.values())
-        if len(unique_hashes) > 1 or len(hashes) < len(dirs_to_check):
-            if len(unique_hashes) > 1:
-                errors.append(f"SHA-256 mismatch for '{fname}' across directories: {hashes}")
+            stats["checked_files"][fname] = hashes
+            unique_hashes = set(hashes.values())
+            if len(unique_hashes) > 1 or len(hashes) < len(dirs_to_check):
+                if len(unique_hashes) > 1:
+                    errors.append(f"SHA-256 mismatch for '{fname}' across directories: {hashes}")
 
     is_valid = len(errors) == 0
     return is_valid, errors, stats

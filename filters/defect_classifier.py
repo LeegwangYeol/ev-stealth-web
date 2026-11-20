@@ -417,6 +417,15 @@ class DefectClassifier:
             "대책 없", "대책없", "답이 없", "답없",
             "형편없", "쓸데없", "터무니없", "어림없", "정신없", "부질없", "보잘것없",
         ]
+        spaced_eopda_subjects = (
+            "대책", "대책이", "대책도",
+            "답", "답이", "답도",
+            "어이", "어이가",
+            "어처구니", "어처구니가",
+            "양심", "양심이",
+            "개념", "개념이",
+            "상식", "상식이",
+        )
         for j, w in enumerate(window):
             w_strip = str(w or "").strip()
             if not w_strip:
@@ -428,7 +437,7 @@ class DefectClassifier:
 
             # Idiom check: '말도 안 됨' / '납득이 안 됨' where '안' follows '말도', '납득이', etc.
             if w_strip == "안":
-                if j > 0 and window[j - 1] in ("말도", "납득이", "이해가"):
+                if j > 0 and window[j - 1] in ("말도", "말이", "납득이", "납득", "이해가", "이해"):
                     continue
                 # Hearsay contrastive: '안 난다더니', '안 들린다더니', '안 보인다더니'
                 if j + 1 < len(window) and any(
@@ -436,13 +445,13 @@ class DefectClassifier:
                 ):
                     continue
                 malfunction_verbs = (
-                    "되고", "된다", "돼서", "됨", "돼",
-                    "열리고", "열려", "열림", "열린다",
-                    "켜지고", "켜져", "켜짐", "켜진다",
+                    "되고", "된다", "돼서", "됨", "돼", "되", "됐",
+                    "열리고", "열려", "열림", "열린다", "열리", "열렸",
+                    "켜지고", "켜져", "켜짐", "켜진다", "켜지", "켜졌",
                     "걸리고", "걸려", "걸림", "걸린다",
                     "빠지고", "빠져", "빠짐", "빠진다",
                     "먹히고", "먹혀", "먹힘", "먹힌다",
-                    "나오고", "나와", "나옴", "나온다",
+                    "나오고", "나와", "나옴", "나온다", "나오", "나왔",
                     "돌아가고", "돌아가", "돌아감", "돌아간다",
                     "작동하고", "작동해", "작동함", "작동된다", "작동",
                     "잡히고", "잡혀", "잡힘", "잡힌다", "잡히",
@@ -453,11 +462,11 @@ class DefectClassifier:
                     "풀리고", "풀려", "풀림", "풀린다", "풀리",
                     "줄어들고", "줄어들어", "줄어듦", "줄어든다", "줄어",
                     "멈추고", "멈춰", "멈춤", "멈춘다",
-                    "밟히", "밟혀", "밟힘", "밟힌",
+                    "밟히", "밟혀", "밟힘", "밟힌", "밟혔",
                     "뽑히", "뽑혀", "뽑힘", "뽑힌",
                     "닦이", "닦여", "닦임", "닦인",
-                    "들어오", "들어와", "들어옴", "들어온",
-                    "움직이", "움직여", "움직임", "움직인",
+                    "들어오", "들어와", "들어옴", "들어온", "들어왔",
+                    "움직이", "움직여", "움직임", "움직인", "움직였",
                 )
                 if j + 1 < len(window):
                     if any(window[j + 1].startswith(mv) for mv in malfunction_verbs):
@@ -467,6 +476,8 @@ class DefectClassifier:
 
             # Rhetorical and hearsay contrastive exclusions: '없기는 개뿔', '없기는커녕', '없다더니', '없다는데'
             if w_strip.startswith(("없기는", "없다더니", "없다는데", "없다지만", "없긴")):
+                continue
+            if w_strip.startswith("없") and j > 0 and window[j - 1] in spaced_eopda_subjects:
                 continue
             if w_strip.startswith("없") and j + 1 < len(window) and window[j + 1] in (
                 "개뿔", "커녕", "무슨", "개뿔이", "들었는데", "하더니", "해서", "했으나", "봤는데"
@@ -529,15 +540,28 @@ class DefectClassifier:
             if dw_lower in non_negatable_terms or dw_lower not in text_lower:
                 continue
             for i, tok_lower in enumerate(tokens_lower):
-                if dw_lower in tok_lower or tok_lower.startswith(dw_lower):
-                    after_slice = tokens[i + 1:min(len(tokens), i + 4)]
-                    if any(any(t.startswith(aff) for aff in affirmative_occurrences) for t in after_slice):
+                if dw_lower == "하자":
+                    if not tok_lower.startswith("하자") or tok_lower.startswith(("하자마자", "하자고", "하자면")):
                         continue
-                    window_end = min(len(tokens), i + 5)
-                    window = tokens[i:window_end]
-                    if self._is_negator_in_window(window):
-                        negated.append(dw)
-                        break
+                elif dw_lower == "이상":
+                    if not (dw_lower in tok_lower or tok_lower.startswith(dw_lower)):
+                        continue
+                    if i > 0 and (
+                        tokens_lower[i - 1] in ("더", "그", "이")
+                        or any(ch.isdigit() for ch in tokens_lower[i - 1])
+                    ):
+                        continue
+                elif not (dw_lower in tok_lower or tok_lower.startswith(dw_lower)):
+                    continue
+
+                after_slice = tokens[i + 1:min(len(tokens), i + 4)]
+                if any(any(t.startswith(aff) for aff in affirmative_occurrences) for t in after_slice):
+                    continue
+                window_end = min(len(tokens), i + 5)
+                window = tokens[i:window_end]
+                if self._is_negator_in_window(window):
+                    negated.append(dw)
+                    break
 
         for parts, dw in _MULTI_PART_DEFECT_TERMS:
             dw_lower = dw.lower()
@@ -561,6 +585,23 @@ class DefectClassifier:
 
         return list(set(negated))
 
+    @staticmethod
+    def _is_positive_negated_in_clause(pos_word: str, clause_tokens: List[str]) -> bool:
+        """Return True if a positive lexicon term is locally negated (e.g. '훌륭하지 않다', '안 좋다')."""
+        if not clause_tokens:
+            return False
+        for idx, tok in enumerate(clause_tokens):
+            if pos_word not in tok:
+                continue
+            if idx > 0 and clause_tokens[idx - 1] in ("안", "못"):
+                return True
+            if tok.endswith(("안함", "못함", "안됨", "아님")):
+                return True
+            for nxt in clause_tokens[idx + 1:idx + 3]:
+                if nxt in ("안", "못", "아님") or nxt.startswith(("않", "못", "아니")):
+                    return True
+        return False
+
     def _calculate_polarity(
         self,
         clauses: List[str],
@@ -575,20 +616,44 @@ class DefectClassifier:
         total_weight = 0.0
         matched_terms: List[str] = []
 
+        # Split clauses at mid-clause concessive connectives when trailing text exists
+        expanded_clauses: List[str] = []
+        sorted_concs = sorted(self.concessives, key=len, reverse=True)
+        for raw_c in clauses:
+            c = str(raw_c or "").strip()
+            if not c:
+                continue
+            while c:
+                split_done = False
+                for conc in sorted_concs:
+                    idx = c.find(conc)
+                    if idx > 0:
+                        end_idx = idx + len(conc)
+                        tail = c[end_idx:].strip()
+                        if tail:
+                            expanded_clauses.append(c[:end_idx].strip())
+                            c = tail
+                            split_done = True
+                            break
+                if not split_done:
+                    expanded_clauses.append(c)
+                    break
+
         is_post_concessive = False
 
-        for clause in clauses:
-            clause = str(clause or "").strip()
+        for clause in expanded_clauses:
+            clause = clause.strip()
             if not clause:
                 continue
 
-            for conc in self.concessives:
-                if conc in clause:
-                    is_post_concessive = True
-                    break
+            starts_with_conc = any(clause.startswith(conc) for conc in self.concessives)
+            has_conc = starts_with_conc or any(conc in clause for conc in self.concessives)
+            if starts_with_conc:
+                is_post_concessive = True
 
             clause_multiplier = 1.5 if is_post_concessive else 0.5
             clause_lower = clause.lower()
+            clause_tokens: Optional[List[str]] = None
 
             for slang_entry, slang_nfc, slang_lower in _SLANG_TERM_LOWER_PAIRS:
                 if slang_entry.term == "씰":
@@ -635,10 +700,19 @@ class DefectClassifier:
                 if pos_word in clause and not any(pos_word in already for already in matched_clause_pos):
                     matched_clause_pos.append(pos_word)
                     base_val = POSITIVE_LEXICON[pos_word]
+                    if clause_tokens is None:
+                        clause_tokens = RE_TOKENS.findall(clause)
+                    if self._is_positive_negated_in_clause(pos_word, clause_tokens):
+                        term_polarity = -base_val * 0.85
+                    else:
+                        term_polarity = base_val
                     weight = 1.5 * clause_multiplier
-                    total_score += base_val * weight
+                    total_score += term_polarity * weight
                     total_weight += weight
                     matched_terms.append(pos_word)
+
+            if has_conc and not is_post_concessive:
+                is_post_concessive = True
 
         if total_weight == 0.0:
             if negated_defects:

@@ -148,7 +148,7 @@ class StatisticalRanker:
         tokenizer: Optional[DomainTokenizer] = None,
         sentiment_engine: Optional[SentimentEngine] = None
     ):
-        self.records = records or []
+        self.records = list(records) if isinstance(records, (list, tuple)) else []
         self.num_docs = len(self.records)
         self.tokenizer = tokenizer or DomainTokenizer()
         self.sentiment_engine = sentiment_engine or SentimentEngine(self.tokenizer)
@@ -167,7 +167,7 @@ class StatisticalRanker:
     def fit_and_process(self, records: Optional[List[Dict[str, Any]]] = None):
         """Tokenize documents, populate frequency matrices, and calculate document-level DSI."""
         if records is not None:
-            self.records = records
+            self.records = list(records) if isinstance(records, (list, tuple)) else []
 
         self.doc_freq.clear()
         self.term_freq.clear()
@@ -250,6 +250,8 @@ class StatisticalRanker:
             or top_k <= 0
         ):
             return []
+        if not isinstance(min_freq, int) or isinstance(min_freq, bool):
+            min_freq = 3
         ngram_counts: Counter = Counter()
         total_ngrams = 0
 
@@ -291,7 +293,7 @@ class StatisticalRanker:
         """
         if records is not None:
             self.fit_and_process(records)
-        if top_n <= 0:
+        if not isinstance(top_n, int) or isinstance(top_n, bool) or top_n <= 0:
             return []
 
         # Authoritative master topics for the top ranking table matching project inventory
@@ -406,9 +408,10 @@ class StatisticalRanker:
         Compute top complaint keywords filtered for a specific automotive brand family.
         Supported brands: 'tesla', 'hyundai_kia', 'genesis', 'mercedes', 'bmw', 'porsche', 'polestar', 'byd', 'chinese'
         """
-        if top_n <= 0:
+        if not isinstance(top_n, int) or isinstance(top_n, bool) or top_n <= 0:
             return []
-        recs = [r for r in (records if records is not None else self.records) if isinstance(r, dict)]
+        raw_recs = records if records is not None else self.records
+        recs = [r for r in raw_recs if isinstance(r, dict)] if isinstance(raw_recs, (list, tuple)) else []
         brand_lower = str(brand or "").lower()
 
         filtered_recs = []

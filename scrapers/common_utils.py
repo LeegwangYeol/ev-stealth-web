@@ -144,9 +144,14 @@ def normalize_scraper_url(raw_url: Any, base_url: str) -> Optional[str]:
         return None
     if eff_url.startswith("//"):
         base_scheme = urllib.parse.urlsplit(base_url).scheme or "https"
-        return f"{base_scheme}:{eff_url}"
+        candidate = f"{base_scheme}:{eff_url}"
+        try:
+            cand_parsed = urllib.parse.urlsplit(candidate)
+        except Exception:
+            return None
+        return candidate if cand_parsed.netloc else None
     if eff_url.lower().startswith(("http://", "https://")):
-        return eff_url
+        return eff_url if parsed.netloc else None
     if parsed.scheme:
         # Malformed scheme-relative or schemed URL without '//' (e.g. 'https:evil.com')
         return None
@@ -154,6 +159,10 @@ def normalize_scraper_url(raw_url: Any, base_url: str) -> Optional[str]:
         return urllib.parse.urljoin(base_url, eff_url)
     base_clean = base_url.rstrip("/")
     return f"{base_clean}/{eff_url}"
+
+
+_NAT64_WELL_KNOWN_PREFIX = ipaddress.IPv6Network("64:ff9b::/96")
+_NAT64_LOCAL_PREFIX = ipaddress.IPv6Network("64:ff9b:1::/48")
 
 
 def is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
@@ -168,18 +177,19 @@ def is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
         or ip.is_unspecified
     ):
         return False
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
-        mapped = ip.ipv4_mapped
-        if (
-            not mapped.is_global
-            or mapped.is_loopback
-            or mapped.is_private
-            or mapped.is_link_local
-            or mapped.is_multicast
-            or mapped.is_reserved
-            or mapped.is_unspecified
-        ):
+    if isinstance(ip, ipaddress.IPv6Address):
+        if ip.ipv4_mapped and not is_safe_ip(ip.ipv4_mapped):
             return False
+        if ip.sixtofour and not is_safe_ip(ip.sixtofour):
+            return False
+        if ip.teredo:
+            for teredo_ip in ip.teredo:
+                if not is_safe_ip(teredo_ip):
+                    return False
+        if ip in _NAT64_WELL_KNOWN_PREFIX or ip in _NAT64_LOCAL_PREFIX:
+            embedded_v4 = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+            if not is_safe_ip(embedded_v4):
+                return False
     if str(ip) in ("169.254.169.254", "100.100.100.200"):
         return False
     return True
@@ -204,6 +214,9 @@ def is_safe_url(
         parsed = urllib.parse.urlsplit(url_str)
     except Exception as e:
         return False, f"URL parsing error: {e}"
+
+    if "\\" in (parsed.netloc or ""):
+        return False, "SSRF blocked: Invalid backslash in URL authority"
 
     scheme = (parsed.scheme or "").lower()
     if scheme not in ("http", "https"):
@@ -520,17 +533,27 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
         self.allowed_ports = allowed_ports
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        target_url = str(newurl or "").strip()
+        if target_url and not target_url.lower().startswith(("http://", "https://")):
+            if not urllib.parse.urlsplit(target_url).scheme:
+                target_url = urllib.parse.urljoin(req.full_url, target_url)
         is_safe, reason = is_safe_url(
-            newurl,
+            target_url,
             allow_private_ips=self.allow_private_ips,
             allowed_ports=self.allowed_ports,
         )
         if not is_safe:
             logger.warning(f"SSRF defense blocked redirect from {req.full_url} to {newurl}: {reason}")
             raise urllib.error.HTTPError(
-                newurl, 403, f"SSRF Blocked: Unsafe redirect target ({reason})", headers, fp
+                target_url or newurl, 403, f"SSRF Blocked: Unsafe redirect target ({reason})", headers, fp
             )
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
+        new_req = super().redirect_request(req, fp, code, msg, headers, target_url)
+        if new_req is not None:
+            if hasattr(req, "_connect_timeout"):
+                new_req._connect_timeout = req._connect_timeout
+            if hasattr(req, "_read_timeout"):
+                new_req._read_timeout = req._read_timeout
+        return new_req
 
 
 class ResilientHTTPHandler(urllib.request.HTTPHandler):
@@ -601,9 +624,17 @@ class CircuitBreaker:
         cooldown_seconds: float = 30.0,
         half_open_max_probes: int = 1,
     ):
-        self.failure_threshold = max(1, int(failure_threshold))
-        self.cooldown_seconds = max(0.01, float(cooldown_seconds))
-        self.half_open_max_probes = max(1, int(half_open_max_probes))
+        try:
+            ft = int(failure_threshold) if failure_threshold is not None and not isinstance(failure_threshold, bool) else 3
+        except (ValueError, TypeError, OverflowError):
+            ft = 3
+        self.failure_threshold = max(1, ft)
+        self.cooldown_seconds = max(0.01, _positive_float(cooldown_seconds, 30.0))
+        try:
+            hp = int(half_open_max_probes) if half_open_max_probes is not None and not isinstance(half_open_max_probes, bool) else 1
+        except (ValueError, TypeError, OverflowError):
+            hp = 1
+        self.half_open_max_probes = max(1, hp)
         self._lock = threading.Lock()
         self._hosts: Dict[str, Dict[str, Any]] = {}
 
@@ -635,6 +666,16 @@ class CircuitBreaker:
             info = self._hosts.get(host)
             if info and info.get("state") == CircuitBreakerState.HALF_OPEN:
                 info["probe_count"] = info.get("probe_count", 0) + 1
+
+    def release_probe(self, url_or_host: str) -> None:
+        """Release an unused or aborted HALF_OPEN canary probe slot."""
+        host = self._extract_host(url_or_host)
+        if not host:
+            return
+        with self._lock:
+            info = self._hosts.get(host)
+            if info and info.get("state") == CircuitBreakerState.HALF_OPEN:
+                info["probe_count"] = max(0, info.get("probe_count", 0) - 1)
 
     def try_acquire(self, url_or_host: str) -> bool:
         """Atomically check availability and reserve a HALF_OPEN canary probe slot if applicable."""
@@ -745,10 +786,12 @@ class CircuitBreaker:
                 # Canary probe failed; re-trip circuit
                 info["state"] = CircuitBreakerState.OPEN
                 info["tripped_until"] = now + cooldown
+                info["probe_count"] = 0
                 tripped = True
             elif info["failure_count"] >= self.failure_threshold:
                 info["state"] = CircuitBreakerState.OPEN
                 info["tripped_until"] = now + cooldown
+                info["probe_count"] = 0
                 tripped = True
 
             return tripped
@@ -1219,6 +1262,9 @@ class SafeHttpClient:
         if not self.circuit_breaker.is_available(norm_url):
             logger.warning(f"Circuit breaker OPEN for {norm_url}; skipping session warm-up.")
             return False
+        if self.opener is None:
+            logger.error("SafeHttpClient opener is not initialized.")
+            return False
         logger.info(f"Warming up session on base domain: {norm_url}")
         resp = None
         try:
@@ -1327,6 +1373,10 @@ class SafeHttpClient:
             logger.warning(f"SSRF defense blocked request to {norm_url}: {reason}")
             return 0, "", b""
 
+        if self.opener is None:
+            logger.error("SafeHttpClient opener is not initialized.")
+            return 0, "", b""
+
         # Host-level Circuit Breaker guard (atomic check + HALF_OPEN probe reservation)
         cb_allowed = (
             self.circuit_breaker.try_acquire(norm_url)
@@ -1352,266 +1402,286 @@ class SafeHttpClient:
             if self.circuit_breaker.get_state(norm_url) == CircuitBreakerState.HALF_OPEN:
                 self.circuit_breaker.record_probe(norm_url)
 
-        if self.opener is None:
-            logger.error("SafeHttpClient opener is not initialized.")
-            return 0, "", b""
-
-        self.last_response_from_cache = False
-        self._sleep_with_jitter()
-
-        req_headers = get_random_headers(referer=referer)
-        if headers:
-            for k, v in headers.items():
-                matching_keys = [ek for ek in req_headers if ek.lower() == str(k).lower()]
-                for mk in matching_keys:
-                    del req_headers[mk]
-                req_headers[k] = v
-
-        payload_bytes = None
-        if data is not None:
-            if isinstance(data, dict):
-                payload_bytes = urllib.parse.urlencode(data).encode("utf-8")
-                if not any(str(k).lower() == "content-type" for k in req_headers):
-                    req_headers["Content-Type"] = "application/x-www-form-urlencoded"
-            elif isinstance(data, bytes):
-                payload_bytes = data
-            elif isinstance(data, str):
-                payload_bytes = data.encode("utf-8")
-
-        # Resolve explicit connect and read timeouts
-        if connect_timeout is not None:
-            eff_connect_timeout = _positive_float(connect_timeout, self._connect_timeout)
-        elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
-            eff_connect_timeout = _positive_float(timeout[0], self._connect_timeout)
-        elif isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(float(timeout)) and float(timeout) > 0:
-            eff_connect_timeout = min(5.0, float(timeout))
-        else:
-            eff_connect_timeout = self._connect_timeout
-
-        if read_timeout is not None:
-            eff_read_timeout = _positive_float(read_timeout, self._read_timeout)
-        elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
-            eff_read_timeout = _positive_float(timeout[1], self._read_timeout)
-        elif isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(float(timeout)) and float(timeout) > 0:
-            eff_read_timeout = float(timeout)
-        else:
-            eff_read_timeout = self._read_timeout
-
-        eff_timeout = eff_read_timeout
+        cb_resolved = False
         try:
-            eff_retries = max(1, int(self.max_retries)) if self.max_retries is not None and not isinstance(self.max_retries, bool) else 3
-        except (ValueError, TypeError, OverflowError):
-            eff_retries = 3
+            self.last_response_from_cache = False
+            self._sleep_with_jitter()
 
-        eff_method = (method or "GET").upper()
-        for attempt in range(1, eff_retries + 1):
-            if attempt > 1:
-                ua_keys = [k for k in req_headers if str(k).lower() == "user-agent"]
-                current_ua = req_headers.get(ua_keys[0]) if ua_keys else None
-                for k in ua_keys:
-                    del req_headers[k]
-                req_headers["User-Agent"] = self.get_random_user_agent(exclude=current_ua)
+            req_headers = get_random_headers(referer=referer)
+            if headers:
+                for k, v in headers.items():
+                    matching_keys = [ek for ek in req_headers if ek.lower() == str(k).lower()]
+                    for mk in matching_keys:
+                        del req_headers[mk]
+                    req_headers[k] = v
+
+            payload_bytes = None
+            if data is not None:
+                if isinstance(data, dict):
+                    payload_bytes = urllib.parse.urlencode(data).encode("utf-8")
+                    if not any(str(k).lower() == "content-type" for k in req_headers):
+                        req_headers["Content-Type"] = "application/x-www-form-urlencoded"
+                elif isinstance(data, bytes):
+                    payload_bytes = data
+                elif isinstance(data, str):
+                    payload_bytes = data.encode("utf-8")
+
+            # Resolve explicit connect and read timeouts
+            if connect_timeout is not None:
+                eff_connect_timeout = _positive_float(connect_timeout, self._connect_timeout)
+            elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
+                eff_connect_timeout = _positive_float(timeout[0], self._connect_timeout)
+            elif isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(float(timeout)) and float(timeout) > 0:
+                eff_connect_timeout = min(5.0, float(timeout))
+            else:
+                eff_connect_timeout = self._connect_timeout
+
+            if read_timeout is not None:
+                eff_read_timeout = _positive_float(read_timeout, self._read_timeout)
+            elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
+                eff_read_timeout = _positive_float(timeout[1], self._read_timeout)
+            elif isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(float(timeout)) and float(timeout) > 0:
+                eff_read_timeout = float(timeout)
+            else:
+                eff_read_timeout = self._read_timeout
+
+            eff_timeout = eff_read_timeout
             try:
-                req = urllib.request.Request(
-                    norm_url,
-                    data=payload_bytes,
-                    headers=req_headers,
-                    method=eff_method,
-                )
-                req._connect_timeout = eff_connect_timeout
-                req._read_timeout = eff_read_timeout
-                resp = self.opener.open(req, timeout=eff_timeout)
+                eff_retries = max(1, int(self.max_retries)) if self.max_retries is not None and not isinstance(self.max_retries, bool) else 3
+            except (ValueError, TypeError, OverflowError):
+                eff_retries = 3
+
+            eff_method = (method or "GET").upper()
+            for attempt in range(1, eff_retries + 1):
+                if attempt > 1:
+                    ua_keys = [k for k in req_headers if str(k).lower() == "user-agent"]
+                    current_ua = req_headers.get(ua_keys[0]) if ua_keys else None
+                    for k in ua_keys:
+                        del req_headers[k]
+                    req_headers["User-Agent"] = self.get_random_user_agent(exclude=current_ua)
                 try:
-                    status_code = resp.getcode()
-                    if status_code is None:
-                        status_code = getattr(resp, "status", None) or 200
+                    req = urllib.request.Request(
+                        norm_url,
+                        data=payload_bytes,
+                        headers=req_headers,
+                        method=eff_method,
+                    )
+                    req._connect_timeout = eff_connect_timeout
+                    req._read_timeout = eff_read_timeout
+                    resp = self.opener.open(req, timeout=eff_timeout)
+                    try:
+                        status_code = resp.getcode()
+                        if status_code is None:
+                            status_code = getattr(resp, "status", None) or 200
 
-                    if hasattr(resp, "fp") and resp.fp and hasattr(resp.fp, "raw") and hasattr(resp.fp.raw, "_sock"):
-                        try:
-                            resp.fp.raw._sock.settimeout(eff_read_timeout)
-                        except Exception:
-                            pass
+                        if hasattr(resp, "fp") and resp.fp and hasattr(resp.fp, "raw") and hasattr(resp.fp.raw, "_sock"):
+                            try:
+                                resp.fp.raw._sock.settimeout(eff_read_timeout)
+                            except Exception:
+                                pass
 
-                    # Bounded stream reading up to max_response_size
-                    chunks = []
-                    bytes_read = 0
-                    start_stream_time = time.time()
-                    max_stream_duration = max(30.0, eff_read_timeout * 3.0)
-                    while True:
-                        if time.time() - start_stream_time > max_stream_duration:
-                            logger.warning(
-                                f"Response stream from {norm_url} exceeded wall-clock deadline ({max_stream_duration}s). Truncating."
-                            )
-                            break
-                        try:
-                            chunk = resp.read(65536)
-                        except TypeError:
-                            chunk = resp.read()
-                        except http.client.IncompleteRead as ire:
-                            partial_bytes = ire.partial if isinstance(ire.partial, (bytes, bytearray)) else b""
-                            logger.warning(
-                                f"IncompleteRead on {norm_url} (Attempt {attempt}/{eff_retries}): "
-                                f"{len(partial_bytes)} partial bytes received before disconnect."
-                            )
-                            if partial_bytes:
-                                chunks.append(bytes(partial_bytes))
-                                bytes_read += len(partial_bytes)
-                            if attempt < eff_retries:
-                                raise
-                            break
-                        if not chunk or not isinstance(chunk, (bytes, bytearray, memoryview, str)):
-                            break
-                        if isinstance(chunk, str):
-                            chunk = chunk.encode("utf-8")
-                        elif isinstance(chunk, (bytearray, memoryview)):
-                            chunk = bytes(chunk)
-                        chunks.append(chunk)
-                        bytes_read += len(chunk)
-                        if self.max_response_size > 0 and bytes_read >= self.max_response_size:
-                            logger.warning(
-                                f"Response from {norm_url} exceeded max size ({self.max_response_size} bytes). Truncating."
-                            )
-                            break
-                        if len(chunk) > 65536:
-                            break
-                    raw_bytes = b"".join(chunks)
-                    if self.max_response_size > 0 and len(raw_bytes) > self.max_response_size:
-                        raw_bytes = raw_bytes[: self.max_response_size]
-
-                    # Detect charset from response headers (case-insensitive for plain dicts)
-                    content_type_hdr = ""
-                    if hasattr(resp, "headers") and resp.headers:
-                        if hasattr(resp.headers, "get"):
-                            content_type_hdr = resp.headers.get("Content-Type", "")
-                            if not content_type_hdr and hasattr(resp.headers, "items"):
-                                for hk, hv in resp.headers.items():
-                                    if str(hk).lower() == "content-type":
-                                        content_type_hdr = hv
-                                        break
-                    content_type = str(content_type_hdr) if content_type_hdr is not None else ""
-                    detected_encoding = encoding or self._detect_encoding(content_type, raw_bytes)
-                    decoded_text = robust_decode(raw_bytes, declared_encoding=detected_encoding)
-
-                    if 200 <= status_code < 400:
-                        self.circuit_breaker.record_success(norm_url)
-                        if status_code == 200 and decoded_text:
-                            self.set_cached_response(norm_url, status_code, decoded_text, raw_bytes)
-
-                    return status_code, decoded_text, raw_bytes
-                finally:
-                    if hasattr(resp, "close"):
-                        try:
-                            resp.close()
-                        except Exception:
-                            pass
-                    if hasattr(resp, "fp") and resp.fp and hasattr(resp.fp, "close"):
-                        try:
-                            resp.fp.close()
-                        except Exception:
-                            pass
-
-            except urllib.error.HTTPError as he:
-                logger.warning(f"HTTPError {he.code} on {norm_url} (Attempt {attempt}/{eff_retries}): {he.reason}")
-                try:
-                    if isinstance(getattr(he, "reason", None), str) and he.reason.startswith("SSRF Blocked:"):
-                        logger.warning(f"SSRF redirect aborted immediately for {norm_url}: {he.reason}")
-                        return 0, "", b""
-                    retryable_codes = (408, 429, 403, 500, 502, 503, 504, 520, 521, 522, 523, 524)
-                    if he.code in retryable_codes and attempt < eff_retries:
-                        if he.code in (403, 429):
-                            self.clear_cookies()
-                        retry_after = self._parse_retry_after(he) if he.code in (429, 503) else None
-                        if retry_after is not None and retry_after > 0:
-                            backoff = min(60.0, retry_after)
-                        else:
-                            backoff = min(60.0, (2 ** attempt) * 2.0 + random.uniform(1.0, 3.0))
-                        logger.info(f"Backing off for {backoff:.2f}s before retry (status {he.code})...")
-                        time.sleep(backoff)
-                    else:
-                        retry_after = self._parse_retry_after(he) if he.code in (429, 503) else None
-                        if he.code in (403, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524):
-                            tripped = self.circuit_breaker.record_failure(
-                                norm_url, status_code=he.code, retry_after=retry_after
-                            )
-                            if tripped:
+                        # Bounded stream reading up to max_response_size
+                        chunks = []
+                        bytes_read = 0
+                        stream_truncated = False
+                        start_stream_time = time.time()
+                        max_stream_duration = max(30.0, eff_read_timeout * 3.0)
+                        while True:
+                            if time.time() - start_stream_time > max_stream_duration:
                                 logger.warning(
-                                    f"Circuit breaker tripped OPEN for {norm_url} on HTTP {he.code}."
+                                    f"Response stream from {norm_url} exceeded wall-clock deadline ({max_stream_duration}s). Truncating."
                                 )
+                                stream_truncated = True
+                                break
+                            try:
+                                chunk = resp.read(65536)
+                            except TypeError:
+                                chunk = resp.read()
+                            except http.client.IncompleteRead as ire:
+                                partial_bytes = ire.partial if isinstance(ire.partial, (bytes, bytearray)) else b""
+                                logger.warning(
+                                    f"IncompleteRead on {norm_url} (Attempt {attempt}/{eff_retries}): "
+                                    f"{len(partial_bytes)} partial bytes received before disconnect."
+                                )
+                                if partial_bytes:
+                                    chunks.append(bytes(partial_bytes))
+                                    bytes_read += len(partial_bytes)
+                                if attempt < eff_retries:
+                                    raise
+                                stream_truncated = True
+                                break
+                            if not chunk or not isinstance(chunk, (bytes, bytearray, memoryview, str)):
+                                break
+                            if isinstance(chunk, str):
+                                chunk = chunk.encode("utf-8")
+                            elif isinstance(chunk, (bytearray, memoryview)):
+                                chunk = bytes(chunk)
+                            chunks.append(chunk)
+                            bytes_read += len(chunk)
+                            if self.max_response_size > 0 and bytes_read >= self.max_response_size:
+                                logger.warning(
+                                    f"Response from {norm_url} exceeded max size ({self.max_response_size} bytes). Truncating."
+                                )
+                                stream_truncated = True
+                                break
+                            if len(chunk) > 65536:
+                                break
+                        raw_bytes = b"".join(chunks)
+                        if self.max_response_size > 0 and len(raw_bytes) > self.max_response_size:
+                            raw_bytes = raw_bytes[: self.max_response_size]
+
+                        # Detect charset from response headers (case-insensitive for plain dicts)
+                        content_type_hdr = ""
+                        if hasattr(resp, "headers") and resp.headers:
+                            if hasattr(resp.headers, "get"):
+                                content_type_hdr = resp.headers.get("Content-Type", "")
+                                if not content_type_hdr and hasattr(resp.headers, "items"):
+                                    for hk, hv in resp.headers.items():
+                                        if str(hk).lower() == "content-type":
+                                            content_type_hdr = hv
+                                            break
+                        content_type = str(content_type_hdr) if content_type_hdr is not None else ""
+                        detected_encoding = encoding or self._detect_encoding(content_type, raw_bytes)
+                        decoded_text = robust_decode(raw_bytes, declared_encoding=detected_encoding)
+
+                        if 200 <= status_code < 400:
+                            self.circuit_breaker.record_success(norm_url)
+                            cb_resolved = True
+                            if status_code == 200 and decoded_text and not stream_truncated:
+                                self.set_cached_response(norm_url, status_code, decoded_text, raw_bytes)
+                        elif status_code in (403, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524):
+                            self.circuit_breaker.record_failure(norm_url, status_code=status_code)
+                            cb_resolved = True
                         elif self.circuit_breaker.get_state(norm_url) == CircuitBreakerState.HALF_OPEN:
                             self.circuit_breaker.record_success(norm_url)
-                        if he.code in (403, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524) and self.cache_fallback:
+                            cb_resolved = True
+
+                        return status_code, decoded_text, raw_bytes
+                    finally:
+                        if hasattr(resp, "close"):
+                            try:
+                                resp.close()
+                            except Exception:
+                                pass
+                        if hasattr(resp, "fp") and resp.fp and hasattr(resp.fp, "close"):
+                            try:
+                                resp.fp.close()
+                            except Exception:
+                                pass
+
+                except urllib.error.HTTPError as he:
+                    logger.warning(f"HTTPError {he.code} on {norm_url} (Attempt {attempt}/{eff_retries}): {he.reason}")
+                    try:
+                        if isinstance(getattr(he, "reason", None), str) and he.reason.startswith("SSRF Blocked:"):
+                            logger.warning(f"SSRF redirect aborted immediately for {norm_url}: {he.reason}")
+                            return 0, "", b""
+                        retryable_codes = (408, 429, 403, 500, 502, 503, 504, 520, 521, 522, 523, 524)
+                        if he.code in retryable_codes and attempt < eff_retries:
+                            if he.code in (403, 429):
+                                self.clear_cookies()
+                            retry_after = self._parse_retry_after(he) if he.code in (429, 503) else None
+                            if retry_after is not None and retry_after > 0:
+                                backoff = min(60.0, retry_after)
+                            else:
+                                backoff = min(60.0, (2 ** attempt) * 2.0 + random.uniform(1.0, 3.0))
+                            logger.info(f"Backing off for {backoff:.2f}s before retry (status {he.code})...")
+                            time.sleep(backoff)
+                        else:
+                            retry_after = self._parse_retry_after(he) if he.code in (429, 503) else None
+                            if he.code in (403, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524):
+                                tripped = self.circuit_breaker.record_failure(
+                                    norm_url, status_code=he.code, retry_after=retry_after
+                                )
+                                cb_resolved = True
+                                if tripped:
+                                    logger.warning(
+                                        f"Circuit breaker tripped OPEN for {norm_url} on HTTP {he.code}."
+                                    )
+                            elif self.circuit_breaker.get_state(norm_url) == CircuitBreakerState.HALF_OPEN:
+                                self.circuit_breaker.record_success(norm_url)
+                                cb_resolved = True
+                            if he.code in (403, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524) and self.cache_fallback:
+                                cached = self.get_cached_response(norm_url)
+                                if cached is not None:
+                                    logger.warning(
+                                        f"Remote endpoint {norm_url} returned HTTP {he.code}. Falling back to cached response."
+                                    )
+                                    self.last_response_from_cache = True
+                                    return cached
+                            try:
+                                read_limit = self.max_response_size if self.max_response_size > 0 else 65536
+                                try:
+                                    raw_bytes = he.read(read_limit)
+                                except TypeError:
+                                    raw_bytes = he.read()
+                                if raw_bytes is None:
+                                    raw_bytes = b""
+                                elif isinstance(raw_bytes, str):
+                                    raw_bytes = raw_bytes.encode("utf-8")
+                                elif isinstance(raw_bytes, (bytearray, memoryview)):
+                                    raw_bytes = bytes(raw_bytes)
+                                if self.max_response_size > 0 and len(raw_bytes) > self.max_response_size:
+                                    raw_bytes = raw_bytes[: self.max_response_size]
+                                err_ct = ""
+                                if hasattr(he, "headers") and he.headers and hasattr(he.headers, "get"):
+                                    err_ct = str(he.headers.get("Content-Type", "") or "")
+                                err_enc = encoding or self._detect_encoding(err_ct, raw_bytes)
+                                decoded_text = robust_decode(raw_bytes, declared_encoding=err_enc)
+                                return he.code, decoded_text, raw_bytes
+                            except Exception:
+                                return he.code, "", b""
+                    finally:
+                        try:
+                            if hasattr(he, "fp") and he.fp:
+                                he.fp.close()
+                            he.close()
+                        except Exception:
+                            pass
+                except (
+                    TimeoutError,
+                    socket.timeout,
+                    urllib.error.URLError,
+                    http.client.RemoteDisconnected,
+                    http.client.IncompleteRead,
+                    http.client.HTTPException,
+                    ConnectionError,
+                    BrokenPipeError,
+                    ssl.SSLError,
+                    socket.gaierror,
+                    OSError,
+                    Exception,
+                ) as ex:
+                    logger.warning(f"Request error on {norm_url} (Attempt {attempt}/{eff_retries}): {ex}")
+                    if attempt < eff_retries:
+                        backoff = min(30.0, (2 ** attempt) * 1.5 + random.uniform(0.5, 1.5))
+                        time.sleep(backoff)
+                    else:
+                        self.circuit_breaker.record_failure(norm_url)
+                        cb_resolved = True
+                        if self.cache_fallback:
                             cached = self.get_cached_response(norm_url)
                             if cached is not None:
                                 logger.warning(
-                                    f"Remote endpoint {norm_url} returned HTTP {he.code}. Falling back to cached response."
+                                    f"Remote endpoint {norm_url} unreachable ({ex}). Falling back to cached response."
                                 )
                                 self.last_response_from_cache = True
                                 return cached
-                        try:
-                            try:
-                                raw_bytes = he.read(self.max_response_size)
-                            except TypeError:
-                                raw_bytes = he.read()
-                            if raw_bytes is None:
-                                raw_bytes = b""
-                            elif isinstance(raw_bytes, str):
-                                raw_bytes = raw_bytes.encode("utf-8")
-                            elif isinstance(raw_bytes, (bytearray, memoryview)):
-                                raw_bytes = bytes(raw_bytes)
-                            if self.max_response_size > 0 and len(raw_bytes) > self.max_response_size:
-                                raw_bytes = raw_bytes[: self.max_response_size]
-                            decoded_text = robust_decode(raw_bytes, declared_encoding=encoding or "utf-8")
-                            return he.code, decoded_text, raw_bytes
-                        except Exception:
-                            return he.code, "", b""
-                finally:
-                    try:
-                        if hasattr(he, "fp") and he.fp:
-                            he.fp.close()
-                        he.close()
-                    except Exception:
-                        pass
-            except (
-                TimeoutError,
-                socket.timeout,
-                urllib.error.URLError,
-                http.client.RemoteDisconnected,
-                http.client.IncompleteRead,
-                http.client.HTTPException,
-                ConnectionError,
-                BrokenPipeError,
-                ssl.SSLError,
-                socket.gaierror,
-                OSError,
-                Exception,
-            ) as ex:
-                logger.warning(f"Request error on {norm_url} (Attempt {attempt}/{eff_retries}): {ex}")
-                if attempt < eff_retries:
-                    backoff = min(30.0, (2 ** attempt) * 1.5 + random.uniform(0.5, 1.5))
-                    time.sleep(backoff)
-                else:
-                    self.circuit_breaker.record_failure(norm_url)
-                    if self.cache_fallback:
-                        cached = self.get_cached_response(norm_url)
-                        if cached is not None:
-                            logger.warning(
-                                f"Remote endpoint {norm_url} unreachable ({ex}). Falling back to cached response."
-                            )
-                            self.last_response_from_cache = True
-                            return cached
-                    break
+                        break
 
-        if self.cache_fallback:
-            cached = self.get_cached_response(norm_url)
-            if cached is not None:
-                logger.warning(
-                    f"Remote endpoint {norm_url} unreachable. Falling back to cached response."
-                )
-                self.last_response_from_cache = True
-                return cached
+            if self.cache_fallback:
+                cached = self.get_cached_response(norm_url)
+                if cached is not None:
+                    logger.warning(
+                        f"Remote endpoint {norm_url} unreachable. Falling back to cached response."
+                    )
+                    self.last_response_from_cache = True
+                    return cached
 
-        logger.error(f"Failed to fetch {norm_url} after {eff_retries} attempts.")
-        return 0, "", b""
+            logger.error(f"Failed to fetch {norm_url} after {eff_retries} attempts.")
+            return 0, "", b""
+        finally:
+            if not cb_resolved and hasattr(self.circuit_breaker, "release_probe"):
+                self.circuit_breaker.release_probe(norm_url)
 
     def get(
         self,
@@ -1664,17 +1734,17 @@ class SafeHttpClient:
     @staticmethod
     def _detect_encoding(content_type: str, raw_bytes: bytes) -> str:
         """Detect encoding from Content-Type header or HTML meta tags."""
-        match = re.search(r'charset=["\']?([\w\-]+)', content_type or "", re.IGNORECASE)
+        match = re.search(r'charset\s*=\s*["\']?([\w\-]+)', content_type or "", re.IGNORECASE)
         if match:
             return match.group(1).strip().lower()
 
         # Check HTML meta charset in initial bytes
-        prefix = raw_bytes[:4096].decode("ascii", "ignore")
-        meta_match = re.search(r'<meta[^>]+charset=["\']?([\w\-]+)', prefix, re.IGNORECASE)
+        prefix = raw_bytes[:16384].decode("ascii", "ignore")
+        meta_match = re.search(r'<meta\b[^>]*\bcharset\s*=\s*["\']?([\w\-]+)', prefix, re.IGNORECASE)
         if meta_match:
             return meta_match.group(1).strip().lower()
 
-        meta_http = re.search(r'<meta[^>]+http-equiv=["\']?content-type["\']?[^>]+content=["\'][^"\']*charset=([\w\-]+)', prefix, re.IGNORECASE)
+        meta_http = re.search(r'<meta\b[^>]*\bhttp-equiv\s*=\s*["\']?content-type["\']?[^>]*\bcontent\s*=\s*["\'][^"\']*charset=([\w\-]+)', prefix, re.IGNORECASE)
         if meta_http:
             return meta_http.group(1).strip().lower()
 
@@ -1700,9 +1770,14 @@ def robust_decode(raw_bytes: Union[bytes, bytearray, memoryview, str, None], dec
         elif norm_declared in ("ks_c_5601-1987", "ksc5601", "euc_kr"):
             norm_declared = "euc-kr"
 
-    if raw_bytes.startswith(b"\xef\xbb\xbf") and (not norm_declared or norm_declared in ("utf-8", "utf8", "utf-8-sig")):
+    if raw_bytes.startswith(b"\xef\xbb\xbf"):
         try:
             return raw_bytes.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            pass
+    if raw_bytes.startswith((b"\xff\xfe", b"\xfe\xff")) and (not norm_declared or norm_declared.startswith("utf-16")):
+        try:
+            return raw_bytes.decode("utf-16")
         except UnicodeDecodeError:
             pass
 
@@ -1720,7 +1795,7 @@ def robust_decode(raw_bytes: Union[bytes, bytearray, memoryview, str, None], dec
         except (UnicodeDecodeError, LookupError):
             continue
 
-    fallback_enc = norm_declared if norm_declared in ("cp949", "euc-kr") else "utf-8"
+    fallback_enc = "cp949" if norm_declared in ("cp949", "euc-kr") else "utf-8"
     return raw_bytes.decode(fallback_enc, errors="replace")
 
 
@@ -1796,7 +1871,7 @@ def clean_html_text(raw_html: Union[str, bytes, Any]) -> str:
 
     cleaned = raw_html.replace("\x00", " ")
     cleaned = re.sub(r"<!--.*?-->", " ", cleaned, flags=re.DOTALL)
-    cleaned = re.sub(r"<(script|style)[^>]*>(?:.*?</\1>|.*$)", " ", cleaned, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r"<(script|style)[^>]*>(?:.*?</\1\s*>|.*$)", " ", cleaned, flags=re.DOTALL | re.IGNORECASE)
     cleaned = re.sub(r"<(br|p|/p|div|/div|li|/li|h\d|/h\d|tr|/tr|dt|/dt|dd|/dd)[^>]*>", "\n", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"<[^>]+>", " ", cleaned)
     cleaned = re.sub(r"<[a-zA-Z/][^<]*$", " ", cleaned)

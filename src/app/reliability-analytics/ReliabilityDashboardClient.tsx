@@ -752,7 +752,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
   // Brand SVG dynamic dimensions and accessible description
   const brandSvgHeight = useMemo(() => {
-    return Math.max(140, 30 + sortedBrands.length * 34 + 45);
+    return Math.max(140, 30 + sortedBrands.length * 52 + 45);
   }, [sortedBrands.length]);
 
   const brandSvgDesc = useMemo(() => {
@@ -1002,6 +1002,19 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [pinnedRadarCategory, hoveredRadarCategory, activeChartTab]);
+
+  // Escape key listener to dismiss hovered SVG brand detail card
+  useEffect(() => {
+    if (!hoveredSvgBrand || activeChartTab !== 'brand_ranking') return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setHoveredSvgBrand(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [hoveredSvgBrand, activeChartTab]);
 
   const handleBrandToggle = useCallback((brandId: string) => {
     setSelectedBrand((prev) => (prev === brandId ? 'ALL' : brandId));
@@ -1335,7 +1348,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   role="dialog"
                   aria-modal="false"
                   aria-labelledby="heatmap-dialog-title"
-                  aria-live="polite"
+                  aria-describedby="heatmap-dialog-desc"
                   tabIndex={-1}
                   className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-700 shadow-xl animate-fade-in motion-reduce:animate-none flex flex-col sm:flex-row justify-between gap-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                 >
@@ -1356,7 +1369,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         {hoveredCell.verdict} (DSI {hoveredCell.dsi}점)
                       </span>
                     </div>
-                    <p className="text-sm text-slate-200 font-medium flex items-center gap-1">
+                    <p id="heatmap-dialog-desc" className="text-sm text-slate-200 font-medium flex items-center gap-1">
                       <span aria-hidden="true">⚠️</span>
                       <span>주요 결함: {hoveredCell.primaryDefect}</span>
                     </p>
@@ -1370,7 +1383,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     <Link
                       href={`/recall-portal?model=${encodeURIComponent(hoveredCell.modelName)}`}
                       prefetch={false}
-                      className="px-3 py-1.5 min-h-[44px] bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 inline-flex items-center gap-1"
+                      className="px-3 py-1.5 min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 inline-flex items-center gap-1"
                     >
                       <span>공식 리콜 조회</span>
                       <span aria-hidden="true">&rarr;</span>
@@ -1379,7 +1392,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       type="button"
                       onClick={handleCloseCell}
                       aria-label="결함 세부정보 닫기 (Esc)"
-                      className="px-3 py-1.5 min-h-[44px] bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      className="px-3 py-1.5 min-h-[44px] bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     >
                       닫기
                     </button>
@@ -1442,11 +1455,11 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 >
                   <div className="sm:hidden flex items-center justify-between pb-2 mb-2 text-[11px] font-medium text-slate-300 border-b border-slate-800 select-none" aria-hidden="true"><span>← 좌우로 밀어서 9대 브랜드 비교</span><span className="text-[10px] text-blue-300 font-semibold">차트 스크롤 ↔</span></div>
                   <svg
-                    className="w-full min-w-[560px] h-auto select-none"
+                    className="w-full min-w-[640px] h-auto select-none"
                     viewBox={`0 0 680 ${brandSvgHeight}`}
                     width="680"
                     height={brandSvgHeight}
-                    role="img"
+                    role="group"
                     aria-labelledby="brand-dsi-svg-title brand-dsi-svg-desc"
                   >
                     <title id="brand-dsi-svg-title">
@@ -1488,10 +1501,11 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
                     {/* Horizontal Bars */}
                     {sortedBrands.map((brand, i) => {
-                      const y = 20 + i * 34;
+                      const y = 24 + i * 52;
                       const safeDsi = Number.isFinite(brand.overall_dsi)
                         ? Math.min(100, Math.max(0, brand.overall_dsi))
                         : 0;
+                      const safeReports = Number.isFinite(brand.total_reports) ? brand.total_reports : 0;
                       const barWidth = Math.max(12, (safeDsi / 100) * 480);
                       const barFill =
                         safeDsi < 50
@@ -1509,7 +1523,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           tabIndex={0}
                           role="button"
                           aria-pressed={selectedBrand === brand.id}
-                          aria-label={`${brand.name_ko} (${brand.name_en}), DSI ${safeDsi}점, 치명 결함율 ${Number.isFinite(brand.critical_issue_rate) ? brand.critical_issue_rate : 0}%, 총 ${(brand.total_reports || 0).toLocaleString('ko-KR')}건 제보`}
+                          aria-label={`${brand.name_ko} (${brand.name_en}), DSI ${safeDsi}점, 치명 결함율 ${Number.isFinite(brand.critical_issue_rate) ? brand.critical_issue_rate : 0}%, 총 ${safeReports.toLocaleString('ko-KR')}건 제보`}
                           onMouseEnter={() => setHoveredSvgBrand(brand)}
                           onFocus={() => setHoveredSvgBrand(brand)}
                           onClick={() => handleBrandToggle(brand.id)}
@@ -1517,20 +1531,23 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault();
                               handleBrandToggle(brand.id);
+                            } else if (e.key === 'Escape' && hoveredSvgBrand) {
+                              e.preventDefault();
+                              setHoveredSvgBrand(null);
                             }
                           }}
                           className="transition-opacity hover:opacity-90 cursor-pointer focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 focus-visible:outline-offset-2"
                         >
                           <rect
                             x="0"
-                            y={y - 6}
+                            y={y - 14}
                             width="680"
-                            height="30"
+                            height="48"
                             fill="transparent"
                           />
                           <text
                             x="110"
-                            y={y + 13}
+                            y={y + 14}
                             textAnchor="end"
                             fill="#f8fafc"
                             fontSize="11"
@@ -1542,7 +1559,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                             x="120"
                             y={y}
                             width="480"
-                            height="18"
+                            height="20"
                             rx="4"
                             fill="#1e293b"
                             stroke={isBarHighlighted ? '#60a5fa' : 'none'}
@@ -1552,13 +1569,13 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                             x="120"
                             y={y}
                             width={barWidth}
-                            height="18"
+                            height="20"
                             rx="4"
                             fill={barFill}
                           />
                           <text
                             x={120 + barWidth + 8}
-                            y={y + 13}
+                            y={y + 14}
                             textAnchor="start"
                             fill="#ffffff"
                             fontSize="11"
@@ -1592,7 +1609,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       <button
                         type="button"
                         onClick={() => handleBrandToggle(hoveredSvgBrand.id)}
-                        className="px-3.5 py-2 min-h-[44px] inline-flex items-center justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold transition shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                        className="px-3.5 py-2 min-h-[44px] inline-flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                       >
                         {selectedBrand === hoveredSvgBrand.id ? '필터 해제' : '이 브랜드만 보기'}
                       </button>
@@ -1757,7 +1774,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   viewBox="0 0 500 480"
                   width="500"
                   height="480"
-                  role="img"
+                  role="group"
                   aria-labelledby="radar-brand-svg-title radar-brand-svg-desc"
                 >
                   <title id="radar-brand-svg-title">
@@ -1804,7 +1821,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
                   {/* Polygons (guarded against empty/degenerate axis sets) */}
                   {radarAxes.length >= 3 && (
-                    <>
+                    <g aria-hidden="true">
                       {/* Industry Average Polygon */}
                       <polygon
                         points={polygonPointsInd}
@@ -1829,10 +1846,10 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         stroke="#f43f5e"
                         strokeWidth="2.5"
                       />
-                    </>
+                    </g>
                   )}
 
-                  {/* Interactive Vertex Nodes and Labels (1 focusable group per axis with 44px touch hit targets) */}
+                  {/* Interactive Vertex Nodes and Labels (1 focusable group per axis with >=44px touch hit targets) */}
                   {radarAxes.map((axis) => {
                     const isActive = activeRadarCode === axis.code;
                     const isPinned = pinnedRadarCategory === axis.code;
@@ -1852,6 +1869,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     return (
                       <g
                         key={`nodes-${axis.code}`}
+                        id={`radar-axis-${axis.code}`}
                         role="button"
                         tabIndex={0}
                         aria-pressed={isPinned}
@@ -1864,10 +1882,10 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         onClick={togglePin}
                         onKeyDown={handleVertexKeyDown}
                       >
-                        {/* 44px transparent hit targets for touch & mouse */}
-                        <circle cx={axis.labelX} cy={axis.labelY - 4} r={22} fill="transparent" />
-                        <circle cx={axis.xA} cy={axis.yA} r={22} fill="transparent" />
-                        <circle cx={axis.xB} cy={axis.yB} r={22} fill="transparent" />
+                        {/* >=44px transparent hit targets for touch & mouse */}
+                        <circle cx={axis.labelX} cy={axis.labelY - 4} r={25} fill="transparent" />
+                        <circle cx={axis.xA} cy={axis.yA} r={25} fill="transparent" />
+                        <circle cx={axis.xB} cy={axis.yB} r={25} fill="transparent" />
 
                         {/* Category Axis Label */}
                         <text
@@ -1928,8 +1946,10 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           <button
                             type="button"
                             onClick={() => {
+                              const targetId = `radar-axis-${activeRadarItem.code}`;
                               setPinnedRadarCategory(null);
                               setHoveredRadarCategory(null);
+                              document.getElementById(targetId)?.focus();
                             }}
                             aria-label={`${activeRadarItem.label} 상세 고정 해제`}
                             className="min-h-[44px] min-w-[44px] px-2.5 py-1 inline-flex items-center justify-center rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"

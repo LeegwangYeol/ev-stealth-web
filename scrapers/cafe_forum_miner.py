@@ -159,7 +159,7 @@ class CafeForumMiner:
                 search_url,
                 method="GET",
                 referer=f"{POMPPU_BASE_URL}/",
-                encoding="euc-kr",
+                encoding=None,
                 connect_timeout=self.connect_timeout,
                 read_timeout=self.read_timeout,
             )

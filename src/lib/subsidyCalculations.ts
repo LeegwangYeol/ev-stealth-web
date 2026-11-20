@@ -265,8 +265,15 @@ export function getPriceSubsidyRatio(msrpKrw: number): number {
 
 const REGION_SUFFIX_RE = /(특별시|광역시|특별자치시|특별자치도|도)$/;
 const MODEL_CLEAN_RE = /[\s\-_]+/g;
-const DATE_ONLY_RE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})$/;
-const DATETIME_RE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})[T ](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:([Zz])|([+-])(\d{2}):?(\d{2}))?$/;
+const DATE_ONLY_RE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})(?:\s*(?:[Zz]|UTC|GMT))?$/;
+const DATETIME_RE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})[T ](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:\s*(?:([Zz]|UTC|GMT)|([+-])(\d{2})(?::?(\d{2}))?))?$/;
+const NAMED_MONTH_DAY_RE = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b[^0-9]*(\d{1,2})\b|\b(\d{1,2})\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i;
+const MONTH_NAME_TO_INDEX: Readonly<Record<string, number>> = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+};
+const STRICT_NUMBER_RE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+const STRICT_UNIT_NUMBER_RE = /^(?:\d+(?:\.\d*)?|\.\d+)$/;
 const LEADING_SIGN_RE = /^([+-])?\s*(.*)$/;
 const EOK_RE = /([\d.,]+)\s*억/;
 const CHEON_MAN_RE = /([\d.,]+)\s*천\s*만/;
@@ -474,6 +481,9 @@ export function calculateDepletionRate(
   let rate = Number.isFinite(numerator)
     ? numerator / totalQuota
     : (appliedCount / totalQuota) * 100;
+  if (rate === Infinity && options?.clamp100) {
+    rate = 100.0;
+  }
   if (!Number.isFinite(rate) || rate < 0) {
     return 0.0;
   }
@@ -737,7 +747,7 @@ function parseUtcStartDate(startDate?: Date | string | null): Date | null {
     let offsetMinutes = 0;
     if (dtMatch[10]) {
       const tzHour = Number(dtMatch[11]);
-      const tzMin = Number(dtMatch[12]);
+      const tzMin = dtMatch[12] ? Number(dtMatch[12]) : 0;
       if (tzHour > 23 || tzMin > 59) {
         return null;
       }
@@ -758,7 +768,24 @@ function parseUtcStartDate(startDate?: Date | string | null): Date | null {
   }
 
   const parsed = new Date(s);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  const namedMatch = NAMED_MONTH_DAY_RE.exec(s);
+  if (namedMatch) {
+    const monthToken = (namedMatch[1] ?? namedMatch[4] ?? '').slice(0, 3).toLowerCase();
+    const dayToken = Number(namedMatch[2] ?? namedMatch[3]);
+    const expectedMonth = MONTH_NAME_TO_INDEX[monthToken];
+    if (expectedMonth !== undefined && Number.isInteger(dayToken)) {
+      const hasExplicitTz = /(?:GMT|UTC|Z|[+-]\d{2}:?\d{2})\s*$/i.test(s);
+      const actualMonth = hasExplicitTz ? parsed.getUTCMonth() : parsed.getMonth();
+      const actualDay = hasExplicitTz ? parsed.getUTCDate() : parsed.getDate();
+      if (actualMonth !== expectedMonth || actualDay !== dayToken) {
+        return null;
+      }
+    }
+  }
+  return parsed;
 }
 
 /**
@@ -879,7 +906,8 @@ export function parseSubsidyNumber(
   // 1. Match '억'
   const eokMatch = EOK_RE.exec(clean);
   if (eokMatch) {
-    const val = parseFloat(eokMatch[1].replace(COMMA_RE, ''));
+    const numStr = eokMatch[1].replace(COMMA_RE, '');
+    const val = STRICT_UNIT_NUMBER_RE.test(numStr) ? parseFloat(numStr) : NaN;
     if (Number.isFinite(val)) {
       total += val * 100_000_000;
       matchedKoreanUnit = true;
@@ -889,7 +917,8 @@ export function parseSubsidyNumber(
   // 2. Match '천만' (e.g. 5천만원)
   const cheonManMatch = CHEON_MAN_RE.exec(clean);
   if (cheonManMatch) {
-    const val = parseFloat(cheonManMatch[1].replace(COMMA_RE, ''));
+    const numStr = cheonManMatch[1].replace(COMMA_RE, '');
+    const val = STRICT_UNIT_NUMBER_RE.test(numStr) ? parseFloat(numStr) : NaN;
     if (Number.isFinite(val)) {
       total += val * 10_000_000;
       matchedKoreanUnit = true;
@@ -898,7 +927,8 @@ export function parseSubsidyNumber(
     // 3. Match '만' (e.g. 650만원, 5,500만 원, 650만)
     const manMatch = MAN_RE.exec(clean);
     if (manMatch) {
-      const val = parseFloat(manMatch[1].replace(COMMA_RE, ''));
+      const numStr = manMatch[1].replace(COMMA_RE, '');
+      const val = STRICT_UNIT_NUMBER_RE.test(numStr) ? parseFloat(numStr) : NaN;
       if (Number.isFinite(val)) {
         total += val * 10_000;
         matchedKoreanUnit = true;
@@ -909,7 +939,8 @@ export function parseSubsidyNumber(
   // 4. Match standalone '천' (not followed by '만', e.g. 5천원)
   const cheonMatch = CHEON_RE.exec(clean);
   if (cheonMatch) {
-    const val = parseFloat(cheonMatch[1].replace(COMMA_RE, ''));
+    const numStr = cheonMatch[1].replace(COMMA_RE, '');
+    const val = STRICT_UNIT_NUMBER_RE.test(numStr) ? parseFloat(numStr) : NaN;
     if (Number.isFinite(val)) {
       total += val * 1_000;
       matchedKoreanUnit = true;
@@ -919,6 +950,9 @@ export function parseSubsidyNumber(
   // 5. If no Korean unit was matched, parse as standard raw number with commas/currency symbols
   if (!matchedKoreanUnit) {
     const stripped = clean.replace(CURRENCY_STRIP_RE, '');
+    if (!STRICT_NUMBER_RE.test(stripped)) {
+      return fallback;
+    }
     const val = parseFloat(stripped);
     if (Number.isFinite(val)) {
       total = val;
@@ -979,7 +1013,16 @@ function safeString(value: unknown): string {
 }
 
 function safeNonEmptyString(value: unknown, fallback: string): string {
-  return typeof value === 'string' && value.trim().length > 0 ? value : fallback;
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
+}
+
+function safeFiniteNonNeg(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+    return value === 0 ? 0 : value;
+  }
+  return undefined;
 }
 
 function round1Safe(value: number): number {
@@ -1079,7 +1122,7 @@ export function parseCategoryMetrics(category: unknown): ParsedCategoryMetrics {
     rawRemaining !== null &&
     !(typeof rawRemaining === 'number' && !Number.isFinite(rawRemaining))
   ) {
-    const parsedRemaining = parseSubsidyNumber(rawRemaining, { allowNegative: false, defaultKrw: -1 });
+    const parsedRemaining = parseSubsidyNumber(rawRemaining, { allowNegative: true, defaultKrw: -1 });
     remainingUnits = parsedRemaining >= 0
       ? parsedRemaining
       : calculateRemainingUnits(appliedUnits, announcedUnits);
@@ -1381,7 +1424,7 @@ function extractModelSortMetric(
     case 'RANGE_DESC':
     case 'RANGE_ASC':
       return typeof model.rated_range_km === 'number' && Number.isFinite(model.rated_range_km)
-        ? model.rated_range_km
+        ? (model.rated_range_km === 0 ? 0 : model.rated_range_km)
         : 0;
     default:
       return 0;
@@ -1632,16 +1675,16 @@ export function calculateNetSubsidyPure(
   const catAnnounced = parseFiniteNonNegNumber(passengerCategory?.announced_units);
   const catApplied = parseFiniteNonNegNumber(passengerCategory?.applied_units);
 
-  const depletionRate = typeof passengerCategory?.depletion_rate === 'number' && Number.isFinite(passengerCategory.depletion_rate) && passengerCategory.depletion_rate >= 0
-    ? passengerCategory.depletion_rate
-    : calculateDepletionRate(catApplied, catAnnounced);
+  const depletionRate =
+    safeFiniteNonNeg(passengerCategory?.depletion_rate) ??
+    calculateDepletionRate(catApplied, catAnnounced);
 
   const isHighDepletionRisk = depletionRate >= 80.0;
   const depletionStatus = resolveAlertSeverity(passengerCategory?.status, depletionRate);
 
-  const remainingUnits = typeof passengerCategory?.remaining_units === 'number' && Number.isFinite(passengerCategory.remaining_units) && passengerCategory.remaining_units >= 0
-    ? passengerCategory.remaining_units
-    : calculateRemainingUnits(catApplied, catAnnounced);
+  const remainingUnits =
+    safeFiniteNonNeg(passengerCategory?.remaining_units) ??
+    calculateRemainingUnits(catApplied, catAnnounced);
 
   const regionDisplayName = safeNonEmptyString(safeRegion.name_ko, '해당 지역');
   let warningNotice: string | undefined;
@@ -1664,8 +1707,8 @@ export function calculateNetSubsidyPure(
     modelName: safeNonEmptyString(safeModel.name_ko, '기본 모델'),
     manufacturer: safeNonEmptyString(safeModel.manufacturer, '기타'),
     batteryType: safeNonEmptyString(safeModel.battery_type, 'NCM 삼원계'),
-    batteryCapacityKwh: typeof safeModel.battery_capacity_kwh === 'number' && Number.isFinite(safeModel.battery_capacity_kwh) && safeModel.battery_capacity_kwh >= 0 ? safeModel.battery_capacity_kwh : 0,
-    ratedRangeKm: typeof safeModel.rated_range_km === 'number' && Number.isFinite(safeModel.rated_range_km) && safeModel.rated_range_km >= 0 ? safeModel.rated_range_km : 0,
+    batteryCapacityKwh: safeFiniteNonNeg(safeModel.battery_capacity_kwh) ?? 0,
+    ratedRangeKm: safeFiniteNonNeg(safeModel.rated_range_km) ?? 0,
     regionId: safeNonEmptyString(safeRegion.region_id, 'unknown-region'),
     regionName: regionDisplayName,
     msrpKrw: activeMsrp,
@@ -1678,7 +1721,7 @@ export function calculateNetSubsidyPure(
     isHighDepletionRisk,
     depletionRate,
     depletionStatus,
-    residencyRequirementDays: typeof safeRegion.residency_requirement_days === 'number' && Number.isFinite(safeRegion.residency_requirement_days) && safeRegion.residency_requirement_days >= 0 ? safeRegion.residency_requirement_days : 30,
+    residencyRequirementDays: safeFiniteNonNeg(safeRegion.residency_requirement_days) ?? 30,
     warningNotice,
     priceCapTierText,
   };
@@ -1687,6 +1730,17 @@ export function calculateNetSubsidyPure(
 // ==========================================
 // 6. STATISTICAL AGGREGATION UTILITIES
 // ==========================================
+
+function buildCategoryBreakdown(cat: CategoryMetrics | undefined): CategoryBreakdownMetrics {
+  const announced = parseFiniteNonNegNumber(cat?.announced_units);
+  const applied = parseFiniteNonNegNumber(cat?.applied_units);
+  return {
+    announced,
+    applied,
+    remaining: safeFiniteNonNeg(cat?.remaining_units) ?? calculateRemainingUnits(cat?.applied_units, cat?.announced_units),
+    rate: safeFiniteNonNeg(cat?.depletion_rate) ?? calculateDepletionRate(cat?.applied_units, cat?.announced_units),
+  };
+}
 
 /**
  * Pure calculation of nationwide subsidy statistics from an EVSubsidyDataset.
@@ -1700,26 +1754,22 @@ export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> |
   const announced = parseFiniteNonNegNumber(summary?.total_announced_units);
   const applied = parseFiniteNonNegNumber(summary?.total_applied_units);
   const delivered = parseFiniteNonNegNumber(summary?.total_delivered_units);
-  const remaining = typeof summary?.total_remaining_units === 'number' && Number.isFinite(summary.total_remaining_units) && summary.total_remaining_units >= 0
-    ? summary.total_remaining_units
-    : calculateRemainingUnits(applied, announced);
+  const remaining =
+    safeFiniteNonNeg(summary?.total_remaining_units) ??
+    calculateRemainingUnits(applied, announced);
 
-  const depletionRate = typeof summary?.nationwide_depletion_rate === 'number' && Number.isFinite(summary.nationwide_depletion_rate) && summary.nationwide_depletion_rate >= 0
-    ? summary.nationwide_depletion_rate
-    : calculateDepletionRate(applied, announced);
+  const depletionRate =
+    safeFiniteNonNeg(summary?.nationwide_depletion_rate) ??
+    calculateDepletionRate(applied, announced);
 
   const deliveryRate = calculateDeliveryRate(delivered, announced);
 
-  let budgetTotal = typeof summary?.total_budget_billion_krw === 'number' && Number.isFinite(summary.total_budget_billion_krw) && summary.total_budget_billion_krw >= 0
-    ? summary.total_budget_billion_krw
-    : 0;
+  let budgetTotal = safeFiniteNonNeg(summary?.total_budget_billion_krw) ?? 0;
   if (budgetTotal === 0 && typeof summary?.total_budget_krw === 'number' && Number.isFinite(summary.total_budget_krw) && summary.total_budget_krw > 0) {
     budgetTotal = Math.round((summary.total_budget_krw / 1_000_000_000) * 10) / 10;
   }
 
-  let budgetDisbursed = typeof summary?.disbursed_budget_billion_krw === 'number' && Number.isFinite(summary.disbursed_budget_billion_krw) && summary.disbursed_budget_billion_krw >= 0
-    ? summary.disbursed_budget_billion_krw
-    : 0;
+  let budgetDisbursed = safeFiniteNonNeg(summary?.disbursed_budget_billion_krw) ?? 0;
   if (budgetDisbursed === 0 && typeof summary?.disbursed_budget_krw === 'number' && Number.isFinite(summary.disbursed_budget_krw) && summary.disbursed_budget_krw > 0) {
     budgetDisbursed = Math.round((summary.disbursed_budget_krw / 1_000_000_000) * 10) / 10;
   }
@@ -1743,12 +1793,12 @@ export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> |
     for (const r of regions) {
       if (!isPlainObject(r)) continue;
       const passengerCat = getSafeCategory(r.categories, 'passenger');
-      const rate = typeof r.overall_depletion_rate === 'number' && Number.isFinite(r.overall_depletion_rate) && r.overall_depletion_rate >= 0
-        ? r.overall_depletion_rate
-        : calculateDepletionRate(passengerCat?.applied_units, passengerCat?.announced_units);
-      const rem = typeof passengerCat?.remaining_units === 'number' && Number.isFinite(passengerCat.remaining_units) && passengerCat.remaining_units >= 0
-        ? passengerCat.remaining_units
-        : calculateRemainingUnits(passengerCat?.applied_units, passengerCat?.announced_units);
+      const rate =
+        safeFiniteNonNeg(r.overall_depletion_rate) ??
+        calculateDepletionRate(passengerCat?.applied_units, passengerCat?.announced_units);
+      const rem =
+        safeFiniteNonNeg(passengerCat?.remaining_units) ??
+        calculateRemainingUnits(passengerCat?.applied_units, passengerCat?.announced_units);
 
       if (rate >= 100.0) {
         depletedCount++;
@@ -1811,36 +1861,9 @@ export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> |
     cautionRegionsCount: cautionCount,
     healthyRegionsCount: healthyCount,
     categoryBreakdown: {
-      passenger: {
-        announced: parseFiniteNonNegNumber(passengerCat?.announced_units),
-        applied: parseFiniteNonNegNumber(passengerCat?.applied_units),
-        remaining: typeof passengerCat?.remaining_units === 'number' && Number.isFinite(passengerCat.remaining_units) && passengerCat.remaining_units >= 0
-          ? passengerCat.remaining_units
-          : calculateRemainingUnits(passengerCat?.applied_units, passengerCat?.announced_units),
-        rate: typeof passengerCat?.depletion_rate === 'number' && Number.isFinite(passengerCat.depletion_rate) && passengerCat.depletion_rate >= 0
-          ? passengerCat.depletion_rate
-          : calculateDepletionRate(passengerCat?.applied_units, passengerCat?.announced_units),
-      },
-      commercial: {
-        announced: parseFiniteNonNegNumber(commercialCat?.announced_units),
-        applied: parseFiniteNonNegNumber(commercialCat?.applied_units),
-        remaining: typeof commercialCat?.remaining_units === 'number' && Number.isFinite(commercialCat.remaining_units) && commercialCat.remaining_units >= 0
-          ? commercialCat.remaining_units
-          : calculateRemainingUnits(commercialCat?.applied_units, commercialCat?.announced_units),
-        rate: typeof commercialCat?.depletion_rate === 'number' && Number.isFinite(commercialCat.depletion_rate) && commercialCat.depletion_rate >= 0
-          ? commercialCat.depletion_rate
-          : calculateDepletionRate(commercialCat?.applied_units, commercialCat?.announced_units),
-      },
-      bus: {
-        announced: parseFiniteNonNegNumber(busCat?.announced_units),
-        applied: parseFiniteNonNegNumber(busCat?.applied_units),
-        remaining: typeof busCat?.remaining_units === 'number' && Number.isFinite(busCat.remaining_units) && busCat.remaining_units >= 0
-          ? busCat.remaining_units
-          : calculateRemainingUnits(busCat?.applied_units, busCat?.announced_units),
-        rate: typeof busCat?.depletion_rate === 'number' && Number.isFinite(busCat.depletion_rate) && busCat.depletion_rate >= 0
-          ? busCat.depletion_rate
-          : calculateDepletionRate(busCat?.applied_units, busCat?.announced_units),
-      },
+      passenger: buildCategoryBreakdown(passengerCat),
+      commercial: buildCategoryBreakdown(commercialCat),
+      bus: buildCategoryBreakdown(busCat),
     },
     // Compatibility Shorthand Aliases
     announced,

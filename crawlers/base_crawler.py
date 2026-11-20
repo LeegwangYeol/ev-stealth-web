@@ -12,6 +12,7 @@ import logging
 import math
 import os
 import re
+import threading
 import urllib.parse
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
@@ -39,8 +40,23 @@ def _sanitize_referer(referer: Optional[str]) -> Optional[str]:
     return cleaned or None
 
 
+def _has_unsafe_authority(parsed: urllib.parse.SplitResult) -> bool:
+    """Reject userinfo (@) and backslashes in URL authority to prevent SSRF parser confusion."""
+    if parsed.username is not None or parsed.password is not None:
+        return True
+    if "\\" in (parsed.netloc or ""):
+        return True
+    return False
+
+
 def _is_safe_client_url(client: Any, url: str) -> Tuple[bool, str]:
     """Validate URL safety against SSRF, respecting real bool/set overrides on client."""
+    try:
+        parsed = urllib.parse.urlsplit(url)
+    except ValueError as e:
+        return False, f"Invalid URL syntax: {e}"
+    if _has_unsafe_authority(parsed):
+        return False, "SSRF blocked: Unsafe authority (userinfo or backslash) in URL"
     raw_allow = getattr(client, "allow_private_ips", False) if client is not None else False
     allow_private = raw_allow if isinstance(raw_allow, bool) else False
     raw_ports = getattr(client, "allowed_ports", None) if client is not None else None
@@ -56,11 +72,41 @@ def _positive_float(value: Any, default: float) -> float:
         return default
     try:
         num = float(value)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         return default
     if not math.isfinite(num) or num <= 0:
         return default
     return num
+
+
+def _normalize_limit(limit: Any) -> Optional[int]:
+    """Normalize an optional crawl limit into None or a non-negative integer."""
+    if limit is None:
+        return None
+    if isinstance(limit, bool):
+        return 0 if not limit else None
+    try:
+        num = float(limit)
+    except (ValueError, TypeError, OverflowError):
+        return 0
+    if not math.isfinite(num):
+        return None if num > 0 else 0
+    if num <= 0:
+        return 0
+    return int(num)
+
+
+def _normalize_pages(pages: Any, default: int = 1) -> int:
+    """Normalize a page count into an integer >= 1."""
+    if pages is None or isinstance(pages, bool):
+        return default
+    try:
+        num = float(pages)
+    except (ValueError, TypeError, OverflowError):
+        return default
+    if not math.isfinite(num) or num < 1:
+        return default
+    return max(1, int(num))
 
 
 class BaseCrawler(abc.ABC):
@@ -84,6 +130,7 @@ class BaseCrawler(abc.ABC):
         self.enable_cache = enable_cache
         self.cache_fallback = cache_fallback
         self._post_cache: Dict[str, Dict[str, Any]] = {}
+        self._cache_lock = threading.RLock()
 
         # Resolve explicit connect and read timeouts
         if connect_timeout is not None:
@@ -138,15 +185,116 @@ class BaseCrawler(abc.ABC):
         """Read timeout in seconds."""
         return self._read_timeout
 
+    def _normalize_fetch_url(
+        self,
+        raw_url: str,
+        base_url: Optional[str] = None,
+    ) -> Optional[str]:
+        """Normalize relative/entity-encoded URLs and reject malformed or unsafe authority syntax."""
+        if not raw_url or not isinstance(raw_url, str) or not raw_url.strip():
+            return None
+        eff_url = _unescape_url_entities(raw_url.strip())
+        if not eff_url or any(ord(c) < 32 or ord(c) == 127 for c in eff_url):
+            return None
+        try:
+            parsed_input = urllib.parse.urlsplit(eff_url)
+        except ValueError:
+            return None
+        if parsed_input.scheme:
+            if parsed_input.scheme.lower() not in ("http", "https"):
+                return None
+            if not eff_url.lower().startswith(("http://", "https://")):
+                return None
+
+        eff_base = base_url if isinstance(base_url, str) and base_url.strip() else self.base_url
+        if eff_url.startswith("//"):
+            base_scheme = "https"
+            if isinstance(eff_base, str) and eff_base.strip():
+                try:
+                    base_scheme = urllib.parse.urlsplit(eff_base.strip()).scheme or "https"
+                except ValueError:
+                    base_scheme = "https"
+            if base_scheme.lower() not in ("http", "https"):
+                base_scheme = "https"
+            eff_url = f"{base_scheme}:{eff_url}"
+        elif not eff_url.lower().startswith(("http://", "https://")):
+            if eff_base and isinstance(eff_base, str):
+                base_clean = eff_base.strip().rstrip("/")
+                path_clean = eff_url.lstrip("/")
+                eff_url = f"{base_clean}/{path_clean}"
+
+        try:
+            parsed_out = urllib.parse.urlsplit(eff_url)
+        except ValueError:
+            return None
+        if _has_unsafe_authority(parsed_out):
+            return None
+        return eff_url
+
+    def _resolve_timeout_arg(
+        self,
+        timeout: Any = None,
+        connect_timeout: Any = None,
+        read_timeout: Any = None,
+    ) -> Tuple[float, float]:
+        """Normalize timeout arguments into a positive finite (connect_timeout, read_timeout) tuple."""
+        def_conn = getattr(self, "connect_timeout", 5.0)
+        def_read = getattr(self, "read_timeout", 15.0)
+        if timeout is None:
+            return (
+                _positive_float(connect_timeout, def_conn),
+                _positive_float(read_timeout, def_read),
+            )
+        if isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
+            return (
+                _positive_float(connect_timeout if connect_timeout is not None else timeout[0], def_conn),
+                _positive_float(read_timeout if read_timeout is not None else timeout[1], def_read),
+            )
+        scalar = _positive_float(timeout, -1.0)
+        if scalar > 0:
+            return (
+                _positive_float(connect_timeout, min(def_conn, scalar)),
+                _positive_float(read_timeout, scalar),
+            )
+        return (
+            _positive_float(connect_timeout, def_conn),
+            _positive_float(read_timeout, def_read),
+        )
+
+    def _store_cached_post(self, post_url: str, detail: Dict[str, Any]) -> None:
+        """Store parsed post detail in bounded in-memory cache when caching is enabled."""
+        if not self.enable_cache or not post_url or not isinstance(detail, dict):
+            return
+        with self._cache_lock:
+            if post_url not in self._post_cache and len(self._post_cache) >= MAX_POST_CACHE_SIZE:
+                oldest_key = next(iter(self._post_cache))
+                del self._post_cache[oldest_key]
+            self._post_cache[post_url] = detail
+
+    def _fallback_cached_post(self, post_url: str) -> Optional[Dict[str, Any]]:
+        """Retrieve cached post detail for fallback when cache_fallback is enabled."""
+        if not self.cache_fallback or not post_url:
+            return None
+        with self._cache_lock:
+            return self._post_cache.get(post_url)
+
     def get_cached_post(self, post_url: str) -> Optional[Dict[str, Any]]:
         """Retrieve cached post detail if present."""
         if not post_url or not isinstance(post_url, str):
             return None
-        return self._post_cache.get(post_url.strip())
+        raw_key = post_url.strip()
+        with self._cache_lock:
+            if raw_key in self._post_cache:
+                return self._post_cache[raw_key]
+            norm_key = self._normalize_fetch_url(raw_key)
+            if norm_key and norm_key in self._post_cache:
+                return self._post_cache[norm_key]
+        return None
 
     def clear_post_cache(self) -> None:
         """Clear cached post details."""
-        self._post_cache.clear()
+        with self._cache_lock:
+            self._post_cache.clear()
 
     @property
     def is_warmed_up(self) -> bool:
@@ -222,7 +370,8 @@ class BaseCrawler(abc.ABC):
         limit: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """Load fallback records from seed datasets in data/ if live crawl is unavailable."""
-        if limit is not None and limit <= 0:
+        eff_limit = _normalize_limit(limit)
+        if eff_limit is not None and eff_limit <= 0:
             return []
         seed_posts: List[Dict[str, Any]] = []
         target_platform = (platform_name or getattr(self, "platform", "") or "").lower().strip()
@@ -247,7 +396,7 @@ class BaseCrawler(abc.ABC):
                 s_file = s_dir / s_name
                 if s_file.is_file():
                     try:
-                        with open(s_file, "r", encoding="utf-8") as f:
+                        with open(s_file, "r", encoding="utf-8-sig") as f:
                             data = json.load(f)
                         if isinstance(data, list):
                             for item in data:
@@ -255,7 +404,10 @@ class BaseCrawler(abc.ABC):
                                     item_plat = str(item.get("platform") or "").lower()
                                     if target_platform and item_plat and item_plat != target_platform:
                                         continue
-                                    pid = str(item.get("id") or item.get("post_id") or "")
+                                    raw_id = item.get("id")
+                                    if raw_id is None or raw_id == "":
+                                        raw_id = item.get("post_id")
+                                    pid = str(raw_id) if raw_id is not None and raw_id != "" else ""
                                     if pid and pid in seen_ids:
                                         continue
                                     if pid:
@@ -268,13 +420,13 @@ class BaseCrawler(abc.ABC):
                                     if "raw_quote" in norm_item and "content" not in norm_item:
                                         norm_item["content"] = norm_item["raw_quote"]
                                     seed_posts.append(norm_item)
-                                    if limit is not None and len(seed_posts) >= limit:
+                                    if eff_limit is not None and len(seed_posts) >= eff_limit:
                                         return seed_posts
                     except Exception as e:
                         logger.debug(f"Failed reading seed file {s_file}: {e}")
             if seed_posts:
                 break
-        return seed_posts[:limit] if limit is not None else seed_posts
+        return seed_posts[:eff_limit] if eff_limit is not None else seed_posts
 
     def reset_session(self) -> None:
         """Alias for clear_session() to reinitialize session state."""
@@ -282,15 +434,18 @@ class BaseCrawler(abc.ABC):
 
     def close(self, force: bool = False) -> None:
         """Release HTTP client resources and close session."""
-        try:
-            self.clear_session()
-        except Exception:
-            pass
-        if (self._owns_client or force) and hasattr(self.client, "close"):
+        if self._owns_client or force:
             try:
-                self.client.close()
-            except Exception as e:
-                logger.warning(f"Error closing HTTP client: {e}")
+                self.clear_session()
+            except Exception:
+                pass
+            if hasattr(self.client, "close"):
+                try:
+                    self.client.close()
+                except Exception as e:
+                    logger.warning(f"Error closing HTTP client: {e}")
+        else:
+            self._warmed_up = False
 
     def __del__(self) -> None:
         """Safely release underlying client resources on garbage collection if owned."""
@@ -357,31 +512,11 @@ class BaseCrawler(abc.ABC):
         Includes safe try...except handling around parse_post_detail() so that
         corrupt HTML, broken DOMs, or unexpected markup do not crash the scrape loop.
         """
-        if not post_url or not isinstance(post_url, str) or not post_url.strip():
-            logger.warning(f"Invalid post_url provided to fetch_post: {post_url!r}")
-            return None
-
-        eff_url = _unescape_url_entities(post_url.strip())
-        if not eff_url or any(ord(c) < 32 or ord(c) == 127 for c in eff_url):
-            logger.warning(f"Unsafe control characters in post_url: {post_url!r}")
-            return None
-
-        parsed_input = urllib.parse.urlsplit(eff_url)
-        if parsed_input.scheme and parsed_input.scheme.lower() not in ("http", "https"):
-            logger.warning(f"Disallowed URL scheme in fetch_post: {post_url!r}")
-            return None
-
         base_url = kwargs.get("base_url") or self.base_url
-        if eff_url.startswith("//"):
-            base_scheme = "https"
-            if isinstance(base_url, str) and base_url.strip():
-                base_scheme = urllib.parse.urlsplit(base_url.strip()).scheme or "https"
-            eff_url = f"{base_scheme}:{eff_url}"
-        elif not eff_url.lower().startswith(("http://", "https://")):
-            if base_url and isinstance(base_url, str):
-                base_clean = base_url.rstrip("/")
-                path_clean = eff_url.lstrip("/")
-                eff_url = f"{base_clean}/{path_clean}"
+        eff_url = self._normalize_fetch_url(post_url, base_url=base_url if isinstance(base_url, str) else None)
+        if not eff_url:
+            logger.warning(f"Invalid or unsafe post_url provided to fetch_post: {post_url!r}")
+            return None
 
         is_safe, reason = _is_safe_client_url(self.client, eff_url)
         if not is_safe:
@@ -394,39 +529,39 @@ class BaseCrawler(abc.ABC):
         self.ensure_warm_up(base_url)
 
         eff_referer = _sanitize_referer(referer)
-        timeout = kwargs.get("timeout")
-        if timeout is None:
-            timeout = (
-                _positive_float(kwargs.get("connect_timeout"), getattr(self, "connect_timeout", 5.0)),
-                _positive_float(kwargs.get("read_timeout"), getattr(self, "read_timeout", 15.0)),
-            )
+        timeout = self._resolve_timeout_arg(
+            kwargs.get("timeout"),
+            kwargs.get("connect_timeout"),
+            kwargs.get("read_timeout"),
+        )
         try:
             resp = self.client.get(eff_url, referer=eff_referer, timeout=timeout)
             if not resp or not isinstance(resp, (tuple, list)) or len(resp) < 2:
                 logger.warning(f"Failed to fetch post: {eff_url} (empty or invalid response)")
-                if self.cache_fallback and eff_url in self._post_cache:
+                cached = self._fallback_cached_post(eff_url)
+                if cached is not None:
                     logger.warning(f"Falling back to cached post detail for {eff_url}")
-                    return self._post_cache[eff_url]
+                    return cached
                 return None
             status, text = resp[0], resp[1]
         except Exception as e:
             logger.warning(f"Network error fetching post {eff_url}: {e}")
-            if self.cache_fallback and eff_url in self._post_cache:
+            cached = self._fallback_cached_post(eff_url)
+            if cached is not None:
                 logger.warning(f"Falling back to cached post detail for {eff_url}")
-                return self._post_cache[eff_url]
+                return cached
             return None
 
         if status == 429:
             logger.warning(f"Rate-limited (HTTP 429) fetching post {eff_url}. Degrading gracefully.")
-            if self.cache_fallback and eff_url in self._post_cache:
-                return self._post_cache[eff_url]
-            return None
+            return self._fallback_cached_post(eff_url)
 
         if status != 200 or not text:
             logger.warning(f"Failed to fetch post: {eff_url} (status: {status})")
-            if self.cache_fallback and eff_url in self._post_cache:
+            cached = self._fallback_cached_post(eff_url)
+            if cached is not None:
                 logger.warning(f"Falling back to cached post detail for {eff_url}")
-                return self._post_cache[eff_url]
+                return cached
             return None
 
         try:
@@ -450,17 +585,10 @@ class BaseCrawler(abc.ABC):
                 )
             ):
                 return None
-            if self.enable_cache:
-                if eff_url not in self._post_cache and len(self._post_cache) >= MAX_POST_CACHE_SIZE:
-                    # Evict oldest entry to keep in-memory cache bounded
-                    oldest_key = next(iter(self._post_cache))
-                    del self._post_cache[oldest_key]
-                self._post_cache[eff_url] = detail
+            self._store_cached_post(eff_url, detail)
             return detail
         except Exception as e:
             logger.warning(
                 f"Error parsing post detail for {eff_url} on corrupt HTML: {e}"
             )
-            if self.cache_fallback and eff_url in self._post_cache:
-                return self._post_cache[eff_url]
-            return None
+            return self._fallback_cached_post(eff_url)

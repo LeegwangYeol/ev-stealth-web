@@ -92,11 +92,18 @@ DEFAULT_FALLBACK_USER_AGENT: str = (
 
 _NAT64_WELL_KNOWN_PREFIX = ipaddress.IPv6Network("64:ff9b::/96")
 _NAT64_LOCAL_PREFIX = ipaddress.IPv6Network("64:ff9b:1::/48")
+_CGNAT_PREFIX = ipaddress.IPv4Network("100.64.0.0/10")
+_ORCHID_V2_PREFIX = ipaddress.IPv6Network("2001:20::/28")
+_SRV6_SID_PREFIX = ipaddress.IPv6Network("5f00::/16")
+_IPV4_TRANSLATED_PREFIX = ipaddress.IPv6Network("::ffff:0:0/96")
+_IPV4_COMPAT_PREFIX = ipaddress.IPv6Network("::/96")
 _RE_URL_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 
 
 def is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
     """Check if an IP address is publicly routable and safe from SSRF."""
+    if getattr(ip, "scope_id", None):
+        return False
     if (
         not ip.is_global
         or ip.is_loopback
@@ -105,10 +112,16 @@ def is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
         or ip.is_multicast
         or ip.is_reserved
         or ip.is_unspecified
+        or getattr(ip, "is_site_local", False)
     ):
         return False
-    # Check IPv4-mapped IPv6 addresses (e.g. ::ffff:127.0.0.1 or ::ffff:169.254.169.254)
+    if isinstance(ip, ipaddress.IPv4Address):
+        if ip in _CGNAT_PREFIX:
+            return False
+    # Check IPv4-mapped / translated / transition IPv6 addresses
     if isinstance(ip, ipaddress.IPv6Address):
+        if ip in _ORCHID_V2_PREFIX or ip in _SRV6_SID_PREFIX:
+            return False
         if ip.ipv4_mapped and not is_safe_ip(ip.ipv4_mapped):
             return False
         if ip.sixtofour and not is_safe_ip(ip.sixtofour):
@@ -117,8 +130,14 @@ def is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
             for teredo_ip in ip.teredo:
                 if not is_safe_ip(teredo_ip):
                     return False
-        # NAT64 prefixes embed IPv4 in the lowest 32 bits
-        if ip in _NAT64_WELL_KNOWN_PREFIX or ip in _NAT64_LOCAL_PREFIX:
+        # NAT64, IPv4-translated (SIIT), IPv4-compatible, and ISATAP embed IPv4 in the lowest 32 bits
+        if (
+            ip in _NAT64_WELL_KNOWN_PREFIX
+            or ip in _NAT64_LOCAL_PREFIX
+            or ip in _IPV4_TRANSLATED_PREFIX
+            or ip in _IPV4_COMPAT_PREFIX
+            or ((int(ip) >> 32) & 0xFFFFFFFF) in (0x00005EFE, 0x02005EFE)
+        ):
             embedded_v4 = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
             if not is_safe_ip(embedded_v4):
                 return False
@@ -157,6 +176,9 @@ def is_safe_url(
     if scheme not in ("http", "https"):
         return False, f"Disallowed URL scheme: {scheme!r} (only http/https allowed)"
 
+    if "\\" in (parsed.netloc or ""):
+        return False, "SSRF blocked: Backslash in URL authority"
+
     # 2. Hostname extraction
     hostname = parsed.hostname
     if not hostname:
@@ -168,6 +190,9 @@ def is_safe_url(
 
     if allow_private_ips:
         return True, "Private IPs allowed by configuration"
+
+    if "%" in host_lower:
+        return False, "SSRF blocked: IPv6 zone ID not allowed"
 
     # 3. Check disallowed hostnames & suffixes
     if host_lower in DISALLOWED_HOSTS:
@@ -375,19 +400,70 @@ def _resolve_timeouts(
     return eff_conn, eff_read
 
 
+def _create_safe_connection(
+    address: Tuple[str, int],
+    timeout: float,
+    source_address: Optional[Tuple[str, int]] = None,
+    allow_private_ips: bool = True,
+) -> socket.socket:
+    """Create TCP socket with optional SSRF IP validation on resolved addresses."""
+    if allow_private_ips:
+        return socket.create_connection(address, timeout, source_address)
+    host, port = address
+    addr_list = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
+    for _, _, _, _, sockaddr in addr_list:
+        ip_str = sockaddr[0]
+        try:
+            resolved_ip = ipaddress.ip_address(ip_str)
+        except ValueError as exc:
+            raise OSError(f"SSRF blocked: Invalid resolved IP {ip_str!r}") from exc
+        if not is_safe_ip(resolved_ip):
+            raise OSError(f"SSRF blocked: Domain '{host}' resolved to unsafe IP {resolved_ip}")
+    err: Optional[OSError] = None
+    for af, socktype, proto, _, sa in addr_list:
+        sock: Optional[socket.socket] = None
+        try:
+            sock = socket.socket(af, socktype, proto)
+            if timeout is not None:
+                sock.settimeout(timeout)
+            if source_address:
+                sock.bind(source_address)
+            sock.connect(sa)
+            return sock
+        except OSError as exc:
+            err = exc
+            if sock is not None:
+                try:
+                    sock.close()
+                except OSError:
+                    pass
+    if err is not None:
+        raise err
+    raise OSError(f"getaddrinfo returns an empty list for {host}:{port}")
+
+
 class ResilientHTTPConnection(http.client.HTTPConnection):
     """HTTPConnection supporting explicit separate connect and read timeouts."""
 
-    def __init__(self, *args, connect_timeout: float = 5.0, read_timeout: float = 15.0, **kwargs):
+    def __init__(
+        self,
+        *args,
+        connect_timeout: float = 5.0,
+        read_timeout: float = 15.0,
+        allow_private_ips: bool = True,
+        **kwargs,
+    ):
         self._conn_timeout = _normalize_timeout(connect_timeout, 5.0)
         self._read_timeout = _normalize_timeout(read_timeout, 15.0)
+        self._allow_private_ips = bool(allow_private_ips)
         super().__init__(*args, **kwargs)
 
     def connect(self):
-        self.sock = socket.create_connection(
+        self.sock = _create_safe_connection(
             (self.host, self.port),
             self._conn_timeout,
             self.source_address,
+            allow_private_ips=self._allow_private_ips,
         )
         if self._read_timeout is not None:
             self.sock.settimeout(self._read_timeout)
@@ -396,16 +472,25 @@ class ResilientHTTPConnection(http.client.HTTPConnection):
 class ResilientHTTPSConnection(http.client.HTTPSConnection):
     """HTTPSConnection supporting explicit separate connect and read timeouts."""
 
-    def __init__(self, *args, connect_timeout: float = 5.0, read_timeout: float = 15.0, **kwargs):
+    def __init__(
+        self,
+        *args,
+        connect_timeout: float = 5.0,
+        read_timeout: float = 15.0,
+        allow_private_ips: bool = True,
+        **kwargs,
+    ):
         self._conn_timeout = _normalize_timeout(connect_timeout, 5.0)
         self._read_timeout = _normalize_timeout(read_timeout, 15.0)
+        self._allow_private_ips = bool(allow_private_ips)
         super().__init__(*args, **kwargs)
 
     def connect(self):
-        self.sock = socket.create_connection(
+        self.sock = _create_safe_connection(
             (self.host, self.port),
             self._conn_timeout,
             self.source_address,
+            allow_private_ips=self._allow_private_ips and not self._tunnel_host,
         )
         if self._read_timeout is not None:
             self.sock.settimeout(self._read_timeout)
@@ -450,20 +535,29 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
 class ResilientHTTPHandler(urllib.request.HTTPHandler):
     """HTTP handler injecting ResilientHTTPConnection with explicit timeouts."""
 
-    def __init__(self, connect_timeout: float = 5.0, read_timeout: float = 15.0, **kwargs):
+    def __init__(
+        self,
+        connect_timeout: float = 5.0,
+        read_timeout: float = 15.0,
+        allow_private_ips: bool = True,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self._connect_timeout = _normalize_timeout(connect_timeout, 5.0)
         self._read_timeout = _normalize_timeout(read_timeout, 15.0)
+        self._allow_private_ips = bool(allow_private_ips)
 
     def http_open(self, req):
         conn_to = getattr(req, "_connect_timeout", self._connect_timeout)
         read_to = getattr(req, "_read_timeout", self._read_timeout)
+        allow_priv = self._allow_private_ips
 
         def _factory(host, **kwargs):
             return ResilientHTTPConnection(
                 host,
                 connect_timeout=conn_to,
                 read_timeout=read_to,
+                allow_private_ips=allow_priv,
                 **kwargs,
             )
         return self.do_open(_factory, req)
@@ -472,14 +566,23 @@ class ResilientHTTPHandler(urllib.request.HTTPHandler):
 class ResilientHTTPSHandler(urllib.request.HTTPSHandler):
     """HTTPS handler injecting ResilientHTTPSConnection with explicit timeouts."""
 
-    def __init__(self, connect_timeout: float = 5.0, read_timeout: float = 15.0, context=None, **kwargs):
+    def __init__(
+        self,
+        connect_timeout: float = 5.0,
+        read_timeout: float = 15.0,
+        context=None,
+        allow_private_ips: bool = True,
+        **kwargs,
+    ):
         super().__init__(context=context, **kwargs)
         self._connect_timeout = _normalize_timeout(connect_timeout, 5.0)
         self._read_timeout = _normalize_timeout(read_timeout, 15.0)
+        self._allow_private_ips = bool(allow_private_ips)
 
     def https_open(self, req):
         conn_to = getattr(req, "_connect_timeout", self._connect_timeout)
         read_to = getattr(req, "_read_timeout", self._read_timeout)
+        allow_priv = self._allow_private_ips
 
         def _factory(host, **kwargs):
             ctx = getattr(self, "_context", None)
@@ -491,6 +594,7 @@ class ResilientHTTPSHandler(urllib.request.HTTPSHandler):
                 host,
                 connect_timeout=conn_to,
                 read_timeout=read_to,
+                allow_private_ips=allow_priv,
                 **kwargs,
             )
         return self.do_open(_factory, req)
@@ -892,15 +996,18 @@ class SafeHttpClient:
                     connect_timeout=self._connect_timeout,
                     read_timeout=self._read_timeout,
                     context=ssl_ctx,
+                    allow_private_ips=self.allow_private_ips,
                 )
             else:
                 https_handler = ResilientHTTPSHandler(
                     connect_timeout=self._connect_timeout,
                     read_timeout=self._read_timeout,
+                    allow_private_ips=self.allow_private_ips,
                 )
             http_handler = ResilientHTTPHandler(
                 connect_timeout=self._connect_timeout,
                 read_timeout=self._read_timeout,
+                allow_private_ips=self.allow_private_ips,
             )
             self.opener = urllib.request.build_opener(
                 cookie_processor, redirect_handler, http_handler, https_handler
@@ -1362,6 +1469,8 @@ class SafeHttpClient:
                         self.circuit_breaker.record_success(norm_url)
                         if is_cacheable_method and status_code == 200 and decoded_text:
                             self.set_cached_response(norm_url, status_code, decoded_text, raw_bytes)
+                    elif is_half_open_probe and status_code >= 400:
+                        self.circuit_breaker.record_failure(norm_url, status_code=status_code)
 
                     return status_code, decoded_text, raw_bytes
                 finally:

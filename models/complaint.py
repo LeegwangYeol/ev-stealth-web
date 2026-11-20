@@ -108,18 +108,19 @@ def normalize_severity(severity: Any, severity_index: Any = None, default: str =
             return "MEDIUM"
         if s in ("INFO", "INFORMATIONAL", "NEGLIGIBLE", "LOW"):
             return "LOW"
-    try:
-        val = float(severity_index)
-        if not (math.isnan(val) or math.isinf(val)):
-            if val >= 8.0:
-                return "CRITICAL"
-            if val >= 6.0:
-                return "HIGH"
-            if val >= 4.0:
-                return "MEDIUM"
-            return "LOW"
-    except (ValueError, TypeError, OverflowError):
-        pass
+    if severity_index is not None and not isinstance(severity_index, bool):
+        try:
+            val = float(severity_index)
+            if not (math.isnan(val) or math.isinf(val)):
+                if val >= 8.0:
+                    return "CRITICAL"
+                if val >= 6.0:
+                    return "HIGH"
+                if val >= 4.0:
+                    return "MEDIUM"
+                return "LOW"
+        except (ValueError, TypeError, OverflowError):
+            pass
     return default
 
 
@@ -153,8 +154,8 @@ def normalize_category(category: Any, default: str = "BUILD_QUALITY") -> str:
 
 
 def _safe_round(val: Any, decimals: int = 4, default: float = 0.0) -> float:
-    """Safely round numeric value, catching None, NaN, Inf, and non-numeric inputs."""
-    if val is None:
+    """Safely round numeric value, catching None, bool, NaN, Inf, and non-numeric inputs."""
+    if val is None or isinstance(val, bool):
         return default
     try:
         f = float(val)
@@ -166,8 +167,8 @@ def _safe_round(val: Any, decimals: int = 4, default: float = 0.0) -> float:
 
 
 def _safe_int(val: Any, default: int = 0) -> int:
-    """Safely convert value to int, catching None, NaN, Inf, and non-numeric inputs."""
-    if val is None:
+    """Safely convert value to int, catching None, bool, NaN, Inf, and non-numeric inputs."""
+    if val is None or isinstance(val, bool):
         return default
     try:
         f = float(val)
@@ -179,8 +180,8 @@ def _safe_int(val: Any, default: int = 0) -> int:
 
 
 def _safe_float(val: Any, default: float = 0.0) -> float:
-    """Safely convert value to float, catching None, NaN, Inf, and non-numeric inputs."""
-    if val is None:
+    """Safely convert value to float, catching None, bool, NaN, Inf, and non-numeric inputs."""
+    if val is None or isinstance(val, bool):
         return default
     try:
         f = float(val)
@@ -677,6 +678,10 @@ def validate_report_entry(entry: Any, strict: bool = False) -> Tuple[bool, str]:
     ):
         v = _get(num_key)
         if v is not None:
+            if isinstance(v, bool):
+                if strict:
+                    return False, f"Non-numeric bool value for numeric field '{num_key}'"
+                continue
             try:
                 fv = float(v)
                 if math.isnan(fv) or math.isinf(fv):
@@ -748,6 +753,10 @@ class ComplaintRecord:
         """Sanitize default factory values, ensure copy resilience, clean corrupted chars, and clamp sentiment bounds."""
         if self.slang_terms_detected is None:
             self.slang_terms_detected = []
+        elif isinstance(self.slang_terms_detected, str):
+            self.slang_terms_detected = [
+                sanitize_string(s, 256) for s in self.slang_terms_detected.split(",") if s.strip()
+            ]
         elif not isinstance(self.slang_terms_detected, list):
             self.slang_terms_detected = [sanitize_string(s, 256) for s in self.slang_terms_detected if s is not None]
         else:
@@ -1226,7 +1235,12 @@ class ComplaintRecord:
 
         # 15. is_authentic_defect
         raw_auth = _get("is_authentic_defect")
-        is_auth = bool(raw_auth) if raw_auth is not None else True
+        if raw_auth is None:
+            is_auth = True
+        elif isinstance(raw_auth, str):
+            is_auth = raw_auth.strip().lower() not in ("false", "0", "no", "n", "")
+        else:
+            is_auth = bool(raw_auth)
 
         # 16. dsi_breakdown: convert from dict or pass through DSIBreakdown instance
         raw_dsi = _get("dsi_breakdown")

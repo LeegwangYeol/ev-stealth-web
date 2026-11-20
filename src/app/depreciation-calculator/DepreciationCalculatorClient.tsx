@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useRef, useDeferredValue, useCallback, memo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useDeferredValue, useCallback, memo } from 'react';
 import type {
   DepreciationDatabase,
   EvModelDepreciation,
@@ -781,6 +781,16 @@ export default function DepreciationCalculatorClient({
     return `${sign}${monthlyAvg.toLocaleString()}만 원 ${verdict}`;
   }, [tcoResult?.totalCumulativeSavingsKrw, safeYears]);
 
+  // Debounced live calculation announcement to prevent AT chatter during rapid slider scrubbing
+  const rawLiveSummary = `${selectedModel.brand_name_ko} ${selectedModel.model_name} ${holdingYears}년 보유 기준 예상 잔존 시세는 ${Math.round((depResult.estimatedResidualPriceKrw || 0) / 10000).toLocaleString()}만 원(잔존율 ${depResult.adjustedResidualPct}%), 배터리 잔여 수명은 ${safeSohPct.toFixed(1)}%, ${holdingYears}개년 누적 절감액은 ${(tcoResult.totalCumulativeSavingsKrw ?? 0) >= 0 ? '+' : ''}${Math.round((tcoResult.totalCumulativeSavingsKrw ?? 0) / 10000).toLocaleString()}만 원입니다.`;
+  const [liveSummaryAnnouncement, setLiveSummaryAnnouncement] = useState<string>(rawLiveSummary);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLiveSummaryAnnouncement(rawLiveSummary);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [rawLiveSummary]);
+
   // ----------------------------------------------------
   // 4. PRESET SCENARIO HANDLERS
   // ----------------------------------------------------
@@ -882,34 +892,34 @@ export default function DepreciationCalculatorClient({
             <button
               type="button"
               onClick={() => applyPreset('commute')}
-              className="px-3 py-1.5 min-h-[44px] flex items-center rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-              aria-label="🚗 출퇴근 표준 프리셋 (3년 보유, 연 1.5만 km, 급속 20%)"
+              className="px-3 py-1.5 min-h-[44px] flex items-center gap-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+              aria-label="출퇴근 표준 프리셋 (3년 보유, 연 1.5만 km, 급속 20%)"
             >
-              🚗 출퇴근 표준 (3년/1.5만 km)
+              <span aria-hidden="true">🚗</span> 출퇴근 표준 (3년/1.5만 km)
             </button>
             <button
               type="button"
               onClick={() => applyPreset('business')}
-              className="px-3 py-1.5 min-h-[44px] flex items-center rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-              aria-label="🚛 장거리 영업 프리셋 (4년 보유, 연 3.5만 km, 급속 65%)"
+              className="px-3 py-1.5 min-h-[44px] flex items-center gap-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+              aria-label="장거리 영업 프리셋 (4년 보유, 연 3.5만 km, 급속 65%)"
             >
-              🚛 장거리 영업 (4년/3.5만 km)
+              <span aria-hidden="true">🚛</span> 장거리 영업 (4년/3.5만 km)
             </button>
             <button
               type="button"
               onClick={() => applyPreset('leisure')}
-              className="px-3 py-1.5 min-h-[44px] flex items-center rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-              aria-label="🏖️ 주말 레저 프리셋 (2년 보유, 연 8,000 km, 급속 15%)"
+              className="px-3 py-1.5 min-h-[44px] flex items-center gap-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+              aria-label="주말 레저 프리셋 (2년 보유, 연 8,000 km, 급속 15%)"
             >
-              🏖️ 주말 레저 (2년/8,000 km)
+              <span aria-hidden="true">🏖️</span> 주말 레저 (2년/8,000 km)
             </button>
             <button
               type="button"
               onClick={() => applyPreset('earlySell')}
-              className="px-3 py-1.5 min-h-[44px] flex items-center rounded-lg text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-              aria-label="⚠️ 보조금 환수 점검 프리셋 (18개월 보유, 관외 이전)"
+              className="px-3 py-1.5 min-h-[44px] flex items-center gap-1 rounded-lg text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+              aria-label="보조금 환수 점검 프리셋 (18개월 보유, 관외 이전)"
             >
-              ⚠️ 보조금 환수 점검 (18개월 보유)
+              <span aria-hidden="true">⚠️</span> 보조금 환수 점검 (18개월 보유)
             </button>
           </div>
         </div>
@@ -968,7 +978,7 @@ export default function DepreciationCalculatorClient({
                 tabIndex={isSelected ? 0 : -1}
                 onKeyDown={(e) => handleBrandTabKeyDown(e, idx)}
                 onClick={() => setSelectedBrand(b.id)}
-                className={`px-3 py-1.5 min-h-[44px] flex items-center rounded-lg text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+                className={`px-3 py-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                   isSelected
                     ? 'bg-blue-600 text-white shadow-sm'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -1036,20 +1046,22 @@ export default function DepreciationCalculatorClient({
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-slate-50 px-3 min-h-[44px] rounded-lg border border-slate-200">
+            <label
+              htmlFor="winter-season-checkbox"
+              className="flex items-center gap-2.5 bg-slate-50 px-3 min-h-[44px] rounded-lg border border-slate-200 cursor-pointer text-xs font-semibold text-slate-700 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500 has-[:focus-visible]:ring-offset-2"
+            >
               <input
                 id="winter-season-checkbox"
                 type="checkbox"
                 checked={winterSeason}
                 onChange={(e) => setWinterSeason(e.target.checked)}
                 aria-describedby="winter-season-hint"
-                className="w-5 h-5 rounded text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 cursor-pointer"
-                aria-label="❄️ 혹한기(-5℃) 저온 페널티 반영"
+                className="w-5 h-5 rounded text-blue-600 focus:outline-none cursor-pointer shrink-0"
               />
-              <label htmlFor="winter-season-checkbox" className="text-xs font-semibold text-slate-700 cursor-pointer min-h-[44px] flex items-center py-2">
-                ❄️ 혹한기(-5℃) 저온 페널티 반영
-              </label>
-            </div>
+              <span className="flex items-center gap-1 py-2">
+                <span aria-hidden="true">❄️</span> 혹한기(-5℃) 저온 페널티 반영
+              </span>
+            </label>
             <span id="winter-season-hint" className="sr-only">
               혹한기(-5도) 저온 페널티 반영 시 겨울철 배터리 열화율 및 감가율이 추가 계산됩니다.
             </span>
@@ -1095,14 +1107,14 @@ export default function DepreciationCalculatorClient({
               <span>4년</span>
               <span>5년</span>
             </div>
-            <div role="group" aria-label="보유 기간 빠른 선택 (1년~5년)" className="flex gap-1 pt-1">
+            <div role="group" aria-label="보유 기간 빠른 선택 (1년~5년)" className="flex flex-wrap gap-1.5 pt-1">
               {[1, 2, 3, 4, 5].map((yr) => (
                 <button
                   key={yr}
                   type="button"
                   onClick={() => handleYearsChange(yr)}
                   aria-pressed={holdingYears === yr}
-                  className={`flex-1 py-1 min-h-[44px] flex items-center justify-center text-[11px] font-semibold rounded border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+                  className={`flex-1 min-w-[44px] py-1 min-h-[44px] flex items-center justify-center text-[11px] font-semibold rounded border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                     holdingYears === yr
                       ? 'bg-blue-600 text-white border-blue-600'
                       : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -1311,7 +1323,7 @@ export default function DepreciationCalculatorClient({
       >
         {/* Dynamic calculation live summary for screen readers */}
         <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-          {selectedModel.brand_name_ko} {selectedModel.model_name} {holdingYears}년 보유 기준 예상 잔존 시세는 {Math.round((depResult.estimatedResidualPriceKrw || 0) / 10000).toLocaleString()}만 원(잔존율 {depResult.adjustedResidualPct}%), 배터리 잔여 수명은 {safeSohPct.toFixed(1)}%, {holdingYears}개년 누적 절감액은 {(tcoResult.totalCumulativeSavingsKrw ?? 0) >= 0 ? '+' : ''}{Math.round((tcoResult.totalCumulativeSavingsKrw ?? 0) / 10000).toLocaleString()}만 원입니다.
+          {liveSummaryAnnouncement}
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
@@ -2136,7 +2148,7 @@ export default function DepreciationCalculatorClient({
                   />
                   <span id="national-subsidy-hint" className="sr-only">정부 국비 전기차 보조금 지원 금액(원)을 입력합니다.</span>
                   {hasNationalSubsidyError && (
-                    <span id="national-subsidy-error-msg" className="text-[10px] text-rose-400 font-semibold block mt-1" role="alert">
+                    <span id="national-subsidy-error-msg" className="text-[11px] text-rose-400 font-semibold block mt-1" role="alert">
                       {Number.isNaN(parsedNationalSubsidy) ? "숫자만 입력 가능" : (parsedNationalSubsidy ?? 0) < 0 ? "0원 이상 입력" : "최대 1억 원 제한"}
                     </span>
                   )}
@@ -2164,7 +2176,7 @@ export default function DepreciationCalculatorClient({
                   />
                   <span id="local-subsidy-hint" className="sr-only">지자체 지방비 전기차 보조금 지원 금액(원)을 입력합니다.</span>
                   {hasLocalSubsidyError && (
-                    <span id="local-subsidy-error-msg" className="text-[10px] text-rose-400 font-semibold block mt-1" role="alert">
+                    <span id="local-subsidy-error-msg" className="text-[11px] text-rose-400 font-semibold block mt-1" role="alert">
                       {Number.isNaN(parsedLocalSubsidy) ? "숫자만 입력 가능" : (parsedLocalSubsidy ?? 0) < 0 ? "0원 이상 입력" : "최대 1억 원 제한"}
                     </span>
                   )}
@@ -2195,9 +2207,14 @@ export default function DepreciationCalculatorClient({
 
         {/* 8-Tier Statutory Schedule Table */}
         <div className="pt-2">
-          <details className="text-xs text-slate-600 bg-slate-50 rounded-xl border border-slate-200 p-3">
+          <details className="group text-xs text-slate-600 bg-slate-50 rounded-xl border border-slate-200 p-3">
             <summary className="font-bold text-slate-800 cursor-pointer hover:text-blue-700 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded px-2 min-h-[44px] flex items-center">
-              📋 대기환경보전법 시행규칙 [별표 21의2] 8단계 의무운행 회수요율표 보기
+              <span className="flex items-center justify-between w-full gap-2">
+                <span className="flex items-center gap-1.5">
+                  <span aria-hidden="true">📋</span> 대기환경보전법 시행규칙 [별표 21의2] 8단계 의무운행 회수요율표 보기
+                </span>
+                <span aria-hidden="true" className="text-slate-600 transition-transform duration-200 group-open:rotate-180">▾</span>
+              </span>
             </summary>
             <div
               tabIndex={0}
@@ -2346,7 +2363,7 @@ export default function DepreciationCalculatorClient({
             <span className="text-lg sm:text-2xl font-black text-white block mt-1 break-keep">
               {tcoResult.totalCumulativeSavingsKrw >= 0 ? '+' : ''}
               {(Math.round(tcoResult.totalCumulativeSavingsKrw / 10000)).toLocaleString()}{' '}
-              <span className="text-xs font-semibold text-white/90">만 원</span>
+              <span className="text-xs font-semibold text-white">만 원</span>
             </span>
             <span className="text-[11px] text-white font-medium mt-1 block">
               월평균 {monthlySavingsFormatted}
@@ -2405,9 +2422,6 @@ export default function DepreciationCalculatorClient({
 
         {/* Net Resale Balance Callout */}
         <div
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
           className="bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
         >
           <div className="space-y-1">

@@ -12,8 +12,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
-# Setup project root
+# Setup project root on sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 DEFAULT_DATA_PATH = PROJECT_ROOT / "data" / "compiled_complaints.json"
 DEFAULT_SLANG_PATH = PROJECT_ROOT / "data" / "slang_dict.json"
 DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "CASEBOOK.md"
@@ -75,14 +77,15 @@ def build_slang_dictionary_section(slang_dict: Dict[str, Any]) -> str:
         "|---|---|---|---|---|",
     ]
 
-    for term, data in slang_dict.items():
-        if not isinstance(data, dict):
-            continue
-        category = str(data.get("category") or "")
-        meaning = str(data.get("meaning") or "").replace("\n", " ")
-        context = str(data.get("context") or "").replace("\n", " ")
-        example = str(data.get("example") or "").replace("\n", " ")
-        lines.append(f"| **{term}** | `{category}` | {meaning} | {context} | *\"{example}\"* |")
+    if isinstance(slang_dict, dict):
+        for term, data in slang_dict.items():
+            if not isinstance(data, dict):
+                continue
+            category = str(data.get("category") or "")
+            meaning = str(data.get("meaning") or "").replace("\n", " ")
+            context = str(data.get("context") or "").replace("\n", " ")
+            example = str(data.get("example") or "").replace("\n", " ")
+            lines.append(f"| **{term}** | `{category}` | {meaning} | {context} | *\"{example}\"* |")
 
     lines.extend([
         "",
@@ -118,7 +121,9 @@ def build_slang_dictionary_section(slang_dict: Dict[str, Any]) -> str:
 
 def build_case_studies_section(category_key: str, category_title: str, complaints: List[Dict[str, Any]]) -> str:
     """Generate a category section with 10 detailed cases."""
-    category_cases = [c for c in complaints if c.get("category") == category_key]
+    category_cases = [
+        c for c in (complaints or []) if isinstance(c, dict) and c.get("category") == category_key
+    ]
 
     category_intros = {
         "parking": """주차 환경에서 발생하는 문제들은 한국 특유의 고밀도 공동주택(아파트) 지하주차장 문화와 중국 전기차의 전장/기구 설계 간의 부조화에서 비롯됩니다. 지하주차장 화재 공포로 인한 입주민 간의 격렬한 배척, 공차중량 2톤 초과로 인한 기계식 주차타워 입고 거부, 어안렌즈 왜곡 보정 미흡에 따른 휠 긁힘, 그리고 N단 중립 이중주차 불가로 인한 출근길 갈등이 주를 이룹니다.""",
@@ -269,8 +274,10 @@ def build_source_index_section(complaints: List[Dict[str, Any]]) -> str:
 
 def build_casebook(data_path: Path, slang_path: Path, output_path: Path) -> None:
     """Compile and write CASEBOOK.md."""
-    complaints = load_json_file(data_path)
-    slang_dict = load_json_file(slang_path)
+    raw_complaints = load_json_file(data_path)
+    raw_slang_dict = load_json_file(slang_path)
+    complaints = raw_complaints if isinstance(raw_complaints, list) else []
+    slang_dict = raw_slang_dict if isinstance(raw_slang_dict, dict) else {}
 
     sections = [
         "# 중국 전기차(BYD 등) 실생활 결함 및 커뮤니티 민심 종합 사례집 (Casebook)",

@@ -14,11 +14,13 @@ import json
 import logging
 import re
 import urllib.parse
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from crawlers.base_crawler import (
     BaseCrawler,
     _is_safe_client_url,
+    _normalize_limit,
+    _normalize_pages,
     _positive_float,
     _sanitize_referer,
     _unescape_url_entities,
@@ -97,7 +99,7 @@ def extract_container_content(html_str: str, tag_name: str, class_name: str) -> 
     masked = RE_SCRIPT_STYLE.sub(_repl, masked)
 
     pattern = re.compile(
-        rf"<{tag_name}\b[^>]*class\s*=\s*[\"']?[^\"'>]*\b{re.escape(class_name)}\b[^\"'>]*[\"']?[^>]*>",
+        rf"<{tag_name}\b[^>]*class\s*=\s*(?:[\"'][^\"']*\b{re.escape(class_name)}\b[^\"']*[\"']|{re.escape(class_name)}(?=[\s>]))[^>]*>",
         re.IGNORECASE,
     )
     match = pattern.search(masked)
@@ -224,7 +226,7 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
     # 1. Try ISO-8601 parsing directly if format matches
     if "T" in raw or (raw.count("-") == 2 and ":" in raw):
         try:
-            clean_iso = raw.replace("Z", "+00:00")
+            clean_iso = re.sub(r"[zZ]$", "+00:00", raw)
             dt = datetime.datetime.fromisoformat(clean_iso)
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=datetime.timezone.utc)
@@ -361,14 +363,23 @@ class DCInsideCrawler(BaseCrawler):
                 enable_cache=enable_cache,
                 cache_fallback=cache_fallback,
             )
-        super().__init__(
-            client=client,
-            timeout=timeout,
-            connect_timeout=connect_timeout,
-            read_timeout=read_timeout,
-            enable_cache=enable_cache,
-            cache_fallback=cache_fallback,
-        )
+        try:
+            super().__init__(
+                client=client,
+                timeout=timeout,
+                connect_timeout=connect_timeout,
+                read_timeout=read_timeout,
+                base_url=DC_BASE_URL,
+                enable_cache=enable_cache,
+                cache_fallback=cache_fallback,
+            )
+        except Exception:
+            if owns_client and hasattr(client, "close"):
+                try:
+                    client.close()
+                except Exception:
+                    pass
+            raise
         self._owns_client = owns_client
         self.platform = "dcinside"
 
@@ -486,7 +497,7 @@ class DCInsideCrawler(BaseCrawler):
             else:
                 tr_attrs = match.group(1)
                 row_html = match.group(2)
-                no_m = re.search(r'data-no=["\']?(\d+)["\']?', tr_attrs)
+                no_m = re.search(r'data-no=["\']?(\d+)["\']?', tr_attrs, re.IGNORECASE)
                 post_no = no_m.group(1) if no_m else ""
 
             # Check if post_no can be extracted from gall_num cell or href inside row
@@ -524,7 +535,7 @@ class DCInsideCrawler(BaseCrawler):
                 best_anchor = None
                 # Prefer anchor linking directly to post view (containing view, no=, or post_no)
                 for a_attrs, a_inner in anchors:
-                    href_m = re.search(r'href=(?:"([^"]+)"|\'([^\']+)\'|([^\s>]+))', a_attrs, re.IGNORECASE)
+                    href_m = re.search(r'\bhref=(?:"([^"]+)"|\'([^\']+)\'|([^\s>]+))', a_attrs, re.IGNORECASE)
                     href_val = (href_m.group(1) or href_m.group(2) or href_m.group(3)) if href_m else ""
                     if "reply_num" in a_attrs or "reply_numbox" in a_attrs:
                         continue
@@ -538,7 +549,7 @@ class DCInsideCrawler(BaseCrawler):
                     for a_attrs, a_inner in anchors:
                         if "reply_num" in a_attrs or "reply_numbox" in a_attrs:
                             continue
-                        href_m = re.search(r'href=(?:"([^"]+)"|\'([^\']+)\'|([^\s>]+))', a_attrs, re.IGNORECASE)
+                        href_m = re.search(r'\bhref=(?:"([^"]+)"|\'([^\']+)\'|([^\s>]+))', a_attrs, re.IGNORECASE)
                         href_val = (href_m.group(1) or href_m.group(2) or href_m.group(3)) if href_m else ""
                         candidates.append((href_val, a_inner))
                     if candidates:
@@ -668,7 +679,7 @@ class DCInsideCrawler(BaseCrawler):
         post_id: str,
         e_s_n_o: str,
         post_url: str,
-        timeout: Optional[float] = None,
+        timeout: Optional[Union[float, Tuple[float, float]]] = None,
     ) -> List[str]:
         """
         Fetch dynamic comments via DCInside internal AJAX comment endpoint:
@@ -694,6 +705,7 @@ class DCInsideCrawler(BaseCrawler):
         }
 
         eff_referer = _sanitize_referer(post_url) or f"{DC_BASE_URL}/"
+        eff_timeout = self._resolve_timeout_arg(timeout)
         headers = {
             "X-Requested-With": "XMLHttpRequest",
             "Referer": eff_referer,
@@ -709,7 +721,7 @@ class DCInsideCrawler(BaseCrawler):
                 data=form_data,
                 headers=headers,
                 referer=eff_referer,
-                timeout=timeout,
+                timeout=eff_timeout,
             )
             if resp and isinstance(resp, (tuple, list)) and len(resp) >= 2:
                 status, text = resp[0], resp[1]
@@ -813,21 +825,22 @@ class DCInsideCrawler(BaseCrawler):
         }
         """
         # 1. Post ID - zero falsy guard and multi-format URL inspection
+        norm_post_url = _unescape_url_entities(str(post_url)) if post_url else ""
         eff_post_id = str(post_id).strip() if post_id is not None else ""
-        if not eff_post_id and post_url:
-            no_match = RE_POST_NO.search(str(post_url))
+        if not eff_post_id and norm_post_url:
+            no_match = RE_POST_NO.search(norm_post_url)
             if not no_match:
-                no_match = RE_POST_PATH_NO.search(str(post_url))
+                no_match = RE_POST_PATH_NO.search(norm_post_url)
             if not no_match:
-                no_match = RE_POST_NUMERIC.search(str(post_url))
+                no_match = RE_POST_NUMERIC.search(norm_post_url)
             eff_post_id = no_match.group(1) if no_match else ""
 
         # Auto-detect gallery_id from URL if left default or blank
         eff_gallery_id = str(gallery_id or "").strip().lower()
-        if (not eff_gallery_id or eff_gallery_id == "car_new1") and post_url:
-            gid_m = re.search(r"[?&]id=([a-zA-Z0-9_]+)", str(post_url), re.IGNORECASE)
+        if (not eff_gallery_id or eff_gallery_id == "car_new1") and norm_post_url:
+            gid_m = re.search(r"[?&]id=([a-zA-Z0-9_]+)", norm_post_url, re.IGNORECASE)
             if not gid_m:
-                gid_m = re.search(r"/(?:board|mgallery/board|mini/board)/([a-zA-Z0-9_]+)/\d+", str(post_url), re.IGNORECASE)
+                gid_m = re.search(r"/(?:board|mgallery/board|mini/board)/([a-zA-Z0-9_]+)/\d+", norm_post_url, re.IGNORECASE)
             if gid_m:
                 eff_gallery_id = gid_m.group(1).lower()
         if not eff_gallery_id:
@@ -932,16 +945,26 @@ class DCInsideCrawler(BaseCrawler):
             writer_match = re.search(r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\bwriter\b)[^>]*>(.*?)</span>', html_content, re.IGNORECASE)
         if writer_match:
             author = clean_html_text(writer_match.group(1))
-        ip_match = re.search(r'<span class=["\']ip["\'][^>]*>\(([0-9.*]+)\)</span>', html_content)
+        writer_scope_m = re.search(r'<td\b[^>]*\bclass=["\']?[^"\'>]*\bgall_writer\b[^>]*>.*?</td>', html_content, re.DOTALL | re.IGNORECASE)
+        ip_search_scope = writer_scope_m.group(0) if writer_scope_m else html_content.split("write_div", 1)[0]
+        ip_match = re.search(r'<span\b[^>]*\bclass=["\']ip["\'][^>]*>\(([0-9.*]+)\)</span>', ip_search_scope, re.IGNORECASE)
         if ip_match:
             author = f"{author or 'ㅇㅇ'} ({ip_match.group(1)})"
 
         raw_date = ""
-        date_match = re.search(r'<span class=["\']gall_date["\'][^>]*title=["\']([^"\']*)["\']', html_content, re.IGNORECASE)
+        date_match = re.search(
+            r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\bgall_date\b)[^>]*\btitle=["\']([^"\']*)["\']',
+            html_content,
+            re.IGNORECASE,
+        )
         if date_match and date_match.group(1).strip():
             raw_date = date_match.group(1).strip()
         if not raw_date:
-            date_match2 = re.search(r'<span class=["\']gall_date["\'][^>]*>(.*?)</span>', html_content, re.IGNORECASE)
+            date_match2 = re.search(
+                r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\bgall_date\b)[^>]*>(.*?)</span>',
+                html_content,
+                re.DOTALL | re.IGNORECASE,
+            )
             if date_match2:
                 raw_date = clean_html_text(date_match2.group(1))
         if not raw_date:
@@ -982,9 +1005,11 @@ class DCInsideCrawler(BaseCrawler):
 
         # 5. Dynamic AJAX comments using e_s_n_o
         comments: List[str] = []
-        timeout = kwargs.get("timeout")
-        if timeout is None:
-            timeout = (self.connect_timeout, self.read_timeout)
+        timeout = self._resolve_timeout_arg(
+            kwargs.get("timeout"),
+            kwargs.get("connect_timeout"),
+            kwargs.get("read_timeout"),
+        )
         e_s_n_o = self.extract_esno_token(html_content)
         if e_s_n_o and eff_post_id:
             comments = self.fetch_ajax_comments(eff_gallery_id, eff_post_id, e_s_n_o, post_url=post_url, timeout=timeout)
@@ -1034,21 +1059,10 @@ class DCInsideCrawler(BaseCrawler):
             gallery_id = "car_new1"
 
         # Defensively normalize relative URLs and semicolon-terminated HTML entities
-        eff_url = _unescape_url_entities(post_url.strip())
-        if not eff_url or any(ord(c) < 32 or ord(c) == 127 for c in eff_url):
-            logger.warning(f"Unsafe DCInside post_url provided: {post_url!r}")
+        eff_url = self._normalize_fetch_url(post_url, base_url=DC_BASE_URL)
+        if not eff_url:
+            logger.warning(f"Unsafe or invalid DCInside post_url provided: {post_url!r}")
             return None
-        parsed_input = urllib.parse.urlsplit(eff_url)
-        if parsed_input.scheme and parsed_input.scheme.lower() not in ("http", "https"):
-            logger.warning(f"Disallowed URL scheme in DCInside post_url: {post_url!r}")
-            return None
-
-        if eff_url.startswith("//"):
-            eff_url = f"https:{eff_url}"
-        elif eff_url.startswith("/"):
-            eff_url = f"{DC_BASE_URL}{eff_url}"
-        elif not eff_url.lower().startswith(("http://", "https://")):
-            eff_url = f"{DC_BASE_URL}/{eff_url}"
 
         is_safe, reason = _is_safe_client_url(self.client, eff_url)
         if not is_safe:
@@ -1061,12 +1075,11 @@ class DCInsideCrawler(BaseCrawler):
         base_url = kwargs.get("base_url")
         self.ensure_warm_up(base_url)
         eff_referer = _sanitize_referer(referer) or f"{DC_BASE_URL}/"
-        timeout = kwargs.get("timeout")
-        if timeout is None:
-            timeout = (
-                _positive_float(kwargs.get("connect_timeout"), self.connect_timeout),
-                _positive_float(kwargs.get("read_timeout"), self.read_timeout),
-            )
+        timeout = self._resolve_timeout_arg(
+            kwargs.get("timeout"),
+            kwargs.get("connect_timeout"),
+            kwargs.get("read_timeout"),
+        )
 
         try:
             resp = self.client.get(eff_url, referer=eff_referer, timeout=timeout)
@@ -1102,7 +1115,7 @@ class DCInsideCrawler(BaseCrawler):
             # If rate-limited (HTTP 429), gracefully degrade without hammering mobile endpoint
             if status == 429:
                 logger.warning(f"Rate-limited (HTTP 429) fetching DCInside post: {eff_url}. Degrading gracefully.")
-                return None
+                return self._fallback_cached_post(eff_url)
 
             # Try fallback to mobile view URL on desktop 404/empty or layout anomalies
             if effective_post_id:
@@ -1110,6 +1123,10 @@ class DCInsideCrawler(BaseCrawler):
                 safe_gid = urllib.parse.quote(effective_gallery_id, safe="")
                 safe_pid = urllib.parse.quote(effective_post_id, safe="")
                 mobile_url = f"{DC_MOBILE_BASE_URL}/board/{safe_gid}/{safe_pid}"
+                m_safe, m_safe_reason = _is_safe_client_url(self.client, mobile_url)
+                if not m_safe:
+                    logger.warning(f"SSRF defense blocked DCInside mobile fallback URL {mobile_url!r}: {m_safe_reason}")
+                    return self._fallback_cached_post(eff_url)
                 try:
                     m_resp = self.client.get(
                         mobile_url,
@@ -1123,7 +1140,7 @@ class DCInsideCrawler(BaseCrawler):
                         m_status, m_text = m_resp[0], m_resp[1]
                         if m_status == 429:
                             logger.warning(f"Rate-limited (HTTP 429) on DCInside mobile fallback ({mobile_url}).")
-                            return None
+                            return self._fallback_cached_post(eff_url)
                         if m_status == 200 and m_text:
                             m_blocked, m_reason = is_deleted_or_restricted(m_text)
                             if m_blocked:
@@ -1155,15 +1172,16 @@ class DCInsideCrawler(BaseCrawler):
                                     )
                                 ):
                                     return None
+                                self._store_cached_post(eff_url, m_detail)
                                 return m_detail
                             except Exception as e:
                                 logger.warning(f"Error parsing DCInside mobile post detail ({eff_url}) on corrupt HTML: {e}")
-                                return None
+                                return self._fallback_cached_post(eff_url)
                 except Exception as e:
                     logger.warning(f"Network error on DCInside mobile fallback ({mobile_url}): {e}")
 
             logger.warning(f"Failed to fetch DCInside post: {eff_url} (status: {status})")
-            return None
+            return self._fallback_cached_post(eff_url)
 
         # Check for deleted / restricted / Cloudflare challenge page
         is_blocked, block_reason = is_deleted_or_restricted(text)
@@ -1197,22 +1215,23 @@ class DCInsideCrawler(BaseCrawler):
                 )
             ):
                 return None
+            self._store_cached_post(eff_url, detail)
             return detail
         except Exception as e:
             logger.warning(f"Error parsing DCInside post detail ({eff_url}) on corrupt HTML: {e}")
-            return None
+            return self._fallback_cached_post(eff_url)
 
-    def crawl_gallery(
+    def _crawl_gallery_pages(
         self,
         gallery_id: str,
+        url_builder: Any,
         pages: int = 1,
         limit: Optional[int] = None,
+        action_label: str = "Crawling",
     ) -> List[Dict[str, Any]]:
-        """
-        Crawl recent posts from a gallery without keyword search.
-        Target galleries: car_new1, electriccar.
-        """
-        if limit is not None and limit <= 0:
+        """Shared pagination loop for DCInside gallery listing and keyword search."""
+        eff_limit = _normalize_limit(limit)
+        if eff_limit is not None and eff_limit <= 0:
             return []
         if not self.client:
             return []
@@ -1222,14 +1241,11 @@ class DCInsideCrawler(BaseCrawler):
         seen_pids = set()
         consecutive_failures = 0
         MAX_CONSECUTIVE_FAILURES = 5
-        try:
-            eff_pages = max(1, int(float(pages)))
-        except (ValueError, TypeError, OverflowError):
-            eff_pages = 1
+        eff_pages = _normalize_pages(pages, default=1)
 
         for page in range(1, eff_pages + 1):
-            url = self.build_list_url(gallery_id, page=page)
-            logger.info(f"Crawling DCInside [{gallery_id}] list (Page {page}): {url}")
+            url = url_builder(page)
+            logger.info(f"{action_label} DCInside [{gallery_id}] (Page {page}): {url}")
             try:
                 resp = self.client.get(
                     url,
@@ -1248,7 +1264,6 @@ class DCInsideCrawler(BaseCrawler):
                 logger.warning(f"Failed to fetch list for DC [{gallery_id}] page {page} (status: {status})")
                 break
 
-            # Check if list page itself was blocked or restricted
             is_blocked, block_reason = is_deleted_or_restricted(text)
             if is_blocked:
                 logger.warning(f"DCInside list page unavailable ({block_reason}) on page {page}")
@@ -1277,7 +1292,7 @@ class DCInsideCrawler(BaseCrawler):
                 if post:
                     results.append(post)
                     consecutive_failures = 0
-                    if limit and len(results) >= limit:
+                    if eff_limit and len(results) >= eff_limit:
                         return results
                 else:
                     consecutive_failures += 1
@@ -1294,6 +1309,24 @@ class DCInsideCrawler(BaseCrawler):
 
         return results
 
+    def crawl_gallery(
+        self,
+        gallery_id: str,
+        pages: int = 1,
+        limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Crawl recent posts from a gallery without keyword search.
+        Target galleries: car_new1, electriccar.
+        """
+        return self._crawl_gallery_pages(
+            gallery_id=gallery_id,
+            url_builder=lambda p: self.build_list_url(gallery_id, page=p),
+            pages=pages,
+            limit=limit,
+            action_label="Crawling",
+        )
+
     def search_gallery(
         self,
         gallery_id: str,
@@ -1304,87 +1337,13 @@ class DCInsideCrawler(BaseCrawler):
         """
         Search a DCInside gallery with a UTF-8 encoded query.
         """
-        if limit is not None and limit <= 0:
-            return []
-        if not self.client:
-            return []
-
-        self.ensure_warm_up()
-        results: List[Dict[str, Any]] = []
-        seen_pids = set()
-        consecutive_failures = 0
-        MAX_CONSECUTIVE_FAILURES = 5
-        try:
-            eff_pages = max(1, int(float(pages)))
-        except (ValueError, TypeError, OverflowError):
-            eff_pages = 1
-
-        for page in range(1, eff_pages + 1):
-            url = self.build_search_url(gallery_id, keyword, page=page)
-            logger.info(f"Searching DCInside [{gallery_id}] for '{keyword}' (Page {page}): {url}")
-            try:
-                resp = self.client.get(
-                    url,
-                    referer=f"{DC_BASE_URL}/",
-                    timeout=(self.connect_timeout, self.read_timeout),
-                )
-                if not resp or not isinstance(resp, (tuple, list)) or len(resp) < 2:
-                    logger.warning(f"Search request failed for DC [{gallery_id}] keyword '{keyword}' page {page}")
-                    break
-                status, text = resp[0], resp[1]
-            except Exception as e:
-                logger.warning(f"Network dropout during search for DC [{gallery_id}] keyword '{keyword}' page {page}: {e}")
-                break
-
-            if status != 200 or not text:
-                logger.warning(f"Search request failed for DC [{gallery_id}] keyword '{keyword}' page {page} (status: {status})")
-                break
-
-            # Check if search page itself was blocked or restricted
-            is_blocked, block_reason = is_deleted_or_restricted(text)
-            if is_blocked:
-                logger.warning(f"DCInside search page unavailable ({block_reason}) on page {page}")
-                break
-
-            items = self.parse_gallery_list(text, gallery_id)
-            if not items:
-                logger.info(f"No items found for DC [{gallery_id}] keyword '{keyword}' page {page}")
-                break
-
-            page_pids = {it.get("post_id", "") for it in items if it.get("post_id")}
-            if page_pids and page_pids.issubset(seen_pids):
-                logger.info(f"Search page {page} of DCInside [{gallery_id}] repeated previously seen posts. Halting loop.")
-                break
-
-            halt_crawl = False
-
-            for item in items:
-                pid = item.get("post_id", "")
-                if pid and pid in seen_pids:
-                    continue
-                if pid:
-                    seen_pids.add(pid)
-
-                post = self.fetch_post(item.get("url", ""), gallery_id=gallery_id, post_id=pid, referer=url)
-                if post:
-                    results.append(post)
-                    consecutive_failures = 0
-                    if limit and len(results) >= limit:
-                        return results
-                else:
-                    consecutive_failures += 1
-                    if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
-                        logger.warning(
-                            f"Encountered {consecutive_failures} consecutive fetch failures on DC [{gallery_id}]. "
-                            f"Halting search crawl loop to prevent rate-limit bans."
-                        )
-                        halt_crawl = True
-                        break
-
-            if halt_crawl:
-                break
-
-        return results
+        return self._crawl_gallery_pages(
+            gallery_id=gallery_id,
+            url_builder=lambda p: self.build_search_url(gallery_id, keyword, page=p),
+            pages=pages,
+            limit=limit,
+            action_label=f"Searching '{keyword}' on",
+        )
 
     def crawl_posts_by_keyword(
         self,
@@ -1396,15 +1355,21 @@ class DCInsideCrawler(BaseCrawler):
         """
         Search across target galleries (car_new1, electriccar) for a given keyword.
         """
-        if limit is not None and limit <= 0:
+        eff_limit = _normalize_limit(limit)
+        if eff_limit is not None and eff_limit <= 0:
             return []
 
-        target_galleries = list(galleries) if galleries is not None else ["car_new1", "electriccar"]
+        if isinstance(galleries, str):
+            target_galleries = [galleries]
+        elif galleries is not None:
+            target_galleries = list(galleries)
+        else:
+            target_galleries = ["car_new1", "electriccar"]
         all_posts: List[Dict[str, Any]] = []
         seen_keys = set()
 
         for gall in target_galleries:
-            remaining_limit = (limit - len(all_posts)) if limit is not None else None
+            remaining_limit = (eff_limit - len(all_posts)) if eff_limit is not None else None
             gall_posts = self.search_gallery(gall, keyword, pages=max_pages, limit=remaining_limit)
             for p in gall_posts:
                 pid = str(p.get("post_id") or "")
@@ -1415,8 +1380,8 @@ class DCInsideCrawler(BaseCrawler):
                         continue
                     seen_keys.add(key)
                 all_posts.append(p)
-                if limit and len(all_posts) >= limit:
-                    return all_posts[:limit]
+                if eff_limit and len(all_posts) >= eff_limit:
+                    return all_posts[:eff_limit]
 
         return all_posts
 

@@ -47,7 +47,7 @@ export default function SubsidyTrackerError({ error, reset }: SubsidyErrorProps)
       aria-atomic="true"
       aria-labelledby="subsidy-error-heading"
       aria-describedby="subsidy-error-description"
-      className="min-h-[60vh] flex items-center justify-center px-4 py-12 outline-none focus:outline-none"
+      className="min-h-[60vh] flex items-center justify-center px-4 py-12 outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded-3xl"
     >
       <div className="max-w-xl w-full bg-slate-900 border border-amber-500/30 rounded-3xl p-8 sm:p-10 shadow-2xl text-center space-y-6">
         <div
