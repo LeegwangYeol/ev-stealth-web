@@ -614,6 +614,15 @@ export function sanitizeSafeUrl(url?: unknown, options?: SanitizeUrlOptions): st
 
   // 10. Safe internal relative routes (must start with / and not followed by / or \ or encoded slashes, no backslashes anywhere in path)
   if (/^\/(?![/\\])/.test(trimmed) && !/[\s<>"'\\]/.test(trimmed) && !/^\/(?:%2f|%5c)/i.test(trimmed)) {
+    // Reject dot-segment paths (e.g. /..//evil.com) that normalize to a protocol-relative //host path
+    try {
+      const resolvedPath = new URL(trimmed, 'http://safe-internal.local').pathname;
+      if (resolvedPath.startsWith('//')) {
+        return '#';
+      }
+    } catch {
+      return '#';
+    }
     // Strip any prototype pollution from internal relative query params
     const cleaned = stripPrototypePollutionQueryParams(trimmed);
     return isOpenRedirectWithDecoded(cleaned, cleaned) ? '#' : cleaned;

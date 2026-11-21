@@ -62,6 +62,10 @@ const DANGEROUS_PROTO_KEYS: ReadonlySet<string> = new Set([
   'isprototypeof',
   'propertyisenumerable',
   'tolocalestring',
+  '__definegetter__',
+  '__definesetter__',
+  '__lookupgetter__',
+  '__lookupsetter__',
 ]);
 
 const ENGLISH_MONTH_MAP: Readonly<Record<string, number>> = Object.freeze({
@@ -868,7 +872,7 @@ export function parseRecallDate(dateStr?: string | null): Date | null {
 
   // 4. Explicit UTC parsing for English month-name dates (avoids local-timezone shift and V8 calendar rollover)
   const monthFirstMatch = clean.match(
-    /^([a-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/i
+    /^([a-z]{3,9})\.?[\s\-/]+(\d{1,2})(?:st|nd|rd|th)?(?:,)?[\s\-/]+(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/i
   );
   if (monthFirstMatch) {
     if (monthFirstMatch[4] !== undefined) {
@@ -884,7 +888,7 @@ export function parseRecallDate(dateStr?: string | null): Date | null {
   }
 
   const dayFirstMatch = clean.match(
-    /^(\d{1,2})\s+([a-z]{3,9})\.?,?\s+(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/i
+    /^(\d{1,2})(?:st|nd|rd|th)?[\s\-/]+([a-z]{3,9})\.?(?:,)?[\s\-/]+(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/i
   );
   if (dayFirstMatch) {
     if (dayFirstMatch[4] !== undefined) {
@@ -897,6 +901,22 @@ export function parseRecallDate(dateStr?: string | null): Date | null {
     const month = Object.prototype.hasOwnProperty.call(ENGLISH_MONTH_MAP, mKey) ? ENGLISH_MONTH_MAP[mKey] : undefined;
     if (!month) return null;
     return buildValidatedUtcDate(parseInt(dayFirstMatch[3], 10), month, parseInt(dayFirstMatch[1], 10));
+  }
+
+  const yearFirstMonthNameMatch = clean.match(
+    /^(\d{4})[\s\-/]+([a-z]{3,9})\.?[\s\-/]+(\d{1,2})(?:st|nd|rd|th)?(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/i
+  );
+  if (yearFirstMonthNameMatch) {
+    if (yearFirstMonthNameMatch[4] !== undefined) {
+      const hour = parseInt(yearFirstMonthNameMatch[4], 10);
+      const minute = parseInt(yearFirstMonthNameMatch[5], 10);
+      const second = yearFirstMonthNameMatch[6] !== undefined ? parseInt(yearFirstMonthNameMatch[6], 10) : 0;
+      if (hour > 23 || minute > 59 || second > 59) return null;
+    }
+    const mKey = yearFirstMonthNameMatch[2].toLowerCase();
+    const month = Object.prototype.hasOwnProperty.call(ENGLISH_MONTH_MAP, mKey) ? ENGLISH_MONTH_MAP[mKey] : undefined;
+    if (!month) return null;
+    return buildValidatedUtcDate(parseInt(yearFirstMonthNameMatch[1], 10), month, parseInt(yearFirstMonthNameMatch[3], 10));
   }
 
   // 5. Fallback to standard Date.parse only for explicit RFC/ISO timestamps with a 4-digit year
@@ -952,7 +972,9 @@ export function parseRecallDate(dateStr?: string | null): Date | null {
     }
   }
 
-  const timestamp = Date.parse(clean);
+  // Enforce UTC when no explicit timezone suffix is present so Date.parse never shifts dates via local TZ
+  const hasExplicitTz = /(?:Z|GMT|UTC|UT|[ECMP][SD]T|[+-]\d{2}:?\d{2})(?:\s*\([^)]+\))?\s*$/i.test(clean);
+  const timestamp = Date.parse(hasExplicitTz ? clean : `${clean} UTC`);
   if (isNaN(timestamp)) return null;
 
   const parsed = new Date(timestamp);
@@ -1258,24 +1280,43 @@ function isBrandCompatibleForLookup(
   );
 }
 
+const BRAND_WORD_BOUNDARY_REGEX_CACHE = new Map<string, RegExp>();
+
 function matchesTargetBrandMention(campTargetLower: string, brandTermLower: string): boolean {
   if (!brandTermLower || brandTermLower.length < 2) return false;
   if (/^[a-z0-9]+$/i.test(brandTermLower) && brandTermLower.length < 3) {
-    const escaped = brandTermLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(`\\b${escaped}\\b`, 'i').test(campTargetLower);
+    let re = BRAND_WORD_BOUNDARY_REGEX_CACHE.get(brandTermLower);
+    if (!re) {
+      const escaped = brandTermLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      re = new RegExp(`\\b${escaped}\\b`, 'i');
+      if (BRAND_WORD_BOUNDARY_REGEX_CACHE.size < 256) {
+        BRAND_WORD_BOUNDARY_REGEX_CACHE.set(brandTermLower, re);
+      }
+    }
+    return re.test(campTargetLower);
   }
   return campTargetLower.includes(brandTermLower);
 }
 
 function deduplicateRecallsById(recalls: OfficialRecallCampaign[]): OfficialRecallCampaign[] {
   if (recalls.length <= 1) return recalls;
-  const seenIds = new Set<string>();
+  const seenKeys = new Set<string>();
   const deduped: OfficialRecallCampaign[] = [];
   for (const r of recalls) {
-    const idKey = typeof r.id === 'string' ? r.id.trim() : '';
+    const idKey = typeof r.id === 'string' ? r.id.trim().toLowerCase() : '';
     if (idKey) {
-      if (seenIds.has(idKey)) continue;
-      seenIds.add(idKey);
+      const key = `id:${idKey}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+    } else {
+      const campNo = typeof r.campaign_no === 'string' ? r.campaign_no.trim().toLowerCase() : '';
+      if (campNo) {
+        const brandKey = typeof r.brand === 'string' ? normalizeManufacturer(r.brand).toLowerCase() : '';
+        const modelKey = typeof r.target_model === 'string' ? r.target_model.trim().toLowerCase() : '';
+        const key = `camp:${campNo}::${brandKey}::${modelKey}`;
+        if (seenKeys.has(key)) continue;
+        seenKeys.add(key);
+      }
     }
     deduped.push(r);
   }
@@ -1319,9 +1360,9 @@ export function decodeVinAndCheckRecalls(rawVin: string, db?: RecallDatabase): V
   const sortedPrefixes = getSortedVinPrefixes(vinPrefixes);
   const matchedPrefix = sortedPrefixes.find((p) => vin.startsWith(p.prefixUpper))?.entry;
 
-  let decodedBrand = matchedPrefix?.brand?.trim() || undefined;
-  const decodedModel = matchedPrefix?.model_name?.trim() || undefined;
-  let decodedCountry = matchedPrefix?.country?.trim() || undefined;
+  let decodedBrand = typeof matchedPrefix?.brand === 'string' ? matchedPrefix.brand.trim() || undefined : undefined;
+  const decodedModel = typeof matchedPrefix?.model_name === 'string' ? matchedPrefix.model_name.trim() || undefined : undefined;
+  let decodedCountry = typeof matchedPrefix?.country === 'string' ? matchedPrefix.country.trim() || undefined : undefined;
 
   // Fallback to WMI (first 3 chars)
   if (!decodedBrand) {
@@ -1688,7 +1729,7 @@ export function getModelsForBrand(brand: string, db?: RecallDatabase): string[] 
   recalls
     .filter((r) => r && (isBrandMatch(r?.brand) || (canonicalBrand === '제네시스' && r?.brand && normalizeManufacturer(r.brand) === '현대자동차')))
     .forEach((r) => {
-      if (r?.target_model) {
+      if (typeof r?.target_model === 'string' && r.target_model) {
         r.target_model.split(',').forEach((tm) => {
           const cleanModel = tm.replace(/\s*\([^)]*\)/g, '').trim();
           if (cleanModel) {
@@ -1810,8 +1851,11 @@ export function aggregateRecallsByManufacturer(
     if (campaign.risk_level === 'FIRE_HAZARD') group.fireHazards++;
     if (campaign.risk_level === 'LOSS_OF_POWER') group.lossOfPower++;
 
-    if (Number.isFinite(campaign.affected_kdm_units) && campaign.affected_kdm_units > 0) {
-      group.affectedUnits += campaign.affected_kdm_units;
+    if (typeof campaign.affected_kdm_units === 'number' && Number.isFinite(campaign.affected_kdm_units) && campaign.affected_kdm_units > 0) {
+      const nextUnits = group.affectedUnits + campaign.affected_kdm_units;
+      if (Number.isFinite(nextUnits)) {
+        group.affectedUnits = nextUnits;
+      }
     }
   }
 
@@ -1870,8 +1914,11 @@ export function calculateRecallKPIs(db?: RecallDatabase): RecallKPIs {
     if (statusUpper === 'ACTIVE') activeCampaigns++;
     else if (statusUpper === 'RESOLVED') resolvedCampaigns++;
 
-    if (Number.isFinite(campaign.affected_kdm_units) && campaign.affected_kdm_units > 0) {
-      totalAffectedVehicles += campaign.affected_kdm_units;
+    if (typeof campaign.affected_kdm_units === 'number' && Number.isFinite(campaign.affected_kdm_units) && campaign.affected_kdm_units > 0) {
+      const nextTotal = totalAffectedVehicles + campaign.affected_kdm_units;
+      if (Number.isFinite(nextTotal)) {
+        totalAffectedVehicles = nextTotal;
+      }
     }
     const canonicalBrand = normalizeManufacturer(campaign.brand);
     const safeCanonicalBrand =

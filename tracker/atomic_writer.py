@@ -133,7 +133,8 @@ class FileLock:
             raise ValueError("lock_path cannot be empty")
         self.lock_path = str(Path(lock_path).resolve())
         t_val = float(timeout) if (timeout is not None and not isinstance(timeout, bool)) else 10.0
-        self.timeout = 10.0 if (math.isnan(t_val) or math.isinf(t_val)) else max(0.0, t_val)
+        timeout_max = getattr(threading, "TIMEOUT_MAX", 9223372036.0)
+        self.timeout = 10.0 if (math.isnan(t_val) or math.isinf(t_val)) else min(max(0.0, t_val), timeout_max)
         p_val = float(poll_interval) if (poll_interval is not None and not isinstance(poll_interval, bool)) else 0.02
         self.poll_interval = 0.02 if (math.isnan(p_val) or math.isinf(p_val)) else max(0.001, p_val)
         s_val = float(stale_timeout) if (stale_timeout is not None and not isinstance(stale_timeout, bool)) else 300.0
@@ -159,6 +160,15 @@ class FileLock:
     def is_locked(self) -> bool:
         """Return True if this lock is currently held by this thread."""
         return self.acquired and self.fd is not None
+
+    def _release_thread_lock(self) -> None:
+        """Release one acquisition depth of the per-path thread RLock if held."""
+        if self._thread_lock_depth > 0:
+            self._thread_lock_depth -= 1
+            try:
+                self._thread_lock.release()
+            except RuntimeError:
+                pass
 
     def _inspect_stale_lock(self) -> Tuple[bool, Optional[int], bool, float]:
         """Inspect lock file metadata and mtime to determine whether it is stale."""
@@ -252,6 +262,7 @@ class FileLock:
                                     self.lock_path,
                                 )
                                 self.acquired = False
+                                self._release_thread_lock()
                                 break
                             time.sleep(self.poll_interval)
                             self.fd = os.open(self.lock_path, flags, 0o644)
@@ -303,6 +314,7 @@ class FileLock:
                                         self.lock_path,
                                     )
                                     self.acquired = False
+                                    self._release_thread_lock()
                                     break
                                 time.sleep(self.poll_interval)
                             stale_breaks += 1
@@ -326,6 +338,7 @@ class FileLock:
                                 self.lock_path,
                             )
                             self.acquired = False
+                            self._release_thread_lock()
                             break
                         time.sleep(self.poll_interval)
             elif msvcrt is not None:
@@ -379,6 +392,7 @@ class FileLock:
                                         self.lock_path,
                                     )
                                     self.acquired = False
+                                    self._release_thread_lock()
                                     break
                                 time.sleep(self.poll_interval)
                             stale_breaks += 1
@@ -401,6 +415,7 @@ class FileLock:
                                 self.lock_path,
                             )
                             self.acquired = False
+                            self._release_thread_lock()
                             break
                         time.sleep(self.poll_interval)
             else:
@@ -435,12 +450,7 @@ class FileLock:
                 del self._local.depths[self.lock_path]
             if hasattr(self._local, "fds") and self.lock_path in self._local.fds:
                 del self._local.fds[self.lock_path]
-            if self._thread_lock_depth > 0:
-                self._thread_lock_depth -= 1
-                try:
-                    self._thread_lock.release()
-                except RuntimeError:
-                    pass
+            self._release_thread_lock()
             raise
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
@@ -485,12 +495,7 @@ class FileLock:
             self.acquired = False
             self._instance_depth = 0
         finally:
-            if self._thread_lock_depth > 0:
-                self._thread_lock_depth -= 1
-                try:
-                    self._thread_lock.release()
-                except RuntimeError:
-                    pass
+            self._release_thread_lock()
 
     def acquire(self) -> bool:
         """Explicit acquire method conforming to Lock protocol."""
@@ -522,6 +527,14 @@ def _sanitize_max_age(max_age_seconds: Any, default: float = 3600.0) -> float:
     return val
 
 
+def _normalize_prefixes(prefix: Union[str, tuple[str, ...], list[str], None]) -> tuple[str, ...]:
+    """Normalize prefix input into a tuple of non-empty prefix strings."""
+    if prefix is None:
+        return ()
+    raw = (prefix,) if isinstance(prefix, str) else tuple(prefix)
+    return tuple(p for p in raw if isinstance(p, str) and p)
+
+
 def cleanup_stale_temp_files(
     directory: Union[str, Path],
     prefix: Union[str, tuple[str, ...], list[str]] = (".tmp_", ".tmp_subsidy_", ".tmp_daily_"),
@@ -533,10 +546,12 @@ def cleanup_stale_temp_files(
     d = Path(directory)
     if not d.is_dir():
         return 0
+    prefixes = _normalize_prefixes(prefix)
+    if not prefixes:
+        return 0
     safe_max_age = _sanitize_max_age(max_age_seconds)
     cleaned = 0
     now = time.time()
-    prefixes = (prefix,) if isinstance(prefix, str) else tuple(prefix)
     try:
         for entry in d.iterdir():
             if any(entry.name.startswith(p) for p in prefixes):
@@ -565,16 +580,19 @@ def cleanup_stale_lock_files(
     if not d.is_dir():
         return 0
     safe_max_age = _sanitize_max_age(max_age_seconds)
+    prefixes = _normalize_prefixes(prefix)
+    if not prefixes:
+        return 0
     cleaned = 0
     now = time.time()
-    prefixes = (prefix,) if isinstance(prefix, str) else tuple(prefix)
     try:
         for entry in d.iterdir():
+            name = entry.name
+            if not name.endswith(suffix):
+                continue
+            if not any(name.startswith(p) for p in prefixes):
+                continue
             if not entry.is_file():
-                continue
-            if not entry.name.endswith(suffix):
-                continue
-            if not any(entry.name.startswith(p) for p in prefixes):
                 continue
             try:
                 st = entry.stat()
@@ -587,7 +605,7 @@ def cleanup_stale_lock_files(
                 )
 
                 # Skip if file has an active, living holder
-                if holder_pid and is_pid_alive(holder_pid):
+                if holder_pid is not None and not is_dead_holder:
                     continue
 
                 # For locks without a confirmed dead holder, require expiration
@@ -914,6 +932,16 @@ def _json_default(obj: Any) -> Any:
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
+def _maybe_cleanup_global_temp_locks() -> None:
+    """Throttled cleanup of stale lock files in system tempdir (outside per-file FileLock)."""
+    global _last_temp_dir_cleanup_time
+    if (time.monotonic() - _last_temp_dir_cleanup_time) > 60.0:
+        with _cleanup_meta_lock:
+            if (time.monotonic() - _last_temp_dir_cleanup_time) > 60.0:
+                cleanup_stale_lock_files(tempfile.gettempdir(), max_age_seconds=3600.0)
+                _last_temp_dir_cleanup_time = time.monotonic()
+
+
 def atomic_write_json(
     data: Any,
     target_path: Union[str, Path],
@@ -963,13 +991,16 @@ def atomic_write_json(
     dest_dir = dest.parent
     dest_dir.mkdir(parents=True, exist_ok=True)
 
+    if not temp_prefix or not isinstance(temp_prefix, str) or not temp_prefix.strip():
+        temp_prefix = ".tmp_subsidy_"
+
     if _pre_encoded_content is None:
         # Convert object with to_dict / as_dict / model_dump / dataclass if present
-        if hasattr(data, "to_dict") and callable(getattr(data, "to_dict")):
+        if not isinstance(data, type) and hasattr(data, "to_dict") and callable(getattr(data, "to_dict")):
             payload = data.to_dict()
-        elif hasattr(data, "as_dict") and callable(getattr(data, "as_dict")):
+        elif not isinstance(data, type) and hasattr(data, "as_dict") and callable(getattr(data, "as_dict")):
             payload = data.as_dict()
-        elif hasattr(data, "model_dump") and callable(getattr(data, "model_dump")):
+        elif not isinstance(data, type) and hasattr(data, "model_dump") and callable(getattr(data, "model_dump")):
             payload = data.model_dump()
         elif dataclasses.is_dataclass(data) and not isinstance(data, type):
             payload = dataclasses.asdict(data)
@@ -995,6 +1026,8 @@ def atomic_write_json(
     temp_name: Optional[str] = None
     lock_file = get_lock_path(dest)
 
+    _maybe_cleanup_global_temp_locks()
+
     with FileLock(lock_file):
         try:
             if mode is None and preserve_permissions and dest.exists():
@@ -1005,14 +1038,6 @@ def atomic_write_json(
 
             cleanup_stale_temp_files(dest_dir, prefix=temp_prefix, max_age_seconds=3600.0)
             cleanup_stale_lock_files(dest_dir, max_age_seconds=3600.0)
-
-            # Throttle global temp directory cleanup to avoid disk thrashing
-            global _last_temp_dir_cleanup_time
-            if (time.monotonic() - _last_temp_dir_cleanup_time) > 60.0:
-                with _cleanup_meta_lock:
-                    if (time.monotonic() - _last_temp_dir_cleanup_time) > 60.0:
-                        cleanup_stale_lock_files(tempfile.gettempdir(), max_age_seconds=3600.0)
-                        _last_temp_dir_cleanup_time = time.monotonic()
 
             # Create temp file in the same directory to ensure atomic os.replace across filesystem boundaries
             if _pre_encoded_content is not None:
@@ -1165,11 +1190,12 @@ def atomic_write_json_multiple(
     preserve_permissions: bool = True,
 ) -> List[Path]:
     """Atomically write data as JSON to multiple target paths with single-pass serialization."""
-    if not target_paths:
+    paths = list(target_paths) if target_paths is not None else []
+    if not paths:
         return []
 
     # Validate target_paths early to fail fast on invalid arguments
-    for p in target_paths:
+    for p in paths:
         if not p or not str(p).strip():
             raise ValueError("target_path cannot be empty")
         resolved = Path(p).resolve()
@@ -1177,11 +1203,11 @@ def atomic_write_json_multiple(
             raise IsADirectoryError(f"Target path is an existing directory: {resolved}")
 
     # Serialize and sanitize once across all destination writes
-    if hasattr(data, "to_dict") and callable(getattr(data, "to_dict")):
+    if not isinstance(data, type) and hasattr(data, "to_dict") and callable(getattr(data, "to_dict")):
         payload = data.to_dict()
-    elif hasattr(data, "as_dict") and callable(getattr(data, "as_dict")):
+    elif not isinstance(data, type) and hasattr(data, "as_dict") and callable(getattr(data, "as_dict")):
         payload = data.as_dict()
-    elif hasattr(data, "model_dump") and callable(getattr(data, "model_dump")):
+    elif not isinstance(data, type) and hasattr(data, "model_dump") and callable(getattr(data, "model_dump")):
         payload = data.model_dump()
     elif dataclasses.is_dataclass(data) and not isinstance(data, type):
         payload = dataclasses.asdict(data)
@@ -1199,7 +1225,7 @@ def atomic_write_json_multiple(
     ).encode("utf-8")
 
     written_paths: List[Path] = []
-    for p in target_paths:
+    for p in paths:
         written = atomic_write_json(
             payload,
             p,
@@ -1260,6 +1286,8 @@ def atomic_write_text(
 
     if not isinstance(content, str):
         content = str(content)
+    if not temp_prefix or not isinstance(temp_prefix, str) or not temp_prefix.strip():
+        temp_prefix = ".tmp_text_"
 
     # Determine POSIX permission target
     target_mode = mode
@@ -1275,6 +1303,8 @@ def atomic_write_text(
     temp_name: Optional[str] = None
     lock_file = get_lock_path(dest)
 
+    _maybe_cleanup_global_temp_locks()
+
     with FileLock(lock_file):
         try:
             if mode is None and preserve_permissions and dest.exists():
@@ -1285,13 +1315,6 @@ def atomic_write_text(
 
             cleanup_stale_temp_files(dest_dir, prefix=temp_prefix, max_age_seconds=3600.0)
             cleanup_stale_lock_files(dest_dir, max_age_seconds=3600.0)
-
-            global _last_temp_dir_cleanup_time
-            if (time.monotonic() - _last_temp_dir_cleanup_time) > 60.0:
-                with _cleanup_meta_lock:
-                    if (time.monotonic() - _last_temp_dir_cleanup_time) > 60.0:
-                        cleanup_stale_lock_files(tempfile.gettempdir(), max_age_seconds=3600.0)
-                        _last_temp_dir_cleanup_time = time.monotonic()
 
             suffix = dest.suffix if dest.suffix else ".txt"
             with tempfile.NamedTemporaryFile(

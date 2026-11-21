@@ -51,8 +51,13 @@ def _has_unsafe_authority(parsed: urllib.parse.SplitResult) -> bool:
 
 def _is_safe_client_url(client: Any, url: str) -> Tuple[bool, str]:
     """Validate URL safety against SSRF, respecting real bool/set overrides on client."""
+    if not url or not isinstance(url, str) or not url.strip():
+        return False, "Empty or invalid URL"
+    url_clean = url.strip()
+    if any(ord(c) < 32 or ord(c) == 127 for c in url_clean):
+        return False, "SSRF blocked: URL contains control characters"
     try:
-        parsed = urllib.parse.urlsplit(url)
+        parsed = urllib.parse.urlsplit(url_clean)
     except ValueError as e:
         return False, f"Invalid URL syntax: {e}"
     if _has_unsafe_authority(parsed):
@@ -63,7 +68,7 @@ def _is_safe_client_url(client: Any, url: str) -> Tuple[bool, str]:
     allowed_ports: Optional[Set[int]] = (
         set(raw_ports) if isinstance(raw_ports, (set, frozenset)) else None
     )
-    return is_safe_url(url, allow_private_ips=allow_private, allowed_ports=allowed_ports)
+    return is_safe_url(url_clean, allow_private_ips=allow_private, allowed_ports=allowed_ports)
 
 
 def _positive_float(value: Any, default: float) -> float:
@@ -127,6 +132,7 @@ class BaseCrawler(abc.ABC):
         cache_fallback: bool = True,
     ):
         self._owns_client = client is None
+        self._client_closed = False
         self.enable_cache = enable_cache
         self.cache_fallback = cache_fallback
         self._post_cache: Dict[str, Dict[str, Any]] = {}
@@ -227,6 +233,8 @@ class BaseCrawler(abc.ABC):
             parsed_out = urllib.parse.urlsplit(eff_url)
         except ValueError:
             return None
+        if parsed_out.scheme and parsed_out.scheme.lower() not in ("http", "https"):
+            return None
         if _has_unsafe_authority(parsed_out):
             return None
         return eff_url
@@ -322,7 +330,7 @@ class BaseCrawler(abc.ABC):
         if isinstance(base_url, bool):
             force = base_url
             base_url = None
-        target_url = (base_url if isinstance(base_url, str) else None) or self.base_url
+        target_url = (base_url.strip() if isinstance(base_url, str) and base_url.strip() else None) or self.base_url
         if (not self._warmed_up or force) and target_url and isinstance(target_url, str):
             target_clean = target_url.strip()
             is_safe, reason = _is_safe_client_url(self.client, target_clean)
@@ -439,7 +447,8 @@ class BaseCrawler(abc.ABC):
                 self.clear_session()
             except Exception:
                 pass
-            if hasattr(self.client, "close"):
+            if not self._client_closed and hasattr(self.client, "close"):
+                self._client_closed = True
                 try:
                     self.client.close()
                 except Exception as e:

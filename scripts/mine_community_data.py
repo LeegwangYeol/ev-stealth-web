@@ -187,7 +187,11 @@ class CommunityDataMiningOrchestrator:
 
         logger.info(f"Live mining stage produced {len(mined_records)} raw records.")
 
-        # If live scraping is dry-run or produces fewer records than required standard,
+        if dry_run:
+            logger.info("[DRY-RUN] Skipping database compilation disk write.")
+            return mined_records
+
+        # If live scraping produces fewer records than required standard,
         # compile full comprehensive database using master verified casebook
         compiled_records = compile_database(
             output_path=self.output_path,

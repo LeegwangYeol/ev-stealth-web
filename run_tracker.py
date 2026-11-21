@@ -268,13 +268,22 @@ def sync_defect_reports(
         else:
             web_reports_path = _CURRENT_DIR / "daily_reports.json"
         if root_dir:
-            root_reports_path = Path(root_dir) / "daily_reports.json"
+            rp = Path(root_dir)
+            root_reports_path = rp if (rp.suffix == ".json" and not rp.is_dir()) else rp / "daily_reports.json"
         elif (_CURRENT_DIR / "data" / "daily_reports.json").exists():
             root_reports_path = _CURRENT_DIR / "data" / "daily_reports.json"
         elif (repo_root / "data" / "daily_reports.json").exists():
             root_reports_path = repo_root / "data" / "daily_reports.json"
         else:
             root_reports_path = _CURRENT_DIR / "daily_reports.json"
+
+        external_web_only = (
+            root_dir is None
+            and web_dir is not None
+            and _is_project_data_dir(root_reports_path.parent, _CURRENT_DIR)
+            and not _is_project_data_dir(web_reports_path.parent, _CURRENT_DIR)
+        )
+
         public_reports_paths: List[Path] = []
         if web_dir and (Path(web_dir).parent / "public" / "data").exists():
             public_reports_paths.append(Path(web_dir).parent / "public" / "data" / "daily_reports.json")
@@ -283,6 +292,7 @@ def sync_defect_reports(
         if root_dir and (Path(root_dir).parent / "public" / "data").exists():
             public_reports_paths.append(Path(root_dir).parent / "public" / "data" / "daily_reports.json")
     else:
+        external_web_only = False
         if web_dir:
             w_path = Path(web_dir)
             if (w_path / "src" / "data").is_dir():
@@ -295,7 +305,8 @@ def sync_defect_reports(
             web_reports_path = _CURRENT_DIR / "ev-stealth-web" / "src" / "data" / "daily_reports.json"
 
         if root_dir:
-            root_reports_path = Path(root_dir) / "daily_reports.json"
+            rp = Path(root_dir)
+            root_reports_path = rp if (rp.suffix == ".json" and not rp.is_dir()) else rp / "daily_reports.json"
         elif (repo_root / "data").exists():
             root_reports_path = repo_root / "data" / "daily_reports.json"
         else:
@@ -332,9 +343,11 @@ def sync_defect_reports(
             seen_pub.add(r_str)
             deduped_public.append(p)
 
-    sync_lock_path = root_reports_path.parent / ".sync_defect_reports.lock"
-    cleanup_stale_lock_files(root_reports_path.parent, prefix=(".sync_",), max_age_seconds=stale_timeout)
-    if web_reports_path.parent != root_reports_path.parent and web_reports_path.parent.is_dir():
+    lock_base_dir = web_reports_path.parent if external_web_only else root_reports_path.parent
+    sync_lock_path = lock_base_dir / ".sync_defect_reports.lock"
+    if not external_web_only:
+        cleanup_stale_lock_files(root_reports_path.parent, prefix=(".sync_",), max_age_seconds=stale_timeout)
+    if web_reports_path.parent.is_dir() and (external_web_only or web_reports_path.parent != root_reports_path.parent):
         cleanup_stale_lock_files(web_reports_path.parent, prefix=(".sync_",), max_age_seconds=stale_timeout)
     written_paths: List[str] = []
 
@@ -398,7 +411,7 @@ def sync_defect_reports(
             if is_valid:
                 source_path = cand
                 break
-            elif quarantine_corrupted:
+            elif quarantine_corrupted and not (external_web_only and cand == root_reports_path):
                 quarantine_corrupted_file(cand)
 
         if not source_path:
@@ -415,6 +428,8 @@ def sync_defect_reports(
             source_resolved = str(Path(source_path).absolute())
         seen_target_abs: Set[str] = {source_resolved}
         for p in known_paths:
+            if external_web_only and p == root_reports_path:
+                continue
             try:
                 resolved_p = str(Path(p).resolve())
             except (OSError, RuntimeError):
@@ -959,16 +974,27 @@ def main(argv: Optional[List[str]] = None) -> int:
                     logger.info("  ✓ Successfully written: %s", wp)
 
             # Synchronize defect reports alongside subsidy data when syncing web or auto-bidirectional
+            is_repo_web_target = (args.web_dir is None) or _is_project_data_dir(Path(args.web_dir), _CURRENT_DIR)
             if args.sync_web or auto_bidirectional or (args.sync_defects is True):
                 if getattr(args, "sync_defects", None) is not False:
+                    isolated_root = (
+                        args.output.parent
+                        if (not is_default_or_repo_target and (not is_repo_web_target or not args.sync_web))
+                        else None
+                    )
+                    isolated_web = (
+                        args.web_dir
+                        if args.web_dir is not None
+                        else (args.output.parent if (not is_default_or_repo_target and not args.sync_web) else None)
+                    )
                     sync_defect_reports(
-                        web_dir=args.web_dir,
+                        web_dir=isolated_web,
                         dry_run=False,
                         run_crawler=bool(args.sync_defects is True),
                         quarantine_corrupted=getattr(args, "quarantine_corrupted", True),
+                        root_dir=isolated_root,
                     )
 
-            is_repo_web_target = (args.web_dir is None) or _is_project_data_dir(Path(args.web_dir), _CURRENT_DIR)
             if (args.sync_web and is_repo_web_target) or auto_bidirectional:
                 healed = auto_heal_mirrored_parity(_find_repo_root())
                 if healed:
@@ -995,7 +1021,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         # Print output to stdout according to --format
         if args.format == "json":
-            print(json.dumps(payload.to_dict(), indent=2, ensure_ascii=False))
+            print(json.dumps(payload.to_dict(), indent=2, ensure_ascii=False, allow_nan=False))
         elif args.format in ("markdown", "md"):
             briefing = tracker.generate_briefing(payload, fallback_used=fallback_used)
             print("\n" + briefing + "\n")

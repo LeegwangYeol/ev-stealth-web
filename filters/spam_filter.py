@@ -106,6 +106,7 @@ _RE_BOUNDED_CATEGORY_KEYWORDS: Dict[str, re.Pattern[str]] = {
     "12v": re.compile(r"(?<![a-zA-Z0-9])12v(?![a-zA-Z0-9])", re.IGNORECASE),
 }
 _RE_DEFECT_HAJA: re.Pattern[str] = re.compile(r"(?<![가-힣])하자(?!마자|고|면)")
+_RE_GLASS_KEYWORD: re.Pattern[str] = re.compile(r"(?<![불자])유리(?!하|한|할|해|함|히)")
 
 
 def matches_category_keyword(category: str, keyword: str, text_lower: str) -> bool:
@@ -113,6 +114,8 @@ def matches_category_keyword(category: str, keyword: str, text_lower: str) -> bo
     kw_lower = keyword.lower()
     if category == "SERVICE_REPAIR_COST" and kw_lower == "as":
         return bool(RE_AS_KEYWORD.search(text_lower))
+    if category == "BUILD_QUALITY" and kw_lower == "유리":
+        return bool(_RE_GLASS_KEYWORD.search(text_lower))
     bounded_pat = _RE_BOUNDED_CATEGORY_KEYWORDS.get(kw_lower)
     if bounded_pat is not None:
         return bool(bounded_pat.search(text_lower))

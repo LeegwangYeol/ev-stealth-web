@@ -1405,7 +1405,9 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 value={pageSize}
                 onChange={(e) => {
                   const next = Number(e.target.value);
-                  if (Number.isFinite(next) && next > 0) setPageSize(next);
+                  if (Number.isFinite(next) && next >= 10 && next <= 100) {
+                    setPageSize(Math.floor(next));
+                  }
                 }}
                 className="min-h-[44px] px-2 py-1.5 bg-slate-100 text-slate-800 rounded-xl border border-slate-200 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"
                 aria-label="페이지당 표시 제보 개수 선택"

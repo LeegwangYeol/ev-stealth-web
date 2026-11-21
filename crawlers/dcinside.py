@@ -87,7 +87,7 @@ def extract_container_content(html_str: str, tag_name: str, class_name: str) -> 
     Resilient against nested tags of the same name, self-closing tags, unclosed child tags,
     and closing tags inside HTML comments or scripts.
     """
-    if not html_str or not isinstance(html_str, str):
+    if not html_str or not isinstance(html_str, str) or not tag_name or not class_name:
         return ""
 
     # Mask comments and scripts with equal-length whitespace so dummy tags inside them
@@ -99,7 +99,7 @@ def extract_container_content(html_str: str, tag_name: str, class_name: str) -> 
     masked = RE_SCRIPT_STYLE.sub(_repl, masked)
 
     pattern = re.compile(
-        rf"<{tag_name}\b[^>]*class\s*=\s*(?:[\"'][^\"']*\b{re.escape(class_name)}\b[^\"']*[\"']|{re.escape(class_name)}(?=[\s>]))[^>]*>",
+        rf"<{re.escape(tag_name)}\b[^>]*class\s*=\s*(?:[\"'][^\"']*\b{re.escape(class_name)}\b[^\"']*[\"']|{re.escape(class_name)}(?=[\s>]))[^>]*>",
         re.IGNORECASE,
     )
     match = pattern.search(masked)
@@ -112,13 +112,13 @@ def extract_container_content(html_str: str, tag_name: str, class_name: str) -> 
     depth = 1
     tag_re = re.compile(rf"<(/?)({re.escape(tag_name)})\b([^>]*)>", re.IGNORECASE)
 
-    for m in tag_re.finditer(masked[start_idx:]):
+    for m in tag_re.finditer(masked, start_idx):
         is_closing = bool(m.group(1))
         tag_attrs = m.group(3)
         if is_closing:
             depth -= 1
             if depth == 0:
-                return html_str[start_idx : start_idx + m.start()]
+                return html_str[start_idx : m.start()]
         else:
             # Skip self-closing tags (e.g. <div ... />)
             if tag_attrs and tag_attrs.rstrip().endswith("/"):
@@ -224,14 +224,14 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
     now = datetime.datetime.now(datetime.timezone.utc)
 
     # 1. Try ISO-8601 parsing directly if format matches
-    if "T" in raw or (raw.count("-") == 2 and ":" in raw):
+    if "T" in raw or (raw.count("-") >= 2 and ":" in raw):
         try:
             clean_iso = re.sub(r"[zZ]$", "+00:00", raw)
             dt = datetime.datetime.fromisoformat(clean_iso)
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=datetime.timezone.utc)
             return dt.astimezone(datetime.timezone.utc).isoformat()
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             pass
 
     # 2. Relative times: "방금", "10분 전", "1시간 전", "어제"
@@ -256,7 +256,17 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
         except (ValueError, OverflowError):
             return now.isoformat()
     if "어제" in raw:
-        return (now - datetime.timedelta(days=1)).isoformat()
+        yesterday = now - datetime.timedelta(days=1)
+        time_part = re.search(r"(\d{1,2}):(\d{2})(?::(\d{2}))?", raw)
+        if time_part:
+            try:
+                h = int(time_part.group(1))
+                m = int(time_part.group(2))
+                s = int(time_part.group(3)) if time_part.group(3) else 0
+                return yesterday.replace(hour=h, minute=m, second=s, microsecond=0).isoformat()
+            except (ValueError, OverflowError):
+                return yesterday.isoformat()
+        return yesterday.isoformat()
 
     # 3. Full timestamp: "2026-09-08 10:11:21" or "2026.09.08 (화) 10:11" or "2026.9.8"
     full_match = re.search(
@@ -396,7 +406,7 @@ class DCInsideCrawler(BaseCrawler):
         if isinstance(base_url, bool):
             force = base_url
             base_url = None
-        target_url = (base_url if isinstance(base_url, str) else None) or DC_BASE_URL
+        target_url = (base_url.strip() if isinstance(base_url, str) and base_url.strip() else None) or DC_BASE_URL
         if (not self._warmed_up or force) and target_url:
             target_clean = target_url.strip()
             is_safe, reason = _is_safe_client_url(self.client, target_clean)
@@ -517,7 +527,7 @@ class DCInsideCrawler(BaseCrawler):
             is_notice = (
                 "ub-notice" in tr_attrs
                 or "ub-notice" in row_html[:200]
-                or bool(re.search(r'<td[^>]*class=["\'][^"\']*gall_num[^"\']*["\'][^>]*>\s*(?:공지|설문|AD)\s*</td>', row_html, re.IGNORECASE))
+                or bool(re.search(r'<td[^>]*class=["\'][^"\']*gall_num[^"\']*["\'][^>]*>\s*(?:<[^>]+>\s*)*(?:공지|설문|AD)(?:\s*</[^>]+>)*\s*</td>', row_html, re.IGNORECASE))
             )
             if is_notice:
                 continue
@@ -618,7 +628,7 @@ class DCInsideCrawler(BaseCrawler):
                 clean_title = clean_html_text(raw_title)
                 if clean_title and "&" in clean_title and re.search(r"&[a-zA-Z#0-9]+;", clean_title):
                     clean_title = html.unescape(clean_title)
-                if not clean_title or len(clean_title) < 2 or clean_title.startswith("[공지]"):
+                if not clean_title or len(clean_title) < 2 or clean_title.startswith("[공지]") or clean_title.startswith("공지:"):
                     continue
                 seen_nos.add(post_no)
                 items.append({
@@ -685,7 +695,7 @@ class DCInsideCrawler(BaseCrawler):
         Fetch dynamic comments via DCInside internal AJAX comment endpoint:
         POST https://gall.dcinside.com/{prefix}/comment/
         """
-        if not e_s_n_o or post_id is None or str(post_id).strip() == "" or not gallery_id:
+        if not e_s_n_o or not str(e_s_n_o).strip() or post_id is None or str(post_id).strip() == "" or not gallery_id:
             return []
 
         prefix = self.get_gallery_prefix(gallery_id)
@@ -1054,7 +1064,7 @@ class DCInsideCrawler(BaseCrawler):
             return None
 
         # LSP compliance: if gallery_id is passed a URL (as in base crawler fetch_post(url, referer)), handle gracefully
-        if isinstance(gallery_id, str) and (gallery_id.startswith("http://") or gallery_id.startswith("https://")):
+        if isinstance(gallery_id, str) and gallery_id.strip().lower().startswith(("http://", "https://")):
             referer = gallery_id
             gallery_id = "car_new1"
 
@@ -1118,7 +1128,7 @@ class DCInsideCrawler(BaseCrawler):
                 return self._fallback_cached_post(eff_url)
 
             # Try fallback to mobile view URL on desktop 404/empty or layout anomalies
-            if effective_post_id:
+            if effective_post_id and not eff_url.lower().startswith(DC_MOBILE_BASE_URL):
                 # Canonical mobile route: m.dcinside.com/board/{gallery_id}/{post_id}
                 safe_gid = urllib.parse.quote(effective_gallery_id, safe="")
                 safe_pid = urllib.parse.quote(effective_post_id, safe="")
@@ -1274,8 +1284,9 @@ class DCInsideCrawler(BaseCrawler):
                 logger.info(f"No more items in DCInside [{gallery_id}] page {page}")
                 break
 
-            page_pids = {it.get("post_id", "") for it in items if it.get("post_id")}
-            if page_pids and page_pids.issubset(seen_pids):
+            page_keys = {str(it.get("post_id") or it.get("url") or "") for it in items}
+            page_keys.discard("")
+            if page_keys and page_keys.issubset(seen_pids):
                 logger.info(f"Page {page} of DCInside [{gallery_id}] repeated previously seen posts. Halting pagination loop.")
                 break
 
@@ -1283,10 +1294,11 @@ class DCInsideCrawler(BaseCrawler):
 
             for item in items:
                 pid = item.get("post_id", "")
-                if pid and pid in seen_pids:
+                dedup_key = str(pid or item.get("url") or "")
+                if dedup_key and dedup_key in seen_pids:
                     continue
-                if pid:
-                    seen_pids.add(pid)
+                if dedup_key:
+                    seen_pids.add(dedup_key)
 
                 post = self.fetch_post(item.get("url", ""), gallery_id=gallery_id, post_id=pid, referer=url)
                 if post:

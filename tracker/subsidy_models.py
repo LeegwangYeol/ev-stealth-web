@@ -71,6 +71,8 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
 
 def _safe_rate_percent(numerator: Union[int, float], denominator: Union[int, float]) -> float:
     """Compute rounded percentage (1 decimal) scaling numerator first to avoid float drift."""
+    if isinstance(numerator, bool) or isinstance(denominator, bool):
+        return 0.0
     if denominator <= 0 or numerator <= 0:
         return 0.0
     scaled = numerator * 100.0
@@ -78,6 +80,15 @@ def _safe_rate_percent(numerator: Union[int, float], denominator: Union[int, flo
     if math.isnan(raw) or math.isinf(raw):
         return 0.0
     return max(0.0, round(raw, 1))
+
+
+def _first_not_none(data: Dict[str, Any], *keys: str, default: Any = None) -> Any:
+    """Return the value of the first key in `keys` present in `data` whose value is not None."""
+    for k in keys:
+        val = data.get(k)
+        if val is not None:
+            return val
+    return default
 
 
 def _mapping_getitem(obj: Any, key: Any) -> Any:
@@ -296,21 +307,17 @@ class CategoryMetrics:
             return data
         if not isinstance(data, dict):
             data = {}
-        ann = max(0, _safe_int(data.get("announced_units", data.get("announced", 0))))
-        app = max(0, _safe_int(data.get("applied_units", data.get("applied", 0))))
-        deliv = max(0, _safe_int(data.get("delivered_units", data.get("delivered", 0))))
+        ann = max(0, _safe_int(_first_not_none(data, "announced_units", "announced", default=0)))
+        app = max(0, _safe_int(_first_not_none(data, "applied_units", "applied", default=0)))
+        deliv = max(0, _safe_int(_first_not_none(data, "delivered_units", "delivered", default=0)))
 
-        rem_raw = data.get("remaining_units")
-        if rem_raw is None:
-            rem_raw = data.get("remaining")
+        rem_raw = _first_not_none(data, "remaining_units", "remaining")
         if rem_raw is None:
             rem = max(0, ann - app)
         else:
             rem = max(0, _safe_int(rem_raw, 0))
 
-        rate_raw = data.get("depletion_rate")
-        if rate_raw is None:
-            rate_raw = data.get("rate")
+        rate_raw = _first_not_none(data, "depletion_rate", "rate")
         if rate_raw is not None:
             dep_rate = max(0.0, _safe_float(rate_raw, 0.0))
         elif ann > 0 and app > 0:
@@ -340,10 +347,10 @@ class CategoryMetrics:
             depletion_rate=dep_rate,
             delivery_rate=deliv_rate,
             status=status,
-            max_local_subsidy_krw=max(0, _safe_int(data.get("max_local_subsidy_krw", data.get("local_subsidy_krw", 0)))),
-            max_total_subsidy_krw=max(0, _safe_int(data.get("max_total_subsidy_krw", data.get("total_subsidy_krw", 0)))),
-            total_budget_krw=max(0, _safe_int(data.get("total_budget_krw", data.get("total_budget", 0)))),
-            remaining_budget_krw=max(0, _safe_int(data.get("remaining_budget_krw", data.get("remaining_budget", 0)))),
+            max_local_subsidy_krw=max(0, _safe_int(_first_not_none(data, "max_local_subsidy_krw", "local_subsidy_krw", default=0))),
+            max_total_subsidy_krw=max(0, _safe_int(_first_not_none(data, "max_total_subsidy_krw", "total_subsidy_krw", default=0))),
+            total_budget_krw=max(0, _safe_int(_first_not_none(data, "total_budget_krw", "total_budget", default=0))),
+            remaining_budget_krw=max(0, _safe_int(_first_not_none(data, "remaining_budget_krw", "remaining_budget", default=0))),
         )
 
 
@@ -413,21 +420,17 @@ class MunicipalityMetrics:
             return data
         if not isinstance(data, dict):
             data = {}
-        ann = max(0, _safe_int(data.get("announced_units", data.get("announced", 0))))
-        app = max(0, _safe_int(data.get("applied_units", data.get("applied", 0))))
-        deliv = max(0, _safe_int(data.get("delivered_units", data.get("delivered", 0))))
+        ann = max(0, _safe_int(_first_not_none(data, "announced_units", "announced", default=0)))
+        app = max(0, _safe_int(_first_not_none(data, "applied_units", "applied", default=0)))
+        deliv = max(0, _safe_int(_first_not_none(data, "delivered_units", "delivered", default=0)))
 
-        rem_raw = data.get("remaining_units")
-        if rem_raw is None:
-            rem_raw = data.get("remaining")
+        rem_raw = _first_not_none(data, "remaining_units", "remaining")
         if rem_raw is None:
             rem = max(0, ann - app)
         else:
             rem = max(0, _safe_int(rem_raw, 0))
 
-        rate_raw = data.get("depletion_rate")
-        if rate_raw is None:
-            rate_raw = data.get("rate")
+        rate_raw = _first_not_none(data, "depletion_rate", "rate")
         if rate_raw is not None:
             dep_rate = max(0.0, _safe_float(rate_raw, 0.0))
         elif ann > 0 and app > 0:
@@ -448,12 +451,12 @@ class MunicipalityMetrics:
             remaining_units=rem,
             depletion_rate=dep_rate,
             status=status,
-            local_subsidy_krw=max(0, _safe_int(data.get("local_subsidy_krw", data.get("local_subsidy", 0)))),
+            local_subsidy_krw=max(0, _safe_int(_first_not_none(data, "local_subsidy_krw", "local_subsidy", default=0))),
             muni_id=str(data.get("muni_id") or data.get("id") or data.get("code") or ""),
             name_en=str(data.get("name_en") or ""),
             category=str(data.get("category") or "passenger"),
             delivered_units=deliv,
-            total_subsidy_krw=max(0, _safe_int(data.get("total_subsidy_krw", data.get("total_subsidy", 0)))),
+            total_subsidy_krw=max(0, _safe_int(_first_not_none(data, "total_subsidy_krw", "total_subsidy", default=0))),
         )
 
 
@@ -698,7 +701,7 @@ class RegionRecord:
             tier=str(data.get("tier") or "province"),
             overall_depletion_rate=overall_rate,
             overall_status=overall_status,
-            residency_requirement_days=max(0, _safe_int(data.get("residency_requirement_days", data.get("residency_days", 30)), default=30)),
+            residency_requirement_days=max(0, _safe_int(_first_not_none(data, "residency_requirement_days", "residency_days", default=30), default=30)),
             supplementary_budget_added=supp_added,
             categories=cats,
             municipalities=munis,
@@ -759,6 +762,11 @@ _EN_TO_ISO_CODES: Dict[str, tuple[str, ...]] = {}
 for _iso, _en in _ISO_ALIAS_MAP.items():
     _EN_TO_ISO_CODES.setdefault(_en, ())
     _EN_TO_ISO_CODES[_en] = _EN_TO_ISO_CODES[_en] + (_iso.lower(),)
+
+_EN_TO_KO_ALIASES: Dict[str, tuple[str, ...]] = {}
+for _ko, _en in _KO_REGION_ALIAS_MAP.items():
+    _EN_TO_KO_ALIASES.setdefault(_en, ())
+    _EN_TO_KO_ALIASES[_en] = _EN_TO_KO_ALIASES[_en] + (_ko,)
 
 
 @dataclass
@@ -847,9 +855,14 @@ class PopularModelEntry:
                 for ko_key, en_key in _KO_REGION_ALIAS_MAP.items():
                     if ko_key in code_str or en_key in code_lower:
                         iso_cands = _EN_TO_ISO_CODES.get(en_key, ())
+                        ko_cands = _EN_TO_KO_ALIASES.get(en_key, ())
                         for k, v in self.regional_subsidy_samples.items():
                             k_lower = str(k).strip().lower()
-                            if en_key in k_lower or ko_key in k_lower or k_lower in iso_cands:
+                            if (
+                                en_key in k_lower
+                                or k_lower in iso_cands
+                                or any(ko_c in k_lower for ko_c in ko_cands)
+                            ):
                                 entry = v
                                 break
                         if entry is not None:
@@ -899,11 +912,11 @@ class PopularModelEntry:
             name_ko=str(data.get("name_ko") or data.get("name") or data.get("model_name") or ""),
             manufacturer=str(data.get("manufacturer") or data.get("brand") or data.get("maker") or ""),
             battery_type=str(data.get("battery_type") or ""),
-            battery_capacity_kwh=max(0.0, _safe_float(data.get("battery_capacity_kwh", data.get("capacity_kwh", 0.0)))),
-            rated_range_km=max(0, _safe_int(data.get("rated_range_km", data.get("range_km", 0)))),
-            base_price_krw=max(0, _safe_int(data.get("base_price_krw", data.get("price_krw", data.get("price", 0))))),
-            price_subsidy_ratio=max(0.0, min(1.0, _safe_float(data.get("price_subsidy_ratio", 1.0), default=1.0))),
-            national_subsidy_krw=max(0, _safe_int(data.get("national_subsidy_krw", data.get("national_subsidy", 0)))),
+            battery_capacity_kwh=max(0.0, _safe_float(_first_not_none(data, "battery_capacity_kwh", "capacity_kwh", default=0.0))),
+            rated_range_km=max(0, _safe_int(_first_not_none(data, "rated_range_km", "range_km", default=0))),
+            base_price_krw=max(0, _safe_int(_first_not_none(data, "base_price_krw", "price_krw", "price", default=0))),
+            price_subsidy_ratio=max(0.0, min(1.0, _safe_float(data.get("price_subsidy_ratio"), default=1.0))),
+            national_subsidy_krw=max(0, _safe_int(_first_not_none(data, "national_subsidy_krw", "national_subsidy", default=0))),
             regional_subsidy_samples=reg_samples,
         )
 
@@ -1089,9 +1102,9 @@ class NationwideSummary:
         if not isinstance(alert_region_counts, dict):
             alert_region_counts = {}
 
-        total_ann = max(0, _safe_int(data.get("total_announced_units", data.get("announced", 0))))
-        total_app = max(0, _safe_int(data.get("total_applied_units", data.get("applied", 0))))
-        total_del = max(0, _safe_int(data.get("total_delivered_units", data.get("delivered", 0))))
+        total_ann = max(0, _safe_int(_first_not_none(data, "total_announced_units", "announced", default=0)))
+        total_app = max(0, _safe_int(_first_not_none(data, "total_applied_units", "applied", default=0)))
+        total_del = max(0, _safe_int(_first_not_none(data, "total_delivered_units", "delivered", default=0)))
 
         rem_raw = data.get("total_remaining_units")
         if rem_raw is None:
@@ -1307,9 +1320,10 @@ class SubsidyPayload:
                 for r in self.regions:
                     r_id = str((r.get("region_id") if isinstance(r, dict) else getattr(r, "region_id", "")) or "").strip().lower()
                     r_iso = str((r.get("iso_code") if isinstance(r, dict) else getattr(r, "iso_code", "")) or "").strip().lower()
+                    r_code = str((r.get("code") if isinstance(r, dict) else getattr(r, "code", "")) or "").strip().lower()
                     r_ko = str((r.get("name_ko") if isinstance(r, dict) else getattr(r, "name_ko", "")) or "").strip().lower()
                     r_en = str((r.get("name_en") if isinstance(r, dict) else getattr(r, "name_en", "")) or "").strip().lower()
-                    if cand in (r_id, r_iso, r_ko, r_en):
+                    if cand in (r_id, r_iso, r_code, r_ko, r_en):
                         return r if isinstance(r, RegionRecord) else RegionRecord.from_dict(r)
 
         # 3. Substring match on Korean name or English name

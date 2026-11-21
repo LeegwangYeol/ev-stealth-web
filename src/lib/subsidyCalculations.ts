@@ -265,8 +265,11 @@ export function getPriceSubsidyRatio(msrpKrw: number): number {
 
 const REGION_SUFFIX_RE = /(특별시|광역시|특별자치시|특별자치도|도)$/;
 const MODEL_CLEAN_RE = /[\s\-_]+/g;
-const DATE_ONLY_RE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})(?:\s*(?:[Zz]|UTC|GMT))?$/;
-const DATETIME_RE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})[T ](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:\s*(?:([Zz]|UTC|GMT)|([+-])(\d{2})(?::?(\d{2}))?))?$/;
+const DATE_ONLY_RE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})(?:\s*(?:Z|UTC|GMT))?$/i;
+const US_DATE_ONLY_RE = /^(\d{1,2})([-/.])(\d{1,2})\2(\d{4})(?:\s*(?:Z|UTC|GMT))?$/i;
+const DATETIME_RE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})[Tt ](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:\s*(?:(Z|UTC|GMT)|(?:UTC|GMT)?\s*([+-])(\d{2})(?::?(\d{2}))?))?$/i;
+const EXPLICIT_TZ_RE = /(?:GMT|UTC|Z|(?:GMT|UTC)?\s*([+-])(\d{2}):?(\d{2}))\s*$/i;
+const ISO_YEAR_MONTH_RE = /^\d{4}(?:-\d{2})?$/;
 const NAMED_MONTH_DAY_RE = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b[^0-9]*(\d{1,2})\b|\b(\d{1,2})\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i;
 const MONTH_NAME_TO_INDEX: Readonly<Record<string, number>> = {
   jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
@@ -280,7 +283,7 @@ const CHEON_MAN_RE = /([\d.,]+)\s*천\s*만/;
 const MAN_RE = /([\d.,]+)\s*만/;
 const CHEON_RE = /([\d.,]+)\s*천(?!\s*만)/;
 const COMMA_RE = /,/g;
-const CURRENCY_STRIP_RE = /[,원₩\sKRWkrw]/g;
+const CURRENCY_STRIP_RE = /krw|[,원₩\s]/gi;
 
 const KO_COLLATOR = new Intl.Collator('ko');
 const DEFAULT_COLLATOR = new Intl.Collator();
@@ -733,6 +736,15 @@ function parseUtcStartDate(startDate?: Date | string | null): Date | null {
     return buildValidatedUtcDate(year, month, day, 0, 0, 0, 0);
   }
 
+  // US date-only formats: MM-DD-YYYY, MM/DD/YYYY, MM.DD.YYYY
+  const usDateOnly = US_DATE_ONLY_RE.exec(s);
+  if (usDateOnly) {
+    const month = Number(usDateOnly[1]);
+    const day = Number(usDateOnly[3]);
+    const year = Number(usDateOnly[4]);
+    return buildValidatedUtcDate(year, month, day, 0, 0, 0, 0);
+  }
+
   // Datetime formats (naive treated as UTC, or explicit Z / ±HH:MM / ±HHMM)
   const dtMatch = DATETIME_RE.exec(s);
   if (dtMatch) {
@@ -771,19 +783,55 @@ function parseUtcStartDate(startDate?: Date | string | null): Date | null {
   if (Number.isNaN(parsed.getTime())) {
     return null;
   }
+
+  const tzMatch = EXPLICIT_TZ_RE.exec(s);
+  const hasExplicitTz = Boolean(tzMatch);
+  let offsetMinutes = 0;
+  if (tzMatch && tzMatch[1]) {
+    const tzHour = Number(tzMatch[2]);
+    const tzMin = Number(tzMatch[3]);
+    if (tzHour > 23 || tzMin > 59) {
+      return null;
+    }
+    offsetMinutes = (tzMatch[1] === '+' ? 1 : -1) * (tzHour * 60 + tzMin);
+  }
+
   const namedMatch = NAMED_MONTH_DAY_RE.exec(s);
   if (namedMatch) {
     const monthToken = (namedMatch[1] ?? namedMatch[4] ?? '').slice(0, 3).toLowerCase();
     const dayToken = Number(namedMatch[2] ?? namedMatch[3]);
-    const expectedMonth = MONTH_NAME_TO_INDEX[monthToken];
+    const expectedMonth = Object.prototype.hasOwnProperty.call(MONTH_NAME_TO_INDEX, monthToken)
+      ? MONTH_NAME_TO_INDEX[monthToken]
+      : undefined;
     if (expectedMonth !== undefined && Number.isInteger(dayToken)) {
-      const hasExplicitTz = /(?:GMT|UTC|Z|[+-]\d{2}:?\d{2})\s*$/i.test(s);
-      const actualMonth = hasExplicitTz ? parsed.getUTCMonth() : parsed.getMonth();
-      const actualDay = hasExplicitTz ? parsed.getUTCDate() : parsed.getDate();
+      let actualMonth: number;
+      let actualDay: number;
+      if (hasExplicitTz) {
+        const checkDt = offsetMinutes !== 0
+          ? new Date(parsed.getTime() + offsetMinutes * 60_000)
+          : parsed;
+        actualMonth = checkDt.getUTCMonth();
+        actualDay = checkDt.getUTCDate();
+      } else {
+        actualMonth = parsed.getMonth();
+        actualDay = parsed.getDate();
+      }
       if (actualMonth !== expectedMonth || actualDay !== dayToken) {
         return null;
       }
     }
+  }
+
+  if (!hasExplicitTz && !ISO_YEAR_MONTH_RE.test(s)) {
+    return buildValidatedUtcDate(
+      parsed.getFullYear(),
+      parsed.getMonth() + 1,
+      parsed.getDate(),
+      parsed.getHours(),
+      parsed.getMinutes(),
+      parsed.getSeconds(),
+      parsed.getMilliseconds()
+    );
   }
   return parsed;
 }
@@ -1737,8 +1785,8 @@ function buildCategoryBreakdown(cat: CategoryMetrics | undefined): CategoryBreak
   return {
     announced,
     applied,
-    remaining: safeFiniteNonNeg(cat?.remaining_units) ?? calculateRemainingUnits(cat?.applied_units, cat?.announced_units),
-    rate: safeFiniteNonNeg(cat?.depletion_rate) ?? calculateDepletionRate(cat?.applied_units, cat?.announced_units),
+    remaining: safeFiniteNonNeg(cat?.remaining_units) ?? calculateRemainingUnits(applied, announced),
+    rate: safeFiniteNonNeg(cat?.depletion_rate) ?? calculateDepletionRate(applied, announced),
   };
 }
 
@@ -1793,12 +1841,14 @@ export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> |
     for (const r of regions) {
       if (!isPlainObject(r)) continue;
       const passengerCat = getSafeCategory(r.categories, 'passenger');
+      const passengerApplied = parseFiniteNonNegNumber(passengerCat?.applied_units);
+      const passengerAnnounced = parseFiniteNonNegNumber(passengerCat?.announced_units);
       const rate =
         safeFiniteNonNeg(r.overall_depletion_rate) ??
-        calculateDepletionRate(passengerCat?.applied_units, passengerCat?.announced_units);
+        calculateDepletionRate(passengerApplied, passengerAnnounced);
       const rem =
         safeFiniteNonNeg(passengerCat?.remaining_units) ??
-        calculateRemainingUnits(passengerCat?.applied_units, passengerCat?.announced_units);
+        calculateRemainingUnits(passengerApplied, passengerAnnounced);
 
       if (rate >= 100.0) {
         depletedCount++;
@@ -2000,29 +2050,32 @@ export const PROVINCE_CODES = Object.freeze([
   'KR-49',
 ] as const);
 
+const METROPOLITAN_CITY_CODE_SET: ReadonlySet<string> = new Set(METROPOLITAN_CITY_CODES);
+const PROVINCE_CODE_SET: ReadonlySet<string> = new Set(PROVINCE_CODES);
+
+function resolveRegionAliasCode(raw: string): string {
+  const trimmed = raw.trim();
+  const lower = trimmed.toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, lower)) {
+    return REGION_ALIAS_MAP[lower].toUpperCase();
+  }
+  if (Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, trimmed)) {
+    return REGION_ALIAS_MAP[trimmed].toUpperCase();
+  }
+  return trimmed.toUpperCase();
+}
+
 export function classifyRegionGroup(
   region: RegionEntry | string | null | undefined
 ): RegionalGroup {
   if (!region) return 'other';
 
-  const resolveAliasCode = (raw: string): string => {
-    const trimmed = raw.trim();
-    const lower = trimmed.toLowerCase();
-    if (Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, lower)) {
-      return REGION_ALIAS_MAP[lower].toUpperCase();
-    }
-    if (Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, trimmed)) {
-      return REGION_ALIAS_MAP[trimmed].toUpperCase();
-    }
-    return trimmed.toUpperCase();
-  };
-
   if (typeof region === 'string') {
     const ident = region.trim();
     if (!ident) return 'other';
-    const canonical = resolveAliasCode(ident);
-    if ((METROPOLITAN_CITY_CODES as readonly string[]).includes(canonical)) return 'metropolitan_cities';
-    if ((PROVINCE_CODES as readonly string[]).includes(canonical)) return 'provinces';
+    const canonical = resolveRegionAliasCode(ident);
+    if (METROPOLITAN_CITY_CODE_SET.has(canonical)) return 'metropolitan_cities';
+    if (PROVINCE_CODE_SET.has(canonical)) return 'provinces';
     for (const city of METROPOLITAN_CITIES) {
       if (ident.startsWith(city)) return 'metropolitan_cities';
     }
@@ -2044,9 +2097,9 @@ export function classifyRegionGroup(
     safeString(region.iso_code) ||
     safeString(region.region_id) ||
     safeString(region.code);
-  const code = rawCode.trim() ? resolveAliasCode(rawCode) : '';
-  if ((METROPOLITAN_CITY_CODES as readonly string[]).includes(code)) return 'metropolitan_cities';
-  if ((PROVINCE_CODES as readonly string[]).includes(code)) return 'provinces';
+  const code = rawCode.trim() ? resolveRegionAliasCode(rawCode) : '';
+  if (METROPOLITAN_CITY_CODE_SET.has(code)) return 'metropolitan_cities';
+  if (PROVINCE_CODE_SET.has(code)) return 'provinces';
 
   const nameKo = safeString(region.name_ko).trim();
   for (const city of METROPOLITAN_CITIES) {

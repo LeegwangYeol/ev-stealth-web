@@ -515,7 +515,11 @@ def normalize_report_item(item: Dict[str, Any], default_idx: int = 1) -> Dict[st
 
     # Optional: is_authentic_defect (boolean)
     if "is_authentic_defect" in item and item["is_authentic_defect"] is not None:
-        normalized["is_authentic_defect"] = bool(item["is_authentic_defect"])
+        raw_auth = item["is_authentic_defect"]
+        if isinstance(raw_auth, str):
+            normalized["is_authentic_defect"] = raw_auth.strip().lower() not in ("false", "0", "no", "off", "")
+        else:
+            normalized["is_authentic_defect"] = bool(raw_auth)
     else:
         normalized["is_authentic_defect"] = True
 
@@ -647,6 +651,11 @@ def build_canonical_payload(
 # SYNCHRONIZATION & FILE LOCKING ENGINE
 # =============================================================================
 
+def _reject_json_constant(constant: str) -> Any:
+    """Reject non-standard JSON constants (NaN, Infinity, -Infinity)."""
+    raise ValueError(f"Non-standard JSON constant: {constant}")
+
+
 def validate_reports_file(path: Union[str, Path]) -> bool:
     """Validate that path exists and parses to valid JSON with a 'reports' key or list."""
     p = Path(path)
@@ -656,10 +665,10 @@ def validate_reports_file(path: Union[str, Path]) -> bool:
         return False
     try:
         with open(p, "r", encoding="utf-8-sig") as f:
-            data = json.load(f)
+            data = json.load(f, parse_constant=_reject_json_constant)
         if isinstance(data, dict):
             if "reports" in data and isinstance(data["reports"], list):
-                return True
+                return all(isinstance(item, dict) for item in data["reports"])
         elif isinstance(data, list):
             return all(isinstance(item, dict) for item in data)
         return False
@@ -671,14 +680,33 @@ def validate_reports_file(path: Union[str, Path]) -> bool:
 def load_reports_from_file(path: Path) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Load defect reports and top-level metadata from file."""
     with open(path, "r", encoding="utf-8-sig") as f:
-        data = json.load(f)
+        data = json.load(f, parse_constant=_reject_json_constant)
     if isinstance(data, dict):
         reports = data.get("reports", [])
         meta = {k: v for k, v in data.items() if k != "reports"}
-        return (reports if isinstance(reports, list) else []), meta
+        return ([r for r in reports if isinstance(r, dict)] if isinstance(reports, list) else []), meta
     elif isinstance(data, list):
         return [r for r in data if isinstance(r, dict)], {}
     return [], {}
+
+
+def _is_repo_path(p: Path, repo_root: Path) -> bool:
+    """Return True if path p resides inside known repository data/web directories."""
+    try:
+        res = p.resolve()
+        for cand in (
+            repo_root / "data",
+            repo_root / "ev-stealth-web",
+            repo_root / "ev-stealth-web" / "src" / "data",
+            repo_root / "ev-stealth-web" / "data",
+            repo_root / "src" / "data",
+            repo_root / "public" / "data",
+        ):
+            if cand.exists() and (res == cand.resolve() or res.parent == cand.resolve()):
+                return True
+    except (OSError, RuntimeError):
+        pass
+    return False
 
 
 def get_default_known_paths(
@@ -690,11 +718,31 @@ def get_default_known_paths(
 
     has_root_dir = bool(root_dir and str(root_dir).strip())
     has_web_dir = bool(web_dir and str(web_dir).strip())
+    is_custom_run = has_root_dir or has_web_dir
 
     # 1. Root reports path
     if has_root_dir:
         rp = Path(str(root_dir).strip())
-        root_path = rp / "daily_reports.json" if (rp.is_dir() or rp.suffix != ".json") else rp
+        root_path = rp if (rp.suffix == ".json" and not rp.is_dir()) else rp / "daily_reports.json"
+    elif has_web_dir:
+        w_base = Path(str(web_dir).strip())
+        if _is_repo_path(w_base, repo_root):
+            root_path = repo_root / "data" / "daily_reports.json" if (repo_root / "data").is_dir() else Path.cwd() / "data" / "daily_reports.json"
+        else:
+            custom_root_cand = next(
+                (
+                    d / "daily_reports.json"
+                    for d in (w_base.parent / "data", w_base.parent.parent / "data", w_base.parent.parent.parent / "data")
+                    if d.is_dir()
+                ),
+                None,
+            )
+            if custom_root_cand is not None:
+                root_path = custom_root_cand
+            elif (w_base / "src" / "data").is_dir():
+                root_path = w_base / "src" / "data" / "daily_reports.json"
+            else:
+                root_path = w_base if (w_base.suffix == ".json" and not w_base.is_dir()) else w_base / "daily_reports.json"
     elif (repo_root / "data").is_dir():
         root_path = repo_root / "data" / "daily_reports.json"
     else:
@@ -703,14 +751,34 @@ def get_default_known_paths(
     # 2. Web reports path (src/data/)
     if has_web_dir:
         w = Path(str(web_dir).strip())
-        if (w / "src" / "data").is_dir():
+        if w.suffix == ".json" and not w.is_dir():
+            web_path = w
+        elif (w / "src" / "data").is_dir():
             web_path = w / "src" / "data" / "daily_reports.json"
-        elif w.name == "data" and w.parent.name == "src":
-            web_path = w / "daily_reports.json"
-        elif (w / "daily_reports.json").is_file():
-            web_path = w / "daily_reports.json"
         else:
             web_path = w / "daily_reports.json"
+    elif has_root_dir:
+        rp_base = root_path.parent
+        if _is_repo_path(rp_base, repo_root):
+            if (repo_root / "ev-stealth-web" / "src" / "data").is_dir():
+                web_path = repo_root / "ev-stealth-web" / "src" / "data" / "daily_reports.json"
+            elif (repo_root / "src" / "data").is_dir():
+                web_path = repo_root / "src" / "data" / "daily_reports.json"
+            else:
+                web_path = root_path
+        else:
+            custom_web_cand = next(
+                (
+                    d / "daily_reports.json"
+                    for d in (
+                        rp_base.parent / "ev-stealth-web" / "src" / "data",
+                        rp_base.parent / "src" / "data",
+                    )
+                    if d.is_dir()
+                ),
+                None,
+            )
+            web_path = custom_web_cand if custom_web_cand is not None else root_path
     elif (repo_root / "ev-stealth-web" / "src" / "data").is_dir():
         web_path = repo_root / "ev-stealth-web" / "src" / "data" / "daily_reports.json"
     elif (repo_root / "src" / "data").is_dir():
@@ -719,7 +787,6 @@ def get_default_known_paths(
         web_path = Path.cwd() / "src" / "data" / "daily_reports.json"
 
     # 3. Additional targets
-    is_custom_run = has_root_dir or has_web_dir
     if is_custom_run:
         additional: List[Path] = []
         if has_web_dir:
@@ -773,7 +840,16 @@ def sync_defect_reports(
     Returns list of paths successfully synchronized.
     """
     root_reports_path, web_reports_path, additional_paths = get_default_known_paths(root_dir, web_dir)
-    all_target_paths = [root_reports_path, web_reports_path] + additional_paths
+    all_target_paths: List[Path] = []
+    seen_targets: Set[str] = set()
+    for p in [root_reports_path, web_reports_path] + additional_paths:
+        try:
+            p_key = str(p.resolve())
+        except (OSError, RuntimeError):
+            p_key = str(p.absolute())
+        if p_key not in seen_targets:
+            seen_targets.add(p_key)
+            all_target_paths.append(p)
 
     logger.info("Initiating defect reports synchronization...")
     logger.debug("Primary root: %s", root_reports_path)

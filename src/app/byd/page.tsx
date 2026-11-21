@@ -11,16 +11,20 @@ const rawSiteUrl =
   (process.env.NEXT_PUBLIC_SITE_URL || '').trim().replace(/\/+$/, '') ||
   'https://ev-stealth-web.vercel.app';
 const normalizedSiteUrl =
-  rawSiteUrl.startsWith('http://') || rawSiteUrl.startsWith('https://')
+  /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawSiteUrl) || rawSiteUrl.startsWith('//')
     ? rawSiteUrl
     : `https://${rawSiteUrl}`;
 
 function resolveSiteUrl(url: string): string {
   try {
-    return new URL(url).origin;
+    const parsed = new URL(url);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.origin;
+    }
   } catch {
-    return 'https://ev-stealth-web.vercel.app';
+    // fallback below
   }
+  return 'https://ev-stealth-web.vercel.app';
 }
 
 const SITE_URL = resolveSiteUrl(normalizedSiteUrl);
@@ -297,7 +301,7 @@ export default function BydPage() {
       <JsonLd data={bydJsonLd} />
       <BrandComparisonNav currentBrand="byd" pageTitle="BYD 구매 가이드" />
 
-      <header className="border-b pb-4 space-y-2">
+      <header className="border-b border-slate-200 pb-4 space-y-2">
         <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
           BYD 연식별 구매 가이드 (피해야 할 연식)
         </h1>
@@ -356,7 +360,7 @@ export default function BydPage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="돌핀 국토교통부 자동차리콜센터 리콜 조회 (새 창에서 열림)"
-                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] min-w-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>리콜 조회</span>
                     <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -389,7 +393,7 @@ export default function BydPage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="시라이언 07 국토교통부 자동차리콜센터 리콜 조회 (새 창에서 열림)"
-                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] min-w-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>리콜 조회</span>
                     <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -422,7 +426,7 @@ export default function BydPage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="씰 국토교통부 자동차리콜센터 리콜 조회 (새 창에서 열림)"
-                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] min-w-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>리콜 조회</span>
                     <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -455,7 +459,7 @@ export default function BydPage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="아토 3 국토교통부 자동차리콜센터 리콜 조회 (새 창에서 열림)"
-                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
+                    className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] min-w-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>리콜 조회</span>
                     <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">

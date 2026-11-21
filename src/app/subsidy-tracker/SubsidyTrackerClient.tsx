@@ -170,7 +170,8 @@ export const BRAND_PREFIX_REGEX = /^(현대|기아|테슬라|KGM|비야디|BYD)\
 
 // Pure Helper: Zone categorizer
 const getRegionZone = (isoCode: string): ZoneFilter => {
-  switch (isoCode) {
+  const code = typeof isoCode === 'string' ? isoCode.trim().toUpperCase() : '';
+  switch (code) {
     case 'KR-11': // 서울
     case 'KR-41': // 경기
     case 'KR-28': // 인천
@@ -186,7 +187,8 @@ const getRegionZone = (isoCode: string): ZoneFilter => {
     case 'KR-46': // 전남
       return 'HONAM';
     case 'KR-30': // 대전
-    case 'KR-36': // 세종
+    case 'KR-36': // 세종 (CleanSys)
+    case 'KR-50': // 세종 (ISO 3166-2:KR)
     case 'KR-43': // 충북
     case 'KR-44': // 충남
       return 'CHUNGCHEONG';
@@ -412,7 +414,7 @@ const TrackerHeader = React.memo(function TrackerHeader({
               <strong className="text-rose-100 font-semibold">마감 임박 특보 (소진율 95% 이상):</strong>
             </div>
             <div className="flex flex-wrap gap-1.5 ml-1">
-              {criticalRegions.map((crit) => {
+              {criticalRegions.map((crit, idx) => {
                 const critCat = crit.categories?.[selectedCategory] || crit.categories?.passenger;
                 const critAnn = Number.isFinite(critCat?.announced_units) ? Math.max(0, critCat.announced_units) : 0;
                 const critApp = Number.isFinite(critCat?.applied_units) ? Math.max(0, critCat.applied_units) : 0;
@@ -421,16 +423,18 @@ const TrackerHeader = React.memo(function TrackerHeader({
                   : critAnn > 0
                   ? (critApp / critAnn) * 100
                   : 0;
+                const critKey = crit.region_id || crit.iso_code || crit.name_ko || `crit-${idx}`;
+                const critName = crit.name_ko || '해당 지역';
                 return (
                   <button
-                    key={crit.region_id}
+                    key={critKey}
                     type="button"
-                    onClick={() => onSelectCriticalRegion(crit.name_ko, crit.region_id)}
-                    aria-label={`${crit.name_ko} 소진율 ${critRate.toFixed(1)}%, 보조금 계산기로 이동`}
-                    className="px-2.5 py-1.5 min-h-[44px] inline-flex items-center rounded bg-rose-900 border border-rose-500/50 text-rose-200 hover:bg-rose-800 hover:text-white transition font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-                    title={`${crit.name_ko} 보조금 계산기로 이동`}
+                    onClick={() => onSelectCriticalRegion(critName, crit.region_id || critKey)}
+                    aria-label={`${critName} 소진율 ${critRate.toFixed(1)}%, 보조금 계산기로 이동`}
+                    className="px-2.5 py-1.5 min-h-[44px] min-w-[44px] inline-flex items-center rounded bg-rose-900 border border-rose-500/50 text-rose-200 hover:bg-rose-800 hover:text-white transition font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                    title={`${critName} 보조금 계산기로 이동`}
                   >
-                    {crit.name_ko} ({critRate.toFixed(1)}%)
+                    {critName} ({critRate.toFixed(1)}%)
                   </button>
                 );
               })}
@@ -539,9 +543,8 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   }, [searchQuery]);
 
   // Performance Optimization: Non-blocking search filtering via useDeferredValue on debouncedQuery
+  // (Replaces direct useDeferredValue(searchQuery) to avoid extra deferred transition renders per keystroke)
   const deferredSearchQuery = useDeferredValue(debouncedQuery);
-  const _legacyDeferredSearch = useDeferredValue(searchQuery);
-  void _legacyDeferredSearch;
 
   // Search Input & Calculator Refs
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -584,7 +587,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
       if (!catMetrics) return false;
 
       // Zone filter
-      if (zoneFilter !== 'ALL' && getRegionZone(region.iso_code) !== zoneFilter) {
+      if (zoneFilter !== 'ALL' && getRegionZone(region.iso_code || region.region_id) !== zoneFilter) {
         return false;
       }
 
@@ -774,8 +777,8 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
 
   // Performance & Stability: Memoized regional cards to prevent re-render cascades
   const renderedGridCards = useMemo(() => {
-    return filteredRegions.map((regionItem) => {
-      const regionKey = regionItem.region_id || regionItem.iso_code || regionItem.name_ko || 'unknown';
+    return filteredRegions.map((regionItem, idx) => {
+      const regionKey = regionItem.region_id || regionItem.iso_code || regionItem.name_ko || `region-${idx}`;
       return (
         <RegionCard
           key={regionKey}
@@ -945,14 +948,14 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
 
         {/* Active Filter Clear indicator with role="status" and aria-live (Persistent in DOM to satisfy aria-describedby) */}
         <div className="flex items-center justify-between text-xs text-slate-300 pt-2 border-t border-slate-800">
-          <span id="filter-feedback-status" role="status" aria-live="polite">
-            {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || debouncedQuery.trim() !== '' || supplementaryOnly) ? (
+          <span id="filter-feedback-status" role="status" aria-live="polite" aria-atomic="true">
+            {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || deferredSearchQuery.trim() !== '' || supplementaryOnly) ? (
               <>필터 적용 중: 총 <strong>{filteredRegions.length}</strong>개 지역 표시 중 ({SORT_OPTION_LABELS[sortOption] || ''})</>
             ) : (
               <>전체 <strong>{filteredRegions.length}</strong>개 지역 표시 중 ({SORT_OPTION_LABELS[sortOption] || ''})</>
             )}
           </span>
-          {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || searchQuery || supplementaryOnly) && (
+          {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || searchQuery.trim() !== '' || supplementaryOnly) && (
             <button
               type="button"
               aria-label="적용된 전체 필터 초기화"
@@ -1032,13 +1035,13 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
 
             {/* Diagnostic Filter Chips: Allows removing individual constraints */}
             <div className="flex flex-wrap items-center justify-center gap-2 pt-1 max-w-xl mx-auto">
-              {debouncedQuery.trim() !== '' && (
+              {deferredSearchQuery.trim() !== '' && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-200">
-                  <span>검색어: <strong>&ldquo;{debouncedQuery}&rdquo;</strong></span>
+                  <span>검색어: <strong>&ldquo;{deferredSearchQuery}&rdquo;</strong></span>
                   <button
                     type="button"
                     onClick={handleClearSearch}
-                    aria-label={`검색어 "${debouncedQuery}" 제거`}
+                    aria-label={`검색어 "${deferredSearchQuery}" 제거`}
                     className="ml-1 text-slate-300 hover:text-white font-bold p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                   >
                     ✕
@@ -1428,12 +1431,18 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
     setCustomMsrpInput(msrp);
   }, []);
 
-  // Performance: Fast O(1) indexed lookup maps for models and regions
+  // Performance: Fast O(1) indexed lookup maps for models and regions (IDs, ISO codes, and localized names)
   const modelsMap = useMemo(() => {
     const map = new Map<string, PopularModelEntry>();
     for (const m of models) {
       if (m?.model_id) {
         map.set(m.model_id.toLowerCase(), m);
+      }
+    }
+    for (const m of models) {
+      if (typeof m?.name_ko === 'string') {
+        const ko = m.name_ko.trim().toLowerCase();
+        if (ko && !map.has(ko)) map.set(ko, m);
       }
     }
     return map;
@@ -1449,6 +1458,18 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
         map.set(r.iso_code.toLowerCase(), r);
       }
     }
+    for (const r of regions) {
+      if (typeof r?.name_ko === 'string') {
+        const ko = r.name_ko.trim().toLowerCase();
+        if (ko && !map.has(ko)) map.set(ko, r);
+        const strippedKo = ko.replace(/(특별시|광역시|특별자치시|도|특별자치도)$/, '');
+        if (strippedKo && !map.has(strippedKo)) map.set(strippedKo, r);
+      }
+      if (typeof r?.name_en === 'string') {
+        const en = r.name_en.trim().toLowerCase();
+        if (en && !map.has(en)) map.set(en, r);
+      }
+    }
     return map;
   }, [regions]);
 
@@ -1457,57 +1478,36 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
 
   const activeModel = useMemo(() => {
     const q = (selectedModelId || '').trim().toLowerCase();
-    if (q && modelsMap.has(q)) {
-      return modelsMap.get(q)!;
+    if (!q) {
+      return models[0] || undefined;
+    }
+    const directHit = modelsMap.get(q);
+    if (directHit) {
+      return directHit;
     }
     const resolved = getModelById(q);
     if (resolved) {
       const resolvedId = typeof resolved.model_id === 'string' ? resolved.model_id.toLowerCase() : '';
-      const matchInModels = resolvedId ? modelsMap.get(resolvedId) : undefined;
-      if (matchInModels) return matchInModels;
-      return resolved;
+      return (resolvedId ? modelsMap.get(resolvedId) : undefined) || resolved;
     }
-    return (
-      (q
-        ? models.find(
-            (m) =>
-              m &&
-              ((typeof m.model_id === 'string' && m.model_id.toLowerCase() === q) ||
-                (typeof m.name_ko === 'string' && m.name_ko.toLowerCase().includes(q)))
-          )
-        : undefined) ||
-      models[0] ||
-      undefined
-    );
+    return models[0] || undefined;
   }, [models, modelsMap, selectedModelId, getModelById]);
 
   const activeRegionForCalc = useMemo(() => {
     const q = (selectedRegionId || '').trim().toLowerCase();
-    if (q && regionsMap.has(q)) {
-      return regionsMap.get(q)!;
+    if (!q) {
+      return regions[0] || undefined;
+    }
+    const directHit = regionsMap.get(q);
+    if (directHit) {
+      return directHit;
     }
     const resolved = getRegionById(q);
     if (resolved) {
       const resolvedId = typeof resolved.region_id === 'string' ? resolved.region_id.toLowerCase() : '';
-      const matchInRegions = resolvedId ? regionsMap.get(resolvedId) : undefined;
-      if (matchInRegions) return matchInRegions;
-      return resolved;
+      return (resolvedId ? regionsMap.get(resolvedId) : undefined) || resolved;
     }
-    return (
-      (q
-        ? regions.find((r) => {
-            if (!r || typeof r !== 'object') return false;
-            const rid = typeof r.region_id === 'string' ? r.region_id.toLowerCase() : '';
-            const iso = typeof r.iso_code === 'string' ? r.iso_code.toLowerCase() : '';
-            const ko = typeof r.name_ko === 'string' ? r.name_ko.toLowerCase() : '';
-            const en = typeof r.name_en === 'string' ? r.name_en.toLowerCase() : '';
-            const strippedKo = ko.replace(/(특별시|광역시|특별자치시|도|특별자치도)$/, '');
-            return rid === q || iso === q || ko === q || strippedKo === q || en === q;
-          })
-        : undefined) ||
-      regions[0] ||
-      undefined
-    );
+    return regions[0] || undefined;
   }, [regions, regionsMap, selectedRegionId, getRegionById]);
 
   const handleToggleCustomMsrp = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1592,8 +1592,8 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               {models.length === 0 ? (
                 <option value="">등록된 차량 모델 없음</option>
               ) : (
-                models.map((model) => (
-                  <option key={model.model_id} value={model.model_id}>
+                models.map((model, idx) => (
+                  <option key={model.model_id || `model-${idx}`} value={model.model_id}>
                     {model.manufacturer || ''} - {model.name_ko || model.model_id} (출고가 {((Number.isFinite(model.base_price_krw) ? Math.max(0, model.base_price_krw) : 0) / 10000).toLocaleString()}만 원)
                   </option>
                 ))
@@ -1602,12 +1602,12 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
 
             {/* Quick Pills for Top Models */}
             <div role="group" aria-label="인기 전기차 모델 빠른 선택" className="flex flex-wrap gap-1.5 pt-1">
-              {topModels.map((m) => {
+              {topModels.map((m, idx) => {
                 const isSelected = (activeModel?.model_id || selectedModelId) === m.model_id;
                 const displayName = (typeof m.name_ko === 'string' ? m.name_ko : m.model_id || '').replace(BRAND_PREFIX_REGEX, '');
                 return (
                   <button
-                    key={m.model_id}
+                    key={m.model_id || `top-model-${idx}`}
                     type="button"
                     aria-pressed={isSelected}
                     aria-label={`${m.name_ko || displayName} 모델 선택`}
@@ -1650,12 +1650,18 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               {regions.length === 0 ? (
                 <option value="">등록된 지자체 데이터 없음</option>
               ) : (
-                regions.map((reg) => {
+                regions.map((reg, idx) => {
                   const pCat = reg.categories?.passenger;
-                  const pRate = Number.isFinite(pCat?.depletion_rate) ? Math.max(0, pCat!.depletion_rate) : 0;
+                  const pAnn = Number.isFinite(pCat?.announced_units) ? Math.max(0, pCat!.announced_units) : 0;
+                  const pApp = Number.isFinite(pCat?.applied_units) ? Math.max(0, pCat!.applied_units) : 0;
+                  const pRate = Number.isFinite(pCat?.depletion_rate)
+                    ? Math.max(0, pCat!.depletion_rate)
+                    : pAnn > 0
+                    ? (pApp / pAnn) * 100
+                    : 0;
                   const pStatus = normalizeAlertSeverity(pCat?.status, pRate);
                   return (
-                    <option key={reg.region_id} value={reg.region_id}>
+                    <option key={reg.region_id || reg.iso_code || `reg-${idx}`} value={reg.region_id}>
                       {reg.name_ko} ({pRate.toFixed(1)}% 소진, {getStatusLabel(pStatus)})
                     </option>
                   );
@@ -1713,6 +1719,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                 <p
                   id="custom-msrp-hint"
                   aria-live="polite"
+                  aria-atomic="true"
                   className={`text-[11px] ${hasInvalidCustomMsrp ? 'text-rose-300 font-medium' : 'text-slate-300'}`}
                 >
                   {hasInvalidCustomMsrp

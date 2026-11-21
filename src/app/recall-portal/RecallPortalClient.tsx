@@ -97,6 +97,19 @@ function normalizeSearchText(text?: string | null): string {
   return text.toLowerCase().replace(/[\s\-_\/()+[\],.*&]/g, '');
 }
 
+/**
+ * Normalizes raw VIN input/paste strings across full-width Unicode forms (NFKC),
+ * invisible characters (ZWSP, soft-hyphen, word-joiner, BOM), bidi overrides, whitespace, and dashes.
+ */
+function normalizeVinInput(raw: unknown, maxLength?: number): string {
+  if (typeof raw !== 'string') return '';
+  const normalized = sanitizeText(raw)
+    .normalize('NFKC')
+    .toUpperCase()
+    .replace(/[\s\-\u00AD\u2010-\u2015\u200B-\u200D\u2060\uFEFF]/g, '');
+  return typeof maxLength === 'number' ? normalized.slice(0, maxLength) : normalized;
+}
+
 function resolveBrand(inputBrand: string, availableBrands: string[]): string | undefined {
   if (!inputBrand || typeof inputBrand !== 'string' || !Array.isArray(availableBrands)) {
     return undefined;
@@ -476,20 +489,14 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
         clearTimeout(vinDebounceTimerRef.current);
       }
       setIsSearchingVin(false);
-      const cleanVin = sanitizeText(vin)
-        .trim()
-        .toUpperCase()
-        .replace(/[\s\-\u2010-\u2015\u200B-\u200D\uFEFF]/g, '');
+      const cleanVin = normalizeVinInput(vin);
+      const isExactLength = cleanVin.length === 17;
       setVinInput(cleanVin);
       setVinTouched(true);
-      setVinBlurred(cleanVin.length !== 17);
+      setVinBlurred(!isExactLength);
       setVinSubmitted(false);
       setActiveCheckerMode('VIN');
-      if (cleanVin.length === 17) {
-        const result = decodeVinAndCheckRecalls(cleanVin, initialDatabase);
-        setCheckResult(result);
-        focusResultSection();
-      } else if (cleanVin.length > 0) {
+      if (cleanVin.length > 0) {
         const result = decodeVinAndCheckRecalls(cleanVin, initialDatabase);
         setCheckResult(result);
         focusResultSection();
@@ -511,17 +518,17 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
   // Realtime ISO / US 9th check digit checksum verification
   const vinChecksum = useMemo(() => {
     if (!vinInput) return null;
-    const clean = vinInput.trim().toUpperCase().replace(/[\s-]/g, '');
+    const clean = normalizeVinInput(vinInput);
     if (clean.length !== 17) return null;
     return verifyVinChecksum(clean);
   }, [vinInput]);
 
   // Debounced input change handler for VIN search
   const handleVinChange = useCallback((value: string) => {
-    const clean = value
-      .toUpperCase()
-      .replace(/[\s\-\u2010-\u2015\u200B-\u200D\uFEFF]/g, '')
-      .slice(0, 17);
+    const clean = normalizeVinInput(value, 17);
+    if (clean === vinInput) {
+      return;
+    }
     setVinInput(clean);
     setVinTouched(true);
     setVinSubmitted(false);
@@ -552,18 +559,19 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
         setCheckResult(result);
       }, 350);
     }
-  }, [initialDatabase]);
+  }, [vinInput, initialDatabase]);
 
   // Clean pasted VINs (including hyphens/spaces/Unicode dashes/selection replacement) before maxLength=17 truncates them
   const handleVinPaste = useCallback(
     (e: React.ClipboardEvent<HTMLInputElement>) => {
-      const pastedText = e.clipboardData?.getData('text');
+      const pastedText = e.clipboardData?.getData('text/plain') || e.clipboardData?.getData('text');
       if (!pastedText) return;
       e.preventDefault();
       const input = e.currentTarget;
-      const start = input.selectionStart ?? vinInput.length;
-      const end = input.selectionEnd ?? vinInput.length;
-      const combined = vinInput.slice(0, start) + pastedText + vinInput.slice(end);
+      const baseValue = input.value ?? vinInput;
+      const start = input.selectionStart ?? baseValue.length;
+      const end = input.selectionEnd ?? baseValue.length;
+      const combined = baseValue.slice(0, start) + pastedText + baseValue.slice(end);
       handleVinChange(combined);
     },
     [vinInput, handleVinChange]
@@ -579,22 +587,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
       clearTimeout(vinDebounceTimerRef.current);
     }
     setIsSearchingVin(false);
-    const clean = vinInput.trim().toUpperCase().replace(/[\s-]/g, '');
-    if (!clean) {
-      const result = decodeVinAndCheckRecalls('', initialDatabase);
-      setCheckResult(result);
-      focusResultSection();
-      return;
-    }
-
-    const validation = validateVinString(clean);
-    if (!validation.valid) {
-      const result = decodeVinAndCheckRecalls(clean, initialDatabase);
-      setCheckResult(result);
-      focusResultSection();
-      return;
-    }
-
+    const clean = normalizeVinInput(vinInput);
     const result = decodeVinAndCheckRecalls(clean, initialDatabase);
     setCheckResult(result);
     focusResultSection();
@@ -602,14 +595,13 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
   // Quick 1-click sample VIN handler
   const handleSelectSampleVin = useCallback((sampleVin: string) => {
-    const cleanSample = typeof sampleVin === 'string'
-      ? sampleVin.trim().toUpperCase().replace(/[\s\-\u2010-\u2015\u200B-\u200D\uFEFF]/g, '')
-      : '';
+    const cleanSample = normalizeVinInput(sampleVin, 17);
     if (!cleanSample) return;
     if (vinDebounceTimerRef.current) {
       clearTimeout(vinDebounceTimerRef.current);
     }
     setIsSearchingVin(false);
+    setActiveCheckerMode('VIN');
     setVinInput(cleanSample);
     setVinTouched(true);
     setVinBlurred(false);
@@ -784,7 +776,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
   // Active VIN error state for accessible form feedback
   // Only display intrusive error alerts when illegal characters (I, O, Q) are entered,
   // when blur occurs on an incomplete VIN, or when submitted.
-  const cleanVinLength = vinInput.trim().replace(/[\s-]/g, '').length;
+  const cleanVinLength = normalizeVinInput(vinInput).length;
   const hasIllegalVinChars = /[IOQ]/i.test(vinInput);
   const showVinError =
     hasIllegalVinChars ||
@@ -840,12 +832,6 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     } else if (e.key === 'End') {
       e.preventDefault();
       nextMode = 'MODEL';
-    } else if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
-      e.preventDefault();
-      cancelPendingVinSearch();
-      setActiveCheckerMode(currentMode);
-      setCheckResult(null);
-      return;
     }
     if (nextMode && nextMode !== currentMode) {
       cancelPendingVinSearch();
@@ -976,9 +962,11 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               tabIndex={activeCheckerMode === 'VIN' ? 0 : -1}
               onKeyDown={(e) => handleModeKeyDown(e, 'VIN')}
               onClick={() => {
-                cancelPendingVinSearch();
-                setActiveCheckerMode('VIN');
-                setCheckResult(null);
+                if (activeCheckerMode !== 'VIN') {
+                  cancelPendingVinSearch();
+                  setActiveCheckerMode('VIN');
+                  setCheckResult(null);
+                }
               }}
               className={`py-3 px-5 min-h-[44px] text-sm font-semibold border-b-2 transition flex items-center justify-center sm:justify-start gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                 activeCheckerMode === 'VIN'
@@ -1000,9 +988,11 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               tabIndex={activeCheckerMode === 'MODEL' ? 0 : -1}
               onKeyDown={(e) => handleModeKeyDown(e, 'MODEL')}
               onClick={() => {
-                cancelPendingVinSearch();
-                setActiveCheckerMode('MODEL');
-                setCheckResult(null);
+                if (activeCheckerMode !== 'MODEL') {
+                  cancelPendingVinSearch();
+                  setActiveCheckerMode('MODEL');
+                  setCheckResult(null);
+                }
               }}
               className={`py-3 px-5 min-h-[44px] text-sm font-semibold border-b-2 transition flex items-center justify-center sm:justify-start gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
                 activeCheckerMode === 'MODEL'
@@ -1065,7 +1055,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     }`}
                   />
                   <p id="vin-format-hint" className="sr-only">영문 대문자와 숫자로 구성된 17자리 차량 식별 번호 (I, O, Q 제외)</p>
-                  <div className="absolute right-3 top-3.5 flex items-center gap-2">
+                  <div className="absolute inset-y-0 right-3 flex items-center gap-2 pointer-events-none">
                     {isSearchingVin && (
                       <span role="status" aria-live="polite" className="inline-flex items-center gap-1 text-xs text-blue-400">
                         <svg className="animate-spin h-3.5 w-3.5 text-blue-400 motion-reduce:hidden" width="14" height="14" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -1150,30 +1140,34 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 <span className="text-[11px] text-slate-300">실제 KDM 출고 규격</span>
               </div>
               <div role="group" aria-label="실제 KDM 출고 규격 예시 차대번호 빠른 선택 목록" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                {vinPrefixes.slice(0, 6).map((item, idx) => (
-                  <button
-                    key={item.sample_full_vin || `${item.prefix}-${idx}`}
-                    type="button"
-                    aria-pressed={vinInput === item.sample_full_vin}
-                    aria-label={`${item.brand || '제조사'} ${item.model_name || '차종'} 샘플 차대번호(${item.sample_full_vin}) 자동 입력`}
-                    onClick={() => handleSelectSampleVin(item.sample_full_vin)}
-                    className={`p-2.5 rounded-lg border text-left transition group focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 min-h-[44px] ${
-                      vinInput === item.sample_full_vin
-                        ? 'bg-blue-950/60 border-blue-500 ring-1 ring-blue-500'
-                        : 'bg-slate-900 hover:bg-blue-900/40 border-slate-800 hover:border-blue-700'
-                    }`}
-                  >
-                    <div className="text-xs font-bold text-white group-hover:text-blue-300 truncate">
-                      {item.model_name || '차종 미상'}
-                    </div>
-                    <div className="text-[10px] text-slate-300 truncate mt-0.5">
-                      {item.brand || '제조사 미상'}
-                    </div>
-                    <div className="text-[10px] font-mono text-blue-300 truncate mt-1">
-                      {item.prefix}...
-                    </div>
-                  </button>
-                ))}
+                {vinPrefixes.slice(0, 6).map((item, idx) => {
+                  const normalizedSample = normalizeVinInput(item.sample_full_vin, 17);
+                  const isSampleSelected = Boolean(normalizedSample) && vinInput === normalizedSample;
+                  return (
+                    <button
+                      key={item.sample_full_vin || `${item.prefix}-${idx}`}
+                      type="button"
+                      aria-pressed={isSampleSelected}
+                      aria-label={`${item.brand || '제조사'} ${item.model_name || '차종'} 샘플 차대번호(${item.sample_full_vin || '미등록'}) 자동 입력`}
+                      onClick={() => item.sample_full_vin && handleSelectSampleVin(item.sample_full_vin)}
+                      className={`p-2.5 rounded-lg border text-left transition group focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 min-h-[44px] ${
+                        isSampleSelected
+                          ? 'bg-blue-950/60 border-blue-500 ring-1 ring-blue-500'
+                          : 'bg-slate-900 hover:bg-blue-900/40 border-slate-800 hover:border-blue-700'
+                      }`}
+                    >
+                      <div className="text-xs font-bold text-white group-hover:text-blue-300 truncate">
+                        {item.model_name || '차종 미상'}
+                      </div>
+                      <div className="text-[10px] text-slate-300 truncate mt-0.5">
+                        {item.brand || '제조사 미상'}
+                      </div>
+                      <div className="text-[10px] font-mono text-blue-300 truncate mt-1">
+                        {item.prefix}...
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1302,7 +1296,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       <span className="text-xs font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-red-950 text-red-200 border border-red-700">
                         {checkResult.mode === 'MODEL' ? '차종 선택 검증 안내' : '차대번호(VIN) 유효성 검증 실패'}
                       </span>
-                      <span className="text-xs text-slate-300">
+                      <span className="text-xs text-slate-300 break-all">
                         입력값: <span className="font-mono text-amber-300 font-bold">{checkResult.query || '(선택 없음)'}</span>
                       </span>
                     </div>
@@ -1594,7 +1588,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               <div role="group" aria-label="배터리 제원 보기 방식 선택" className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
                 <button
                   type="button"
-                  aria-label="배터리 제원 카드 뷰 보기"
+                  aria-label="배터리 제원 카드형 보기"
                   aria-pressed={batteryViewMode === 'card'}
                   onClick={() => setBatteryViewMode('card')}
                   className={`px-3 py-1.5 min-h-[44px] rounded-lg text-xs font-semibold transition inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
@@ -1607,7 +1601,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 </button>
                 <button
                   type="button"
-                  aria-label="배터리 제원 대장 표 보기"
+                  aria-label="배터리 제원 테이블형 보기"
                   aria-pressed={batteryViewMode === 'table'}
                   onClick={() => setBatteryViewMode('table')}
                   className={`px-3 py-1.5 min-h-[44px] rounded-lg text-xs font-semibold transition inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
@@ -1725,7 +1719,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     <button
                       type="button"
                       onClick={() => setVisibleBatteryCount(filteredBatteryProfiles.length)}
-                      aria-label={`배터리 차종 전체 ${filteredBatteryProfiles.length}개 펼쳐보기`}
+                      aria-label={`배터리 차종 전체 보기 (${filteredBatteryProfiles.length}개)`}
                       className="px-4 py-2.5 min-h-[44px] rounded-xl text-xs font-medium text-slate-300 hover:text-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     >
                       전체 보기 ({filteredBatteryProfiles.length}개 차종)
@@ -1751,7 +1745,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     <button
                       type="button"
                       onClick={() => setVisibleBatteryCount(filteredBatteryProfiles.length)}
-                      aria-label={`배터리 차종 전체 ${filteredBatteryProfiles.length}개 펼쳐보기`}
+                      aria-label={`배터리 차종 전체 보기 (${filteredBatteryProfiles.length}개)`}
                       className="px-4 py-2.5 min-h-[44px] rounded-xl text-xs font-medium text-slate-300 hover:text-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     >
                       전체 보기 ({filteredBatteryProfiles.length}개 차종)
@@ -1795,7 +1789,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               <div role="group" aria-label="리콜 캠페인 목록 보기 방식 선택" className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
                 <button
                   type="button"
-                  aria-label="리콜 캠페인 카드 뷰 보기"
+                  aria-label="리콜 캠페인 카드형 보기"
                   aria-pressed={recallViewMode === 'card'}
                   onClick={() => setRecallViewMode('card')}
                   className={`px-3 py-1.5 min-h-[44px] rounded-lg text-xs font-semibold transition inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
@@ -1808,7 +1802,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                 </button>
                 <button
                   type="button"
-                  aria-label="리콜 캠페인 대장 표 보기"
+                  aria-label="리콜 캠페인 테이블형 보기"
                   aria-pressed={recallViewMode === 'table'}
                   onClick={() => setRecallViewMode('table')}
                   className={`px-3 py-1.5 min-h-[44px] rounded-lg text-xs font-semibold transition inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
@@ -1949,7 +1943,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     <button
                       type="button"
                       onClick={() => setVisibleRecallCount(filteredRecalls.length)}
-                      aria-label={`리콜 캠페인 전체 ${filteredRecalls.length}건 펼쳐보기`}
+                      aria-label={`리콜 캠페인 전체 보기 (${filteredRecalls.length}건)`}
                       className="px-4 py-2.5 min-h-[44px] rounded-xl text-xs font-medium text-slate-300 hover:text-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     >
                       전체 보기 ({filteredRecalls.length}건 리콜)
@@ -1981,7 +1975,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     <button
                       type="button"
                       onClick={() => setVisibleRecallCount(filteredRecalls.length)}
-                      aria-label={`리콜 캠페인 전체 ${filteredRecalls.length}건 펼쳐보기`}
+                      aria-label={`리콜 캠페인 전체 보기 (${filteredRecalls.length}건)`}
                       className="px-4 py-2.5 min-h-[44px] rounded-xl text-xs font-medium text-slate-300 hover:text-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     >
                       전체 보기 ({filteredRecalls.length}건 리콜)

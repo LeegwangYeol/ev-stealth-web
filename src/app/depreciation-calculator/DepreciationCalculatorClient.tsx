@@ -101,6 +101,14 @@ const FALLBACK_REPLACEMENT_TIER = {
 // Maximum bounded cache entries for Arrhenius kinetics battery simulation
 const MAX_BATTERY_SIMULATION_CACHE_ENTRIES = 100;
 
+function getChartBarY(val: number, maxVal: number): number {
+  if (!Number.isFinite(val) || !Number.isFinite(maxVal) || maxVal <= 0) {
+    return 230;
+  }
+  const ratio = Math.max(0, Math.min(1, val / maxVal));
+  return 230 - ratio * 200;
+}
+
 export const getChemistryBadge = (chem: string) => {
   const upper = String(chem ?? '').toUpperCase();
   if (upper.includes('LFP')) {
@@ -481,6 +489,17 @@ export default function DepreciationCalculatorClient({
     setCustomLocalSubsidyInput(null);
     setCustomNationalSubsidyInput(null);
   }, []);
+
+  const renderedModelCards = useMemo(() => {
+    return filteredModels.map((model) => (
+      <ModelGridCard
+        key={model.id}
+        model={model}
+        isSelected={model.id === selectedModel.id}
+        onSelect={handleSelectModel}
+      />
+    ));
+  }, [filteredModels, selectedModel.id, handleSelectModel]);
 
   // Sync heldMonths if sync is active (clamped to slider max 36 months)
   const handleYearsChange = useCallback((years: number) => {
@@ -946,8 +965,9 @@ export default function DepreciationCalculatorClient({
             <input
               id="vehicle-search-input"
               type="text"
+              maxLength={200}
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => setSearchQuery(e.target.value.slice(0, 200))}
               placeholder="모델명, 제조사, 배터리 검색..."
               aria-describedby="vehicle-search-hint"
               className="w-full px-3.5 py-2 pl-9 min-h-[44px] rounded-xl border border-slate-300 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:border-blue-500 bg-slate-50 placeholder-slate-500"
@@ -1018,14 +1038,7 @@ export default function DepreciationCalculatorClient({
               )}
             </div>
           ) : (
-            filteredModels.map((model) => (
-              <ModelGridCard
-                key={model.id}
-                model={model}
-                isSelected={model.id === selectedModel.id}
-                onSelect={handleSelectModel}
-              />
-            ))
+            renderedModelCards
           )}
         </div>
       </section>
@@ -1520,25 +1533,24 @@ export default function DepreciationCalculatorClient({
 
                 // Heights for price or percentage
                 // Max: 100%, 0 to 200px (y from 230 to 30)
-                const getY = (val: number, maxVal: number) => {
-                  if (!Number.isFinite(val) || !Number.isFinite(maxVal) || maxVal <= 0) {
-                    return 230;
-                  }
-                  const ratio = Math.max(0, Math.min(1, val / maxVal));
-                  return 230 - ratio * 200;
-                };
+                const safeEvPrice = Number.isFinite(pt.evResidualPriceKrw) ? pt.evResidualPriceKrw : 0;
+                const safeEvPct = Number.isFinite(pt.evResidualPct) ? pt.evResidualPct : 0;
+                const safeEvAvgPrice = Number.isFinite(pt.evClassAvgPrice) ? pt.evClassAvgPrice : 0;
+                const safeEvAvgPct = Number.isFinite(pt.evClassAvgPct) ? pt.evClassAvgPct : 0;
+                const safeIcePrice = Number.isFinite(pt.iceBenchmarkPrice) ? pt.iceBenchmarkPrice : 0;
+                const safeIcePct = Number.isFinite(pt.iceBenchmarkPct) ? pt.iceBenchmarkPct : 0;
 
                 const maxRef = chartViewMode === 'price' ? currentPurchasePrice : 100;
                 const evVal =
-                  chartViewMode === 'price' ? pt.evResidualPriceKrw : pt.evResidualPct;
+                  chartViewMode === 'price' ? safeEvPrice : safeEvPct;
                 const evAvgVal =
-                  chartViewMode === 'price' ? pt.evClassAvgPrice : pt.evClassAvgPct;
+                  chartViewMode === 'price' ? safeEvAvgPrice : safeEvAvgPct;
                 const iceVal =
-                  chartViewMode === 'price' ? pt.iceBenchmarkPrice : pt.iceBenchmarkPct;
+                  chartViewMode === 'price' ? safeIcePrice : safeIcePct;
 
-                const yEv = getY(evVal, maxRef);
-                const yEvAvg = getY(evAvgVal, maxRef);
-                const yIce = getY(iceVal, maxRef);
+                const yEv = getChartBarY(evVal, maxRef);
+                const yEvAvg = getChartBarY(evAvgVal, maxRef);
+                const yIce = getChartBarY(iceVal, maxRef);
 
                 const barWidth = 22;
 
@@ -1569,7 +1581,7 @@ export default function DepreciationCalculatorClient({
                       fill={isSelectedYear ? '#3b82f6' : '#2563eb'}
                       className="transition-all duration-300 motion-reduce:transition-none hover:opacity-90"
                     >
-                      <title>{`${selectedModel.model_name} ${pt.year}년차: ${chartViewMode === 'price' ? `${Math.round(pt.evResidualPriceKrw / 10000).toLocaleString()}만 원` : `${pt.evResidualPct.toFixed(0)}%`}`}</title>
+                      <title>{`${selectedModel.model_name} ${pt.year}년차: ${chartViewMode === 'price' ? `${Math.round(safeEvPrice / 10000).toLocaleString()}만 원` : `${safeEvPct.toFixed(0)}%`}`}</title>
                     </rect>
                     <text
                       x={groupX - 19}
@@ -1580,8 +1592,8 @@ export default function DepreciationCalculatorClient({
                       fontWeight="bold"
                     >
                       {chartViewMode === 'price'
-                        ? `${Math.round(pt.evResidualPriceKrw / 10000).toLocaleString()}`
-                        : `${pt.evResidualPct.toFixed(0)}%`}
+                        ? `${Math.round(safeEvPrice / 10000).toLocaleString()}`
+                        : `${safeEvPct.toFixed(0)}%`}
                     </text>
 
                     {/* Bar 2: EV Class Average */}
@@ -1594,7 +1606,7 @@ export default function DepreciationCalculatorClient({
                       fill="#10b981"
                       className="transition-all duration-300 motion-reduce:transition-none hover:opacity-90"
                     >
-                      <title>{`${pt.year}년차 전기차 전체 평균: ${chartViewMode === 'price' ? `${Math.round(pt.evClassAvgPrice / 10000).toLocaleString()}만 원` : `${pt.evClassAvgPct.toFixed(0)}%`}`}</title>
+                      <title>{`${pt.year}년차 전기차 전체 평균: ${chartViewMode === 'price' ? `${Math.round(safeEvAvgPrice / 10000).toLocaleString()}만 원` : `${safeEvAvgPct.toFixed(0)}%`}`}</title>
                     </rect>
 
                     {/* Bar 3: ICE Benchmark */}
@@ -1607,7 +1619,7 @@ export default function DepreciationCalculatorClient({
                       fill="#94a3b8"
                       className="transition-all duration-300 motion-reduce:transition-none hover:opacity-90"
                     >
-                      <title>{`${pt.year}년차 동급 내연기관(가솔린): ${chartViewMode === 'price' ? `${Math.round(pt.iceBenchmarkPrice / 10000).toLocaleString()}만 원` : `${pt.iceBenchmarkPct.toFixed(0)}%`}`}</title>
+                      <title>{`${pt.year}년차 동급 내연기관(가솔린): ${chartViewMode === 'price' ? `${Math.round(safeIcePrice / 10000).toLocaleString()}만 원` : `${safeIcePct.toFixed(0)}%`}`}</title>
                     </rect>
 
                     {/* X-axis Year Label */}
@@ -1645,11 +1657,11 @@ export default function DepreciationCalculatorClient({
                 <tbody>
                   {multiYearProjection.map((pt) => (
                     <tr key={pt.year}>
-                      <th scope="row">{pt.year}년차</th>
-                      <td>{Math.round(pt.evResidualPriceKrw / 10000).toLocaleString()}만 원</td>
-                      <td>{pt.evResidualPct.toFixed(1)}%</td>
-                      <td>{pt.evClassAvgPct.toFixed(1)}%</td>
-                      <td>{pt.iceBenchmarkPct.toFixed(1)}%</td>
+                      <th scope="row">{pt.year}년차{pt.isCurrent ? ' (현재 선택)' : ''}</th>
+                      <td>{Math.round((Number.isFinite(pt.evResidualPriceKrw) ? pt.evResidualPriceKrw : 0) / 10000).toLocaleString()}만 원</td>
+                      <td>{(Number.isFinite(pt.evResidualPct) ? pt.evResidualPct : 0).toFixed(1)}%</td>
+                      <td>{(Number.isFinite(pt.evClassAvgPct) ? pt.evClassAvgPct : 0).toFixed(1)}%</td>
+                      <td>{(Number.isFinite(pt.iceBenchmarkPct) ? pt.iceBenchmarkPct : 0).toFixed(1)}%</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2297,7 +2309,7 @@ export default function DepreciationCalculatorClient({
               value={iceDisplacementCc}
               onChange={(e) => {
                 const val = parseInt(e.target.value, 10);
-                setIceDisplacementCc(Number.isFinite(val) && val > 0 ? val : 1998);
+                setIceDisplacementCc(Number.isFinite(val) && val >= 600 && val <= 8000 ? val : 1998);
               }}
               aria-describedby="ice-displacement-hint"
               className="w-full sm:w-auto px-3 py-2 min-h-[44px] rounded-lg border border-slate-300 font-medium bg-white text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"

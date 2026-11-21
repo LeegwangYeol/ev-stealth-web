@@ -119,7 +119,13 @@ class BlindScraper:
         if os.path.exists(self.slang_path):
             try:
                 with open(self.slang_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    content = f.read().strip()
+                if content:
+                    data = json.loads(content)
+                    if isinstance(data, dict):
+                        return data
+                    if isinstance(data, list):
+                        return {str(item): {} for item in data}
             except Exception as e:
                 logger.warning(f"Failed to load slang dictionary from {self.slang_path}: {e}")
         return {}
@@ -186,7 +192,8 @@ class BlindScraper:
         if next_data_match:
             try:
                 data = json.loads(next_data_match.group(1))
-                page_props = data.get("props", {}).get("pageProps", {}) if isinstance(data, dict) else {}
+                props = data.get("props") if isinstance(data, dict) else None
+                page_props = props.get("pageProps") if isinstance(props, dict) else {}
                 if not isinstance(page_props, dict):
                     page_props = {}
                 posts_list = page_props.get("articles") or page_props.get("posts") or []
@@ -299,7 +306,8 @@ class BlindScraper:
         if next_data_match:
             try:
                 data = json.loads(next_data_match.group(1))
-                page_props = data.get("props", {}).get("pageProps", {}) if isinstance(data, dict) else {}
+                props = data.get("props") if isinstance(data, dict) else None
+                page_props = props.get("pageProps") if isinstance(props, dict) else {}
                 if not isinstance(page_props, dict):
                     page_props = {}
                 post = page_props.get("article") or page_props.get("post") or {}
@@ -346,9 +354,9 @@ class BlindScraper:
 
         # 2. DOM & OpenGraph Fallback Extraction
         title = ""
-        title_match = re.search(r'<h1[^>]*class="[^"]*article-title[^"]*"[^>]*>(.*?)</h1>', html_content, re.DOTALL)
+        title_match = re.search(r'<h1[^>]*class=["\'][^"\']*article-title[^"\']*["\'][^>]*>(.*?)</h1>', html_content, re.DOTALL | re.IGNORECASE)
         if not title_match:
-            title_match = re.search(r'<meta property="og:title" content="([^"]*)"', html_content)
+            title_match = re.search(r'<meta\b[^>]*\bproperty=["\']og:title["\'][^>]*\bcontent=["\']([^"\']*)["\']', html_content, re.IGNORECASE)
         if title_match:
             title = clean_html_text(title_match.group(1))
 
@@ -646,7 +654,12 @@ def main():
     parser = argparse.ArgumentParser(description="Blind Korea Automotive Discussion Scraper")
     parser.add_argument("--keywords", nargs="+", default=["BYD", "아토3", "씰", "T4K", "중국 전기차"], help="Keywords to search")
     parser.add_argument("--topic", type=str, default="자동차", help="Blind topic channel")
-    parser.add_argument("--output", type=str, default="/Users/a7890/src/my-e-car/data/blind_complaints.json", help="Output JSON path")
+    default_output = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "data",
+        "blind_complaints.json",
+    )
+    parser.add_argument("--output", type=str, default=default_output, help="Output JSON path")
     args = parser.parse_args()
 
     with BlindScraper() as scraper:

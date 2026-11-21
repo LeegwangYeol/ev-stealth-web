@@ -622,7 +622,7 @@ export function calculateDepreciation(
   const rawYearsInput =
     safeInput.years !== undefined && safeInput.years !== null ? safeInput.years : safeInput.heldYears;
   const parsedYears = parseNumericInput(rawYearsInput);
-  const years = Number.isFinite(parsedYears) ? clamp(parsedYears, 0, 100) : 0;
+  const years = clamp(parsedYears, 0, 100);
 
   const rawFactors = isPlainRecord(safeOptions?.adjustmentFactors)
     ? safeOptions.adjustmentFactors
@@ -634,13 +634,16 @@ export function calculateDepreciation(
     ? rawFactors.warranty_cliff
     : undefined;
 
-  const baselineAnnualMileageKm = finitePosOr(
-    safeOptions?.baselineAnnualMileageKm ?? safeOptions?.annualAverageKm,
+  const baselineAnnualMileageKm = Math.min(
+    1_000_000,
     finitePosOr(
-      rawMileageSens?.baseline_annual_km,
+      safeOptions?.baselineAnnualMileageKm ?? safeOptions?.annualAverageKm,
       finitePosOr(
-        rawMileageSens?.base_km_per_year,
-        DEFAULT_BASELINE_ANNUAL_MILEAGE_KM
+        rawMileageSens?.baseline_annual_km,
+        finitePosOr(
+          rawMileageSens?.base_km_per_year,
+          DEFAULT_BASELINE_ANNUAL_MILEAGE_KM
+        )
       )
     )
   );
@@ -690,10 +693,13 @@ export function calculateDepreciation(
   const rawMileageInput =
     safeInput.mileageKm !== undefined && safeInput.mileageKm !== null ? safeInput.mileageKm : safeInput.totalKm;
   const parsedMileage = parseNumericInput(rawMileageInput);
-  const defaultMileage = normalizeZero(years * baselineAnnualMileageKm);
-  const mileageKm = Number.isFinite(parsedMileage)
-    ? clamp(parsedMileage, 0, 10_000_000)
-    : defaultMileage;
+  const defaultMileage = clamp(years * baselineAnnualMileageKm, 0, 10_000_000);
+  const mileageKm =
+    parsedMileage === Infinity
+      ? 10_000_000
+      : Number.isFinite(parsedMileage)
+      ? clamp(parsedMileage, 0, 10_000_000)
+      : defaultMileage;
 
   const {
     modelId,
@@ -714,7 +720,7 @@ export function calculateDepreciation(
   }
 
   const rawBaselineResidualPct = interpolateBaselineResidual(
-    model.depreciation_curve,
+    model?.depreciation_curve as DepreciationCurve,
     years,
     priceBasis
   );
@@ -905,9 +911,12 @@ export function simulateBatteryHealth(
   const isInvalidYears =
     rawYears === undefined ||
     rawYears === null ||
-    !Number.isFinite(parsedYears) ||
-    parsedYears < 0;
-  const safeYears = isInvalidYears ? 3 : clamp(parsedYears, 0, 100);
+    (parsedYears !== Infinity && (!Number.isFinite(parsedYears) || parsedYears < 0));
+  const safeYears = isInvalidYears
+    ? 3
+    : parsedYears === Infinity
+    ? 100
+    : clamp(parsedYears, 0, 100);
 
   let model: EvModelDepreciation | undefined = isPlainRecord(safeParams.model)
     ? (safeParams.model as EvModelDepreciation)
@@ -949,14 +958,19 @@ export function simulateBatteryHealth(
 
   const parsedAnnualKm = parseNumericInput(annualKm);
   const safeAnnualKm =
-    Number.isFinite(parsedAnnualKm) && parsedAnnualKm >= 0
+    parsedAnnualKm === Infinity
+      ? 10_000_000
+      : Number.isFinite(parsedAnnualKm) && parsedAnnualKm >= 0
       ? normalizeZero(Math.min(10_000_000, parsedAnnualKm))
       : 15000;
 
   const parsedInputTotalKm = parseNumericInput(inputTotalKm);
-  const rawMileage = Number.isFinite(parsedInputTotalKm)
-    ? parsedInputTotalKm
-    : safeYears * safeAnnualKm;
+  const rawMileage =
+    parsedInputTotalKm === Infinity
+      ? 10_000_000
+      : Number.isFinite(parsedInputTotalKm)
+      ? parsedInputTotalKm
+      : safeYears * safeAnnualKm;
   const safeMileage = clamp(rawMileage, 0, 10_000_000);
 
   // A. Calendar Aging via Arrhenius & SoC Kinetics
@@ -1059,9 +1073,10 @@ export function simulateBatteryHealth(
     0,
     20
   );
+  const cycleRatio = safeCycles / baseCycles;
   const qLossCyc =
-    safeCycles > 0
-      ? 0.2 * fDod * fDcfc * fTempCyc * Math.pow(safeCycles / baseCycles, cyclicExp)
+    cycleRatio > 0
+      ? 0.2 * fDod * fDcfc * fTempCyc * Math.pow(cycleRatio, cyclicExp)
       : 0;
 
   // C. Sub-additive Coupling (p = 1.25)
@@ -1583,12 +1598,17 @@ export function calculateTcoComparison(
 
   const parsedAnnualKm = parseNumericInput(annualKm);
   const safeAnnualKm =
-    Number.isFinite(parsedAnnualKm) && parsedAnnualKm >= 0
+    parsedAnnualKm === Infinity
+      ? 10_000_000
+      : Number.isFinite(parsedAnnualKm) && parsedAnnualKm >= 0
       ? normalizeZero(Math.min(10_000_000, parsedAnnualKm))
       : 15000;
   const parsedYears = parseNumericInput(years);
 
-  const rawYears = Math.min(30, Number.isFinite(parsedYears) && parsedYears > 0 ? parsedYears : 1);
+  const rawYears =
+    parsedYears === Infinity
+      ? 30
+      : Math.min(30, Number.isFinite(parsedYears) && parsedYears > 0 ? parsedYears : 1);
   const safeYears = Math.max(1, Math.round(rawYears));
   const fullYears = Math.floor(rawYears);
   const fractionalRemainder = roundTo(rawYears - fullYears, 4);

@@ -60,6 +60,11 @@ def _is_finite_number(val: Any) -> bool:
     return isinstance(val, (int, float)) and not isinstance(val, bool) and math.isfinite(val)
 
 
+def _reject_json_constant(constant: str) -> Any:
+    """Reject non-standard JSON constants (NaN, Infinity, -Infinity)."""
+    raise ValueError(f"Non-standard JSON constant: {constant}")
+
+
 def _parity_candidate_priority(fname: str, parsed: Any) -> int:
     """Score parsed JSON candidate so empty or structurally corrupt shells never overwrite healthy mirrors."""
     if parsed is None:
@@ -116,7 +121,7 @@ def validate_database(
     else:
         try:
             with open(slang_path, "r", encoding="utf-8-sig") as f:
-                slang_dict = json.load(f)
+                slang_dict = json.load(f, parse_constant=_reject_json_constant)
             if not isinstance(slang_dict, dict):
                 errors.append(f"Slang dictionary must be a JSON object, got {type(slang_dict).__name__}")
                 slang_dict = {}
@@ -134,7 +139,7 @@ def validate_database(
 
     try:
         with open(complaints_path, "r", encoding="utf-8-sig") as f:
-            records = json.load(f)
+            records = json.load(f, parse_constant=_reject_json_constant)
     except Exception as e:
         errors.append(f"Failed to parse complaints database JSON: {e}")
         return False, errors, stats
@@ -240,7 +245,7 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
 
     try:
         with open(path, "r", encoding="utf-8-sig") as f:
-            data = json.load(f)
+            data = json.load(f, parse_constant=_reject_json_constant)
     except Exception as exc:
         errors.append(f"Failed to parse subsidy JSON from {path}: {exc}")
         return False, errors, stats
@@ -321,6 +326,10 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
                     errors.append(
                         f"Nationwide depletion rate ({dep_rate}%) inconsistent with applications ({tot_app}/{tot_ann} = {expected_rate:.1f}%)"
                     )
+            elif _is_finite_number(tot_ann) and tot_ann == 0 and dep_rate > 0.2:
+                errors.append(
+                    f"Nationwide depletion rate ({dep_rate}%) must be 0.0 when total_announced_units is 0"
+                )
         stats["nationwide_depletion_rate"] = dep_rate if _is_finite_number(dep_rate) else 0.0
 
     # 4. Regions validation (17 statutory regions)
@@ -353,8 +362,8 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
         if iso:
             seen_iso.add(iso)
 
-        if "name_ko" not in reg:
-            errors.append(f"{prefix} Missing 'name_ko'")
+        if "name_ko" not in reg or not isinstance(reg.get("name_ko"), str) or not reg.get("name_ko", "").strip():
+            errors.append(f"{prefix} Missing or empty 'name_ko'")
 
         cats = reg.get("categories")
         if not isinstance(cats, dict):
@@ -400,6 +409,10 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
                                 errors.append(
                                     f"{prefix} Category '{cname}' depletion_rate ({rate}%) inconsistent with {app}/{ann} ({expected_rate:.1f}%)"
                                 )
+                        elif _is_finite_number(ann) and ann == 0 and rate > 0.2:
+                            errors.append(
+                                f"{prefix} Category '{cname}' depletion_rate ({rate}%) must be 0.0 when announced_units is 0"
+                            )
 
                     if status is not None and status not in expected_tiers:
                         errors.append(f"{prefix} Category '{cname}' unknown status '{status}', expected one of {expected_tiers}")
@@ -412,8 +425,8 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
                     errors.append(f"{prefix} Municipality [{midx}] is not a dict")
                     continue
                 m_name = muni.get("name_ko", f"Muni-{midx}")
-                if "name_ko" not in muni:
-                    errors.append(f"{prefix} Municipality [{midx}] missing 'name_ko'")
+                if "name_ko" not in muni or not isinstance(muni.get("name_ko"), str) or not muni.get("name_ko", "").strip():
+                    errors.append(f"{prefix} Municipality [{midx}] missing or empty 'name_ko'")
 
                 for mk in ("announced_units", "applied_units", "remaining_units"):
                     if mk in muni:
@@ -443,6 +456,10 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
                             errors.append(
                                 f"{prefix} Municipality '{m_name}' depletion_rate ({m_rate}%) inconsistent with {m_app}/{m_ann} ({exp_r:.1f}%)"
                             )
+                    elif _is_finite_number(m_ann) and m_ann == 0 and m_rate > 0.2:
+                        errors.append(
+                            f"{prefix} Municipality '{m_name}' depletion_rate ({m_rate}%) must be 0.0 when announced_units is 0"
+                        )
 
                 m_status = muni.get("status")
                 if m_status is not None and m_status not in expected_tiers:
@@ -463,6 +480,13 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
                     errors.append(f"Popular model [{midx}] ({m.get('model_id', 'UNKNOWN')}) missing key '{req_k}'")
             price = m.get("base_price_krw")
             ratio = m.get("price_subsidy_ratio")
+            nat_sub = m.get("national_subsidy_krw")
+            if "base_price_krw" in m and (not _is_finite_number(price) or price < 0):
+                errors.append(f"Model '{m.get('model_id')}' base_price_krw must be finite >= 0, got {price}")
+            if "price_subsidy_ratio" in m and not _is_finite_number(ratio):
+                errors.append(f"Model '{m.get('model_id')}' price_subsidy_ratio must be finite, got {ratio}")
+            if "national_subsidy_krw" in m and (not _is_finite_number(nat_sub) or nat_sub < 0):
+                errors.append(f"Model '{m.get('model_id')}' national_subsidy_krw must be finite >= 0, got {nat_sub}")
             if _is_finite_number(price) and _is_finite_number(ratio):
                 if price <= 55_000_000 and ratio != 1.0:
                     errors.append(f"Model '{m.get('model_id')}' price <=55M but ratio {ratio} != 1.0")
@@ -495,7 +519,7 @@ def validate_models_matrix(file_path: Union[str, Path]) -> Tuple[bool, List[str]
 
     try:
         with open(path, "r", encoding="utf-8-sig") as f:
-            data = json.load(f)
+            data = json.load(f, parse_constant=_reject_json_constant)
     except Exception as exc:
         errors.append(f"Failed to parse models matrix JSON from {path}: {exc}")
         return False, errors, stats
@@ -517,9 +541,9 @@ def validate_models_matrix(file_path: Union[str, Path]) -> Tuple[bool, List[str]
             continue
 
         raw_mid = m.get("model_id")
-        mid = raw_mid if isinstance(raw_mid, str) else (str(raw_mid) if isinstance(raw_mid, int) and not isinstance(raw_mid, bool) else "")
+        mid = raw_mid.strip() if isinstance(raw_mid, str) else (str(raw_mid) if isinstance(raw_mid, int) and not isinstance(raw_mid, bool) else "")
         prefix = f"Model [{idx}] ({mid or 'MISSING'}):"
-        if raw_mid is not None and not isinstance(raw_mid, (str, int)) or isinstance(raw_mid, bool):
+        if (raw_mid is not None and not isinstance(raw_mid, (str, int))) or isinstance(raw_mid, bool):
             errors.append(f"{prefix} Invalid model_id type '{type(raw_mid).__name__}'")
         elif not mid:
             errors.append(f"{prefix} Missing 'model_id'")
@@ -588,7 +612,7 @@ def validate_daily_reports(file_path: Union[str, Path]) -> Tuple[bool, List[str]
 
     try:
         with open(path, "r", encoding="utf-8-sig") as f:
-            data = json.load(f)
+            data = json.load(f, parse_constant=_reject_json_constant)
     except Exception as exc:
         errors.append(f"Failed to parse daily reports JSON from {path}: {exc}")
         return False, errors, stats
@@ -626,16 +650,16 @@ def validate_daily_reports(file_path: Union[str, Path]) -> Tuple[bool, List[str]
             continue
 
         rid = r.get("id")
-        prefix = f"Report [{idx}] ({rid or 'MISSING'}):"
-        if not rid:
-            errors.append(f"{prefix} Missing 'id'")
-        elif not isinstance(rid, (str, int)) or isinstance(rid, bool):
+        rid_str = rid.strip() if isinstance(rid, str) else (str(rid) if isinstance(rid, int) and not isinstance(rid, bool) else "")
+        prefix = f"Report [{idx}] ({rid_str or 'MISSING'}):"
+        if (rid is not None and not isinstance(rid, (str, int))) or isinstance(rid, bool):
             errors.append(f"{prefix} Invalid id type '{type(rid).__name__}'")
+        elif not rid_str:
+            errors.append(f"{prefix} Missing 'id'")
         else:
-            rid_key = str(rid)
-            if rid_key in seen_ids:
+            if rid_str in seen_ids:
                 errors.append(f"{prefix} Duplicate report id '{rid}'")
-            seen_ids.add(rid_key)
+            seen_ids.add(rid_str)
 
         for rf in req_rep_fields:
             if rf not in r:
@@ -648,10 +672,11 @@ def validate_daily_reports(file_path: Union[str, Path]) -> Tuple[bool, List[str]
             sources_set.add(str(r["source"]))
         if r.get("defect_category"):
             categories_set.add(str(r["defect_category"]))
-        sev = str(r.get("severity", "")).upper()
+        raw_sev = r.get("severity")
+        sev = str(raw_sev).strip().upper() if raw_sev is not None else ""
         valid_sevs = {"LOW", "MEDIUM", "HIGH", "CRITICAL", "HEALTHY", "CAUTION", "WARNING", "DEPLETED"}
-        if sev and sev not in valid_sevs:
-            errors.append(f"{prefix} Unknown severity '{sev}'")
+        if "severity" in r and (not sev or sev not in valid_sevs):
+            errors.append(f"{prefix} Unknown severity '{raw_sev}'")
         if sev == "CRITICAL":
             stats["critical_reports"] += 1
 
@@ -717,6 +742,7 @@ def validate_data_parity(
             authoritative_path: Optional[Path] = None
             auth_hash: Optional[str] = None
             best_candidate: Optional[Tuple[int, float, Path, str]] = None
+            invalid_struct_errors: List[str] = []
 
             for label, d in dirs_to_check:
                 fp = d / fname
@@ -725,7 +751,7 @@ def validate_data_parity(
                         content = fp.read_bytes()
                         parsed = json.loads(
                             content.decode("utf-8-sig"),
-                            parse_constant=lambda c: (_ for _ in ()).throw(ValueError(f"Non-standard JSON constant: {c}")),
+                            parse_constant=_reject_json_constant,
                         )
                         h = hashlib.sha256(content).hexdigest()
                         hashes[label] = h
@@ -734,6 +760,10 @@ def validate_data_parity(
                             score = (prio, fp.stat().st_mtime)
                             if best_candidate is None or score > (best_candidate[0], best_candidate[1]):
                                 best_candidate = (score[0], score[1], fp, h)
+                        else:
+                            invalid_struct_errors.append(
+                                f"Invalid or empty structure for '{fname}' in {label} ({fp})"
+                            )
                     except Exception as exc:
                         errors.append(f"Failed to read/validate {label} ({fp}): {exc}")
                 else:
@@ -747,6 +777,8 @@ def validate_data_parity(
             if best_candidate is not None:
                 authoritative_path = best_candidate[2]
                 auth_hash = best_candidate[3]
+            elif invalid_struct_errors:
+                errors.extend(invalid_struct_errors)
 
             # Automatic mirror repair if requested and authoritative file exists
             if repair and authoritative_path is not None and auth_hash is not None:
@@ -998,22 +1030,26 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         # Write output file if requested
         if args.output:
-            out_path = Path(args.output)
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            from tracker.atomic_writer import atomic_write_json
-            atomic_write_json(
-                result_payload,
-                out_path,
-                indent=2,
-                ensure_ascii=False,
-                mode=0o644,
-                temp_prefix=".tmp_val_rep_",
-            )
-            logger.info("Validation report written to: %s", out_path)
+            raw_out = str(args.output).strip()
+            if raw_out and raw_out != ".":
+                out_path = Path(raw_out)
+                if out_path.is_dir() or raw_out.endswith(("/", "\\")):
+                    out_path = out_path / "validation_report.json"
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                from tracker.atomic_writer import atomic_write_json
+                atomic_write_json(
+                    result_payload,
+                    out_path,
+                    indent=2,
+                    ensure_ascii=False,
+                    mode=0o644,
+                    temp_prefix=".tmp_val_rep_",
+                )
+                logger.info("Validation report written to: %s", out_path)
 
         # Output formatting
         if args.format == "json":
-            print(json.dumps(result_payload, indent=2, ensure_ascii=False))
+            print(json.dumps(result_payload, indent=2, ensure_ascii=False, allow_nan=False))
         elif args.format in ("markdown", "md"):
             mod_status = stats.get("module_status", {})
             comp_ok = mod_status.get("complaints", not any("complaints" in e.lower() for e in errors))

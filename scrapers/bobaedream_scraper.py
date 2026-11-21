@@ -131,7 +131,13 @@ class BobaedreamScraper:
         if os.path.exists(self.slang_path):
             try:
                 with open(self.slang_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    content = f.read().strip()
+                if content:
+                    data = json.loads(content)
+                    if isinstance(data, dict):
+                        return data
+                    if isinstance(data, list):
+                        return {str(item): {} for item in data}
             except Exception as e:
                 logger.warning(f"Failed to load slang dictionary from {self.slang_path}: {e}")
         return {}
@@ -372,7 +378,7 @@ class BobaedreamScraper:
         if not title_match:
             title_match = re.search(r'<dt[^>]*class="tit"[^>]*>(.*?)</dt>', html_content, re.DOTALL)
         if not title_match:
-            title_match = re.search(r'<meta property="og:title" content="([^"]*)"', html_content)
+            title_match = re.search(r'<meta\b[^>]*\bproperty=["\']og:title["\'][^>]*\bcontent=["\']([^"\']*)["\']', html_content, re.IGNORECASE)
         if title_match:
             title = clean_html_text(title_match.group(1))
 
@@ -691,7 +697,12 @@ def main():
     parser.add_argument("--boards", nargs="+", default=["national", "import", "freeb", "battle", "electric", "accident"], help="Board codes")
     parser.add_argument("--keywords", nargs="+", default=["BYD", "아토3", "씰", "T4K", "중국 전기차", "마사다"], help="Search keywords")
     parser.add_argument("--limit", type=int, default=5, help="Max posts to parse per board/keyword")
-    parser.add_argument("--output", type=str, default="/Users/a7890/src/my-e-car/data/bobaedream_complaints.json", help="Output JSON path")
+    default_output = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "data",
+        "bobaedream_complaints.json",
+    )
+    parser.add_argument("--output", type=str, default=default_output, help="Output JSON path")
     args = parser.parse_args()
 
     with BobaedreamScraper() as scraper:

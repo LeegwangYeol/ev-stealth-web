@@ -120,6 +120,28 @@ export const CATEGORY_MAP: Record<string, { code: DefectCategoryCode; ko: string
   depreciation: { code: 'SERVICE_REPAIR_COST', ko: 'AS/수리비' },
 };
 
+function firstSafeString(...candidates: unknown[]): string {
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string') {
+      const cleaned = sanitizeText(candidate);
+      if (cleaned) return cleaned;
+    }
+  }
+  return '';
+}
+
+function firstSafeId(...candidates: unknown[]): string {
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string') {
+      const cleaned = sanitizeText(candidate);
+      if (cleaned) return cleaned;
+    } else if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+      return String(candidate);
+    }
+  }
+  return '';
+}
+
 /**
  * Resolves defect category safely from category code, alias, or Korean label.
  */
@@ -127,8 +149,8 @@ export function resolveCategory(
   rawCategory?: unknown,
   rawCategoryKo?: unknown
 ): { code: DefectCategoryCode; ko: string } {
-  const cat = sanitizeText(rawCategory || '').trim();
-  const catKo = sanitizeText(rawCategoryKo || '').trim();
+  const cat = typeof rawCategory === 'string' ? sanitizeText(rawCategory).trim() : '';
+  const catKo = typeof rawCategoryKo === 'string' ? sanitizeText(rawCategoryKo).trim() : '';
 
   // 1. Direct match in CATEGORY_MAP
   if (cat && Object.prototype.hasOwnProperty.call(CATEGORY_MAP, cat)) {
@@ -282,14 +304,32 @@ function isPrivateOrInternalHost(rawHost: string): boolean {
     return true;
   }
 
-  // IPv6 reserved, loopback, unspecified, IPv4-mapped/compatible (::/96), NAT64, Teredo, benchmarking, ORCHID, 6to4, 6bone, discard, ULA, link/site-local, multicast
+  // IPv6 reserved, loopback, unspecified, IPv4-mapped/compatible (::/96), NAT64, Teredo, benchmarking, ORCHID, 6to4, 6bone, discard, ULA, link/site-local, multicast.
+  // Only Global Unicast (2000::/3) outside special-use tunneling/documentation/benchmarking ranges is public.
   if (host.startsWith('[') || bareHost.includes(':')) {
-    if (
-      bareHost.startsWith('::') ||
-      /^0+:/.test(bareHost) ||
-      /^(?:64:ff9b(?::1)?:|100:|2001:(?::|0:|2:|1[0-9a-f]:|2[0-9a-f]:|0?db8:)|2002:|3ffe:|fe[89a-f][0-9a-f]:|f[cd][0-9a-f]{2}:|ff[0-9a-f]{2}:)/i.test(bareHost)
-    ) {
+    if (bareHost.startsWith(':')) {
       return true;
+    }
+    const parts = bareHost.split(':');
+    const h0 = parseInt(parts[0], 16);
+    if (!Number.isFinite(h0) || Number.isNaN(h0) || h0 < 0x2000 || h0 > 0x3fff) {
+      return true;
+    }
+    if (h0 === 0x2002 || h0 === 0x3ffe) {
+      return true;
+    }
+    if (h0 === 0x2001) {
+      const h1 = parts[1] === '' ? 0 : parseInt(parts[1] || '0', 16);
+      if (
+        !Number.isFinite(h1) ||
+        Number.isNaN(h1) ||
+        h1 === 0 ||
+        h1 === 2 ||
+        h1 === 0x0db8 ||
+        (h1 >= 0x0010 && h1 <= 0x002f)
+      ) {
+        return true;
+      }
     }
     return false;
   }
@@ -350,6 +390,23 @@ export function sanitizeReportUrl(rawUrl?: unknown): string {
       for (const paramKey of Array.from(urlObj.searchParams.keys())) {
         if (REPORT_SENSITIVE_QUERY_KEYS.has(paramKey.toLowerCase())) {
           urlObj.searchParams.delete(paramKey);
+          modified = true;
+        }
+      }
+      // Strip sensitive OAuth/token parameters if leaked in hash fragments (e.g. #access_token=...)
+      if (urlObj.hash && urlObj.hash.includes('=')) {
+        const rawFragment = urlObj.hash.slice(1);
+        const hashParams = new URLSearchParams(rawFragment);
+        let hashModified = false;
+        for (const hashKey of Array.from(hashParams.keys())) {
+          if (REPORT_SENSITIVE_QUERY_KEYS.has(hashKey.toLowerCase())) {
+            hashParams.delete(hashKey);
+            hashModified = true;
+          }
+        }
+        if (hashModified) {
+          const nextHash = hashParams.toString();
+          urlObj.hash = nextHash ? `#${nextHash}` : '';
           modified = true;
         }
       }
@@ -427,7 +484,7 @@ function canonicalizeReportUrlForDedup(rawUrl: string): string {
     }
     keptParams.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0));
     const queryStr = keptParams.length > 0
-      ? '?' + keptParams.map(([k, v]) => `${k}=${v}`).join('&')
+      ? '?' + keptParams.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')
       : '';
     return `${host}${pathname}${queryStr}`;
   } catch {
@@ -509,11 +566,11 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
   const safeIndex = typeof index === 'number' && Number.isFinite(index) && index >= 0 ? Math.floor(index) : 0;
 
   const catInfo = resolveCategory(
-    raw.defect_category || raw.category || raw.defect_category_key,
-    raw.defect_category_ko || raw.category_ko
+    firstSafeString(raw.defect_category, raw.category, raw.defect_category_key),
+    firstSafeString(raw.defect_category_ko, raw.category_ko)
   );
 
-  const rawSeverity = sanitizeText(raw.severity || raw.severity_tier || '').toUpperCase();
+  const rawSeverity = firstSafeString(raw.severity, raw.severity_tier).toUpperCase();
   let severity: SeverityLevel = 'WARNING';
   if (rawSeverity === 'CRITICAL' || rawSeverity.includes('CRITICAL')) {
     severity = 'CRITICAL';
@@ -555,7 +612,8 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
   }
   const slangList = Array.isArray(rawSlang) ? rawSlang : [];
   const slangTags = slangList
-    .map((s: unknown) => maskSensitiveData(sanitizeText(s)))
+    .filter((s): s is string => typeof s === 'string')
+    .map((s) => maskSensitiveData(sanitizeText(s)))
     .filter((s): s is string => Boolean(s && s.length > 0));
 
   let rawDsiCandidate = raw.dsi_breakdown;
@@ -578,9 +636,9 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
       }
     : undefined;
 
-  let safeDate = sanitizeText(raw.date || raw.post_date || '');
-  if (!safeDate && raw.created_at) {
-    const split = String(raw.created_at).trim().split(/[T\s]/)[0];
+  let safeDate = firstSafeString(raw.date, raw.post_date);
+  if (!safeDate && typeof raw.created_at === 'string') {
+    const split = raw.created_at.trim().split(/[T\s]/)[0];
     if (split && split.length >= 8) {
       safeDate = sanitizeText(split);
     }
@@ -589,31 +647,26 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
     safeDate = new Date().toISOString().split('T')[0];
   }
 
-  const rawIdCandidate =
-    raw.id !== undefined && raw.id !== null && String(raw.id).trim() !== ''
-      ? raw.id
-      : raw.post_id ?? '';
-
   return {
-    id: sanitizeText(rawIdCandidate) || `report_${safeIndex + 1}`,
-    source: sanitizeText(raw.source || raw.platform || '').toLowerCase() || 'bobaedream',
-    url: sanitizeReportUrl(raw.url || raw.post_url || '#'),
-    title: maskSensitiveData(sanitizeText(raw.title || raw.post_title || '')) || '전기차 결함 제보',
+    id: firstSafeId(raw.id, raw.post_id) || `report_${safeIndex + 1}`,
+    source: firstSafeString(raw.source, raw.platform).toLowerCase() || 'bobaedream',
+    url: sanitizeReportUrl(firstSafeString(raw.url, raw.post_url) || '#'),
+    title: maskSensitiveData(firstSafeString(raw.title, raw.post_title)) || '전기차 결함 제보',
     date: safeDate,
-    created_at: raw.created_at ? sanitizeText(raw.created_at) : undefined,
-    vehicle_model: sanitizeText(raw.vehicle_model || raw.target_vehicle || '') || '미상 모델',
-    vehicle_brand: raw.vehicle_brand ? sanitizeText(raw.vehicle_brand) || undefined : undefined,
-    target_vehicle: raw.target_vehicle ? sanitizeText(raw.target_vehicle) || undefined : undefined,
+    created_at: firstSafeString(raw.created_at) || undefined,
+    vehicle_model: firstSafeString(raw.vehicle_model, raw.target_vehicle) || '미상 모델',
+    vehicle_brand: firstSafeString(raw.vehicle_brand) || undefined,
+    target_vehicle: firstSafeString(raw.target_vehicle) || undefined,
     defect_category: catInfo.code,
-    defect_category_ko: sanitizeText(raw.defect_category_ko || '') || catInfo.ko,
-    summary: maskSensitiveData(sanitizeText(raw.summary || raw.defect_summary || raw.defect_topic || '')) || '결함 상세 내용 요약',
-    verbatim_quote: maskSensitiveData(sanitizeText(raw.verbatim_quote || raw.raw_quote || raw.content || '')) || '원문 없음',
+    defect_category_ko: firstSafeString(raw.defect_category_ko) || catInfo.ko,
+    summary: maskSensitiveData(firstSafeString(raw.summary, raw.defect_summary, raw.defect_topic)) || '결함 상세 내용 요약',
+    verbatim_quote: maskSensitiveData(firstSafeString(raw.verbatim_quote, raw.raw_quote, raw.content)) || '원문 없음',
     slang_tags: slangTags,
     sentiment_score: score,
     sentiment_polarity: Number.isFinite(raw.sentiment_polarity) ? Number(raw.sentiment_polarity) : undefined,
     severity,
     severity_index: Number.isFinite(raw.severity_index) ? Number(raw.severity_index) : undefined,
-    author: raw.author ? maskAuthor(raw.author) : undefined,
+    author: typeof raw.author === 'string' ? maskAuthor(raw.author) : undefined,
     is_authentic_defect: typeof raw.is_authentic_defect === 'boolean' ? raw.is_authentic_defect : true,
     dsi_breakdown: dsiBreakdown,
   };
@@ -631,12 +684,12 @@ export function calculateKPIs(
     : [];
   const totalFiltered = safeReports.length;
   const criticalCount = safeReports.filter(
-    (r) => String(r.severity || '').toUpperCase() === 'CRITICAL'
+    (r) => typeof r.severity === 'string' && r.severity.toUpperCase() === 'CRITICAL'
   ).length;
 
   const totalScore = safeReports.reduce((acc, r) => {
     const val = typeof r.sentiment_score === 'number' && Number.isFinite(r.sentiment_score)
-      ? Math.min(1.0, Math.max(0.0, Math.abs(r.sentiment_score)))
+      ? getSafeSentimentScore(r.sentiment_score, 0)
       : 0;
     return acc + val;
   }, 0);
@@ -645,8 +698,9 @@ export function calculateKPIs(
   // Calculate top vehicle model with prototype-safe Map
   const modelCounts = new Map<string, number>();
   for (const r of safeReports) {
-    if (r.vehicle_model) {
-      modelCounts.set(r.vehicle_model, (modelCounts.get(r.vehicle_model) || 0) + 1);
+    const model = typeof r.vehicle_model === 'string' ? sanitizeText(r.vehicle_model) : '';
+    if (model) {
+      modelCounts.set(model, (modelCounts.get(model) || 0) + 1);
     }
   }
   let topModelName = '아이오닉5';
@@ -664,7 +718,8 @@ export function calculateKPIs(
   // Calculate top community platform with prototype-safe Map
   const platformCounts = new Map<string, number>();
   for (const r of safeReports) {
-    const src = (r.source || 'bobaedream').toLowerCase();
+    const rawSrc = typeof r.source === 'string' ? sanitizeText(r.source) : '';
+    const src = (rawSrc || 'bobaedream').toLowerCase();
     platformCounts.set(src, (platformCounts.get(src) || 0) + 1);
   }
   let topPlatformKey = 'bobaedream';
@@ -701,21 +756,21 @@ export function calculateKPIs(
 
   return {
     total_scraped: typeof totalScraped === 'number' && Number.isFinite(totalScraped)
-      ? Math.max(0, totalScraped)
+      ? Math.floor(Math.max(0, totalScraped))
       : (totalFiltered * 7),
     total_filtered_defects: totalFiltered,
     avg_negativity_score: typeof existingStats?.avg_negativity_score === 'number' && Number.isFinite(existingStats.avg_negativity_score)
       ? getSafeSentimentScore(existingStats.avg_negativity_score, avgScore)
       : avgScore,
     critical_defect_count: typeof existingStats?.critical_defect_count === 'number' && Number.isFinite(existingStats.critical_defect_count)
-      ? Math.min(totalFiltered, Math.max(0, existingStats.critical_defect_count))
+      ? Math.floor(Math.min(totalFiltered, Math.max(0, existingStats.critical_defect_count)))
       : criticalCount,
     top_model: existingTopModel || topModelDisplay,
     top_platform: existingTopPlatform || topPlatformDisplay,
     duplicates_removed: typeof existingStats?.duplicates_removed === 'number' && Number.isFinite(existingStats.duplicates_removed)
-      ? Math.max(0, existingStats.duplicates_removed)
+      ? Math.floor(Math.max(0, existingStats.duplicates_removed))
       : 0,
-    is_deduplicated: existingStats?.is_deduplicated ?? true,
+    is_deduplicated: typeof existingStats?.is_deduplicated === 'boolean' ? existingStats.is_deduplicated : true,
   };
 }
 

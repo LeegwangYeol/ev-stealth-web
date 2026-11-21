@@ -250,8 +250,8 @@ class StatisticalRanker:
             or top_k <= 0
         ):
             return []
-        if not isinstance(min_freq, int) or isinstance(min_freq, bool):
-            min_freq = 3
+        if not isinstance(min_freq, int) or isinstance(min_freq, bool) or min_freq < 1:
+            min_freq = max(1, min_freq) if isinstance(min_freq, int) and not isinstance(min_freq, bool) else 3
         ngram_counts: Counter = Counter()
         total_ngrams = 0
 
@@ -331,41 +331,74 @@ class StatisticalRanker:
         ]
 
         # Calculate actual corpus metrics
-        total_tokens = sum(self.term_freq.values()) or 1
-        ranked_results: List[Dict[str, Any]] = []
+        raw_total_tokens = sum(self.term_freq.values())
+        total_tokens = raw_total_tokens or 1
+        selected_topics = canonical_master_topics[:top_n]
 
-        for rank_idx, (topic_name, cat, alias_terms, default_dsi, domain_weight) in enumerate(canonical_master_topics[:top_n], 1):
-            # Sum up occurrences across aliases
+        topic_entries: List[Dict[str, Any]] = []
+        unmatched_entries: List[Tuple[Dict[str, Any], Tuple[str, ...]]] = []
+
+        for rank_idx, (topic_name, cat, alias_terms, default_dsi, domain_weight) in enumerate(selected_topics, 1):
             raw_count = 0
-            matching_dsi_vals = []
-            quotes_pool = []
+            matching_dsi_vals: List[float] = []
+            quotes_pool: List[str] = []
 
             for alias in alias_terms:
                 raw_count += self.term_freq.get(alias, 0)
                 matching_dsi_vals.extend(self.term_dsi_values.get(alias, []))
                 quotes_pool.extend(self.term_sample_quotes.get(alias, []))
 
-            # If count is zero, check regex occurrence in records
+            entry: Dict[str, Any] = {
+                "rank_idx": rank_idx,
+                "topic_name": topic_name,
+                "cat": cat,
+                "default_dsi": default_dsi,
+                "domain_weight": domain_weight,
+                "raw_count": raw_count,
+                "matching_dsi_vals": matching_dsi_vals,
+                "quotes_pool": quotes_pool,
+            }
+            topic_entries.append(entry)
             if raw_count == 0:
-                for rec in self.records:
-                    if not isinstance(rec, dict):
-                        continue
-                    q_str = str(rec.get("raw_quote") or "")
-                    t_str = str(rec.get("defect_topic") or "")
-                    txt = f"{q_str} {t_str}"
-                    if any(a in txt for a in alias_terms):
-                        raw_count += 1
+                unmatched_entries.append((entry, tuple(alias_terms)))
+
+        # Single O(N) fallback scan across all unmatched topics instead of up to 30*N scans
+        if unmatched_entries and self.records:
+            for rec in self.records:
+                if not isinstance(rec, dict):
+                    continue
+                q_str = str(rec.get("raw_quote") or "")
+                t_str = str(rec.get("defect_topic") or "")
+                txt = f"{q_str} {t_str}"
+                for entry, aliases in unmatched_entries:
+                    if any(a in txt for a in aliases):
+                        entry["raw_count"] += 1
                         if q_str:
-                            quotes_pool.append(q_str)
+                            entry["quotes_pool"].append(q_str)
+
+        ranked_results: List[Dict[str, Any]] = []
+        for entry in topic_entries:
+            rank_idx = entry["rank_idx"]
+            topic_name = entry["topic_name"]
+            cat = entry["cat"]
+            default_dsi = entry["default_dsi"]
+            domain_weight = entry["domain_weight"]
+            raw_count = entry["raw_count"]
+            matching_dsi_vals = entry["matching_dsi_vals"]
+            quotes_pool = entry["quotes_pool"]
 
             # Ensure baseline counts proportional to topic relevance
             if raw_count == 0:
                 raw_count = max(2, 35 - rank_idx)
 
-            share_pct = round((raw_count / total_tokens) * 100, 2)
-            # Smooth IDF (guard against empty corpus num_docs == 0)
-            df = max(1, len(set(quotes_pool)) or int(raw_count * 0.75))
-            smooth_idf = math.log((1.0 + self.num_docs) / (1.0 + df)) + 1.0 if self.num_docs > 0 else 1.0
+            share_pct = 0.0 if raw_total_tokens == 0 else min(100.0, round((raw_count / total_tokens) * 100, 2))
+            # Smooth IDF (clamp df <= num_docs so smooth_idf >= 1.0 even on small corpora)
+            raw_df = max(1, len(set(quotes_pool)) or int(raw_count * 0.75))
+            if self.num_docs > 0:
+                df = min(self.num_docs, raw_df)
+                smooth_idf = max(1.0, math.log((1.0 + self.num_docs) / (1.0 + df)) + 1.0)
+            else:
+                smooth_idf = 1.0
             tfidf = round(raw_count * smooth_idf, 2)
 
             # Mean DSI

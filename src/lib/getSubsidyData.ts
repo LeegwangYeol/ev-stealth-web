@@ -192,7 +192,11 @@ const ALERT_SEVERITIES: readonly AlertSeverity[] = [
   'DEPLETED',
 ];
 
-const CATEGORY_KEYS: readonly SubsidyCategoryKey[] = ['passenger', 'commercial', 'bus'];
+const VALID_CATEGORY_KEYS: ReadonlySet<SubsidyCategoryKey> = new Set([
+  'passenger',
+  'commercial',
+  'bus',
+]);
 
 const VALID_REGION_TIERS: ReadonlySet<RegionTier> = new Set([
   'special_city',
@@ -208,6 +212,8 @@ const FORBIDDEN_PROTO_KEYS: ReadonlySet<string> = new Set([
   'prototype',
 ]);
 
+const NON_NEG_FLOAT_STR_RE = /^(?:\d+(?:\.\d*)?|\.\d+)$/;
+
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
@@ -216,6 +222,33 @@ function safeNonNegNum(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
     ? (value === 0 ? 0 : value)
     : fallback;
+}
+
+function parseNonNegIntOrKrw(value: unknown, fallback: number): number {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value >= 0 ? (value === 0 ? 0 : value) : fallback;
+  }
+  if (typeof value === 'string') {
+    const parsed = parseSubsidyNumber(value, { allowNegative: true, defaultKrw: -1 });
+    return parsed >= 0 ? parsed : fallback;
+  }
+  return fallback;
+}
+
+function parseNonNegFloat(value: unknown, fallback: number): number {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value >= 0 ? (value === 0 ? 0 : value) : fallback;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (NON_NEG_FLOAT_STR_RE.test(trimmed)) {
+      const parsed = Number(trimmed);
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        return parsed === 0 ? 0 : parsed;
+      }
+    }
+  }
+  return fallback;
 }
 
 function safeNonEmptyStr(value: unknown, fallback: string): string {
@@ -228,18 +261,18 @@ function normalizeCategoryMetricsObj(raw: unknown, fb: CategoryMetrics): Categor
   if (!isPlainRecord(raw)) {
     return fb;
   }
-  const announced = safeNonNegNum(raw.announced_units, fb.announced_units);
-  const applied = safeNonNegNum(raw.applied_units, fb.applied_units);
-  const delivered = safeNonNegNum(raw.delivered_units, fb.delivered_units);
-  const remaining = safeNonNegNum(raw.remaining_units, calculateRemainingUnits(applied, announced));
-  const depletionRate = safeNonNegNum(raw.depletion_rate, calculateDepletionRate(applied, announced));
-  const deliveryRate = safeNonNegNum(raw.delivery_rate, calculateDeliveryRate(delivered, announced));
+  const announced = parseNonNegIntOrKrw(raw.announced_units, fb.announced_units);
+  const applied = parseNonNegIntOrKrw(raw.applied_units, fb.applied_units);
+  const delivered = parseNonNegIntOrKrw(raw.delivered_units, fb.delivered_units);
+  const remaining = parseNonNegIntOrKrw(raw.remaining_units, calculateRemainingUnits(applied, announced));
+  const depletionRate = parseNonNegFloat(raw.depletion_rate, calculateDepletionRate(applied, announced));
+  const deliveryRate = parseNonNegFloat(raw.delivery_rate, calculateDeliveryRate(delivered, announced));
   const status = resolveAlertSeverity(raw.status, depletionRate);
 
-  const maxLocal = safeNonNegNum(raw.max_local_subsidy_krw, -1);
-  const maxTotal = safeNonNegNum(raw.max_total_subsidy_krw, -1);
-  const totalBudget = safeNonNegNum(raw.total_budget_krw, -1);
-  const remainingBudget = safeNonNegNum(raw.remaining_budget_krw, -1);
+  const maxLocal = parseNonNegIntOrKrw(raw.max_local_subsidy_krw, -1);
+  const maxTotal = parseNonNegIntOrKrw(raw.max_total_subsidy_krw, -1);
+  const totalBudget = parseNonNegIntOrKrw(raw.total_budget_krw, -1);
+  const remainingBudget = parseNonNegIntOrKrw(raw.remaining_budget_krw, -1);
 
   return {
     announced_units: announced,
@@ -266,13 +299,13 @@ function normalizeCategoryMetricsObj(raw: unknown, fb: CategoryMetrics): Categor
 
 function normalizeMunicipalityMetrics(raw: unknown): MunicipalityMetrics | null {
   if (!isPlainRecord(raw)) return null;
-  const announced = safeNonNegNum(raw.announced_units, 0);
-  const applied = safeNonNegNum(raw.applied_units, 0);
-  const remaining = safeNonNegNum(raw.remaining_units, calculateRemainingUnits(applied, announced));
-  const depletionRate = safeNonNegNum(raw.depletion_rate, calculateDepletionRate(applied, announced));
-  const localSubsidy = safeNonNegNum(raw.local_subsidy_krw, 0);
-  const delivered = safeNonNegNum(raw.delivered_units, -1);
-  const totalSubsidy = safeNonNegNum(raw.total_subsidy_krw, -1);
+  const announced = parseNonNegIntOrKrw(raw.announced_units, 0);
+  const applied = parseNonNegIntOrKrw(raw.applied_units, 0);
+  const remaining = parseNonNegIntOrKrw(raw.remaining_units, calculateRemainingUnits(applied, announced));
+  const depletionRate = parseNonNegFloat(raw.depletion_rate, calculateDepletionRate(applied, announced));
+  const localSubsidy = parseNonNegIntOrKrw(raw.local_subsidy_krw, 0);
+  const delivered = parseNonNegIntOrKrw(raw.delivered_units, -1);
+  const totalSubsidy = parseNonNegIntOrKrw(raw.total_subsidy_krw, -1);
 
   return {
     name_ko: safeNonEmptyStr(raw.name_ko, safeNonEmptyStr(raw.name_en, '미상 지자체')),
@@ -298,7 +331,7 @@ function normalizeRegionEntry(raw: unknown): RegionEntry | null {
   const commercial = normalizeCategoryMetricsObj(rawCats.commercial, fbCats.commercial);
   const bus = normalizeCategoryMetricsObj(rawCats.bus, fbCats.bus);
 
-  const overallRate = safeNonNegNum(raw.overall_depletion_rate, passenger.depletion_rate);
+  const overallRate = parseNonNegFloat(raw.overall_depletion_rate, passenger.depletion_rate);
   const regionId = safeNonEmptyStr(raw.region_id, safeNonEmptyStr(raw.iso_code, 'unknown-region'));
   const isoCode = safeNonEmptyStr(raw.iso_code, regionId);
   const nameKo = safeNonEmptyStr(raw.name_ko, safeNonEmptyStr(raw.name_en, '미상 지역'));
@@ -326,7 +359,7 @@ function normalizeRegionEntry(raw: unknown): RegionEntry | null {
     tier,
     overall_depletion_rate: overallRate,
     overall_status: resolveAlertSeverity(raw.overall_status, overallRate),
-    residency_requirement_days: safeNonNegNum(raw.residency_requirement_days, 30),
+    residency_requirement_days: parseNonNegIntOrKrw(raw.residency_requirement_days, 30),
     supplementary_budget_added: typeof raw.supplementary_budget_added === 'boolean' ? raw.supplementary_budget_added : false,
     categories: { passenger, commercial, bus },
     ...(municipalities ? { municipalities } : {}),
@@ -342,11 +375,10 @@ function normalizePopularModelEntry(raw: unknown): PopularModelEntry | null {
     ? rawNumPrice
     : parseSubsidyNumber(raw.base_price_krw, { defaultKrw: 0 });
   const basePrice = parsedPrice > 0 ? parsedPrice : 54_100_000;
-  const rawRatio = raw.price_subsidy_ratio;
-  const ratio =
-    typeof rawRatio === 'number' && Number.isFinite(rawRatio) && rawRatio >= 0
-      ? Math.min(1.0, rawRatio === 0 ? 0 : rawRatio)
-      : getPriceSubsidyRatio(basePrice);
+  const parsedRatio = parseNonNegFloat(raw.price_subsidy_ratio, -1);
+  const ratio = parsedRatio >= 0
+    ? Math.min(1.0, parsedRatio)
+    : getPriceSubsidyRatio(basePrice);
 
   let samples: PopularModelEntry['regional_subsidy_samples'];
   if (isPlainRecord(raw.regional_subsidy_samples)) {
@@ -355,12 +387,17 @@ function normalizePopularModelEntry(raw: unknown): PopularModelEntry | null {
       if (FORBIDDEN_PROTO_KEYS.has(key)) continue;
       const sample = raw.regional_subsidy_samples[key];
       if (!isPlainRecord(sample)) continue;
-      const localSub = safeNonNegNum(sample.local_subsidy_krw, -1);
-      cleanSamples[key] = {
-        ...(localSub >= 0 ? { local_subsidy_krw: localSub } : {}),
-        total_subsidy_krw: safeNonNegNum(sample.total_subsidy_krw, 0),
-        net_price_krw: safeNonNegNum(sample.net_price_krw, 0),
-      };
+      const localSub = parseNonNegIntOrKrw(sample.local_subsidy_krw, -1);
+      Object.defineProperty(cleanSamples, key, {
+        value: {
+          ...(localSub >= 0 ? { local_subsidy_krw: localSub } : {}),
+          total_subsidy_krw: parseNonNegIntOrKrw(sample.total_subsidy_krw, 0),
+          net_price_krw: parseNonNegIntOrKrw(sample.net_price_krw, 0),
+        },
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
     samples = cleanSamples;
   }
@@ -373,11 +410,11 @@ function normalizePopularModelEntry(raw: unknown): PopularModelEntry | null {
       ? { manufacturer_ko: raw.manufacturer_ko.trim() }
       : {}),
     battery_type: safeNonEmptyStr(raw.battery_type, 'NCM 삼원계'),
-    battery_capacity_kwh: safeNonNegNum(raw.battery_capacity_kwh, 0),
-    rated_range_km: safeNonNegNum(raw.rated_range_km, 0),
+    battery_capacity_kwh: parseNonNegFloat(raw.battery_capacity_kwh, 0),
+    rated_range_km: parseNonNegIntOrKrw(raw.rated_range_km, 0),
     base_price_krw: basePrice,
     price_subsidy_ratio: ratio,
-    national_subsidy_krw: safeNonNegNum(raw.national_subsidy_krw, 0),
+    national_subsidy_krw: parseNonNegIntOrKrw(raw.national_subsidy_krw, 0),
     ...(samples ? { regional_subsidy_samples: samples } : {}),
   };
 }
@@ -430,8 +467,8 @@ export function normalizeSubsidyDataset(data: unknown): EVSubsidyDataset {
       ? (rawThresholds[sev] as Record<string, unknown>)
       : {};
     alertThresholds[sev] = {
-      min_percent: typeof rawCfg.min_percent === 'number' && Number.isFinite(rawCfg.min_percent) ? (rawCfg.min_percent === 0 ? 0 : rawCfg.min_percent) : fbCfg.min_percent,
-      max_percent: typeof rawCfg.max_percent === 'number' && Number.isFinite(rawCfg.max_percent) ? (rawCfg.max_percent === 0 ? 0 : rawCfg.max_percent) : fbCfg.max_percent,
+      min_percent: parseNonNegFloat(rawCfg.min_percent, fbCfg.min_percent),
+      max_percent: parseNonNegFloat(rawCfg.max_percent, fbCfg.max_percent),
       label_ko: safeNonEmptyStr(rawCfg.label_ko, fbCfg.label_ko),
       severity: sev,
       color_hex: safeNonEmptyStr(rawCfg.color_hex, fbCfg.color_hex),
@@ -445,29 +482,29 @@ export function normalizeSubsidyDataset(data: unknown): EVSubsidyDataset {
   const rawCatTotals = isPlainRecord(rawSummary.category_totals) ? rawSummary.category_totals : {};
   const rawAlertCounts = isPlainRecord(rawSummary.alert_region_counts) ? rawSummary.alert_region_counts : {};
 
-  const totalBudgetKrw = safeNonNegNum(rawSummary.total_budget_krw, -1);
-  const disbursedBudgetKrw = safeNonNegNum(rawSummary.disbursed_budget_krw, -1);
-  const totalAnnouncedUnits = safeNonNegNum(rawSummary.total_announced_units, zeroSummary.total_announced_units);
-  const totalAppliedUnits = safeNonNegNum(rawSummary.total_applied_units, zeroSummary.total_applied_units);
-  const totalDeliveredUnits = safeNonNegNum(rawSummary.total_delivered_units, zeroSummary.total_delivered_units);
+  const totalBudgetKrw = parseNonNegIntOrKrw(rawSummary.total_budget_krw, -1);
+  const disbursedBudgetKrw = parseNonNegIntOrKrw(rawSummary.disbursed_budget_krw, -1);
+  const totalAnnouncedUnits = parseNonNegIntOrKrw(rawSummary.total_announced_units, zeroSummary.total_announced_units);
+  const totalAppliedUnits = parseNonNegIntOrKrw(rawSummary.total_applied_units, zeroSummary.total_applied_units);
+  const totalDeliveredUnits = parseNonNegIntOrKrw(rawSummary.total_delivered_units, zeroSummary.total_delivered_units);
 
   const nationwideSummary: EVSubsidyDataset['nationwide_summary'] = {
     total_announced_units: totalAnnouncedUnits,
     total_applied_units: totalAppliedUnits,
     total_delivered_units: totalDeliveredUnits,
-    total_remaining_units: safeNonNegNum(
+    total_remaining_units: parseNonNegIntOrKrw(
       rawSummary.total_remaining_units,
       calculateRemainingUnits(totalAppliedUnits, totalAnnouncedUnits)
     ),
-    nationwide_depletion_rate: safeNonNegNum(
+    nationwide_depletion_rate: parseNonNegFloat(
       rawSummary.nationwide_depletion_rate,
       calculateDepletionRate(totalAppliedUnits, totalAnnouncedUnits)
     ),
-    total_budget_billion_krw: safeNonNegNum(
+    total_budget_billion_krw: parseNonNegFloat(
       rawSummary.total_budget_billion_krw,
       zeroSummary.total_budget_billion_krw
     ),
-    disbursed_budget_billion_krw: safeNonNegNum(
+    disbursed_budget_billion_krw: parseNonNegFloat(
       rawSummary.disbursed_budget_billion_krw,
       zeroSummary.disbursed_budget_billion_krw
     ),
@@ -479,11 +516,11 @@ export function normalizeSubsidyDataset(data: unknown): EVSubsidyDataset {
       bus: normalizeCategoryMetricsObj(rawCatTotals.bus, zeroSummary.category_totals.bus),
     },
     alert_region_counts: {
-      healthy: safeNonNegNum(rawAlertCounts.healthy, zeroSummary.alert_region_counts.healthy),
-      caution: safeNonNegNum(rawAlertCounts.caution, zeroSummary.alert_region_counts.caution),
-      warning: safeNonNegNum(rawAlertCounts.warning, zeroSummary.alert_region_counts.warning),
-      critical: safeNonNegNum(rawAlertCounts.critical, zeroSummary.alert_region_counts.critical),
-      depleted: safeNonNegNum(rawAlertCounts.depleted, zeroSummary.alert_region_counts.depleted),
+      healthy: parseNonNegIntOrKrw(rawAlertCounts.healthy, zeroSummary.alert_region_counts.healthy),
+      caution: parseNonNegIntOrKrw(rawAlertCounts.caution, zeroSummary.alert_region_counts.caution),
+      warning: parseNonNegIntOrKrw(rawAlertCounts.warning, zeroSummary.alert_region_counts.warning),
+      critical: parseNonNegIntOrKrw(rawAlertCounts.critical, zeroSummary.alert_region_counts.critical),
+      depleted: parseNonNegIntOrKrw(rawAlertCounts.depleted, zeroSummary.alert_region_counts.depleted),
     },
   };
 
@@ -500,9 +537,9 @@ export function normalizeSubsidyDataset(data: unknown): EVSubsidyDataset {
         .filter((pt): pt is Record<string, unknown> => isPlainRecord(pt))
         .map((pt) => ({
           date: safeNonEmptyStr(pt.date, metadata.generated_at.slice(0, 10)),
-          passenger_rate: safeNonNegNum(pt.passenger_rate, 0),
-          commercial_rate: safeNonNegNum(pt.commercial_rate, 0),
-          overall_rate: safeNonNegNum(pt.overall_rate, 0),
+          passenger_rate: parseNonNegFloat(pt.passenger_rate, 0),
+          commercial_rate: parseNonNegFloat(pt.commercial_rate, 0),
+          overall_rate: parseNonNegFloat(pt.overall_rate, 0),
         }))
     : undefined;
 
@@ -649,16 +686,22 @@ export function getCategoryDepletion(
   if (typeof regionOrId === 'string') {
     region = getRegionById(regionOrId);
   } else if (isPlainRecord(regionOrId)) {
-    if ('categories' in regionOrId && isPlainRecord(regionOrId.categories)) {
+    if (
+      Object.prototype.hasOwnProperty.call(regionOrId, 'categories') &&
+      isPlainRecord(regionOrId.categories)
+    ) {
       region = regionOrId as unknown as RegionEntry;
-    } else if ('region_id' in regionOrId && typeof regionOrId.region_id === 'string') {
+    } else if (
+      Object.prototype.hasOwnProperty.call(regionOrId, 'region_id') &&
+      typeof regionOrId.region_id === 'string'
+    ) {
       region = getRegionById(regionOrId.region_id);
     }
   }
 
   const rawCategories = region?.categories as unknown;
   const category =
-    CATEGORY_KEYS.includes(categoryKey) &&
+    VALID_CATEGORY_KEYS.has(categoryKey) &&
     isPlainRecord(rawCategories) &&
     Object.prototype.hasOwnProperty.call(rawCategories, categoryKey) &&
     isPlainRecord(rawCategories[categoryKey])

@@ -49,7 +49,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
 
   return (
     <html lang="ko">
-      <body className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 antialiased font-sans">
+      <body className="min-h-screen min-h-[100dvh] bg-slate-950 text-slate-100 flex items-center justify-center p-4 antialiased font-sans">
         <main id="main-content" className="max-w-lg w-full">
           <div
             ref={containerRef}

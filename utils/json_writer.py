@@ -123,12 +123,17 @@ def _extract_record_date(record: Optional[Mapping[str, Any]]) -> str:
         if len(val_str) >= 10 and val_str[4] in ("-", "/") and val_str[7] in ("-", "/"):
             candidate = val_str[:10].replace("/", "-")
             try:
-                return datetime.strptime(candidate, "%Y-%m-%d").strftime("%Y-%m-%d")
+                dt = datetime.strptime(candidate, "%Y-%m-%d")
+                validated = _validate_ymd(dt.year, dt.month, dt.day)
+                if validated:
+                    return validated
             except ValueError:
                 pass
         try:
             dt = datetime.fromisoformat(val_str.replace("Z", "+00:00"))
-            return dt.strftime("%Y-%m-%d")
+            validated = _validate_ymd(dt.year, dt.month, dt.day)
+            if validated:
+                return validated
         except Exception:
             pass
     return ""
@@ -163,7 +168,12 @@ def format_daily_report_payload(
             category = item.defect_category
         elif isinstance(item, (dict, Mapping)):
             # Check is_authentic_defect if provided
-            if not item.get("is_authentic_defect", True):
+            raw_auth = item.get("is_authentic_defect", True)
+            if isinstance(raw_auth, str):
+                is_auth = raw_auth.strip().lower() not in ("false", "0", "no", "n", "")
+            else:
+                is_auth = bool(raw_auth)
+            if not is_auth:
                 continue
             record_dict = dict(item)
             # Ensure required aliases
@@ -189,10 +199,18 @@ def format_daily_report_payload(
             if "confidence_score" in record_dict:
                 record_dict["confidence_score"] = _safe_float(record_dict.get("confidence_score"), 0.0)
             if isinstance(record_dict.get("dsi_breakdown"), Mapping):
-                record_dict["dsi_breakdown"] = {
-                    k: _safe_float(v, 0.0) if isinstance(v, (int, float)) or v is None else v
-                    for k, v in record_dict["dsi_breakdown"].items()
-                }
+                from decimal import Decimal
+                cleaned_dsi: Dict[str, Any] = {}
+                for k, v in record_dict["dsi_breakdown"].items():
+                    if isinstance(v, (int, float, Decimal)) or v is None:
+                        cleaned_dsi[k] = _safe_float(v, 0.0)
+                    elif isinstance(v, str) and v.strip().lower() in (
+                        "nan", "+nan", "-nan", "inf", "+inf", "-inf", "infinity", "+infinity", "-infinity"
+                    ):
+                        cleaned_dsi[k] = 0.0
+                    else:
+                        cleaned_dsi[k] = v
+                record_dict["dsi_breakdown"] = cleaned_dsi
             raw_sev = str(record_dict.get("severity") or record_dict.get("severity_tier") or "").strip().upper()
             is_critical = (raw_sev == "CRITICAL" or sev_idx >= 8.0)
             raw_cat = record_dict.get("defect_category")

@@ -122,7 +122,13 @@ class CafeForumMiner:
         if os.path.exists(self.slang_path):
             try:
                 with open(self.slang_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    content = f.read().strip()
+                if content:
+                    data = json.loads(content)
+                    if isinstance(data, dict):
+                        return data
+                    if isinstance(data, list):
+                        return {str(item): {} for item in data}
             except Exception as e:
                 logger.warning(f"Failed to load slang dictionary from {self.slang_path}: {e}")
         return {}
@@ -476,7 +482,12 @@ class CafeForumMiner:
 def main():
     parser = argparse.ArgumentParser(description="Cafe and Forum Miner")
     parser.add_argument("--keywords", nargs="+", default=["BYD", "아토3", "씰", "T4K", "중국 전기차"], help="Keywords to mine")
-    parser.add_argument("--output", type=str, default="/Users/a7890/src/my-e-car/data/forum_complaints.json", help="Output path")
+    default_output = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "data",
+        "forum_complaints.json",
+    )
+    parser.add_argument("--output", type=str, default=default_output, help="Output path")
     args = parser.parse_args()
 
     with CafeForumMiner() as miner:

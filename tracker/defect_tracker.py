@@ -210,6 +210,7 @@ class DefectTracker:
         self._cached_reports_path: Optional[Path] = None
         self._cached_is_primary: bool = False
         self._cached_reports: Optional[List[Dict[str, Any]]] = None
+        self._cached_full_data: Optional[Dict[str, Any]] = None
         self._category_index: Dict[str, List[Dict[str, Any]]] = {}
         self._query_cache: OrderedDict[Tuple[Any, ...], List[Dict[str, Any]]] = OrderedDict()
 
@@ -307,6 +308,9 @@ class DefectTracker:
             quarantine_corrupted_file,
         )
 
+        if file_path is not None and not str(file_path).strip():
+            return {"reports": [], "statistics": {}}
+
         target = Path(file_path) if file_path else self.resolve_primary_reports_path()
         if not target or not target.exists():
             logger.warning("No defect report file found to load.")
@@ -352,6 +356,7 @@ class DefectTracker:
             self._cached_reports_path = None
             self._cached_is_primary = False
             self._cached_reports = None
+            self._cached_full_data = None
             self._category_index.clear()
             self._query_cache.clear()
 
@@ -369,9 +374,15 @@ class DefectTracker:
                 self._category_index[cat_norm] = []
             self._category_index[cat_norm].append(r)
 
-    def load_reports(self, file_path: Optional[Union[str, Path]] = None) -> List[Dict[str, Any]]:
-        """Load and return list of defect reports from target or primary path with mtime caching."""
+    def _ensure_reports_loaded(
+        self,
+        file_path: Optional[Union[str, Path]] = None,
+        copy_dicts: bool = False,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Ensure in-memory report cache and category index are up to date; optionally return copied dicts."""
         is_primary = file_path is None
+        if file_path is not None and not str(file_path).strip():
+            return [] if copy_dicts else None
         raw_target = Path(file_path) if file_path is not None else self.resolve_primary_reports_path()
         target: Optional[Path] = None
         if raw_target is not None:
@@ -380,11 +391,12 @@ class DefectTracker:
             except OSError:
                 target = raw_target
 
+        pre_stat: Optional[os.stat_result] = None
         if target and target.exists():
             try:
-                st = target.stat()
-                current_mtime = st.st_mtime
-                current_sig = (st.st_mtime_ns, st.st_size)
+                pre_stat = target.stat()
+                current_mtime = pre_stat.st_mtime
+                current_sig = (pre_stat.st_mtime_ns, pre_stat.st_size)
                 with self._cache_lock:
                     if (
                         self._cached_reports is not None
@@ -394,9 +406,9 @@ class DefectTracker:
                     ):
                         if is_primary:
                             self._cached_is_primary = True
-                        return [_to_record_dict(r) for r in self._cached_reports]
+                        return [_to_record_dict(r) for r in self._cached_reports] if copy_dicts else None
             except OSError:
-                pass
+                pre_stat = None
 
         data = self.load_full_report_data(file_path=target)
         reports = data.get("reports", [])
@@ -404,9 +416,18 @@ class DefectTracker:
         with self._cache_lock:
             if target and target.exists():
                 try:
-                    st = target.stat()
-                    self._cached_reports_mtime = st.st_mtime
-                    self._cached_reports_sig = (st.st_mtime_ns, st.st_size)
+                    post_stat = target.stat()
+                    # Guard against TOCTOU: if file changed while reading, retain pre_stat so next read reloads
+                    effective_stat = (
+                        pre_stat
+                        if (
+                            pre_stat is not None
+                            and (post_stat.st_mtime_ns != pre_stat.st_mtime_ns or post_stat.st_size != pre_stat.st_size)
+                        )
+                        else post_stat
+                    )
+                    self._cached_reports_mtime = effective_stat.st_mtime
+                    self._cached_reports_sig = (effective_stat.st_mtime_ns, effective_stat.st_size)
                     self._cached_reports_path = target
                     self._cached_is_primary = is_primary
                 except OSError:
@@ -421,9 +442,15 @@ class DefectTracker:
                 self._cached_is_primary = False
 
             self._cached_reports = reports
+            self._cached_full_data = data
             self._build_category_index(reports)
             self._query_cache.clear()
-            return [_to_record_dict(r) for r in self._cached_reports]
+            return [_to_record_dict(r) for r in self._cached_reports] if copy_dicts else None
+
+    def load_reports(self, file_path: Optional[Union[str, Path]] = None) -> List[Dict[str, Any]]:
+        """Load and return list of defect reports from target or primary path with mtime caching."""
+        result = self._ensure_reports_loaded(file_path=file_path, copy_dicts=True)
+        return result if result is not None else []
 
     def query_defects(
         self,
@@ -454,9 +481,12 @@ class DefectTracker:
             except (ValueError, TypeError, OverflowError):
                 norm_min_sev = None
 
+        candidate_source: Optional[List[Any]] = None
         if reports is None:
-            loaded_reports = self.load_reports(file_path=file_path)
-            candidate_source = loaded_reports
+            if "load_reports" not in self.__dict__ and type(self).load_reports is DefectTracker.load_reports:
+                self._ensure_reports_loaded(file_path=file_path, copy_dicts=False)
+            else:
+                candidate_source = self.load_reports(file_path=file_path)
             use_cache = True
         else:
             candidate_source = list(reports)
@@ -476,6 +506,7 @@ class DefectTracker:
                 resolved_req_path = Path(file_path)
 
         cache_key: Optional[Tuple[Any, ...]] = None
+        candidate_pool: Optional[List[Any]] = None
         if use_cache:
             with self._cache_lock:
                 # Verify cache wasn't invalidated or swapped to a different file by another thread
@@ -485,7 +516,6 @@ class DefectTracker:
                 )
                 if self._cached_reports is None or target_mismatch:
                     use_cache = False
-                    candidate_pool = list(candidate_source)
                 else:
                     cache_key = (
                         str(self._cached_reports_path),
@@ -508,8 +538,15 @@ class DefectTracker:
                         candidate_pool = list(self._category_index.get(cat_upper, []))
                     else:
                         candidate_pool = list(self._cached_reports)
+
+            if candidate_pool is None:
+                candidate_pool = (
+                    list(candidate_source)
+                    if candidate_source is not None
+                    else self.load_reports(file_path=file_path)
+                )
         else:
-            candidate_pool = list(candidate_source)
+            candidate_pool = list(candidate_source or [])
 
         filtered: List[Dict[str, Any]] = []
 
@@ -545,7 +582,9 @@ class DefectTracker:
                         effective_sev = None
 
                 if effective_sev is None:
-                    raw_tier = str(_extract_val(r, "severity") or _extract_val(r, "severity_tier") or "").strip().upper()
+                    raw_sev = _extract_val(r, "severity") or _extract_val(r, "severity_tier") or ""
+                    raw_sev = getattr(raw_sev, "value", raw_sev)
+                    raw_tier = str(raw_sev).strip().upper()
                     tier_map = {
                         "CRITICAL": 9.0,
                         "HIGH": 7.0,
@@ -611,7 +650,16 @@ class DefectTracker:
                 val = default
             return default if val is None else val
 
-        full_data = self.load_full_report_data(file_path=file_path)
+        full_data: Optional[Dict[str, Any]] = None
+        if (
+            "load_full_report_data" not in self.__dict__
+            and type(self).load_full_report_data is DefectTracker.load_full_report_data
+        ):
+            self._ensure_reports_loaded(file_path=file_path, copy_dicts=False)
+            with self._cache_lock:
+                full_data = self._cached_full_data
+        if full_data is None:
+            full_data = self.load_full_report_data(file_path=file_path)
         stats = _get_val(full_data, "statistics")
         if stats and isinstance(stats, dict):
             stat_copy = dict(stats)
@@ -720,6 +768,7 @@ class DefectTracker:
                     effective_dsi = None
 
             sev_raw = _get_val(r, "severity_tier") or _get_val(r, "severity") or ""
+            sev_raw = getattr(sev_raw, "value", sev_raw)
             sev_str = str(sev_raw).strip().upper()
             is_critical = (
                 sev_str == "CRITICAL"
@@ -765,14 +814,14 @@ class DefectTracker:
                         post_obj = RawPost.from_dict(post_item)
                     else:
                         post_obj = RawPost(
-                            platform=str(getattr(post_item, "platform", "unknown")),
-                            post_id=str(getattr(post_item, "post_id", getattr(post_item, "id", ""))),
-                            url=str(getattr(post_item, "url", "")),
-                            title=str(getattr(post_item, "title", "")),
-                            content=str(getattr(post_item, "content", "")),
-                            comments=list(getattr(post_item, "comments", [])),
-                            created_at=str(getattr(post_item, "created_at", "")),
-                            author=str(getattr(post_item, "author", "")),
+                            platform=str(getattr(post_item, "platform", None) or "unknown"),
+                            post_id=str(getattr(post_item, "post_id", None) or getattr(post_item, "id", None) or ""),
+                            url=str(getattr(post_item, "url", None) or ""),
+                            title=str(getattr(post_item, "title", None) or ""),
+                            content=str(getattr(post_item, "content", None) or ""),
+                            comments=list(getattr(post_item, "comments", None) or ()),
+                            created_at=str(getattr(post_item, "created_at", None) or ""),
+                            author=str(getattr(post_item, "author", None) or ""),
                         )
                     record = self.filter_engine.process_post(post_obj)
                 else:

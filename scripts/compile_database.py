@@ -98,8 +98,11 @@ def compile_database(
             )
             all_records.append(record.to_dict())
 
-    if output_path:
-        output_file = os.path.abspath(output_path)
+    if output_path and str(output_path).strip():
+        raw_out = str(output_path).strip()
+        output_file = os.path.abspath(raw_out)
+        if os.path.isdir(output_file) or raw_out.endswith(("/", "\\")):
+            output_file = os.path.join(output_file, "compiled_complaints.json")
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
     else:
         output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")

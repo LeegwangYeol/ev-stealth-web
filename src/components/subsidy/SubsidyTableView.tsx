@@ -36,6 +36,30 @@ const FALLBACK_CATEGORY_METRICS: Readonly<CategoryMetrics> = Object.freeze({
   max_total_subsidy_krw: 0,
 });
 
+function normalizeTableStatus(status: unknown, fallbackRate: number): AlertSeverity {
+  const normalized = typeof status === 'string' ? status.trim().toUpperCase() : '';
+  switch (normalized) {
+    case 'HEALTHY':
+    case 'AVAILABLE':
+      return 'HEALTHY';
+    case 'CAUTION':
+      return 'CAUTION';
+    case 'WARNING':
+      return 'WARNING';
+    case 'CRITICAL':
+    case 'DANGER':
+    case 'EMERGENCY':
+      return 'CRITICAL';
+    case 'DEPLETED':
+    case 'EXHAUSTED':
+    case 'CLOSED':
+    case 'END':
+      return 'DEPLETED';
+    default:
+      return resolveAlertSeverity(undefined, fallbackRate);
+  }
+}
+
 function getSortAria(
   col: 'NAME' | 'REMAINING' | 'DEPLETION' | 'LOCAL_SUBSIDY',
   sortOption: SortOption
@@ -106,18 +130,11 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
   const regionName = region?.name_ko || '해당 지역';
   const regionId = region?.region_id || region?.iso_code || region?.name_ko || 'unknown';
   const categoryLabel = selectedCategory === 'passenger' ? '전기승용' : selectedCategory === 'commercial' ? '전기화물' : '전기승합';
-  const rawStatus = typeof cat?.status === 'string' ? cat.status.trim() : '';
-  const upperStatus = rawStatus.toUpperCase();
-  const effectiveStatus = rawStatus ? rawStatus : resolveAlertSeverity(undefined, depletionRate);
-  const isDepleted =
-    upperStatus === 'DEPLETED' ||
-    upperStatus === 'EXHAUSTED' ||
-    upperStatus === 'CLOSED' ||
-    upperStatus === 'END' ||
-    depletionRate >= 100;
-  const isCriticalStatus = upperStatus === 'CRITICAL' || upperStatus === 'DANGER' || upperStatus === 'EMERGENCY';
-  const isWarningStatus = upperStatus === 'WARNING';
-  const isCautionStatus = upperStatus === 'CAUTION';
+  const effectiveStatus = normalizeTableStatus(cat?.status, depletionRate);
+  const isDepleted = effectiveStatus === 'DEPLETED' || depletionRate >= 100;
+  const isCriticalStatus = effectiveStatus === 'CRITICAL';
+  const isWarningStatus = effectiveStatus === 'WARNING';
+  const isCautionStatus = effectiveStatus === 'CAUTION';
 
   // Memoized stable row handlers to prevent recreating closures on every render
   const handleToggle = useCallback(() => {
@@ -155,11 +172,10 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
         ? (muniApplied / muniAnnounced) * 100
         : 0;
       const muniLocalSubsidy = Number.isFinite(muni.local_subsidy_krw) ? Math.max(0, muni.local_subsidy_krw) : 0;
-      const muniRawStatus = typeof muni.status === 'string' ? muni.status.trim() : '';
-      const muniStatus = muniRawStatus ? muniRawStatus : resolveAlertSeverity(undefined, muniDepletion);
+      const muniStatus = normalizeTableStatus(muni.status, muniDepletion);
 
       return (
-        <tr key={muni.muni_id || `${regionId}-${muni.name_ko || idx}`} className="hover:bg-slate-900/50">
+        <tr key={muni.muni_id || `${regionId}-${muni.name_ko || 'muni'}-${idx}`} className="hover:bg-slate-900/50">
           <th scope="row" className="p-2 font-medium text-slate-200 sticky left-0 bg-slate-950 z-10 border-r border-slate-800">
             {muni.name_ko || '세부 지자체'}
           </th>
@@ -399,8 +415,8 @@ export const SubsidyTableView = memo(function SubsidyTableView({
 
   // Performance & Stability: Memoization of filtered/sorted rows to prevent unnecessary DOM mutations
   const renderedRows = useMemo(() => {
-    return (regions || EMPTY_REGIONS).map((region) => {
-      const regionKey = region.region_id || region.iso_code || region.name_ko || 'unknown';
+    return (regions || EMPTY_REGIONS).map((region, idx) => {
+      const regionKey = region.region_id || region.iso_code || region.name_ko || `region-${idx}`;
       return (
         <SubsidyTableRow
           key={regionKey}

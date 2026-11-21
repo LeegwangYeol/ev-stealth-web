@@ -188,6 +188,8 @@ def calculate_net_subsidy(
 
 def _calc_rate_percent(numerator: Union[int, float], denominator: Union[int, float]) -> float:
     """Compute percentage rounded to 1 decimal place, scaling numerator first to prevent float drift."""
+    if isinstance(numerator, bool) or isinstance(denominator, bool):
+        return 0.0
     if denominator <= 0 or numerator <= 0:
         return 0.0
     scaled = numerator * 100.0
@@ -902,7 +904,18 @@ def build_initial_baseline(regions: Optional[List[Any]] = None) -> SubsidyPayloa
             disbursed_budget_sum += max(0, tot_b - rem_b)
 
         if status_key not in alert_counts and (cats or (isinstance(r, dict) and "overall_depletion_rate" in r)):
-            reg_rate = _calc_rate_percent(reg_app, reg_ann)
+            if cats:
+                reg_rate = _calc_rate_percent(reg_app, reg_ann)
+            else:
+                raw_rate = r.get("overall_depletion_rate") if isinstance(r, dict) else getattr(r, "overall_depletion_rate", 0.0)
+                if raw_rate is None or isinstance(raw_rate, bool):
+                    reg_rate = 0.0
+                else:
+                    try:
+                        f_rate = float(str(raw_rate).strip().replace(",", "")) if isinstance(raw_rate, str) else float(raw_rate)
+                        reg_rate = 0.0 if (math.isnan(f_rate) or math.isinf(f_rate)) else max(0.0, f_rate)
+                    except (ValueError, TypeError, OverflowError):
+                        reg_rate = 0.0
             status_key = AlertSeverity.from_rate(reg_rate).value.lower()
         if status_key in alert_counts:
             alert_counts[status_key] += 1
@@ -933,14 +946,23 @@ def build_initial_baseline(regions: Optional[List[Any]] = None) -> SubsidyPayloa
             remaining_budget_krw=0,
         )
 
+    try:
+        total_budget_billion = round(total_budget_sum / 1_000_000_000, 1)
+    except OverflowError:
+        total_budget_billion = float(total_budget_sum // 1_000_000_000)
+    try:
+        disbursed_budget_billion = max(0.0, round(disbursed_budget_sum / 1_000_000_000, 1))
+    except OverflowError:
+        disbursed_budget_billion = max(0.0, float(disbursed_budget_sum // 1_000_000_000))
+
     summary = NationwideSummary(
         total_announced_units=total_announced,
         total_applied_units=total_applied,
         total_delivered_units=total_delivered,
         total_remaining_units=total_remaining,
         nationwide_depletion_rate=nationwide_depletion_rate,
-        total_budget_billion_krw=round(total_budget_sum / 1_000_000_000, 1),
-        disbursed_budget_billion_krw=max(0.0, round(disbursed_budget_sum / 1_000_000_000, 1)),
+        total_budget_billion_krw=total_budget_billion,
+        disbursed_budget_billion_krw=disbursed_budget_billion,
         category_totals=category_totals,
         alert_region_counts=alert_counts,
     )

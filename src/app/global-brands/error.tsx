@@ -71,7 +71,7 @@ export default function GlobalBrandsGuideError({ error, reset }: ErrorProps) {
             벤츠, 폭스바겐, 폴스타 등 글로벌 전기차 결함 분석 정보를 불러오는 중 오류가 발생했습니다.
             아래 &apos;다시 시도&apos; 버튼을 눌러 다시 로드해 주세요.
           </p>
-          {error?.digest && (
+          {typeof error?.digest === 'string' && error.digest.trim().length > 0 && (
             <p className="text-xs text-slate-700 font-mono pt-1">
               오류 참조 코드: <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200 break-all">{error.digest}</span>
             </p>
@@ -109,21 +109,21 @@ export default function GlobalBrandsGuideError({ error, reset }: ErrorProps) {
           <Link
             href="/reliability-analytics"
             prefetch={false}
-            className="hover:text-blue-700 transition inline-flex items-center gap-1 px-3 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+            className="hover:text-blue-700 transition inline-flex items-center gap-1 px-3 py-1 min-h-[44px] min-w-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">📊</span> 결함 통계
           </Link>
           <Link
             href="/subsidy-tracker"
             prefetch={true}
-            className="hover:text-amber-800 transition inline-flex items-center gap-1 px-3 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2"
+            className="hover:text-amber-800 transition inline-flex items-center gap-1 px-3 py-1 min-h-[44px] min-w-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">⚡</span> 보조금 추적기
           </Link>
           <Link
             href="/recall-portal"
             prefetch={false}
-            className="hover:text-rose-700 transition inline-flex items-center gap-1 px-3 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-2"
+            className="hover:text-rose-700 transition inline-flex items-center gap-1 px-3 py-1 min-h-[44px] min-w-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">🚨</span> 리콜 포털
           </Link>

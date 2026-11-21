@@ -128,7 +128,7 @@ def validate_category(category: Any) -> bool:
     """Validate whether category is in CANONICAL_CATEGORIES or Korean mappings."""
     if not isinstance(category, str):
         return False
-    s = category.strip()
+    s = unicodedata.normalize("NFC", category).strip()
     return (
         s.upper() in DEFECT_CATEGORY_KO_MAP
         or s in DEFECT_CATEGORY_KO_MAP.values()
@@ -139,7 +139,7 @@ def normalize_category(category: Any, default: str = "BUILD_QUALITY") -> str:
     """Normalize category string (case-insensitive English, Korean, or aliases) to canonical uppercase English."""
     if not category:
         return default
-    s = str(category).strip()
+    s = unicodedata.normalize("NFC", str(category)).strip()
     s_upper = s.upper()
     if s_upper in DEFECT_CATEGORY_KO_MAP:
         return s_upper
@@ -513,7 +513,7 @@ class RawPost:
                     return cls()
             except Exception:
                 return cls()
-        if data is None or not isinstance(data, (dict, object)) or isinstance(data, (int, float, bool, list, tuple, set, str, bytes)):
+        if data is None or isinstance(data, (int, float, bool, list, tuple, set, frozenset, str, bytes, bytearray, memoryview, range, complex)):
             return cls()
         def _get(k: str, default: Any = "") -> Any:
             if isinstance(data, dict):
@@ -645,7 +645,7 @@ def validate_report_entry(entry: Any, strict: bool = False) -> Tuple[bool, str]:
     """
     if entry is None:
         return False, "Entry is None"
-    if not isinstance(entry, (dict, object)) or isinstance(entry, (int, float, bool, list, tuple, set, str, bytes)):
+    if isinstance(entry, (int, float, bool, list, tuple, set, frozenset, str, bytes, bytearray, memoryview, range, complex)):
         return False, f"Invalid entry type: {type(entry).__name__}, expected dict or mapping"
 
     def _get(k: str, default: Any = None) -> Any:
@@ -930,14 +930,13 @@ class ComplaintRecord:
         if isinstance(data, (str, bytes, bytearray)):
             try:
                 parsed = json.loads(data)
-                if isinstance(parsed, dict):
-                    data = parsed
+                data = parsed if isinstance(parsed, dict) else {}
             except Exception as e:
                 if strict:
                     raise ValueError(f"Failed to parse JSON string: {e}") from e
                 data = {}
 
-        if not isinstance(data, (dict, object)) or data is None or isinstance(data, (int, float, bool, list, tuple, set, str, bytes)):
+        if data is None or isinstance(data, (int, float, bool, list, tuple, set, frozenset, str, bytes, bytearray, memoryview, range, complex)):
             data = {}
 
         if strict or quarantine:
@@ -959,7 +958,7 @@ class ComplaintRecord:
 
     @classmethod
     def _from_dict_internal(cls, data: Any) -> ComplaintRecord:
-        if not isinstance(data, (dict, object)) or data is None or isinstance(data, (int, float, bool, list, tuple, set, str, bytes)):
+        if data is None or isinstance(data, (int, float, bool, list, tuple, set, frozenset, str, bytes, bytearray, memoryview, range, complex)):
             data = {}
 
         def _get(key: str, default: Any = None) -> Any:
@@ -1599,7 +1598,7 @@ class DailyReportPayload:
         raw_cats = data.get("top_defect_categories")
         top_cats = [dict(c) for c in raw_cats if isinstance(c, dict)] if isinstance(raw_cats, (list, tuple)) else []
 
-        tot_complaints = _safe_int(data.get("total_complaints_today", len(valid_reports)))
+        tot_complaints = max(0, _safe_int(data.get("total_complaints_today", len(valid_reports))))
 
         return cls(
             generated_at=gen_at,

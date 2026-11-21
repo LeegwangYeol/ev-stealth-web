@@ -101,7 +101,7 @@ def extract_container_content(html_str: str, tag_name: str, class_name: str) -> 
     and dummy closing tags inside HTML comments or scripts.
     Supports double quotes, single quotes, and unquoted class names.
     """
-    if not html_str or not isinstance(html_str, str):
+    if not html_str or not isinstance(html_str, str) or not tag_name or not class_name:
         return ""
 
     # Mask comments and scripts with equal-length whitespace so dummy tags inside them
@@ -113,7 +113,7 @@ def extract_container_content(html_str: str, tag_name: str, class_name: str) -> 
     masked = RE_SCRIPT_STYLE.sub(_repl, masked)
 
     pattern = re.compile(
-        rf"<{tag_name}\b[^>]*class\s*=\s*(?:[\"'][^\"']*\b{re.escape(class_name)}\b[^\"']*[\"']|{re.escape(class_name)}(?=[\s>]))[^>]*>",
+        rf"<{re.escape(tag_name)}\b[^>]*class\s*=\s*(?:[\"'][^\"']*\b{re.escape(class_name)}\b[^\"']*[\"']|{re.escape(class_name)}(?=[\s>]))[^>]*>",
         re.IGNORECASE,
     )
     match = pattern.search(masked)
@@ -126,13 +126,13 @@ def extract_container_content(html_str: str, tag_name: str, class_name: str) -> 
     depth = 1
     tag_re = re.compile(rf"<(/?)({re.escape(tag_name)})\b([^>]*)>", re.IGNORECASE)
 
-    for m in tag_re.finditer(masked[start_idx:]):
+    for m in tag_re.finditer(masked, start_idx):
         is_closing = bool(m.group(1))
         tag_attrs = m.group(3)
         if is_closing:
             depth -= 1
             if depth == 0:
-                return html_str[start_idx : start_idx + m.start()]
+                return html_str[start_idx : m.start()]
         else:
             # Skip self-closing tags (e.g. <div ... />)
             if tag_attrs and tag_attrs.rstrip().endswith("/"):
@@ -272,8 +272,8 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
 
     now = datetime.datetime.now(datetime.timezone.utc)
 
-    # Case 0: Already ISO-8601 string with 'T' (e.g. "2026-09-08T10:15:00Z" or "2026-09-08T10:15:00")
-    if "T" in raw:
+    # Case 0: Already ISO-8601 string (e.g. "2026-09-08T10:15:00Z" or "2026-09-08 10:15:00+09:00")
+    if "T" in raw or (raw.count("-") >= 2 and ":" in raw):
         try:
             iso_clean = re.sub(r"[zZ]$", "+00:00", raw)
             dt = datetime.datetime.fromisoformat(iso_clean)
@@ -516,7 +516,7 @@ class BobaeDreamCrawler(BaseCrawler):
         if isinstance(base_url, bool):
             force = base_url
             base_url = None
-        target_url = (base_url if isinstance(base_url, str) else None) or BOBAE_BASE_URL
+        target_url = (base_url.strip() if isinstance(base_url, str) and base_url.strip() else None) or BOBAE_BASE_URL
         if (not self._warmed_up or force) and target_url:
             target_clean = target_url.strip()
             is_safe, reason = _is_safe_client_url(self.client, target_clean)
@@ -707,23 +707,23 @@ class BobaeDreamCrawler(BaseCrawler):
 
         # Match load("/board_renew/bulletin/comment_list.php?...") or load("http...")
         match = re.search(
-            r'load\(["\'](?:https?://[^/"\']+)?(/(?:board_renew|board|bulletin)/[^"\']*comment_list\.php\?[^"\']+)["\']',
+            r'load\(["\']((?:https?://[^/"\']+)?/(?:board_renew|board|bulletin)/[^"\']*comment_list\.php\?[^"\']+)["\']',
             html_content,
             re.IGNORECASE,
         )
         if match:
-            path = _unescape_url_entities(match.group(1))
-            return _canonicalize_bobaedream_href(path)
+            raw_url = _unescape_url_entities(match.group(1))
+            return _canonicalize_bobaedream_href(raw_url)
 
         # Alternative: match direct comment_list.php URL in any script or data attr
         alt_match = re.search(
-            r'["\'](?:https?://[^/"\']+)?(/(?:board_renew|board|bulletin)/[^"\']*comment_list\.php\?[^"\']+)["\']',
+            r'["\']((?:https?://[^/"\']+)?/(?:board_renew|board|bulletin)/[^"\']*comment_list\.php\?[^"\']+)["\']',
             html_content,
             re.IGNORECASE,
         )
         if alt_match:
-            path = _unescape_url_entities(alt_match.group(1))
-            return _canonicalize_bobaedream_href(path)
+            raw_url = _unescape_url_entities(alt_match.group(1))
+            return _canonicalize_bobaedream_href(raw_url)
 
         return None
 
@@ -842,7 +842,7 @@ class BobaeDreamCrawler(BaseCrawler):
         if not title_match:
             title_match = re.search(r'<meta\b(?=[^>]*\bproperty=["\']og:title["\'])[^>]*\bcontent=["\']([^"\']*)["\']', html_content, re.IGNORECASE)
         if not title_match:
-            title_match = re.search(r'<meta property=["\']og:title["\'] content=["\']([^"\']*)["\']', html_content, re.IGNORECASE)
+            title_match = re.search(r'<meta\b(?=[^>]*\bcontent=["\']([^"\']*)["\'])[^>]*\bproperty=["\']og:title["\']', html_content, re.IGNORECASE)
         if not title_match:
             title_tag = re.search(r'<title[^>]*>(.*?)</title>', html_content, re.DOTALL | re.IGNORECASE)
             if title_tag:
@@ -934,7 +934,7 @@ class BobaeDreamCrawler(BaseCrawler):
             return None
 
         # LSP compliance: if board_code is passed a URL (as in base crawler fetch_post(url, referer)), handle gracefully
-        if isinstance(board_code, str) and (board_code.startswith("http://") or board_code.startswith("https://")):
+        if isinstance(board_code, str) and board_code.strip().lower().startswith(("http://", "https://")):
             referer = board_code
             board_code = "national"
 
@@ -984,8 +984,9 @@ class BobaeDreamCrawler(BaseCrawler):
             logger.warning(f"BobaeDream post {eff_url} is unavailable ({block_reason})")
             return None
 
+        eff_post_id = str(post_id).strip() if post_id is not None else ""
         try:
-            detail = self.parse_post_detail(text, eff_url, board_code=board_code, post_id=post_id or "", **kwargs)
+            detail = self.parse_post_detail(text, eff_url, board_code=board_code, post_id=eff_post_id, **kwargs)
             if not isinstance(detail, dict):
                 return None
             if (
@@ -1064,8 +1065,9 @@ class BobaeDreamCrawler(BaseCrawler):
                 break
 
             # Pagination loop detection: if all items on this page were already seen, stop
-            page_nos = {it["post_id"] for it in items if it.get("post_id")}
-            if page_nos and page_nos.issubset(visited_nos):
+            page_keys = {str(it.get("post_id") or it.get("url") or "") for it in items}
+            page_keys.discard("")
+            if page_keys and page_keys.issubset(visited_nos):
                 logger.info(f"Page {page} of [{board_code}] repeated previously seen posts. Halting pagination loop.")
                 break
 
@@ -1073,10 +1075,11 @@ class BobaeDreamCrawler(BaseCrawler):
 
             for item in items:
                 pid = item.get("post_id", "")
-                if pid and pid in visited_nos:
+                dedup_key = str(pid or item.get("url") or "")
+                if dedup_key and dedup_key in visited_nos:
                     continue
-                if pid:
-                    visited_nos.add(pid)
+                if dedup_key:
+                    visited_nos.add(dedup_key)
                 post = self.fetch_post(
                     item.get("url", ""),
                     board_code=board_code,

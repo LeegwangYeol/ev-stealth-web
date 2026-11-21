@@ -178,6 +178,8 @@ def is_safe_url(
 
     if "\\" in (parsed.netloc or ""):
         return False, "SSRF blocked: Backslash in URL authority"
+    if parsed.username is not None or parsed.password is not None:
+        return False, "SSRF blocked: Userinfo credentials not allowed in URL"
 
     # 2. Hostname extraction
     hostname = parsed.hostname
@@ -486,17 +488,21 @@ class ResilientHTTPSConnection(http.client.HTTPSConnection):
         super().__init__(*args, **kwargs)
 
     def connect(self):
+        if self._tunnel_host and not self._allow_private_ips:
+            is_safe, reason = is_safe_url(f"https://{self._tunnel_host}")
+            if not is_safe:
+                raise OSError(f"SSRF blocked: Unsafe tunnel host '{self._tunnel_host}' ({reason})")
         self.sock = _create_safe_connection(
             (self.host, self.port),
             self._conn_timeout,
             self.source_address,
-            allow_private_ips=self._allow_private_ips and not self._tunnel_host,
+            allow_private_ips=self._allow_private_ips,
         )
         if self._read_timeout is not None:
             self.sock.settimeout(self._read_timeout)
         if self._tunnel_host:
             self._tunnel()
-        server_hostname = self.host if ssl.HAS_SNI else None
+        server_hostname = (self._tunnel_host or self.host) if ssl.HAS_SNI else None
         self.sock = self._context.wrap_socket(self.sock, server_hostname=server_hostname)
 
 
@@ -1424,10 +1430,12 @@ class SafeHttpClient:
                                 f"Response stream from {norm_url} exceeded wall-clock deadline ({max_stream_duration}s). Truncating."
                             )
                             break
+                        single_read = False
                         try:
                             chunk = resp.read(65536)
                         except TypeError:
                             chunk = resp.read()
+                            single_read = True
                         except http.client.IncompleteRead as ire:
                             partial = ire.partial or b""
                             logger.warning(
@@ -1450,7 +1458,7 @@ class SafeHttpClient:
                                 f"Response from {norm_url} exceeded max size ({self.max_response_size} bytes). Truncating."
                             )
                             break
-                        if len(chunk) > 65536:
+                        if single_read or len(chunk) > 65536:
                             break
                     raw_bytes = b"".join(chunks)
                     if self.max_response_size > 0 and len(raw_bytes) > self.max_response_size:
@@ -1490,6 +1498,11 @@ class SafeHttpClient:
                     f"HTTPError {he.code} ({he.reason}) on {norm_url} (Attempt {attempt}/{eff_retries})"
                 )
                 try:
+                    if isinstance(getattr(he, "reason", None), str) and he.reason.startswith("SSRF Blocked:"):
+                        logger.warning(f"SSRF redirect aborted immediately for {norm_url}: {he.reason}")
+                        if is_half_open_probe:
+                            self.circuit_breaker.record_failure(norm_url, status_code=he.code)
+                        return 0, "", b""
                     # Retry on rate limiting or server errors
                     if (
                         he.code in [408, 429, 403, 500, 502, 503, 504, 520, 521, 522, 523, 524]
@@ -1534,8 +1547,9 @@ class SafeHttpClient:
                                 return cached
                         # Return error content if not retrying
                         try:
+                            read_limit = self.max_response_size if self.max_response_size > 0 else 65536
                             try:
-                                raw_bytes = he.read(self.max_response_size)
+                                raw_bytes = he.read(read_limit)
                             except TypeError:
                                 raw_bytes = he.read()
                                 if self.max_response_size > 0 and isinstance(raw_bytes, (bytes, bytearray)) and len(raw_bytes) > self.max_response_size:

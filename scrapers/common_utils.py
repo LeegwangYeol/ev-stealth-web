@@ -133,12 +133,17 @@ def normalize_scraper_url(raw_url: Any, base_url: str) -> Optional[str]:
     """Normalize a scraped link or post URL against base_url while rejecting unsafe schemes."""
     if not raw_url or not isinstance(raw_url, str):
         return None
-    eff_url = html.unescape(raw_url.strip())
+    stripped_raw = raw_url.strip()
+    if not stripped_raw or any(ord(c) < 32 or ord(c) == 127 for c in stripped_raw):
+        return None
+    eff_url = html.unescape(stripped_raw).strip()
     if not eff_url or any(ord(c) < 32 or ord(c) == 127 for c in eff_url):
         return None
     try:
         parsed = urllib.parse.urlsplit(eff_url)
     except Exception:
+        return None
+    if "\\" in (parsed.netloc or "") or parsed.username is not None or parsed.password is not None:
         return None
     if parsed.scheme and parsed.scheme.lower() not in ("http", "https"):
         return None
@@ -148,6 +153,8 @@ def normalize_scraper_url(raw_url: Any, base_url: str) -> Optional[str]:
         try:
             cand_parsed = urllib.parse.urlsplit(candidate)
         except Exception:
+            return None
+        if "\\" in (cand_parsed.netloc or "") or cand_parsed.username is not None or cand_parsed.password is not None:
             return None
         return candidate if cand_parsed.netloc else None
     if eff_url.lower().startswith(("http://", "https://")):
@@ -163,10 +170,17 @@ def normalize_scraper_url(raw_url: Any, base_url: str) -> Optional[str]:
 
 _NAT64_WELL_KNOWN_PREFIX = ipaddress.IPv6Network("64:ff9b::/96")
 _NAT64_LOCAL_PREFIX = ipaddress.IPv6Network("64:ff9b:1::/48")
+_CGNAT_PREFIX = ipaddress.IPv4Network("100.64.0.0/10")
+_ORCHID_V2_PREFIX = ipaddress.IPv6Network("2001:20::/28")
+_SRV6_SID_PREFIX = ipaddress.IPv6Network("5f00::/16")
+_IPV4_TRANSLATED_PREFIX = ipaddress.IPv6Network("::ffff:0:0/96")
+_IPV4_COMPAT_PREFIX = ipaddress.IPv6Network("::/96")
 
 
 def is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
     """Check if an IP address is publicly routable and safe from SSRF."""
+    if getattr(ip, "scope_id", None):
+        return False
     if (
         not ip.is_global
         or ip.is_loopback
@@ -175,9 +189,15 @@ def is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
         or ip.is_multicast
         or ip.is_reserved
         or ip.is_unspecified
+        or getattr(ip, "is_site_local", False)
     ):
         return False
+    if isinstance(ip, ipaddress.IPv4Address):
+        if ip in _CGNAT_PREFIX:
+            return False
     if isinstance(ip, ipaddress.IPv6Address):
+        if ip in _ORCHID_V2_PREFIX or ip in _SRV6_SID_PREFIX:
+            return False
         if ip.ipv4_mapped and not is_safe_ip(ip.ipv4_mapped):
             return False
         if ip.sixtofour and not is_safe_ip(ip.sixtofour):
@@ -186,7 +206,13 @@ def is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
             for teredo_ip in ip.teredo:
                 if not is_safe_ip(teredo_ip):
                     return False
-        if ip in _NAT64_WELL_KNOWN_PREFIX or ip in _NAT64_LOCAL_PREFIX:
+        if (
+            ip in _NAT64_WELL_KNOWN_PREFIX
+            or ip in _NAT64_LOCAL_PREFIX
+            or ip in _IPV4_TRANSLATED_PREFIX
+            or ip in _IPV4_COMPAT_PREFIX
+            or ((int(ip) >> 32) & 0xFFFFFFFF) in (0x00005EFE, 0x02005EFE)
+        ):
             embedded_v4 = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
             if not is_safe_ip(embedded_v4):
                 return False
@@ -217,6 +243,8 @@ def is_safe_url(
 
     if "\\" in (parsed.netloc or ""):
         return False, "SSRF blocked: Invalid backslash in URL authority"
+    if parsed.username is not None or parsed.password is not None:
+        return False, "SSRF blocked: URL authority userinfo (@) not allowed"
 
     scheme = (parsed.scheme or "").lower()
     if scheme not in ("http", "https"):
@@ -232,6 +260,9 @@ def is_safe_url(
 
     if allow_private_ips:
         return True, "Private IPs allowed by configuration"
+
+    if "%" in host_lower:
+        return False, "SSRF blocked: IPv6 zone ID not allowed"
 
     if host_lower in DISALLOWED_HOSTS:
         return False, f"SSRF blocked: Disallowed hostname '{host_lower}'"
@@ -272,10 +303,10 @@ def is_safe_url(
                 ip_str = sockaddr[0]
                 try:
                     resolved_ip = ipaddress.ip_address(ip_str)
-                    if not is_safe_ip(resolved_ip):
-                        return False, f"SSRF blocked: Domain '{host_lower}' resolves to unsafe IP {resolved_ip}"
                 except ValueError:
-                    continue
+                    return False, f"SSRF blocked: Domain '{host_lower}' resolved to invalid IP {ip_str!r}"
+                if not is_safe_ip(resolved_ip):
+                    return False, f"SSRF blocked: Domain '{host_lower}' resolves to unsafe IP {resolved_ip}"
     except socket.gaierror:
         pass
     except Exception as e:
@@ -462,19 +493,70 @@ class ComplaintRecord:
         return asdict(self)
 
 
+def _create_safe_connection(
+    address: Tuple[str, int],
+    timeout: float,
+    source_address: Optional[Tuple[str, int]] = None,
+    allow_private_ips: bool = True,
+) -> socket.socket:
+    """Create TCP socket with optional SSRF IP validation on resolved addresses."""
+    if allow_private_ips:
+        return socket.create_connection(address, timeout, source_address)
+    host, port = address
+    addr_list = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
+    for _, _, _, _, sockaddr in addr_list:
+        ip_str = sockaddr[0]
+        try:
+            resolved_ip = ipaddress.ip_address(ip_str)
+        except ValueError as exc:
+            raise OSError(f"SSRF blocked: Invalid resolved IP {ip_str!r}") from exc
+        if not is_safe_ip(resolved_ip):
+            raise OSError(f"SSRF blocked: Domain '{host}' resolved to unsafe IP {resolved_ip}")
+    err: Optional[OSError] = None
+    for af, socktype, proto, _, sa in addr_list:
+        sock: Optional[socket.socket] = None
+        try:
+            sock = socket.socket(af, socktype, proto)
+            if timeout is not None:
+                sock.settimeout(timeout)
+            if source_address:
+                sock.bind(source_address)
+            sock.connect(sa)
+            return sock
+        except OSError as exc:
+            err = exc
+            if sock is not None:
+                try:
+                    sock.close()
+                except OSError:
+                    pass
+    if err is not None:
+        raise err
+    raise OSError(f"getaddrinfo returns an empty list for {host}:{port}")
+
+
 class ResilientHTTPConnection(http.client.HTTPConnection):
     """HTTPConnection supporting explicit separate connect and read timeouts."""
 
-    def __init__(self, *args, connect_timeout: float = 5.0, read_timeout: float = 15.0, **kwargs):
+    def __init__(
+        self,
+        *args,
+        connect_timeout: float = 5.0,
+        read_timeout: float = 15.0,
+        allow_private_ips: bool = True,
+        **kwargs,
+    ):
         self._conn_timeout = _positive_float(connect_timeout, 5.0)
         self._read_timeout = _positive_float(read_timeout, 15.0)
+        self._allow_private_ips = bool(allow_private_ips)
         super().__init__(*args, **kwargs)
 
     def connect(self):
-        self.sock = socket.create_connection(
+        self.sock = _create_safe_connection(
             (self.host, self.port),
             self._conn_timeout,
             self.source_address,
+            allow_private_ips=self._allow_private_ips,
         )
         try:
             if self._read_timeout is not None:
@@ -492,16 +574,25 @@ class ResilientHTTPConnection(http.client.HTTPConnection):
 class ResilientHTTPSConnection(http.client.HTTPSConnection):
     """HTTPSConnection supporting explicit separate connect and read timeouts."""
 
-    def __init__(self, *args, connect_timeout: float = 5.0, read_timeout: float = 15.0, **kwargs):
+    def __init__(
+        self,
+        *args,
+        connect_timeout: float = 5.0,
+        read_timeout: float = 15.0,
+        allow_private_ips: bool = True,
+        **kwargs,
+    ):
         self._conn_timeout = _positive_float(connect_timeout, 5.0)
         self._read_timeout = _positive_float(read_timeout, 15.0)
+        self._allow_private_ips = bool(allow_private_ips)
         super().__init__(*args, **kwargs)
 
     def connect(self):
-        self.sock = socket.create_connection(
+        self.sock = _create_safe_connection(
             (self.host, self.port),
             self._conn_timeout,
             self.source_address,
+            allow_private_ips=self._allow_private_ips and not self._tunnel_host,
         )
         try:
             if self._read_timeout is not None:
@@ -559,20 +650,29 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
 class ResilientHTTPHandler(urllib.request.HTTPHandler):
     """HTTP handler injecting ResilientHTTPConnection with explicit timeouts."""
 
-    def __init__(self, connect_timeout: float = 5.0, read_timeout: float = 15.0, **kwargs):
+    def __init__(
+        self,
+        connect_timeout: float = 5.0,
+        read_timeout: float = 15.0,
+        allow_private_ips: bool = True,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self._connect_timeout = _positive_float(connect_timeout, 5.0)
         self._read_timeout = _positive_float(read_timeout, 15.0)
+        self._allow_private_ips = bool(allow_private_ips)
 
     def http_open(self, req):
         conn_to = getattr(req, "_connect_timeout", self._connect_timeout)
         read_to = getattr(req, "_read_timeout", self._read_timeout)
+        allow_priv = self._allow_private_ips
 
         def _factory(host, **kwargs):
             return ResilientHTTPConnection(
                 host,
                 connect_timeout=conn_to,
                 read_timeout=read_to,
+                allow_private_ips=allow_priv,
                 **kwargs,
             )
         return self.do_open(_factory, req)
@@ -581,14 +681,23 @@ class ResilientHTTPHandler(urllib.request.HTTPHandler):
 class ResilientHTTPSHandler(urllib.request.HTTPSHandler):
     """HTTPS handler injecting ResilientHTTPSConnection with explicit timeouts."""
 
-    def __init__(self, connect_timeout: float = 5.0, read_timeout: float = 15.0, context=None, **kwargs):
+    def __init__(
+        self,
+        connect_timeout: float = 5.0,
+        read_timeout: float = 15.0,
+        context=None,
+        allow_private_ips: bool = True,
+        **kwargs,
+    ):
         super().__init__(context=context, **kwargs)
         self._connect_timeout = _positive_float(connect_timeout, 5.0)
         self._read_timeout = _positive_float(read_timeout, 15.0)
+        self._allow_private_ips = bool(allow_private_ips)
 
     def https_open(self, req):
         conn_to = getattr(req, "_connect_timeout", self._connect_timeout)
         read_to = getattr(req, "_read_timeout", self._read_timeout)
+        allow_priv = self._allow_private_ips
 
         def _factory(host, **kwargs):
             ctx = getattr(self, "_context", None)
@@ -600,6 +709,7 @@ class ResilientHTTPSHandler(urllib.request.HTTPSHandler):
                 host,
                 connect_timeout=conn_to,
                 read_timeout=read_to,
+                allow_private_ips=allow_priv,
                 **kwargs,
             )
         return self.do_open(_factory, req)
@@ -646,16 +756,21 @@ class CircuitBreaker:
             try:
                 parsed = urllib.parse.urlsplit(s)
                 if parsed.hostname:
-                    return parsed.hostname.lower()
+                    return parsed.hostname.lower().rstrip(".")
             except Exception:
                 pass
         try:
+            ip = ipaddress.ip_address(s.split("%")[0])
+            return str(ip).lower()
+        except ValueError:
+            pass
+        try:
             parsed = urllib.parse.urlsplit("//" + s)
             if parsed.hostname:
-                return parsed.hostname.lower()
+                return parsed.hostname.lower().rstrip(".")
         except Exception:
             pass
-        return s.lower().split(":")[0].split("/")[0]
+        return s.lower().split(":")[0].split("/")[0].rstrip(".")
 
     def record_probe(self, url_or_host: str) -> None:
         """Record that a canary probe is in-flight for this host during HALF_OPEN state."""
@@ -773,7 +888,7 @@ class CircuitBreaker:
             tripped = False
 
             cooldown = self.cooldown_seconds
-            if retry_after is not None:
+            if retry_after is not None and not isinstance(retry_after, bool):
                 try:
                     ra_val = float(retry_after)
                     if math.isfinite(ra_val) and ra_val > 0:
@@ -981,10 +1096,12 @@ class SafeHttpClient:
             http_handler = ResilientHTTPHandler(
                 connect_timeout=self._connect_timeout,
                 read_timeout=self._read_timeout,
+                allow_private_ips=self.allow_private_ips,
             )
             https_handler = ResilientHTTPSHandler(
                 connect_timeout=self._connect_timeout,
                 read_timeout=self._read_timeout,
+                allow_private_ips=self.allow_private_ips,
             )
             self.opener = urllib.request.build_opener(
                 cookie_processor, redirect_handler, http_handler, https_handler
@@ -1106,9 +1223,10 @@ class SafeHttpClient:
 
     def clear_cookies(self) -> None:
         """Clear all stored cookies from the session cookie jar."""
-        if hasattr(self.cookie_jar, "clear"):
+        cookie_jar = getattr(self, "cookie_jar", None)
+        if cookie_jar is not None and hasattr(cookie_jar, "clear"):
             try:
-                self.cookie_jar.clear()
+                cookie_jar.clear()
             except Exception:
                 self.cookie_jar = http.cookiejar.CookieJar()
         else:
@@ -1117,9 +1235,10 @@ class SafeHttpClient:
     def get_cookie_dict(self) -> Dict[str, str]:
         """Return all cookies stored in the session cookie jar as a dictionary."""
         cookie_dict: Dict[str, str] = {}
-        if self.cookie_jar is not None:
+        cookie_jar = getattr(self, "cookie_jar", None)
+        if cookie_jar is not None:
             try:
-                for c in self.cookie_jar:
+                for c in cookie_jar:
                     if hasattr(c, "name") and hasattr(c, "value"):
                         cookie_dict[c.name] = c.value
             except Exception:
@@ -1129,13 +1248,16 @@ class SafeHttpClient:
     def close(self) -> None:
         """Release HTTP client session resources, cookie jar, and connection handlers."""
         self.clear_cookies()
-        if hasattr(self.opener, "close"):
+        opener = getattr(self, "opener", None)
+        if opener is None:
+            return
+        if hasattr(opener, "close"):
             try:
-                self.opener.close()
+                opener.close()
             except Exception:
                 pass
-        if hasattr(self.opener, "handlers"):
-            for h in getattr(self.opener, "handlers", []):
+        if hasattr(opener, "handlers"):
+            for h in getattr(opener, "handlers", []):
                 if hasattr(h, "close"):
                     try:
                         h.close()
@@ -1193,11 +1315,14 @@ class SafeHttpClient:
         except Exception:
             pass
 
-        try:
-            raw_min = float(self.min_delay)
-            raw_max = float(self.max_delay)
-        except (ValueError, TypeError):
+        if isinstance(self.min_delay, bool) or isinstance(self.max_delay, bool):
             raw_min, raw_max = 0.0, 0.0
+        else:
+            try:
+                raw_min = float(self.min_delay)
+                raw_max = float(self.max_delay)
+            except (ValueError, TypeError):
+                raw_min, raw_max = 0.0, 0.0
         if not math.isfinite(raw_min) or raw_min < 0:
             raw_min = 0.0
         if not math.isfinite(raw_max) or raw_max < 0:
@@ -1217,15 +1342,17 @@ class SafeHttpClient:
             self.request_count += 1
 
         # Cooldown trigger (every cooldown_interval requests)
-        if (
-            self.cooldown_interval
-            and not isinstance(self.cooldown_interval, bool)
-            and self.cooldown_interval > 0
-            and req_num > 0
-            and req_num % int(self.cooldown_interval) == 0
-        ):
+        try:
+            ci_val = (
+                int(self.cooldown_interval)
+                if self.cooldown_interval is not None and not isinstance(self.cooldown_interval, bool)
+                else 0
+            )
+        except (ValueError, TypeError, OverflowError):
+            ci_val = 0
+        if ci_val > 0 and req_num > 0 and req_num % ci_val == 0:
             try:
-                ct = float(self.cooldown_time)
+                ct = float(self.cooldown_time) if not isinstance(self.cooldown_time, bool) else 6.0
             except (ValueError, TypeError):
                 ct = 6.0
             if math.isfinite(ct) and ct > 0:
@@ -1273,7 +1400,10 @@ class SafeHttpClient:
             req._connect_timeout = self._connect_timeout
             req._read_timeout = self._read_timeout
             resp = self.opener.open(req, timeout=self._read_timeout)
-            _ = resp.read(1024)
+            try:
+                _ = resp.read(1024)
+            except TypeError:
+                _ = resp.read()
             self.circuit_breaker.record_success(norm_url)
             logger.info(f"Session warmed up successfully on {norm_url}. Cookies in jar: {len(self.cookie_jar)}")
             return True
@@ -1580,6 +1710,12 @@ class SafeHttpClient:
                             if he.code in (403, 429):
                                 self.clear_cookies()
                             retry_after = self._parse_retry_after(he) if he.code in (429, 503) else None
+                            try:
+                                if hasattr(he, "fp") and he.fp:
+                                    he.fp.close()
+                                he.close()
+                            except Exception:
+                                pass
                             if retry_after is not None and retry_after > 0:
                                 backoff = min(60.0, retry_after)
                             else:
@@ -1739,7 +1875,8 @@ class SafeHttpClient:
             return match.group(1).strip().lower()
 
         # Check HTML meta charset in initial bytes
-        prefix = raw_bytes[:16384].decode("ascii", "ignore")
+        head_bytes = bytes(raw_bytes[:16384]) if isinstance(raw_bytes, (bytearray, memoryview)) else raw_bytes[:16384]
+        prefix = head_bytes.decode("ascii", "ignore")
         meta_match = re.search(r'<meta\b[^>]*\bcharset\s*=\s*["\']?([\w\-]+)', prefix, re.IGNORECASE)
         if meta_match:
             return meta_match.group(1).strip().lower()
@@ -1767,10 +1904,13 @@ def robust_decode(raw_bytes: Union[bytes, bytearray, memoryview, str, None], dec
         norm_declared = declared_encoding.strip().lower()
         if norm_declared in ("x-windows-949", "windows-949", "ms949"):
             norm_declared = "cp949"
-        elif norm_declared in ("ks_c_5601-1987", "ksc5601", "euc_kr"):
+        elif norm_declared in ("ks_c_5601-1987", "ksc5601", "ksc_5601-1987", "euc_kr", "x-euc-kr"):
             norm_declared = "euc-kr"
+        elif norm_declared in ("utf8", "utf_8"):
+            norm_declared = "utf-8"
 
-    if raw_bytes.startswith(b"\xef\xbb\xbf"):
+    has_utf8_bom = raw_bytes.startswith(b"\xef\xbb\xbf")
+    if has_utf8_bom:
         try:
             return raw_bytes.decode("utf-8-sig")
         except UnicodeDecodeError:
@@ -1795,6 +1935,8 @@ def robust_decode(raw_bytes: Union[bytes, bytearray, memoryview, str, None], dec
         except (UnicodeDecodeError, LookupError):
             continue
 
+    if has_utf8_bom:
+        return raw_bytes.decode("utf-8-sig", errors="replace")
     fallback_enc = "cp949" if norm_declared in ("cp949", "euc-kr") else "utf-8"
     return raw_bytes.decode(fallback_enc, errors="replace")
 
@@ -1858,11 +2000,11 @@ def encode_euc_kr_query(params: Dict[str, Any]) -> bytes:
     return "&".join(encoded_pairs).encode("ascii")
 
 
-def clean_html_text(raw_html: Union[str, bytes, Any]) -> str:
+def clean_html_text(raw_html: Union[str, bytes, bytearray, memoryview, Any]) -> str:
     """Remove HTML tags, script/style blocks, decode entities, and normalize whitespace."""
     if raw_html is None:
         return ""
-    if isinstance(raw_html, bytes):
+    if isinstance(raw_html, (bytes, bytearray, memoryview)):
         raw_html = robust_decode(raw_html)
     elif not isinstance(raw_html, str):
         return ""
@@ -1871,7 +2013,7 @@ def clean_html_text(raw_html: Union[str, bytes, Any]) -> str:
 
     cleaned = raw_html.replace("\x00", " ")
     cleaned = re.sub(r"<!--.*?-->", " ", cleaned, flags=re.DOTALL)
-    cleaned = re.sub(r"<(script|style)[^>]*>(?:.*?</\1\s*>|.*$)", " ", cleaned, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r"<(script|style)\b[^>]*>(?:.*?</\1\s*>|.*$)", " ", cleaned, flags=re.DOTALL | re.IGNORECASE)
     cleaned = re.sub(r"<(br|p|/p|div|/div|li|/li|h\d|/h\d|tr|/tr|dt|/dt|dd|/dd)[^>]*>", "\n", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"<[^>]+>", " ", cleaned)
     cleaned = re.sub(r"<[a-zA-Z/][^<]*$", " ", cleaned)

@@ -81,18 +81,22 @@ export const BrandComparisonNav = memo(function BrandComparisonNav({
       {/* Brand Switcher Nav Tabs */}
       <nav
         aria-label="제조사별 결함 가이드 빠른 전환"
-        className="p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200 shadow-inner max-w-full"
+        className="p-0.5 bg-slate-100/90 rounded-2xl border border-slate-200 shadow-inner max-w-full"
       >
-        <ul className="flex table-scroll-container gap-1.5 list-none p-0 m-0 w-full max-w-full overflow-x-auto" role="list">
+        <ul className="flex table-scroll-container gap-1.5 list-none p-1 m-0 w-full max-w-full overflow-x-auto" role="list">
           {BRAND_PAGES.map((brand) => {
             const isActive = brand.key === currentBrand;
+            const accessibleLabel =
+              brand.shortLabel === brand.label
+                ? `${brand.label} 연식별 가이드${brand.badge ? ` (${brand.badge})` : ''}`
+                : `${brand.shortLabel} (${brand.label}) 연식별 가이드${brand.badge ? ` (${brand.badge})` : ''}`;
             return (
               <li key={brand.key} className="shrink-0 md:flex-1 min-w-[96px]">
                 <Link
                   href={brand.href}
                   prefetch={false}
                   aria-current={isActive ? 'page' : undefined}
-                  aria-label={`${brand.shortLabel} - ${brand.label} 연식별 가이드${brand.badge ? ` (${brand.badge})` : ''}`}
+                  aria-label={accessibleLabel}
                   className={`w-full min-h-[44px] px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-1.5 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100 ${
                     isActive
                       ? 'bg-blue-600 text-white shadow-sm border border-blue-700 focus-visible:ring-slate-900'

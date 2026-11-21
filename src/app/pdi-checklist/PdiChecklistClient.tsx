@@ -451,32 +451,32 @@ export default function PdiChecklistClient() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.storageArea && e.storageArea !== window.localStorage) return;
-      if (e.key === null && !e.newValue) {
-        const resetItems = INITIAL_PDI_ITEMS.map((item) => ({ ...item }));
-        syncedItemsRef.current = resetItems;
-        setItems(resetItems);
-        return;
-      }
-      if (e.key === STORAGE_KEY) {
-        setStorageType('localStorage');
-        if (!e.newValue) {
-          // Another tab cleared or reset storage -> synchronize to initial defaults with fresh reference
+      try {
+        if (e.storageArea && e.storageArea !== window.localStorage) return;
+        if (e.key === null && !e.newValue) {
           const resetItems = INITIAL_PDI_ITEMS.map((item) => ({ ...item }));
           syncedItemsRef.current = resetItems;
           setItems(resetItems);
           return;
         }
-        try {
+        if (e.key === STORAGE_KEY) {
+          setStorageType('localStorage');
+          if (!e.newValue) {
+            // Another tab cleared or reset storage -> synchronize to initial defaults with fresh reference
+            const resetItems = INITIAL_PDI_ITEMS.map((item) => ({ ...item }));
+            syncedItemsRef.current = resetItems;
+            setItems(resetItems);
+            return;
+          }
           const updated = parseStoredChecklistState(e.newValue, INITIAL_PDI_ITEMS);
           const nextItems = updated === INITIAL_PDI_ITEMS
             ? INITIAL_PDI_ITEMS.map((item) => ({ ...item }))
             : updated;
           syncedItemsRef.current = nextItems;
           setItems(nextItems);
-        } catch {
-          // Ignore concurrent write issues
         }
+      } catch {
+        // Ignore restricted storage access or concurrent write issues
       }
     };
     window.addEventListener('storage', handleStorageChange);
@@ -549,7 +549,8 @@ export default function PdiChecklistClient() {
 
   // Guard against division by zero and clamp strictly to [0, 100]
   const progress = useMemo(() => {
-    return items.length === 0 ? 0 : Math.round((checkedCount / items.length) * 100);
+    const raw = items.length === 0 ? 0 : Math.round((checkedCount / items.length) * 100);
+    return Math.min(100, Math.max(0, raw));
   }, [checkedCount, items.length]);
   const progressPercentage = progress;
 
@@ -621,7 +622,11 @@ export default function PdiChecklistClient() {
           {mounted && (
             <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto print:hidden">
               <button
-                onClick={() => window.print()}
+                onClick={() => {
+                  if (typeof window !== 'undefined' && typeof window.print === 'function') {
+                    window.print();
+                  }
+                }}
                 type="button"
                 className="px-3.5 py-2 min-h-[44px] text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >

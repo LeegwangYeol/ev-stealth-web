@@ -200,13 +200,29 @@ function createDefaultFallbackDatabase(): ReliabilityTrendsDatabase {
 
 let cachedTrendsDatabase: ReliabilityTrendsDatabase | null = null;
 
+const FORBIDDEN_DIST_KEYS = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+  'tostring',
+  'valueof',
+  'hasownproperty',
+  'isprototypeof',
+  'propertyisenumerable',
+  'tolocalestring',
+  '__definegetter__',
+  '__definesetter__',
+  '__lookupgetter__',
+  '__lookupsetter__',
+]);
+
 function cloneCategoryDist(
   dist: BrandReliability['category_distribution'] | undefined
 ): BrandReliability['category_distribution'] {
   const cloned: Record<string, { count: number; percentage: number }> = {};
   if (dist && typeof dist === 'object') {
     for (const [k, v] of Object.entries(dist)) {
-      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+      if (FORBIDDEN_DIST_KEYS.has(k.toLowerCase())) continue;
       if (v && typeof v === 'object') {
         cloned[k] = { count: v.count, percentage: v.percentage };
       }

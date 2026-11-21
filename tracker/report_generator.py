@@ -223,7 +223,7 @@ class ReportGenerator:
         for r in regions_list:
             if not r:
                 continue
-            name = _get_field(r, 'name_ko', '') or _get_field(r, 'region_id', '') or '지자체'
+            name = str(_get_field(r, 'name_ko', '') or _get_field(r, 'region_id', '') or '지자체').replace("\n", " ").replace("\r", " ")
             rate_val = max(0.0, _safe_float_val(_get_field(r, 'overall_depletion_rate', 0.0)))
             rem_units = _get_passenger_remaining(r)
             st_raw = _get_field(r, "overall_status", "")
@@ -265,22 +265,22 @@ class ReportGenerator:
         tot_str = f"{tot_r:,.1f}" if (tot_r % 1 != 0) else f"{int(tot_r):,}"
         dep_rate = max(0.0, _safe_float_val(_get_field(summary, "nationwide_depletion_rate", _get_field(summary, "depletion_rate", 0.0))))
 
-        p_ann = _safe_int_val(_metric_val(p_info, "announced_units", 0))
-        p_app = _safe_int_val(_metric_val(p_info, "applied_units", 0))
-        p_rate = _safe_float_val(_metric_val(p_info, "depletion_rate", 0.0))
-        p_rem = _safe_int_val(_metric_val(p_info, "remaining_units", 0))
+        p_ann = max(0, _safe_int_val(_metric_val(p_info, "announced_units", 0)))
+        p_app = max(0, _safe_int_val(_metric_val(p_info, "applied_units", 0)))
+        p_rate = max(0.0, _safe_float_val(_metric_val(p_info, "depletion_rate", 0.0)))
+        p_rem = max(0, _safe_int_val(_metric_val(p_info, "remaining_units", 0)))
         p_st = _metric_val(p_info, "status", "N/A") or "N/A"
 
-        c_ann = _safe_int_val(_metric_val(c_info, "announced_units", 0))
-        c_app = _safe_int_val(_metric_val(c_info, "applied_units", 0))
-        c_rate = _safe_float_val(_metric_val(c_info, "depletion_rate", 0.0))
-        c_rem = _safe_int_val(_metric_val(c_info, "remaining_units", 0))
+        c_ann = max(0, _safe_int_val(_metric_val(c_info, "announced_units", 0)))
+        c_app = max(0, _safe_int_val(_metric_val(c_info, "applied_units", 0)))
+        c_rate = max(0.0, _safe_float_val(_metric_val(c_info, "depletion_rate", 0.0)))
+        c_rem = max(0, _safe_int_val(_metric_val(c_info, "remaining_units", 0)))
         c_st = _metric_val(c_info, "status", "N/A") or "N/A"
 
-        b_ann = _safe_int_val(_metric_val(b_info, "announced_units", 0))
-        b_app = _safe_int_val(_metric_val(b_info, "applied_units", 0))
-        b_rate = _safe_float_val(_metric_val(b_info, "depletion_rate", 0.0))
-        b_rem = _safe_int_val(_metric_val(b_info, "remaining_units", 0))
+        b_ann = max(0, _safe_int_val(_metric_val(b_info, "announced_units", 0)))
+        b_app = max(0, _safe_int_val(_metric_val(b_info, "applied_units", 0)))
+        b_rate = max(0.0, _safe_float_val(_metric_val(b_info, "depletion_rate", 0.0)))
+        b_rem = max(0, _safe_int_val(_metric_val(b_info, "remaining_units", 0)))
         b_st = _metric_val(b_info, "status", "N/A") or "N/A"
 
         status_text = "FALLBACK_BASELINE (Resilient)" if fallback_used else "SUCCESS (Live Sync)"
@@ -365,7 +365,10 @@ class ReportGenerator:
             "KR-48": "경상남도",
             "KR-49": "제주특별자치도",
         }
-        reg_name = region_names.get(target_region, target_region)
+        safe_target = str(target_region).strip() if target_region is not None else "KR-11"
+        if not safe_target:
+            safe_target = "KR-11"
+        reg_name = region_names.get(safe_target.upper(), region_names.get(safe_target, safe_target))
 
         lines = [
             f"## 🚗 주요 인기 전기차 국비·지방비 보조금 및 실구매가 매트릭스 (기준: {reg_name})",
@@ -383,16 +386,16 @@ class ReportGenerator:
         for m in models:
             if not m:
                 continue
-            maker = str(_get_field(m, "manufacturer") or _get_field(m, "brand") or "미지정").replace("|", "/").replace("\n", " ").replace("\r", " ")
-            name = str(_get_field(m, "name_ko") or _get_field(m, "name") or "미지정 차종").replace("|", "/").replace("\n", " ").replace("\r", " ")
+            maker = str(_get_field(m, "manufacturer") or _get_field(m, "brand") or _get_field(m, "maker") or "미지정").replace("|", "/").replace("\n", " ").replace("\r", " ")
+            name = str(_get_field(m, "name_ko") or _get_field(m, "name") or _get_field(m, "model_name") or "미지정 차종").replace("|", "/").replace("\n", " ").replace("\r", " ")
             base_price = max(0, _safe_int_val(_get_field(m, "base_price_krw", _get_field(m, "price", 0))))
             nat_sub = max(0, _safe_int_val(_get_field(m, "national_subsidy_krw", _get_field(m, "national_subsidy", 0))))
 
             local_sub = 0
             if hasattr(m, "get_regional_subsidy") and callable(getattr(m, "get_regional_subsidy")):
-                local_sub = max(0, _safe_int_val(m.get_regional_subsidy(target_region), 0))
+                local_sub = max(0, _safe_int_val(m.get_regional_subsidy(safe_target), 0))
             elif isinstance(m, dict):
-                local_sub = PopularModelEntry.from_dict(m).get_regional_subsidy(target_region)
+                local_sub = PopularModelEntry.from_dict(m).get_regional_subsidy(safe_target)
 
             total_sub = nat_sub + local_sub
             final_price = max(0, base_price - total_sub)
@@ -427,7 +430,7 @@ class ReportGenerator:
             stats = _get_field(report_data, "statistics", {}) or {}
             if isinstance(stats, (int, float, str, bool, list)):
                 stats = {}
-            gen_time = _get_field(report_data, "generated_at", datetime.now(timezone.utc).isoformat())
+            gen_time = _get_field(report_data, "generated_at", None) or datetime.now(timezone.utc).isoformat()
 
         reports = [r for r in (reports or []) if r is not None]
         total_reports = len(reports)
@@ -438,7 +441,7 @@ class ReportGenerator:
             critical_count = max(0, _safe_int_val(critical_count, 0))
 
         raw_avg_neg = _get_field(stats, "avg_negativity_score")
-        avg_negativity = _safe_float_val(raw_avg_neg, 0.0)
+        avg_negativity = max(0.0, _safe_float_val(raw_avg_neg, 0.0))
 
         # Category aggregation
         category_counts: Dict[str, int] = {}
@@ -447,7 +450,7 @@ class ReportGenerator:
             cat = str(raw_cat).strip() if (raw_cat and str(raw_cat).strip()) else "UNKNOWN"
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
-        top_categories = sorted(category_counts.items(), key=lambda x: x[1], reverse=True)
+        top_categories = sorted(category_counts.items(), key=lambda x: (-x[1], x[0]))
 
         lines = [
             "# [대한민국 EV 실생활 결함 및 커뮤니티 동향 일일 브리핑]",
@@ -475,8 +478,8 @@ class ReportGenerator:
             for r in critical_reports:
                 brand = _get_field(r, "vehicle_brand", "") or ""
                 model = _get_field(r, "vehicle_model", "") or ""
-                v_model = f"{brand} {model}".strip() or "차종 미상"
-                topic = _get_field(r, "defect_topic") or _get_field(r, "title") or "상세 없음"
+                v_model = (f"{brand} {model}".strip() or "차종 미상").replace("\n", " ").replace("\r", " ")
+                topic = str(_get_field(r, "defect_topic") or _get_field(r, "title") or "상세 없음").replace("\n", " ").replace("\r", " ")
                 dsi = _safe_sev(r)
                 lines.append(f"- 🔴 **[{v_model}]** {topic} (심각도 DSI: {dsi:.1f})")
         else:
@@ -545,7 +548,7 @@ class ReportGenerator:
         def _md_cell(val: str) -> str:
             return val.replace("|", "/").replace("\n", " ").replace("\r", " ")
 
-        for p, count in sorted(platform_counts.items(), key=lambda x: x[1], reverse=True):
+        for p, count in sorted(platform_counts.items(), key=lambda x: (-x[1], x[0])):
             pct = (count / total_records * 100) if total_records > 0 else 0.0
             lines.append(f"| {_md_cell(p)} | {count:,} | {pct:.1f}% |")
 
@@ -555,7 +558,7 @@ class ReportGenerator:
             "| 결함 카테고리 | 건수 | 점유율 (%) |",
             "|---|---|---|",
         ])
-        for cat, count in sorted(category_counts.items(), key=lambda x: x[1], reverse=True):
+        for cat, count in sorted(category_counts.items(), key=lambda x: (-x[1], x[0])):
             pct = (count / total_records * 100) if total_records > 0 else 0.0
             lines.append(f"| {_md_cell(cat)} | {count:,} | {pct:.1f}% |")
 
@@ -565,7 +568,7 @@ class ReportGenerator:
             "| 브랜드 | 건수 | 점유율 (%) |",
             "|---|---|---|",
         ])
-        for brand, count in sorted(brand_counts.items(), key=lambda x: x[1], reverse=True):
+        for brand, count in sorted(brand_counts.items(), key=lambda x: (-x[1], x[0])):
             pct = (count / total_records * 100) if total_records > 0 else 0.0
             lines.append(f"| {_md_cell(brand)} | {count:,} | {pct:.1f}% |")
 

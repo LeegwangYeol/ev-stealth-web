@@ -487,82 +487,62 @@ class CrossAggregator:
         """
         clean_records = [r for r in (records or []) if isinstance(r, dict)]
 
-        # 1. Platform x Sentiment Contingency
         target_platforms = ["bobaedream", "dcinside", "blind", "naver_cafe", "youtube"]
         sentiment_tiers = ["POSITIVE", "NEUTRAL", "NEGATIVE", "STRONGLY_NEGATIVE"]
-
-        plat_sent_matrix: List[List[int]] = []
-        for plat in target_platforms:
-            row = []
-            for tier in sentiment_tiers:
-                c = sum(1 for r in clean_records if str(r.get("platform") or "").lower() == plat and r.get("sentiment_tier") == tier)
-                row.append(c)
-            plat_sent_matrix.append(row)
-
-        chi2_plat, dof_plat, p_val_plat = self.compute_chi_square(plat_sent_matrix)
-
-        # 2. Category x Vehicle Segment Contingency
         categories = ["parking", "charging", "rain_driving", "hill_climbing"]
         segments = ["Passenger EV", "Commercial EV"]
-
-        cat_seg_matrix: List[List[int]] = []
-        for cat in categories:
-            row = []
-            for seg in segments:
-                if seg == "Commercial EV":
-                    c = sum(
-                        1 for r in clean_records
-                        if r.get("category") == cat and any(
-                            v in str(r.get("target_vehicle") or "").lower()
-                            for v in ["t4k", "masada", "van", "truck", "마사다", "이티밴", "1톤", "포터", "봉고"]
-                        )
-                    )
-                else:
-                    c = sum(
-                        1 for r in clean_records
-                        if r.get("category") == cat and not any(
-                            v in str(r.get("target_vehicle") or "").lower()
-                            for v in ["t4k", "masada", "van", "truck", "마사다", "이티밴", "1톤", "포터", "봉고"]
-                        )
-                    )
-                row.append(c)
-            cat_seg_matrix.append(row)
-
-        chi2_cat, dof_cat, p_val_cat = self.compute_chi_square(cat_seg_matrix)
-
-        # 3. Brand Family x Category Contingency
         brand_families = ["Tesla", "Hyundai_Kia_Genesis", "Global_Imports", "BYD_Chinese"]
 
-        def get_brand_key(rec):
-            combined = f"{rec.get('target_vehicle') or ''} {rec.get('raw_quote') or ''} {rec.get('post_title') or ''}".lower()
-            if any(k in combined for k in ["tesla", "테슬라", "model 3", "model y", "model s", "model x", "사이버트럭", "하이랜드"]):
-                return "Tesla"
-            elif any(k in combined for k in ["ioniq", "아이오닉", "ev6", "ev9", "현대", "기아", "코나", "니로", "gv60", "genesis", "제네시스", "eg80", "egv70", "iccu", "e-gmp"]):
-                return "Hyundai_Kia_Genesis"
-            elif any(k in combined for k in ["벤츠", "benz", "eqe", "eqs", "eqb", "bmw", "i4", "ix3", "ix", "i7", "타이칸", "taycan", "포르쉐", "폴스타", "polestar", "볼트", "bolt", "얼티엄"]):
-                return "Global_Imports"
+        plat_idx_map = {p: idx for idx, p in enumerate(target_platforms)}
+        tier_idx_map = {t: idx for idx, t in enumerate(sentiment_tiers)}
+        cat_idx_map = {c: idx for idx, c in enumerate(categories)}
+        brand_idx_map = {b: idx for idx, b in enumerate(brand_families)}
+
+        plat_sent_matrix: List[List[int]] = [[0] * len(sentiment_tiers) for _ in target_platforms]
+        cat_seg_matrix: List[List[int]] = [[0] * len(segments) for _ in categories]
+        brand_cat_matrix: List[List[int]] = [[0] * len(categories) for _ in brand_families]
+        brand_sent_matrix: List[List[int]] = [[0] * len(sentiment_tiers) for _ in brand_families]
+
+        commercial_keywords = ("t4k", "masada", "van", "truck", "마사다", "이티밴", "1톤", "포터", "봉고")
+        tesla_keywords = ("tesla", "테슬라", "model 3", "model y", "model s", "model x", "사이버트럭", "하이랜드")
+        hmg_keywords = ("ioniq", "아이오닉", "ev6", "ev9", "현대", "기아", "코나", "니로", "gv60", "genesis", "제네시스", "eg80", "egv70", "iccu", "e-gmp")
+        global_keywords = ("벤츠", "benz", "eqe", "eqs", "eqb", "bmw", "i4", "ix3", "ix", "i7", "타이칸", "taycan", "포르쉐", "폴스타", "polestar", "볼트", "bolt", "얼티엄")
+
+        # Single O(N) pass over clean_records to populate all 4 contingency matrices
+        for r in clean_records:
+            plat = str(r.get("platform") or "").lower()
+            tier = r.get("sentiment_tier")
+            cat = r.get("category")
+            target_veh_lower = str(r.get("target_vehicle") or "").lower()
+            combined = f"{r.get('target_vehicle') or ''} {r.get('raw_quote') or ''} {r.get('post_title') or ''}".lower()
+
+            if any(k in combined for k in tesla_keywords):
+                brand_idx = brand_idx_map["Tesla"]
+            elif any(k in combined for k in hmg_keywords):
+                brand_idx = brand_idx_map["Hyundai_Kia_Genesis"]
+            elif any(k in combined for k in global_keywords):
+                brand_idx = brand_idx_map["Global_Imports"]
             else:
-                return "BYD_Chinese"
+                brand_idx = brand_idx_map["BYD_Chinese"]
 
-        brand_cat_matrix: List[List[int]] = []
-        for bf in brand_families:
-            row = []
-            for cat in categories:
-                c = sum(1 for r in clean_records if get_brand_key(r) == bf and r.get("category") == cat)
-                row.append(c)
-            brand_cat_matrix.append(row)
+            p_idx = plat_idx_map.get(plat)
+            t_idx = tier_idx_map.get(tier) if isinstance(tier, str) else None
+            c_idx = cat_idx_map.get(cat) if isinstance(cat, str) else None
 
+            if p_idx is not None and t_idx is not None:
+                plat_sent_matrix[p_idx][t_idx] += 1
+
+            if c_idx is not None:
+                seg_idx = 1 if any(v in target_veh_lower for v in commercial_keywords) else 0
+                cat_seg_matrix[c_idx][seg_idx] += 1
+                brand_cat_matrix[brand_idx][c_idx] += 1
+
+            if t_idx is not None:
+                brand_sent_matrix[brand_idx][t_idx] += 1
+
+        chi2_plat, dof_plat, p_val_plat = self.compute_chi_square(plat_sent_matrix)
+        chi2_cat, dof_cat, p_val_cat = self.compute_chi_square(cat_seg_matrix)
         chi2_brand_cat, dof_brand_cat, p_val_brand_cat = self.compute_chi_square(brand_cat_matrix)
-
-        # 4. Brand Family x Sentiment Contingency
-        brand_sent_matrix: List[List[int]] = []
-        for bf in brand_families:
-            row = []
-            for tier in sentiment_tiers:
-                c = sum(1 for r in clean_records if get_brand_key(r) == bf and r.get("sentiment_tier") == tier)
-                row.append(c)
-            brand_sent_matrix.append(row)
-
         chi2_brand_sent, dof_brand_sent, p_val_brand_sent = self.compute_chi_square(brand_sent_matrix)
 
         return {

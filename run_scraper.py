@@ -505,7 +505,8 @@ class ScraperPipeline:
             try:
                 logger.info(f"Crawling BobaeDream board '{board}' (limit={limit})...")
                 board_posts = self.bobae_crawler.crawl_board(board, pages=1, limit=limit)
-                posts.extend(board_posts)
+                if board_posts:
+                    posts.extend(board_posts)
                 if len(posts) >= limit:
                     break
             except Exception as e:
@@ -517,7 +518,8 @@ class ScraperPipeline:
             try:
                 logger.info(f"Searching BobaeDream for '전기차' (remaining limit={remaining})...")
                 search_posts = self.bobae_crawler.crawl_posts_by_keyword("전기차", boards=["national", "electric", "import"], limit=remaining)
-                posts.extend(search_posts)
+                if search_posts:
+                    posts.extend(search_posts)
             except Exception as e:
                 logger.warning(f"Error while searching BobaeDream: {e}")
 
@@ -535,7 +537,8 @@ class ScraperPipeline:
             try:
                 logger.info(f"Crawling DCInside gallery '{gall}' (limit={limit})...")
                 gall_posts = self.dc_crawler.crawl_gallery(gall, pages=1, limit=limit)
-                posts.extend(gall_posts)
+                if gall_posts:
+                    posts.extend(gall_posts)
                 if len(posts) >= limit:
                     break
             except Exception as e:
@@ -547,7 +550,8 @@ class ScraperPipeline:
             try:
                 logger.info(f"Searching DCInside for '전기차' (remaining limit={remaining})...")
                 search_posts = self.dc_crawler.crawl_posts_by_keyword("전기차", galleries=["car_new1", "electriccar", "tesla", "ioniq", "byd"], limit=remaining)
-                posts.extend(search_posts)
+                if search_posts:
+                    posts.extend(search_posts)
             except Exception as e:
                 logger.warning(f"Error while searching DCInside: {e}")
 
@@ -618,11 +622,15 @@ class ScraperPipeline:
                 valid_cached = [p for p in cached_posts if isinstance(p, dict)]
                 filtered = [
                     p for p in valid_cached
-                    if p.get("platform") in selected_sources
+                    if str(p.get("platform") or "").strip().lower() in selected_sources
                 ]
                 raw_posts = (filtered if filtered else valid_cached)[:clamped_limit]
-                stats["bobaedream"] = sum(1 for p in raw_posts if p.get("platform") == "bobaedream")
-                stats["dcinside"] = sum(1 for p in raw_posts if p.get("platform") == "dcinside")
+                stats["bobaedream"] = sum(
+                    1 for p in raw_posts if str(p.get("platform") or "").strip().lower() == "bobaedream"
+                )
+                stats["dcinside"] = sum(
+                    1 for p in raw_posts if str(p.get("platform") or "").strip().lower() == "dcinside"
+                )
 
         return raw_posts, stats
 
@@ -643,8 +651,28 @@ class ScraperPipeline:
             temp_file = cache_file.with_suffix(f".tmp.{os.getpid()}.{threading.get_ident()}")
             with open(temp_file, "w", encoding="utf-8") as f:
                 json.dump(posts, f, ensure_ascii=False, allow_nan=False)
+                f.flush()
+                os.fsync(f.fileno())
+            try:
+                os.chmod(temp_file, 0o644)
+            except OSError:
+                pass
             os.replace(temp_file, cache_file)
             temp_file = None
+            if os.name != "nt":
+                dir_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+                dir_fd = -1
+                try:
+                    dir_fd = os.open(str(cache_file.parent), dir_flags)
+                    os.fsync(dir_fd)
+                except OSError:
+                    pass
+                finally:
+                    if dir_fd >= 0:
+                        try:
+                            os.close(dir_fd)
+                        except OSError:
+                            pass
         except Exception as e:
             logger.debug(f"Failed to save harvest cache: {e}")
         finally:
@@ -677,8 +705,8 @@ class ScraperPipeline:
                 s_file = s_dir / s_name
                 if s_file.is_file():
                     try:
-                        with open(s_file, "r", encoding="utf-8") as f:
-                            data = json.load(f)
+                        with open(s_file, "r", encoding="utf-8-sig") as f:
+                            data = json.load(f, parse_constant=_reject_json_constant)
                         if isinstance(data, list):
                             for item in data:
                                 if isinstance(item, dict):
@@ -707,8 +735,8 @@ class ScraperPipeline:
         try:
             cache_file = self._get_harvest_cache_path()
             if cache_file.is_file():
-                with open(cache_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+                with open(cache_file, "r", encoding="utf-8-sig") as f:
+                    data = json.load(f, parse_constant=_reject_json_constant)
                 if isinstance(data, list) and len(data) > 0:
                     return data
         except Exception as e:
@@ -784,9 +812,12 @@ class ScraperPipeline:
 
         # 3. Determine output file targets
         target_paths: List[str] = []
-        custom_out = output_path.strip() if output_path and output_path.strip() else None
+        custom_out = output_path.strip() if output_path and str(output_path).strip() and str(output_path).strip() != "." else None
 
         if custom_out:
+            custom_p = Path(custom_out)
+            if custom_p.is_dir() or custom_out.endswith(("/", "\\")):
+                custom_out = str(custom_p / "daily_reports.json")
             target_paths.append(os.path.abspath(custom_out))
         if sync_web:
             resolved_web_path = _resolve_web_reports_path(web_dir)
@@ -828,10 +859,16 @@ class ScraperPipeline:
         if not target_paths:
             target_paths.append(os.path.abspath(DEFAULT_OUTPUT_PATH))
 
-        # Deduplicate paths while preserving order
+        # Deduplicate paths by physical resolved target while preserving order
         unique_paths: List[str] = []
+        seen_resolved_paths: Set[str] = set()
         for path_str in target_paths:
-            if path_str not in unique_paths:
+            try:
+                res_key = str(Path(path_str).resolve())
+            except (OSError, RuntimeError):
+                res_key = path_str
+            if res_key not in seen_resolved_paths:
+                seen_resolved_paths.add(res_key)
                 unique_paths.append(path_str)
 
         # Normal write mode with graceful degradation and bitwise parity replication

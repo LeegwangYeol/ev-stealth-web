@@ -13,7 +13,11 @@ function getBaseUrl(): string {
           : `https://${raw}`;
       try {
         const parsed = new URL(normalized);
-        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        if (
+          (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+          !parsed.username &&
+          !parsed.password
+        ) {
           return parsed.origin;
         }
       } catch {

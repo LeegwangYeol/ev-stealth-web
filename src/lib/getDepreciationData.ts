@@ -489,17 +489,24 @@ export function getDepreciationDatabase(): DepreciationDatabase {
         isPlainRecord(rawDepreciationData.metadata) &&
         isPlainRecord(rawDepreciationData.market_context) &&
         isPlainRecord(rawDepreciationData.adjustment_factors) &&
+        isPlainRecord(rawDepreciationData.adjustment_factors.warranty_cliff) &&
+        isPlainRecord(rawDepreciationData.adjustment_factors.battery_chemistry) &&
+        isPlainRecord(rawDepreciationData.adjustment_factors.mileage_sensitivity) &&
         isPlainRecord(rawDepreciationData.chemistries) &&
         Array.isArray(rawDepreciationData.battery_replacement_costs) &&
         rawDepreciationData.battery_replacement_costs.length > 0 &&
+        rawDepreciationData.battery_replacement_costs.every(isPlainRecord) &&
         isPlainRecord(rawDepreciationData.subsidy_clawback_schedule) &&
         Array.isArray(rawDepreciationData.subsidy_clawback_schedule.tiers) &&
         rawDepreciationData.subsidy_clawback_schedule.tiers.length > 0 &&
+        rawDepreciationData.subsidy_clawback_schedule.tiers.every(isPlainRecord) &&
+        isPlainRecord(rawDepreciationData.subsidy_clawback_schedule.transfer_rules) &&
         isPlainRecord(rawDepreciationData.tco_parameters) &&
         isPlainRecord(rawDepreciationData.tco_parameters.fuel_tariffs) &&
         isPlainRecord(rawDepreciationData.tco_parameters.efficiency_baselines) &&
         isPlainRecord(rawDepreciationData.tco_parameters.tax_parameters) &&
-        isPlainRecord(rawDepreciationData.tco_parameters.auxiliary_benefits);
+        isPlainRecord(rawDepreciationData.tco_parameters.auxiliary_benefits) &&
+        rawDepreciationData.models.every(isPlainRecord);
 
       if (hasAllSections) {
         cachedDatabase = rawDepreciationData as unknown as DepreciationDatabase;
@@ -515,6 +522,13 @@ export function getDepreciationDatabase(): DepreciationDatabase {
       const rawClawback: Record<string, unknown> = isPlainRecord(rawDepreciationData.subsidy_clawback_schedule)
         ? rawDepreciationData.subsidy_clawback_schedule
         : {};
+      const validModels = rawDepreciationData.models.filter(isPlainRecord);
+      const validReplacementCosts = Array.isArray(rawDepreciationData.battery_replacement_costs)
+        ? rawDepreciationData.battery_replacement_costs.filter(isPlainRecord)
+        : [];
+      const validClawbackTiers = Array.isArray(rawClawback.tiers)
+        ? rawClawback.tiers.filter(isPlainRecord)
+        : [];
 
       cachedDatabase = {
         metadata: isPlainRecord(rawDepreciationData.metadata)
@@ -540,17 +554,19 @@ export function getDepreciationDatabase(): DepreciationDatabase {
           ? ({ ...fb.chemistries, ...rawDepreciationData.chemistries } as unknown as DepreciationDatabase['chemistries'])
           : fb.chemistries,
         battery_replacement_costs:
-          Array.isArray(rawDepreciationData.battery_replacement_costs) &&
-          rawDepreciationData.battery_replacement_costs.length > 0
-            ? (rawDepreciationData.battery_replacement_costs as unknown as BatteryReplacementTier[])
+          validReplacementCosts.length > 0
+            ? (validReplacementCosts as unknown as BatteryReplacementTier[])
             : fb.battery_replacement_costs,
         subsidy_clawback_schedule: {
           ...fb.subsidy_clawback_schedule,
           ...(rawClawback as Partial<SubsidyClawbackSchedule>),
           tiers:
-            Array.isArray(rawClawback.tiers) && rawClawback.tiers.length > 0
-              ? (rawClawback.tiers as unknown as ClawbackTier[])
+            validClawbackTiers.length > 0
+              ? (validClawbackTiers as unknown as ClawbackTier[])
               : fb.subsidy_clawback_schedule.tiers,
+          transfer_rules: isPlainRecord(rawClawback.transfer_rules)
+            ? ({ ...fb.subsidy_clawback_schedule.transfer_rules, ...rawClawback.transfer_rules } as SubsidyClawbackSchedule['transfer_rules'])
+            : fb.subsidy_clawback_schedule.transfer_rules,
         },
         tco_parameters: {
           fuel_tariffs: isPlainRecord(rawTco.fuel_tariffs)
@@ -566,7 +582,7 @@ export function getDepreciationDatabase(): DepreciationDatabase {
             ? ({ ...fb.tco_parameters.auxiliary_benefits, ...rawTco.auxiliary_benefits } as TcoAuxiliaryBenefits)
             : fb.tco_parameters.auxiliary_benefits,
         },
-        models: rawDepreciationData.models as unknown as EvModelDepreciation[],
+        models: validModels.length > 0 ? (validModels as unknown as EvModelDepreciation[]) : fb.models,
       };
       return cachedDatabase;
     }
@@ -808,7 +824,7 @@ export function calculateDepreciation(
   const rawYearsInput =
     safeInput.years !== undefined && safeInput.years !== null ? safeInput.years : safeInput.heldYears;
   const parsedYears = parseNumericInput(rawYearsInput);
-  const years = Number.isFinite(parsedYears) ? clamp(parsedYears, 0, 100) : 0;
+  const years = clamp(parsedYears, 0, 100);
 
   const rawFactors = isPlainRecord(safeOptions?.adjustmentFactors)
     ? safeOptions.adjustmentFactors
@@ -824,23 +840,29 @@ export function calculateDepreciation(
     DATABASE?.metadata?.baseline_annual_mileage_km,
     15000
   );
-  const baselineAnnualMileage = finitePosOr(
-    safeOptions?.baselineAnnualMileageKm ?? safeOptions?.annualAverageKm,
+  const baselineAnnualMileage = Math.min(
+    1_000_000,
     finitePosOr(
-      rawMileageSens?.baseline_annual_km,
+      safeOptions?.baselineAnnualMileageKm ?? safeOptions?.annualAverageKm,
       finitePosOr(
-        rawMileageSens?.base_km_per_year,
-        defaultBaselineAnnualMileage
+        rawMileageSens?.baseline_annual_km,
+        finitePosOr(
+          rawMileageSens?.base_km_per_year,
+          defaultBaselineAnnualMileage
+        )
       )
     )
   );
   const rawMileageInput =
     safeInput.mileageKm !== undefined && safeInput.mileageKm !== null ? safeInput.mileageKm : safeInput.totalKm;
   const parsedMileage = parseNumericInput(rawMileageInput);
-  const defaultMileage = normalizeZero(years * baselineAnnualMileage);
-  const mileageKm = Number.isFinite(parsedMileage)
-    ? clamp(parsedMileage, 0, 10_000_000)
-    : defaultMileage;
+  const defaultMileage = clamp(years * baselineAnnualMileage, 0, 10_000_000);
+  const mileageKm =
+    parsedMileage === Infinity
+      ? 10_000_000
+      : Number.isFinite(parsedMileage)
+      ? clamp(parsedMileage, 0, 10_000_000)
+      : defaultMileage;
 
   const {
     modelId,
@@ -853,13 +875,18 @@ export function calculateDepreciation(
     : isPlainRecord(safeOptions?.model)
     ? (safeOptions.model as EvModelDepreciation)
     : undefined;
+  const firstDbModel = isPlainRecord(DATABASE?.models?.[0]) ? DATABASE.models[0] : undefined;
   const model =
     explicitModel ||
     (safeOptions?.models && modelId ? findModelById(safeOptions.models, modelId) : undefined) ||
     (modelId ? getModelById(modelId) : undefined) ||
-    DATABASE?.models?.[0] ||
+    firstDbModel ||
     DEFAULT_FALLBACK_DEPRECIATION_DATABASE.models[0];
-  const rawBaselineResidualPct = interpolateBaselineResidual(model.depreciation_curve, years, priceBasis);
+  const rawBaselineResidualPct = interpolateBaselineResidual(
+    model?.depreciation_curve as DepreciationCurve,
+    years,
+    priceBasis
+  );
   const baselineResidualPct = Number.isFinite(rawBaselineResidualPct)
     ? clamp(rawBaselineResidualPct, 0.0, 100.0)
     : 100.0;
@@ -1101,9 +1128,12 @@ export function simulateBatteryHealth(
   const isInvalidYears =
     rawYears === undefined ||
     rawYears === null ||
-    !Number.isFinite(parsedYears) ||
-    parsedYears < 0;
-  const safeYears = isInvalidYears ? 3 : clamp(parsedYears, 0, 100);
+    (parsedYears !== Infinity && (!Number.isFinite(parsedYears) || parsedYears < 0));
+  const safeYears = isInvalidYears
+    ? 3
+    : parsedYears === Infinity
+    ? 100
+    : clamp(parsedYears, 0, 100);
 
   let model: EvModelDepreciation | undefined = isPlainRecord(safeParams.model)
     ? (safeParams.model as EvModelDepreciation)
@@ -1137,11 +1167,16 @@ export function simulateBatteryHealth(
         ...dbChem,
         name: typeof dbChem.name === 'string' && dbChem.name.trim() ? dbChem.name : hardFallbackChem.name,
         calendar_arrhenius_ea_j_mol: finiteNonNegOr(dbChem.calendar_arrhenius_ea_j_mol, hardFallbackChem.calendar_arrhenius_ea_j_mol),
-        soc_stress_coefficient_beta: finiteOr(dbChem.soc_stress_coefficient_beta, hardFallbackChem.soc_stress_coefficient_beta),
+        soc_stress_coefficient_beta: finiteNonNegOr(dbChem.soc_stress_coefficient_beta, hardFallbackChem.soc_stress_coefficient_beta),
         calendar_baseline_annual_loss_pct: finiteNonNegOr(dbChem.calendar_baseline_annual_loss_pct, hardFallbackChem.calendar_baseline_annual_loss_pct),
         calendar_time_exponent_z: finiteNonNegOr(dbChem.calendar_time_exponent_z, hardFallbackChem.calendar_time_exponent_z),
         dod_exponent_u: finiteNonNegOr(dbChem.dod_exponent_u, hardFallbackChem.dod_exponent_u),
-        dcfc_acceleration_multiplier_max: finiteOr(dbChem.dcfc_acceleration_multiplier_max, hardFallbackChem.dcfc_acceleration_multiplier_max),
+        dcfc_acceleration_multiplier_max:
+          typeof dbChem.dcfc_acceleration_multiplier_max === 'number' &&
+          Number.isFinite(dbChem.dcfc_acceleration_multiplier_max) &&
+          dbChem.dcfc_acceleration_multiplier_max >= 1
+            ? dbChem.dcfc_acceleration_multiplier_max
+            : hardFallbackChem.dcfc_acceleration_multiplier_max,
         cold_charge_sensitivity_gamma: finiteNonNegOr(dbChem.cold_charge_sensitivity_gamma, hardFallbackChem.cold_charge_sensitivity_gamma),
         cycle_life_to_80_soh: finitePosOr(dbChem.cycle_life_to_80_soh, hardFallbackChem.cycle_life_to_80_soh),
         cyclic_exponent_w: finiteNonNegOr(dbChem.cyclic_exponent_w, hardFallbackChem.cyclic_exponent_w),
@@ -1168,14 +1203,19 @@ export function simulateBatteryHealth(
 
   const parsedAnnualKm = parseNumericInput(annualKm);
   const safeAnnualKm =
-    Number.isFinite(parsedAnnualKm) && parsedAnnualKm >= 0
+    parsedAnnualKm === Infinity
+      ? 10_000_000
+      : Number.isFinite(parsedAnnualKm) && parsedAnnualKm >= 0
       ? normalizeZero(Math.min(10_000_000, parsedAnnualKm))
       : 15000;
 
   const parsedInputTotalKm = parseNumericInput(inputTotalKm);
-  const rawMileage = Number.isFinite(parsedInputTotalKm)
-    ? parsedInputTotalKm
-    : safeYears * safeAnnualKm;
+  const rawMileage =
+    parsedInputTotalKm === Infinity
+      ? 10_000_000
+      : Number.isFinite(parsedInputTotalKm)
+      ? parsedInputTotalKm
+      : safeYears * safeAnnualKm;
   const safeMileage = clamp(rawMileage, 0, 10_000_000);
 
   // A. Calendar Aging via Arrhenius & SoC Kinetics
@@ -1277,9 +1317,10 @@ export function simulateBatteryHealth(
     0,
     20
   );
+  const cycleRatio = safeCycles / baseCycles;
   const qLossCyc =
-    safeCycles > 0
-      ? 0.20 * fDod * fDcfc * fTempCyc * Math.pow(safeCycles / baseCycles, cyclicExp)
+    cycleRatio > 0
+      ? 0.20 * fDod * fDcfc * fTempCyc * Math.pow(cycleRatio, cyclicExp)
       : 0;
 
   // C. Sub-additive Coupling (p = 1.25)
@@ -1841,12 +1882,17 @@ export function calculateTcoComparison(
 
   const parsedAnnualKm = parseNumericInput(annualKm);
   const safeAnnualKm =
-    Number.isFinite(parsedAnnualKm) && parsedAnnualKm >= 0
+    parsedAnnualKm === Infinity
+      ? 10_000_000
+      : Number.isFinite(parsedAnnualKm) && parsedAnnualKm >= 0
       ? normalizeZero(Math.min(10_000_000, parsedAnnualKm))
       : 15000;
   const parsedYears = parseNumericInput(years);
 
-  const rawYears = Math.min(30, Number.isFinite(parsedYears) && parsedYears > 0 ? parsedYears : 1);
+  const rawYears =
+    parsedYears === Infinity
+      ? 30
+      : Math.min(30, Number.isFinite(parsedYears) && parsedYears > 0 ? parsedYears : 1);
   const safeYears = Math.max(1, Math.round(rawYears));
   const fullYears = Math.floor(rawYears);
   const fractionalRemainder = roundTo(rawYears - fullYears, 4);

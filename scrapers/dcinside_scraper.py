@@ -188,22 +188,22 @@ class DCInsideScraper:
             )
 
             if status != 200 or not text:
-                logger.warning(f"Search request failed on DC Inside [{gallery_id}] page {page}")
+                logger.warning(f"Search request failed on DC Inside [{gid_clean}] page {page}")
                 break
 
-            items = self.parse_gallery_list(text, gallery_id)
+            items = self.parse_gallery_list(text, gid_clean)
             if not items:
-                logger.info(f"No more items found for keyword '{keyword}' in {gallery_id}")
+                logger.info(f"No more items found for keyword '{keyword}' in {gid_clean}")
                 break
 
             new_items = [it for it in items if not it.get("post_id") or it["post_id"] not in seen_pids]
             if not new_items:
-                logger.info(f"Search page {page} of [{gallery_id}] repeated previously seen items. Halting loop.")
+                logger.info(f"Search page {page} of [{gid_clean}] repeated previously seen items. Halting loop.")
                 break
             seen_pids.update(it["post_id"] for it in new_items if it.get("post_id"))
             results.extend(new_items)
 
-        logger.info(f"Found {len(results)} items for '{keyword}' in DC Inside [{gallery_id}].")
+        logger.info(f"Found {len(results)} items for '{keyword}' in DC Inside [{gid_clean}].")
         return results
 
     def parse_gallery_list(self, html_content: str, gallery_id: str) -> List[Dict[str, Any]]:
@@ -428,7 +428,7 @@ class DCInsideScraper:
         if not title_match:
             title_match = re.search(r'<span class="title_headtext"[^>]*>.*?</span>\s*<span[^>]*>(.*?)</span>', html_content, re.DOTALL)
         if not title_match:
-            title_match = re.search(r'<meta property="og:title" content="([^"]*)"', html_content)
+            title_match = re.search(r'<meta\b[^>]*\bproperty=["\']og:title["\'][^>]*\bcontent=["\']([^"\']*)["\']', html_content, re.IGNORECASE)
         if title_match:
             title = clean_html_text(title_match.group(1))
 
@@ -773,7 +773,12 @@ def main():
     parser.add_argument("--galleries", nargs="+", default=["electriccar", "car_new1", "commercialvehicle", "ev"], help="Galleries to search")
     parser.add_argument("--keywords", nargs="+", default=["BYD", "아토3", "씰", "T4K", "중국 전기차", "마사다"], help="Search keywords")
     parser.add_argument("--limit", type=int, default=5, help="Max posts per gallery/keyword")
-    parser.add_argument("--output", type=str, default="/Users/a7890/src/my-e-car/data/dcinside_complaints.json", help="Output JSON path")
+    default_output = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "data",
+        "dcinside_complaints.json",
+    )
+    parser.add_argument("--output", type=str, default=default_output, help="Output JSON path")
     args = parser.parse_args()
 
     with DCInsideScraper() as scraper:

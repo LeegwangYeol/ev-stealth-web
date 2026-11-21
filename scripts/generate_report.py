@@ -394,6 +394,9 @@ def main():
 
     with open(args.input, "r", encoding="utf-8-sig") as f:
         records = json.load(f)
+    if not isinstance(records, list):
+        print(f"[ERROR] Input dataset must be a JSON list: {args.input}")
+        sys.exit(1)
 
     # Initialize NLP & Analytics Engines
     tokenizer = DomainTokenizer(str(args.slang))

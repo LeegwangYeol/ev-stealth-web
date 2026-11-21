@@ -129,6 +129,10 @@ const FORBIDDEN_RECORD_KEYS = new Set([
   'isprototypeof',
   'propertyisenumerable',
   'tolocalestring',
+  '__definegetter__',
+  '__definesetter__',
+  '__lookupgetter__',
+  '__lookupsetter__',
 ]);
 
 /**
@@ -184,7 +188,9 @@ export function aggregateCategoryComplaintCounts(
     const num = parseFiniteNumber(rawCount);
     const parsedCount = num !== null ? Math.max(0, Math.floor(num)) : 0;
 
-    countMap.set(key, (countMap.get(key) || 0) + parsedCount);
+    const prev = countMap.get(key) || 0;
+    const next = prev + parsedCount;
+    countMap.set(key, Number.isFinite(next) ? next : Number.MAX_VALUE);
   };
 
   if (Array.isArray(inputs)) {
@@ -252,12 +258,14 @@ export function aggregateCategoryComplaintCounts(
 
   let totalCount = 0;
   for (const c of countMap.values()) {
-    totalCount += c;
+    const nextTotal = totalCount + c;
+    totalCount = Number.isFinite(nextTotal) ? nextTotal : Number.MAX_VALUE;
   }
 
   const result: Record<string, { count: number; percentage: number }> = {};
   for (const [key, count] of countMap.entries()) {
-    const percentage = totalCount > 0 ? Math.round((count / totalCount) * 1000) / 10 + 0 : 0.0;
+    const rawPct = totalCount > 0 ? (count / totalCount) * 100 : 0;
+    const percentage = Number.isFinite(rawPct) ? Math.round(rawPct * 10) / 10 + 0 : 0.0;
     result[key] = {
       count,
       percentage,
@@ -425,7 +433,10 @@ export function calculateReliabilityKPIs(data?: ReliabilityTrendsDatabase | null
     for (const b of brands) {
       const bReports = parseFiniteNumber(b.total_reports);
       if (bReports !== null && bReports > 0) {
-        totalAnalyzedPosts += Math.floor(bReports);
+        const nextPosts = totalAnalyzedPosts + Math.floor(bReports);
+        if (Number.isFinite(nextPosts)) {
+          totalAnalyzedPosts = nextPosts;
+        }
       }
     }
   }
@@ -723,11 +734,12 @@ export function getModelReliabilityById(
         continue;
       }
 
-      // Priority 3: Fallback substring match
+      // Priority 3: Fallback substring match (require length >= 2 to prevent 1-char false positives)
       if (
         !partialMatch &&
-        ((mIdNorm.length > 0 && (mIdNorm.includes(normalized) || normalized.includes(mIdNorm))) ||
-          (mNameNorm.length > 0 && (mNameNorm.includes(normalized) || normalized.includes(mNameNorm))))
+        normalized.length >= 2 &&
+        ((mIdNorm.length >= 2 && (mIdNorm.includes(normalized) || normalized.includes(mIdNorm))) ||
+          (mNameNorm.length >= 2 && (mNameNorm.includes(normalized) || normalized.includes(mNameNorm))))
       ) {
         partialMatch = { brand, model };
       }
@@ -779,10 +791,11 @@ export function getBrandReliabilityById(
   );
   if (exactName) return exactName;
 
+  if (normalized.length < 2) return undefined;
   return brands.find((b) => {
     const ko = typeof b.name_ko === 'string' ? b.name_ko.trim().toLowerCase() : '';
     const en = typeof b.name_en === 'string' ? b.name_en.trim().toLowerCase() : '';
-    return (ko.length > 0 && ko.includes(normalized)) || (en.length > 0 && en.includes(normalized));
+    return (ko.length >= 2 && ko.includes(normalized)) || (en.length >= 2 && en.includes(normalized));
   });
 }
 
@@ -1152,7 +1165,7 @@ export function getModelYearEvaluation(
     dsi_score: normalizeReliabilityScore(target.dsi_score, 50.0),
     incident_rate:
       parsedIncident !== null
-        ? Math.max(0, Math.min(100, parsedIncident))
+        ? Math.max(0, Math.min(100, parsedIncident)) + 0
         : 0,
     chronic_symptoms: Array.isArray(target.chronic_symptoms)
       ? target.chronic_symptoms.filter((s): s is string => typeof s === 'string')
@@ -1303,6 +1316,8 @@ interface PeriodAccumulator {
   totalComplaints: number;
   dsiWeightedSum: number;
   dsiCount: number;
+  dsiUnweightedSum: number;
+  dsiUnweightedCount: number;
   categoryCounts: Map<string, number>;
 }
 
@@ -1343,6 +1358,18 @@ function isValidCalendarDate(year: number, month: number, day: number): boolean 
 function parsePeriodicDate(
   dateVal: unknown
 ): { year: number; month?: number; quarter?: 1 | 2 | 3 | 4 } | null {
+  if (dateVal instanceof Date) {
+    if (Number.isNaN(dateVal.getTime())) return null;
+    const parsedY = dateVal.getUTCFullYear();
+    const parsedM = dateVal.getUTCMonth() + 1;
+    if (parsedY < 1990 || parsedY > 2100) return null;
+    return {
+      year: parsedY,
+      month: parsedM,
+      quarter: Math.ceil(parsedM / 3) as 1 | 2 | 3 | 4,
+    };
+  }
+
   const dateStr = parseValidDateString(dateVal);
   if (!dateStr) return null;
 
@@ -1358,9 +1385,9 @@ function parsePeriodicDate(
     return null;
   }
 
-  // 2. Full or partial delimited date: YYYY-MM-DD, YYYY.MM.DD, YYYY/MM/DD, YYYY-MM
+  // 2. Full or partial delimited date: YYYY-MM-DD, YYYY.MM.DD, YYYY/MM/DD, YYYY-MM, and ISO-8601 timestamps
   const fullMatch = dateStr.match(
-    /^(\d{4})[-/. ](\d{1,2})(?:[-/. ](\d{1,2})(?:$|T|\s+.*))?$/
+    /^(\d{4})[-/. ](\d{1,2})(?:[-/. ](\d{1,2})(?:$|(?:T|\s+)(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:(Z)|([+-])(\d{2}):?(\d{2}))?))?$/i
   );
   if (fullMatch) {
     const parsedY = Number(fullMatch[1]);
@@ -1369,6 +1396,35 @@ function parsePeriodicDate(
     if (fullMatch[3] !== undefined) {
       const parsedD = Number(fullMatch[3]);
       if (!isValidCalendarDate(parsedY, parsedM, parsedD)) return null;
+
+      if (fullMatch[4] !== undefined) {
+        const hour = Number(fullMatch[4]);
+        const minute = Number(fullMatch[5]);
+        const second = fullMatch[6] !== undefined ? Number(fullMatch[6]) : 0;
+        if (hour > 23 || minute > 59 || second > 59) return null;
+
+        // Convert explicit-offset ISO timestamps (Z or ±HH:MM) to UTC
+        if (fullMatch[7] !== undefined || fullMatch[8] !== undefined) {
+          let offsetMinutes = 0;
+          if (fullMatch[8] !== undefined) {
+            const tzHour = Number(fullMatch[9]);
+            const tzMin = Number(fullMatch[10]);
+            if (tzHour > 23 || tzMin > 59) return null;
+            const sign = fullMatch[8] === '-' ? -1 : 1;
+            offsetMinutes = sign * (tzHour * 60 + tzMin);
+          }
+          const utcMs = Date.UTC(parsedY, parsedM - 1, parsedD, hour, minute, second) - offsetMinutes * 60_000;
+          const utcDate = new Date(utcMs);
+          const utcY = utcDate.getUTCFullYear();
+          const utcM = utcDate.getUTCMonth() + 1;
+          if (utcY < 1990 || utcY > 2100) return null;
+          return {
+            year: utcY,
+            month: utcM,
+            quarter: Math.ceil(utcM / 3) as 1 | 2 | 3 | 4,
+          };
+        }
+      }
     }
     return {
       year: parsedY,
@@ -1463,21 +1519,35 @@ function accumulatePeriodEntry(
       totalComplaints: 0,
       dsiWeightedSum: 0,
       dsiCount: 0,
+      dsiUnweightedSum: 0,
+      dsiUnweightedCount: 0,
       categoryCounts: new Map(),
     });
   }
 
   const g = groups.get(periodKey)!;
-  g.totalComplaints += metrics.parsedCount;
+  const nextTotal = g.totalComplaints + metrics.parsedCount;
+  g.totalComplaints = Number.isFinite(nextTotal) ? nextTotal : Number.MAX_VALUE;
 
   if (metrics.parsedDsi !== null) {
+    g.dsiUnweightedSum += metrics.parsedDsi;
+    g.dsiUnweightedCount += 1;
+
     const weight = Math.max(1, metrics.parsedCount);
-    g.dsiWeightedSum += metrics.parsedDsi * weight;
-    g.dsiCount += weight;
+    const nextWeightedSum = g.dsiWeightedSum + metrics.parsedDsi * weight;
+    const nextWeightCount = g.dsiCount + weight;
+    if (Number.isFinite(nextWeightedSum) && Number.isFinite(nextWeightCount)) {
+      g.dsiWeightedSum = nextWeightedSum;
+      g.dsiCount = nextWeightCount;
+    } else {
+      g.dsiWeightedSum = Number.NaN;
+    }
   }
 
   if (metrics.parsedCount > 0) {
-    g.categoryCounts.set(metrics.catKey, (g.categoryCounts.get(metrics.catKey) || 0) + metrics.parsedCount);
+    const prevCat = g.categoryCounts.get(metrics.catKey) || 0;
+    const nextCat = prevCat + metrics.parsedCount;
+    g.categoryCounts.set(metrics.catKey, Number.isFinite(nextCat) ? nextCat : Number.MAX_VALUE);
   }
 
   return metrics.parsedCount;
@@ -1492,22 +1562,32 @@ function buildPeriodSummary(
   const key = sortedKeys[index];
   const g = groups.get(key)!;
 
-  const percentage = grandTotalComplaints > 0
-    ? Math.round((g.totalComplaints / grandTotalComplaints) * 1000) / 10 + 0
-    : 0.0;
+  const safeGrandTotal = Number.isFinite(grandTotalComplaints) ? grandTotalComplaints : Number.MAX_VALUE;
+  const rawPct = safeGrandTotal > 0 ? (g.totalComplaints / safeGrandTotal) * 100 : 0;
+  const percentage = Number.isFinite(rawPct) ? Math.round(rawPct * 10) / 10 + 0 : 0.0;
 
-  const avgDsi = g.dsiCount > 0
-    ? Math.round((g.dsiWeightedSum / g.dsiCount) * 10) / 10 + 0
-    : 50.0;
+  let avgDsi = 50.0;
+  if (g.dsiCount > 0 && Number.isFinite(g.dsiWeightedSum) && Number.isFinite(g.dsiCount)) {
+    const rawAvg = g.dsiWeightedSum / g.dsiCount;
+    if (Number.isFinite(rawAvg)) {
+      avgDsi = Math.round(rawAvg * 10) / 10 + 0;
+    }
+  } else if (g.dsiUnweightedCount > 0 && Number.isFinite(g.dsiUnweightedSum)) {
+    const rawFallback = g.dsiUnweightedSum / g.dsiUnweightedCount;
+    if (Number.isFinite(rawFallback)) {
+      avgDsi = Math.round(rawFallback * 10) / 10 + 0;
+    }
+  }
 
   let topCategory: DefectCategoryKey | string = 'NONE';
   let maxCatCount = 0;
   const categoryDistribution: Record<string, { count: number; percentage: number }> = {};
 
   for (const [cat, cnt] of g.categoryCounts.entries()) {
+    const rawCatPct = g.totalComplaints > 0 ? (cnt / g.totalComplaints) * 100 : 0;
     categoryDistribution[cat] = {
       count: cnt,
-      percentage: g.totalComplaints > 0 ? Math.round((cnt / g.totalComplaints) * 1000) / 10 + 0 : 0.0,
+      percentage: Number.isFinite(rawCatPct) ? Math.round(rawCatPct * 10) / 10 + 0 : 0.0,
     };
     if (cnt > maxCatCount) {
       maxCatCount = cnt;
@@ -1523,9 +1603,11 @@ function buildPeriodSummary(
   const windowStart = Math.max(0, index - 2);
   let windowSum = 0;
   for (let w = windowStart; w <= index; w++) {
-    windowSum += groups.get(sortedKeys[w])!.totalComplaints;
+    const nextWin = windowSum + groups.get(sortedKeys[w])!.totalComplaints;
+    windowSum = Number.isFinite(nextWin) ? nextWin : Number.MAX_VALUE;
   }
-  const movingAverage3 = Math.round((windowSum / (index - windowStart + 1)) * 10) / 10 + 0;
+  const rawMa = windowSum / (index - windowStart + 1);
+  const movingAverage3 = Number.isFinite(rawMa) ? Math.round(rawMa * 10) / 10 + 0 : 0;
 
   return {
     periodKey: key,

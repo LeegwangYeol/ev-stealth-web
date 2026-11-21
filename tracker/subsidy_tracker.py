@@ -6,7 +6,7 @@ nationwide aggregations, fallback resilience, and atomic persistence.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import http.client
 import ipaddress
 import json
@@ -36,6 +36,7 @@ from tracker.subsidy_baseline import (
     DEFAULT_ALERT_THRESHOLDS,
     PASSENGER_NATIONAL_CAP_KRW,
     build_baseline_regions,
+    build_historical_trajectory,
     build_initial_baseline,
     build_popular_models,
     calculate_net_subsidy,
@@ -110,12 +111,17 @@ _DISALLOWED_ENDPOINT_SUFFIXES: Tuple[str, ...] = (
 _STANDARD_ENDPOINT_PORTS: Set[int] = {80, 443, 8080, 8443, 8000, 8888}
 _NAT64_WELL_KNOWN_PREFIX = ipaddress.IPv6Network("64:ff9b::/96")
 _NAT64_LOCAL_PREFIX = ipaddress.IPv6Network("64:ff9b:1::/48")
+_CGNAT_PREFIX = ipaddress.IPv4Network("100.64.0.0/10")
+_IPV4_TRANSLATED_PREFIX = ipaddress.IPv6Network("::ffff:0:0/96")
+_IPV4_COMPAT_PREFIX = ipaddress.IPv6Network("::/96")
 
 try:
     from utils.http_client import is_safe_ip as _is_safe_ip
 except ImportError:
     def _is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
         """Check if an IP address is publicly routable and safe from SSRF."""
+        if getattr(ip, "scope_id", None):
+            return False
         if (
             not ip.is_global
             or ip.is_loopback
@@ -124,7 +130,10 @@ except ImportError:
             or ip.is_multicast
             or ip.is_reserved
             or ip.is_unspecified
+            or getattr(ip, "is_site_local", False)
         ):
+            return False
+        if isinstance(ip, ipaddress.IPv4Address) and ip in _CGNAT_PREFIX:
             return False
         if isinstance(ip, ipaddress.IPv6Address):
             if ip.ipv4_mapped and not _is_safe_ip(ip.ipv4_mapped):
@@ -135,7 +144,12 @@ except ImportError:
                 for teredo_ip in ip.teredo:
                     if not _is_safe_ip(teredo_ip):
                         return False
-            if ip in _NAT64_WELL_KNOWN_PREFIX or ip in _NAT64_LOCAL_PREFIX:
+            if (
+                ip in _NAT64_WELL_KNOWN_PREFIX
+                or ip in _NAT64_LOCAL_PREFIX
+                or ip in _IPV4_TRANSLATED_PREFIX
+                or ip in _IPV4_COMPAT_PREFIX
+            ):
                 embedded_v4 = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
                 if not _is_safe_ip(embedded_v4):
                     return False
@@ -163,6 +177,8 @@ def _validate_endpoint_url(url: str, allow_private_ips: bool = False) -> Tuple[b
         return False, f"Disallowed URL scheme: {scheme!r}"
     if parsed.username is not None or parsed.password is not None:
         return False, "Disallowed userinfo in endpoint URL"
+    if "\\" in (parsed.netloc or ""):
+        return False, "Backslash in URL authority"
 
     hostname = parsed.hostname
     if not hostname:
@@ -170,6 +186,8 @@ def _validate_endpoint_url(url: str, allow_private_ips: bool = False) -> Tuple[b
     host_lower = hostname.lower().strip().rstrip(".")
     if not host_lower:
         return False, "Missing hostname in URL"
+    if "%" in host_lower:
+        return False, "IPv6 zone ID not allowed in endpoint URL"
 
     try:
         port = parsed.port
@@ -676,10 +694,13 @@ def predict_exhaustion_date(
             base_dt = datetime.now(timezone.utc)
         elif isinstance(start_date, datetime):
             base_dt = start_date
+        elif isinstance(start_date, date):
+            base_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=timezone.utc)
         elif isinstance(start_date, str):
             clean_s = start_date.strip()
-            if "T" in clean_s:
-                base_dt = datetime.fromisoformat(clean_s.replace("Z", "+00:00"))
+            if "T" in clean_s or "t" in clean_s:
+                iso_s = clean_s[:-1] + "+00:00" if clean_s.endswith(("Z", "z")) else clean_s
+                base_dt = datetime.fromisoformat(iso_s)
             else:
                 base_dt = datetime.strptime(clean_s[:10], "%Y-%m-%d")
         else:
@@ -709,17 +730,17 @@ def classify_region_group(region: Union[RegionRecord, Dict[str, Any], str, None]
             return REGIONAL_GROUP_METROPOLITAN
         if ident_upper in PROVINCE_CODES:
             return REGIONAL_GROUP_PROVINCES
-        for city in METROPOLITAN_CITIES:
-            if city in ident:
-                return REGIONAL_GROUP_METROPOLITAN
         for prov in PROVINCE_PATTERNS_KO:
             if prov in ident:
                 return REGIONAL_GROUP_PROVINCES
+        for city in METROPOLITAN_CITIES:
+            if city in ident:
+                return REGIONAL_GROUP_METROPOLITAN
         ident_lower = ident.lower()
-        if any(c in ident_lower for c in METROPOLITAN_PATTERNS_EN):
-            return REGIONAL_GROUP_METROPOLITAN
         if any(p in ident_lower for p in PROVINCE_PATTERNS_EN):
             return REGIONAL_GROUP_PROVINCES
+        if any(c in ident_lower for c in METROPOLITAN_PATTERNS_EN):
+            return REGIONAL_GROUP_METROPOLITAN
         return REGIONAL_GROUP_OTHER
 
     iso_code = _metric_val(region, "iso_code", "") or _metric_val(region, "region_id", "")
@@ -730,18 +751,18 @@ def classify_region_group(region: Union[RegionRecord, Dict[str, Any], str, None]
         return REGIONAL_GROUP_PROVINCES
 
     name_ko = str(_metric_val(region, "name_ko", "")).strip()
-    for city in METROPOLITAN_CITIES:
-        if city in name_ko:
-            return REGIONAL_GROUP_METROPOLITAN
     for prov in PROVINCE_PATTERNS_KO:
         if prov in name_ko:
             return REGIONAL_GROUP_PROVINCES
+    for city in METROPOLITAN_CITIES:
+        if city in name_ko:
+            return REGIONAL_GROUP_METROPOLITAN
 
     name_en = str(_metric_val(region, "name_en", "")).strip().lower()
-    if any(c in name_en for c in METROPOLITAN_PATTERNS_EN):
-        return REGIONAL_GROUP_METROPOLITAN
     if any(p in name_en for p in PROVINCE_PATTERNS_EN):
         return REGIONAL_GROUP_PROVINCES
+    if any(c in name_en for c in METROPOLITAN_PATTERNS_EN):
+        return REGIONAL_GROUP_METROPOLITAN
 
     tier = str(_metric_val(region, "tier", "")).strip().lower()
     if tier in ("special_city", "metropolitan_city", "special_self_governing_city"):
@@ -939,9 +960,13 @@ class SubsidyTracker:
                 if rem_ratio_units == 0:
                     safe_rem_budget = 0
                 else:
+                    try:
+                        scaled_rem_budget = int(round((safe_total_budget * rem_ratio_units) / safe_ann))
+                    except OverflowError:
+                        scaled_rem_budget = (safe_total_budget * rem_ratio_units) // safe_ann
                     safe_rem_budget = min(
                         safe_total_budget,
-                        max(0, int(round((safe_total_budget * rem_ratio_units) / safe_ann))),
+                        max(0, scaled_rem_budget),
                     )
             else:
                 cat_rem = max(0, _safe_int_metric(_metric_val(cat, "remaining_budget_krw", 0), 0))
@@ -1051,7 +1076,7 @@ class SubsidyTracker:
             if not isinstance(r_cats, dict):
                 r_cats = {}
 
-            if st_key not in alert_counts and (r_cats or (isinstance(r, dict) and "overall_depletion_rate" in r)):
+            if st_key not in alert_counts and (r_cats or (isinstance(r, dict) and "overall_depletion_rate" in r) or hasattr(r, "overall_depletion_rate")):
                 raw_rate = _metric_val(r, "overall_depletion_rate", None)
                 if raw_rate is not None and not isinstance(raw_rate, bool):
                     try:
@@ -1060,6 +1085,10 @@ class SubsidyTracker:
                             st_key = self.evaluate_status(max(0.0, f_rate)).value.lower()
                     except (ValueError, TypeError, OverflowError):
                         pass
+                if st_key not in alert_counts and r_cats:
+                    r_ann = sum(max(0, _safe_int_metric(_metric_val(c, "announced_units", 0), 0)) for c in r_cats.values())
+                    r_app = sum(max(0, _safe_int_metric(_metric_val(c, "applied_units", 0), 0)) for c in r_cats.values())
+                    st_key = self.evaluate_status(calculate_depletion_rate(r_app, r_ann)).value.lower()
 
             if st_key in alert_counts:
                 alert_counts[st_key] += 1
@@ -1105,14 +1134,23 @@ class SubsidyTracker:
                 "status": self.evaluate_status(c_rate).value,
             }
 
+        try:
+            total_budget_billion = round(total_budget_krw / 1_000_000_000, 1)
+        except OverflowError:
+            total_budget_billion = float(total_budget_krw // 1_000_000_000)
+        try:
+            disbursed_budget_billion = max(0.0, round(disbursed_budget_krw / 1_000_000_000, 1))
+        except OverflowError:
+            disbursed_budget_billion = max(0.0, float(disbursed_budget_krw // 1_000_000_000))
+
         return NationwideSummary(
             total_announced_units=total_announced,
             total_applied_units=total_applied,
             total_delivered_units=total_delivered,
             total_remaining_units=total_remaining,
             nationwide_depletion_rate=nationwide_rate,
-            total_budget_billion_krw=round(total_budget_krw / 1_000_000_000, 1),
-            disbursed_budget_billion_krw=max(0.0, round(disbursed_budget_krw / 1_000_000_000, 1)),
+            total_budget_billion_krw=total_budget_billion,
+            disbursed_budget_billion_krw=disbursed_budget_billion,
             category_totals=cat_totals,
             alert_region_counts=alert_counts,
         )
@@ -1193,7 +1231,7 @@ class SubsidyTracker:
                                 safe_retries,
                             )
                             if attempt < safe_retries:
-                                backoff = safe_backoff * (2 ** (attempt - 1))
+                                backoff = min(60.0, safe_backoff * (2 ** min(attempt - 1, 10)))
                                 time.sleep(backoff)
                                 continue
                             return None
@@ -1205,7 +1243,7 @@ class SubsidyTracker:
                         safe_retries,
                     )
                     if attempt < safe_retries:
-                        backoff = safe_backoff * (2 ** (attempt - 1))
+                        backoff = min(60.0, safe_backoff * (2 ** min(attempt - 1, 10)))
                         time.sleep(backoff)
                         continue
                     return None
@@ -1232,7 +1270,7 @@ class SubsidyTracker:
                         pass
                 logger.warning("Live fetch attempt %d/%d failed: %s.", attempt, safe_retries, exc)
                 if attempt < safe_retries:
-                    backoff = safe_backoff * (2 ** (attempt - 1))
+                    backoff = min(60.0, safe_backoff * (2 ** min(attempt - 1, 10)))
                     time.sleep(backoff)
                     continue
                 logger.warning("Live fetch failed: %s. Initiating graceful fallback.", exc)
@@ -1353,17 +1391,17 @@ class SubsidyTracker:
                     seen_dates.add(d)
                     deduped_history.append(pt)
             payload.historical_depletion_trajectory = (
-                deduped_history if len(deduped_history) >= 2 else build_initial_baseline().historical_depletion_trajectory
+                deduped_history if len(deduped_history) >= 2 else build_historical_trajectory()
             )
         else:
-            payload.historical_depletion_trajectory = build_initial_baseline().historical_depletion_trajectory
+            payload.historical_depletion_trajectory = build_historical_trajectory()
 
         if not payload.popular_models_matrix:
             payload.popular_models_matrix = build_popular_models()
         if not payload.alert_thresholds:
-            payload.alert_thresholds = build_initial_baseline().alert_thresholds
+            payload.alert_thresholds = dict(DEFAULT_ALERT_THRESHOLDS)
 
-        payload.metadata.total_regions_tracked = len(payload.regions)
+        payload.metadata.total_regions_tracked = sum(1 for r in payload.regions if r is not None)
         total_munis = 0
         for r in payload.regions:
             munis = r.get("municipalities", []) if isinstance(r, dict) else getattr(r, "municipalities", [])
@@ -1510,6 +1548,11 @@ class SubsidyTracker:
                     if web_pub_data.exists():
                         destinations.append(web_pub_data / "ev_subsidy_data.json")
                         destinations.append(web_pub_data / "subsidy_depletion_data.json")
+
+                    web_data_dir = repo_root / "ev-stealth-web" / "data"
+                    if web_data_dir.exists():
+                        destinations.append(web_data_dir / "ev_subsidy_data.json")
+                        destinations.append(web_data_dir / "subsidy_depletion_data.json")
 
                     if root_data_dir.exists():
                         destinations.append(root_data_dir / "ev_subsidy_data.json")
@@ -1841,6 +1884,7 @@ def export_models_subsidy_matrix(target_dirs: Optional[List[Union[str, Path]]] =
         cwd = Path.cwd()
         candidates = [
             repo_root / "data",
+            repo_root / "ev-stealth-web" / "data",
             repo_root / "ev-stealth-web" / "src" / "data",
             repo_root / "ev-stealth-web" / "public" / "data",
             repo_root / "public" / "data",
@@ -1860,16 +1904,29 @@ def export_models_subsidy_matrix(target_dirs: Optional[List[Union[str, Path]]] =
         if not target_dirs:
             target_dirs = [repo_root / "data"]
 
-    written_paths: List[Path] = []
+    dest_files: List[Path] = []
+    seen_files: Set[str] = set()
     for d in target_dirs:
-        dest_dir = Path(d).resolve()
-        dest_file = dest_dir / "models_subsidy_matrix.json"
+        dest_file = Path(d).resolve() / "models_subsidy_matrix.json"
+        key = str(dest_file)
+        if key not in seen_files:
+            seen_files.add(key)
+            dest_files.append(dest_file)
+
+    written_paths: List[Path] = []
+    if dest_files:
         try:
-            w = atomic_write_json(matrix_data, dest_file)
-            written_paths.append(w)
-            logger.info("  ✓ Successfully exported models matrix to %s", dest_file)
-        except Exception as exc:
-            logger.warning("Failed to export models matrix to %s: %s", dest_file, exc)
+            written_paths = atomic_write_json_multiple(matrix_data, dest_files)
+            for dest_file in written_paths:
+                logger.info("  ✓ Successfully exported models matrix to %s", dest_file)
+        except Exception:
+            for dest_file in dest_files:
+                try:
+                    w = atomic_write_json(matrix_data, dest_file)
+                    written_paths.append(w)
+                    logger.info("  ✓ Successfully exported models matrix to %s", dest_file)
+                except Exception as exc:
+                    logger.warning("Failed to export models matrix to %s: %s", dest_file, exc)
 
     return written_paths
 

@@ -458,6 +458,7 @@ class DomainTokenizer:
     # Text Normalization Cleaner: preserves Korean, alphanumeric, whitespace, key units
     CLEAN_REGEX = re.compile(r'[^가-힣A-Za-z0-9\s%℃kWkm/h\-\.\,\_\/]')
     _NON_WS_REGEX = re.compile(r'\S+')
+    _WHITESPACE_REGEX = re.compile(r'\s+')
 
     def __init__(self, slang_dict_path: Optional[str] = None):
         self.trie = AutomotiveTrie()
@@ -522,7 +523,7 @@ class DomainTokenizer:
         if not isinstance(text, str):
             text = str(text)
         cleaned = self.CLEAN_REGEX.sub(" ", text)
-        return re.sub(r'\s+', ' ', cleaned).strip()
+        return self._WHITESPACE_REGEX.sub(" ", cleaned).strip()
 
     def tokenize(self, text: str) -> List[Dict[str, Any]]:
         """

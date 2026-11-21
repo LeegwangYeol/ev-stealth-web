@@ -37,12 +37,14 @@ from filters.slang_lexicon import (
     SlangEntry,
     _RE_BYD_SEAL,
     _RE_RICE_COOKER_APP,
+    _RE_TCAM_KO,
     _decode_bytes_safely,
     find_matching_slang,
 )
 from filters.spam_filter import (
     CATEGORY_KEYWORD_MAP,
     SpamFilter,
+    _RE_DEFECT_HAJA,
     evaluate_stage1_noise,
     matches_category_keyword,
 )
@@ -339,7 +341,10 @@ class DefectClassifier:
             "iccu", "bms", "피시테일", "피쉬테일", "fishtail", "도어캐치", "스펀지 브레이크", "열폭주",
             "꺼지", "꺼짐", "소리도 안"
         ]
-        if any(dk in text_lower for dk in defect_keywords):
+        if any(
+            (_RE_DEFECT_HAJA.search(text_lower) is not None) if dk == "하자" else (dk in text_lower)
+            for dk in defect_keywords
+        ):
             has_symptom = True
 
         # Check for bystander / third-person trolling without genuine owner experience
@@ -448,6 +453,7 @@ class DefectClassifier:
                     "되고", "된다", "돼서", "됨", "돼", "되", "됐",
                     "열리고", "열려", "열림", "열린다", "열리", "열렸",
                     "켜지고", "켜져", "켜짐", "켜진다", "켜지", "켜졌",
+                    "꺼지고", "꺼져", "꺼짐", "꺼진다", "꺼지", "꺼졌",
                     "걸리고", "걸려", "걸림", "걸린다",
                     "빠지고", "빠져", "빠짐", "빠진다",
                     "먹히고", "먹혀", "먹힘", "먹힌다",
@@ -545,6 +551,8 @@ class DefectClassifier:
                         continue
                 elif dw_lower == "이상":
                     if not (dw_lower in tok_lower or tok_lower.startswith(dw_lower)):
+                        continue
+                    if any(ch.isdigit() for ch in tok_lower) or tok_lower.startswith(("더이상", "그이상", "이이상")):
                         continue
                     if i > 0 and (
                         tokens_lower[i - 1] in ("더", "그", "이")
@@ -786,7 +794,12 @@ class DefectClassifier:
         # 1. High-precision compound defect rules using pre-sorted phrases
         for cat, phrases in _SORTED_COMPOUND_RULES.items():
             for phrase in phrases:
-                if phrase in text_lower:
+                matched_phrase = (
+                    (_RE_TCAM_KO.search(text_lower) is not None)
+                    if phrase == "티캠"
+                    else (phrase in text_lower)
+                )
+                if matched_phrase:
                     category_scores[cat] += 12.0
                     if cat == "DRIVING_POWERTRAIN":
                         if any(term in phrase for term in ("브레이크", "페달", "제동", "조향", "오토홀드", "가속", "동력", "구동")):
@@ -888,7 +901,10 @@ class DefectClassifier:
 
         # 5. High-precision compound defect match
         category_compounds = COMPOUND_DEFECT_RULES.get(category, [])
-        if any(cp in text_lower for cp in category_compounds):
+        if any(
+            (_RE_TCAM_KO.search(text_lower) is not None) if cp == "티캠" else (cp in text_lower)
+            for cp in category_compounds
+        ):
             confidence += 0.20
 
         # False-positive suppression penalties

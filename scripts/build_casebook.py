@@ -211,6 +211,7 @@ def build_source_index_section(complaints: List[Dict[str, Any]]) -> str:
     platform_counts: Dict[str, int] = {}
     vehicle_counts: Dict[str, int] = {}
     cat_counts: Dict[str, int] = {}
+    vehicle_cat_counts: Dict[str, Dict[str, int]] = {}
 
     valid_complaints = [c for c in (complaints or []) if isinstance(c, dict)]
     for c in valid_complaints:
@@ -220,6 +221,12 @@ def build_source_index_section(complaints: List[Dict[str, Any]]) -> str:
         platform_counts[p] = platform_counts.get(p, 0) + 1
         vehicle_counts[v] = vehicle_counts.get(v, 0) + 1
         cat_counts[cat] = cat_counts.get(cat, 0) + 1
+        veh_cats = vehicle_cat_counts.setdefault(
+            v,
+            {"parking": 0, "charging": 0, "rain_driving": 0, "hill_climbing": 0},
+        )
+        if cat in veh_cats:
+            veh_cats[cat] += 1
 
     lines.append("| 플랫폼 (Platform) | 수집 사례 수 (Cases) | 비율 (%) | 대표 게시판 |")
     lines.append("|---|---|---|---|")
@@ -237,10 +244,11 @@ def build_source_index_section(complaints: List[Dict[str, Any]]) -> str:
     ])
 
     for v in sorted(vehicle_counts.keys()):
-        p_c = sum(1 for c in valid_complaints if c.get("target_vehicle") == v and c.get("category") == "parking")
-        c_c = sum(1 for c in valid_complaints if c.get("target_vehicle") == v and c.get("category") == "charging")
-        r_c = sum(1 for c in valid_complaints if c.get("target_vehicle") == v and c.get("category") == "rain_driving")
-        h_c = sum(1 for c in valid_complaints if c.get("target_vehicle") == v and c.get("category") == "hill_climbing")
+        veh_cats = vehicle_cat_counts[v]
+        p_c = veh_cats["parking"]
+        c_c = veh_cats["charging"]
+        r_c = veh_cats["rain_driving"]
+        h_c = veh_cats["hill_climbing"]
         tot = p_c + c_c + r_c + h_c
         lines.append(f"| **{v}** | {p_c}건 | {c_c}건 | {r_c}건 | {h_c}건 | **{tot}건** |")
 

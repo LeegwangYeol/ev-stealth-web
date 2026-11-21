@@ -318,7 +318,7 @@ const BrandRankingItem = React.memo(function BrandRankingItem({
       onClick={() => onToggle(brand.id)}
       aria-pressed={isSelected}
       aria-label={`${idx + 1}위 ${brand?.name_ko || ''} (${brand?.name_en || ''}), 국가: ${brand?.country || ''}, ${modelCount}개 모델, 치명 결함율 ${criticalRate}%, 평균 DSI ${safeDsi}점 (${dsiInfo.label})${isSelected ? ' (선택됨, 필터 해제하려면 클릭)' : ' (클릭하여 이 브랜드만 필터링)'}`}
-      className={`w-full text-left p-3 sm:p-4 rounded-2xl border transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+      className={`w-full min-h-[44px] text-left p-3 sm:p-4 rounded-2xl border transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
         isSelected
           ? 'bg-indigo-50/80 border-indigo-300 ring-2 ring-indigo-200'
           : 'bg-slate-50 hover:bg-slate-100/80 border-slate-200'
@@ -387,7 +387,7 @@ const CategoryShareCard = React.memo(function CategoryShareCard({
       aria-pressed={isSelected}
       aria-labelledby={`cat-title-${cat.code}`}
       aria-describedby={`cat-desc-${cat.code} cat-cost-${cat.code}`}
-      className={`w-full text-left p-4 rounded-2xl border transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+      className={`w-full min-h-[44px] text-left p-4 rounded-2xl border transition cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
         isSelected
           ? 'ring-2 ring-indigo-300 bg-indigo-50/50 border-indigo-300'
           : `${color.bg} ${color.border} hover:shadow-md`
@@ -977,8 +977,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
   }, [hoveredCell]);
 
   // Escape key listener for accessible dismissal of detail card with focus return
+  const hasHoveredCell = Boolean(hoveredCell);
   useEffect(() => {
-    if (!hoveredCell || activeChartTab !== 'heatmap') return;
+    if (!hasHoveredCell || activeChartTab !== 'heatmap') return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -987,11 +988,12 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hoveredCell, activeChartTab, handleCloseCell]);
+  }, [hasHoveredCell, activeChartTab, handleCloseCell]);
 
   // Escape key listener to unpin active radar category
+  const hasActiveRadar = Boolean(pinnedRadarCategory || hoveredRadarCategory);
   useEffect(() => {
-    if ((!pinnedRadarCategory && !hoveredRadarCategory) || activeChartTab !== 'brand_compare') return;
+    if (!hasActiveRadar || activeChartTab !== 'brand_compare') return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -1001,11 +1003,12 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [pinnedRadarCategory, hoveredRadarCategory, activeChartTab]);
+  }, [hasActiveRadar, activeChartTab]);
 
   // Escape key listener to dismiss hovered SVG brand detail card
+  const hasHoveredSvgBrand = Boolean(hoveredSvgBrand);
   useEffect(() => {
-    if (!hoveredSvgBrand || activeChartTab !== 'brand_ranking') return;
+    if (!hasHoveredSvgBrand || activeChartTab !== 'brand_ranking') return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -1014,7 +1017,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hoveredSvgBrand, activeChartTab]);
+  }, [hasHoveredSvgBrand, activeChartTab]);
 
   const handleBrandToggle = useCallback((brandId: string) => {
     setSelectedBrand((prev) => (prev === brandId ? 'ALL' : brandId));
@@ -1030,6 +1033,36 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     selectedVerdict !== 'ALL' ||
     selectedYearRange !== 'ALL' ||
     searchQuery.trim() !== '';
+
+  // Memoize heavy card & matrix grids so transient hover/preview states skip array recreation
+  const renderedHeatmapRows = useMemo(
+    () =>
+      allModels.map((model) => (
+        <HeatmapRow
+          key={model.id}
+          model={model}
+          evalMap={modelEvalMaps.get(model.id)}
+          heatmapYears={heatmapYears}
+          selectedYear={hoveredCell?.modelName === model.name ? hoveredCell.year : null}
+          onCellClick={handleCellClick}
+          onCellHover={setCellPreview}
+        />
+      )),
+    [allModels, modelEvalMaps, heatmapYears, hoveredCell?.modelName, hoveredCell?.year, handleCellClick]
+  );
+
+  const renderedModelCards = useMemo(
+    () => sortedModels.map((model) => <ModelCardItem key={model.id} model={model} />),
+    [sortedModels]
+  );
+
+  const renderedRepairCostRows = useMemo(
+    () =>
+      repairCostMatrix.map((item, idx) => (
+        <RepairCostMatrixRow key={`${item.component_name || 'repair'}-${idx}`} item={item} />
+      )),
+    [repairCostMatrix]
+  );
 
   // Single-pass memoized evaluation statistics
   const { totalEvaluationsCount, avoidEvaluationsCount, avoidPercentage } = useMemo(() => {
@@ -1299,47 +1332,44 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         </td>
                       </tr>
                     ) : (
-                      allModels.map((model) => (
-                        <HeatmapRow
-                          key={model.id}
-                          model={model}
-                          evalMap={modelEvalMaps.get(model.id)}
-                          heatmapYears={heatmapYears}
-                          selectedYear={hoveredCell?.modelName === model.name ? hoveredCell.year : null}
-                          onCellClick={handleCellClick}
-                          onCellHover={setCellPreview}
-                        />
-                      ))
+                      renderedHeatmapRows
                     )}
                   </tbody>
                 </table>
               </div>
 
               {/* Heatmap Cell Instant Hover Preview Tooltip */}
-              {cellPreview && !hoveredCell && (
-                <div
-                  role="status"
-                  aria-live="polite"
-                  className="p-3 bg-slate-900 text-white rounded-xl border border-slate-700 shadow-md text-xs flex flex-wrap items-center justify-between gap-2 animate-fade-in motion-reduce:animate-none"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-blue-300">{cellPreview.modelName} ({cellPreview.year}년식)</span>
-                    <span
-                      className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                        cellPreview.verdict === 'AVOID'
-                          ? 'bg-rose-500/30 text-rose-200 border border-rose-500/50'
-                          : cellPreview.verdict === 'CAUTION'
-                          ? 'bg-amber-400/30 text-amber-100 border border-amber-400/50'
-                          : 'bg-emerald-500/30 text-emerald-200 border border-emerald-500/50'
-                      }`}
-                    >
-                      {cellPreview.verdict} (DSI {cellPreview.dsi}점)
-                    </span>
-                    <span className="text-slate-300 hidden sm:inline">주요 결함: {cellPreview.primaryDefect}</span>
-                  </div>
-                  <span className="text-[11px] text-blue-300 font-medium">클릭 시 리콜 상세 및 공임 열람 ↵</span>
-                </div>
-              )}
+              <div
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                className={
+                  cellPreview && !hoveredCell
+                    ? 'p-3 bg-slate-900 text-white rounded-xl border border-slate-700 shadow-md text-xs flex flex-wrap items-center justify-between gap-2 animate-fade-in motion-reduce:animate-none'
+                    : 'sr-only !m-0'
+                }
+              >
+                {cellPreview && !hoveredCell && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-blue-300">{cellPreview.modelName} ({cellPreview.year}년식)</span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                          cellPreview.verdict === 'AVOID'
+                            ? 'bg-rose-500/30 text-rose-200 border border-rose-500/50'
+                            : cellPreview.verdict === 'CAUTION'
+                            ? 'bg-amber-400/30 text-amber-100 border border-amber-400/50'
+                            : 'bg-emerald-500/30 text-emerald-200 border border-emerald-500/50'
+                        }`}
+                      >
+                        {cellPreview.verdict} (DSI {cellPreview.dsi}점)
+                      </span>
+                      <span className="text-slate-300 hidden sm:inline">주요 결함: {cellPreview.primaryDefect}</span>
+                    </div>
+                    <span className="text-[11px] text-blue-300 font-medium">클릭 시 리콜 상세 및 공임 열람 ↵</span>
+                  </>
+                )}
+              </div>
 
               {/* Heatmap Detail Dialog (if selected) */}
               {hoveredCell && (
@@ -1480,7 +1510,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                               y1={15}
                               x2={x}
                               y2={brandSvgHeight - 45}
-                              stroke="#334155"
+                              stroke="#64748b"
                               strokeDasharray={val === 50 ? '0' : '3 3'}
                               strokeWidth={val === 50 ? '1.5' : '1'}
                             />
@@ -1588,33 +1618,40 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     })}
                   </svg>
                   {/* Live SVG Bar Tooltip Card */}
-                  {hoveredSvgBrand && (
-                    <div
-                      role="status"
-                      aria-live="polite"
-                      className="mt-4 p-4 bg-slate-800 text-white rounded-xl border border-slate-700 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-fade-in motion-reduce:animate-none"
-                    >
-                      <div className="space-y-1">
-                        <div className="font-bold text-sm text-blue-300 flex items-center gap-2">
-                          <span>{hoveredSvgBrand.name_ko} ({hoveredSvgBrand.name_en})</span>
-                          <span className="text-[11px] px-2 py-0.5 rounded bg-slate-700 text-slate-200">{hoveredSvgBrand.country}</span>
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                    className={
+                      hoveredSvgBrand
+                        ? 'mt-4 p-4 bg-slate-800 text-white rounded-xl border border-slate-700 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-fade-in motion-reduce:animate-none'
+                        : 'sr-only !m-0'
+                    }
+                  >
+                    {hoveredSvgBrand && (
+                      <>
+                        <div className="space-y-1">
+                          <div className="font-bold text-sm text-blue-300 flex items-center gap-2">
+                            <span>{hoveredSvgBrand.name_ko} ({hoveredSvgBrand.name_en})</span>
+                            <span className="text-[11px] px-2 py-0.5 rounded bg-slate-700 text-slate-200">{hoveredSvgBrand.country}</span>
+                          </div>
+                          <div className="text-slate-300 flex flex-wrap items-center gap-3">
+                            <span>종합 DSI: <strong className="text-white">{Number.isFinite(hoveredSvgBrand.overall_dsi) ? hoveredSvgBrand.overall_dsi : 0}점</strong></span>
+                            <span>치명 결함율: <strong className="text-rose-300">{Number.isFinite(hoveredSvgBrand.critical_issue_rate) ? hoveredSvgBrand.critical_issue_rate : 0}%</strong></span>
+                            <span>분석 제보: <strong className="text-white">{(Number.isFinite(hoveredSvgBrand.total_reports) ? hoveredSvgBrand.total_reports : 0).toLocaleString('ko-KR')}건</strong></span>
+                            <span>모델 수: <strong className="text-white">{(Array.isArray(hoveredSvgBrand.models) ? hoveredSvgBrand.models : []).length}개</strong></span>
+                          </div>
                         </div>
-                        <div className="text-slate-300 flex flex-wrap items-center gap-3">
-                          <span>종합 DSI: <strong className="text-white">{Number.isFinite(hoveredSvgBrand.overall_dsi) ? hoveredSvgBrand.overall_dsi : 0}점</strong></span>
-                          <span>치명 결함율: <strong className="text-rose-300">{Number.isFinite(hoveredSvgBrand.critical_issue_rate) ? hoveredSvgBrand.critical_issue_rate : 0}%</strong></span>
-                          <span>분석 제보: <strong className="text-white">{(Number.isFinite(hoveredSvgBrand.total_reports) ? hoveredSvgBrand.total_reports : 0).toLocaleString('ko-KR')}건</strong></span>
-                          <span>모델 수: <strong className="text-white">{(Array.isArray(hoveredSvgBrand.models) ? hoveredSvgBrand.models : []).length}개</strong></span>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleBrandToggle(hoveredSvgBrand.id)}
-                        className="px-3.5 py-2 min-h-[44px] inline-flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                      >
-                        {selectedBrand === hoveredSvgBrand.id ? '필터 해제' : '이 브랜드만 보기'}
-                      </button>
-                    </div>
-                  )}
+                        <button
+                          type="button"
+                          onClick={() => handleBrandToggle(hoveredSvgBrand.id)}
+                          className="px-3.5 py-2 min-h-[44px] inline-flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                        >
+                          {selectedBrand === hoveredSvgBrand.id ? '필터 해제' : '이 브랜드만 보기'}
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1789,7 +1826,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         <polygon
                           points={ring.points}
                           fill="none"
-                          stroke="#334155"
+                          stroke="#64748b"
                           strokeWidth="1"
                           strokeDasharray="3 3"
                         />
@@ -1813,7 +1850,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         y1={RADAR_CY}
                         x2={axis.axisX}
                         y2={axis.axisY}
-                        stroke="#334155"
+                        stroke="#64748b"
                         strokeWidth="1"
                       />
                     ))}
@@ -1928,69 +1965,76 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 </div>
 
                 {/* Interactive Tooltip Popover for Active Category */}
-                {activeRadarItem && (
-                  <div
-                    role="status"
-                    aria-live="polite"
-                    className="mt-4 p-4 bg-slate-800 text-white rounded-xl border border-slate-700 shadow-xl text-xs space-y-2 animate-fade-in motion-reduce:animate-none"
-                  >
-                    <div className="flex items-center justify-between gap-2 border-b border-slate-700 pb-2">
-                      <span className="font-bold text-sm text-blue-300">
-                        {activeRadarItem.label} 결함 비중 분석
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-slate-300">
-                          산업 평균: {activeRadarItem.indShare.toFixed(1)}%
+                <div
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  className={
+                    activeRadarItem
+                      ? 'mt-4 p-4 bg-slate-800 text-white rounded-xl border border-slate-700 shadow-xl text-xs space-y-2 animate-fade-in motion-reduce:animate-none'
+                      : 'sr-only !m-0'
+                  }
+                >
+                  {activeRadarItem && (
+                    <>
+                      <div className="flex items-center justify-between gap-2 border-b border-slate-700 pb-2">
+                        <span className="font-bold text-sm text-blue-300">
+                          {activeRadarItem.label} 결함 비중 분석
                         </span>
-                        {pinnedRadarCategory === activeRadarItem.code && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const targetId = `radar-axis-${activeRadarItem.code}`;
-                              setPinnedRadarCategory(null);
-                              setHoveredRadarCategory(null);
-                              document.getElementById(targetId)?.focus();
-                            }}
-                            aria-label={`${activeRadarItem.label} 상세 고정 해제`}
-                            className="min-h-[44px] min-w-[44px] px-2.5 py-1 inline-flex items-center justify-center rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                          >
-                            고정 해제
-                          </button>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-slate-300">
+                            산업 평균: {activeRadarItem.indShare.toFixed(1)}%
+                          </span>
+                          {pinnedRadarCategory === activeRadarItem.code && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const targetId = `radar-axis-${activeRadarItem.code}`;
+                                setPinnedRadarCategory(null);
+                                setHoveredRadarCategory(null);
+                                document.getElementById(targetId)?.focus();
+                              }}
+                              aria-label={`${activeRadarItem.label} 상세 고정 해제`}
+                              className="min-h-[44px] min-w-[44px] px-2.5 py-1 inline-flex items-center justify-center rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                            >
+                              고정 해제
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-slate-200 text-xs">{activeRadarItem.description}</p>
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <div className="p-2.5 rounded-lg bg-blue-950/60 border border-blue-800">
+                          <div className="font-bold text-blue-300">{brandAObj?.name_ko}</div>
+                          <div className="text-base font-black text-white mt-0.5">
+                            {activeRadarItem.shareA.toFixed(1)}%
+                            <span className="text-xs font-normal text-slate-300 ml-1">({activeRadarItem.countA}건)</span>
+                          </div>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-rose-950/60 border border-rose-800">
+                          <div className="font-bold text-rose-300">{brandBObj?.name_ko}</div>
+                          <div className="text-base font-black text-white mt-0.5">
+                            {activeRadarItem.shareB.toFixed(1)}%
+                            <span className="text-xs font-normal text-slate-300 ml-1">({activeRadarItem.countB}건)</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-slate-200 pt-1">
+                        {activeRadarItem.shareA < activeRadarItem.shareB ? (
+                          <span className="text-emerald-300 font-semibold">
+                            ✓ {brandAObj?.name_ko}의 해당 결함 비중이 {(activeRadarItem.shareB - activeRadarItem.shareA).toFixed(1)}%p 더 낮아 상대적으로 안전합니다.
+                          </span>
+                        ) : activeRadarItem.shareA > activeRadarItem.shareB ? (
+                          <span className="text-emerald-300 font-semibold">
+                            ✓ {brandBObj?.name_ko}의 해당 결함 비중이 {(activeRadarItem.shareA - activeRadarItem.shareB).toFixed(1)}%p 더 낮아 상대적으로 안전합니다.
+                          </span>
+                        ) : (
+                          <span>양사의 해당 결함 발생 비중이 동일한 수준입니다.</span>
                         )}
                       </div>
-                    </div>
-                    <p className="text-slate-200 text-xs">{activeRadarItem.description}</p>
-                    <div className="grid grid-cols-2 gap-3 pt-1">
-                      <div className="p-2.5 rounded-lg bg-blue-950/60 border border-blue-800">
-                        <div className="font-bold text-blue-300">{brandAObj?.name_ko}</div>
-                        <div className="text-base font-black text-white mt-0.5">
-                          {activeRadarItem.shareA.toFixed(1)}%
-                          <span className="text-xs font-normal text-slate-300 ml-1">({activeRadarItem.countA}건)</span>
-                        </div>
-                      </div>
-                      <div className="p-2.5 rounded-lg bg-rose-950/60 border border-rose-800">
-                        <div className="font-bold text-rose-300">{brandBObj?.name_ko}</div>
-                        <div className="text-base font-black text-white mt-0.5">
-                          {activeRadarItem.shareB.toFixed(1)}%
-                          <span className="text-xs font-normal text-slate-300 ml-1">({activeRadarItem.countB}건)</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-[11px] text-slate-200 pt-1">
-                      {activeRadarItem.shareA < activeRadarItem.shareB ? (
-                        <span className="text-emerald-300 font-semibold">
-                          ✓ {brandAObj?.name_ko}의 해당 결함 비중이 {(activeRadarItem.shareB - activeRadarItem.shareA).toFixed(1)}%p 더 낮아 상대적으로 안전합니다.
-                        </span>
-                      ) : activeRadarItem.shareA > activeRadarItem.shareB ? (
-                        <span className="text-emerald-300 font-semibold">
-                          ✓ {brandBObj?.name_ko}의 해당 결함 비중이 {(activeRadarItem.shareA - activeRadarItem.shareB).toFixed(1)}%p 더 낮아 상대적으로 안전합니다.
-                        </span>
-                      ) : (
-                        <span>양사의 해당 결함 발생 비중이 동일한 수준입니다.</span>
-                      )}
-                    </div>
-                  </div>
-                )}
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Screen Reader Accessible Table for Radar Chart */}
@@ -2336,8 +2380,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               id="reliability-search-input"
               type="text"
               ref={searchInputRef}
+              maxLength={200}
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => setSearchQuery(e.target.value.slice(0, 200))}
               onKeyDown={(e) => {
                 if (e.key === 'Escape' && searchQuery) {
                   e.preventDefault();
@@ -2606,7 +2651,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       <section aria-labelledby="model-reliability-heading" className="space-y-4">
         <h2 id="model-reliability-heading" className="text-2xl font-bold text-slate-900 mb-6">차종별 신뢰성 상세 분석</h2>
         <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold text-slate-700" aria-live="polite" aria-atomic="true">
+          <div className="text-sm font-semibold text-slate-700" role="status" aria-live="polite" aria-atomic="true">
             총 <strong className="text-slate-900">{sortedModels.length}</strong>개 차종 표시 중
           </div>
           {hasActiveFilter && (
@@ -2642,9 +2687,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {sortedModels.map((model) => (
-              <ModelCardItem key={model.id} model={model} />
-            ))}
+            {renderedModelCards}
           </div>
         )}
       </section>
@@ -2695,9 +2738,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   </td>
                 </tr>
               ) : (
-                repairCostMatrix.map((item, idx) => (
-                  <RepairCostMatrixRow key={`${item.component_name || 'repair'}-${idx}`} item={item} />
-                ))
+                renderedRepairCostRows
               )}
             </tbody>
           </table>
