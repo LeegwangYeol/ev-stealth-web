@@ -69,14 +69,29 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
         return safe_default
 
 
-def _safe_rate_percent(numerator: Union[int, float], denominator: Union[int, float]) -> float:
+def _safe_rate_percent(numerator: Any, denominator: Any) -> float:
     """Compute rounded percentage (1 decimal) scaling numerator first to avoid float drift."""
-    if isinstance(numerator, bool) or isinstance(denominator, bool):
+    if numerator is None or denominator is None or isinstance(numerator, bool) or isinstance(denominator, bool):
         return 0.0
-    if denominator <= 0 or numerator <= 0:
+    try:
+        num = float(numerator)
+        den = float(denominator)
+    except (ValueError, TypeError, OverflowError):
+        if isinstance(numerator, int) and isinstance(denominator, int) and denominator > 0 and numerator > 0:
+            try:
+                raw = (numerator * 100) / denominator
+                if math.isnan(raw) or math.isinf(raw):
+                    return 0.0
+                return max(0.0, round(raw, 1))
+            except (OverflowError, ZeroDivisionError):
+                return 0.0
         return 0.0
-    scaled = numerator * 100.0
-    raw = (scaled / denominator) if not math.isinf(scaled) else ((numerator / denominator) * 100.0)
+    if math.isnan(num) or math.isnan(den) or math.isinf(num) or math.isinf(den):
+        return 0.0
+    if den <= 0.0 or num <= 0.0:
+        return 0.0
+    scaled = num * 100.0
+    raw = (scaled / den) if not math.isinf(scaled) else ((num / den) * 100.0)
     if math.isnan(raw) or math.isinf(raw):
         return 0.0
     return max(0.0, round(raw, 1))
@@ -768,6 +783,27 @@ for _ko, _en in _KO_REGION_ALIAS_MAP.items():
     _EN_TO_KO_ALIASES.setdefault(_en, ())
     _EN_TO_KO_ALIASES[_en] = _EN_TO_KO_ALIASES[_en] + (_ko,)
 
+_REGION_LOOKUP_ALIAS_MAP: Dict[str, tuple[str, ...]] = {
+    "서울": ("kr-11", "서울특별시", "seoul"),
+    "부산": ("kr-26", "부산광역시", "busan"),
+    "대구": ("kr-27", "대구광역시", "daegu"),
+    "인천": ("kr-28", "인천광역시", "incheon"),
+    "광주": ("kr-29", "광주광역시", "gwangju"),
+    "대전": ("kr-30", "대전광역시", "daejeon"),
+    "울산": ("kr-31", "울산광역시", "ulsan"),
+    "세종": ("kr-36", "kr-50", "세종특별자치시", "sejong"),
+    "kr-50": ("kr-36", "세종특별자치시", "sejong"),
+    "경기": ("kr-41", "경기도", "gyeonggi"),
+    "강원": ("kr-42", "강원특별자치도", "gangwon"),
+    "충북": ("kr-43", "충청북도", "chungbuk"),
+    "충남": ("kr-44", "충청남도", "chungnam"),
+    "전북": ("kr-45", "전북특별자치도", "jeonbuk"),
+    "전남": ("kr-46", "전라남도", "jeonnam"),
+    "경북": ("kr-47", "경상북도", "gyeongbuk"),
+    "경남": ("kr-48", "경상남도", "gyeongnam"),
+    "제주": ("kr-49", "제주특별자치도", "jeju"),
+}
+
 
 @dataclass
 class PopularModelEntry:
@@ -847,8 +883,15 @@ class PopularModelEntry:
             code_lower = code_str.lower()
             mapped_en = _ISO_ALIAS_MAP.get(code_str.upper())
             if mapped_en:
+                iso_cands = _EN_TO_ISO_CODES.get(mapped_en, ())
+                ko_cands = _EN_TO_KO_ALIASES.get(mapped_en, ())
                 for k, v in self.regional_subsidy_samples.items():
-                    if mapped_en in str(k).lower():
+                    k_lower = str(k).strip().lower()
+                    if (
+                        mapped_en in k_lower
+                        or k_lower in iso_cands
+                        or any(ko_c in k_lower for ko_c in ko_cands)
+                    ):
                         entry = v
                         break
             if entry is None:
@@ -1055,13 +1098,8 @@ class NationwideSummary:
     @property
     def disbursed_budget_krw(self) -> int:
         """Disbursed statutory budget in KRW (non-negative)."""
-        val = self.disbursed_budget_billion_krw
-        if val is None or isinstance(val, bool):
-            return 0
+        f = _safe_float(self.disbursed_budget_billion_krw, 0.0)
         try:
-            f = float(val)
-            if math.isnan(f) or math.isinf(f):
-                return 0
             return max(0, int(round(f * 1_000_000_000)))
         except (ValueError, TypeError, OverflowError):
             return 0
@@ -1069,13 +1107,8 @@ class NationwideSummary:
     @property
     def total_budget_krw(self) -> int:
         """Total statutory budget in KRW (non-negative)."""
-        val = self.total_budget_billion_krw
-        if val is None or isinstance(val, bool):
-            return 0
+        f = _safe_float(self.total_budget_billion_krw, 0.0)
         try:
-            f = float(val)
-            if math.isnan(f) or math.isinf(f):
-                return 0
             return max(0, int(round(f * 1_000_000_000)))
         except (ValueError, TypeError, OverflowError):
             return 0
@@ -1294,27 +1327,7 @@ class SubsidyPayload:
                     return r
 
         # 2. Known statutory alias mapping
-        alias_map = {
-            "서울": ("kr-11", "서울특별시", "seoul"),
-            "부산": ("kr-26", "부산광역시", "busan"),
-            "대구": ("kr-27", "대구광역시", "daegu"),
-            "인천": ("kr-28", "인천광역시", "incheon"),
-            "광주": ("kr-29", "광주광역시", "gwangju"),
-            "대전": ("kr-30", "대전광역시", "daejeon"),
-            "울산": ("kr-31", "울산광역시", "ulsan"),
-            "세종": ("kr-36", "kr-50", "세종특별자치시", "sejong"),
-            "kr-50": ("kr-36", "세종특별자치시", "sejong"),
-            "경기": ("kr-41", "경기도", "gyeonggi"),
-            "강원": ("kr-42", "강원특별자치도", "gangwon"),
-            "충북": ("kr-43", "충청북도", "chungbuk"),
-            "충남": ("kr-44", "충청남도", "chungnam"),
-            "전북": ("kr-45", "전북특별자치도", "jeonbuk"),
-            "전남": ("kr-46", "전라남도", "jeonnam"),
-            "경북": ("kr-47", "경상북도", "gyeongbuk"),
-            "경남": ("kr-48", "경상남도", "gyeongnam"),
-            "제주": ("kr-49", "제주특별자치도", "jeju"),
-        }
-        mapped_keys = alias_map.get(target)
+        mapped_keys = _REGION_LOOKUP_ALIAS_MAP.get(target)
         if mapped_keys:
             for cand in mapped_keys:
                 for r in self.regions:

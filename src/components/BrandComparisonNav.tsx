@@ -61,7 +61,7 @@ export const BrandComparisonNav = memo(function BrandComparisonNav({
         <Link
           href="/"
           prefetch={false}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs font-semibold transition border border-slate-200/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white min-h-[44px]"
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs font-semibold transition border border-slate-200/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white min-h-[44px] min-w-[44px]"
           aria-label="전체 가이드 홈으로 돌아가기"
         >
           <svg
@@ -83,7 +83,7 @@ export const BrandComparisonNav = memo(function BrandComparisonNav({
         aria-label="제조사별 결함 가이드 빠른 전환"
         className="p-0.5 bg-slate-100/90 rounded-2xl border border-slate-200 shadow-inner max-w-full"
       >
-        <ul className="flex table-scroll-container gap-1.5 list-none p-1 m-0 w-full max-w-full overflow-x-auto" role="list">
+        <ul className="flex table-scroll-container gap-1.5 list-none p-1.5 m-0 w-full max-w-full overflow-x-auto" role="list">
           {BRAND_PAGES.map((brand) => {
             const isActive = brand.key === currentBrand;
             const accessibleLabel =

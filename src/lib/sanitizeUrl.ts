@@ -166,7 +166,7 @@ export interface SanitizeUrlOptions {
 /**
  * Dangerous parameter keys and expressions associated with Prototype Pollution attacks.
  */
-export const PROTOTYPE_POLLUTION_REGEX = /(?:^|[.[\]\s])(?:__proto__|constructor|prototype|Object\.prototype)(?:[.[\]\s]|$)/i;
+export const PROTOTYPE_POLLUTION_REGEX = /(?:^|[.[\]\s'"])(?:__proto__|constructor|prototype|Object\.prototype)(?:[.[\]\s'"]|$)/i;
 
 /**
  * Decodes HTML entities (numeric decimal/hex and named entities) to uncover obfuscated URI schemes.
@@ -449,7 +449,7 @@ export function parseSafeQueryParams(input?: unknown): Record<string, string> {
 export function extractHostname(urlOrHost?: unknown): string {
   if (!urlOrHost || typeof urlOrHost !== 'string') return '';
   const trimmed = urlOrHost.trim();
-  if (!trimmed || trimmed.includes('\\')) return '';
+  if (!trimmed || trimmed.includes('\\') || trimmed.startsWith('/')) return '';
 
   // Bare hostname without protocol or slashes
   if (!trimmed.includes('/') && !trimmed.includes(':') && !trimmed.includes('@') && /^[a-zA-Z0-9.\-]+$/.test(trimmed)) {
@@ -719,6 +719,86 @@ export function sanitizeText(text?: unknown): string {
     .trim();
 }
 
+const EXECUTABLE_BLOCK_TAGS = ['script', 'style', 'iframe', 'object', 'embed', 'svg', 'template'] as const;
+
+/**
+ * Strips `<tag ...>...</tag>` blocks in strictly O(N) time without catastrophic regex backtracking.
+ */
+function stripTagBlock(str: string, tagName: string): string {
+  const openRe = new RegExp(`<${tagName}\\b`, 'gi');
+  const closeRe = new RegExp(`</${tagName}\\s*>`, 'gi');
+  let result = '';
+  let cursor = 0;
+
+  while (true) {
+    openRe.lastIndex = cursor;
+    const openMatch = openRe.exec(str);
+    if (!openMatch) break;
+
+    closeRe.lastIndex = openMatch.index + openMatch[0].length;
+    const closeMatch = closeRe.exec(str);
+    if (!closeMatch) break;
+
+    result += str.slice(cursor, openMatch.index);
+    cursor = closeMatch.index + closeMatch[0].length;
+  }
+
+  if (cursor === 0) return str;
+  return result + str.slice(cursor);
+}
+
+function stripExecutableBlocks(str: string): string {
+  if (!str.includes('</')) return str;
+  let current = str;
+  for (const tag of EXECUTABLE_BLOCK_TAGS) {
+    current = stripTagBlock(current, tag);
+    if (!current.includes('</')) break;
+  }
+  return current;
+}
+
+/**
+ * Strips `<...>` tag pairs (matching `/<[^>]+>/g`) in strictly O(N) time,
+ * avoiding polynomial backtracking on inputs with many unclosed `<` characters.
+ */
+function stripAngleTagPairs(str: string): string {
+  if (!str.includes('<') || !str.includes('>')) return str;
+  let result = '';
+  let cursor = 0;
+
+  while (cursor < str.length) {
+    const openIdx = str.indexOf('<', cursor);
+    if (openIdx === -1) break;
+
+    const closeIdx = str.indexOf('>', openIdx + 1);
+    if (closeIdx === -1) break;
+
+    if (closeIdx === openIdx + 1) {
+      result += str.slice(cursor, openIdx + 1);
+      cursor = openIdx + 1;
+    } else {
+      result += str.slice(cursor, openIdx);
+      cursor = closeIdx + 1;
+    }
+  }
+
+  if (cursor === 0) return str;
+  return result + str.slice(cursor);
+}
+
+/**
+ * Strips trailing unclosed `<tag...` after the last `>` in strictly O(N) time.
+ */
+function stripTrailingUnclosedTag(str: string): string {
+  const lastGt = str.lastIndexOf('>');
+  const searchFrom = lastGt === -1 ? 0 : lastGt + 1;
+  const tail = str.slice(searchFrom);
+  if (!tail.includes('<')) return str;
+  const match = /<[a-zA-Z\/!?][^>]*$/.exec(tail);
+  if (!match) return str;
+  return str.slice(0, searchFrom + match.index);
+}
+
 /**
  * Sanitizes and strips HTML tags from untrusted text (verbatim quotes, forum posts, defect titles, and summaries),
  * eliminating XSS injection vectors, neutralizing executable script/style/iframe blocks, decoding HTML entities,
@@ -733,20 +813,14 @@ export function stripHtmlTags(input?: unknown): string {
   str = sanitizeText(str);
 
   // 2. Strip executable and container elements including their inner content
-  str = str.replace(/<script\b[^<]*(?:(?!<\/script\s*>)<[^<]*)*<\/script\s*>/gi, '');
-  str = str.replace(/<style\b[^<]*(?:(?!<\/style\s*>)<[^<]*)*<\/style\s*>/gi, '');
-  str = str.replace(/<iframe\b[^<]*(?:(?!<\/iframe\s*>)<[^<]*)*<\/iframe\s*>/gi, '');
-  str = str.replace(/<object\b[^<]*(?:(?!<\/object\s*>)<[^<]*)*<\/object\s*>/gi, '');
-  str = str.replace(/<embed\b[^<]*(?:(?!<\/embed\s*>)<[^<]*)*<\/embed\s*>/gi, '');
-  str = str.replace(/<svg\b[^<]*(?:(?!<\/svg\s*>)<[^<]*)*<\/svg\s*>/gi, '');
-  str = str.replace(/<template\b[^<]*(?:(?!<\/template\s*>)<[^<]*)*<\/template\s*>/gi, '');
+  str = stripExecutableBlocks(str);
 
   // 3. Convert breaks and block-closing tags to clean newlines
   str = str.replace(/<br\s*\/?>/gi, '\n');
   str = str.replace(/<\/(?:p|div|tr|li|h[1-6]|blockquote)>/gi, '\n');
 
   // 4. Strip all remaining HTML tags
-  str = str.replace(/<[^>]+>/g, '');
+  str = stripAngleTagPairs(str);
 
   // 5. Decode common HTML entities (&quot;, &apos;, &amp;, &lt;, &gt;, &nbsp;, decimal, and hex entities)
   str = decodeHtmlEntities(str);
@@ -755,15 +829,9 @@ export function stripHtmlTags(input?: unknown): string {
   let prevPass = '';
   while (str.includes('<') && str !== prevPass) {
     prevPass = str;
-    str = str.replace(/<script\b[^<]*(?:(?!<\/script\s*>)<[^<]*)*<\/script\s*>/gi, '');
-    str = str.replace(/<style\b[^<]*(?:(?!<\/style\s*>)<[^<]*)*<\/style\s*>/gi, '');
-    str = str.replace(/<iframe\b[^<]*(?:(?!<\/iframe\s*>)<[^<]*)*<\/iframe\s*>/gi, '');
-    str = str.replace(/<object\b[^<]*(?:(?!<\/object\s*>)<[^<]*)*<\/object\s*>/gi, '');
-    str = str.replace(/<embed\b[^<]*(?:(?!<\/embed\s*>)<[^<]*)*<\/embed\s*>/gi, '');
-    str = str.replace(/<svg\b[^<]*(?:(?!<\/svg\s*>)<[^<]*)*<\/svg\s*>/gi, '');
-    str = str.replace(/<template\b[^<]*(?:(?!<\/template\s*>)<[^<]*)*<\/template\s*>/gi, '');
-    str = str.replace(/<[^>]+>/g, '');
-    str = str.replace(/<[a-zA-Z\/!?][^>]*$/g, '');
+    str = stripExecutableBlocks(str);
+    str = stripAngleTagPairs(str);
+    str = stripTrailingUnclosedTag(str);
   }
 
   // 7. Neutralize any stray event handler attributes (e.g., onmouseover=, onerror=, onload=) or javascript: schemes

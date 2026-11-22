@@ -6,6 +6,8 @@ for community forum web scrapers (BobaeDream, DCInside, etc.).
 from __future__ import annotations
 
 import abc
+from collections import OrderedDict
+import copy
 import html
 import json
 import logging
@@ -17,7 +19,7 @@ import urllib.parse
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
-from utils.http_client import SafeHttpClient, is_safe_url
+from utils.http_client import SafeHttpClient, is_safe_url, robust_decode
 
 logger = logging.getLogger("BaseCrawler")
 
@@ -101,8 +103,8 @@ def _normalize_limit(limit: Any) -> Optional[int]:
     return int(num)
 
 
-def _normalize_pages(pages: Any, default: int = 1) -> int:
-    """Normalize a page count into an integer >= 1."""
+def _normalize_pages(pages: Any, default: int = 1, max_pages: int = 1000) -> int:
+    """Normalize a page count into an integer in [1, max_pages]."""
     if pages is None or isinstance(pages, bool):
         return default
     try:
@@ -111,7 +113,7 @@ def _normalize_pages(pages: Any, default: int = 1) -> int:
         return default
     if not math.isfinite(num) or num < 1:
         return default
-    return max(1, int(num))
+    return min(max_pages, max(1, int(num)))
 
 
 class BaseCrawler(abc.ABC):
@@ -135,7 +137,7 @@ class BaseCrawler(abc.ABC):
         self._client_closed = False
         self.enable_cache = enable_cache
         self.cache_fallback = cache_fallback
-        self._post_cache: Dict[str, Dict[str, Any]] = {}
+        self._post_cache: OrderedDict[str, Dict[str, Any]] = OrderedDict()
         self._cache_lock = threading.RLock()
 
         # Resolve explicit connect and read timeouts
@@ -225,15 +227,16 @@ class BaseCrawler(abc.ABC):
             eff_url = f"{base_scheme}:{eff_url}"
         elif not eff_url.lower().startswith(("http://", "https://")):
             if eff_base and isinstance(eff_base, str):
-                base_clean = eff_base.strip().rstrip("/")
-                path_clean = eff_url.lstrip("/")
-                eff_url = f"{base_clean}/{path_clean}"
+                eff_url = urllib.parse.urljoin(eff_base.strip(), eff_url)
 
         try:
             parsed_out = urllib.parse.urlsplit(eff_url)
+            _ = parsed_out.port
         except ValueError:
             return None
-        if parsed_out.scheme and parsed_out.scheme.lower() not in ("http", "https"):
+        if not parsed_out.scheme or parsed_out.scheme.lower() not in ("http", "https"):
+            return None
+        if not parsed_out.hostname or any(c.isspace() for c in (parsed_out.netloc or "")):
             return None
         if _has_unsafe_authority(parsed_out):
             return None
@@ -270,21 +273,34 @@ class BaseCrawler(abc.ABC):
         )
 
     def _store_cached_post(self, post_url: str, detail: Dict[str, Any]) -> None:
-        """Store parsed post detail in bounded in-memory cache when caching is enabled."""
+        """Store parsed post detail in bounded LRU in-memory cache when caching is enabled."""
         if not self.enable_cache or not post_url or not isinstance(detail, dict):
             return
+        if MAX_POST_CACHE_SIZE <= 0:
+            return
         with self._cache_lock:
-            if post_url not in self._post_cache and len(self._post_cache) >= MAX_POST_CACHE_SIZE:
-                oldest_key = next(iter(self._post_cache))
-                del self._post_cache[oldest_key]
-            self._post_cache[post_url] = detail
+            if post_url in self._post_cache:
+                self._post_cache.move_to_end(post_url)
+            while len(self._post_cache) >= MAX_POST_CACHE_SIZE:
+                self._post_cache.popitem(last=False)
+            self._post_cache[post_url] = copy.deepcopy(detail)
 
     def _fallback_cached_post(self, post_url: str) -> Optional[Dict[str, Any]]:
         """Retrieve cached post detail for fallback when cache_fallback is enabled."""
-        if not self.cache_fallback or not post_url:
+        if not self.cache_fallback or not post_url or not isinstance(post_url, str):
             return None
+        raw_key = post_url.strip()
         with self._cache_lock:
-            return self._post_cache.get(post_url)
+            if raw_key in self._post_cache:
+                if isinstance(self._post_cache, OrderedDict):
+                    self._post_cache.move_to_end(raw_key)
+                return copy.deepcopy(self._post_cache[raw_key])
+            norm_key = self._normalize_fetch_url(raw_key)
+            if norm_key and norm_key in self._post_cache:
+                if isinstance(self._post_cache, OrderedDict):
+                    self._post_cache.move_to_end(norm_key)
+                return copy.deepcopy(self._post_cache[norm_key])
+        return None
 
     def get_cached_post(self, post_url: str) -> Optional[Dict[str, Any]]:
         """Retrieve cached post detail if present."""
@@ -293,10 +309,14 @@ class BaseCrawler(abc.ABC):
         raw_key = post_url.strip()
         with self._cache_lock:
             if raw_key in self._post_cache:
-                return self._post_cache[raw_key]
+                if isinstance(self._post_cache, OrderedDict):
+                    self._post_cache.move_to_end(raw_key)
+                return copy.deepcopy(self._post_cache[raw_key])
             norm_key = self._normalize_fetch_url(raw_key)
             if norm_key and norm_key in self._post_cache:
-                return self._post_cache[norm_key]
+                if isinstance(self._post_cache, OrderedDict):
+                    self._post_cache.move_to_end(norm_key)
+                return copy.deepcopy(self._post_cache[norm_key])
         return None
 
     def clear_post_cache(self) -> None:
@@ -564,6 +584,9 @@ class BaseCrawler(abc.ABC):
         if status == 429:
             logger.warning(f"Rate-limited (HTTP 429) fetching post {eff_url}. Degrading gracefully.")
             return self._fallback_cached_post(eff_url)
+
+        if isinstance(text, (bytes, bytearray, memoryview)):
+            text = robust_decode(text)
 
         if status != 200 or not text:
             logger.warning(f"Failed to fetch post: {eff_url} (status: {status})")

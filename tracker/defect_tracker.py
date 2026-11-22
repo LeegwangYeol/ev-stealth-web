@@ -24,6 +24,34 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 logger = logging.getLogger("defect_tracker")
 
+_SEVERITY_TIER_MAP: Dict[str, float] = {
+    "CRITICAL": 9.0,
+    "HIGH": 7.0,
+    "WARNING": 7.0,
+    "MEDIUM": 5.0,
+    "CAUTION": 4.0,
+    "LOW": 3.0,
+    "INFO": 1.0,
+}
+
+
+def _extract_category(obj: Any, uppercase: bool = True, allow_non_str: bool = False) -> str:
+    """Extract normalized defect category, falling back across keys if blank/whitespace."""
+    for key in ("defect_category", "category"):
+        raw_cat = _extract_val(obj, key)
+        raw_cat = getattr(raw_cat, "value", raw_cat)
+        if raw_cat is None:
+            continue
+        if isinstance(raw_cat, str):
+            stripped = raw_cat.strip()
+            if stripped:
+                return stripped.upper() if uppercase else stripped
+        elif allow_non_str:
+            stripped = str(raw_cat).strip()
+            if stripped:
+                return stripped.upper() if uppercase else stripped
+    return "UNKNOWN"
+
 
 def _extract_val(obj: Any, key: str, default: Any = None) -> Any:
     """Safely extract field from either a dict, a domain object, or a sequence."""
@@ -364,12 +392,7 @@ class DefectTracker:
         """Pre-filter and index defect reports into category buckets for O(1) candidate lookup."""
         self._category_index.clear()
         for r in reports:
-            raw_cat = _extract_val(r, "defect_category") or _extract_val(r, "category")
-            raw_cat = getattr(raw_cat, "value", raw_cat)
-            if raw_cat and isinstance(raw_cat, str) and raw_cat.strip():
-                cat_norm = raw_cat.upper().strip()
-            else:
-                cat_norm = "UNKNOWN"
+            cat_norm = _extract_category(r, uppercase=True, allow_non_str=False)
             if cat_norm not in self._category_index:
                 self._category_index[cat_norm] = []
             self._category_index[cat_norm].append(r)
@@ -553,9 +576,7 @@ class DefectTracker:
         for r in candidate_pool:
             # Category filter (re-verify for defensive assurance, normalizing missing/None to UNKNOWN)
             if cat_upper:
-                raw_cat = _extract_val(r, "defect_category") or _extract_val(r, "category")
-                raw_cat = getattr(raw_cat, "value", raw_cat)
-                item_cat = (raw_cat.upper().strip() if (raw_cat and isinstance(raw_cat, str) and raw_cat.strip()) else "UNKNOWN")
+                item_cat = _extract_category(r, uppercase=True, allow_non_str=False)
                 if item_cat != cat_upper:
                     continue
 
@@ -585,16 +606,7 @@ class DefectTracker:
                     raw_sev = _extract_val(r, "severity") or _extract_val(r, "severity_tier") or ""
                     raw_sev = getattr(raw_sev, "value", raw_sev)
                     raw_tier = str(raw_sev).strip().upper()
-                    tier_map = {
-                        "CRITICAL": 9.0,
-                        "HIGH": 7.0,
-                        "WARNING": 7.0,
-                        "MEDIUM": 5.0,
-                        "CAUTION": 4.0,
-                        "LOW": 3.0,
-                        "INFO": 1.0,
-                    }
-                    effective_sev = tier_map.get(raw_tier, 0.0)
+                    effective_sev = _SEVERITY_TIER_MAP.get(raw_tier, 0.0)
 
                 if effective_sev < norm_min_sev:
                     continue
@@ -651,13 +663,26 @@ class DefectTracker:
             return default if val is None else val
 
         full_data: Optional[Dict[str, Any]] = None
-        if (
+        if file_path is not None and not str(file_path).strip():
+            full_data = {"reports": [], "statistics": {}}
+        elif (
             "load_full_report_data" not in self.__dict__
             and type(self).load_full_report_data is DefectTracker.load_full_report_data
         ):
             self._ensure_reports_loaded(file_path=file_path, copy_dicts=False)
+            resolved_req_path: Optional[Path] = None
+            if file_path is not None:
+                try:
+                    resolved_req_path = Path(file_path).resolve()
+                except OSError:
+                    resolved_req_path = Path(file_path)
             with self._cache_lock:
-                full_data = self._cached_full_data
+                target_mismatch = (
+                    (resolved_req_path is not None and self._cached_reports_path != resolved_req_path)
+                    or (resolved_req_path is None and not self._cached_is_primary)
+                )
+                if not target_mismatch:
+                    full_data = self._cached_full_data
         if full_data is None:
             full_data = self.load_full_report_data(file_path=file_path)
         stats = _get_val(full_data, "statistics")
@@ -731,9 +756,7 @@ class DefectTracker:
                     reports = _get_val(full_data, "reports", [])
                     if isinstance(reports, list):
                         for r in reports:
-                            raw_cat = _get_val(r, "defect_category", None) or _get_val(r, "category", None)
-                            raw_cat = getattr(raw_cat, "value", raw_cat)
-                            cat = str(raw_cat).strip() if (raw_cat and str(raw_cat).strip()) else "UNKNOWN"
+                            cat = _extract_category(r, uppercase=False, allow_non_str=True)
                             cat_dist[cat] = cat_dist.get(cat, 0) + 1
 
                 stat_copy["category_distribution"] = cat_dist
@@ -750,11 +773,7 @@ class DefectTracker:
         category_counts: Dict[str, int] = {}
 
         for r in reports:
-            raw_cat = _get_val(r, "defect_category", None)
-            if raw_cat is None:
-                raw_cat = _get_val(r, "category", None)
-            raw_cat = getattr(raw_cat, "value", raw_cat)
-            cat = str(raw_cat).strip() if (raw_cat and str(raw_cat).strip()) else "UNKNOWN"
+            cat = _extract_category(r, uppercase=False, allow_non_str=True)
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
             dsi = _get_val(r, "severity_index")
@@ -915,11 +934,16 @@ class DefectTracker:
 
             known_paths: List[Path] = [p for p in [root_path, web_path, public_path] if p is not None]
             candidate_paths: List[Path] = [p for p in known_paths if p.exists()]
-            try:
-                candidate_paths.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-            except Exception:
-                pass
 
+            def _safe_mtime(p: Path) -> float:
+                try:
+                    return p.stat().st_mtime
+                except OSError:
+                    return -1.0
+
+            candidate_paths.sort(key=_safe_mtime, reverse=True)
+
+            quarantined_any = False
             source_path: Optional[Path] = None
             for cand in candidate_paths:
                 if is_corrupted_or_quarantined_filename(cand):
@@ -928,7 +952,8 @@ class DefectTracker:
                     source_path = cand
                     break
                 elif quarantine_corrupted:
-                    quarantine_corrupted_file(cand)
+                    if quarantine_corrupted_file(cand) is not None:
+                        quarantined_any = True
 
             if not source_path:
                 logger.error(
@@ -975,7 +1000,8 @@ class DefectTracker:
 
                         if not self.validate_report_file(tgt):
                             if quarantine_corrupted:
-                                quarantine_corrupted_file(tgt)
+                                if quarantine_corrupted_file(tgt) is not None:
+                                    quarantined_any = True
 
                     temp_name = None
                     try:
@@ -1021,7 +1047,7 @@ class DefectTracker:
                             except OSError:
                                 pass
 
-        if written_paths:
+        if written_paths or quarantined_any:
             self.invalidate_cache()
 
         deduped_written: List[str] = []

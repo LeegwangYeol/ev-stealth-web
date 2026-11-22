@@ -288,11 +288,124 @@ const CURRENCY_STRIP_RE = /krw|[,원₩\s]/gi;
 const KO_COLLATOR = new Intl.Collator('ko');
 const DEFAULT_COLLATOR = new Intl.Collator();
 
+interface RegionLookupIndex {
+  length: number;
+  first: RegionEntry | undefined;
+  last: RegionEntry | undefined;
+  idOrIsoMap: Map<string, RegionEntry>;
+  exactAnyMap: Map<string, RegionEntry>;
+  strippedKoMap: Map<string, RegionEntry>;
+}
+
+interface ModelLookupIndex {
+  length: number;
+  first: PopularModelEntry | undefined;
+  last: PopularModelEntry | undefined;
+  exactMap: Map<string, PopularModelEntry>;
+  cleanExactMap: Map<string, PopularModelEntry>;
+}
+
+const REGION_LIST_INDEX_CACHE = new WeakMap<readonly RegionEntry[], RegionLookupIndex>();
+const MODEL_LIST_INDEX_CACHE = new WeakMap<readonly PopularModelEntry[], ModelLookupIndex>();
+
+function getRegionLookupIndex(regions: readonly RegionEntry[]): RegionLookupIndex {
+  const len = regions.length;
+  const first = len > 0 ? regions[0] : undefined;
+  const last = len > 0 ? regions[len - 1] : undefined;
+  const cached = REGION_LIST_INDEX_CACHE.get(regions);
+  if (cached && cached.length === len && cached.first === first && cached.last === last) {
+    return cached;
+  }
+
+  const idOrIsoMap = new Map<string, RegionEntry>();
+  const exactAnyMap = new Map<string, RegionEntry>();
+  const strippedKoMap = new Map<string, RegionEntry>();
+
+  for (let i = 0; i < len; i++) {
+    const r = regions[i];
+    if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
+    const rid = typeof r.region_id === 'string' ? r.region_id.toLowerCase() : '';
+    const iso = typeof r.iso_code === 'string' ? r.iso_code.toLowerCase() : '';
+    const ko = typeof r.name_ko === 'string' ? r.name_ko.toLowerCase() : '';
+    const en = typeof r.name_en === 'string' ? r.name_en.toLowerCase() : '';
+
+    if (rid) {
+      if (!idOrIsoMap.has(rid)) idOrIsoMap.set(rid, r);
+      if (!exactAnyMap.has(rid)) exactAnyMap.set(rid, r);
+    }
+    if (iso) {
+      if (!idOrIsoMap.has(iso)) idOrIsoMap.set(iso, r);
+      if (!exactAnyMap.has(iso)) exactAnyMap.set(iso, r);
+    }
+    if (ko && !exactAnyMap.has(ko)) exactAnyMap.set(ko, r);
+    if (en && !exactAnyMap.has(en)) exactAnyMap.set(en, r);
+    if (ko) {
+      const rStripped = ko.replace(REGION_SUFFIX_RE, '');
+      if (rStripped && !strippedKoMap.has(rStripped)) {
+        strippedKoMap.set(rStripped, r);
+      }
+    }
+  }
+
+  const index: RegionLookupIndex = {
+    length: len,
+    first,
+    last,
+    idOrIsoMap,
+    exactAnyMap,
+    strippedKoMap,
+  };
+  REGION_LIST_INDEX_CACHE.set(regions, index);
+  return index;
+}
+
+function getModelLookupIndex(models: readonly PopularModelEntry[]): ModelLookupIndex {
+  const len = models.length;
+  const first = len > 0 ? models[0] : undefined;
+  const last = len > 0 ? models[len - 1] : undefined;
+  const cached = MODEL_LIST_INDEX_CACHE.get(models);
+  if (cached && cached.length === len && cached.first === first && cached.last === last) {
+    return cached;
+  }
+
+  const exactMap = new Map<string, PopularModelEntry>();
+  const cleanExactMap = new Map<string, PopularModelEntry>();
+
+  for (let i = 0; i < len; i++) {
+    const m = models[i];
+    if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
+    const idNorm = typeof m.model_id === 'string' ? m.model_id.trim().toLowerCase() : '';
+    const koNorm = typeof m.name_ko === 'string' ? m.name_ko.trim().toLowerCase() : '';
+
+    if (idNorm && !exactMap.has(idNorm)) exactMap.set(idNorm, m);
+    if (koNorm && !exactMap.has(koNorm)) exactMap.set(koNorm, m);
+    if (idNorm) {
+      const cleanId = idNorm.replace(MODEL_CLEAN_RE, '');
+      if (cleanId && !cleanExactMap.has(cleanId)) cleanExactMap.set(cleanId, m);
+    }
+    if (koNorm) {
+      const cleanKo = koNorm.replace(MODEL_CLEAN_RE, '');
+      if (cleanKo && !cleanExactMap.has(cleanKo)) cleanExactMap.set(cleanKo, m);
+    }
+  }
+
+  const index: ModelLookupIndex = {
+    length: len,
+    first,
+    last,
+    exactMap,
+    cleanExactMap,
+  };
+  MODEL_LIST_INDEX_CACHE.set(models, index);
+  return index;
+}
+
 /**
  * Pure region resolver from a supplied array of regions.
  * Matches by region_id, iso_code, Korean name, English name, canonical alias,
  * or stripped administrative suffix.
- * Defensively guards against missing properties or non-string attributes.
+ * Uses a WeakMap-cached index for O(1) exact and alias lookups while preserving
+ * exact fallback semantics for partial substring queries.
  */
 export function getRegionByIdFromList(
   regions: readonly RegionEntry[] | undefined,
@@ -303,7 +416,9 @@ export function getRegionByIdFromList(
   const normalized = trimmed.toLowerCase();
   if (!normalized) return undefined;
 
-  // 1. Direct alias resolution
+  const index = getRegionLookupIndex(regions);
+
+  // 1. Direct alias resolution (O(1))
   const rawAlias = Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, normalized)
     ? REGION_ALIAS_MAP[normalized]
     : Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, trimmed)
@@ -311,31 +426,13 @@ export function getRegionByIdFromList(
     : undefined;
   const aliasedId = typeof rawAlias === 'string' ? rawAlias.toLowerCase() : undefined;
   if (aliasedId) {
-    for (let i = 0; i < regions.length; i++) {
-      const r = regions[i];
-      if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
-      if (
-        (typeof r.region_id === 'string' && r.region_id.toLowerCase() === aliasedId) ||
-        (typeof r.iso_code === 'string' && r.iso_code.toLowerCase() === aliasedId)
-      ) {
-        return r;
-      }
-    }
+    const aliasedMatch = index.idOrIsoMap.get(aliasedId);
+    if (aliasedMatch) return aliasedMatch;
   }
 
-  // 2. Direct exact match on ID, ISO code, or localized names
-  for (let i = 0; i < regions.length; i++) {
-    const r = regions[i];
-    if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
-    if (
-      (typeof r.region_id === 'string' && r.region_id.toLowerCase() === normalized) ||
-      (typeof r.iso_code === 'string' && r.iso_code.toLowerCase() === normalized) ||
-      (typeof r.name_ko === 'string' && r.name_ko.toLowerCase() === normalized) ||
-      (typeof r.name_en === 'string' && r.name_en.toLowerCase() === normalized)
-    ) {
-      return r;
-    }
-  }
+  // 2. Direct exact match on ID, ISO code, or localized names (O(1))
+  const exactMatch = index.exactAnyMap.get(normalized);
+  if (exactMatch) return exactMatch;
 
   // 3. 2-letter provincial abbreviation / stripped administrative suffix match
   const stripped = normalized.replace(REGION_SUFFIX_RE, '');
@@ -345,16 +442,12 @@ export function getRegionByIdFromList(
       : undefined;
     const strippedAliasedId = typeof rawStrippedAlias === 'string' ? rawStrippedAlias.toLowerCase() : undefined;
     if (strippedAliasedId) {
-      for (let i = 0; i < regions.length; i++) {
-        const r = regions[i];
-        if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
-        if (
-          (typeof r.region_id === 'string' && r.region_id.toLowerCase() === strippedAliasedId) ||
-          (typeof r.iso_code === 'string' && r.iso_code.toLowerCase() === strippedAliasedId)
-        ) {
-          return r;
-        }
-      }
+      const strippedAliasMatch = index.idOrIsoMap.get(strippedAliasedId);
+      if (strippedAliasMatch) return strippedAliasMatch;
+    }
+
+    if (stripped.length < 2) {
+      return index.strippedKoMap.get(stripped);
     }
 
     for (let i = 0; i < regions.length; i++) {
@@ -365,8 +458,8 @@ export function getRegionByIdFromList(
       const rStripped = lowerKo.replace(REGION_SUFFIX_RE, '');
       if (
         (rStripped && rStripped === stripped) ||
-        (stripped.length >= 2 && lowerKo.includes(stripped)) ||
-        (rStripped && stripped.length >= 2 && stripped.includes(rStripped))
+        lowerKo.includes(stripped) ||
+        (rStripped && stripped.includes(rStripped))
       ) {
         return r;
       }
@@ -379,7 +472,7 @@ export function getRegionByIdFromList(
 /**
  * Pure model resolver from a supplied array of popular models.
  * Supports whitespace-, hyphen-, and punctuation-normalized queries.
- * Defensively guards against missing properties or non-string attributes.
+ * Uses a WeakMap-cached index for O(1) exact and normalized-ID lookups.
  */
 export function getModelByIdFromList(
   models: readonly PopularModelEntry[] | undefined,
@@ -389,17 +482,11 @@ export function getModelByIdFromList(
   const normalized = modelId.trim().toLowerCase();
   if (!normalized) return undefined;
 
-  // 1a. Exact match on model_id or name_ko
-  for (let i = 0; i < models.length; i++) {
-    const m = models[i];
-    if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
-    if (
-      (typeof m.model_id === 'string' && m.model_id.trim().toLowerCase() === normalized) ||
-      (typeof m.name_ko === 'string' && m.name_ko.trim().toLowerCase() === normalized)
-    ) {
-      return m;
-    }
-  }
+  const index = getModelLookupIndex(models);
+
+  // 1a. Exact match on model_id or name_ko (O(1))
+  const exactMatch = index.exactMap.get(normalized);
+  if (exactMatch) return exactMatch;
 
   // 1b. Substring match on name_ko
   for (let i = 0; i < models.length; i++) {
@@ -410,11 +497,13 @@ export function getModelByIdFromList(
     }
   }
 
-  // 2. Normalize by stripping whitespace, hyphens, and punctuation
+  // 2. Normalize by stripping whitespace, hyphens, and punctuation (O(1) exact)
   const cleanQuery = normalized.replace(MODEL_CLEAN_RE, '');
   if (!cleanQuery) return undefined;
 
-  let firstCleanSubstring: PopularModelEntry | undefined;
+  const cleanExactMatch = index.cleanExactMap.get(cleanQuery);
+  if (cleanExactMatch) return cleanExactMatch;
+
   for (let i = 0; i < models.length; i++) {
     const m = models[i];
     if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
@@ -424,18 +513,12 @@ export function getModelByIdFromList(
     const cleanKo = typeof m.name_ko === 'string'
       ? m.name_ko.toLowerCase().replace(MODEL_CLEAN_RE, '')
       : '';
-    if (cleanId === cleanQuery || cleanKo === cleanQuery) {
+    if ((cleanId && cleanId.includes(cleanQuery)) || (cleanKo && cleanKo.includes(cleanQuery))) {
       return m;
-    }
-    if (
-      firstCleanSubstring === undefined &&
-      ((cleanId && cleanId.includes(cleanQuery)) || (cleanKo && cleanKo.includes(cleanQuery)))
-    ) {
-      firstCleanSubstring = m;
     }
   }
 
-  return firstCleanSubstring;
+  return undefined;
 }
 
 // ==========================================
@@ -900,7 +983,7 @@ export function parseSubsidyNumber(
     ? (options.defaultKrw === 0 ? 0 : options.defaultKrw)
     : 0;
   const maxCap = typeof options?.maxKrw === 'number' && Number.isFinite(options.maxKrw) && options.maxKrw >= 0
-    ? options.maxKrw
+    ? (options.maxKrw === 0 ? 0 : options.maxKrw)
     : 10_000_000_000;
   const allowNeg = Boolean(options?.allowNegative);
 
@@ -1710,7 +1793,12 @@ export function calculateNetSubsidyPure(
   const maxLocal = parseFiniteNonNegNumber(passengerCategory?.max_local_subsidy_krw);
   let localSubsidyKrw = 0;
   if (nationalSubsidyKrw > 0 && maxLocal > 0) {
-    const calculated = Math.round(maxLocal * (nationalSubsidyKrw / 6_500_000));
+    const rawProduct = maxLocal * nationalSubsidyKrw;
+    const calculated = Math.round(
+      Number.isFinite(rawProduct)
+        ? rawProduct / 6_500_000
+        : maxLocal * (nationalSubsidyKrw / 6_500_000)
+    );
     localSubsidyKrw = Math.min(maxLocal, Math.max(0, Math.round(calculated / 10_000) * 10_000));
   }
 

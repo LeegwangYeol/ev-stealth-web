@@ -189,7 +189,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     # -----------------------------------------------------------------
     (re.compile(r"(?<![a-zA-Z0-9])(t4k|티사케이)(?![a-zA-Z0-9])", re.IGNORECASE), "T4K", BRAND_BYD),
     (re.compile(r"(아토\s*3|atto\s*3|atto3)", re.IGNORECASE), "Atto 3", BRAND_BYD),
-    (re.compile(r"(돌핀|dolphin)", re.IGNORECASE), "돌핀", BRAND_BYD),
+    (re.compile(r"((?<!엔)돌핀|dolphin)", re.IGNORECASE), "돌핀", BRAND_BYD),
     (re.compile(
         r"((?:byd|비야디)\s*(?:의\s*)?(?:신차\s*|전기차\s*|세단\s*)?(?:씰|seal)"
         r"|(?<!도어\s)(?<!도어)(?<!오일\s)(?<!오일)(?<!고무\s)(?<!고무)(?<!웨더스트립\s)(?<!웨더스트립)(?<!유리\s)(?<!유리)(?<!윈도우\s)(?<!윈도우)(?<!트렁크\s)(?<!트렁크)(?<!방수\s)(?<!방수)(?<!엔진\s)(?<!엔진)(?<!모터\s)(?<!모터)(?<!문짝\s)(?<!문짝)(?<!실리콘\s)(?<!실리콘)"

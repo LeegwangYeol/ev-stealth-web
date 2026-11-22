@@ -653,9 +653,9 @@ class TestCycle12FrontendHardening(unittest.TestCase):
         self.assertIn("evDiff", content)
         self.assertIn("iceDiff", content)
 
-        # Must style positive vs negative conditionally
-        self.assertIn("evDiff >= 0 ? 'text-emerald-700' : 'text-rose-600'", content)
-        self.assertIn("iceDiff >= 0 ? 'text-amber-800' : 'text-rose-600'", content)
+        # Must style positive vs negative conditionally (WCAG AA 5.72:1 rose-700, -0.0% guard)
+        self.assertIn("evDiff >= -0.049 ? 'text-emerald-700' : 'text-rose-700'", content)
+        self.assertIn("iceDiff >= -0.049 ? 'text-amber-800' : 'text-rose-700'", content)
 
         # Must not contain obsolete hardcoded static 3-year deltas
         self.assertNotIn("(depResult.adjustedResidualPct - 58)", content)

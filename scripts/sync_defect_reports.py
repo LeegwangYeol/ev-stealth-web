@@ -172,8 +172,11 @@ def build_composite_key(report: Dict[str, Any]) -> str:
 
 def get_report_primary_id(report: Dict[str, Any]) -> Optional[str]:
     """Extract report ID if valid and non-trivial."""
-    rep_id = str(report.get("id") or "").strip()
-    if rep_id and rep_id.lower() not in ("none", "null", "undefined", "0", ""):
+    raw_id = report.get("id")
+    if isinstance(raw_id, bool) or (isinstance(raw_id, float) and not math.isfinite(raw_id)):
+        return None
+    rep_id = str(raw_id or "").strip()
+    if rep_id and rep_id.lower() not in ("none", "null", "undefined", "0", "nan", "inf", "-inf", ""):
         return rep_id
     return None
 
@@ -256,17 +259,20 @@ def merge_report_records(existing: Dict[str, Any], incoming: Dict[str, Any]) -> 
         merged["slang_terms_detected"] = ex_terms
 
     # 4. Sentiment and Severity: retain maximum severity and highest negativity
-    ex_raw = merged.get("negativity_score")
-    if ex_raw is None:
-        ex_raw = merged.get("sentiment_score")
-    inc_raw = incoming.get("negativity_score")
-    if inc_raw is None:
-        inc_raw = incoming.get("sentiment_score")
-    ex_neg_opt = _safe_finite_float(ex_raw, None)
-    inc_neg = _safe_finite_float(inc_raw, None)
+    ex_neg_opt = _safe_finite_float(merged.get("negativity_score"), None)
+    if ex_neg_opt is None:
+        ex_neg_opt = _safe_finite_float(merged.get("sentiment_score"), None)
+    inc_neg = _safe_finite_float(incoming.get("negativity_score"), None)
+    if inc_neg is None:
+        inc_neg = _safe_finite_float(incoming.get("sentiment_score"), None)
     if inc_neg is not None and (ex_neg_opt is None or inc_neg > ex_neg_opt):
         merged["negativity_score"] = round(inc_neg, 4)
         merged["sentiment_score"] = round(inc_neg, 4)
+    elif ex_neg_opt is not None:
+        if _safe_finite_float(merged.get("negativity_score"), None) is None:
+            merged["negativity_score"] = round(ex_neg_opt, 4)
+        if _safe_finite_float(merged.get("sentiment_score"), None) is None:
+            merged["sentiment_score"] = round(ex_neg_opt, 4)
 
     severity_order = {"INFO": 0, "LOW": 1, "CAUTION": 2, "MEDIUM": 3, "WARNING": 4, "HIGH": 5, "CRITICAL": 6}
     ex_sev_key = str(merged.get("severity") or "").strip().upper()
@@ -373,7 +379,12 @@ def normalize_report_item(item: Dict[str, Any], default_idx: int = 1) -> Dict[st
 
     # Required: id (string)
     raw_id = item.get("id")
-    if raw_id is not None and str(raw_id).strip() not in ("", "none", "null", "undefined"):
+    is_valid_id_scalar = (
+        raw_id is not None
+        and not isinstance(raw_id, bool)
+        and not (isinstance(raw_id, float) and not math.isfinite(raw_id))
+    )
+    if is_valid_id_scalar and str(raw_id).strip().lower() not in ("", "none", "null", "undefined", "nan", "inf", "-inf"):
         normalized["id"] = str(raw_id).strip()
     else:
         # Generate deterministic stable ID from composite key
@@ -859,6 +870,11 @@ def sync_defect_reports(
         logger.info("[DRY-RUN] Defect reports synchronization completed with 0 writes.")
         return []
 
+    safe_lock_timeout_f = _safe_finite_float(lock_timeout, DEFAULT_LOCK_TIMEOUT)
+    safe_lock_timeout = max(0.1, safe_lock_timeout_f if safe_lock_timeout_f is not None else DEFAULT_LOCK_TIMEOUT)
+    safe_stale_timeout_f = _safe_finite_float(stale_timeout, DEFAULT_STALE_TIMEOUT)
+    safe_stale_timeout = max(1.0, safe_stale_timeout_f if safe_stale_timeout_f is not None else DEFAULT_STALE_TIMEOUT)
+
     # Prepare lock directory
     lock_dir = root_reports_path.parent
     lock_dir.mkdir(parents=True, exist_ok=True)
@@ -866,14 +882,14 @@ def sync_defect_reports(
 
     # Clean up stale locks automatically
     if cleanup_stale_lock_files is not None:
-        cleanup_stale_lock_files(lock_dir, prefix=(".sync_",), max_age_seconds=stale_timeout)
+        cleanup_stale_lock_files(lock_dir, prefix=(".sync_",), max_age_seconds=safe_stale_timeout)
         if web_reports_path.parent != lock_dir and web_reports_path.parent.is_dir():
-            cleanup_stale_lock_files(web_reports_path.parent, prefix=(".sync_",), max_age_seconds=stale_timeout)
+            cleanup_stale_lock_files(web_reports_path.parent, prefix=(".sync_",), max_age_seconds=safe_stale_timeout)
 
     written_paths: List[str] = []
 
     # Acquire advisory file lock
-    lock_ctx = FileLock(sync_lock_path, timeout=lock_timeout, stale_timeout=stale_timeout) if FileLock else None
+    lock_ctx = FileLock(sync_lock_path, timeout=safe_lock_timeout, stale_timeout=safe_stale_timeout) if FileLock else None
 
     with lock_ctx if lock_ctx else contextlib.nullcontext():
         # Discover and sort candidate source files
@@ -893,13 +909,21 @@ def sync_defect_reports(
             logger.error("No valid candidate defect report files found among %s. Aborting sync.", existing_candidates)
             return []
 
+        # Parse each valid source once and cache reports + metadata to avoid redundant disk reads
+        cached_sources: Dict[Path, Tuple[List[Dict[str, Any]], Dict[str, Any], float]] = {}
+        for cand in valid_sources:
+            try:
+                reps, meta = load_reports_from_file(cand)
+                cached_sources[cand] = (reps, meta, cand.stat().st_mtime)
+            except Exception as e:
+                logger.warning("Could not read valid candidate %s: %s", cand, e)
+
         # Sort candidate sources by report count (descending) and mtime (descending)
         def _source_weight(path: Path) -> Tuple[int, float]:
-            try:
-                reports, _ = load_reports_from_file(path)
-                return (len(reports), path.stat().st_mtime)
-            except Exception:
-                return (0, 0.0)
+            entry = cached_sources.get(path)
+            if entry is not None:
+                return (len(entry[0]), entry[2])
+            return (0, 0.0)
 
         valid_sources.sort(key=_source_weight, reverse=True)
         primary_source = valid_sources[0]
@@ -909,14 +933,20 @@ def sync_defect_reports(
         all_reports: List[Dict[str, Any]] = []
         combined_meta: Dict[str, Any] = {}
 
-        primary_reports, primary_meta = load_reports_from_file(primary_source)
+        if primary_source in cached_sources:
+            primary_reports, primary_meta, _ = cached_sources[primary_source]
+        else:
+            primary_reports, primary_meta = load_reports_from_file(primary_source)
         all_reports.extend(primary_reports)
         combined_meta.update(primary_meta)
 
         # Merge secondary valid sources if they contain unique reports
         for sec_source in valid_sources[1:]:
             try:
-                sec_reports, _ = load_reports_from_file(sec_source)
+                if sec_source in cached_sources:
+                    sec_reports, _, _ = cached_sources[sec_source]
+                else:
+                    sec_reports, _ = load_reports_from_file(sec_source)
                 all_reports.extend(sec_reports)
             except Exception as e:
                 logger.warning("Could not read secondary source %s: %s", sec_source, e)

@@ -8,6 +8,7 @@ Returns structured raw post dictionaries adhering to PROJECT.md § Interface Con
 
 from __future__ import annotations
 
+from collections import OrderedDict
 import datetime
 import html
 import logging
@@ -28,7 +29,7 @@ from crawlers.base_crawler import (
     _sanitize_referer,
     _unescape_url_entities,
 )
-from utils.http_client import SafeHttpClient, clean_html_text, encode_euc_kr_query
+from utils.http_client import SafeHttpClient, clean_html_text, encode_euc_kr_query, robust_decode
 
 logger = logging.getLogger("BobaeDreamCrawler")
 
@@ -113,7 +114,7 @@ def extract_container_content(html_str: str, tag_name: str, class_name: str) -> 
     masked = RE_SCRIPT_STYLE.sub(_repl, masked)
 
     pattern = re.compile(
-        rf"<{re.escape(tag_name)}\b[^>]*class\s*=\s*(?:[\"'][^\"']*\b{re.escape(class_name)}\b[^\"']*[\"']|{re.escape(class_name)}(?=[\s>]))[^>]*>",
+        rf"<{re.escape(tag_name)}\b[^>]*?(?<=\s)class\s*=\s*(?:[\"'][^\"']*\b{re.escape(class_name)}\b[^\"']*[\"']|{re.escape(class_name)}(?=[\s>]))[^>]*>",
         re.IGNORECASE,
     )
     match = pattern.search(masked)
@@ -383,28 +384,35 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
         except (ValueError, OverflowError):
             return now.isoformat()
 
-    # Case 4: "YYYY-MM-DD HH:MM:SS" or "YYYY.MM.DD (화) HH:MM" or "YYYY.M.D"
+    # Case 4: "YYYY-MM-DD HH:MM:SS" or "YYYY.MM.DD (화) 오후 HH:MM" or "YYYY.M.D"
     full_match = re.search(
-        r"(\d{4})[./\-\s]+(\d{1,2})[./\-\s]+(\d{1,2})(?:[\sT]*(?:\([월화수목금토일A-Za-z]+\))?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
+        r"(?<!\d)(\d{4})[./\-\s]+(\d{1,2})[./\-\s]+(\d{1,2})\.?(?:[\sT]*(?:\([월화수목금토일A-Za-z]+\))?\s*(?:(오전|오후|AM|PM)\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
         raw,
+        re.IGNORECASE,
     )
     if full_match:
         try:
             year = int(full_match.group(1))
             month = int(full_match.group(2))
             day = int(full_match.group(3))
-            hour = int(full_match.group(4)) if full_match.group(4) else 12
-            minute = int(full_match.group(5)) if full_match.group(5) else 0
-            second = int(full_match.group(6)) if full_match.group(6) else 0
+            meridiem = full_match.group(4).upper() if full_match.group(4) else None
+            hour = int(full_match.group(5)) if full_match.group(5) is not None else 12
+            if meridiem in ("오후", "PM") and hour < 12:
+                hour += 12
+            elif meridiem in ("오전", "AM") and hour == 12:
+                hour = 0
+            minute = int(full_match.group(6)) if full_match.group(6) is not None else 0
+            second = int(full_match.group(7)) if full_match.group(7) is not None else 0
             dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
             return dt.isoformat()
         except (ValueError, OverflowError):
             return now.isoformat()
 
-    # Case 5: "YY/MM/DD [HH:MM[:SS]]"
+    # Case 5: "YY/MM/DD [오전/오후] [HH:MM[:SS]]"
     yymmdd_match = re.search(
-        r"(\d{2})[./\-](\d{1,2})[./\-](\d{1,2})(?!\.\d)(?:[\sT]*(?:\([월화수목금토일A-Za-z]+\))?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
+        r"(?<!\d)(\d{2})[./\-](\d{1,2})[./\-](\d{1,2})(?!\.\d)(?:[\sT]*(?:\([월화수목금토일A-Za-z]+\))?\s*(?:(오전|오후|AM|PM)\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
         raw,
+        re.IGNORECASE,
     )
     if yymmdd_match:
         try:
@@ -412,9 +420,14 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
             year = 2000 + yy if yy < 70 else 1900 + yy
             month = int(yymmdd_match.group(2))
             day = int(yymmdd_match.group(3))
-            hour = int(yymmdd_match.group(4)) if yymmdd_match.group(4) else 12
-            minute = int(yymmdd_match.group(5)) if yymmdd_match.group(5) else 0
-            second = int(yymmdd_match.group(6)) if yymmdd_match.group(6) else 0
+            meridiem = yymmdd_match.group(4).upper() if yymmdd_match.group(4) else None
+            hour = int(yymmdd_match.group(5)) if yymmdd_match.group(5) is not None else 12
+            if meridiem in ("오후", "PM") and hour < 12:
+                hour += 12
+            elif meridiem in ("오전", "AM") and hour == 12:
+                hour = 0
+            minute = int(yymmdd_match.group(6)) if yymmdd_match.group(6) is not None else 0
+            second = int(yymmdd_match.group(7)) if yymmdd_match.group(7) is not None else 0
             dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
             return dt.isoformat()
         except (ValueError, OverflowError):
@@ -422,19 +435,33 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
 
     # Case 6: "MM/DD [HH:MM[:SS]]" or "MM.DD [HH:MM]"
     month_day_match = re.match(
-        r"^(\d{1,2})[./\-](\d{1,2})(?:[\sT]*(?:\([월화수목금토일A-Za-z]+\))?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?$",
+        r"^(\d{1,2})[./\-](\d{1,2})(?:[\sT]*(?:\([월화수목금토일A-Za-z]+\))?\s*(?:(오전|오후|AM|PM)\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?)?$",
         raw,
+        re.IGNORECASE,
     )
     if month_day_match:
         try:
             month = int(month_day_match.group(1))
             day = int(month_day_match.group(2))
-            hour = int(month_day_match.group(3)) if month_day_match.group(3) else 12
-            minute = int(month_day_match.group(4)) if month_day_match.group(4) else 0
-            second = int(month_day_match.group(5)) if month_day_match.group(5) else 0
-            # Year rollover guard: if crawling in Jan but post date is Nov/Dec, post belongs to previous year
+            meridiem = month_day_match.group(3).upper() if month_day_match.group(3) else None
+            hour = int(month_day_match.group(4)) if month_day_match.group(4) is not None else 12
+            if meridiem in ("오후", "PM") and hour < 12:
+                hour += 12
+            elif meridiem in ("오전", "AM") and hour == 12:
+                hour = 0
+            minute = int(month_day_match.group(5)) if month_day_match.group(5) is not None else 0
+            second = int(month_day_match.group(6)) if month_day_match.group(6) is not None else 0
+            # Year rollover guard: roll back year if month/day would land meaningfully in the future
             year = now.year - 1 if (now.month == 1 and month >= 11) else now.year
-            dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
+            try:
+                dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
+            except ValueError:
+                if month == 2 and day == 29:
+                    dt = datetime.datetime(now.year - 1, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
+                else:
+                    raise
+            if year == now.year and dt > now + datetime.timedelta(days=1):
+                dt = dt.replace(year=now.year - 1)
             return dt.isoformat()
         except (ValueError, OverflowError):
             return now.isoformat()
@@ -617,7 +644,7 @@ class BobaeDreamCrawler(BaseCrawler):
                 or "공지사항" in clean_title
                 or "<b>공지</b>" in raw_title_val
                 or '<b class="notice">' in raw_title_val
-                or re.match(r"^\s*\[?(?:공지|필독|운영안내)\]?", clean_title)
+                or re.match(r"^\s*(?:\[(?:공지|필독|운영안내)\]|(?:공지|필독|운영안내)(?:[:\s\]-]|$))", clean_title)
             ):
                 return
 
@@ -631,7 +658,7 @@ class BobaeDreamCrawler(BaseCrawler):
 
         # Resilient link pattern matching desktop, PHP script, and mobile view URLs
         link_pattern = re.compile(
-            r'<a\b[^>]*\bhref=["\']?([^"\'\s>]*view(?:\.php)?\?[^"\'\s>]*|[^"\'\s>]*/(?:bbs_view|view)/[^"\'\s>]*)["\']?[^>]*>(.*?)</a>',
+            r'<a\b[^>]*\bhref\s*=\s*["\']?([^"\'\s>]*view(?:\.php)?\?[^"\'\s>]*|[^"\'\s>]*/(?:bbs_view|view)/[^"\'\s>]*)["\']?[^>]*>(.*?)</a>',
             re.IGNORECASE | re.DOTALL,
         )
 
@@ -651,9 +678,9 @@ class BobaeDreamCrawler(BaseCrawler):
             post_no = no_match.group(1) or no_match.group(2)
 
             # Extract board code from query param or path
-            code_match = re.search(r"[?&]code=([a-zA-Z0-9_]+)", full_href, re.IGNORECASE)
+            code_match = re.search(r"[?&]code=([a-zA-Z0-9_-]+)", full_href, re.IGNORECASE)
             if not code_match:
-                code_match = re.search(r"/(?:bbs_view|list)/([a-zA-Z0-9_]+)/", full_href, re.IGNORECASE)
+                code_match = re.search(r"/(?:bbs_view|list)/([a-zA-Z0-9_-]+)/", full_href, re.IGNORECASE)
             extracted_code = code_match.group(1) if code_match else board_code
 
             _append_item(raw_href, post_no, extracted_code, raw_title)
@@ -669,21 +696,76 @@ class BobaeDreamCrawler(BaseCrawler):
 
         return items
 
+    @staticmethod
+    def _extract_balanced_matches(html_str: str, tag_name: str, open_pattern: re.Pattern[str]) -> List[str]:
+        """Extract inner HTML of all matched tags using balanced depth tracking."""
+        def _repl(m: re.Match[str]) -> str:
+            return " " * len(m.group(0))
+
+        masked = RE_HTML_COMMENTS.sub(_repl, html_str)
+        masked = RE_SCRIPT_STYLE.sub(_repl, masked)
+        tag_re = re.compile(rf"<(/?)({re.escape(tag_name)})\b([^>]*)>", re.IGNORECASE)
+        results: List[str] = []
+        pos = 0
+        while True:
+            match = open_pattern.search(masked, pos)
+            if not match:
+                break
+            if match.group(0).rstrip(">").rstrip().endswith("/"):
+                pos = match.end()
+                continue
+            start_idx = match.end()
+            depth = 1
+            end_idx = len(html_str)
+            next_pos = len(html_str)
+            for m in tag_re.finditer(masked, start_idx):
+                is_closing = bool(m.group(1))
+                tag_attrs = m.group(3)
+                if is_closing:
+                    depth -= 1
+                    if depth == 0:
+                        end_idx = m.start()
+                        next_pos = m.end()
+                        break
+                else:
+                    if tag_attrs and tag_attrs.rstrip().endswith("/"):
+                        continue
+                    depth += 1
+            results.append(html_str[start_idx:end_idx])
+            pos = next_pos
+        return results
+
     def parse_comments_html(self, comment_html: str) -> List[str]:
         """Parse comment strings from comment_list.php HTML snippet or detail page HTML."""
         comments: List[str] = []
         if not comment_html or not isinstance(comment_html, str):
             return comments
 
-        # Pattern 1: <dd id="cmt_..."> or <dd class="...comment...">
-        comment_matches = re.findall(r'<dd[^>]*class=["\'][^"\']*comment[^"\']*["\'][^>]*>(.*?)</dd>', comment_html, re.DOTALL | re.IGNORECASE)
+        # Pattern 1: <dd class="...comment..."> or <dd id="cmt_...">
+        comment_matches = self._extract_balanced_matches(
+            comment_html,
+            "dd",
+            re.compile(r'<dd\b[^>]*?(?<=\s)class\s*=\s*["\'][^"\']*comment[^"\']*["\'][^>]*>', re.IGNORECASE),
+        )
         if not comment_matches:
-            comment_matches = re.findall(r'<dd id=["\']cmt_\d+["\'][^>]*>(.*?)</dd>', comment_html, re.DOTALL | re.IGNORECASE)
+            comment_matches = self._extract_balanced_matches(
+                comment_html,
+                "dd",
+                re.compile(r'<dd\b[^>]*?(?<=\s)id\s*=\s*["\']cmt_\d+["\'][^>]*>', re.IGNORECASE),
+            )
         if not comment_matches:
-            # Pattern 2: comment body container
-            comment_matches = re.findall(r'<div class=["\'][^"\']*comment_memo[^"\']*["\'][^>]*>(.*?)</div>', comment_html, re.DOTALL | re.IGNORECASE)
+            # Pattern 2: comment body container (balanced for nested divs)
+            comment_matches = self._extract_balanced_matches(
+                comment_html,
+                "div",
+                re.compile(r'<div\b[^>]*?(?<=\s)class\s*=\s*["\'][^"\']*comment_memo[^"\']*["\'][^>]*>', re.IGNORECASE),
+            )
         if not comment_matches:
-            comment_matches = re.findall(r'<li[^>]*class=["\'][^"\']*comment[^"\']*["\'][^>]*>(.*?)</li>', comment_html, re.DOTALL | re.IGNORECASE)
+            comment_matches = self._extract_balanced_matches(
+                comment_html,
+                "li",
+                re.compile(r'<li\b[^>]*?(?<=\s)class\s*=\s*["\'][^"\']*comment[^"\']*["\'][^>]*>', re.IGNORECASE),
+            )
 
         for c_html in comment_matches:
             cleaned = clean_title_text(c_html)
@@ -707,7 +789,7 @@ class BobaeDreamCrawler(BaseCrawler):
 
         # Match load("/board_renew/bulletin/comment_list.php?...") or load("http...")
         match = re.search(
-            r'load\(["\']((?:https?://[^/"\']+)?/(?:board_renew|board|bulletin)/[^"\']*comment_list\.php\?[^"\']+)["\']',
+            r'load\(\s*["\']((?:https?://[^/"\']+)?/(?:board_renew|board|bulletin)/[^"\']*comment_list\.php\?[^"\']+)["\']',
             html_content,
             re.IGNORECASE,
         )
@@ -754,6 +836,8 @@ class BobaeDreamCrawler(BaseCrawler):
             )
             if resp and isinstance(resp, (tuple, list)) and len(resp) >= 2:
                 status, text = resp[0], resp[1]
+                if isinstance(text, (bytes, bytearray, memoryview)):
+                    text = robust_decode(text)
                 if status == 200 and text:
                     return self.parse_comments_html(text)
         except Exception as e:
@@ -793,9 +877,9 @@ class BobaeDreamCrawler(BaseCrawler):
 
         # Extract board code from post_url if present
         if norm_post_url:
-            url_code_match = re.search(r"[?&]code=([a-zA-Z0-9_]+)", norm_post_url, re.IGNORECASE)
+            url_code_match = re.search(r"[?&]code=([a-zA-Z0-9_-]+)", norm_post_url, re.IGNORECASE)
             if not url_code_match:
-                url_code_match = re.search(r"/(?:bbs_view|list)/([a-zA-Z0-9_]+)/", norm_post_url, re.IGNORECASE)
+                url_code_match = re.search(r"/(?:bbs_view|list)/([a-zA-Z0-9_-]+)/", norm_post_url, re.IGNORECASE)
             if url_code_match:
                 board_code = url_code_match.group(1)
 
@@ -834,11 +918,11 @@ class BobaeDreamCrawler(BaseCrawler):
 
         # 2. Title - resilient against attribute order, tag structures, and entities
         title = ""
-        title_match = re.search(r'<strong class=["\']title["\'][^>]*>(.*?)</strong>', html_content, re.DOTALL | re.IGNORECASE)
+        title_match = re.search(r'<strong\b(?=[^>]*\bclass=["\']?[^"\'>]*\btitle\b)[^>]*>(.*?)</strong>', html_content, re.DOTALL | re.IGNORECASE)
         if not title_match:
-            title_match = re.search(r'<dt[^>]*class=["\']tit["\'][^>]*>(.*?)</dt>', html_content, re.DOTALL | re.IGNORECASE)
+            title_match = re.search(r'<dt\b(?=[^>]*\bclass=["\']?[^"\'>]*\btit\b)[^>]*>(.*?)</dt>', html_content, re.DOTALL | re.IGNORECASE)
         if not title_match:
-            title_match = re.search(r'<h[1-3][^>]*class=["\'][^"\']*title[^"\']*["\'][^>]*>(.*?)</h[1-3]>', html_content, re.DOTALL | re.IGNORECASE)
+            title_match = re.search(r'<h[1-3]\b(?=[^>]*\bclass=["\']?[^"\'>]*title)[^>]*>(.*?)</h[1-3]>', html_content, re.DOTALL | re.IGNORECASE)
         if not title_match:
             title_match = re.search(r'<meta\b(?=[^>]*\bproperty=["\']og:title["\'])[^>]*\bcontent=["\']([^"\']*)["\']', html_content, re.IGNORECASE)
         if not title_match:
@@ -855,11 +939,11 @@ class BobaeDreamCrawler(BaseCrawler):
 
         # 3. Author & Date
         author = ""
-        author_match = re.search(r'<span class=["\']author["\'][^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
+        author_match = re.search(r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\bauthor\b)[^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
         if not author_match:
-            author_match = re.search(r'<span class=["\']userNick["\'][^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
+            author_match = re.search(r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\buserNick\b)[^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
         if not author_match:
-            author_match = re.search(r'<dt class=["\']writer["\'][^>]*>(.*?)</dt>', html_content, re.DOTALL | re.IGNORECASE)
+            author_match = re.search(r'<dt\b(?=[^>]*\bclass=["\']?[^"\'>]*\bwriter\b)[^>]*>(.*?)</dt>', html_content, re.DOTALL | re.IGNORECASE)
         if author_match:
             author = clean_title_text(author_match.group(1))
 
@@ -974,6 +1058,9 @@ class BobaeDreamCrawler(BaseCrawler):
             logger.warning(f"Rate-limited (HTTP 429) fetching BobaeDream post: {eff_url}. Degrading gracefully.")
             return self._fallback_cached_post(eff_url)
 
+        if isinstance(text, (bytes, bytearray, memoryview)):
+            text = robust_decode(text)
+
         if status != 200 or not text:
             logger.warning(f"Failed to fetch BobaeDream post: {eff_url} (status: {status})")
             return self._fallback_cached_post(eff_url)
@@ -1029,12 +1116,17 @@ class BobaeDreamCrawler(BaseCrawler):
         eff_pages = _normalize_pages(pages, default=1)
         self.ensure_warm_up()
         results: List[Dict[str, Any]] = []
-        visited_nos: Set[str] = set()
+        visited_nos: OrderedDict[str, None] = OrderedDict()
+        MAX_VISITED_TRACK = 10000
         consecutive_failures = 0
         MAX_CONSECUTIVE_FAILURES = 5
 
         for page in range(1, eff_pages + 1):
             url = url_builder(page)
+            is_safe, reason = _is_safe_client_url(self.client, url)
+            if not is_safe:
+                logger.warning(f"SSRF defense blocked BobaeDream list URL {url!r}: {reason}")
+                break
             logger.info(f"{action_label} BobaeDream [{board_code}] (Page {page}): {url}")
             try:
                 resp = self.client.get(
@@ -1049,6 +1141,9 @@ class BobaeDreamCrawler(BaseCrawler):
             except Exception as e:
                 logger.warning(f"Network dropout fetching list for {board_code} page {page}: {e}")
                 break
+
+            if isinstance(text, (bytes, bytearray, memoryview)):
+                text = robust_decode(text)
 
             if status != 200 or not text:
                 logger.warning(f"Failed to fetch list for {board_code} page {page} (status: {status})")
@@ -1067,7 +1162,7 @@ class BobaeDreamCrawler(BaseCrawler):
             # Pagination loop detection: if all items on this page were already seen, stop
             page_keys = {str(it.get("post_id") or it.get("url") or "") for it in items}
             page_keys.discard("")
-            if page_keys and page_keys.issubset(visited_nos):
+            if page_keys and page_keys.issubset(visited_nos.keys()):
                 logger.info(f"Page {page} of [{board_code}] repeated previously seen posts. Halting pagination loop.")
                 break
 
@@ -1079,7 +1174,9 @@ class BobaeDreamCrawler(BaseCrawler):
                 if dedup_key and dedup_key in visited_nos:
                     continue
                 if dedup_key:
-                    visited_nos.add(dedup_key)
+                    if len(visited_nos) >= MAX_VISITED_TRACK:
+                        visited_nos.popitem(last=False)
+                    visited_nos[dedup_key] = None
                 post = self.fetch_post(
                     item.get("url", ""),
                     board_code=board_code,

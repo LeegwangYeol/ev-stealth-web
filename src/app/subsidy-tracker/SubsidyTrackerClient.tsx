@@ -11,6 +11,7 @@ import {
   SubsidyCalculatorOptions,
   RegionEntry,
   PopularModelEntry,
+  MunicipalityMetrics,
 } from '@/types/subsidy';
 import {
   sortRegions,
@@ -270,6 +271,8 @@ const FALLBACK_THRESHOLDS: Record<AlertSeverity, AlertThresholdConfig> = Object.
   },
 });
 
+const EMPTY_MUNIS: readonly MunicipalityMetrics[] = Object.freeze([]);
+
 const FALLBACK_CATEGORY_METRICS: Readonly<CategoryMetrics> = Object.freeze({
   status: 'HEALTHY' as AlertSeverity,
   announced_units: 0,
@@ -429,7 +432,7 @@ const TrackerHeader = React.memo(function TrackerHeader({
                   <button
                     key={critKey}
                     type="button"
-                    onClick={() => onSelectCriticalRegion(critName, crit.region_id || critKey)}
+                    onClick={() => onSelectCriticalRegion(crit.name_ko || '', crit.region_id || critKey)}
                     aria-label={`${critName} 소진율 ${critRate.toFixed(1)}%, 보조금 계산기로 이동`}
                     className="px-2.5 py-1.5 min-h-[44px] min-w-[44px] inline-flex items-center rounded bg-rose-900 border border-rose-500/50 text-rose-200 hover:bg-rose-800 hover:text-white transition font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                     title={`${critName} 보조금 계산기로 이동`}
@@ -699,8 +702,10 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
     setZoneFilter('ALL');
     setAlertFilter('ALL');
     setSupplementaryOnly(false);
-    setSearchQuery(nameKo);
-    setDebouncedQuery(nameKo);
+    if (nameKo) {
+      setSearchQuery(nameKo);
+      setDebouncedQuery(nameKo);
+    }
     handleSelectRegionForCalc(regionId);
   }, [handleSelectRegionForCalc]);
 
@@ -783,6 +788,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         <RegionCard
           key={regionKey}
           region={regionItem}
+          regionKey={regionKey}
           selectedCategory={selectedCategory}
           isExpanded={Boolean(expandedRegions[regionKey])}
           toggleRegionExpand={toggleRegionExpand}
@@ -1101,15 +1107,22 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             </div>
           </div>
         ) : viewMode === 'table' ? (
-          <SubsidyTableView
-            regions={filteredRegions}
-            selectedCategory={selectedCategory}
-            sortOption={sortOption}
-            onSortChange={handleSortChange}
-            expandedRegions={expandedRegions}
-            onToggleExpand={toggleRegionExpand}
-            onSelectForCalc={handleSelectRegionForCalc}
-          />
+          <SubsidyErrorBoundary
+            boundaryId="subsidy-table-error"
+            fallbackTitle="지자체 비교 표 로드 오류"
+            retryLabel="표 다시 불러오기"
+            headingLevel="h3"
+          >
+            <SubsidyTableView
+              regions={filteredRegions}
+              selectedCategory={selectedCategory}
+              sortOption={sortOption}
+              onSortChange={handleSortChange}
+              expandedRegions={expandedRegions}
+              onToggleExpand={toggleRegionExpand}
+              onSelectForCalc={handleSelectRegionForCalc}
+            />
+          </SubsidyErrorBoundary>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {renderedGridCards}
@@ -1118,7 +1131,11 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
       </section>
 
       {/* 5. Interactive Real-Time Net Subsidy Calculator (Wrapped with ErrorBoundary) */}
-      <SubsidyErrorBoundary fallbackTitle="실시간 전기차 보조금 계산기 일시 오류">
+      <SubsidyErrorBoundary
+        boundaryId="subsidy-calc-error"
+        fallbackTitle="실시간 전기차 보조금 계산기 일시 오류"
+        headingLevel="h2"
+      >
         <SubsidyCalculator
           calculatorRef={calculatorRef}
           models={models}
@@ -1131,7 +1148,14 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
       </SubsidyErrorBoundary>
 
       {/* 6. Regulatory Footer Notes & Accessible FAQ Accordion */}
-      <SubsidyFaqAccordion />
+      <SubsidyErrorBoundary
+        boundaryId="subsidy-faq-error"
+        fallbackTitle="보조금 제도 가이드 로드 오류"
+        retryLabel="가이드 다시 불러오기"
+        headingLevel="h2"
+      >
+        <SubsidyFaqAccordion />
+      </SubsidyErrorBoundary>
     </div>
   );
 }
@@ -1141,6 +1165,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
 // ============================================================================
 interface RegionCardProps {
   region: RegionEntry;
+  regionKey?: string;
   selectedCategory: CategoryType;
   isExpanded: boolean;
   toggleRegionExpand: (regionId: string) => void;
@@ -1149,6 +1174,7 @@ interface RegionCardProps {
 
 const RegionCard = React.memo(function RegionCard({
   region,
+  regionKey,
   selectedCategory,
   isExpanded,
   toggleRegionExpand,
@@ -1176,7 +1202,7 @@ const RegionCard = React.memo(function RegionCard({
   const regionName = region?.name_ko || '해당 지역';
   const regionId = region?.region_id || region?.iso_code || region?.name_ko || 'unknown';
   const munis = useMemo(
-    () => (Array.isArray(region?.municipalities) ? region.municipalities : []),
+    () => (Array.isArray(region?.municipalities) ? region.municipalities : EMPTY_MUNIS),
     [region?.municipalities]
   );
   const categoryLabel = selectedCategory === 'passenger' ? '전기승용' : selectedCategory === 'commercial' ? '전기화물' : '전기승합';
@@ -1315,7 +1341,7 @@ const RegionCard = React.memo(function RegionCard({
           <div className="pt-2">
             <button
               type="button"
-              onClick={() => toggleRegionExpand(region.region_id || regionId)}
+              onClick={() => toggleRegionExpand(region.region_id || regionKey || regionId)}
               aria-expanded={isExpanded}
               aria-controls={'muni-details-' + region.region_id}
               aria-label={`${region.name_ko} 세부 시·군·구 ${munis.length}개 현황 ${isExpanded ? '접기' : '보기'}`}
@@ -1425,6 +1451,34 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
     }
     const parsed = parseInt(digits, 10);
     setCustomMsrpInput(Number.isFinite(parsed) && parsed > 10_000_000_000 ? '10000000000' : digits);
+  }, []);
+
+  const handleCustomMsrpKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    const input = e.currentTarget;
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    if (start === null || end === null || start !== end) return;
+    const val = input.value;
+
+    if (e.key === 'Backspace' && start > 1 && val[start - 1] === ',') {
+      e.preventDefault();
+      const nextRaw = (val.slice(0, start - 2) + val.slice(start)).replace(/[^0-9]/g, '').slice(0, 11);
+      if (!nextRaw) {
+        setCustomMsrpInput('');
+      } else {
+        const parsed = parseInt(nextRaw, 10);
+        setCustomMsrpInput(Number.isFinite(parsed) && parsed > 10_000_000_000 ? '10000000000' : nextRaw);
+      }
+    } else if (e.key === 'Delete' && start < val.length - 1 && val[start] === ',') {
+      e.preventDefault();
+      const nextRaw = (val.slice(0, start) + val.slice(start + 2)).replace(/[^0-9]/g, '').slice(0, 11);
+      if (!nextRaw) {
+        setCustomMsrpInput('');
+      } else {
+        const parsed = parseInt(nextRaw, 10);
+        setCustomMsrpInput(Number.isFinite(parsed) && parsed > 10_000_000_000 ? '10000000000' : nextRaw);
+      }
+    }
   }, []);
 
   const handleSetPresetMsrp = useCallback((msrp: string) => {
@@ -1593,7 +1647,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                 <option value="">등록된 차량 모델 없음</option>
               ) : (
                 models.map((model, idx) => (
-                  <option key={model.model_id || `model-${idx}`} value={model.model_id}>
+                  <option key={model.model_id || `model-${idx}`} value={model.model_id || model.name_ko || ''}>
                     {model.manufacturer || ''} - {model.name_ko || model.model_id} (출고가 {((Number.isFinite(model.base_price_krw) ? Math.max(0, model.base_price_krw) : 0) / 10000).toLocaleString()}만 원)
                   </option>
                 ))
@@ -1611,7 +1665,9 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                     type="button"
                     aria-pressed={isSelected}
                     aria-label={`${m.name_ko || displayName} 모델 선택`}
-                    onClick={() => onSelectModelId(m.model_id)}
+                    onClick={() => {
+                      if (m.model_id) onSelectModelId(m.model_id);
+                    }}
                     className={`px-2.5 py-1 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                       isSelected
                         ? 'bg-blue-600 text-white'
@@ -1661,7 +1717,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                     : 0;
                   const pStatus = normalizeAlertSeverity(pCat?.status, pRate);
                   return (
-                    <option key={reg.region_id || reg.iso_code || `reg-${idx}`} value={reg.region_id}>
+                    <option key={reg.region_id || reg.iso_code || `reg-${idx}`} value={reg.region_id || reg.iso_code || reg.name_ko || ''}>
                       {reg.name_ko} ({pRate.toFixed(1)}% 소진, {getStatusLabel(pStatus)})
                     </option>
                   );
@@ -1707,6 +1763,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
                     aria-describedby="custom-msrp-hint"
                     value={customMsrpInput && Number.isFinite(parsedCustomMsrp) ? parsedCustomMsrp.toLocaleString('ko-KR') : ''}
                     onChange={handleCustomMsrpChange}
+                    onKeyDown={handleCustomMsrpKeyDown}
                     placeholder="원 단위 출고가 입력 (예: 54,900,000)"
                     className={`w-full py-2.5 px-3.5 min-h-[44px] rounded-xl bg-slate-900 border text-white text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 pr-12 ${
                       hasInvalidCustomMsrp ? 'border-rose-400' : 'border-slate-500'

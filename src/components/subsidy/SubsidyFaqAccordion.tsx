@@ -115,7 +115,7 @@ const FaqItemRow = memo(function FaqItemRow({
           aria-labelledby={`faq-title-${item.id}`}
           onClick={() => onToggle(item.id)}
           onKeyDown={(e) => onKeyDown(e, idx)}
-          className="w-full py-3.5 px-4 sm:px-5 min-h-[44px] text-left text-xs sm:text-sm font-semibold text-slate-200 hover:text-white flex items-center justify-between gap-3 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+          className="w-full py-3.5 px-4 sm:px-5 min-h-[44px] text-left text-xs sm:text-sm font-semibold text-slate-200 hover:text-white flex items-center justify-between gap-3 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-inset"
         >
           <span className="flex items-center gap-2">
             <span className="text-amber-400 font-bold" aria-hidden="true">Q.</span>

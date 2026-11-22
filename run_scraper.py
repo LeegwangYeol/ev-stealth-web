@@ -191,7 +191,9 @@ def _resolve_root_reports_path() -> Path:
 
 
 def _atomic_copy_file(src_path: Union[str, Path], dest_path: Union[str, Path]) -> str:
-    """Atomically copy a file to dest_path using tempfile + os.replace."""
+    """Atomically copy a file to dest_path using FileLock + tempfile + os.replace."""
+    from tracker.atomic_writer import FileLock, get_lock_path
+
     dest = Path(dest_path).resolve()
     src_p = Path(src_path)
     try:
@@ -200,44 +202,46 @@ def _atomic_copy_file(src_path: Union[str, Path], dest_path: Union[str, Path]) -
     except OSError:
         pass
     dest.parent.mkdir(parents=True, exist_ok=True)
+    lock_file = get_lock_path(dest)
     temp_name = None
-    try:
-        src_stat = src_p.stat()
-        with tempfile.NamedTemporaryFile("wb", dir=str(dest.parent), delete=False, prefix=".tmp_sync_") as tf:
-            temp_name = tf.name
-            with open(src_path, "rb") as sf:
-                shutil.copyfileobj(sf, tf)
-            tf.flush()
-            os.fsync(tf.fileno())
+    with FileLock(lock_file):
         try:
-            os.chmod(temp_name, 0o644)
-        except OSError:
-            pass
-        os.replace(temp_name, dest)
-        temp_name = None
-        try:
-            os.utime(dest, (src_stat.st_atime, src_stat.st_mtime))
-        except OSError:
-            pass
-        if os.name != "nt":
-            dir_flags = os.O_RDONLY
-            if hasattr(os, "O_DIRECTORY"):
-                dir_flags |= os.O_DIRECTORY
+            src_stat = src_p.stat()
+            with tempfile.NamedTemporaryFile("wb", dir=str(dest.parent), delete=False, prefix=".tmp_sync_") as tf:
+                temp_name = tf.name
+                with open(src_path, "rb") as sf:
+                    shutil.copyfileobj(sf, tf)
+                tf.flush()
+                os.fsync(tf.fileno())
             try:
-                dir_fd = os.open(str(dest.parent), dir_flags)
+                os.chmod(temp_name, 0o644)
+            except OSError:
+                pass
+            os.replace(temp_name, dest)
+            temp_name = None
+            try:
+                os.utime(dest, (src_stat.st_atime, src_stat.st_mtime))
+            except OSError:
+                pass
+            if os.name != "nt":
+                dir_flags = os.O_RDONLY
+                if hasattr(os, "O_DIRECTORY"):
+                    dir_flags |= os.O_DIRECTORY
                 try:
-                    os.fsync(dir_fd)
-                finally:
-                    os.close(dir_fd)
-            except OSError:
-                pass
-        return str(dest)
-    finally:
-        if temp_name and os.path.exists(temp_name):
-            try:
-                os.unlink(temp_name)
-            except OSError:
-                pass
+                    dir_fd = os.open(str(dest.parent), dir_flags)
+                    try:
+                        os.fsync(dir_fd)
+                    finally:
+                        os.close(dir_fd)
+                except OSError:
+                    pass
+            return str(dest)
+        finally:
+            if temp_name and os.path.exists(temp_name):
+                try:
+                    os.unlink(temp_name)
+                except OSError:
+                    pass
 
 
 def _reject_json_constant(constant: str) -> Any:
@@ -374,8 +378,8 @@ def create_parser() -> argparse.ArgumentParser:
     ).strip()
     parser.add_argument(
         "--web-dir",
-        type=Path,
-        default=Path(web_dir_env) if web_dir_env else None,
+        type=str,
+        default=web_dir_env if web_dir_env else None,
         help="Custom web directory to sync data files into (overrides default ev-stealth-web/src/data/ or EV_SCRAPER_WEB_DIR).",
     )
     parser.add_argument(
@@ -502,9 +506,12 @@ class ScraperPipeline:
             if _SHUTDOWN_REQUESTED:
                 logger.warning("Shutdown requested. Halting BobaeDream crawl.")
                 break
+            remaining = limit - len(posts)
+            if remaining <= 0:
+                break
             try:
-                logger.info(f"Crawling BobaeDream board '{board}' (limit={limit})...")
-                board_posts = self.bobae_crawler.crawl_board(board, pages=1, limit=limit)
+                logger.info(f"Crawling BobaeDream board '{board}' (limit={remaining})...")
+                board_posts = self.bobae_crawler.crawl_board(board, pages=1, limit=remaining)
                 if board_posts:
                     posts.extend(board_posts)
                 if len(posts) >= limit:
@@ -534,9 +541,12 @@ class ScraperPipeline:
             if _SHUTDOWN_REQUESTED:
                 logger.warning("Shutdown requested. Halting DCInside crawl.")
                 break
+            remaining = limit - len(posts)
+            if remaining <= 0:
+                break
             try:
-                logger.info(f"Crawling DCInside gallery '{gall}' (limit={limit})...")
-                gall_posts = self.dc_crawler.crawl_gallery(gall, pages=1, limit=limit)
+                logger.info(f"Crawling DCInside gallery '{gall}' (limit={remaining})...")
+                gall_posts = self.dc_crawler.crawl_gallery(gall, pages=1, limit=remaining)
                 if gall_posts:
                     posts.extend(gall_posts)
                 if len(posts) >= limit:
@@ -576,6 +586,8 @@ class ScraperPipeline:
             else:
                 logger.warning(f"Unknown source '{s}', falling back to 'all'")
                 selected_sources.update(["bobaedream", "dcinside"])
+        if not selected_sources:
+            selected_sources.update(["bobaedream", "dcinside"])
 
         try:
             if isinstance(limit, bool):
@@ -622,14 +634,14 @@ class ScraperPipeline:
                 valid_cached = [p for p in cached_posts if isinstance(p, dict)]
                 filtered = [
                     p for p in valid_cached
-                    if str(p.get("platform") or "").strip().lower() in selected_sources
+                    if str(p.get("platform") or p.get("source") or "").strip().lower() in selected_sources
                 ]
                 raw_posts = (filtered if filtered else valid_cached)[:clamped_limit]
                 stats["bobaedream"] = sum(
-                    1 for p in raw_posts if str(p.get("platform") or "").strip().lower() == "bobaedream"
+                    1 for p in raw_posts if str(p.get("platform") or p.get("source") or "").strip().lower() == "bobaedream"
                 )
                 stats["dcinside"] = sum(
-                    1 for p in raw_posts if str(p.get("platform") or "").strip().lower() == "dcinside"
+                    1 for p in raw_posts if str(p.get("platform") or p.get("source") or "").strip().lower() == "dcinside"
                 )
 
         return raw_posts, stats
@@ -710,7 +722,10 @@ class ScraperPipeline:
                         if isinstance(data, list):
                             for item in data:
                                 if isinstance(item, dict):
-                                    pid = str(item.get("id") or item.get("post_id") or "")
+                                    raw_id = item.get("id")
+                                    if raw_id is None:
+                                        raw_id = item.get("post_id")
+                                    pid = str(raw_id) if raw_id is not None else ""
                                     if pid and pid in seen_ids:
                                         continue
                                     if pid:

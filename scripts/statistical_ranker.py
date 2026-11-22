@@ -191,13 +191,11 @@ class StatisticalRanker:
             topic = str(raw_top) if raw_top is not None else ""
             full_text = f"{title} {topic} {quote}"
 
-            # Calculate DSI
-            sent_res = self.sentiment_engine.classify(full_text)
+            # Tokenize once and reuse tokens in SentimentEngine
+            tokens = self.tokenizer.tokenize(full_text)
+            sent_res = self.sentiment_engine.classify(full_text, tokens=tokens)
             dsi = sent_res.dsi_score
             self.doc_dsi_scores.append(dsi)
-
-            # Tokenize
-            tokens = self.tokenizer.tokenize(full_text)
             doc_stems: List[str] = []
 
             for tok in tokens:

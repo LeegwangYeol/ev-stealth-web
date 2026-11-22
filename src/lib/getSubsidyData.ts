@@ -117,7 +117,7 @@ export {
 const fallbackDataset: EVSubsidyDataset = Object.freeze({
   metadata: Object.freeze({
     version: '1.0.0',
-    generated_at: new Date().toISOString(),
+    generated_at: '2026-01-01T00:00:00.000Z',
     policy_year: 2026,
     data_sources: Object.freeze([
       '환경부 무공해차 통합누리집 (ev.or.kr)',
@@ -224,12 +224,18 @@ function safeNonNegNum(value: unknown, fallback: number): number {
     : fallback;
 }
 
-function parseNonNegIntOrKrw(value: unknown, fallback: number): number {
+const BUDGET_MAX_KRW = 100_000_000_000_000;
+
+function parseNonNegIntOrKrw(
+  value: unknown,
+  fallback: number,
+  maxKrw?: number
+): number {
   if (typeof value === 'number') {
     return Number.isFinite(value) && value >= 0 ? (value === 0 ? 0 : value) : fallback;
   }
   if (typeof value === 'string') {
-    const parsed = parseSubsidyNumber(value, { allowNegative: true, defaultKrw: -1 });
+    const parsed = parseSubsidyNumber(value, { allowNegative: true, defaultKrw: -1, maxKrw });
     return parsed >= 0 ? parsed : fallback;
   }
   return fallback;
@@ -271,8 +277,8 @@ function normalizeCategoryMetricsObj(raw: unknown, fb: CategoryMetrics): Categor
 
   const maxLocal = parseNonNegIntOrKrw(raw.max_local_subsidy_krw, -1);
   const maxTotal = parseNonNegIntOrKrw(raw.max_total_subsidy_krw, -1);
-  const totalBudget = parseNonNegIntOrKrw(raw.total_budget_krw, -1);
-  const remainingBudget = parseNonNegIntOrKrw(raw.remaining_budget_krw, -1);
+  const totalBudget = parseNonNegIntOrKrw(raw.total_budget_krw, -1, BUDGET_MAX_KRW);
+  const remainingBudget = parseNonNegIntOrKrw(raw.remaining_budget_krw, -1, BUDGET_MAX_KRW);
 
   return {
     announced_units: announced,
@@ -434,6 +440,11 @@ export function normalizeSubsidyDataset(data: unknown): EVSubsidyDataset {
     if (normalizedRegion) regions.push(normalizedRegion);
   }
 
+  const trackedMunicipalitiesFallback = regions.reduce(
+    (sum, r) => sum + (Array.isArray(r.municipalities) ? r.municipalities.length : 0),
+    0
+  );
+
   const rawMeta = isPlainRecord(data.metadata) ? data.metadata : {};
   const fbMeta = fallbackDataset.metadata;
   const metadata: EVSubsidyDataset['metadata'] = {
@@ -451,7 +462,7 @@ export function normalizeSubsidyDataset(data: unknown): EVSubsidyDataset {
     total_regions_tracked: safeNonNegNum(rawMeta.total_regions_tracked, regions.length),
     total_municipalities_tracked: safeNonNegNum(
       rawMeta.total_municipalities_tracked,
-      0
+      trackedMunicipalitiesFallback
     ),
     currency: safeNonEmptyStr(rawMeta.currency, fbMeta.currency),
   };
@@ -482,8 +493,8 @@ export function normalizeSubsidyDataset(data: unknown): EVSubsidyDataset {
   const rawCatTotals = isPlainRecord(rawSummary.category_totals) ? rawSummary.category_totals : {};
   const rawAlertCounts = isPlainRecord(rawSummary.alert_region_counts) ? rawSummary.alert_region_counts : {};
 
-  const totalBudgetKrw = parseNonNegIntOrKrw(rawSummary.total_budget_krw, -1);
-  const disbursedBudgetKrw = parseNonNegIntOrKrw(rawSummary.disbursed_budget_krw, -1);
+  const totalBudgetKrw = parseNonNegIntOrKrw(rawSummary.total_budget_krw, -1, BUDGET_MAX_KRW);
+  const disbursedBudgetKrw = parseNonNegIntOrKrw(rawSummary.disbursed_budget_krw, -1, BUDGET_MAX_KRW);
   const totalAnnouncedUnits = parseNonNegIntOrKrw(rawSummary.total_announced_units, zeroSummary.total_announced_units);
   const totalAppliedUnits = parseNonNegIntOrKrw(rawSummary.total_applied_units, zeroSummary.total_applied_units);
   const totalDeliveredUnits = parseNonNegIntOrKrw(rawSummary.total_delivered_units, zeroSummary.total_delivered_units);

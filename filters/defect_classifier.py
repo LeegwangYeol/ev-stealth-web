@@ -35,7 +35,11 @@ from filters.slang_lexicon import (
     SUPER_INTENSIFIERS,
     SYMPTOM_PREDICATES,
     SlangEntry,
+    _RE_BOUNDED_ICCU,
+    _RE_BOUNDED_V2L,
     _RE_BYD_SEAL,
+    _RE_JEONSON,
+    _RE_MEGI,
     _RE_RICE_COOKER_APP,
     _RE_TCAM_KO,
     _decode_bytes_safely,
@@ -177,14 +181,35 @@ NEGATIVE_LEXICON: Dict[str, float] = {
 RE_CLAUSE_SPLIT: re.Pattern[str] = re.compile(r"[,;.\n]+")
 RE_TOKENS: re.Pattern[str] = re.compile(r"[\w가-힣]+")
 RE_HANGUL: re.Pattern[str] = re.compile(r"[가-힣]")
-RE_AS_KEYWORD: re.Pattern[str] = re.compile(r"(?:\b|[^a-zA-Z])(?:as|a/s)(?:\b|[^a-zA-Z])", re.IGNORECASE)
+RE_AS_KEYWORD: re.Pattern[str] = re.compile(r"(?<![a-zA-Z0-9])(?:as|a/s)(?![a-zA-Z0-9])", re.IGNORECASE)
 _RE_ATTACHED_EOPDA: re.Pattern[str] = re.compile(
     r"없(?:습니다|네요|어요|었음|었어|었던|었습|더라|는지|는데|지만|군요|이|는|다|고|음|네|어|죠|지)"
 )
 _RE_GAE_INTENSIFIER: re.Pattern[str] = re.compile(
-    r"(?<![가-힣0-9a-zA-Z])개(?!(?:선|인|발|정|시|업|통|최|편|방|념|요|괄|혁|수|월|별|체|입|관|막|장|축|량|조|척|학|화|회|국|근|녕|념|로|에서|부터|까지|랑|와|과|의|에|도|는|은|를|이|가|\s*$))"
+    r"(?<![가-힣0-9a-zA-Z])개(?!(?:선|인|발|정|시|업|통|최|편|방|념|요|괄|혁|수|월|별|체|입|관|막|장|축|량|조|척|학|화|회|국|근|녕|로|에서|부터|까지|랑|와|과|의|에|도|는|은|를|이|가|\s*$))"
     r"|(?<![가-힣0-9a-zA-Z])개(?=\s|$)"
 )
+_BOUNDED_COMPOUND_REGEXES: Dict[str, re.Pattern[str]] = {
+    "iccu": _RE_BOUNDED_ICCU,
+    "bms": re.compile(r"(?<![a-zA-Z0-9])bms(?![a-zA-Z])", re.IGNORECASE),
+    "tcam": re.compile(r"(?<![a-zA-Z0-9])tcam(?![a-zA-Z])", re.IGNORECASE),
+    "ccnc": re.compile(r"(?<![a-zA-Z0-9])ccnc(?![a-zA-Z0-9])", re.IGNORECASE),
+    "ccic": re.compile(r"(?<![a-zA-Z0-9])ccic(?![a-zA-Z0-9])", re.IGNORECASE),
+    "avnt": re.compile(r"(?<![a-zA-Z0-9])avnt(?![a-zA-Z0-9])", re.IGNORECASE),
+    "dsm": re.compile(r"(?<![a-zA-Z0-9])dsm(?![a-zA-Z0-9])", re.IGNORECASE),
+}
+
+
+def _matches_compound_phrase(phrase: str, text_lower: str) -> bool:
+    """Match a compound defect phrase against lowercased text with boundary safety."""
+    if phrase == "티캠":
+        return _RE_TCAM_KO.search(text_lower) is not None
+    if phrase == "전손":
+        return _RE_JEONSON.search(text_lower) is not None
+    bounded = _BOUNDED_COMPOUND_REGEXES.get(phrase)
+    if bounded is not None:
+        return bounded.search(text_lower) is not None
+    return phrase in text_lower
 
 # Malfunction cues that disambiguate neutral EV features from actual defect complaints
 MALFUNCTION_CUES: Tuple[str, ...] = (
@@ -217,7 +242,60 @@ _MULTI_PART_DEFECT_TERMS: Tuple[Tuple[Tuple[str, ...], str], ...] = tuple(
 
 MAX_TEXT_LENGTH: int = 50_000
 
-# Pre-normalized and lowercased slang entry pairs for fast case-insensitive evaluation
+_SARCASM_DEFECT_WORDS: Tuple[str, ...] = (
+    "단차", "누수", "워터파크", "불쇼", "화재", "먹통", "벽돌", "고장", "짱개차", "짱깨차"
+)
+_EXCLUDED_NEGATOR_PATTERNS: Tuple[str, ...] = (
+    "안전", "불안", "어처구니없", "어이없", "말도 안", "말도안",
+    "납득이 안", "납득안", "안정", "안심", "안내", "안락",
+    "대책 없", "대책없", "답이 없", "답없",
+    "형편없", "쓸데없", "터무니없", "어림없", "정신없", "부질없", "보잘것없",
+    "끊임없", "쉴새없", "수없", "끝없", "한없", "어김없", "가차없",
+    "이유없", "원인없", "전조없", "예고없",
+)
+_SPACED_EOPDA_SUBJECTS: Tuple[str, ...] = (
+    "대책", "대책이", "대책도",
+    "답", "답이", "답도",
+    "어이", "어이가",
+    "어처구니", "어처구니가",
+    "양심", "양심이",
+    "개념", "개념이",
+    "상식", "상식이",
+    "이유", "이유가", "이유도",
+    "원인", "원인이", "원인도",
+    "전조", "전조가", "전조도",
+    "예고", "예고가", "예고도",
+    "경고", "경고가", "경고도",
+    "새",
+)
+_MALFUNCTION_VERBS: Tuple[str, ...] = (
+    "되고", "된다", "돼서", "됨", "돼", "되", "됐",
+    "열리고", "열려", "열림", "열린다", "열리", "열렸",
+    "켜지고", "켜져", "켜짐", "켜진다", "켜지", "켜졌",
+    "꺼지고", "꺼져", "꺼짐", "꺼진다", "꺼지", "꺼졌",
+    "걸리고", "걸려", "걸림", "걸린다",
+    "빠지고", "빠져", "빠짐", "빠진다",
+    "먹히고", "먹혀", "먹힘", "먹힌다",
+    "나오고", "나와", "나옴", "나온다", "나오", "나왔",
+    "돌아가고", "돌아가", "돌아감", "돌아간다",
+    "작동하고", "작동해", "작동함", "작동된다", "작동",
+    "잡히고", "잡혀", "잡힘", "잡힌다", "잡히",
+    "고쳐지고", "고쳐져", "고쳐짐", "고쳐진다", "고쳐",
+    "해결되고", "해결돼", "해결됨", "해결된다", "해결",
+    "사라지고", "사라져", "사라짐", "사라진다",
+    "없어지고", "없어져", "없어짐", "없어진다",
+    "풀리고", "풀려", "풀림", "풀린다", "풀리",
+    "줄어들고", "줄어들어", "줄어듦", "줄어든다", "줄어",
+    "멈추고", "멈춰", "멈춤", "멈춘다",
+    "밟히", "밟혀", "밟힘", "밟힌", "밟혔",
+    "뽑히", "뽑혀", "뽑힘", "뽑힌",
+    "닦이", "닦여", "닦임", "닦인",
+    "들어오", "들어와", "들어옴", "들어온", "들어왔",
+    "움직이", "움직여", "움직임", "움직인", "움직였",
+)
+_MULTI_CHAR_NEGATORS: Tuple[str, ...] = tuple(
+    neg for neg in NEGATORS if neg not in ("안", "못", "없")
+)
 _SLANG_TERM_LOWER_PAIRS: Tuple[Tuple[SlangEntry, str, str], ...] = tuple(
     (entry, unicodedata.normalize("NFC", entry.term), unicodedata.normalize("NFC", entry.term).lower())
     for entry in RAW_SLANG_ENTRIES
@@ -342,7 +420,9 @@ class DefectClassifier:
             "꺼지", "꺼짐", "소리도 안"
         ]
         if any(
-            (_RE_DEFECT_HAJA.search(text_lower) is not None) if dk == "하자" else (dk in text_lower)
+            (_RE_DEFECT_HAJA.search(text_lower) is not None)
+            if dk == "하자"
+            else (_matches_compound_phrase(dk, text_lower) if dk in ("iccu", "bms") else (dk in text_lower))
             for dk in defect_keywords
         ):
             has_symptom = True
@@ -391,6 +471,17 @@ class DefectClassifier:
         # Check for global praise / negated defects (e.g. "단차 전혀 없고 잡소리도 1도 안 납니다")
         negated_defects = self._detect_negated_defects(tokens, text_str=text_str)
 
+        # If every sarcasm-triggering defect noun in the text was explicitly negated,
+        # treat it as genuine owner praise rather than sarcastic inversion.
+        if is_sarcastic and negated_defects:
+            negated_set = set(negated_defects)
+            present_defect_words = [w for w in _SARCASM_DEFECT_WORDS if w in text_str]
+            if present_defect_words and all(
+                any(w in neg or neg in w for neg in negated_set)
+                for w in present_defect_words
+            ):
+                is_sarcastic = False
+
         # Polarity calculation with concessive handling
         polarity, matches = self._calculate_polarity(clauses, is_sarcastic, negated_defects)
 
@@ -406,9 +497,7 @@ class DefectClassifier:
         text_str = sanitize_text(text)
         if not text_str:
             return False
-        has_defect_word = any(
-            w in text_str for w in ["단차", "누수", "워터파크", "불쇼", "화재", "먹통", "벽돌", "고장", "짱개차", "짱깨차"]
-        )
+        has_defect_word = any(w in text_str for w in _SARCASM_DEFECT_WORDS)
         has_praise_word = any(pw in text_str for pw in SARCASM_PRAISE_WORDS)
         has_laughing = any(lm in text_str for lm in LAUGHING_MARKERS)
 
@@ -416,28 +505,13 @@ class DefectClassifier:
 
     def _is_negator_in_window(self, window: List[str]) -> bool:
         """Check if any token in the window is a genuine negator, respecting token boundaries and exclusions."""
-        excluded_patterns = [
-            "안전", "불안", "어처구니없", "어이없", "말도 안", "말도안",
-            "납득이 안", "납득안", "안정", "안심", "안내", "안락",
-            "대책 없", "대책없", "답이 없", "답없",
-            "형편없", "쓸데없", "터무니없", "어림없", "정신없", "부질없", "보잘것없",
-        ]
-        spaced_eopda_subjects = (
-            "대책", "대책이", "대책도",
-            "답", "답이", "답도",
-            "어이", "어이가",
-            "어처구니", "어처구니가",
-            "양심", "양심이",
-            "개념", "개념이",
-            "상식", "상식이",
-        )
         for j, w in enumerate(window):
             w_strip = str(w or "").strip()
             if not w_strip:
                 continue
 
             # Explicitly exclude positive/distress words containing negator characters
-            if any(p in w_strip for p in excluded_patterns):
+            if any(p in w_strip for p in _EXCLUDED_NEGATOR_PATTERNS):
                 continue
 
             # Idiom check: '말도 안 됨' / '납득이 안 됨' where '안' follows '말도', '납득이', etc.
@@ -449,33 +523,8 @@ class DefectClassifier:
                     window[j + 1].startswith(p) for p in ("난다더니", "들린다더니", "보인다더니")
                 ):
                     continue
-                malfunction_verbs = (
-                    "되고", "된다", "돼서", "됨", "돼", "되", "됐",
-                    "열리고", "열려", "열림", "열린다", "열리", "열렸",
-                    "켜지고", "켜져", "켜짐", "켜진다", "켜지", "켜졌",
-                    "꺼지고", "꺼져", "꺼짐", "꺼진다", "꺼지", "꺼졌",
-                    "걸리고", "걸려", "걸림", "걸린다",
-                    "빠지고", "빠져", "빠짐", "빠진다",
-                    "먹히고", "먹혀", "먹힘", "먹힌다",
-                    "나오고", "나와", "나옴", "나온다", "나오", "나왔",
-                    "돌아가고", "돌아가", "돌아감", "돌아간다",
-                    "작동하고", "작동해", "작동함", "작동된다", "작동",
-                    "잡히고", "잡혀", "잡힘", "잡힌다", "잡히",
-                    "고쳐지고", "고쳐져", "고쳐짐", "고쳐진다", "고쳐",
-                    "해결되고", "해결돼", "해결됨", "해결된다", "해결",
-                    "사라지고", "사라져", "사라짐", "사라진다",
-                    "없어지고", "없어져", "없어짐", "없어진다",
-                    "풀리고", "풀려", "풀림", "풀린다", "풀리",
-                    "줄어들고", "줄어들어", "줄어듦", "줄어든다", "줄어",
-                    "멈추고", "멈춰", "멈춤", "멈춘다",
-                    "밟히", "밟혀", "밟힘", "밟힌", "밟혔",
-                    "뽑히", "뽑혀", "뽑힘", "뽑힌",
-                    "닦이", "닦여", "닦임", "닦인",
-                    "들어오", "들어와", "들어옴", "들어온", "들어왔",
-                    "움직이", "움직여", "움직임", "움직인", "움직였",
-                )
                 if j + 1 < len(window):
-                    if any(window[j + 1].startswith(mv) for mv in malfunction_verbs):
+                    if any(window[j + 1].startswith(mv) for mv in _MALFUNCTION_VERBS):
                         continue
                     return True
                 continue
@@ -483,7 +532,7 @@ class DefectClassifier:
             # Rhetorical and hearsay contrastive exclusions: '없기는 개뿔', '없기는커녕', '없다더니', '없다는데'
             if w_strip.startswith(("없기는", "없다더니", "없다는데", "없다지만", "없긴")):
                 continue
-            if w_strip.startswith("없") and j > 0 and window[j - 1] in spaced_eopda_subjects:
+            if w_strip.startswith("없") and j > 0 and window[j - 1] in _SPACED_EOPDA_SUBJECTS:
                 continue
             if w_strip.startswith("없") and j + 1 < len(window) and window[j + 1] in (
                 "개뿔", "커녕", "무슨", "개뿔이", "들었는데", "하더니", "해서", "했으나", "봤는데"
@@ -512,9 +561,7 @@ class DefectClassifier:
                 return True
 
             # 3. Multi-character negators from NEGATORS
-            for neg in NEGATORS:
-                if neg in ("안", "못", "없"):
-                    continue
+            for neg in _MULTI_CHAR_NEGATORS:
                 if neg in w_strip:
                     return True
 
@@ -548,6 +595,12 @@ class DefectClassifier:
             for i, tok_lower in enumerate(tokens_lower):
                 if dw_lower == "하자":
                     if not tok_lower.startswith("하자") or tok_lower.startswith(("하자마자", "하자고", "하자면")):
+                        continue
+                elif dw_lower == "전손":
+                    if _RE_JEONSON.search(tok_lower) is None:
+                        continue
+                elif dw_lower == "티캠":
+                    if _RE_TCAM_KO.search(tok_lower) is None:
                         continue
                 elif dw_lower == "이상":
                     if not (dw_lower in tok_lower or tok_lower.startswith(dw_lower)):
@@ -632,6 +685,8 @@ class DefectClassifier:
             if not c:
                 continue
             while c:
+                if len(expanded_clauses) >= 200:
+                    break
                 split_done = False
                 for conc in sorted_concs:
                     idx = c.find(conc)
@@ -646,6 +701,8 @@ class DefectClassifier:
                 if not split_done:
                     expanded_clauses.append(c)
                     break
+            if len(expanded_clauses) >= 200:
+                break
 
         is_post_concessive = False
 
@@ -662,31 +719,56 @@ class DefectClassifier:
             clause_multiplier = 1.5 if is_post_concessive else 0.5
             clause_lower = clause.lower()
             clause_tokens: Optional[List[str]] = None
+            clause_intensifier: Optional[float] = None
 
             for slang_entry, slang_nfc, slang_lower in _SLANG_TERM_LOWER_PAIRS:
-                if slang_entry.term == "씰":
+                term = slang_entry.term
+                if term == "씰":
                     if "씰링" in clause or not _RE_BYD_SEAL.search(clause):
                         continue
-                if slang_entry.term == "밥솥":
+                elif term == "밥솥":
                     if _RE_RICE_COOKER_APP.search(clause) and not any(
                         w in clause for w in ("소리", "취사소리", "이음", "고주파", "모터", "인버터", "잡소리")
                     ):
                         continue
-                if slang_entry.term.lower() in ("v2l", "깜빡이", "웨더스트립"):
+                    if slang_lower not in clause_lower:
+                        continue
+                elif term == "전손":
+                    if not _RE_JEONSON.search(clause):
+                        continue
+                elif term == "티캠":
+                    if not _RE_TCAM_KO.search(clause):
+                        continue
+                elif term == "ICCU":
+                    if not _RE_BOUNDED_ICCU.search(clause):
+                        continue
+                elif term == "V2L":
                     if not any(mc in clause_lower for mc in MALFUNCTION_CUES):
                         continue
-                if slang_nfc in clause or slang_lower in clause_lower:
-                    is_term_negated = any(dw in slang_entry.term or slang_entry.term in dw for dw in negated_defects)
-                    if is_term_negated:
-                        term_polarity = -slang_entry.default_polarity * 0.85
-                    else:
-                        term_polarity = slang_entry.default_polarity
+                    if not _RE_BOUNDED_V2L.search(clause):
+                        continue
+                elif term == "메기":
+                    if not _RE_MEGI.search(clause):
+                        continue
+                else:
+                    if term.lower() in ("깜빡이", "웨더스트립"):
+                        if not any(mc in clause_lower for mc in MALFUNCTION_CUES):
+                            continue
+                    if slang_lower not in clause_lower:
+                        continue
 
-                    intensifier_mult = self._get_intensifier_multiplier(clause)
-                    weight = slang_entry.severity_weight * clause_multiplier * intensifier_mult
-                    total_score += term_polarity * weight
-                    total_weight += weight
-                    matched_terms.append(slang_entry.term)
+                is_term_negated = any(dw in term or term in dw for dw in negated_defects)
+                if is_term_negated:
+                    term_polarity = -slang_entry.default_polarity * 0.85
+                else:
+                    term_polarity = slang_entry.default_polarity
+
+                if clause_intensifier is None:
+                    clause_intensifier = self._get_intensifier_multiplier(clause)
+                weight = slang_entry.severity_weight * clause_multiplier * clause_intensifier
+                total_score += term_polarity * weight
+                total_weight += weight
+                matched_terms.append(term)
 
             matched_clause_negs: List[str] = []
             for neg_word in _SORTED_NEGATIVE_WORDS:
@@ -697,8 +779,9 @@ class DefectClassifier:
                         term_polarity = 0.70
                     else:
                         term_polarity = base_val
-                    intensifier_mult = self._get_intensifier_multiplier(clause)
-                    weight = 2.5 * clause_multiplier * intensifier_mult
+                    if clause_intensifier is None:
+                        clause_intensifier = self._get_intensifier_multiplier(clause)
+                    weight = 2.5 * clause_multiplier * clause_intensifier
                     total_score += term_polarity * weight
                     total_weight += weight
                     matched_terms.append(neg_word)
@@ -794,12 +877,7 @@ class DefectClassifier:
         # 1. High-precision compound defect rules using pre-sorted phrases
         for cat, phrases in _SORTED_COMPOUND_RULES.items():
             for phrase in phrases:
-                matched_phrase = (
-                    (_RE_TCAM_KO.search(text_lower) is not None)
-                    if phrase == "티캠"
-                    else (phrase in text_lower)
-                )
-                if matched_phrase:
+                if _matches_compound_phrase(phrase, text_lower):
                     category_scores[cat] += 12.0
                     if cat == "DRIVING_POWERTRAIN":
                         if any(term in phrase for term in ("브레이크", "페달", "제동", "조향", "오토홀드", "가속", "동력", "구동")):
@@ -901,10 +979,7 @@ class DefectClassifier:
 
         # 5. High-precision compound defect match
         category_compounds = COMPOUND_DEFECT_RULES.get(category, [])
-        if any(
-            (_RE_TCAM_KO.search(text_lower) is not None) if cp == "티캠" else (cp in text_lower)
-            for cp in category_compounds
-        ):
+        if any(_matches_compound_phrase(cp, text_lower) for cp in category_compounds):
             confidence += 0.20
 
         # False-positive suppression penalties

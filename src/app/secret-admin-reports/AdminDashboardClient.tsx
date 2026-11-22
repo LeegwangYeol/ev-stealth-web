@@ -128,16 +128,22 @@ export function parseSafeDate(rawDate?: string): number {
  * Generates an array of page numbers with ellipsis for accessible pagination controls.
  */
 export function getPaginationItems(current: number, total: number): Array<number | '...'> {
-  if (total <= 7) {
-    return Array.from({ length: total }, (_, i) => i + 1);
+  const safeTotal = Number.isFinite(total) ? Math.max(0, Math.floor(total)) : 0;
+  if (safeTotal === 0) return [];
+  const safeCurrent = Number.isFinite(current)
+    ? Math.max(1, Math.min(safeTotal, Math.floor(current)))
+    : 1;
+
+  if (safeTotal <= 7) {
+    return Array.from({ length: safeTotal }, (_, i) => i + 1);
   }
-  if (current <= 4) {
-    return [1, 2, 3, 4, 5, '...', total];
+  if (safeCurrent <= 4) {
+    return [1, 2, 3, 4, 5, '...', safeTotal];
   }
-  if (current >= total - 3) {
-    return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+  if (safeCurrent >= safeTotal - 3) {
+    return [1, '...', safeTotal - 4, safeTotal - 3, safeTotal - 2, safeTotal - 1, safeTotal];
   }
-  return [1, '...', current - 1, current, current + 1, '...', total];
+  return [1, '...', safeCurrent - 1, safeCurrent, safeCurrent + 1, '...', safeTotal];
 }
 
 export interface DsiBreakdown {
@@ -328,7 +334,7 @@ function getSeverityBadge(severity: string) {
   );
 }
 
-function getSourceBadge(source: string, url: string) {
+function getSourceBadge(source: string, url: string, linkTabIndex?: number) {
   const lower = (source || '').toLowerCase();
   const isBobae = lower.includes('bobae');
   const isDc = lower.includes('dc');
@@ -366,6 +372,7 @@ function getSourceBadge(source: string, url: string) {
       href={safeUrl}
       target="_blank"
       rel="noopener noreferrer"
+      tabIndex={linkTabIndex}
       title={`${badgeText} 원문 게시물 바로가기 (새 창에서 열림)`}
       aria-label={`${badgeText} 원문 게시물 바로가기 (새 창에서 열림)`}
       className={`inline-flex items-center justify-center gap-1 text-xs px-2.5 py-1.5 min-h-[44px] rounded-md border font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${badgeColor}`}
@@ -743,11 +750,11 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
   // Calculate dynamic category and source counts in a single O(N) pass
   const { categoryCounts, sourceCounts } = useMemo(() => {
-    const catCounts: Record<string, number> = { ALL: reports.length };
+    const catCounts: Record<string, number> = Object.assign(Object.create(null), { ALL: reports.length });
     for (const cat of CATEGORY_TABS) {
       if (cat.code !== 'ALL') catCounts[cat.code] = 0;
     }
-    const srcCounts: Record<string, number> = { all: reports.length };
+    const srcCounts: Record<string, number> = Object.assign(Object.create(null), { all: reports.length });
     for (const src of SOURCE_OPTIONS) {
       if (src.id !== 'all') srcCounts[src.id] = 0;
     }
@@ -757,18 +764,18 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     for (const r of reports) {
       // Category count
       const catCode = r.defect_category;
-      if (catCounts[catCode] !== undefined) {
+      if (catCode && Object.prototype.hasOwnProperty.call(catCounts, catCode)) {
         catCounts[catCode]++;
       } else {
         const mappedCode = catLabelMap.get(r.defect_category_ko);
-        if (mappedCode && catCounts[mappedCode] !== undefined) {
+        if (mappedCode && Object.prototype.hasOwnProperty.call(catCounts, mappedCode)) {
           catCounts[mappedCode]++;
         }
       }
 
       // Source count
       const srcId = (r.source || '').toLowerCase();
-      if (srcCounts[srcId] !== undefined) {
+      if (srcId && Object.prototype.hasOwnProperty.call(srcCounts, srcId)) {
         srcCounts[srcId]++;
       }
     }
@@ -777,10 +784,11 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
   // Dynamic brand aggregation with normalized naming and counts
   const { availableBrands, brandCounts } = useMemo(() => {
-    const counts: Record<string, number> = { ALL: reports.length };
+    const counts: Record<string, number> = Object.assign(Object.create(null), { ALL: reports.length });
     for (const r of reports) {
       const b = r._normalizedBrand;
-      counts[b] = (counts[b] || 0) + 1;
+      if (!b || b === '__proto__' || b === 'constructor' || b === 'prototype') continue;
+      counts[b] = (Object.prototype.hasOwnProperty.call(counts, b) ? counts[b] : 0) + 1;
     }
     const brandOrder = ['현대', '기아', '제네시스', '테슬라', '벤츠', 'BMW', 'BYD', '폴스타', '기타'];
     const existing = Object.keys(counts).filter((k) => k !== 'ALL');
@@ -797,12 +805,18 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
   // Dynamic date aggregation with presets (최근 7일, 최근 30일) and specific dates
   const { availableDates, dateCounts, maxReportTimestamp } = useMemo(() => {
-    const counts: Record<string, number> = { ALL: reports.length, RECENT_7D: 0, RECENT_30D: 0 };
+    const counts: Record<string, number> = Object.assign(Object.create(null), {
+      ALL: reports.length,
+      RECENT_7D: 0,
+      RECENT_30D: 0,
+    });
     let maxTs = 0;
     for (const r of reports) {
       if (r._timestamp > maxTs) maxTs = r._timestamp;
       const d = r.date;
-      if (d) counts[d] = (counts[d] || 0) + 1;
+      if (d && d !== '__proto__' && d !== 'constructor' && d !== 'prototype') {
+        counts[d] = (Object.prototype.hasOwnProperty.call(counts, d) ? counts[d] : 0) + 1;
+      }
     }
 
     const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
@@ -1217,7 +1231,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             aria-valuemax={100}
             aria-label="평균 부정 감성 지수"
             aria-valuetext={`${Math.round(safeScore * 100)}%`}
-            className="mt-2 w-full bg-slate-200 rounded-full h-2 overflow-hidden border border-slate-300"
+            className="mt-2 w-full bg-slate-50 rounded-full h-2 overflow-hidden border border-slate-300"
           >
             <div
               className="bg-amber-600 h-2 rounded-full transition-all duration-500"
@@ -1289,7 +1303,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               aria-describedby="admin-defect-search-hint"
               aria-label="전기차 결함 제보 및 은어 검색"
               placeholder="제목, 요약, 실차주 원문 코멘트, 차종, 은어(#ICCU폭탄 등) 실시간 검색..."
-              className="w-full pl-10 pr-10 py-2.5 min-h-[44px] text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition placeholder-slate-600"
+              className="w-full pl-10 pr-11 py-2.5 min-h-[44px] text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition placeholder-slate-600"
             />
             <span id="admin-defect-search-hint" className="sr-only">
               검색어를 입력하면 실시간으로 목록이 필터링됩니다. ESC 키를 누르면 입력한 검색어가 초기화됩니다.
@@ -1645,7 +1659,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                         </span>
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap">{getSeverityBadge(report.severity)}</td>
-                      <td className="px-3 py-3 whitespace-nowrap">{getSourceBadge(report.source || 'N/A', safeUrl)}</td>
+                      <td className="px-3 py-3 whitespace-nowrap">{getSourceBadge(report.source || 'N/A', safeUrl, viewMode === 'table' ? undefined : -1)}</td>
                       <td className="px-3 py-3 text-slate-900 font-medium max-w-xs" title={report.title}>
                         <div className="flex items-center gap-1.5 min-w-0">
                           <span id={`report-table-title-${report.id}`} className="truncate"><span>{report.title}</span></span>
@@ -1654,6 +1668,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                               href={safeUrl}
                               target="_blank"
                               rel="noopener noreferrer"
+                              tabIndex={viewMode === 'table' ? undefined : -1}
                               aria-label="게시글 원문 보기"
                               aria-describedby={`report-table-title-${report.id}`}
                               title="게시글 원문 보기 (새 창에서 열림)"
@@ -1788,7 +1803,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
                   <button
                     type="button"
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    onClick={() => setCurrentPage(Math.max(1, validCurrentPage - 1))}
                     disabled={validCurrentPage === 1}
                     aria-label="이전 페이지로 이동"
                     className="px-3 py-2 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
@@ -1826,7 +1841,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
                   <button
                     type="button"
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    onClick={() => setCurrentPage(Math.min(totalPages, validCurrentPage + 1))}
                     disabled={validCurrentPage === totalPages}
                     aria-label="다음 페이지로 이동"
                     className="px-3 py-2 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
@@ -2152,9 +2167,9 @@ const DefectReportCard = memo(function DefectReportCard({
                 safeSentimentPct >= 80
                   ? 'bg-rose-700'
                   : safeSentimentPct >= 60
-                  ? 'bg-orange-600'
+                  ? 'bg-orange-700'
                   : safeSentimentPct >= 40
-                  ? 'bg-amber-500'
+                  ? 'bg-amber-700'
                   : 'bg-emerald-600'
               }`}
               style={{ width: `${safeSentimentPct}%` }}

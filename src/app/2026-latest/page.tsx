@@ -18,7 +18,11 @@ const normalizedSiteUrl =
 function resolveSiteUrl(url: string): string {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+    if (
+      (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+      !parsed.username &&
+      !parsed.password
+    ) {
       return parsed.origin;
     }
   } catch {
@@ -397,7 +401,7 @@ export default function Latest2026Page() {
           aria-label="가로 스크롤 가능한 2026년식 KDM 주요 신차 초기 결함 및 리콜 판정 요약 표"
           className="overflow-x-auto table-scroll-container rounded-2xl border border-slate-200 bg-white shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
         >
-          <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-600 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true">
+          <div className="sm:hidden sticky left-0 flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-600 bg-slate-50 border-b border-slate-200 select-none" aria-hidden="true">
             <span>← 좌우로 밀어서 2026 신차 비교</span>
             <span className="text-[10px] text-blue-700 font-semibold">가로 스크롤 ↔</span>
           </div>

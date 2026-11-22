@@ -6,6 +6,7 @@ jitter (1.5s~3.5s), exponential backoff, cookie jar session handling, and error 
 
 from __future__ import annotations
 
+from collections import OrderedDict
 import datetime
 import email.utils
 import hashlib
@@ -210,8 +211,9 @@ def is_safe_url(
         port = parsed.port
     except ValueError as e:
         return False, f"SSRF blocked: Invalid port in URL ({e})"
-    if port is not None and port not in ports_set:
-        return False, f"SSRF blocked: Disallowed port {port}"
+    effective_port = port if port is not None else (443 if scheme == "https" else 80)
+    if effective_port not in ports_set:
+        return False, f"SSRF blocked: Disallowed port {effective_port}"
 
     # 5. IP Address Check (literal IP, octal/hex/decimal representations)
     try:
@@ -531,6 +533,29 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
             )
         new_req = super().redirect_request(req, fp, code, msg, headers, newurl)
         if new_req is not None:
+            # Strip sensitive credentials on cross-origin redirects
+            try:
+                old_p = urllib.parse.urlsplit(req.full_url)
+                new_p = urllib.parse.urlsplit(new_req.full_url)
+                old_origin = (
+                    (old_p.scheme or "").lower(),
+                    (old_p.hostname or "").lower().rstrip("."),
+                    old_p.port or (443 if (old_p.scheme or "").lower() == "https" else 80),
+                )
+                new_origin = (
+                    (new_p.scheme or "").lower(),
+                    (new_p.hostname or "").lower().rstrip("."),
+                    new_p.port or (443 if (new_p.scheme or "").lower() == "https" else 80),
+                )
+                if old_origin != new_origin:
+                    for hdr in list(new_req.headers.keys()):
+                        if hdr.lower() in ("authorization", "proxy-authorization", "cookie"):
+                            new_req.remove_header(hdr)
+                    for hdr in list(getattr(new_req, "unredirected_hdrs", {}).keys()):
+                        if hdr.lower() in ("authorization", "proxy-authorization", "cookie"):
+                            del new_req.unredirected_hdrs[hdr]
+            except Exception:
+                pass
             if hasattr(req, "_connect_timeout"):
                 new_req._connect_timeout = req._connect_timeout
             if hasattr(req, "_read_timeout"):
@@ -648,16 +673,16 @@ class CircuitBreaker:
             try:
                 parsed = urllib.parse.urlsplit(s)
                 if parsed.hostname:
-                    return parsed.hostname.lower()
+                    return parsed.hostname.lower().rstrip(".")
             except Exception:
                 pass
         try:
             parsed = urllib.parse.urlsplit("//" + s)
             if parsed.hostname:
-                return parsed.hostname.lower()
+                return parsed.hostname.lower().rstrip(".")
         except Exception:
             pass
-        return s.lower().split(":")[0].split("/")[0]
+        return s.lower().split(":")[0].split("/")[0].rstrip(".")
 
     def record_probe(self, url_or_host: str) -> None:
         """Record that a canary probe is in-flight for this host during HALF_OPEN state."""
@@ -960,7 +985,8 @@ class SafeHttpClient:
         self.last_response_from_cache = False
         self._rate_lock = threading.Lock()
         self._cache_lock = threading.Lock()
-        self._memory_cache: Dict[str, Dict[str, Any]] = {}
+        self._cookie_lock = threading.Lock()
+        self._memory_cache: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
         eff_cooldown = cooldown_seconds if cooldown_seconds is not None else circuit_cooldown
         self.circuit_breaker = circuit_breaker or CircuitBreaker(
             failure_threshold=failure_threshold,
@@ -1041,6 +1067,7 @@ class SafeHttpClient:
         # 1. In-memory cache
         with self._cache_lock:
             if key in self._memory_cache:
+                self._memory_cache.move_to_end(key)
                 entry = self._memory_cache[key]
                 return entry.get("status", 200), entry.get("text", ""), entry.get("raw", b"")
 
@@ -1051,6 +1078,8 @@ class SafeHttpClient:
                 try:
                     with open(file_path, "r", encoding="utf-8") as f:
                         data = json.load(f)
+                    if not isinstance(data, dict):
+                        return None
                     status = int(data.get("status", 200))
                     text = str(data.get("text", ""))
                     raw_hex = data.get("raw_hex", "")
@@ -1063,6 +1092,9 @@ class SafeHttpClient:
                             "time": data.get("time", time.time()),
                             "url": url,
                         }
+                        self._memory_cache.move_to_end(key)
+                        while len(self._memory_cache) > 500:
+                            self._memory_cache.popitem(last=False)
                     return status, text, raw_bytes
                 except Exception as e:
                     logger.debug(f"Cache read error for {url}: {e}")
@@ -1088,9 +1120,9 @@ class SafeHttpClient:
         }
         with self._cache_lock:
             self._memory_cache[key] = entry
-            if len(self._memory_cache) > 500:
-                oldest_k = min(self._memory_cache, key=lambda k: self._memory_cache[k].get("time", 0))
-                del self._memory_cache[oldest_k]
+            self._memory_cache.move_to_end(key)
+            while len(self._memory_cache) > 500:
+                self._memory_cache.popitem(last=False)
 
         if self.cache_dir:
             temp_path = None
@@ -1140,24 +1172,33 @@ class SafeHttpClient:
 
     def clear_cookies(self) -> None:
         """Clear all stored cookies from the session cookie jar."""
-        if hasattr(self.cookie_jar, "clear"):
-            try:
-                self.cookie_jar.clear()
-            except Exception:
+        with self._cookie_lock:
+            replaced = False
+            if hasattr(self.cookie_jar, "clear"):
+                try:
+                    self.cookie_jar.clear()
+                except Exception:
+                    self.cookie_jar = http.cookiejar.CookieJar()
+                    replaced = True
+            else:
                 self.cookie_jar = http.cookiejar.CookieJar()
-        else:
-            self.cookie_jar = http.cookiejar.CookieJar()
+                replaced = True
+            if replaced and hasattr(self.opener, "handlers"):
+                for h in getattr(self.opener, "handlers", []):
+                    if isinstance(h, urllib.request.HTTPCookieProcessor):
+                        h.cookiejar = self.cookie_jar
 
     def get_cookie_dict(self) -> Dict[str, str]:
         """Return all cookies stored in the session cookie jar as a dictionary."""
         cookie_dict: Dict[str, str] = {}
-        if self.cookie_jar is not None:
-            try:
-                for c in self.cookie_jar:
-                    if hasattr(c, "name") and hasattr(c, "value"):
-                        cookie_dict[c.name] = c.value
-            except Exception:
-                pass
+        with self._cookie_lock:
+            if self.cookie_jar is not None:
+                try:
+                    for c in list(self.cookie_jar):
+                        if hasattr(c, "name") and hasattr(c, "value"):
+                            cookie_dict[c.name] = c.value
+                except Exception:
+                    pass
         return cookie_dict
 
     def close(self) -> None:
@@ -1214,19 +1255,23 @@ class SafeHttpClient:
     def _sleep_with_jitter(self):
         """Perform polite delay with randomized jitter between requests."""
         # Prune expired cookies to prevent unbounded memory growth
-        if hasattr(self.cookie_jar, "clear_expired_cookies"):
+        should_clear_cookies = False
+        with self._cookie_lock:
+            if hasattr(self.cookie_jar, "clear_expired_cookies"):
+                try:
+                    self.cookie_jar.clear_expired_cookies()
+                except Exception:
+                    pass
             try:
-                self.cookie_jar.clear_expired_cookies()
+                if len(self.cookie_jar) > self.max_cookies:
+                    logger.info(
+                        f"Cookie jar exceeded {self.max_cookies} entries. Pruning cookies to protect memory."
+                    )
+                    should_clear_cookies = True
             except Exception:
                 pass
-        try:
-            if len(self.cookie_jar) > self.max_cookies:
-                logger.info(
-                    f"Cookie jar exceeded {self.max_cookies} entries. Pruning cookies to protect memory."
-                )
-                self.clear_cookies()
-        except Exception:
-            pass
+        if should_clear_cookies:
+            self.clear_cookies()
 
         min_d = max(0.0, float(min(self.min_delay, self.max_delay)))
         max_d = max(0.0, float(max(self.min_delay, self.max_delay)))
@@ -1377,7 +1422,8 @@ class SafeHttpClient:
         if data is not None:
             if isinstance(data, dict):
                 payload_bytes = urllib.parse.urlencode(data).encode("utf-8")
-                req_headers.setdefault("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+                if not any(k.lower() == "content-type" for k in req_headers):
+                    req_headers["Content-Type"] = "application/x-www-form-urlencoded; charset=UTF-8"
             elif isinstance(data, bytes):
                 payload_bytes = data
             elif isinstance(data, str):
@@ -1394,7 +1440,14 @@ class SafeHttpClient:
 
         req_timeout = eff_read_timeout
 
-        eff_retries = max(1, int(self.max_retries)) if self.max_retries is not None else 3
+        try:
+            eff_retries = (
+                max(1, int(self.max_retries))
+                if self.max_retries is not None and not isinstance(self.max_retries, bool)
+                else 3
+            )
+        except (ValueError, TypeError, OverflowError):
+            eff_retries = 3
 
         for attempt in range(1, eff_retries + 1):
             if attempt > 1 and self.rotate_user_agent and not has_custom_ua:
@@ -1473,11 +1526,11 @@ class SafeHttpClient:
                     detected_encoding = encoding or self._detect_encoding(content_type, raw_bytes)
                     decoded_text = robust_decode(raw_bytes, declared_encoding=detected_encoding)
 
-                    if status_code == 200 or (is_half_open_probe and status_code < 400):
+                    if status_code is not None and (status_code == 200 or (is_half_open_probe and status_code < 400)):
                         self.circuit_breaker.record_success(norm_url)
                         if is_cacheable_method and status_code == 200 and decoded_text:
                             self.set_cached_response(norm_url, status_code, decoded_text, raw_bytes)
-                    elif is_half_open_probe and status_code >= 400:
+                    elif is_half_open_probe and (status_code is None or status_code >= 400):
                         self.circuit_breaker.record_failure(norm_url, status_code=status_code)
 
                     return status_code, decoded_text, raw_bytes
@@ -1742,9 +1795,10 @@ class SafeHttpClient:
             jitter = random.uniform(0.1, 0.5)
             return min(max(max_backoff, 60.0), float(retry_after) + jitter)
 
+        exp_step = min(max(0, int(attempt)), 30)
         if not self.enable_jitter:
-            return min(max_backoff, float(2 ** attempt))
-        base = (2 ** attempt) * factor
+            return min(max_backoff, float(2 ** exp_step))
+        base = (2 ** exp_step) * factor
         jitter = random.uniform(0.5, 1.5)
         return min(max_backoff, base + jitter)
 

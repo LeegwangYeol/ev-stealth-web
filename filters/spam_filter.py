@@ -29,6 +29,8 @@ from filters.slang_lexicon import (
     NEWS_PATTERNS,
     OWNERSHIP_ANCHORS,
     STOCK_TERMS,
+    _RE_JEONSON,
+    _RE_TCAM_KO,
     _decode_bytes_safely,
     find_matching_slang,
 )
@@ -94,7 +96,7 @@ JOURNALISTIC_WIRE_REGEXES: Tuple[re.Pattern[str], ...] = (
     re.compile(r"(?:밝혔다|전했다|보도했다|배포했다)\b"),
     re.compile(r"연합뉴스|뉴시스|뉴스1"),
 )
-RE_AS_KEYWORD: re.Pattern[str] = re.compile(r"(?:\b|[^a-zA-Z])(?:as|a/s)(?:\b|[^a-zA-Z])", re.IGNORECASE)
+RE_AS_KEYWORD: re.Pattern[str] = re.compile(r"(?<![a-zA-Z0-9])(?:as|a/s)(?![a-zA-Z0-9])", re.IGNORECASE)
 _RE_BOUNDED_CATEGORY_KEYWORDS: Dict[str, re.Pattern[str]] = {
     "ota": re.compile(r"(?<![a-zA-Z])ota(?![a-zA-Z])", re.IGNORECASE),
     "soc": re.compile(r"(?<![a-zA-Z])soc(?![a-zA-Z])", re.IGNORECASE),
@@ -112,10 +114,15 @@ _RE_GLASS_KEYWORD: re.Pattern[str] = re.compile(r"(?<![불자])유리(?!하|한|
 def matches_category_keyword(category: str, keyword: str, text_lower: str) -> bool:
     """Match a CATEGORY_KEYWORD_MAP keyword against lowercased text with ASCII boundary safety."""
     kw_lower = keyword.lower()
-    if category == "SERVICE_REPAIR_COST" and kw_lower == "as":
-        return bool(RE_AS_KEYWORD.search(text_lower))
+    if category == "SERVICE_REPAIR_COST":
+        if kw_lower == "as":
+            return bool(RE_AS_KEYWORD.search(text_lower))
+        if kw_lower == "전손":
+            return bool(_RE_JEONSON.search(text_lower))
     if category == "BUILD_QUALITY" and kw_lower == "유리":
         return bool(_RE_GLASS_KEYWORD.search(text_lower))
+    if category == "SOFTWARE_ELECTRONICS" and kw_lower == "티캠":
+        return bool(_RE_TCAM_KO.search(text_lower))
     bounded_pat = _RE_BOUNDED_CATEGORY_KEYWORDS.get(kw_lower)
     if bounded_pat is not None:
         return bool(bounded_pat.search(text_lower))
@@ -405,14 +412,18 @@ class SpamFilter:
         political_terms: Optional[Sequence[str]] = None,
         ownership_anchors: Optional[Sequence[str]] = None,
     ) -> None:
-        self.news_regexes = list(news_regexes or NEWS_REGEXES)
-        self.stock_terms = list(stock_terms or STOCK_TERMS)
-        self.financial_terms = list(stock_terms or FINANCIAL_SPECULATION_TERMS)
-        self.commercial_spam_terms = list(commercial_spam_terms or COMMERCIAL_SPAM_KEYWORDS)
-        self.commercial_spam_regexes = list(commercial_spam_regexes or COMMERCIAL_SPAM_REGEXES)
+        self.news_regexes = list(news_regexes if news_regexes is not None else NEWS_REGEXES)
+        self.stock_terms = list(stock_terms if stock_terms is not None else STOCK_TERMS)
+        self.financial_terms = list(stock_terms if stock_terms is not None else FINANCIAL_SPECULATION_TERMS)
+        self.commercial_spam_terms = list(
+            commercial_spam_terms if commercial_spam_terms is not None else COMMERCIAL_SPAM_KEYWORDS
+        )
+        self.commercial_spam_regexes = list(
+            commercial_spam_regexes if commercial_spam_regexes is not None else COMMERCIAL_SPAM_REGEXES
+        )
         self.hard_illicit_regex_set = set(HARD_ILLICIT_REGEXES)
-        self.political_terms = list(political_terms or POLITICAL_TERMS)
-        self.ownership_anchors = list(ownership_anchors or OWNERSHIP_ANCHORS)
+        self.political_terms = list(political_terms if political_terms is not None else POLITICAL_TERMS)
+        self.ownership_anchors = list(ownership_anchors if ownership_anchors is not None else OWNERSHIP_ANCHORS)
 
     def evaluate_stage1_noise(self, text: Any, url: Any = "") -> Tuple[bool, str]:
         """Check if post is journalistic news, stock trading, commercial spam, politics, or baseless flaming.
@@ -452,7 +463,9 @@ class SpamFilter:
                 break
 
         has_defect_keyword = any(
-            (_RE_DEFECT_HAJA.search(text_lower) is not None) if dk == "하자" else (dk in text_lower)
+            (_RE_DEFECT_HAJA.search(text_lower) is not None)
+            if dk == "하자"
+            else ((_RE_JEONSON.search(text_lower) is not None) if dk == "전손" else (dk in text_lower))
             for dk in DEFECT_QUESTION_KEYWORDS
         )
 
@@ -465,7 +478,8 @@ class SpamFilter:
         has_ownership_anchor = any(anchor and anchor in text_str for anchor in self.ownership_anchors)
 
         has_defect_symptom = has_defect_keyword or has_defect_slang or any(
-            w in text_lower for w in (
+            (_RE_JEONSON.search(text_lower) is not None) if w == "전손" else (w in text_lower)
+            for w in (
                 "고장", "결함", "누수", "소음", "파손",
                 "경고등", "먹통", "단차", "터짐", "멈춤",
                 "방전", "화재", "전손", "통교체"

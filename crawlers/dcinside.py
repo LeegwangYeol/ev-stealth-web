@@ -8,6 +8,7 @@ Returns structured raw post dictionaries adhering to PROJECT.md § Interface Con
 
 from __future__ import annotations
 
+from collections import OrderedDict
 import datetime
 import html
 import json
@@ -25,7 +26,7 @@ from crawlers.base_crawler import (
     _sanitize_referer,
     _unescape_url_entities,
 )
-from utils.http_client import SafeHttpClient, clean_html_text
+from utils.http_client import SafeHttpClient, clean_html_text, robust_decode
 
 logger = logging.getLogger("DCInsideCrawler")
 
@@ -99,7 +100,7 @@ def extract_container_content(html_str: str, tag_name: str, class_name: str) -> 
     masked = RE_SCRIPT_STYLE.sub(_repl, masked)
 
     pattern = re.compile(
-        rf"<{re.escape(tag_name)}\b[^>]*class\s*=\s*(?:[\"'][^\"']*\b{re.escape(class_name)}\b[^\"']*[\"']|{re.escape(class_name)}(?=[\s>]))[^>]*>",
+        rf"<{re.escape(tag_name)}\b[^>]*?(?<=\s)class\s*=\s*(?:[\"'][^\"']*\b{re.escape(class_name)}\b[^\"']*[\"']|{re.escape(class_name)}(?=[\s>]))[^>]*>",
         re.IGNORECASE,
     )
     match = pattern.search(masked)
@@ -234,7 +235,7 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
         except (ValueError, TypeError, OverflowError):
             pass
 
-    # 2. Relative times: "방금", "10분 전", "1시간 전", "어제"
+    # 2. Relative times: "방금", "10분 전", "1시간 전", "어제", "그저께"
     if "방금" in raw:
         return now.isoformat()
     rel_min = re.search(r"(\d+)\s*분\s*전", raw)
@@ -255,32 +256,69 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
             return (now - datetime.timedelta(days=int(rel_day.group(1)))).isoformat()
         except (ValueError, OverflowError):
             return now.isoformat()
+    if raw == "그저께":
+        return (now - datetime.timedelta(days=2)).isoformat()
     if "어제" in raw:
         yesterday = now - datetime.timedelta(days=1)
-        time_part = re.search(r"(\d{1,2}):(\d{2})(?::(\d{2}))?", raw)
+        time_part = re.search(r"(?:(오전|오후|AM|PM)\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?", raw, re.IGNORECASE)
         if time_part:
             try:
-                h = int(time_part.group(1))
-                m = int(time_part.group(2))
-                s = int(time_part.group(3)) if time_part.group(3) else 0
+                meridiem = time_part.group(1).upper() if time_part.group(1) else None
+                h = int(time_part.group(2))
+                if meridiem in ("오후", "PM") and h < 12:
+                    h += 12
+                elif meridiem in ("오전", "AM") and h == 12:
+                    h = 0
+                m = int(time_part.group(3))
+                s = int(time_part.group(4)) if time_part.group(4) else 0
                 return yesterday.replace(hour=h, minute=m, second=s, microsecond=0).isoformat()
             except (ValueError, OverflowError):
                 return yesterday.isoformat()
         return yesterday.isoformat()
 
-    # 3. Full timestamp: "2026-09-08 10:11:21" or "2026.09.08 (화) 10:11" or "2026.9.8"
-    full_match = re.search(
-        r"(\d{4})[./\-\s]+(\d{1,2})[./\-\s]+(\d{1,2})(?:[\sT]*(?:\([월화수목금토일]\))?[\sT]*(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
+    # 2b. Korean format with 년, 월, 일: "2026년 9월 8일 (화) 오후 02:15"
+    kr_date = re.search(
+        r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일(?:\s*(?:\([월화수목금토일A-Za-z]+\))?\s*(?:(오전|오후|AM|PM)\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
         raw,
+        re.IGNORECASE,
+    )
+    if kr_date:
+        try:
+            y = int(kr_date.group(1))
+            m = int(kr_date.group(2))
+            d = int(kr_date.group(3))
+            meridiem = kr_date.group(4).upper() if kr_date.group(4) else None
+            h = int(kr_date.group(5)) if kr_date.group(5) is not None else 12
+            if meridiem in ("오후", "PM") and h < 12:
+                h += 12
+            elif meridiem in ("오전", "AM") and h == 12:
+                h = 0
+            mi = int(kr_date.group(6)) if kr_date.group(6) is not None else 0
+            s = int(kr_date.group(7)) if kr_date.group(7) is not None else 0
+            dt = datetime.datetime(y, m, d, h, mi, s, tzinfo=datetime.timezone.utc)
+            return dt.isoformat()
+        except (ValueError, OverflowError):
+            return now.isoformat()
+
+    # 3. Full timestamp: "2026-09-08 10:11:21" or "2026.09.08 (화) 오후 10:11" or "2026.9.8"
+    full_match = re.search(
+        r"(?<!\d)(\d{4})[./\-\s]+(\d{1,2})[./\-\s]+(\d{1,2})\.?(?:[\sT]*(?:\([월화수목금토일A-Za-z]+\))?[\sT]*(?:(오전|오후|AM|PM)\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
+        raw,
+        re.IGNORECASE,
     )
     if full_match:
         try:
             year = int(full_match.group(1))
             month = int(full_match.group(2))
             day = int(full_match.group(3))
-            hour = int(full_match.group(4)) if full_match.group(4) is not None else 12
-            minute = int(full_match.group(5)) if full_match.group(5) is not None else 0
-            second = int(full_match.group(6)) if full_match.group(6) is not None else 0
+            meridiem = full_match.group(4).upper() if full_match.group(4) else None
+            hour = int(full_match.group(5)) if full_match.group(5) is not None else 12
+            if meridiem in ("오후", "PM") and hour < 12:
+                hour += 12
+            elif meridiem in ("오전", "AM") and hour == 12:
+                hour = 0
+            minute = int(full_match.group(6)) if full_match.group(6) is not None else 0
+            second = int(full_match.group(7)) if full_match.group(7) is not None else 0
             dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
             return dt.isoformat()
         except (ValueError, OverflowError):
@@ -288,8 +326,9 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
 
     # 4. Case: "YY/MM/DD" or "YY.MM.DD"
     yymmdd_match = re.match(
-        r"^(\d{2})[./\-](\d{1,2})[./\-](\d{1,2})(?:[\sT]*(?:\([월화수목금토일]\))?[\sT]*(\d{1,2}):(\d{2})(?::(\d{2}))?)?$",
+        r"^(?<!\d)(\d{2})[./\-](\d{1,2})[./\-](\d{1,2})(?:[\sT]*(?:\([월화수목금토일A-Za-z]+\))?[\sT]*(?:(오전|오후|AM|PM)\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?)?$",
         raw,
+        re.IGNORECASE,
     )
     if yymmdd_match:
         try:
@@ -297,15 +336,36 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
             year = 2000 + yy if yy < 70 else 1900 + yy
             month = int(yymmdd_match.group(2))
             day = int(yymmdd_match.group(3))
-            hour = int(yymmdd_match.group(4)) if yymmdd_match.group(4) is not None else 12
-            minute = int(yymmdd_match.group(5)) if yymmdd_match.group(5) is not None else 0
-            second = int(yymmdd_match.group(6)) if yymmdd_match.group(6) is not None else 0
+            meridiem = yymmdd_match.group(4).upper() if yymmdd_match.group(4) else None
+            hour = int(yymmdd_match.group(5)) if yymmdd_match.group(5) is not None else 12
+            if meridiem in ("오후", "PM") and hour < 12:
+                hour += 12
+            elif meridiem in ("오전", "AM") and hour == 12:
+                hour = 0
+            minute = int(yymmdd_match.group(6)) if yymmdd_match.group(6) is not None else 0
+            second = int(yymmdd_match.group(7)) if yymmdd_match.group(7) is not None else 0
             dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
             return dt.isoformat()
         except (ValueError, OverflowError):
             return now.isoformat()
 
-    # 5. Time only: "10:11" or "10:11:20"
+    # 5. Time only: "10:11" or "10:11:20" or "오후 02:15"
+    ampm_time = re.match(r"^(오전|오후|AM|PM)\s*(\d{1,2}):(\d{2})(?::(\d{2}))?$", raw, re.IGNORECASE)
+    if ampm_time:
+        try:
+            meridiem = ampm_time.group(1).upper()
+            hour = int(ampm_time.group(2))
+            minute = int(ampm_time.group(3))
+            second = int(ampm_time.group(4)) if ampm_time.group(4) else 0
+            if meridiem in ("오후", "PM") and hour < 12:
+                hour += 12
+            elif meridiem in ("오전", "AM") and hour == 12:
+                hour = 0
+            dt = now.replace(hour=hour, minute=minute, second=second, microsecond=0)
+            return dt.isoformat()
+        except (ValueError, OverflowError):
+            return now.isoformat()
+
     time_match = re.match(r"^(\d{1,2}):(\d{2})(?::(\d{2}))?$", raw)
     if time_match:
         try:
@@ -319,19 +379,33 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
 
     # 6. Month-day: "09.08" or "09.08 10:11"
     md_match = re.match(
-        r"^(\d{1,2})[./\-](\d{1,2})(?:[\sT]*(?:\([월화수목금토일]\))?[\sT]*(\d{1,2}):(\d{2})(?::(\d{2}))?)?$",
+        r"^(\d{1,2})[./\-](\d{1,2})(?:[\sT]*(?:\([월화수목금토일A-Za-z]+\))?[\sT]*(?:(오전|오후|AM|PM)\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?)?$",
         raw,
+        re.IGNORECASE,
     )
     if md_match:
         try:
             month = int(md_match.group(1))
             day = int(md_match.group(2))
-            hour = int(md_match.group(3)) if md_match.group(3) is not None else 12
-            minute = int(md_match.group(4)) if md_match.group(4) is not None else 0
-            second = int(md_match.group(5)) if md_match.group(5) is not None else 0
-            # Year rollover guard: if crawling in Jan but post date is Nov/Dec, post belongs to previous year
+            meridiem = md_match.group(3).upper() if md_match.group(3) else None
+            hour = int(md_match.group(4)) if md_match.group(4) is not None else 12
+            if meridiem in ("오후", "PM") and hour < 12:
+                hour += 12
+            elif meridiem in ("오전", "AM") and hour == 12:
+                hour = 0
+            minute = int(md_match.group(5)) if md_match.group(5) is not None else 0
+            second = int(md_match.group(6)) if md_match.group(6) is not None else 0
+            # Year rollover guard: roll back year if month/day would land meaningfully in the future
             year = now.year - 1 if (now.month == 1 and month >= 11) else now.year
-            dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
+            try:
+                dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
+            except ValueError:
+                if month == 2 and day == 29:
+                    dt = datetime.datetime(now.year - 1, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
+                else:
+                    raise
+            if year == now.year and dt > now + datetime.timedelta(days=1):
+                dt = dt.replace(year=now.year - 1)
             return dt.isoformat()
         except (ValueError, OverflowError):
             return now.isoformat()
@@ -545,9 +619,11 @@ class DCInsideCrawler(BaseCrawler):
                 best_anchor = None
                 # Prefer anchor linking directly to post view (containing view, no=, or post_no)
                 for a_attrs, a_inner in anchors:
-                    href_m = re.search(r'\bhref=(?:"([^"]+)"|\'([^\']+)\'|([^\s>]+))', a_attrs, re.IGNORECASE)
+                    href_m = re.search(r'\bhref\s*=\s*(?:"([^"]+)"|\'([^\']+)\'|([^\s>]+))', a_attrs, re.IGNORECASE)
                     href_val = (href_m.group(1) or href_m.group(2) or href_m.group(3)) if href_m else ""
                     if "reply_num" in a_attrs or "reply_numbox" in a_attrs:
+                        continue
+                    if href_val.strip().lower().startswith("javascript:"):
                         continue
                     if "view" in href_val or "no=" in href_val or (post_no and post_no in href_val):
                         best_anchor = (href_val, a_inner)
@@ -559,8 +635,10 @@ class DCInsideCrawler(BaseCrawler):
                     for a_attrs, a_inner in anchors:
                         if "reply_num" in a_attrs or "reply_numbox" in a_attrs:
                             continue
-                        href_m = re.search(r'\bhref=(?:"([^"]+)"|\'([^\']+)\'|([^\s>]+))', a_attrs, re.IGNORECASE)
+                        href_m = re.search(r'\bhref\s*=\s*(?:"([^"]+)"|\'([^\']+)\'|([^\s>]+))', a_attrs, re.IGNORECASE)
                         href_val = (href_m.group(1) or href_m.group(2) or href_m.group(3)) if href_m else ""
+                        if href_val.strip().lower().startswith("javascript:"):
+                            continue
                         candidates.append((href_val, a_inner))
                     if candidates:
                         best_anchor = max(candidates, key=lambda c: len(clean_html_text(c[1])))
@@ -735,6 +813,8 @@ class DCInsideCrawler(BaseCrawler):
             )
             if resp and isinstance(resp, (tuple, list)) and len(resp) >= 2:
                 status, text = resp[0], resp[1]
+                if isinstance(text, (bytes, bytearray, memoryview)):
+                    text = robust_decode(text)
                 if status == 200 and text:
                     return self.parse_comment_json(text)
         except Exception as e:
@@ -848,9 +928,9 @@ class DCInsideCrawler(BaseCrawler):
         # Auto-detect gallery_id from URL if left default or blank
         eff_gallery_id = str(gallery_id or "").strip().lower()
         if (not eff_gallery_id or eff_gallery_id == "car_new1") and norm_post_url:
-            gid_m = re.search(r"[?&]id=([a-zA-Z0-9_]+)", norm_post_url, re.IGNORECASE)
+            gid_m = re.search(r"[?&]id=([a-zA-Z0-9_-]+)", norm_post_url, re.IGNORECASE)
             if not gid_m:
-                gid_m = re.search(r"/(?:board|mgallery/board|mini/board)/([a-zA-Z0-9_]+)/\d+", norm_post_url, re.IGNORECASE)
+                gid_m = re.search(r"/(?:board|mgallery/board|mini/board)/([a-zA-Z0-9_-]+)/\d+", norm_post_url, re.IGNORECASE)
             if gid_m:
                 eff_gallery_id = gid_m.group(1).lower()
         if not eff_gallery_id:
@@ -942,28 +1022,30 @@ class DCInsideCrawler(BaseCrawler):
 
         # 3. Author & Date
         author = ""
-        writer_match = re.search(
-            r'<td class=["\']gall_writer[^"\']*["\'][^>]*>.*?<span class=["\']nickname["\'][^>]*>(.*?)</span>',
-            html_content,
-            re.DOTALL | re.IGNORECASE,
-        )
+        writer_scope_div = extract_container_content(html_content, "div", "gall_writer")
+        writer_scope_td = re.search(r'<td\b[^>]*\bclass=["\']?[^"\'>]*\bgall_writer\b[^>]*>.*?</td>', html_content, re.DOTALL | re.IGNORECASE)
+        writer_scope_html = writer_scope_div or (writer_scope_td.group(0) if writer_scope_td else "")
+        writer_match = None
+        if writer_scope_html:
+            writer_match = re.search(r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\bnickname\b)[^>]*>(.*?)</span>', writer_scope_html, re.DOTALL | re.IGNORECASE)
+            if not writer_match:
+                writer_match = re.search(r'data-nick=["\']([^"\']+)["\']', writer_scope_html, re.IGNORECASE)
         if not writer_match:
-            writer_match = re.search(r'<span class=["\']nickname["\'][^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
+            writer_match = re.search(r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\bnickname\b)[^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
         if not writer_match:
             writer_match = re.search(r'data-nick=["\']([^"\']+)["\']', html_content, re.IGNORECASE)
         if not writer_match:
             writer_match = re.search(r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\bwriter\b)[^>]*>(.*?)</span>', html_content, re.IGNORECASE)
         if writer_match:
             author = clean_html_text(writer_match.group(1))
-        writer_scope_m = re.search(r'<td\b[^>]*\bclass=["\']?[^"\'>]*\bgall_writer\b[^>]*>.*?</td>', html_content, re.DOTALL | re.IGNORECASE)
-        ip_search_scope = writer_scope_m.group(0) if writer_scope_m else html_content.split("write_div", 1)[0]
+        ip_search_scope = writer_scope_html or html_content.split("write_div", 1)[0].split("gallview-contents", 1)[0]
         ip_match = re.search(r'<span\b[^>]*\bclass=["\']ip["\'][^>]*>\(([0-9.*]+)\)</span>', ip_search_scope, re.IGNORECASE)
         if ip_match:
             author = f"{author or 'ㅇㅇ'} ({ip_match.group(1)})"
 
         raw_date = ""
         date_match = re.search(
-            r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\bgall_date\b)[^>]*\btitle=["\']([^"\']*)["\']',
+            r'<(?:span|td|div|li|em|p)\b(?=[^>]*\bclass=["\']?[^"\'>]*\bgall_date\b)[^>]*\btitle=["\']([^"\']*)["\']',
             html_content,
             re.IGNORECASE,
         )
@@ -971,7 +1053,7 @@ class DCInsideCrawler(BaseCrawler):
             raw_date = date_match.group(1).strip()
         if not raw_date:
             date_match2 = re.search(
-                r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\bgall_date\b)[^>]*>(.*?)</span>',
+                r'<(?:span|td|div|li|em|p)\b(?=[^>]*\bclass=["\']?[^"\'>]*\bgall_date\b)[^>]*>(.*?)</(?:span|td|div|li|em|p)>',
                 html_content,
                 re.DOTALL | re.IGNORECASE,
             )
@@ -1113,13 +1195,16 @@ class DCInsideCrawler(BaseCrawler):
 
         effective_gallery_id = str(gallery_id or "").strip().lower()
         if (not effective_gallery_id or effective_gallery_id == "car_new1") and eff_url:
-            m_gid = re.search(r"[?&]id=([a-zA-Z0-9_]+)", eff_url, re.IGNORECASE)
+            m_gid = re.search(r"[?&]id=([a-zA-Z0-9_-]+)", eff_url, re.IGNORECASE)
             if not m_gid:
-                m_gid = re.search(r"/(?:board|mgallery/board|mini/board)/([a-zA-Z0-9_]+)/\d+", eff_url, re.IGNORECASE)
+                m_gid = re.search(r"/(?:board|mgallery/board|mini/board)/([a-zA-Z0-9_-]+)/\d+", eff_url, re.IGNORECASE)
             if m_gid:
                 effective_gallery_id = m_gid.group(1).lower()
         if not effective_gallery_id:
             effective_gallery_id = "car_new1"
+
+        if isinstance(text, (bytes, bytearray, memoryview)):
+            text = robust_decode(text)
 
         if status != 200 or not text:
             # If rate-limited (HTTP 429), gracefully degrade without hammering mobile endpoint
@@ -1128,7 +1213,9 @@ class DCInsideCrawler(BaseCrawler):
                 return self._fallback_cached_post(eff_url)
 
             # Try fallback to mobile view URL on desktop 404/empty or layout anomalies
-            if effective_post_id and not eff_url.lower().startswith(DC_MOBILE_BASE_URL):
+            eff_host = (urllib.parse.urlsplit(eff_url).hostname or "").lower().rstrip(".")
+            is_dc_desktop = (eff_host == "dcinside.com" or eff_host.endswith(".dcinside.com")) and eff_host != "m.dcinside.com"
+            if effective_post_id and is_dc_desktop:
                 # Canonical mobile route: m.dcinside.com/board/{gallery_id}/{post_id}
                 safe_gid = urllib.parse.quote(effective_gallery_id, safe="")
                 safe_pid = urllib.parse.quote(effective_post_id, safe="")
@@ -1148,6 +1235,8 @@ class DCInsideCrawler(BaseCrawler):
                     )
                     if m_resp and isinstance(m_resp, (tuple, list)) and len(m_resp) >= 2:
                         m_status, m_text = m_resp[0], m_resp[1]
+                        if isinstance(m_text, (bytes, bytearray, memoryview)):
+                            m_text = robust_decode(m_text)
                         if m_status == 429:
                             logger.warning(f"Rate-limited (HTTP 429) on DCInside mobile fallback ({mobile_url}).")
                             return self._fallback_cached_post(eff_url)
@@ -1248,13 +1337,18 @@ class DCInsideCrawler(BaseCrawler):
 
         self.ensure_warm_up()
         results: List[Dict[str, Any]] = []
-        seen_pids = set()
+        seen_pids: OrderedDict[str, None] = OrderedDict()
+        MAX_SEEN_TRACK = 10000
         consecutive_failures = 0
         MAX_CONSECUTIVE_FAILURES = 5
         eff_pages = _normalize_pages(pages, default=1)
 
         for page in range(1, eff_pages + 1):
             url = url_builder(page)
+            is_safe, reason = _is_safe_client_url(self.client, url)
+            if not is_safe:
+                logger.warning(f"SSRF defense blocked DCInside list URL {url!r}: {reason}")
+                break
             logger.info(f"{action_label} DCInside [{gallery_id}] (Page {page}): {url}")
             try:
                 resp = self.client.get(
@@ -1269,6 +1363,9 @@ class DCInsideCrawler(BaseCrawler):
             except Exception as e:
                 logger.warning(f"Network dropout fetching list for DC [{gallery_id}] page {page}: {e}")
                 break
+
+            if isinstance(text, (bytes, bytearray, memoryview)):
+                text = robust_decode(text)
 
             if status != 200 or not text:
                 logger.warning(f"Failed to fetch list for DC [{gallery_id}] page {page} (status: {status})")
@@ -1286,7 +1383,7 @@ class DCInsideCrawler(BaseCrawler):
 
             page_keys = {str(it.get("post_id") or it.get("url") or "") for it in items}
             page_keys.discard("")
-            if page_keys and page_keys.issubset(seen_pids):
+            if page_keys and page_keys.issubset(seen_pids.keys()):
                 logger.info(f"Page {page} of DCInside [{gallery_id}] repeated previously seen posts. Halting pagination loop.")
                 break
 
@@ -1298,7 +1395,9 @@ class DCInsideCrawler(BaseCrawler):
                 if dedup_key and dedup_key in seen_pids:
                     continue
                 if dedup_key:
-                    seen_pids.add(dedup_key)
+                    if len(seen_pids) >= MAX_SEEN_TRACK:
+                        seen_pids.popitem(last=False)
+                    seen_pids[dedup_key] = None
 
                 post = self.fetch_post(item.get("url", ""), gallery_id=gallery_id, post_id=pid, referer=url)
                 if post:

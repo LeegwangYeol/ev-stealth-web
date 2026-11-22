@@ -505,6 +505,9 @@ export function getDepreciationDatabase(): DepreciationDatabase {
         isPlainRecord(rawDepreciationData.tco_parameters.fuel_tariffs) &&
         isPlainRecord(rawDepreciationData.tco_parameters.efficiency_baselines) &&
         isPlainRecord(rawDepreciationData.tco_parameters.tax_parameters) &&
+        Array.isArray(rawDepreciationData.tco_parameters.tax_parameters.ice_displacement_tiers) &&
+        rawDepreciationData.tco_parameters.tax_parameters.ice_displacement_tiers.length > 0 &&
+        rawDepreciationData.tco_parameters.tax_parameters.ice_displacement_tiers.every(isPlainRecord) &&
         isPlainRecord(rawDepreciationData.tco_parameters.auxiliary_benefits) &&
         rawDepreciationData.models.every(isPlainRecord);
 
@@ -530,6 +533,49 @@ export function getDepreciationDatabase(): DepreciationDatabase {
         ? rawClawback.tiers.filter(isPlainRecord)
         : [];
 
+      const rawChemistries: Record<string, unknown> = isPlainRecord(rawDepreciationData.chemistries)
+        ? rawDepreciationData.chemistries
+        : {};
+      const normalizedChemistries = { ...fb.chemistries } as Record<BatteryChemistryType, BatteryChemistryProfile>;
+      for (const chemKey of Object.keys(fb.chemistries) as BatteryChemistryType[]) {
+        const candidate = rawChemistries[chemKey];
+        if (isPlainRecord(candidate)) {
+          normalizedChemistries[chemKey] = {
+            ...fb.chemistries[chemKey],
+            ...(candidate as Partial<BatteryChemistryProfile>),
+          };
+        }
+      }
+      const rawTaxParams: Record<string, unknown> = isPlainRecord(rawTco.tax_parameters)
+        ? rawTco.tax_parameters
+        : {};
+      const validDisplacementTiers = Array.isArray(rawTaxParams.ice_displacement_tiers)
+        ? rawTaxParams.ice_displacement_tiers.filter(isPlainRecord)
+        : [];
+      const rawAdjBatteryChem: Record<string, unknown> = isPlainRecord(rawAdjFactors.battery_chemistry)
+        ? rawAdjFactors.battery_chemistry
+        : {};
+      const normalizedAdjBatteryChem = { ...fb.adjustment_factors.battery_chemistry } as Record<
+        string,
+        BatteryChemistryAdjustment
+      >;
+      for (const [chemKey, candidate] of Object.entries(rawAdjBatteryChem)) {
+        if (isPlainRecord(candidate)) {
+          const baseEntry = Object.prototype.hasOwnProperty.call(fb.adjustment_factors.battery_chemistry, chemKey)
+            ? (fb.adjustment_factors.battery_chemistry as Record<string, BatteryChemistryAdjustment>)[chemKey]
+            : undefined;
+          normalizedAdjBatteryChem[chemKey] = {
+            ...(baseEntry ?? {
+              cycle_life_bonus_yr3_5: 0,
+              winter_seasonal_discount: -0.01,
+              fire_safety_reputation_bonus: 0,
+              description: '',
+            }),
+            ...(candidate as Partial<BatteryChemistryAdjustment>),
+          };
+        }
+      }
+
       cachedDatabase = {
         metadata: isPlainRecord(rawDepreciationData.metadata)
           ? ({ ...fb.metadata, ...rawDepreciationData.metadata } as unknown as DepreciationDatabase['metadata'])
@@ -539,27 +585,39 @@ export function getDepreciationDatabase(): DepreciationDatabase {
           : fb.market_context,
         adjustment_factors: {
           ...fb.adjustment_factors,
-          ...(rawAdjFactors as Partial<AdjustmentFactors>),
           warranty_cliff: isPlainRecord(rawAdjFactors.warranty_cliff)
             ? ({ ...fb.adjustment_factors.warranty_cliff, ...rawAdjFactors.warranty_cliff } as WarrantyCliffAdjustment)
             : fb.adjustment_factors.warranty_cliff,
-          battery_chemistry: isPlainRecord(rawAdjFactors.battery_chemistry)
-            ? ({ ...fb.adjustment_factors.battery_chemistry, ...rawAdjFactors.battery_chemistry } as AdjustmentFactors['battery_chemistry'])
-            : fb.adjustment_factors.battery_chemistry,
+          battery_chemistry: normalizedAdjBatteryChem as AdjustmentFactors['battery_chemistry'],
+          facelift_hardware: isPlainRecord(rawAdjFactors.facelift_hardware)
+            ? ({ ...fb.adjustment_factors.facelift_hardware, ...rawAdjFactors.facelift_hardware } as FaceliftHardwareAdjustment)
+            : fb.adjustment_factors.facelift_hardware,
+          software_ota: isPlainRecord(rawAdjFactors.software_ota)
+            ? ({
+                ...(fb.adjustment_factors.software_ota as Record<string, number>),
+                ...(rawAdjFactors.software_ota as Record<string, number>),
+              } as AdjustmentFactors['software_ota'])
+            : fb.adjustment_factors.software_ota,
           mileage_sensitivity: isPlainRecord(rawAdjFactors.mileage_sensitivity)
             ? ({ ...fb.adjustment_factors.mileage_sensitivity, ...rawAdjFactors.mileage_sensitivity } as MileageSensitivityAdjustment)
             : fb.adjustment_factors.mileage_sensitivity,
         },
-        chemistries: isPlainRecord(rawDepreciationData.chemistries)
-          ? ({ ...fb.chemistries, ...rawDepreciationData.chemistries } as unknown as DepreciationDatabase['chemistries'])
-          : fb.chemistries,
+        chemistries: normalizedChemistries,
         battery_replacement_costs:
           validReplacementCosts.length > 0
             ? (validReplacementCosts as unknown as BatteryReplacementTier[])
             : fb.battery_replacement_costs,
         subsidy_clawback_schedule: {
-          ...fb.subsidy_clawback_schedule,
-          ...(rawClawback as Partial<SubsidyClawbackSchedule>),
+          mandatory_operation_months:
+            typeof rawClawback.mandatory_operation_months === 'number' &&
+            Number.isFinite(rawClawback.mandatory_operation_months) &&
+            rawClawback.mandatory_operation_months > 0
+              ? rawClawback.mandatory_operation_months
+              : fb.subsidy_clawback_schedule.mandatory_operation_months,
+          legal_basis:
+            typeof rawClawback.legal_basis === 'string' && rawClawback.legal_basis.trim()
+              ? rawClawback.legal_basis
+              : fb.subsidy_clawback_schedule.legal_basis,
           tiers:
             validClawbackTiers.length > 0
               ? (validClawbackTiers as unknown as ClawbackTier[])
@@ -576,7 +634,14 @@ export function getDepreciationDatabase(): DepreciationDatabase {
             ? ({ ...fb.tco_parameters.efficiency_baselines, ...rawTco.efficiency_baselines } as TcoEfficiencyBaselines)
             : fb.tco_parameters.efficiency_baselines,
           tax_parameters: isPlainRecord(rawTco.tax_parameters)
-            ? ({ ...fb.tco_parameters.tax_parameters, ...rawTco.tax_parameters } as TcoTaxParameters)
+            ? ({
+                ...fb.tco_parameters.tax_parameters,
+                ...(rawTaxParams as Partial<TcoTaxParameters>),
+                ice_displacement_tiers:
+                  validDisplacementTiers.length > 0
+                    ? (validDisplacementTiers as unknown as IceDisplacementTier[])
+                    : fb.tco_parameters.tax_parameters.ice_displacement_tiers,
+              } as TcoTaxParameters)
             : fb.tco_parameters.tax_parameters,
           auxiliary_benefits: isPlainRecord(rawTco.auxiliary_benefits)
             ? ({ ...fb.tco_parameters.auxiliary_benefits, ...rawTco.auxiliary_benefits } as TcoAuxiliaryBenefits)
@@ -652,15 +717,23 @@ export function getAllBrands(): { id: string; name_ko: string; name_en: string; 
   const brandMap = new Map<string, { id: string; name_ko: string; name_en: string; count: number }>();
   const models = getAllModels();
   for (const model of models) {
-    if (!isPlainRecord(model) || typeof model.brand_id !== 'string' || !model.brand_id.trim()) continue;
-    const existing = brandMap.get(model.brand_id);
+    if (!isPlainRecord(model) || typeof model.brand_id !== 'string') continue;
+    const brandId = model.brand_id.trim();
+    if (!brandId) continue;
+    const existing = brandMap.get(brandId);
     if (existing) {
       existing.count += 1;
     } else {
-      brandMap.set(model.brand_id, {
-        id: model.brand_id,
-        name_ko: typeof model.brand_name_ko === 'string' && model.brand_name_ko ? model.brand_name_ko : model.brand_id,
-        name_en: typeof model.brand_name_en === 'string' && model.brand_name_en ? model.brand_name_en : model.brand_id,
+      brandMap.set(brandId, {
+        id: brandId,
+        name_ko:
+          typeof model.brand_name_ko === 'string' && model.brand_name_ko.trim()
+            ? model.brand_name_ko
+            : brandId,
+        name_en:
+          typeof model.brand_name_en === 'string' && model.brand_name_en.trim()
+            ? model.brand_name_en
+            : brandId,
         count: 1,
       });
     }
@@ -963,8 +1036,8 @@ export function calculateDepreciation(
   }
 
   // 2. Warranty Cliff
-  const warrantyYears = finiteNonNegOr(model?.warranty?.years, 8);
-  const warrantyKm = finiteNonNegOr(model?.warranty?.km, 160000);
+  const warrantyYears = Math.min(1_000, finiteNonNegOr(model?.warranty?.years, 8));
+  const warrantyKm = Math.min(10_000_000, finiteNonNegOr(model?.warranty?.km, 160000));
   const remainingWarrantyYears = warrantyYears - years;
   const remainingWarrantyKm = warrantyKm - mileageKm;
   const isExpired = remainingWarrantyYears <= 0 || remainingWarrantyKm <= 0;
@@ -1084,8 +1157,14 @@ export function calculateDepreciation(
         ? Math.max(0, roundTo(remainingWarrantyKm, 0))
         : 0,
     },
-    keyPros: typeof model?.key_pros_resale === 'string' ? model.key_pros_resale : '데이터 동기화 완료',
-    keyCons: typeof model?.key_cons_resale === 'string' ? model.key_cons_resale : '정기 점검 필요',
+    keyPros:
+      typeof model?.key_pros_resale === 'string' && model.key_pros_resale.trim()
+        ? model.key_pros_resale
+        : '데이터 동기화 완료',
+    keyCons:
+      typeof model?.key_cons_resale === 'string' && model.key_cons_resale.trim()
+        ? model.key_cons_resale
+        : '정기 점검 필요',
   };
 }
 
@@ -1158,8 +1237,6 @@ export function simulateBatteryHealth(
   const dbChem =
     dbChems && Object.prototype.hasOwnProperty.call(dbChems, chemistryKey)
       ? dbChems[chemistryKey]
-      : dbChems && Object.prototype.hasOwnProperty.call(dbChems, 'NCM_811')
-      ? dbChems.NCM_811
       : undefined;
   const defaultChem: BatteryChemistryProfile = isPlainRecord(dbChem)
     ? {
@@ -1459,11 +1536,11 @@ export function simulateBatteryHealth(
     actionRecommendation,
     replacementCostEstimate: {
       tierId:
-        typeof targetTier?.tier_id === 'string' && targetTier.tier_id
+        typeof targetTier?.tier_id === 'string' && targetTier.tier_id.trim()
           ? targetTier.tier_id
           : 'TIER_77KWH',
       segmentName:
-        typeof targetTier?.segment_name === 'string' && targetTier.segment_name
+        typeof targetTier?.segment_name === 'string' && targetTier.segment_name.trim()
           ? targetTier.segment_name
           : '준중형/중형 (65~84kWh)',
       newPackKrw,
@@ -1493,7 +1570,7 @@ export function calculateSubsidyClawback(
 ): ClawbackResult {
   const parsedMonths = parseNumericInput(heldMonths);
   const normalizedMonths = Number.isFinite(parsedMonths)
-    ? Math.max(0, parsedMonths)
+    ? Math.min(100_000, Math.max(0, parsedMonths))
     : heldMonths === Infinity || parsedMonths === Infinity
     ? 24
     : 0;
@@ -1609,7 +1686,7 @@ export function calculateSubsidyClawback(
   return {
     heldMonths: normalizeZero(normalizedMonths),
     tierLabel:
-      typeof matchedTier?.label_ko === 'string' && matchedTier.label_ko
+      typeof matchedTier?.label_ko === 'string' && matchedTier.label_ko.trim()
         ? matchedTier.label_ko
         : defaultTier.label_ko,
     statutoryClawbackRate: statutoryRate,
@@ -1722,11 +1799,14 @@ export function calculateTcoComparison(
         finiteNonNegOr(fallbackTaxParams?.education_tax_multiplier, hardFallbackTco.tax_parameters.education_tax_multiplier)
       )
     ),
-    ice_age_discount_start_year: Math.max(
-      1,
-      finitePosOr(
-        rawTaxParams?.ice_age_discount_start_year,
-        finitePosOr(fallbackTaxParams?.ice_age_discount_start_year, hardFallbackTco.tax_parameters.ice_age_discount_start_year)
+    ice_age_discount_start_year: Math.min(
+      100,
+      Math.max(
+        1,
+        finitePosOr(
+          rawTaxParams?.ice_age_discount_start_year,
+          finitePosOr(fallbackTaxParams?.ice_age_discount_start_year, hardFallbackTco.tax_parameters.ice_age_discount_start_year)
+        )
       )
     ),
     ice_age_discount_rate_per_year: clamp(

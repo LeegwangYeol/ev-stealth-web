@@ -26,9 +26,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from collections import OrderedDict
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 # Configure logging
 logging.basicConfig(
@@ -133,6 +134,8 @@ def normalize_scraper_url(raw_url: Any, base_url: str) -> Optional[str]:
     """Normalize a scraped link or post URL against base_url while rejecting unsafe schemes."""
     if not raw_url or not isinstance(raw_url, str):
         return None
+    if not base_url or not isinstance(base_url, str):
+        return None
     stripped_raw = raw_url.strip()
     if not stripped_raw or any(ord(c) < 32 or ord(c) == 127 for c in stripped_raw):
         return None
@@ -143,7 +146,12 @@ def normalize_scraper_url(raw_url: Any, base_url: str) -> Optional[str]:
         parsed = urllib.parse.urlsplit(eff_url)
     except Exception:
         return None
-    if "\\" in (parsed.netloc or "") or parsed.username is not None or parsed.password is not None:
+    if (
+        "\\" in (parsed.netloc or "")
+        or any(c.isspace() for c in (parsed.netloc or ""))
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
         return None
     if parsed.scheme and parsed.scheme.lower() not in ("http", "https"):
         return None
@@ -154,7 +162,12 @@ def normalize_scraper_url(raw_url: Any, base_url: str) -> Optional[str]:
             cand_parsed = urllib.parse.urlsplit(candidate)
         except Exception:
             return None
-        if "\\" in (cand_parsed.netloc or "") or cand_parsed.username is not None or cand_parsed.password is not None:
+        if (
+            "\\" in (cand_parsed.netloc or "")
+            or any(c.isspace() for c in (cand_parsed.netloc or ""))
+            or cand_parsed.username is not None
+            or cand_parsed.password is not None
+        ):
             return None
         return candidate if cand_parsed.netloc else None
     if eff_url.lower().startswith(("http://", "https://")):
@@ -243,6 +256,8 @@ def is_safe_url(
 
     if "\\" in (parsed.netloc or ""):
         return False, "SSRF blocked: Invalid backslash in URL authority"
+    if any(c.isspace() for c in (parsed.netloc or "")):
+        return False, "SSRF blocked: Invalid whitespace in URL authority"
     if parsed.username is not None or parsed.password is not None:
         return False, "SSRF blocked: URL authority userinfo (@) not allowed"
 
@@ -258,18 +273,38 @@ def is_safe_url(
     if not host_lower:
         return False, "Missing hostname in URL"
 
+    if allowed_ports is not None:
+        try:
+            explicit_port = parsed.port
+        except ValueError:
+            return False, "SSRF blocked: Invalid port in URL"
+        eff_port = explicit_port if explicit_port is not None else (443 if scheme == "https" else 80)
+        if eff_port not in allowed_ports:
+            return False, f"SSRF blocked: Disallowed port {eff_port}"
+
     if allow_private_ips:
         return True, "Private IPs allowed by configuration"
 
     if "%" in host_lower:
         return False, "SSRF blocked: IPv6 zone ID not allowed"
 
-    if host_lower in DISALLOWED_HOSTS:
-        return False, f"SSRF blocked: Disallowed hostname '{host_lower}'"
+    # Normalize IDNA/Unicode hostnames (e.g., fullwidth digits '１２７.０.０.１' or 'ⓛⓞⓒⓐⓛⓗⓞⓢⓣ')
+    # so host and IP literal checks catch homograph/NFKC bypasses even without DNS.
+    host_candidates = [host_lower]
+    if not host_lower.isascii():
+        try:
+            idna_host = host_lower.encode("idna").decode("ascii").lower().strip().rstrip(".")
+            if idna_host and idna_host not in host_candidates:
+                host_candidates.append(idna_host)
+        except UnicodeError:
+            return False, f"SSRF blocked: Invalid internationalized hostname '{host_lower}'"
 
-    for suffix in DISALLOWED_HOST_SUFFIXES:
-        if host_lower.endswith(suffix):
-            return False, f"SSRF blocked: Hostname '{host_lower}' matches disallowed internal suffix '{suffix}'"
+    for cand in host_candidates:
+        if cand in DISALLOWED_HOSTS:
+            return False, f"SSRF blocked: Disallowed hostname '{cand}'"
+        for suffix in DISALLOWED_HOST_SUFFIXES:
+            if cand.endswith(suffix):
+                return False, f"SSRF blocked: Hostname '{cand}' matches disallowed internal suffix '{suffix}'"
 
     ports_set = allowed_ports if allowed_ports is not None else STANDARD_SAFE_PORTS
     try:
@@ -279,25 +314,27 @@ def is_safe_url(
     if parsed_port is not None and parsed_port not in ports_set:
         return False, f"SSRF blocked: Disallowed port {parsed_port}"
 
-    try:
-        ip = ipaddress.ip_address(host_lower)
-        if not is_safe_ip(ip):
-            return False, f"SSRF blocked: Unsafe IP address {ip}"
-        return True, "Safe public IP"
-    except ValueError:
-        pass
+    for cand in host_candidates:
+        try:
+            ip = ipaddress.ip_address(cand)
+            if not is_safe_ip(ip):
+                return False, f"SSRF blocked: Unsafe IP address {ip}"
+            return True, "Safe public IP"
+        except ValueError:
+            pass
 
-    try:
-        packed = socket.inet_aton(host_lower)
-        ip4 = ipaddress.IPv4Address(packed)
-        if not is_safe_ip(ip4):
-            return False, f"SSRF blocked: Unsafe encoded IP address {ip4}"
-        return True, "Safe public IP"
-    except (OSError, ValueError):
-        pass
+        try:
+            packed = socket.inet_aton(cand)
+            ip4 = ipaddress.IPv4Address(packed)
+            if not is_safe_ip(ip4):
+                return False, f"SSRF blocked: Unsafe encoded IP address {ip4}"
+            return True, "Safe public IP"
+        except (OSError, ValueError):
+            pass
 
+    dns_host = host_candidates[-1]
     try:
-        addr_info = socket.getaddrinfo(host_lower, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        addr_info = socket.getaddrinfo(dns_host, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
         if addr_info:
             for family, socktype, proto, canonname, sockaddr in addr_info:
                 ip_str = sockaddr[0]
@@ -588,11 +625,21 @@ class ResilientHTTPSConnection(http.client.HTTPSConnection):
         super().__init__(*args, **kwargs)
 
     def connect(self):
+        if self._tunnel_host and not self._allow_private_ips:
+            tunnel_host = (
+                f"[{self._tunnel_host}]"
+                if ":" in str(self._tunnel_host) and not str(self._tunnel_host).startswith("[")
+                else str(self._tunnel_host)
+            )
+            tunnel_url = f"https://{tunnel_host}:{self._tunnel_port}" if getattr(self, "_tunnel_port", None) else f"https://{tunnel_host}"
+            is_safe, reason = is_safe_url(tunnel_url)
+            if not is_safe:
+                raise OSError(f"SSRF blocked: Unsafe tunnel host '{self._tunnel_host}' ({reason})")
         self.sock = _create_safe_connection(
             (self.host, self.port),
             self._conn_timeout,
             self.source_address,
-            allow_private_ips=self._allow_private_ips and not self._tunnel_host,
+            allow_private_ips=self._allow_private_ips,
         )
         try:
             if self._read_timeout is not None:
@@ -640,6 +687,20 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
             )
         new_req = super().redirect_request(req, fp, code, msg, headers, target_url)
         if new_req is not None:
+            orig_parsed = urllib.parse.urlsplit(req.full_url)
+            new_parsed = urllib.parse.urlsplit(new_req.full_url)
+            orig_port = orig_parsed.port or (443 if (orig_parsed.scheme or "").lower() == "https" else 80)
+            new_port = new_parsed.port or (443 if (new_parsed.scheme or "").lower() == "https" else 80)
+            if (
+                (orig_parsed.scheme or "").lower() != (new_parsed.scheme or "").lower()
+                or (orig_parsed.hostname or "").lower() != (new_parsed.hostname or "").lower()
+                or orig_port != new_port
+            ):
+                for hdr_name in ("Authorization", "Proxy-Authorization", "Cookie"):
+                    new_req.remove_header(hdr_name)
+                    for existing_key in list(new_req.unredirected_hdrs.keys()):
+                        if existing_key.lower() == hdr_name.lower():
+                            del new_req.unredirected_hdrs[existing_key]
             if hasattr(req, "_connect_timeout"):
                 new_req._connect_timeout = req._connect_timeout
             if hasattr(req, "_read_timeout"):
@@ -1038,8 +1099,24 @@ class SafeHttpClient:
         self.cooldown_interval = cooldown_interval
         self.cooldown_time = cooldown_time
         self.timeout = timeout
-        self.max_response_size = max_response_size
-        self.max_cookies = max_cookies
+        try:
+            mrs = (
+                int(max_response_size)
+                if max_response_size is not None and not isinstance(max_response_size, bool)
+                else MAX_RESPONSE_BYTES
+            )
+        except (ValueError, TypeError, OverflowError):
+            mrs = MAX_RESPONSE_BYTES
+        self.max_response_size = max(0, mrs)
+        try:
+            mc = (
+                int(max_cookies)
+                if max_cookies is not None and not isinstance(max_cookies, bool)
+                else MAX_COOKIEJAR_ENTRIES
+            )
+        except (ValueError, TypeError, OverflowError):
+            mc = MAX_COOKIEJAR_ENTRIES
+        self.max_cookies = max(0, mc)
         self.enable_cache = enable_cache
         self.cache_fallback = cache_fallback
         self.allow_private_ips = bool(allow_private_ips)
@@ -1047,7 +1124,7 @@ class SafeHttpClient:
         self.request_count = 0
         self.last_request_time = 0.0
         self.last_response_from_cache = False
-        self._memory_cache: Dict[str, Dict[str, Any]] = {}
+        self._memory_cache: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
         self._cache_lock = threading.Lock()
         self._rate_lock = threading.Lock()
         eff_cooldown = cooldown_seconds if cooldown_seconds is not None else circuit_cooldown
@@ -1129,6 +1206,7 @@ class SafeHttpClient:
         with self._cache_lock:
             if key in self._memory_cache:
                 entry = self._memory_cache[key]
+                self._memory_cache.move_to_end(key)
                 return entry.get("status", 200), entry.get("text", ""), entry.get("raw", b"")
 
         if self.cache_dir:
@@ -1149,9 +1227,9 @@ class SafeHttpClient:
                             "time": data.get("time", time.time()),
                             "url": url,
                         }
-                        if len(self._memory_cache) > 500:
-                            oldest_k = min(self._memory_cache, key=lambda k: self._memory_cache[k].get("time", 0))
-                            del self._memory_cache[oldest_k]
+                        self._memory_cache.move_to_end(key)
+                        while len(self._memory_cache) > 500:
+                            self._memory_cache.popitem(last=False)
                     return status, text, raw_bytes
                 except Exception as e:
                     logger.debug(f"Cache read error for {url}: {e}")
@@ -1168,36 +1246,38 @@ class SafeHttpClient:
         if not self.enable_cache or not url or not decoded_text:
             return
         key = self._cache_key(url)
+        now_ts = time.time()
+        raw_copy = bytes(raw_bytes)
         entry = {
             "status": int(status_code),
             "text": str(decoded_text),
-            "raw": bytes(raw_bytes),
-            "time": time.time(),
+            "raw": raw_copy,
+            "time": now_ts,
             "url": str(url),
         }
         with self._cache_lock:
             self._memory_cache[key] = entry
-            if len(self._memory_cache) > 500:
-                oldest_k = min(self._memory_cache, key=lambda k: self._memory_cache[k].get("time", 0))
-                del self._memory_cache[oldest_k]
+            self._memory_cache.move_to_end(key)
+            while len(self._memory_cache) > 500:
+                self._memory_cache.popitem(last=False)
 
         if self.cache_dir:
             temp_path = None
             try:
                 os.makedirs(self.cache_dir, exist_ok=True)
                 file_path = os.path.join(self.cache_dir, f"{key}.json")
+                payload = {
+                    "url": str(url),
+                    "status": int(status_code),
+                    "text": str(decoded_text),
+                    "raw_hex": raw_copy.hex(),
+                    "time": now_ts,
+                }
                 temp_fd, temp_path = tempfile.mkstemp(
                     dir=self.cache_dir,
                     prefix=f".tmp_cache_{os.getpid()}_{threading.get_ident()}_{uuid.uuid4().hex[:8]}_",
                     suffix=".json",
                 )
-                payload = {
-                    "url": str(url),
-                    "status": int(status_code),
-                    "text": str(decoded_text),
-                    "raw_hex": bytes(raw_bytes).hex(),
-                    "time": time.time(),
-                }
                 with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
                     json.dump(payload, f)
                 os.replace(temp_path, file_path)
@@ -1386,14 +1466,25 @@ class SafeHttpClient:
         if not is_safe:
             logger.warning(f"SSRF defense blocked warm_up_session to {norm_url}: {reason}")
             return False
-        if not self.circuit_breaker.is_available(norm_url):
+        cb_allowed = (
+            self.circuit_breaker.try_acquire(norm_url)
+            if hasattr(self.circuit_breaker, "try_acquire")
+            else self.circuit_breaker.is_available(norm_url)
+        )
+        if not cb_allowed:
             logger.warning(f"Circuit breaker OPEN for {norm_url}; skipping session warm-up.")
             return False
+        if not hasattr(self.circuit_breaker, "try_acquire"):
+            if self.circuit_breaker.get_state(norm_url) == CircuitBreakerState.HALF_OPEN:
+                self.circuit_breaker.record_probe(norm_url)
         if self.opener is None:
+            if hasattr(self.circuit_breaker, "release_probe"):
+                self.circuit_breaker.release_probe(norm_url)
             logger.error("SafeHttpClient opener is not initialized.")
             return False
         logger.info(f"Warming up session on base domain: {norm_url}")
         resp = None
+        cb_resolved = False
         try:
             headers = get_random_headers(referer=referer)
             req = urllib.request.Request(norm_url, headers=headers)
@@ -1405,10 +1496,20 @@ class SafeHttpClient:
             except TypeError:
                 _ = resp.read()
             self.circuit_breaker.record_success(norm_url)
+            cb_resolved = True
             logger.info(f"Session warmed up successfully on {norm_url}. Cookies in jar: {len(self.cookie_jar)}")
             return True
         except urllib.error.HTTPError as he:
             logger.warning(f"Session warm-up HTTP {he.code} on {norm_url}: {he.reason}")
+            if isinstance(getattr(he, "reason", None), str) and he.reason.startswith("SSRF Blocked:"):
+                pass
+            elif he.code in (403, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524):
+                retry_after = self._parse_retry_after(he) if he.code in (429, 503) else None
+                self.circuit_breaker.record_failure(norm_url, status_code=he.code, retry_after=retry_after)
+                cb_resolved = True
+            elif self.circuit_breaker.get_state(norm_url) == CircuitBreakerState.HALF_OPEN:
+                self.circuit_breaker.record_success(norm_url)
+                cb_resolved = True
             try:
                 if hasattr(he, "fp") and he.fp:
                     he.fp.close()
@@ -1418,8 +1519,12 @@ class SafeHttpClient:
             return False
         except Exception as e:
             logger.warning(f"Session warm-up encountered notice on {norm_url}: {e}")
+            self.circuit_breaker.record_failure(norm_url)
+            cb_resolved = True
             return False
         finally:
+            if not cb_resolved and hasattr(self.circuit_breaker, "release_probe"):
+                self.circuit_breaker.release_probe(norm_url)
             if resp is not None:
                 try:
                     if hasattr(resp, "close"):
@@ -1874,6 +1979,9 @@ class SafeHttpClient:
         if match:
             return match.group(1).strip().lower()
 
+        if not raw_bytes:
+            return "utf-8"
+
         # Check HTML meta charset in initial bytes
         head_bytes = bytes(raw_bytes[:16384]) if isinstance(raw_bytes, (bytearray, memoryview)) else raw_bytes[:16384]
         prefix = head_bytes.decode("ascii", "ignore")
@@ -1902,9 +2010,9 @@ def robust_decode(raw_bytes: Union[bytes, bytearray, memoryview, str, None], dec
     norm_declared = None
     if declared_encoding and isinstance(declared_encoding, str):
         norm_declared = declared_encoding.strip().lower()
-        if norm_declared in ("x-windows-949", "windows-949", "ms949"):
+        if norm_declared in ("x-windows-949", "windows-949", "ms949", "ms-949", "cp-949"):
             norm_declared = "cp949"
-        elif norm_declared in ("ks_c_5601-1987", "ksc5601", "ksc_5601-1987", "euc_kr", "x-euc-kr"):
+        elif norm_declared in ("ks_c_5601-1987", "ks_c_5601", "ksc5601", "ksc_5601-1987", "euc_kr", "euckr", "x-euc-kr"):
             norm_declared = "euc-kr"
         elif norm_declared in ("utf8", "utf_8"):
             norm_declared = "utf-8"
@@ -2000,6 +2108,18 @@ def encode_euc_kr_query(params: Dict[str, Any]) -> bytes:
     return "&".join(encoded_pairs).encode("ascii")
 
 
+_RE_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+_RE_SCRIPT_STYLE = re.compile(
+    r"<(script|style)\b[^>]*>(?:.*?</\1\s*>|.*$)", re.DOTALL | re.IGNORECASE
+)
+_RE_BLOCK_TAGS = re.compile(
+    r"<(br|p|/p|div|/div|li|/li|h\d|/h\d|tr|/tr|dt|/dt|dd|/dd)\b[^>]*>", re.IGNORECASE
+)
+_RE_ANY_TAG = re.compile(r"<[^>]+>")
+_RE_TRAILING_TAG = re.compile(r"<[a-zA-Z/][^<]*$")
+_RE_HORIZONTAL_WS = re.compile(r"[ \t]+")
+
+
 def clean_html_text(raw_html: Union[str, bytes, bytearray, memoryview, Any]) -> str:
     """Remove HTML tags, script/style blocks, decode entities, and normalize whitespace."""
     if raw_html is None:
@@ -2012,11 +2132,11 @@ def clean_html_text(raw_html: Union[str, bytes, bytearray, memoryview, Any]) -> 
         return ""
 
     cleaned = raw_html.replace("\x00", " ")
-    cleaned = re.sub(r"<!--.*?-->", " ", cleaned, flags=re.DOTALL)
-    cleaned = re.sub(r"<(script|style)\b[^>]*>(?:.*?</\1\s*>|.*$)", " ", cleaned, flags=re.DOTALL | re.IGNORECASE)
-    cleaned = re.sub(r"<(br|p|/p|div|/div|li|/li|h\d|/h\d|tr|/tr|dt|/dt|dd|/dd)[^>]*>", "\n", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"<[^>]+>", " ", cleaned)
-    cleaned = re.sub(r"<[a-zA-Z/][^<]*$", " ", cleaned)
+    cleaned = _RE_HTML_COMMENT.sub(" ", cleaned)
+    cleaned = _RE_SCRIPT_STYLE.sub(" ", cleaned)
+    cleaned = _RE_BLOCK_TAGS.sub("\n", cleaned)
+    cleaned = _RE_ANY_TAG.sub(" ", cleaned)
+    cleaned = _RE_TRAILING_TAG.sub(" ", cleaned)
     cleaned = html.unescape(cleaned)
     if "&" in cleaned:
         cleaned = html.unescape(cleaned)
@@ -2026,8 +2146,223 @@ def clean_html_text(raw_html: Union[str, bytes, bytearray, memoryview, Any]) -> 
         .replace("\ufeff", "")
         .replace("\u3000", " ")
     )
-    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in cleaned.splitlines()]
+    lines = [_RE_HORIZONTAL_WS.sub(" ", line).strip() for line in cleaned.splitlines()]
     return "\n".join([line for line in lines if line])
+
+
+def extract_meta_content(html_content: str, prop_name: str) -> str:
+    """Extract content from a <meta> tag matching property/name regardless of attribute order."""
+    if not html_content or not isinstance(html_content, str) or not prop_name:
+        return ""
+    prop_pat = re.compile(
+        rf'\b(?:property|name)\s*=\s*(?:"{re.escape(prop_name)}"|\'{re.escape(prop_name)}\')',
+        re.IGNORECASE,
+    )
+    content_pat = re.compile(r'\bcontent\s*=\s*(?:"([^"]*)"|\'([^\']*)\')', re.IGNORECASE)
+    for meta_m in re.finditer(r"<meta\b[^>]*>", html_content, re.IGNORECASE):
+        tag = meta_m.group(0)
+        if prop_pat.search(tag):
+            cm = content_pat.search(tag)
+            if cm:
+                val = cm.group(1) if cm.group(1) is not None else (cm.group(2) or "")
+                return clean_html_text(val)
+    return ""
+
+
+def strip_non_body_html(html_content: str) -> str:
+    """Remove <head>, <script>, <style>, and HTML comments before fallback metadata searches."""
+    if not html_content or not isinstance(html_content, str):
+        return ""
+    cleaned = re.sub(r"<head\b[^>]*>.*?</head>", " ", html_content, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = _RE_HTML_COMMENT.sub(" ", cleaned)
+    cleaned = _RE_SCRIPT_STYLE.sub(" ", cleaned)
+    return cleaned
+
+
+COMPILED_VEHICLE_PATTERNS: List[Tuple[re.Pattern, str]] = [
+    (re.compile(pat, re.IGNORECASE), vname) for pat, vname in COMMON_VEHICLE_PATTERNS
+]
+_LOWERED_CATEGORY_KEYWORDS: Dict[str, List[str]] = {
+    cat: [kw.lower() for kw in kws] for cat, kws in COMMON_CATEGORY_KEYWORDS.items()
+}
+
+
+def classify_ev_text(
+    text: str,
+    vehicle_patterns: Optional[List[Tuple[str, str]]] = None,
+    category_keywords: Optional[Dict[str, List[str]]] = None,
+) -> Tuple[str, Optional[str]]:
+    """Classify text into target vehicle and complaint category using precompiled patterns."""
+    if not text or not isinstance(text, str):
+        return "BYD EV General", None
+    text_lower = text.lower()
+
+    target_vehicle = "BYD EV General"
+    if vehicle_patterns is None or vehicle_patterns is COMMON_VEHICLE_PATTERNS:
+        for compiled_pat, vname in COMPILED_VEHICLE_PATTERNS:
+            if compiled_pat.search(text_lower):
+                target_vehicle = vname
+                break
+    else:
+        for pattern, vname in vehicle_patterns:
+            if re.search(pattern, text_lower):
+                target_vehicle = vname
+                break
+
+    if category_keywords is None or category_keywords is COMMON_CATEGORY_KEYWORDS:
+        kw_map = _LOWERED_CATEGORY_KEYWORDS
+        category_scores = {cat: 0 for cat in kw_map}
+        for cat, kws in kw_map.items():
+            for kw_lower in kws:
+                if kw_lower in text_lower:
+                    category_scores[cat] += 1
+    else:
+        category_scores = {cat: 0 for cat in category_keywords}
+        for cat, kws in category_keywords.items():
+            for kw in kws:
+                if kw.lower() in text_lower:
+                    category_scores[cat] += 1
+
+    if not category_scores:
+        return target_vehicle, None
+    best_cat = max(category_scores.items(), key=lambda x: x[1])
+    category = best_cat[0] if best_cat[1] > 0 else None
+    return target_vehicle, category
+
+
+def determine_complaint_severity(category: str, text: str) -> str:
+    """Heuristic severity assessment for EV defect complaints."""
+    text_lower = (text or "").lower()
+    if any(w in text_lower for w in ["황천길", "사고", "화재", "죽을뻔", "피쉬테일", "브레이킹", "롤백", "추돌", "벽돌", "방전", "팬텀"]):
+        return "critical_safety"
+    if any(w in text_lower for w in ["튕김", "통신에러", "충전 불가", "안올라감", "멈춤", "물림", "거북이등", "출력 제한"]):
+        return "functional_failure"
+    if any(w in text_lower for w in ["아파트", "주민", "입주자", "금지", "민폐", "항의", "입차 거부"]):
+        return "social_conflict"
+    return "convenience_issue"
+
+
+def extract_defect_topic(category: str, text: str) -> str:
+    """Derive standardized technical defect topic string matching inventory."""
+    if category == "parking":
+        if "어라운드뷰" in text or "왜곡" in text or "어안" in text or "프레임" in text:
+            return "3D 어라운드뷰 왜곡 및 프레임 드랍으로 인한 휠/차체 긁힘"
+        if "센서" in text or "비핑" in text or "초음파" in text:
+            return "초음파 주차 센서 고스트 비핑 및 반응 지연"
+        if "주차타워" in text or "중량" in text or "2톤" in text:
+            return "LFP 배터리 중량 초과(2톤)로 인한 기계식 주차타워 입고 불가"
+        if "이중주차" in text or "N단" in text or "중립" in text:
+            return "이중주차(N단 중립주차) 불가 및 전자식 파킹브레이크 강제 체결"
+        if "자동주차" in text or "연석" in text:
+            return "자동주차 라인 인식 실패 및 연석 충돌 / 고스트 브레이킹"
+        return "아파트 지하주차장 입차 거부 및 입주민 화재 포비아 갈등"
+
+    elif category == "charging":
+        if "겨울" in text or "저온" in text or "굼벵이" in text:
+            return "겨울철 저온 LFP 배터리 급속 충전 속도 급락 (굼벵이 충전)"
+        if "튕김" in text or "환경부" in text or "채비" in text or "통신" in text or "핸드셰이크" in text:
+            return "국내 급속 충전기(환경부, 채비) PLC 통신 오류 및 세션 튕김"
+        if "물림" in text or "커넥터" in text or "안뽑힘" in text or "락" in text:
+            return "완속/급속 충전 커넥터 락 고착 및 도어 결빙"
+        if "12V" in text or "벽돌" in text or "저전압" in text:
+            return "12V 저전압 배터리 방전으로 인한 전장 시스템 먹통"
+        if "완속" in text or "7kW" in text:
+            return "완속 충전기(7kW) 통신 에러 및 충전 중단"
+        return "BMS SOC 잔량 오판 및 20%→0% 급락 벽돌 방전"
+
+    elif category == "rain_driving":
+        if "타이어" in text or "배트맨" in text or "수막" in text or "웻그립" in text:
+            return "중국산 순정 OE 타이어(Atlas Batman 등) 극악 웻그립/수막현상 및 휠스핀"
+        if "피쉬테일" in text or "회생제동" in text or "맨홀" in text or "철판" in text:
+            return "빗길 회생제동 시 맨홀/철판 통과 피쉬테일(차체 털림)"
+        if "팬텀" in text or "고스트" in text or "브레이킹" in text or "dipilot" in text.lower():
+            return "폭우 시 ADAS(DiPilot) 센서/카메라 비 가림으로 인한 유령 급제동(팬텀 브레이킹)"
+        if "와이퍼" in text or "채터링" in text:
+            return "오토 와이퍼 센서 로직 오작동 및 와이퍼 암 채터링 소음"
+        if "디프로스트" in text or "김서림" in text or "성에" in text:
+            return "공조기 디프로스트(성에/습기 제거) 로직 미흡으로 전면 시야 차단"
+        return "차체 단차로 인한 웨더스트립 빗물 누수 및 하부 볼트 부식"
+
+    elif category == "hill_climbing":
+        if "롤백" in text or "밀림" in text or "오토홀드" in text:
+            return "경사로 정차 후 재출발 시 오토홀드 해제 딜레이로 뒤로 밀림(롤백)"
+        if "거북이" in text or "과열" in text or "쓰로틀링" in text:
+            return "산길 연속 등판 시 모터/인버터 발열 쓰로틀링 (거북이모드 출력 제한)"
+        if "휠스핀" in text or "TCS" in text or "토크" in text:
+            return "젖은 노면/오르막 출발 시 전륜 휠스핀 및 미흡한 TCS 토크 벡터링"
+        if "1톤" in text or "화물" in text or "t4k" in text.lower() or "마사다" in text:
+            return "1톤 상용차(T4K, 이티밴, 마사다) 화물 적재 시 등판 전비 급락 및 등판 불능"
+        return "저SoC(15% 이하) 배터리 전압 강하로 인한 급경사 등판 출력 급감"
+
+    return "중국 전기차 시스템 결함"
+
+
+def load_platform_seed_records(
+    platforms: Sequence[str],
+    seed_filenames: Sequence[str],
+    default_board_name: str,
+    limit: Optional[int] = None,
+) -> List[ComplaintRecord]:
+    """Load fallback ComplaintRecord entries from seed datasets when live scraping is unavailable."""
+    if limit is not None and limit <= 0:
+        return []
+    platform_set = set(platforms)
+    default_platform = platforms[0] if platforms else "unknown"
+    records: List[ComplaintRecord] = []
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    raw_dirs = [
+        os.path.join(base_dir, "data"),
+        os.path.join(os.path.dirname(base_dir), "data"),
+        os.path.join(os.getcwd(), "data"),
+    ]
+    search_dirs: List[str] = []
+    seen_dirs: Set[str] = set()
+    for d in raw_dirs:
+        abs_d = os.path.abspath(d)
+        if abs_d not in seen_dirs:
+            seen_dirs.add(abs_d)
+            search_dirs.append(d)
+
+    seen_ids: Set[str] = set()
+    for s_dir in search_dirs:
+        if not os.path.isdir(s_dir):
+            continue
+        for s_name in seed_filenames:
+            s_file = os.path.join(s_dir, s_name)
+            if os.path.isfile(s_file):
+                try:
+                    with open(s_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if isinstance(data, list):
+                        for item in data:
+                            if isinstance(item, dict) and item.get("platform") in platform_set:
+                                pid = str(item.get("id") or item.get("post_id") or "")
+                                if pid and pid in seen_ids:
+                                    continue
+                                if pid:
+                                    seen_ids.add(pid)
+                                records.append(ComplaintRecord(
+                                    id=pid,
+                                    platform=item.get("platform") or default_platform,
+                                    board_name=item.get("board_name") or default_board_name,
+                                    post_url=item.get("post_url") or item.get("url") or "",
+                                    post_title=item.get("post_title") or item.get("title") or "",
+                                    target_vehicle=item.get("target_vehicle") or "Unknown",
+                                    category=item.get("category") or "repair_as",
+                                    defect_topic=item.get("defect_topic") or "",
+                                    raw_quote=item.get("raw_quote") or item.get("content") or "",
+                                    slang_terms=item.get("slang_terms") if isinstance(item.get("slang_terms"), list) else [],
+                                    severity=item.get("severity") or "convenience_issue",
+                                    platform_metadata=item.get("platform_metadata") if isinstance(item.get("platform_metadata"), dict) else {},
+                                    collected_at=str(item.get("collected_at") or ""),
+                                ))
+                                if limit is not None and len(records) >= limit:
+                                    return records
+                except Exception as e:
+                    logger.debug(f"Failed to load seed records from {s_file}: {e}")
+        if records:
+            break
+    return records[:limit] if limit is not None else records
 
 
 def extract_slang_terms(text: str, slang_dictionary: Dict[str, Any]) -> List[str]:
@@ -2039,9 +2374,10 @@ def extract_slang_terms(text: str, slang_dictionary: Dict[str, Any]) -> List[str
     keys_iter = slang_dictionary.keys() if hasattr(slang_dictionary, "keys") else slang_dictionary
     for term in keys_iter:
         term_str = str(term)
-        if term_str.lower() in text_lower or term_str in text:
+        term_lower = term_str.lower()
+        if term_lower in text_lower or (term_lower != term_str and term_str in text):
             found_terms.append(term_str)
-    return sorted(list(set(found_terms)))
+    return sorted(set(found_terms))
 
 
 def save_complaints_json(records: List[Union[ComplaintRecord, Dict[str, Any]]], output_path: str):

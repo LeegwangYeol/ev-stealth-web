@@ -1634,8 +1634,11 @@ _RE_BYD_SEAL: re.Pattern[str] = re.compile(
     re.IGNORECASE,
 )
 _RE_RICE_COOKER_APP: re.Pattern[str] = re.compile(r"(?:전기|쿠쿠|쿠첸|압력|미니|캠핑용)\s*밥솥")
-_RE_JEONSON: re.Pattern[str] = re.compile(r"(?<![안회충감운])전손(?!잡|실|상|가락|목|바닥|톱|님)")
+_RE_JEONSON: re.Pattern[str] = re.compile(r"(?<![안회충감운금완])전손(?!잡|실|상|가락|목|바닥|톱|님)")
 _RE_TCAM_KO: re.Pattern[str] = re.compile(r"(?<![가-힣])티캠")
+_RE_BOUNDED_ICCU: re.Pattern[str] = re.compile(r"(?<![a-zA-Z0-9])iccu(?![a-zA-Z])", re.IGNORECASE)
+_RE_BOUNDED_V2L: re.Pattern[str] = re.compile(r"(?<![a-zA-Z0-9])v2l(?![a-zA-Z])", re.IGNORECASE)
+_RE_MEGI: re.Pattern[str] = re.compile(r"(?<![헤꾸꼬도])메기(?!탕|매운탕)")
 
 
 def _decode_bytes_safely(raw_bytes: Union[bytes, bytearray]) -> str:
@@ -1720,6 +1723,15 @@ def find_matching_slang(text: Any, max_length: int = 50_000) -> List[SlangEntry]
         elif entry.term == "티캠":
             if _RE_TCAM_KO.search(text_nfc):
                 matches.append(entry)
-        elif term_nfc in text_nfc or term_lower in text_lower:
+        elif entry.term == "ICCU":
+            if _RE_BOUNDED_ICCU.search(text_nfc):
+                matches.append(entry)
+        elif entry.term == "V2L":
+            if _RE_BOUNDED_V2L.search(text_nfc):
+                matches.append(entry)
+        elif entry.term == "메기":
+            if _RE_MEGI.search(text_nfc):
+                matches.append(entry)
+        elif term_lower in text_lower:
             matches.append(entry)
     return matches

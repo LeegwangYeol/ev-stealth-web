@@ -441,6 +441,8 @@ export const FALLBACK_MODEL: EvModelDepreciation = {
   key_cons_resale: '부분변경에 따른 구형 시세 완만 조정',
 };
 
+const FALLBACK_MODELS: readonly EvModelDepreciation[] = [FALLBACK_MODEL];
+
 // ==========================================
 // 5. HELPER MATH UTILITIES
 // ==========================================
@@ -748,8 +750,8 @@ export function calculateDepreciation(
   }
 
   // 2. Warranty Cliff
-  const warrantyYears = finiteNonNegOr(model?.warranty?.years, 8);
-  const warrantyKm = finiteNonNegOr(model?.warranty?.km, 160000);
+  const warrantyYears = Math.min(1_000, finiteNonNegOr(model?.warranty?.years, 8));
+  const warrantyKm = Math.min(10_000_000, finiteNonNegOr(model?.warranty?.km, 160000));
   const remainingWarrantyYears = warrantyYears - years;
   const remainingWarrantyKm = warrantyKm - mileageKm;
   const isExpired = remainingWarrantyYears <= 0 || remainingWarrantyKm <= 0;
@@ -872,8 +874,14 @@ export function calculateDepreciation(
         ? Math.max(0, roundTo(remainingWarrantyKm, 0))
         : 0,
     },
-    keyPros: typeof model?.key_pros_resale === 'string' ? model.key_pros_resale : '데이터 동기화 완료',
-    keyCons: typeof model?.key_cons_resale === 'string' ? model.key_cons_resale : '정기 점검 필요',
+    keyPros:
+      typeof model?.key_pros_resale === 'string' && model.key_pros_resale.trim()
+        ? model.key_pros_resale
+        : '데이터 동기화 완료',
+    keyCons:
+      typeof model?.key_cons_resale === 'string' && model.key_cons_resale.trim()
+        ? model.key_cons_resale
+        : '정기 점검 필요',
   };
 }
 
@@ -927,7 +935,7 @@ export function simulateBatteryHealth(
     model = findModelById(safeOptions.models as EvModelDepreciation[], modelId);
   }
   if (!model && typeof modelId === 'string' && modelId.trim() !== '') {
-    model = findModelById([FALLBACK_MODEL], modelId);
+    model = findModelById(FALLBACK_MODELS, modelId);
   }
 
   const chemistryKey: BatteryChemistryType = normalizeChemistry(
@@ -1213,11 +1221,11 @@ export function simulateBatteryHealth(
     actionRecommendation,
     replacementCostEstimate: {
       tierId:
-        typeof targetTier?.tier_id === 'string' && targetTier.tier_id
+        typeof targetTier?.tier_id === 'string' && targetTier.tier_id.trim()
           ? targetTier.tier_id
           : 'TIER_77KWH',
       segmentName:
-        typeof targetTier?.segment_name === 'string' && targetTier.segment_name
+        typeof targetTier?.segment_name === 'string' && targetTier.segment_name.trim()
           ? targetTier.segment_name
           : '준중형/중형 (65~84kWh)',
       newPackKrw,
@@ -1243,7 +1251,7 @@ export function calculateSubsidyClawback(
 ): ClawbackResult {
   const parsedMonths = parseNumericInput(heldMonths);
   const normalizedMonths = Number.isFinite(parsedMonths)
-    ? Math.max(0, parsedMonths)
+    ? Math.min(100_000, Math.max(0, parsedMonths))
     : heldMonths === Infinity || parsedMonths === Infinity
     ? 24
     : 0;
@@ -1369,7 +1377,7 @@ export function calculateSubsidyClawback(
   return {
     heldMonths: normalizeZero(normalizedMonths),
     tierLabel:
-      typeof matchedTier?.label_ko === 'string' && matchedTier.label_ko
+      typeof matchedTier?.label_ko === 'string' && matchedTier.label_ko.trim()
         ? matchedTier.label_ko
         : defaultTier.label_ko,
     statutoryClawbackRate: statutoryRate,
@@ -1456,11 +1464,14 @@ export function calculateTcoComparison(
         defaultTaxParams.education_tax_multiplier
       )
     ),
-    ice_age_discount_start_year: Math.max(
-      1,
-      finitePosOr(
-        rawTaxParams?.ice_age_discount_start_year,
-        defaultTaxParams.ice_age_discount_start_year
+    ice_age_discount_start_year: Math.min(
+      100,
+      Math.max(
+        1,
+        finitePosOr(
+          rawTaxParams?.ice_age_discount_start_year,
+          defaultTaxParams.ice_age_discount_start_year
+        )
       )
     ),
     ice_age_discount_rate_per_year: clamp(

@@ -87,6 +87,13 @@ export function parseFiniteNumber(val: unknown): number | null {
   return null;
 }
 
+function safeRound(value: number, factor: number): number {
+  if (!Number.isFinite(value)) return 0;
+  const scaled = value * factor;
+  if (!Number.isFinite(scaled)) return value + 0;
+  return Math.round(scaled) / factor + 0;
+}
+
 const VALID_CATEGORY_KEYS: ReadonlySet<DefectCategoryKey> = new Set<DefectCategoryKey>([
   'BATTERY_CHARGING',
   'DRIVING_POWERTRAIN',
@@ -318,7 +325,11 @@ export function calculateTrendDirection(
     ? Math.round(scaledAbs) / 100 + 0
     : Number.isFinite(rawAbsChange)
       ? rawAbsChange + 0
-      : 0;
+      : rawAbsChange > 0
+        ? Number.MAX_VALUE
+        : rawAbsChange < 0
+          ? -Number.MAX_VALUE
+          : 0;
 
   // Edge case: previous period is 0 (prevents division by zero, Infinity, and NaN)
   if (safePrevious === 0) {
@@ -905,7 +916,7 @@ export function normalizeDefectFrequency(
       : 1000;
 
   const frequency = (safeComplaints / safeVolume) * safeScale;
-  return Number.isFinite(frequency) ? Math.round(frequency * 100) / 100 + 0 : 0.0;
+  return Number.isFinite(frequency) ? safeRound(frequency, 100) : 0.0;
 }
 
 /**
@@ -940,16 +951,19 @@ export function calculateWeightedDefectFrequency(
     }
   }
 
+  const weightedEntries: Array<{ count: number; weight: number }> = [];
   for (const [cat, data] of Object.entries(aggregated)) {
     const count = data.count || 0;
     if (count <= 0) continue;
-    totalComplaints += count;
+    const nextTotal = totalComplaints + count;
+    totalComplaints = Number.isFinite(nextTotal) ? nextTotal : Number.MAX_VALUE;
     const w = weights.get(cat);
     const weight = w !== undefined && Number.isFinite(w) && w > 0 ? w : 1.0;
     weightedSum += count * weight;
+    weightedEntries.push({ count, weight });
   }
 
-  if (totalComplaints === 0 || weightedSum === 0) {
+  if (totalComplaints === 0 || weightedEntries.length === 0) {
     return 0.0;
   }
 
@@ -973,13 +987,27 @@ export function calculateWeightedDefectFrequency(
   }
 
   if (volume > 0) {
-    const freq = (weightedSum / volume) * scale;
-    return Number.isFinite(freq) ? Math.round(freq * 100) / 100 + 0 : 0.0;
+    let freq = (weightedSum / volume) * scale;
+    if (!Number.isFinite(freq)) {
+      let ratioSum = 0;
+      for (const entry of weightedEntries) {
+        ratioSum += (entry.count / volume) * entry.weight * scale;
+      }
+      freq = ratioSum;
+    }
+    return Number.isFinite(freq) ? safeRound(freq, 100) : 0.0;
   }
 
   // Fallback to average severity multiplier
-  const avgMult = weightedSum / totalComplaints;
-  return Number.isFinite(avgMult) ? Math.round(avgMult * 100) / 100 + 0 : 0.0;
+  let avgMult = weightedSum / totalComplaints;
+  if (!Number.isFinite(avgMult)) {
+    let ratioSum = 0;
+    for (const entry of weightedEntries) {
+      ratioSum += (entry.count / totalComplaints) * entry.weight;
+    }
+    avgMult = ratioSum;
+  }
+  return Number.isFinite(avgMult) ? safeRound(avgMult, 100) : 0.0;
 }
 
 /**
@@ -1387,7 +1415,7 @@ function parsePeriodicDate(
 
   // 2. Full or partial delimited date: YYYY-MM-DD, YYYY.MM.DD, YYYY/MM/DD, YYYY-MM, and ISO-8601 timestamps
   const fullMatch = dateStr.match(
-    /^(\d{4})[-/. ](\d{1,2})(?:[-/. ](\d{1,2})(?:$|(?:T|\s+)(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:(Z)|([+-])(\d{2}):?(\d{2}))?))?$/i
+    /^(\d{4})[-/. ](\d{1,2})(?:[-/. ](\d{1,2})(?:$|(?:T|\s+)(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:\s*(?:(Z)|([+-])(\d{2}):?(\d{2})))?))?$/i
   );
   if (fullMatch) {
     const parsedY = Number(fullMatch[1]);
@@ -1607,7 +1635,7 @@ function buildPeriodSummary(
     windowSum = Number.isFinite(nextWin) ? nextWin : Number.MAX_VALUE;
   }
   const rawMa = windowSum / (index - windowStart + 1);
-  const movingAverage3 = Number.isFinite(rawMa) ? Math.round(rawMa * 10) / 10 + 0 : 0;
+  const movingAverage3 = Number.isFinite(rawMa) ? safeRound(rawMa, 10) : 0;
 
   return {
     periodKey: key,
@@ -1692,12 +1720,8 @@ export function aggregateQuarterlyDefectBreakdown(
     );
   }
 
-  // Sort chronologically by year and quarter
-  const sortedKeys = Array.from(groups.keys()).sort((a, b) => {
-    const [yA, qA] = a.split('-Q').map(Number);
-    const [yB, qB] = b.split('-Q').map(Number);
-    return yA !== yB ? yA - yB : qA - qB;
-  });
+  // Sort chronologically by year and quarter (YYYY-QX lexicographical order matches chronological order)
+  const sortedKeys = Array.from(groups.keys()).sort();
 
   const results: QuarterlyDefectBreakdown[] = [];
   for (let i = 0; i < sortedKeys.length; i++) {
@@ -1768,11 +1792,7 @@ export function aggregateMonthlyDefectBreakdown(
     );
   }
 
-  const sortedKeys = Array.from(groups.keys()).sort((a, b) => {
-    const [yA, mA] = a.split('-').map(Number);
-    const [yB, mB] = b.split('-').map(Number);
-    return yA !== yB ? yA - yB : mA - mB;
-  });
+  const sortedKeys = Array.from(groups.keys()).sort();
   const results: MonthlyDefectBreakdown[] = [];
 
   for (let i = 0; i < sortedKeys.length; i++) {

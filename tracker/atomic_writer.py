@@ -64,7 +64,7 @@ def is_pid_alive(pid: Any) -> bool:
         return False
     except PermissionError:
         return True
-    except OSError:
+    except (OSError, OverflowError):
         return False
 
 
@@ -819,6 +819,19 @@ def quarantine_corrupted_file(
         return None
 
 
+def _decimal_to_finite_float(val: Decimal) -> float:
+    """Convert a Decimal to a finite float, clamping NaN, Inf, and float-overflow to 0.0."""
+    if val.is_nan() or val.is_infinite():
+        return 0.0
+    try:
+        f_val = float(val)
+    except (ValueError, TypeError, OverflowError):
+        return 0.0
+    if math.isnan(f_val) or math.isinf(f_val):
+        return 0.0
+    return f_val
+
+
 def sanitize_nan_inf(obj: Any, seen: Optional[set[int]] = None) -> Any:
     """Recursively convert float/Decimal NaN and Inf to 0.0 to guarantee RFC 8259 JSON compliance.
 
@@ -830,9 +843,7 @@ def sanitize_nan_inf(obj: Any, seen: Optional[set[int]] = None) -> Any:
             return 0.0
         return obj
     elif isinstance(obj, Decimal):
-        if obj.is_nan() or obj.is_infinite():
-            return 0.0
-        return float(obj)
+        return _decimal_to_finite_float(obj)
     elif isinstance(obj, complex):
         real_val = 0.0 if (math.isnan(obj.real) or math.isinf(obj.real)) else float(obj.real)
         imag_val = 0.0 if (math.isnan(obj.imag) or math.isinf(obj.imag)) else float(obj.imag)
@@ -907,9 +918,7 @@ def _json_default(obj: Any) -> Any:
     if isinstance(obj, Enum):
         return sanitize_nan_inf(obj.value)
     if isinstance(obj, Decimal):
-        if obj.is_nan() or obj.is_infinite():
-            return 0.0
-        return float(obj)
+        return _decimal_to_finite_float(obj)
     if isinstance(obj, complex):
         real_val = 0.0 if (math.isnan(obj.real) or math.isinf(obj.real)) else float(obj.real)
         imag_val = 0.0 if (math.isnan(obj.imag) or math.isinf(obj.imag)) else float(obj.imag)

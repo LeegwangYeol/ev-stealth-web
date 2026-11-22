@@ -91,10 +91,12 @@ def _extract_record_date(record: Optional[Mapping[str, Any]]) -> str:
             validated = _validate_ymd(val.year, val.month, val.day)
             if validated:
                 return validated
+            continue
         elif isinstance(val, date):
             validated = _validate_ymd(val.year, val.month, val.day)
             if validated:
                 return validated
+            continue
         elif isinstance(val, (int, float)):
             try:
                 ts = float(val)
@@ -105,6 +107,7 @@ def _extract_record_date(record: Optional[Mapping[str, Any]]) -> str:
                         return datetime.fromtimestamp(ts / 1000.0, tz=timezone.utc).strftime("%Y-%m-%d")
             except (ValueError, OverflowError, OSError):
                 pass
+            continue
         val_str = str(val).strip()
         if not val_str:
             continue
@@ -324,6 +327,8 @@ def write_daily_reports(
         raise ValueError("output_path cannot be empty")
 
     dest_path = Path(output_path).resolve()
+    if dest_path.is_dir():
+        raise IsADirectoryError(f"Target path is an existing directory: {dest_path}")
     dir_path = dest_path.parent
     dir_path.mkdir(parents=True, exist_ok=True)
     lock_file = get_lock_path(dest_path)
@@ -454,6 +459,11 @@ def write_daily_reports(
         return str(output_path)
 
 
+def _reject_json_constant(constant: str) -> Any:
+    """Reject non-standard JSON constants (NaN, Infinity, -Infinity)."""
+    raise ValueError(f"Non-standard JSON constant: {constant}")
+
+
 def read_daily_reports(
     path: str = DEFAULT_OUTPUT_PATH,
     quarantine_corrupted: bool = False,
@@ -483,7 +493,7 @@ def read_daily_reports(
 
     def _read_data() -> Dict[str, Any]:
         with open(p, "r", encoding="utf-8-sig") as f:
-            data = json.load(f)
+            data = json.load(f, parse_constant=_reject_json_constant)
         if not isinstance(data, dict):
             raise ValueError(f"Expected dict root payload, got {type(data).__name__}")
         if "reports" in data and not isinstance(data["reports"], list):

@@ -84,10 +84,32 @@ def _metric_val(metric: Any, key: str, default: Any = 0) -> Any:
     return default if val is None else val
 
 
+_REGION_NAMES: Dict[str, str] = {
+    "KR-11": "서울특별시",
+    "KR-26": "부산광역시",
+    "KR-27": "대구광역시",
+    "KR-28": "인천광역시",
+    "KR-29": "광주광역시",
+    "KR-30": "대전광역시",
+    "KR-31": "울산광역시",
+    "KR-36": "세종특별자치시",
+    "KR-50": "세종특별자치시",
+    "KR-41": "경기도",
+    "KR-42": "강원특별자치도",
+    "KR-43": "충청북도",
+    "KR-44": "충청남도",
+    "KR-45": "전북특별자치도",
+    "KR-46": "전라남도",
+    "KR-47": "경상북도",
+    "KR-48": "경상남도",
+    "KR-49": "제주특별자치도",
+}
+
+
 def _safe_sev(record: Any) -> float:
     """Safely extract and map defect severity score, mapping string tiers to numeric DSI values."""
     raw = _get_field(record, "severity_index")
-    if raw is None:
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
         raw = _get_field(record, "severity")
     if raw is None:
         return 0.0
@@ -193,13 +215,13 @@ class ReportGenerator:
         """
         summary = _get_field(payload, "nationwide_summary", None) or payload or {}
         metadata = _get_field(payload, "metadata", None)
-        gen_time = (
+        gen_time = str(
             _get_field(metadata, "generated_at", None)
             or _get_field(metadata, "updated_at", None)
             or _get_field(payload, "generated_at", None)
             or _get_field(payload, "updated_at", None)
             or datetime.now(timezone.utc).isoformat()
-        )
+        ).replace("\n", " ").replace("\r", " ")
 
         def _get_passenger_remaining(region: Any) -> int:
             cats = _get_field(region, "categories", None)
@@ -223,10 +245,21 @@ class ReportGenerator:
         for r in regions_list:
             if not r:
                 continue
-            name = str(_get_field(r, 'name_ko', '') or _get_field(r, 'region_id', '') or '지자체').replace("\n", " ").replace("\r", " ")
-            rate_val = max(0.0, _safe_float_val(_get_field(r, 'overall_depletion_rate', 0.0)))
+            name = str(
+                _get_field(r, 'name_ko', '')
+                or _get_field(r, 'name', '')
+                or _get_field(r, 'region_id', '')
+                or _get_field(r, 'id', '')
+                or '지자체'
+            ).replace("\n", " ").replace("\r", " ")
+            raw_rate = _get_field(r, 'overall_depletion_rate', None)
+            if raw_rate is None:
+                raw_rate = _get_field(r, 'depletion_rate', 0.0)
+            rate_val = max(0.0, _safe_float_val(raw_rate, 0.0))
             rem_units = _get_passenger_remaining(r)
-            st_raw = _get_field(r, "overall_status", "")
+            st_raw = _get_field(r, "overall_status", None)
+            if st_raw is None or (isinstance(st_raw, str) and not st_raw.strip()):
+                st_raw = _get_field(r, "status", "")
             status_val = getattr(st_raw, "value", st_raw)
             status_raw = str(status_val or "").split(".")[-1].strip().upper()
             if not status_raw:
@@ -263,7 +296,12 @@ class ReportGenerator:
         tot_r = round(tot_b, 1)
         disb_str = f"{disb_r:,.1f}" if (disb_r % 1 != 0) else f"{int(disb_r):,}"
         tot_str = f"{tot_r:,.1f}" if (tot_r % 1 != 0) else f"{int(tot_r):,}"
-        dep_rate = max(0.0, _safe_float_val(_get_field(summary, "nationwide_depletion_rate", _get_field(summary, "depletion_rate", 0.0))))
+        raw_dep_rate = _get_field(summary, "nationwide_depletion_rate", None)
+        if raw_dep_rate is None:
+            raw_dep_rate = _get_field(summary, "depletion_rate", None)
+        if raw_dep_rate is None:
+            raw_dep_rate = _get_field(summary, "rate", 0.0)
+        dep_rate = max(0.0, _safe_float_val(raw_dep_rate, 0.0))
 
         p_ann = max(0, _safe_int_val(_metric_val(p_info, "announced_units", 0)))
         p_app = max(0, _safe_int_val(_metric_val(p_info, "applied_units", 0)))
@@ -345,30 +383,10 @@ class ReportGenerator:
         if not isinstance(models, (list, tuple)):
             models = []
 
-        region_names = {
-            "KR-11": "서울특별시",
-            "KR-26": "부산광역시",
-            "KR-27": "대구광역시",
-            "KR-28": "인천광역시",
-            "KR-29": "광주광역시",
-            "KR-30": "대전광역시",
-            "KR-31": "울산광역시",
-            "KR-36": "세종특별자치시",
-            "KR-50": "세종특별자치시",
-            "KR-41": "경기도",
-            "KR-42": "강원특별자치도",
-            "KR-43": "충청북도",
-            "KR-44": "충청남도",
-            "KR-45": "전북특별자치도",
-            "KR-46": "전라남도",
-            "KR-47": "경상북도",
-            "KR-48": "경상남도",
-            "KR-49": "제주특별자치도",
-        }
         safe_target = str(target_region).strip() if target_region is not None else "KR-11"
         if not safe_target:
             safe_target = "KR-11"
-        reg_name = region_names.get(safe_target.upper(), region_names.get(safe_target, safe_target))
+        reg_name = _REGION_NAMES.get(safe_target.upper(), _REGION_NAMES.get(safe_target, safe_target))
 
         lines = [
             f"## 🚗 주요 인기 전기차 국비·지방비 보조금 및 실구매가 매트릭스 (기준: {reg_name})",
@@ -388,7 +406,14 @@ class ReportGenerator:
                 continue
             maker = str(_get_field(m, "manufacturer") or _get_field(m, "brand") or _get_field(m, "maker") or "미지정").replace("|", "/").replace("\n", " ").replace("\r", " ")
             name = str(_get_field(m, "name_ko") or _get_field(m, "name") or _get_field(m, "model_name") or "미지정 차종").replace("|", "/").replace("\n", " ").replace("\r", " ")
-            base_price = max(0, _safe_int_val(_get_field(m, "base_price_krw", _get_field(m, "price", 0))))
+            raw_bp = _get_field(m, "base_price_krw", None)
+            if raw_bp is None:
+                raw_bp = _get_field(m, "price_krw", None)
+            if raw_bp is None:
+                raw_bp = _get_field(m, "base_price", None)
+            if raw_bp is None:
+                raw_bp = _get_field(m, "price", 0)
+            base_price = max(0, _safe_int_val(raw_bp))
             nat_sub = max(0, _safe_int_val(_get_field(m, "national_subsidy_krw", _get_field(m, "national_subsidy", 0))))
 
             local_sub = 0
@@ -434,9 +459,10 @@ class ReportGenerator:
 
         reports = [r for r in (reports or []) if r is not None]
         total_reports = len(reports)
+        sev_pairs = [(r, _safe_sev(r)) for r in reports]
         critical_count = _get_field(stats, "critical_defect_count")
         if critical_count is None:
-            critical_count = sum(1 for r in reports if _safe_sev(r) >= 7.0)
+            critical_count = sum(1 for _r, sev in sev_pairs if sev >= 7.0)
         else:
             critical_count = max(0, _safe_int_val(critical_count, 0))
 
@@ -447,14 +473,15 @@ class ReportGenerator:
         category_counts: Dict[str, int] = {}
         for r in reports:
             raw_cat = _get_field(r, "defect_category") or _get_field(r, "category")
-            cat = str(raw_cat).strip() if (raw_cat and str(raw_cat).strip()) else "UNKNOWN"
+            cat = str(raw_cat).replace("\n", " ").replace("\r", " ").strip() if (raw_cat and str(raw_cat).strip()) else "UNKNOWN"
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
         top_categories = sorted(category_counts.items(), key=lambda x: (-x[1], x[0]))
+        safe_gen_time = str(gen_time).replace("\n", " ").replace("\r", " ")
 
         lines = [
             "# [대한민국 EV 실생활 결함 및 커뮤니티 동향 일일 브리핑]",
-            f"- **발행 시각(UTC)**: {gen_time}",
+            f"- **발행 시각(UTC)**: {safe_gen_time}",
             f"- **총 수집/분류 결함 건수**: {total_reports}건 (고위험/긴급 결함: {critical_count}건)",
             f"- **평균 부정 감성 점수**: {avg_negativity:.2f} / 1.00",
             "",
@@ -473,14 +500,13 @@ class ReportGenerator:
             "## 🚨 긴급 주의 결함 사례 (DSI >= 7.0)",
         ])
 
-        critical_reports = [r for r in reports if _safe_sev(r) >= 7.0][:5]
+        critical_reports = [(r, sev) for r, sev in sev_pairs if sev >= 7.0][:5]
         if critical_reports:
-            for r in critical_reports:
+            for r, dsi in critical_reports:
                 brand = _get_field(r, "vehicle_brand", "") or ""
                 model = _get_field(r, "vehicle_model", "") or ""
                 v_model = (f"{brand} {model}".strip() or "차종 미상").replace("\n", " ").replace("\r", " ")
                 topic = str(_get_field(r, "defect_topic") or _get_field(r, "title") or "상세 없음").replace("\n", " ").replace("\r", " ")
-                dsi = _safe_sev(r)
                 lines.append(f"- 🔴 **[{v_model}]** {topic} (심각도 DSI: {dsi:.1f})")
         else:
             lines.append("- 현재 긴급 심각도(DSI >= 7.0) 결함 사례 없음.")

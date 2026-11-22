@@ -351,7 +351,7 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
             continue
 
         raw_iso = reg.get("iso_code") or reg.get("region_id") or ""
-        iso = raw_iso if isinstance(raw_iso, str) else ""
+        iso = raw_iso.strip() if isinstance(raw_iso, str) else ""
         prefix = f"Region [{idx}] ({iso or 'MISSING'}):"
         if raw_iso and not isinstance(raw_iso, str):
             errors.append(f"{prefix} Invalid iso_code/region_id type '{type(raw_iso).__name__}'")
@@ -1112,10 +1112,11 @@ def main(argv: Optional[List[str]] = None) -> int:
 
             # 5. Parity
             parity_stats = stats.get("parity", {})
+            expected_copies = len(parity_stats.get("directories", []))
             print("\n[5] Triple Directory Mirror Parity (root vs src/data vs public/data):")
             for fname, hmap in parity_stats.get("checked_files", {}).items():
                 unique_cnt = len(set(hmap.values()))
-                status_tag = "PARITY OK" if unique_cnt == 1 and len(hmap) >= 2 else "MISMATCH"
+                status_tag = "PARITY OK" if unique_cnt == 1 and len(hmap) >= max(2, expected_copies) else "MISMATCH"
                 print(f"  - {fname:28s}: {status_tag} ({len(hmap)} copies verified)")
 
             print("=" * 70)

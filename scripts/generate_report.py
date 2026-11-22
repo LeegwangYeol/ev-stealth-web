@@ -377,6 +377,11 @@ def generate_statistical_report_content(
     return "\n".join(lines) + "\n"
 
 
+def _reject_json_constant(constant: str) -> Any:
+    """Reject non-standard JSON constants (NaN, Infinity, -Infinity)."""
+    raise ValueError(f"Non-standard JSON constant: {constant}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate Comprehensive STATISTICAL_REPORT.md and CASEBOOK.md")
     parser.add_argument("--input", type=Path, default=PROJECT_ROOT / "data" / "compiled_complaints.json", help="Path to compiled complaints dataset")
@@ -392,8 +397,12 @@ def main():
         print(f"[ERROR] Input dataset not found: {args.input}")
         sys.exit(1)
 
-    with open(args.input, "r", encoding="utf-8-sig") as f:
-        records = json.load(f)
+    try:
+        with open(args.input, "r", encoding="utf-8-sig") as f:
+            records = json.load(f, parse_constant=_reject_json_constant)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        print(f"[ERROR] Failed to parse input dataset {args.input}: {exc}")
+        sys.exit(1)
     if not isinstance(records, list):
         print(f"[ERROR] Input dataset must be a JSON list: {args.input}")
         sys.exit(1)

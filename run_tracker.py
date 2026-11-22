@@ -245,9 +245,15 @@ def sync_defect_reports(
     from tracker.atomic_writer import (
         FileLock,
         cleanup_stale_lock_files,
+        durable_fsync,
         is_corrupted_or_quarantined_filename,
         quarantine_corrupted_file,
     )
+
+    if web_dir is not None and not str(web_dir).strip():
+        web_dir = None
+    if root_dir is not None and not str(root_dir).strip():
+        root_dir = None
 
     logger.info("Synchronizing defect reports (daily_reports.json)...")
     if dry_run:
@@ -454,6 +460,7 @@ def sync_defect_reports(
                 if tgt.is_file():
                     if is_corrupted_or_quarantined_filename(tgt):
                         continue
+                    tgt_valid = True
                     try:
                         tgt_bytes = tgt.read_bytes()
                         h_tgt = hashlib.sha256(tgt_bytes).hexdigest()
@@ -466,10 +473,24 @@ def sync_defect_reports(
                                 pass
                             logger.debug("Skipping redundant defect report sync for %s (SHA-256 match)", tgt)
                             continue
+                        if not tgt_bytes.strip():
+                            tgt_valid = False
+                        else:
+                            tgt_parsed = json.loads(
+                                tgt_bytes.decode("utf-8-sig"),
+                                parse_constant=_reject_json_constant,
+                            )
+                            tgt_valid = (
+                                isinstance(tgt_parsed, dict)
+                                and "reports" in tgt_parsed
+                                and isinstance(tgt_parsed["reports"], list)
+                                and all(isinstance(r, dict) for r in tgt_parsed["reports"])
+                            )
                     except Exception as e:
                         logger.warning("Error inspecting target %s: %s", tgt, e)
+                        tgt_valid = False
 
-                    if not validate_defect_reports_file(tgt):
+                    if not tgt_valid:
                         if quarantine_corrupted:
                             quarantine_corrupted_file(tgt)
 
@@ -480,7 +501,7 @@ def sync_defect_reports(
                         temp_name = tf.name
                         tf.write(source_bytes)
                         tf.flush()
-                        os.fsync(tf.fileno())
+                        durable_fsync(tf.fileno())
                     try:
                         os.chmod(temp_name, 0o644)
                     except OSError:
@@ -497,7 +518,7 @@ def sync_defect_reports(
                     try:
                         dir_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
                         dir_fd = os.open(str(tgt.parent), dir_flags)
-                        os.fsync(dir_fd)
+                        durable_fsync(dir_fd)
                     except OSError:
                         pass
                     finally:
@@ -568,27 +589,38 @@ def auto_heal_mirrored_parity(repo_root: Optional[Path] = None) -> List[str]:
     - ev_reliability_trends.json
     - ev_depreciation_data.json
     """
-    from tracker.atomic_writer import FileLock, get_lock_path
+    from tracker.atomic_writer import FileLock, durable_fsync, get_lock_path
 
     root = repo_root or _find_repo_root()
     if not (root / "ev-stealth-web").is_dir() and (root / "src" / "data").is_dir():
-        active_dirs = [
+        raw_dirs = [
             root / "data",
             root / "src" / "data",
             root / "public" / "data",
         ]
     else:
-        active_dirs = [
+        raw_dirs = [
             root / "data",
             root / "ev-stealth-web" / "src" / "data",
             root / "ev-stealth-web" / "public" / "data",
         ]
     web_data = root / "ev-stealth-web" / "data"
     if web_data.is_dir():
-        active_dirs.append(web_data)
+        raw_dirs.append(web_data)
     root_public = root / "public" / "data"
-    if root_public.is_dir() and root_public not in active_dirs:
-        active_dirs.append(root_public)
+    if root_public.is_dir():
+        raw_dirs.append(root_public)
+
+    active_dirs: List[Path] = []
+    seen_dirs: Set[str] = set()
+    for d in raw_dirs:
+        try:
+            d_key = str(d.resolve())
+        except (OSError, RuntimeError):
+            d_key = str(d.absolute())
+        if d_key not in seen_dirs:
+            seen_dirs.add(d_key)
+            active_dirs.append(d)
 
     target_files = [
         "ev_subsidy_data.json",
@@ -644,7 +676,7 @@ def auto_heal_mirrored_parity(repo_root: Optional[Path] = None) -> List[str]:
                                 temp_name = tf.name
                                 tf.write(auth_bytes)
                                 tf.flush()
-                                os.fsync(tf.fileno())
+                                durable_fsync(tf.fileno())
                             try:
                                 os.chmod(temp_name, 0o644)
                             except OSError:
@@ -660,7 +692,7 @@ def auto_heal_mirrored_parity(repo_root: Optional[Path] = None) -> List[str]:
                             try:
                                 dir_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
                                 dir_fd = os.open(str(d), dir_flags)
-                                os.fsync(dir_fd)
+                                durable_fsync(dir_fd)
                             except OSError:
                                 pass
                             finally:
@@ -706,8 +738,8 @@ def parse_arguments(args: Optional[List[str]] = None) -> argparse.Namespace:
         "--output",
         "--out",
         "-o",
-        type=Path,
-        default=DEFAULT_PRIMARY_OUTPUT,
+        type=str,
+        default=str(DEFAULT_PRIMARY_OUTPUT),
         help="Primary output path for the generated subsidy JSON dataset.",
     )
     parser.add_argument(
@@ -725,8 +757,8 @@ def parse_arguments(args: Optional[List[str]] = None) -> argparse.Namespace:
     web_dir_env = (os.getenv("EV_TRACKER_WEB_DIR") or os.getenv("EV_WEB_DIR") or "").strip()
     parser.add_argument(
         "--web-dir",
-        type=Path,
-        default=Path(web_dir_env) if web_dir_env else None,
+        type=str,
+        default=web_dir_env if web_dir_env else None,
         help="Custom web directory to sync data files into (overrides default ev-stealth-web/src/data/ or EV_TRACKER_WEB_DIR).",
     )
     parser.add_argument(

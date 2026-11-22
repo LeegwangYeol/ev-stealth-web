@@ -266,6 +266,14 @@ function cloneTrendsDatabase(db: ReliabilityTrendsDatabase): ReliabilityTrendsDa
   };
 }
 
+function ensureTrendsDatabaseLoaded(): ReliabilityTrendsDatabase {
+  if (cachedTrendsDatabase) {
+    return cachedTrendsDatabase;
+  }
+  const cloned = getReliabilityTrendsData();
+  return cachedTrendsDatabase ?? cloned;
+}
+
 /**
  * Safely loads the master EV Reliability & Defect Trends database.
  * Strictly guarantees non-null, valid array/object shapes with defensive fallbacks
@@ -359,7 +367,10 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
       parseFiniteNumber(
         (rawMetaObj as unknown as Record<string, unknown> | undefined)?.total_analyzed_posts
       );
-    const brandReportsSum = brands.reduce((acc, b) => acc + b.total_reports, 0);
+    const brandReportsSum = brands.reduce((acc, b) => {
+      const next = acc + b.total_reports;
+      return Number.isFinite(next) ? next : Number.MAX_VALUE;
+    }, 0);
     const total_records_analyzed =
       rawTotal !== null && rawTotal >= 0
         ? Math.floor(rawTotal)
@@ -550,7 +561,7 @@ export function calculateStealthScore(input?: StealthScoreInput | null): Stealth
   let baseline = input?.baselineIndustryDsi;
   if (baseline === undefined || baseline === null) {
     try {
-      const db = getReliabilityTrendsData();
+      const db = ensureTrendsDatabaseLoaded();
       baseline = db?.metadata?.avg_industry_dsi ?? 50.0;
     } catch {
       baseline = 50.0;

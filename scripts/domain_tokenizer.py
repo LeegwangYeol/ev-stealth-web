@@ -73,7 +73,7 @@ class AutomotiveTrie:
         Greedy longest-prefix match from start_idx in text.
         Returns: (matched_surface, domain_category, severity_weight, canonical_name, next_idx) or None.
         """
-        if not text or start_idx < 0:
+        if not isinstance(text, str) or not text or start_idx < 0:
             return None
         curr = self.root
         longest_match = None

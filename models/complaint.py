@@ -220,10 +220,14 @@ def sanitize_string(val: Any, max_len: int = 50_000) -> str:
     if val is None or val is False:
         return ""
     if isinstance(val, (bytes, bytearray)):
+        raw_b = bytes(val)
         try:
-            val_str = val.decode("utf-8", errors="replace")
-        except Exception:
-            val_str = str(val)
+            val_str = raw_b.decode("utf-8")
+        except UnicodeDecodeError:
+            try:
+                val_str = raw_b.decode("cp949")
+            except UnicodeDecodeError:
+                val_str = raw_b.decode("utf-8", errors="replace")
     elif isinstance(val, str):
         val_str = val
     else:
@@ -246,10 +250,10 @@ def sanitize_string(val: Any, max_len: int = 50_000) -> str:
 
 
 # Pre-compiled date parsing regular expressions for high-throughput batch evaluation
-_RE_DATE_KR_4: re.Pattern[str] = re.compile(r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?")
+_RE_DATE_KR_4: re.Pattern[str] = re.compile(r"(?<!\d)(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?")
 _RE_DATE_KR_2: re.Pattern[str] = re.compile(r"(?:^|[^\d])(\d{2})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?")
 _RE_DATE_TS: re.Pattern[str] = re.compile(
-    r"(\d{4})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})(?:[\sT]+\d{1,2}:\d{1,2}(?::\d{1,2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?(?:[^\d]|$)"
+    r"(?<!\d)(\d{4})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})(?:[\sT]+\d{1,2}:\d{1,2}(?::\d{1,2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?(?:[^\d]|$)"
 )
 _RE_DATE_COMPACT_8: re.Pattern[str] = re.compile(
     r"(?:^|[^\d])((?:19|20)\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?:\d{4,6})?(?:$|[^\d])"
@@ -257,6 +261,7 @@ _RE_DATE_COMPACT_8: re.Pattern[str] = re.compile(
 _RE_DATE_2: re.Pattern[str] = re.compile(r"(?:^|[^\d])(\d{2})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})")
 _RE_DATE_COMPACT_6: re.Pattern[str] = re.compile(r"^(\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$")
 _RE_DATE_MD: re.Pattern[str] = re.compile(r"^(0[1-9]|1[0-2])[./\-](0[1-9]|[12]\d|3[01])$")
+_RE_TIME_ONLY: re.Pattern[str] = re.compile(r"^\d{1,2}:\d{2}(?::\d{2})?$")
 
 
 def parse_date_str(created_at: Any) -> str:
@@ -308,7 +313,7 @@ def parse_date_str(created_at: Any) -> str:
         return today_iso
 
     # Relative Korean date keywords and time-only stamps
-    if s in ("오늘", "방금") or re.match(r"^\d{1,2}:\d{2}(?::\d{2})?$", s):
+    if s in ("오늘", "방금") or _RE_TIME_ONLY.match(s):
         return today_iso
     if s == "어제":
         return (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -697,8 +702,9 @@ def validate_report_entry(entry: Any, strict: bool = False) -> Tuple[bool, str]:
     if strict:
         cat = _get("defect_category") or _get("category")
         if cat is not None and str(cat).strip():
-            s_cat = str(cat).strip().upper()
-            if not validate_category(s_cat) and s_cat not in CATEGORY_ALIASES and str(cat).strip() not in CATEGORY_ALIASES:
+            s_cat_nfc = unicodedata.normalize("NFC", str(cat)).strip()
+            s_cat = s_cat_nfc.upper()
+            if not validate_category(s_cat) and s_cat not in CATEGORY_ALIASES and s_cat_nfc not in CATEGORY_ALIASES:
                 return False, f"Invalid defect_category: '{cat}'"
 
     return True, ""
@@ -723,6 +729,102 @@ def quarantine_entry(entry: Any, reason: str = "") -> Dict[str, Any]:
         "quarantined_at": now_iso,
         "is_quarantined": True,
     }
+
+
+_TARGET_BRAND_MAP: Dict[str, str] = {
+    "mercedes-benz": "Mercedes-Benz",
+    "mercedes": "Mercedes-Benz",
+    "benz": "Mercedes-Benz",
+    "hyundai": "Hyundai",
+    "현대": "Hyundai",
+    "kia": "Kia",
+    "기아": "Kia",
+    "tesla": "Tesla",
+    "테슬라": "Tesla",
+    "byd": "BYD",
+    "비야디": "BYD",
+    "genesis": "Genesis",
+    "제네시스": "Genesis",
+    "porsche": "Porsche",
+    "포르쉐": "Porsche",
+    "bmw": "BMW",
+    "audi": "Audi",
+    "아우디": "Audi",
+    "chevrolet": "Chevrolet",
+    "쉐보레": "Chevrolet",
+    "polestar": "Polestar",
+    "폴스타": "Polestar",
+    "volvo": "Volvo",
+    "볼보": "Volvo",
+    "volkswagen": "Volkswagen",
+    "폭스바겐": "Volkswagen",
+    "cadillac": "Cadillac",
+    "캐딜락": "Cadillac",
+    "rivian": "Rivian",
+    "리비안": "Rivian",
+    "lucid": "Lucid",
+    "루시드": "Lucid",
+    "other": "Other",
+    "기타": "Other",
+}
+
+_TARGET_MODEL_BRAND_MAP: Dict[str, str] = {
+    "ioniq": "Hyundai",
+    "아이오닉": "Hyundai",
+    "casper": "Hyundai",
+    "캐스퍼": "Hyundai",
+    "porter": "Hyundai",
+    "포터": "Hyundai",
+    "kona": "Hyundai",
+    "코나": "Hyundai",
+    "st1": "Hyundai",
+    "ev2": "Kia",
+    "ev3": "Kia",
+    "ev4": "Kia",
+    "ev5": "Kia",
+    "ev6": "Kia",
+    "ev9": "Kia",
+    "niro": "Kia",
+    "니로": "Kia",
+    "bongo": "Kia",
+    "봉고": "Kia",
+    "ray": "Kia",
+    "레이": "Kia",
+    "model 3": "Tesla",
+    "model y": "Tesla",
+    "model s": "Tesla",
+    "model x": "Tesla",
+    "cybertruck": "Tesla",
+    "t4k": "BYD",
+    "atto": "BYD",
+    "seal": "BYD",
+    "dolphin": "BYD",
+    "sealion": "BYD",
+    "시라이언": "BYD",
+    "gv90": "Genesis",
+    "gv60": "Genesis",
+    "gv70": "Genesis",
+    "g80": "Genesis",
+    "taycan": "Porsche",
+    "타이칸": "Porsche",
+    "id.4": "Volkswagen",
+    "id4": "Volkswagen",
+    "id.buzz": "Volkswagen",
+    "id버즈": "Volkswagen",
+    "lyriq": "Cadillac",
+    "리릭": "Cadillac",
+    "torres": "Other",
+    "토레스": "Other",
+    "eqe": "Other",
+    "eqs": "Other",
+    "i4": "Other",
+    "ix3": "Other",
+    "ix": "Other",
+    "polestar": "Other",
+    "폴스타": "Other",
+    "bolt": "Other",
+    "볼트": "Other",
+}
 
 
 @dataclass
@@ -1000,121 +1102,29 @@ class ComplaintRecord:
         model = _get_str("vehicle_model")
         target_veh = _get_str("target_vehicle")
         if (not brand or not model) and target_veh:
-            brand_map = {
-                "mercedes-benz": "Mercedes-Benz",
-                "mercedes": "Mercedes-Benz",
-                "benz": "Mercedes-Benz",
-                "hyundai": "Hyundai",
-                "현대": "Hyundai",
-                "kia": "Kia",
-                "기아": "Kia",
-                "tesla": "Tesla",
-                "테슬라": "Tesla",
-                "byd": "BYD",
-                "비야디": "BYD",
-                "genesis": "Genesis",
-                "제네시스": "Genesis",
-                "porsche": "Porsche",
-                "포르쉐": "Porsche",
-                "bmw": "BMW",
-                "audi": "Audi",
-                "아우디": "Audi",
-                "chevrolet": "Chevrolet",
-                "쉐보레": "Chevrolet",
-                "polestar": "Polestar",
-                "폴스타": "Polestar",
-                "volvo": "Volvo",
-                "볼보": "Volvo",
-                "volkswagen": "Volkswagen",
-                "폭스바겐": "Volkswagen",
-                "cadillac": "Cadillac",
-                "캐딜락": "Cadillac",
-                "rivian": "Rivian",
-                "리비안": "Rivian",
-                "lucid": "Lucid",
-                "루시드": "Lucid",
-                "other": "Other",
-                "기타": "Other",
-            }
-            model_brand_map = {
-                "ioniq": "Hyundai",
-                "아이오닉": "Hyundai",
-                "casper": "Hyundai",
-                "캐스퍼": "Hyundai",
-                "porter": "Hyundai",
-                "포터": "Hyundai",
-                "ev2": "Kia",
-                "ev3": "Kia",
-                "ev4": "Kia",
-                "ev5": "Kia",
-                "ev6": "Kia",
-                "ev9": "Kia",
-                "niro": "Kia",
-                "니로": "Kia",
-                "bongo": "Kia",
-                "봉고": "Kia",
-                "ray": "Kia",
-                "레이": "Kia",
-                "model 3": "Tesla",
-                "model y": "Tesla",
-                "model s": "Tesla",
-                "model x": "Tesla",
-                "cybertruck": "Tesla",
-                "t4k": "BYD",
-                "atto": "BYD",
-                "seal": "BYD",
-                "dolphin": "BYD",
-                "sealion": "BYD",
-                "시라이언": "BYD",
-                "kona": "Hyundai",
-                "코나": "Hyundai",
-                "st1": "Hyundai",
-                "gv90": "Genesis",
-                "gv60": "Genesis",
-                "gv70": "Genesis",
-                "g80": "Genesis",
-                "taycan": "Porsche",
-                "타이칸": "Porsche",
-                "id.4": "Volkswagen",
-                "id4": "Volkswagen",
-                "id.buzz": "Volkswagen",
-                "id버즈": "Volkswagen",
-                "lyriq": "Cadillac",
-                "리릭": "Cadillac",
-                "torres": "Other",
-                "토레스": "Other",
-                "eqe": "Other",
-                "eqs": "Other",
-                "i4": "Other",
-                "ix3": "Other",
-                "ix": "Other",
-                "polestar": "Other",
-                "폴스타": "Other",
-                "bolt": "Other",
-                "볼트": "Other",
-            }
+            target_veh_nfc = unicodedata.normalize("NFC", target_veh)
             parsed_brand = ""
             parsed_model = ""
-            tv_lower = target_veh.lower()
-            for b_key, b_val in brand_map.items():
+            tv_lower = target_veh_nfc.lower()
+            for b_key, b_val in _TARGET_BRAND_MAP.items():
                 if tv_lower == b_key:
                     parsed_brand = b_val
                     parsed_model = ""
                     break
                 elif tv_lower.startswith(b_key + " "):
                     parsed_brand = b_val
-                    parsed_model = target_veh[len(b_key):].strip()
+                    parsed_model = target_veh_nfc[len(b_key):].strip()
                     break
 
             if not parsed_brand:
-                for m_key, m_b in model_brand_map.items():
+                for m_key, m_b in _TARGET_MODEL_BRAND_MAP.items():
                     if tv_lower == m_key or tv_lower.startswith(m_key + " ") or tv_lower.startswith(m_key):
                         parsed_brand = m_b
-                        parsed_model = target_veh
+                        parsed_model = target_veh_nfc
                         break
 
             if not parsed_brand:
-                parts = target_veh.split(None, 1)
+                parts = target_veh_nfc.split(None, 1)
                 if len(parts) == 2:
                     parsed_brand = parts[0]
                     parsed_model = parts[1]
@@ -1129,65 +1139,8 @@ class ComplaintRecord:
 
         # Model and brand inference when only one is provided
         if not brand and model:
-            m_lower = model.lower()
-            model_brand_map_fallback = {
-                "ioniq": "Hyundai",
-                "아이오닉": "Hyundai",
-                "casper": "Hyundai",
-                "캐스퍼": "Hyundai",
-                "porter": "Hyundai",
-                "포터": "Hyundai",
-                "kona": "Hyundai",
-                "코나": "Hyundai",
-                "st1": "Hyundai",
-                "ev2": "Kia",
-                "ev3": "Kia",
-                "ev4": "Kia",
-                "ev5": "Kia",
-                "ev6": "Kia",
-                "ev9": "Kia",
-                "niro": "Kia",
-                "니로": "Kia",
-                "bongo": "Kia",
-                "봉고": "Kia",
-                "ray": "Kia",
-                "레이": "Kia",
-                "model 3": "Tesla",
-                "model y": "Tesla",
-                "model s": "Tesla",
-                "model x": "Tesla",
-                "cybertruck": "Tesla",
-                "t4k": "BYD",
-                "atto": "BYD",
-                "seal": "BYD",
-                "dolphin": "BYD",
-                "sealion": "BYD",
-                "시라이언": "BYD",
-                "gv90": "Genesis",
-                "gv60": "Genesis",
-                "gv70": "Genesis",
-                "g80": "Genesis",
-                "taycan": "Porsche",
-                "타이칸": "Porsche",
-                "id.4": "Volkswagen",
-                "id4": "Volkswagen",
-                "id.buzz": "Volkswagen",
-                "id버즈": "Volkswagen",
-                "lyriq": "Cadillac",
-                "리릭": "Cadillac",
-                "torres": "Other",
-                "토레스": "Other",
-                "eqe": "Other",
-                "eqs": "Other",
-                "i4": "Other",
-                "ix3": "Other",
-                "ix": "Other",
-                "polestar": "Other",
-                "폴스타": "Other",
-                "bolt": "Other",
-                "볼트": "Other",
-            }
-            for m_key, m_b in model_brand_map_fallback.items():
+            m_lower = unicodedata.normalize("NFC", model).lower()
+            for m_key, m_b in _TARGET_MODEL_BRAND_MAP.items():
                 if m_lower == m_key or m_lower.startswith(m_key + " ") or m_lower.startswith(m_key):
                     brand = m_b
                     break
@@ -1432,10 +1385,10 @@ class DailyReportStatistics:
     def from_dict(cls, data: Any) -> DailyReportStatistics:
         if isinstance(data, cls):
             return cls(
-                total_scraped=data.total_scraped,
-                total_filtered_defects=data.total_filtered_defects,
-                avg_negativity_score=data.avg_negativity_score,
-                critical_defect_count=data.critical_defect_count,
+                total_scraped=max(0, _safe_int(data.total_scraped)),
+                total_filtered_defects=max(0, _safe_int(data.total_filtered_defects)),
+                avg_negativity_score=_safe_float(data.avg_negativity_score),
+                critical_defect_count=max(0, _safe_int(data.critical_defect_count)),
             )
         if not isinstance(data, dict):
             return cls()
@@ -1562,8 +1515,8 @@ class DailyReportPayload:
                 empty.quarantine_entry(data, f"Invalid payload type: {type(data).__name__}")
             return empty
 
-        gen_at = str(data.get("generated_at") or datetime.now(timezone.utc).isoformat())
-        pipe_ver = str(data.get("pipeline_version") or "1.0.0")
+        gen_at = sanitize_string(data.get("generated_at"), max_len=128) or datetime.now(timezone.utc).isoformat()
+        pipe_ver = sanitize_string(data.get("pipeline_version"), max_len=64) or "1.0.0"
 
         raw_stats = data.get("statistics")
         if isinstance(raw_stats, DailyReportStatistics):

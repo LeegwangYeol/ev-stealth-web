@@ -5,6 +5,9 @@ import React, { Component, ErrorInfo, ReactNode, createRef } from 'react';
 interface Props {
   children: ReactNode;
   fallbackTitle?: string;
+  boundaryId?: string;
+  retryLabel?: string;
+  headingLevel?: 'h2' | 'h3';
   onReset?: () => void;
 }
 
@@ -80,14 +83,22 @@ export default class SubsidyErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
+      const baseId = this.props.boundaryId || 'subsidy-error';
+      const titleId = `${baseId}-title`;
+      const descId = `${baseId}-desc`;
+      const HeadingTag = this.props.headingLevel === 'h2' ? 'h2' : 'h3';
+      const retryText = this.props.retryLabel || '다시 계산 시도';
+      const rawMsg = this.state.error?.message ? this.state.error.message.replace(/\s+/g, ' ').trim() : '';
+      const safeErrorMessage = rawMsg.length > 160 ? `${rawMsg.slice(0, 157)}...` : rawMsg;
+
       return (
         <div
           ref={this.containerRef}
           role="alert"
           aria-live="assertive"
           aria-atomic="true"
-          aria-labelledby="subsidy-error-title"
-          aria-describedby="subsidy-error-desc"
+          aria-labelledby={titleId}
+          aria-describedby={descId}
           tabIndex={-1}
           onKeyDown={this.handleKeyDown}
           className="p-6 rounded-3xl bg-slate-950 border border-rose-500/50 text-slate-200 text-center space-y-4 my-4 shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
@@ -96,12 +107,12 @@ export default class SubsidyErrorBoundary extends Component<Props, State> {
             ⚠️
           </div>
           <div className="space-y-1">
-            <h3 id="subsidy-error-title" className="text-base sm:text-lg font-bold text-white">
+            <HeadingTag id={titleId} className="text-base sm:text-lg font-bold text-white">
               {this.props.fallbackTitle || '보조금 계산 중 오류가 발생했습니다'}
-            </h3>
-            <p id="subsidy-error-desc" className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
+            </HeadingTag>
+            <p id={descId} className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
               입력값 또는 지자체 쿼터 데이터를 처리하는 과정에서 일시적인 예외가 발생했습니다.
-              {this.state.error?.message ? ` (${this.state.error.message})` : ''}
+              {safeErrorMessage ? ` (${safeErrorMessage})` : ''}
             </p>
           </div>
           <div className="flex items-center justify-center gap-2 flex-wrap">
@@ -109,11 +120,11 @@ export default class SubsidyErrorBoundary extends Component<Props, State> {
               ref={this.retryButtonRef}
               type="button"
               onClick={this.handleReset}
-              aria-label="보조금 계산 다시 시도"
+              aria-label={retryText === '다시 계산 시도' ? '보조금 계산 다시 시도' : retryText}
               className="px-4 py-2.5 min-h-[44px] min-w-[44px] inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
             >
               <span aria-hidden="true">🔄</span>
-              <span>다시 계산 시도</span>
+              <span>{retryText}</span>
             </button>
             {this.state.retryCount > 0 && (
               <button

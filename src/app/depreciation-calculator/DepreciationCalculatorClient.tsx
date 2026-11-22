@@ -12,6 +12,7 @@ import {
   simulateBatteryHealth,
   calculateSubsidyClawback,
   calculateTcoComparison,
+  DEFAULT_CLAWBACK_TIERS,
 } from '@/lib/depreciationCalculations';
 
 interface DepreciationCalculatorClientProps {
@@ -107,6 +108,16 @@ function getChartBarY(val: number, maxVal: number): number {
   }
   const ratio = Math.max(0, Math.min(1, val / maxVal));
   return 230 - ratio * 200;
+}
+
+/**
+ * Formats a KRW amount in signed 만 원 units without "-0" or "+-0" artifacts.
+ */
+function formatSignedManWon(krw: number): string {
+  const safeKrw = Number.isFinite(krw) ? krw : 0;
+  const manWon = Math.round(safeKrw / 10000) || 0;
+  const sign = manWon >= 0 ? '+' : '';
+  return `${sign}${manWon.toLocaleString()}`;
 }
 
 export const getChemistryBadge = (chem: string) => {
@@ -269,7 +280,7 @@ const ModelGridCard = memo(function ModelGridCard({
         <div className="flex flex-wrap items-center gap-1.5 mb-2">
           {getChemistryBadge(model.battery_specs?.chemistry ?? 'NCM_811')}
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-900 border border-slate-300">
-            {model.battery_specs?.capacity_kwh ?? 77.4} kWh
+            {Number.isFinite(model.battery_specs?.capacity_kwh) ? model.battery_specs.capacity_kwh : 77.4} kWh
           </span>
           <span
             className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold border ${
@@ -617,11 +628,13 @@ export default function DepreciationCalculatorClient({
   }, [holdingYears]);
 
   const evDiff = useMemo(() => {
-    return depResult.adjustedResidualPct - currentEvBenchmark;
+    const raw = depResult.adjustedResidualPct - currentEvBenchmark;
+    return Number.isFinite(raw) && Math.abs(raw) >= 0.05 ? raw : 0;
   }, [depResult.adjustedResidualPct, currentEvBenchmark]);
 
   const iceDiff = useMemo(() => {
-    return depResult.adjustedResidualPct - currentIceBenchmark;
+    const raw = depResult.adjustedResidualPct - currentIceBenchmark;
+    return Number.isFinite(raw) && Math.abs(raw) >= 0.05 ? raw : 0;
   }, [depResult.adjustedResidualPct, currentIceBenchmark]);
 
   // Multi-year comparison projection (1~5 years)
@@ -793,15 +806,15 @@ export default function DepreciationCalculatorClient({
   const monthlySavingsFormatted = useMemo(() => {
     const safeMonths = Math.max(1, Math.round(safeYears * 12));
     const savings = tcoResult?.totalCumulativeSavingsKrw ?? 0;
-    if (!Number.isFinite(savings)) return '0만 원 절약';
-    const monthlyAvg = Math.round(savings / safeMonths / 10000);
+    if (!Number.isFinite(savings)) return '+0만 원 절약';
+    const monthlyAvg = Math.round(savings / safeMonths / 10000) || 0;
     const sign = monthlyAvg >= 0 ? '+' : '';
     const verdict = monthlyAvg >= 0 ? '절약' : '추가 지출';
     return `${sign}${monthlyAvg.toLocaleString()}만 원 ${verdict}`;
   }, [tcoResult?.totalCumulativeSavingsKrw, safeYears]);
 
   // Debounced live calculation announcement to prevent AT chatter during rapid slider scrubbing
-  const rawLiveSummary = `${selectedModel.brand_name_ko} ${selectedModel.model_name} ${holdingYears}년 보유 기준 예상 잔존 시세는 ${Math.round((depResult.estimatedResidualPriceKrw || 0) / 10000).toLocaleString()}만 원(잔존율 ${depResult.adjustedResidualPct}%), 배터리 잔여 수명은 ${safeSohPct.toFixed(1)}%, ${holdingYears}개년 누적 절감액은 ${(tcoResult.totalCumulativeSavingsKrw ?? 0) >= 0 ? '+' : ''}${Math.round((tcoResult.totalCumulativeSavingsKrw ?? 0) / 10000).toLocaleString()}만 원입니다.`;
+  const rawLiveSummary = `${selectedModel.brand_name_ko} ${selectedModel.model_name} ${holdingYears}년 보유 기준 예상 잔존 시세는 ${(Math.round((depResult.estimatedResidualPriceKrw || 0) / 10000) || 0).toLocaleString()}만 원(잔존율 ${depResult.adjustedResidualPct}%), 배터리 잔여 수명은 ${safeSohPct.toFixed(1)}%, ${holdingYears}개년 누적 절감액은 ${formatSignedManWon(tcoResult.totalCumulativeSavingsKrw ?? 0)}만 원입니다.`;
   const [liveSummaryAnnouncement, setLiveSummaryAnnouncement] = useState<string>(rawLiveSummary);
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -912,7 +925,7 @@ export default function DepreciationCalculatorClient({
               type="button"
               onClick={() => applyPreset('commute')}
               className="px-3 py-1.5 min-h-[44px] flex items-center gap-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-              aria-label="출퇴근 표준 프리셋 (3년 보유, 연 1.5만 km, 급속 20%)"
+              aria-label="출퇴근 표준 (3년/1.5만 km): 3년 보유, 연 1.5만 km, 급속 20% 프리셋"
             >
               <span aria-hidden="true">🚗</span> 출퇴근 표준 (3년/1.5만 km)
             </button>
@@ -920,7 +933,7 @@ export default function DepreciationCalculatorClient({
               type="button"
               onClick={() => applyPreset('business')}
               className="px-3 py-1.5 min-h-[44px] flex items-center gap-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-              aria-label="장거리 영업 프리셋 (4년 보유, 연 3.5만 km, 급속 65%)"
+              aria-label="장거리 영업 (4년/3.5만 km): 4년 보유, 연 3.5만 km, 급속 65% 프리셋"
             >
               <span aria-hidden="true">🚛</span> 장거리 영업 (4년/3.5만 km)
             </button>
@@ -928,7 +941,7 @@ export default function DepreciationCalculatorClient({
               type="button"
               onClick={() => applyPreset('leisure')}
               className="px-3 py-1.5 min-h-[44px] flex items-center gap-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-              aria-label="주말 레저 프리셋 (2년 보유, 연 8,000 km, 급속 15%)"
+              aria-label="주말 레저 (2년/8,000 km): 2년 보유, 연 8,000 km, 급속 15% 프리셋"
             >
               <span aria-hidden="true">🏖️</span> 주말 레저 (2년/8,000 km)
             </button>
@@ -936,7 +949,7 @@ export default function DepreciationCalculatorClient({
               type="button"
               onClick={() => applyPreset('earlySell')}
               className="px-3 py-1.5 min-h-[44px] flex items-center gap-1 rounded-lg text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-              aria-label="보조금 환수 점검 프리셋 (18개월 보유, 관외 이전)"
+              aria-label="보조금 환수 점검 (18개월 보유): 18개월 보유, 관외 이전 프리셋"
             >
               <span aria-hidden="true">⚠️</span> 보조금 환수 점검 (18개월 보유)
             </button>
@@ -1003,7 +1016,7 @@ export default function DepreciationCalculatorClient({
                     ? 'bg-blue-600 text-white shadow-sm'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
-                aria-label={`${b.name_ko} (${b.count}): ${b.name_ko} 모델 필터`}
+                aria-label={`${b.name_ko} (${b.count}): 모델 필터`}
               >
                 {b.name_ko} ({b.count})
               </button>
@@ -1069,7 +1082,7 @@ export default function DepreciationCalculatorClient({
                 checked={winterSeason}
                 onChange={(e) => setWinterSeason(e.target.checked)}
                 aria-describedby="winter-season-hint"
-                className="w-5 h-5 rounded text-blue-600 focus:outline-none cursor-pointer shrink-0"
+                className="w-5 h-5 rounded text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 cursor-pointer shrink-0"
               />
               <span className="flex items-center gap-1 py-2">
                 <span aria-hidden="true">❄️</span> 혹한기(-5℃) 저온 페널티 반영
@@ -1364,7 +1377,7 @@ export default function DepreciationCalculatorClient({
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-slate-700 hover:bg-slate-100'
                 }`}
-                aria-label="예상 시세(만 원 단위)로 차트 보기"
+                aria-label="예상 시세 (만 원): 만 원 단위로 차트 보기"
               >
                 예상 시세 (만 원)
               </button>
@@ -1415,19 +1428,19 @@ export default function DepreciationCalculatorClient({
 
           {/* KPI 3: VS EV Class Average */}
           <div className={`${
-            evDiff >= 0
+            evDiff >= -0.049
               ? 'bg-gradient-to-br from-slate-50 to-emerald-50'
               : 'bg-gradient-to-br from-slate-50 to-rose-50'
           } border border-slate-200 rounded-xl p-3 sm:p-4`}>
             <div className="text-xs font-bold text-slate-800">전기차 전체 평균 대비</div>
             <div className={`text-xl sm:text-2xl font-black mt-1 break-keep ${
-              evDiff >= 0 ? 'text-emerald-700' : 'text-rose-600'
+              evDiff >= -0.049 ? 'text-emerald-700' : 'text-rose-700'
             }`}>
-              {evDiff >= 0 ? '+' : ''}
+              {evDiff >= -0.049 ? '+' : ''}
               {Number.isFinite(evDiff) ? evDiff.toFixed(1) : '0.0'}%
             </div>
             <div className={`text-[11px] mt-1 ${
-              evDiff >= 0 ? 'text-emerald-900 font-medium' : 'text-rose-900 font-medium'
+              evDiff >= -0.049 ? 'text-emerald-900 font-medium' : 'text-rose-900 font-medium'
             }`}>
               동급 세그먼트 중 방어력 {depResult.defenseTier}등급
             </div>
@@ -1435,21 +1448,21 @@ export default function DepreciationCalculatorClient({
 
           {/* KPI 4: VS ICE Benchmark */}
           <div className={`${
-            iceDiff >= 0
+            iceDiff >= -0.049
               ? 'bg-gradient-to-br from-slate-50 to-amber-50'
               : 'bg-gradient-to-br from-slate-50 to-rose-50'
           } border border-slate-200 rounded-xl p-3 sm:p-4`}>
             <div className="text-xs font-bold text-slate-800">동급 내연기관(가솔린) 대비</div>
             <div className={`text-xl sm:text-2xl font-black mt-1 break-keep ${
-              iceDiff >= 0 ? 'text-amber-800' : 'text-rose-600'
+              iceDiff >= -0.049 ? 'text-amber-800' : 'text-rose-700'
             }`}>
-              {iceDiff >= 0 ? '+' : ''}
+              {iceDiff >= -0.049 ? '+' : ''}
               {Number.isFinite(iceDiff) ? iceDiff.toFixed(1) : '0.0'}%
             </div>
             <div className={`text-[11px] mt-1 ${
-              iceDiff >= 0 ? 'text-slate-800 font-medium' : 'text-rose-900 font-medium'
+              iceDiff >= -0.049 ? 'text-slate-800 font-medium' : 'text-rose-900 font-medium'
             }`}>
-              {iceDiff >= 0
+              {iceDiff >= -0.049
                 ? '내연기관보다 뛰어난 감가 방어'
                 : '초기 배터리 불확실성 감가 반영'}
             </div>
@@ -1920,7 +1933,7 @@ export default function DepreciationCalculatorClient({
                   <span>🛠️</span> 공식 배터리 팩 교체 비용 견적 ({replacementCostTier.segment_name})
                 </span>
                 <span className="text-[11px] text-slate-300">
-                  용량 {selectedModel.battery_specs?.capacity_kwh ?? 77.4} kWh 기준
+                  용량 {Number.isFinite(selectedModel.battery_specs?.capacity_kwh) ? selectedModel.battery_specs.capacity_kwh : 77.4} kWh 기준
                 </span>
               </div>
 
@@ -2246,7 +2259,10 @@ export default function DepreciationCalculatorClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {(initialDatabase?.subsidy_clawback_schedule?.tiers || []).map((tier) => {
+                  {(initialDatabase?.subsidy_clawback_schedule?.tiers?.length
+                    ? initialDatabase.subsidy_clawback_schedule.tiers
+                    : DEFAULT_CLAWBACK_TIERS
+                  ).map((tier) => {
                     const isCurrentTier =
                       (tier.max_months_exclusive === null && heldMonths >= tier.min_months) ||
                       (tier.max_months_exclusive !== null &&
@@ -2331,8 +2347,7 @@ export default function DepreciationCalculatorClient({
               {holdingYears}년 누적 연료비 절감
             </span>
             <span className="text-lg sm:text-2xl font-black text-emerald-800 block mt-1 break-keep">
-              {tcoResult.fuelSavingsKrw >= 0 ? '+' : ''}
-              {(Math.round(tcoResult.fuelSavingsKrw / 10000)).toLocaleString()}{' '}
+              {formatSignedManWon(tcoResult.fuelSavingsKrw)}{' '}
               <span className="text-xs font-semibold text-slate-700">만 원</span>
             </span>
             <span className="text-[11px] text-slate-700 mt-1 block">
@@ -2345,8 +2360,7 @@ export default function DepreciationCalculatorClient({
               {holdingYears}년 자동차세 절감
             </span>
             <span className="text-lg sm:text-2xl font-black text-blue-800 block mt-1 break-keep">
-              {tcoResult.taxSavingsKrw >= 0 ? '+' : ''}
-              {(Math.round(tcoResult.taxSavingsKrw / 10000)).toLocaleString()}{' '}
+              {formatSignedManWon(tcoResult.taxSavingsKrw)}{' '}
               <span className="text-xs font-semibold text-slate-700">만 원</span>
             </span>
             <span className="text-[11px] text-slate-700 mt-1 block">
@@ -2359,8 +2373,7 @@ export default function DepreciationCalculatorClient({
               통행료·주차·정비 보조 절감
             </span>
             <span className="text-lg sm:text-2xl font-black text-indigo-800 block mt-1 break-keep">
-              {tcoResult.totalAuxiliarySavingsKrw >= 0 ? '+' : ''}
-              {(Math.round(tcoResult.totalAuxiliarySavingsKrw / 10000)).toLocaleString()}{' '}
+              {formatSignedManWon(tcoResult.totalAuxiliarySavingsKrw)}{' '}
               <span className="text-xs font-semibold text-slate-700">만 원</span>
             </span>
             <span className="text-[11px] text-slate-700 mt-1 block">
@@ -2373,8 +2386,7 @@ export default function DepreciationCalculatorClient({
               {holdingYears}년 총 운행비 순이득
             </span>
             <span className="text-lg sm:text-2xl font-black text-white block mt-1 break-keep">
-              {tcoResult.totalCumulativeSavingsKrw >= 0 ? '+' : ''}
-              {(Math.round(tcoResult.totalCumulativeSavingsKrw / 10000)).toLocaleString()}{' '}
+              {formatSignedManWon(tcoResult.totalCumulativeSavingsKrw)}{' '}
               <span className="text-xs font-semibold text-white">만 원</span>
             </span>
             <span className="text-[11px] text-white font-medium mt-1 block">
@@ -2409,7 +2421,14 @@ export default function DepreciationCalculatorClient({
             <tbody className="divide-y divide-slate-200 text-slate-700">
               {tcoResult.yearlyBreakdown.map((row) => (
                 <tr key={row.year} className="hover:bg-slate-50 transition">
-                  <th scope="row" className="py-2 px-3 font-bold text-left">{row.year}년차</th>
+                  <th scope="row" className="py-2 px-3 font-bold text-left">
+                    {row.year}년차
+                    {row.year > Math.floor(holdingYears) && (
+                      <span className="text-[11px] font-normal text-slate-600 ml-1">
+                        ({Math.round((holdingYears - Math.floor(holdingYears)) * 12)}개월)
+                      </span>
+                    )}
+                  </th>
                   <td className="py-2 px-3">{row.cumulativeKm.toLocaleString()} km</td>
                   <td className="py-2 px-3">{Math.round(row.evElectricityCostKrw / 10000).toLocaleString()}만 원</td>
                   <td className="py-2 px-3">{Math.round(row.iceFuelCostKrw / 10000).toLocaleString()}만 원</td>
@@ -2421,10 +2440,10 @@ export default function DepreciationCalculatorClient({
                     {Math.round((row.tollSavingsKrw + row.parkingSavingsKrw + row.maintenanceSavingsKrw) / 10000).toLocaleString()}만 원
                   </td>
                   <td className="py-2 px-3 text-right font-semibold text-emerald-800">
-                    {row.annualNetSavingsKrw >= 0 ? '+' : ''}{Math.round(row.annualNetSavingsKrw / 10000).toLocaleString()}만 원
+                    {formatSignedManWon(row.annualNetSavingsKrw)}만 원
                   </td>
                   <td className="py-2 px-3 text-right font-extrabold text-blue-800">
-                    {row.cumulativeNetSavingsKrw >= 0 ? '+' : ''}{Math.round(row.cumulativeNetSavingsKrw / 10000).toLocaleString()}만 원
+                    {formatSignedManWon(row.cumulativeNetSavingsKrw)}만 원
                   </td>
                 </tr>
               ))}
@@ -2446,13 +2465,13 @@ export default function DepreciationCalculatorClient({
           </div>
 
           <div className="bg-white px-4 py-2 rounded-lg border border-slate-300 font-extrabold text-slate-900 text-sm whitespace-normal sm:whitespace-nowrap break-keep text-center sm:text-right">
-            순 경제적 이점: <span className="text-blue-700">{tcoResult.totalCumulativeSavingsKrw >= 0 ? '+' : ''}{Math.round(tcoResult.totalCumulativeSavingsKrw / 10000).toLocaleString()}만 원</span>
+            순 경제적 이점: <span className="text-blue-700">{formatSignedManWon(tcoResult.totalCumulativeSavingsKrw)}만 원</span>
           </div>
         </div>
       </section>
 
       {/* 9. STATUTORY & DATA SOURCES FOOTNOTE */}
-      <div className="bg-slate-100 rounded-xl p-4 text-xs text-slate-700 space-y-1 leading-relaxed border border-slate-200">
+      <aside aria-label="데이터 출처 및 산정 근거" className="bg-slate-100 rounded-xl p-4 text-xs text-slate-700 space-y-1 leading-relaxed border border-slate-200">
         <div className="font-semibold text-slate-800">📌 데이터 출처 및 산정 근거 고지:</div>
         <div>
           • 중고차 실거래 시세: 엔카닷컴(Encar) 2024~2026 실거래 지수, 케이카(K Car) 월간 전기차 시세표, 보험개발원(KIDI) 차량기준가액표
@@ -2463,7 +2482,7 @@ export default function DepreciationCalculatorClient({
         <div>
           • 자동차세 및 연료 단가: 지방세법 제127조 (전기차 연 13만 원 정액), 환경부 공공급속충전요금 347.2원/kWh, 한전 비공용완속충전 250원/kWh, 오피넷 전국 평균 가솔린 1,700원/L
         </div>
-      </div>
+      </aside>
     </div>
   );
 }

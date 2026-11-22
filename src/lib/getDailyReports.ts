@@ -143,6 +143,22 @@ function firstSafeId(...candidates: unknown[]): string {
   return '';
 }
 
+const FORBIDDEN_PROTOTYPE_KEYS = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+  'tostring',
+  'valueof',
+  'hasownproperty',
+  'isprototypeof',
+  'propertyisenumerable',
+  'tolocalestring',
+]);
+
+function isForbiddenPrototypeKey(key: string): boolean {
+  return FORBIDDEN_PROTOTYPE_KEYS.has(key.toLowerCase()) || key in Object.prototype;
+}
+
 /**
  * Resolves defect category safely from category code, alias, or Korean label.
  */
@@ -150,8 +166,10 @@ export function resolveCategory(
   rawCategory?: unknown,
   rawCategoryKo?: unknown
 ): { code: DefectCategoryCode; ko: string } {
-  const cat = typeof rawCategory === 'string' ? sanitizeText(rawCategory).trim() : '';
-  const catKo = typeof rawCategoryKo === 'string' ? sanitizeText(rawCategoryKo).trim() : '';
+  const rawCat = typeof rawCategory === 'string' ? sanitizeText(rawCategory).trim() : '';
+  const rawCatKo = typeof rawCategoryKo === 'string' ? sanitizeText(rawCategoryKo).trim() : '';
+  const cat = rawCat && !isForbiddenPrototypeKey(rawCat) ? rawCat : '';
+  const catKo = rawCatKo && !isForbiddenPrototypeKey(rawCatKo) ? rawCatKo : '';
 
   // 1. Direct match in CATEGORY_MAP
   if (cat && Object.prototype.hasOwnProperty.call(CATEGORY_MAP, cat)) {
@@ -234,8 +252,13 @@ export function maskAuthor(author?: unknown): string {
   // 1. Mask unmasked full IPv4 addresses (e.g. "123.45.67.89" -> "123.45.*.*")
   let masked = trimmed.replace(/\b(\d{1,3}\.\d{1,3})\.\d{1,3}\.\d{1,3}\b/g, '$1.*.*');
 
-  // 2. Mask email addresses (e.g. "john.doe@example.com" -> "j***@example.com")
-  masked = masked.replace(/\b([a-zA-Z0-9._%+-])[a-zA-Z0-9._%+-]*@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/g, '$1***@$2');
+  // 2. Mask email addresses (e.g. "john.doe@example.com" -> "j***@example.com") in O(N) time
+  if (masked.includes('@')) {
+    masked = masked.replace(
+      /(^|[^a-zA-Z0-9._%+-])([a-zA-Z0-9._%+-])[a-zA-Z0-9._%+-]*@((?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})\b/g,
+      '$1$2***@$3'
+    );
+  }
 
   // 3. Mask phone numbers (e.g. "010-1234-5678" -> "010-****-5678")
   masked = masked.replace(/\b(01[016789])-?\d{3,4}-?(\d{4})\b/g, '$1-****-$2');
@@ -312,6 +335,9 @@ function isPrivateOrInternalHost(rawHost: string): boolean {
       return true;
     }
     const parts = bareHost.split(':');
+    if (!/^[0-9a-f]{1,4}$/.test(parts[0])) {
+      return true;
+    }
     const h0 = parseInt(parts[0], 16);
     if (!Number.isFinite(h0) || Number.isNaN(h0) || h0 < 0x2000 || h0 > 0x3fff) {
       return true;
@@ -320,7 +346,11 @@ function isPrivateOrInternalHost(rawHost: string): boolean {
       return true;
     }
     if (h0 === 0x2001) {
-      const h1 = parts[1] === '' ? 0 : parseInt(parts[1] || '0', 16);
+      const seg1 = parts[1] ?? '';
+      if (seg1 !== '' && !/^[0-9a-f]{1,4}$/.test(seg1)) {
+        return true;
+      }
+      const h1 = seg1 === '' ? 0 : parseInt(seg1, 16);
       if (
         !Number.isFinite(h1) ||
         Number.isNaN(h1) ||
@@ -559,6 +589,24 @@ export function deduplicateReports(
   };
 }
 
+function toFiniteOrUndefined(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return Object.is(value, -0) ? 0 : value;
+}
+
+function toFiniteOrZero(value: unknown): number {
+  return toFiniteOrUndefined(value) ?? 0;
+}
+
+function firstRawUrlCandidate(...candidates: unknown[]): string {
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      return candidate;
+    }
+  }
+  return '#';
+}
+
 /**
  * Normalizes any raw item from external JSON to DefectReportItem with safe defaults.
  */
@@ -595,9 +643,7 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
     else severity = 'LOW';
   }
 
-  const rawScore = Number.isFinite(raw.sentiment_score)
-    ? (raw.sentiment_score as number)
-    : (Number.isFinite(raw.negativity_score) ? (raw.negativity_score as number) : 0.85);
+  const rawScore = toFiniteOrUndefined(raw.sentiment_score) ?? toFiniteOrUndefined(raw.negativity_score) ?? 0.85;
   const score = getSafeSentimentScore(rawScore, 0.85);
 
   let rawSlang = raw.slang_tags || raw.slang_terms || raw.slang_terms_detected;
@@ -629,11 +675,11 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
     : null;
   const dsiBreakdown: DefectReportItem['dsi_breakdown'] = rawDsi
     ? {
-        safety: typeof rawDsi.safety === 'number' && Number.isFinite(rawDsi.safety) ? rawDsi.safety : 0,
-        functional: typeof rawDsi.functional === 'number' && Number.isFinite(rawDsi.functional) ? rawDsi.functional : 0,
-        economic: typeof rawDsi.economic === 'number' && Number.isFinite(rawDsi.economic) ? rawDsi.economic : 0,
-        social: typeof rawDsi.social === 'number' && Number.isFinite(rawDsi.social) ? rawDsi.social : 0,
-        convenience: typeof rawDsi.convenience === 'number' && Number.isFinite(rawDsi.convenience) ? rawDsi.convenience : 0,
+        safety: toFiniteOrZero(rawDsi.safety),
+        functional: toFiniteOrZero(rawDsi.functional),
+        economic: toFiniteOrZero(rawDsi.economic),
+        social: toFiniteOrZero(rawDsi.social),
+        convenience: toFiniteOrZero(rawDsi.convenience),
       }
     : undefined;
 
@@ -651,7 +697,7 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
   return {
     id: firstSafeId(raw.id, raw.post_id) || `report_${safeIndex + 1}`,
     source: firstSafeString(raw.source, raw.platform).toLowerCase() || 'bobaedream',
-    url: sanitizeReportUrl(firstSafeString(raw.url, raw.post_url) || '#'),
+    url: sanitizeReportUrl(firstRawUrlCandidate(raw.url, raw.post_url)),
     title: maskSensitiveData(firstSafeString(raw.title, raw.post_title)) || '전기차 결함 제보',
     date: safeDate,
     created_at: firstSafeString(raw.created_at) || undefined,
@@ -664,9 +710,9 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
     verbatim_quote: maskSensitiveData(firstSafeString(raw.verbatim_quote, raw.raw_quote, raw.content)) || '원문 없음',
     slang_tags: slangTags,
     sentiment_score: score,
-    sentiment_polarity: Number.isFinite(raw.sentiment_polarity) ? Number(raw.sentiment_polarity) : undefined,
+    sentiment_polarity: toFiniteOrUndefined(raw.sentiment_polarity),
     severity,
-    severity_index: Number.isFinite(raw.severity_index) ? Number(raw.severity_index) : undefined,
+    severity_index: toFiniteOrUndefined(raw.severity_index),
     author: typeof raw.author === 'string' ? maskAuthor(raw.author) : undefined,
     is_authentic_defect: typeof raw.is_authentic_defect === 'boolean' ? raw.is_authentic_defect : true,
     dsi_breakdown: dsiBreakdown,
@@ -752,24 +798,28 @@ export function calculateKPIs(
     : '해당 없음 (0%)';
 
   const totalScraped = existingStats?.total_scraped ?? (totalFiltered * 7);
-  const existingTopModel = typeof existingStats?.top_model === 'string' ? sanitizeText(existingStats.top_model) : '';
-  const existingTopPlatform = typeof existingStats?.top_platform === 'string' ? sanitizeText(existingStats.top_platform) : '';
+  const existingTopModel = typeof existingStats?.top_model === 'string'
+    ? maskSensitiveData(sanitizeText(existingStats.top_model))
+    : '';
+  const existingTopPlatform = typeof existingStats?.top_platform === 'string'
+    ? maskSensitiveData(sanitizeText(existingStats.top_platform))
+    : '';
 
   return {
     total_scraped: typeof totalScraped === 'number' && Number.isFinite(totalScraped)
-      ? Math.floor(Math.max(0, totalScraped))
+      ? Math.floor(Math.max(0, totalScraped)) || 0
       : (totalFiltered * 7),
     total_filtered_defects: totalFiltered,
     avg_negativity_score: typeof existingStats?.avg_negativity_score === 'number' && Number.isFinite(existingStats.avg_negativity_score)
       ? getSafeSentimentScore(existingStats.avg_negativity_score, avgScore)
       : avgScore,
     critical_defect_count: typeof existingStats?.critical_defect_count === 'number' && Number.isFinite(existingStats.critical_defect_count)
-      ? Math.floor(Math.min(totalFiltered, Math.max(0, existingStats.critical_defect_count)))
+      ? Math.floor(Math.min(totalFiltered, Math.max(0, existingStats.critical_defect_count))) || 0
       : criticalCount,
     top_model: existingTopModel || topModelDisplay,
     top_platform: existingTopPlatform || topPlatformDisplay,
     duplicates_removed: typeof existingStats?.duplicates_removed === 'number' && Number.isFinite(existingStats.duplicates_removed)
-      ? Math.floor(Math.max(0, existingStats.duplicates_removed))
+      ? Math.floor(Math.max(0, existingStats.duplicates_removed)) || 0
       : 0,
     is_deduplicated: typeof existingStats?.is_deduplicated === 'boolean' ? existingStats.is_deduplicated : true,
   };
@@ -998,11 +1048,13 @@ export function getDailyReports(options?: { useMockOnEmpty?: boolean }): DailyRe
         if (typeof cat.category !== 'string' || !cat.category.trim()) continue;
         const resolved = resolveCategory(cat.category);
         const safeCount = typeof cat.count === 'number' && Number.isFinite(cat.count) ? Math.floor(Math.max(0, cat.count)) : 0;
-        const hasFiniteRatio = typeof cat.ratio === 'number' && Number.isFinite(cat.ratio);
-        const hasFinitePct = typeof cat.percentage === 'number' && Number.isFinite(cat.percentage);
-        const safePct = hasFinitePct ? Math.min(100, Math.max(0, cat.percentage as number)) : 0;
+        const rawRatio = cat.ratio;
+        const rawPct = cat.percentage;
+        const hasFiniteRatio = typeof rawRatio === 'number' && Number.isFinite(rawRatio);
+        const hasFinitePct = typeof rawPct === 'number' && Number.isFinite(rawPct);
+        const safePct = hasFinitePct ? Math.min(100, Math.max(0, rawPct)) : 0;
         const derivedRatio = hasFiniteRatio
-          ? Math.min(1, Math.max(0, cat.ratio as number))
+          ? Math.min(1, Math.max(0, rawRatio))
           : hasFinitePct
             ? Math.min(1, Math.max(0, Number((safePct / 100).toFixed(3))))
             : 0;

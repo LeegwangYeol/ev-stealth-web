@@ -160,8 +160,12 @@ function resolveModelAndBrand(
         withoutParens,
         cleanLower.replace(/^model\s*/i, '모델 '),
         cleanLower.replace(/^모델\s*/i, 'model '),
+        cleanLower.replace(/^모델\s*([a-z0-9]+)/i, '모델 $1'),
+        cleanLower.replace(/^model\s*([a-z0-9]+)/i, '모델 $1'),
         withoutParens.replace(/^model\s*/i, '모델 '),
         withoutParens.replace(/^모델\s*/i, 'model '),
+        withoutParens.replace(/^모델\s*([a-z0-9]+)/i, '모델 $1'),
+        withoutParens.replace(/^model\s*([a-z0-9]+)/i, '모델 $1'),
         cleanLower.replace(/아이오닉\s*([0-9]+)/i, '아이오닉 $1'),
         withoutParens.replace(/아이오닉\s*([0-9]+)/i, '아이오닉 $1'),
       ])
@@ -201,6 +205,23 @@ function resolveModelAndBrand(
         return brandMatch && cLower === v;
       });
       if (matchedCandidate) break;
+    }
+
+    // 1.5. Space/punctuation-normalized exact match (e.g. "모델Y" -> "모델 Y", "EV 6" -> "EV6")
+    if (!matchedCandidate) {
+      for (const v of variants) {
+        const normV = normalizeSearchText(v);
+        if (!normV) continue;
+        matchedCandidate = candidates.find((c) => {
+          if (!c?.model || typeof c.model !== 'string') return false;
+          const brandMatch =
+            !resolvedBrand ||
+            c.brand === resolvedBrand ||
+            normalizeManufacturer(c.brand) === resolvedBrand;
+          return brandMatch && normalizeSearchText(c.model) === normV;
+        });
+        if (matchedCandidate) break;
+      }
     }
 
     // 2. StartsWith match on model variant
@@ -251,20 +272,25 @@ function resolveModelAndBrand(
 
   if (resolvedBrand && resolvedModel) {
     const targetModelLower = resolvedModel.toLowerCase();
+    const targetModelNorm = normalizeSearchText(resolvedModel);
     const brandModels = getModelsForBrand(resolvedBrand, initialDatabase);
-    const matchedBrandModel = brandModels.find(
-      (m) => {
+    const matchedBrandModel =
+      brandModels.find(
+        (m) => typeof m === 'string' && m.toLowerCase() === targetModelLower
+      ) ||
+      brandModels.find(
+        (m) => typeof m === 'string' && Boolean(targetModelNorm) && normalizeSearchText(m) === targetModelNorm
+      ) ||
+      brandModels.find((m) => {
         if (!m || typeof m !== 'string') return false;
         const mLower = m.toLowerCase();
         return (
-          mLower === targetModelLower ||
           mLower.startsWith(targetModelLower) ||
           targetModelLower.startsWith(mLower) ||
           mLower.includes(targetModelLower) ||
           targetModelLower.includes(mLower)
         );
-      }
-    );
+      });
     if (matchedBrandModel) {
       resolvedModel = matchedBrandModel;
     }
@@ -400,6 +426,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
   const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Debounce timer ref for VIN auto-lookup
   const vinDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Latest VIN value ref so input/paste handlers stay stable across keystrokes
+  const vinInputRef = useRef<string>(vinInput);
+  vinInputRef.current = vinInput;
 
   // Clear pending timers on unmount to prevent memory leaks
   useEffect(() => {
@@ -526,9 +555,10 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
   // Debounced input change handler for VIN search
   const handleVinChange = useCallback((value: string) => {
     const clean = normalizeVinInput(value, 17);
-    if (clean === vinInput) {
+    if (clean === vinInputRef.current) {
       return;
     }
+    vinInputRef.current = clean;
     setVinInput(clean);
     setVinTouched(true);
     setVinSubmitted(false);
@@ -559,7 +589,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
         setCheckResult(result);
       }, 350);
     }
-  }, [vinInput, initialDatabase]);
+  }, [initialDatabase]);
 
   // Clean pasted VINs (including hyphens/spaces/Unicode dashes/selection replacement) before maxLength=17 truncates them
   const handleVinPaste = useCallback(
@@ -568,13 +598,13 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
       if (!pastedText) return;
       e.preventDefault();
       const input = e.currentTarget;
-      const baseValue = input.value ?? vinInput;
+      const baseValue = input.value ?? vinInputRef.current;
       const start = input.selectionStart ?? baseValue.length;
       const end = input.selectionEnd ?? baseValue.length;
       const combined = baseValue.slice(0, start) + pastedText + baseValue.slice(end);
       handleVinChange(combined);
     },
-    [vinInput, handleVinChange]
+    [handleVinChange]
   );
 
   // Handle Mode A lookup
@@ -713,11 +743,16 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     return sorted
       .filter((r): r is OfficialRecallCampaign => Boolean(r))
       .map((recall) => {
+        const canonicalBrand = normalizeManufacturer(recall.brand);
+        const targetModelLower = (recall.target_model || '').toLowerCase();
         const combinedRaw = `${recall.campaign_no || ''} ${recall.brand || ''} ${recall.target_model || ''} ${recall.defect_title || ''} ${recall.defect_detail || ''} ${recall.risk_level_ko || ''} ${recall.remedy_type_ko || ''}`.toLowerCase();
         return {
           recall,
-          canonicalBrand: normalizeManufacturer(recall.brand),
+          canonicalBrand,
           brandLower: (recall.brand || '').toLowerCase(),
+          mentionsGenesis:
+            canonicalBrand === '현대자동차' &&
+            (targetModelLower.includes('제네시스') || targetModelLower.includes('genesis')),
           combinedRaw,
           combinedNorm: normalizeSearchText(combinedRaw),
         };
@@ -739,7 +774,8 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
         selectedRecallBrandFilter !== 'ALL' &&
         entry.canonicalBrand !== selectedRecallBrandFilter &&
         !entry.brandLower.includes(brandFilterLower) &&
-        r.brand !== selectedRecallBrandFilter
+        r.brand !== selectedRecallBrandFilter &&
+        !(selectedRecallBrandFilter === '제네시스' && entry.mentionsGenesis)
       ) {
         continue;
       }
@@ -1056,15 +1092,17 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   />
                   <p id="vin-format-hint" className="sr-only">영문 대문자와 숫자로 구성된 17자리 차량 식별 번호 (I, O, Q 제외)</p>
                   <div className="absolute inset-y-0 right-3 flex items-center gap-2 pointer-events-none">
-                    {isSearchingVin && (
-                      <span role="status" aria-live="polite" className="inline-flex items-center gap-1 text-xs text-blue-400">
-                        <svg className="animate-spin h-3.5 w-3.5 text-blue-400 motion-reduce:hidden" width="14" height="14" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-                        </svg>
-                        <span className="sr-only">차대번호 분석 중...</span>
-                      </span>
-                    )}
+                    <span role="status" aria-live="polite" className="inline-flex items-center gap-1 text-xs text-blue-400">
+                      {isSearchingVin && (
+                        <>
+                          <svg className="animate-spin h-3.5 w-3.5 text-blue-400 motion-reduce:hidden" width="14" height="14" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                          </svg>
+                          <span className="sr-only">차대번호 분석 중...</span>
+                        </>
+                      )}
+                    </span>
                     <span className="text-xs font-mono text-slate-300" aria-label={`현재 입력된 자리수: ${vinInput.replace(/[\s-]/g, '').length} / 17`}>
                       {vinInput.replace(/[\s-]/g, '').length}/17
                     </span>
@@ -1386,7 +1424,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                         <p className="text-sm text-slate-200 mt-1 max-w-3xl leading-relaxed">
                           {checkResult.mode === 'VIN' && !checkResult.decodedModel && (
                             <span className="block text-amber-300 text-xs font-semibold mb-1">
-                              ℹ️ 차대번호(VIN) 기준 제조사는 식별되었으나 세부 모델 정보가 데이터베이스에 매핑되지 않았습니다.
+                              {checkResult.decodedBrand === '기타/미확인 브랜드'
+                                ? 'ℹ️ 차대번호(VIN) 형식은 유효하나 등록된 데이터베이스에 매핑된 제조사 및 세부 모델 정보가 없습니다.'
+                                : 'ℹ️ 차대번호(VIN) 기준 제조사는 식별되었으나 세부 모델 정보가 데이터베이스에 매핑되지 않았습니다.'}
                             </span>
                           )}
                           {checkResult.hasFireRisk
@@ -1490,8 +1530,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       <span>배터리 실명제 공시 안내</span>
                     </div>
                     <p className="text-xs text-slate-300 leading-relaxed">
-                      차대번호 기준 제조사({checkResult.decodedBrand || '해당 제조사'})는 식별되었으나, 
-                      본 세부 트림의 배터리 셀 제조사 정보는 하단의 [배터리 제조사 공개표]에서 차종명으로 직접 검색하시거나 차량등록증의 제원표를 확인해 주십시오.
+                      {checkResult.decodedBrand === '기타/미확인 브랜드'
+                        ? '입력하신 차대번호의 제조사 코드(WMI)가 국내 주요 전기차 데이터베이스에 등록되어 있지 않습니다. 하단의 [배터리 제조사 공개표]에서 차종명으로 직접 검색하시거나 자동차등록증의 제원표를 확인해 주십시오.'
+                        : `차대번호 기준 제조사(${checkResult.decodedBrand || '해당 제조사'})는 식별되었으나, 본 세부 트림의 배터리 셀 제조사 정보는 하단의 [배터리 제조사 공개표]에서 차종명으로 직접 검색하시거나 차량등록증의 제원표를 확인해 주십시오.`}
                     </p>
                   </div>
                 )}

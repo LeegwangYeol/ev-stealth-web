@@ -29,9 +29,12 @@ from scrapers.common_utils import (
     COMMON_VEHICLE_PATTERNS,
     ComplaintRecord,
     SafeHttpClient,
+    classify_ev_text,
     clean_html_text,
     encode_euc_kr_query,
+    extract_defect_topic,
     extract_slang_terms,
+    load_platform_seed_records,
     normalize_scraper_url,
     resolve_timeout_pair,
     robust_decode,
@@ -191,7 +194,7 @@ class CafeForumMiner:
         items = []
         seen_urls: Set[str] = set()
         matches = re.findall(
-            r'<a\b[^>]*\bhref=["\']((?:/zboard/)?view\.php\?[^"\']*\bid=car\b[^"\']*)["\'][^>]*>(.*?)</a>',
+            r'<a\b[^>]*\bhref=["\']((?:https?://(?:www\.)?ppomppu\.co\.kr)?(?:/zboard/)?view\.php\?[^"\']*\bid=car\b[^"\']*)["\'][^>]*>(.*?)</a>',
             html_content,
             re.IGNORECASE | re.DOTALL,
         )
@@ -266,7 +269,7 @@ class CafeForumMiner:
         items = []
         seen_urls: Set[str] = set()
         matches = re.findall(
-            r'<a\b([^>]*\bhref=["\'](/service/board/cm_car/\d+[^"\']*)["\'][^>]*)>(.*?)</a>',
+            r'<a\b([^>]*\bhref=["\']((?:https?://(?:www\.)?clien\.net)?/service/board/cm_car/\d+[^"\']*)["\'][^>]*)>(.*?)</a>',
             html_content,
             re.IGNORECASE | re.DOTALL,
         )
@@ -363,120 +366,20 @@ class CafeForumMiner:
 
     def load_seed_records(self, limit: Optional[int] = None) -> List[ComplaintRecord]:
         """Load fallback records from seed dataset when live scraping is unavailable or restricted."""
-        if limit is not None and limit <= 0:
-            return []
-        records: List[ComplaintRecord] = []
-        seed_filenames = ["raw_cafe_emerging.json", "compiled_complaints.json"]
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        search_dirs = [
-            os.path.join(base_dir, "data"),
-            os.path.join(os.path.dirname(base_dir), "data"),
-            os.path.join(os.getcwd(), "data"),
-        ]
-        seen_ids = set()
-        for s_dir in search_dirs:
-            if not os.path.isdir(s_dir):
-                continue
-            for s_name in seed_filenames:
-                s_file = os.path.join(s_dir, s_name)
-                if os.path.isfile(s_file):
-                    try:
-                        with open(s_file, "r", encoding="utf-8") as f:
-                            data = json.load(f)
-                        if isinstance(data, list):
-                            for item in data:
-                                if isinstance(item, dict) and item.get("platform") in ("naver_cafe", "pomppu", "clien"):
-                                    pid = str(item.get("id") or item.get("post_id") or "")
-                                    if pid and pid in seen_ids:
-                                        continue
-                                    if pid:
-                                        seen_ids.add(pid)
-                                    records.append(ComplaintRecord(
-                                        id=pid,
-                                        platform=item.get("platform") or "naver_cafe",
-                                        board_name=item.get("board_name") or "전기차 카페",
-                                        post_url=item.get("post_url") or item.get("url") or "",
-                                        post_title=item.get("post_title") or item.get("title") or "",
-                                        target_vehicle=item.get("target_vehicle") or "Unknown",
-                                        category=item.get("category") or "repair_as",
-                                        defect_topic=item.get("defect_topic") or "",
-                                        raw_quote=item.get("raw_quote") or item.get("content") or "",
-                                        slang_terms=item.get("slang_terms") if isinstance(item.get("slang_terms"), list) else [],
-                                        severity=item.get("severity") or "convenience_issue",
-                                        platform_metadata=item.get("platform_metadata") if isinstance(item.get("platform_metadata"), dict) else {},
-                                        collected_at=str(item.get("collected_at") or ""),
-                                    ))
-                                    if limit is not None and len(records) >= limit:
-                                        return records
-                    except Exception as e:
-                        logger.debug(f"Failed to load seed records from {s_file}: {e}")
-            if records:
-                break
-        return records[:limit] if limit is not None else records
+        return load_platform_seed_records(
+            platforms=("naver_cafe", "pomppu", "clien"),
+            seed_filenames=("raw_cafe_emerging.json", "compiled_complaints.json"),
+            default_board_name="전기차 카페",
+            limit=limit,
+        )
 
     def _detect_category(self, text: str) -> Optional[str]:
-        text_lower = text.lower()
-        scores = {cat: 0 for cat in CATEGORY_KEYWORDS}
-        for cat, kws in CATEGORY_KEYWORDS.items():
-            for kw in kws:
-                if kw.lower() in text_lower:
-                    scores[cat] += 1
-        best = max(scores.items(), key=lambda x: x[1])
-        return best[0] if best[1] > 0 else None
+        _, category = classify_ev_text(text, vehicle_patterns=VEHICLE_PATTERNS, category_keywords=CATEGORY_KEYWORDS)
+        return category
 
     @staticmethod
     def _derive_defect_topic(category: str, text: str) -> str:
-        if category == "parking":
-            if "어라운드뷰" in text or "왜곡" in text or "어안" in text or "프레임" in text:
-                return "3D 어라운드뷰 왜곡 및 프레임 드랍으로 인한 휠/차체 긁힘"
-            if "센서" in text or "비핑" in text or "초음파" in text:
-                return "초음파 주차 센서 고스트 비핑 및 반응 지연"
-            if "주차타워" in text or "중량" in text or "2톤" in text:
-                return "LFP 배터리 중량 초과(2톤)로 인한 기계식 주차타워 입고 불가"
-            if "이중주차" in text or "N단" in text or "중립" in text:
-                return "이중주차(N단 중립주차) 불가 및 전자식 파킹브레이크 강제 체결"
-            if "자동주차" in text or "연석" in text:
-                return "자동주차 라인 인식 실패 및 연석 충돌 / 고스트 브레이킹"
-            return "아파트 지하주차장 입차 거부 및 입주민 화재 포비아 갈등"
-
-        elif category == "charging":
-            if "겨울" in text or "저온" in text or "굼벵이" in text:
-                return "겨울철 저온 LFP 배터리 급속 충전 속도 급락 (굼벵이 충전)"
-            if "튕김" in text or "환경부" in text or "채비" in text or "통신" in text or "핸드셰이크" in text:
-                return "국내 급속 충전기(환경부, 채비) PLC 통신 오류 및 세션 튕김"
-            if "물림" in text or "커넥터" in text or "안뽑힘" in text or "락" in text:
-                return "완속/급속 충전 커넥터 락 고착 및 도어 결빙"
-            if "12V" in text or "벽돌" in text or "저전압" in text:
-                return "12V 저전압 배터리 방전으로 인한 전장 시스템 먹통"
-            if "완속" in text or "7kW" in text:
-                return "완속 충전기(7kW) 통신 에러 및 충전 중단"
-            return "BMS SOC 잔량 오판 및 20%→0% 급락 벽돌 방전"
-
-        elif category == "rain_driving":
-            if "타이어" in text or "배트맨" in text or "수막" in text or "웻그립" in text:
-                return "중국산 순정 OE 타이어(Atlas Batman 등) 극악 웻그립/수막현상 및 휠스핀"
-            if "피쉬테일" in text or "회생제동" in text or "맨홀" in text or "철판" in text:
-                return "빗길 회생제동 시 맨홀/철판 통과 피쉬테일(차체 털림)"
-            if "팬텀" in text or "고스트" in text or "브레이킹" in text or "dipilot" in text.lower():
-                return "폭우 시 ADAS(DiPilot) 센서/카메라 비 가림으로 인한 유령 급제동(팬텀 브레이킹)"
-            if "와이퍼" in text or "채터링" in text:
-                return "오토 와이퍼 센서 로직 오작동 및 와이퍼 암 채터링 소음"
-            if "디프로스트" in text or "김서림" in text or "성에" in text:
-                return "공조기 디프로스트(성에/습기 제거) 로직 미흡으로 전면 시야 차단"
-            return "차체 단차로 인한 웨더스트립 빗물 누수 및 하부 볼트 부식"
-
-        elif category == "hill_climbing":
-            if "롤백" in text or "밀림" in text or "오토홀드" in text:
-                return "경사로 정차 후 재출발 시 오토홀드 해제 딜레이로 뒤로 밀림(롤백)"
-            if "거북이" in text or "과열" in text or "쓰로틀링" in text:
-                return "산길 연속 등판 시 모터/인버터 발열 쓰로틀링 (거북이모드 출력 제한)"
-            if "휠스핀" in text or "TCS" in text or "토크" in text:
-                return "젖은 노면/오르막 출발 시 전륜 휠스핀 및 미흡한 TCS 토크 벡터링"
-            if "1톤" in text or "화물" in text or "t4k" in text.lower() or "마사다" in text:
-                return "1톤 상용차(T4K, 이티밴, 마사다) 화물 적재 시 등판 전비 급락 및 등판 불능"
-            return "저SoC(15% 이하) 배터리 전압 강하로 인한 급경사 등판 출력 급감"
-
-        return "중국 전기차 시스템 결함"
+        return extract_defect_topic(category, text)
 
 
 def main():
@@ -494,11 +397,14 @@ def main():
         pomppu_items = []
         consecutive_failures = 0
         for kw in args.keywords:
-            if consecutive_failures >= 5:
-                logger.warning("Halting Pomppu mining due to consecutive network failures / circuit trips.")
+            if consecutive_failures >= 5 or miner.client.is_circuit_open(POMPPU_BASE_URL):
+                logger.warning("Halting Pomppu mining due to consecutive failures / open circuit breaker.")
                 break
             items = miner.mine_pomppu(kw, max_pages=1)
             if not items:
+                if miner.client.is_circuit_open(POMPPU_BASE_URL):
+                    consecutive_failures = 5
+                    break
                 consecutive_failures += 1
             else:
                 consecutive_failures = 0

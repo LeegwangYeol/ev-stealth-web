@@ -21,12 +21,17 @@ DEFAULT_SLANG_PATH = PROJECT_ROOT / "data" / "slang_dict.json"
 DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "CASEBOOK.md"
 
 
+def _reject_json_constant(constant: str) -> Any:
+    """Reject non-standard JSON constants (NaN, Infinity, -Infinity)."""
+    raise ValueError(f"Non-standard JSON constant: {constant}")
+
+
 def load_json_file(file_path: Path) -> Any:
     """Load and parse JSON file."""
     if not file_path.exists():
         raise FileNotFoundError(f"Required file not found: {file_path}")
     with open(file_path, "r", encoding="utf-8-sig") as f:
-        return json.load(f)
+        return json.load(f, parse_constant=_reject_json_constant)
 
 
 def build_executive_summary() -> str:
@@ -215,9 +220,9 @@ def build_source_index_section(complaints: List[Dict[str, Any]]) -> str:
 
     valid_complaints = [c for c in (complaints or []) if isinstance(c, dict)]
     for c in valid_complaints:
-        p = c.get("platform") or "unknown"
-        v = c.get("target_vehicle") or "Unknown EV"
-        cat = c.get("category") or "unknown"
+        p = str(c.get("platform") or "unknown")
+        v = str(c.get("target_vehicle") or "Unknown EV")
+        cat = str(c.get("category") or "unknown")
         platform_counts[p] = platform_counts.get(p, 0) + 1
         vehicle_counts[v] = vehicle_counts.get(v, 0) + 1
         cat_counts[cat] = cat_counts.get(cat, 0) + 1

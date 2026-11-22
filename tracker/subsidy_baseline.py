@@ -9,6 +9,7 @@ Provinces) and 160+ municipalities.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from fractions import Fraction
 import math
 from typing import Any, Dict, List, Optional, Union
 
@@ -164,15 +165,32 @@ def calculate_net_subsidy(
     safe_max_loc = _coerce_non_negative_int(max_local)
 
     ratio = calculate_price_cap_ratio(msrp)
-    effective_national = int(round(safe_model_nat * ratio))
+    if ratio <= 0.0:
+        return {
+            "national_subsidy_krw": 0,
+            "local_subsidy_krw": 0,
+            "total_subsidy_krw": 0,
+            "net_price_krw": safe_msrp,
+            "price_cap_ratio": 0.0,
+        }
+
+    try:
+        effective_national = safe_model_nat if ratio == 1.0 else int(round(safe_model_nat * ratio))
+    except OverflowError:
+        effective_national = round(Fraction(safe_model_nat, 2)) if ratio == 0.5 else 0
+
     if safe_max_nat > 0 and safe_model_nat > 0:
         if safe_model_nat >= safe_max_nat:
-            effective_local = int(round(safe_max_loc * ratio))
+            try:
+                effective_local = safe_max_loc if ratio == 1.0 else int(round(safe_max_loc * ratio))
+            except OverflowError:
+                effective_local = round(Fraction(safe_max_loc, 2)) if ratio == 0.5 else 0
         else:
             try:
                 effective_local = int(round((safe_max_loc * safe_model_nat * ratio) / safe_max_nat))
             except OverflowError:
-                effective_local = int(round(safe_max_loc * ratio))
+                denom = safe_max_nat * 2 if ratio == 0.5 else safe_max_nat
+                effective_local = round(Fraction(safe_max_loc * safe_model_nat, denom))
     else:
         effective_local = 0
     total_subsidy = effective_national + effective_local
@@ -186,14 +204,29 @@ def calculate_net_subsidy(
     }
 
 
-def _calc_rate_percent(numerator: Union[int, float], denominator: Union[int, float]) -> float:
+def _calc_rate_percent(numerator: Any, denominator: Any) -> float:
     """Compute percentage rounded to 1 decimal place, scaling numerator first to prevent float drift."""
-    if isinstance(numerator, bool) or isinstance(denominator, bool):
+    if numerator is None or denominator is None or isinstance(numerator, bool) or isinstance(denominator, bool):
         return 0.0
-    if denominator <= 0 or numerator <= 0:
+    try:
+        num = float(numerator)
+        den = float(denominator)
+    except (ValueError, TypeError, OverflowError):
+        if isinstance(numerator, int) and isinstance(denominator, int) and denominator > 0 and numerator > 0:
+            try:
+                raw = (numerator * 100) / denominator
+                if math.isnan(raw) or math.isinf(raw):
+                    return 0.0
+                return max(0.0, round(raw, 1))
+            except (OverflowError, ZeroDivisionError):
+                return 0.0
         return 0.0
-    scaled = numerator * 100.0
-    raw = (scaled / denominator) if not math.isinf(scaled) else ((numerator / denominator) * 100.0)
+    if math.isnan(num) or math.isnan(den) or math.isinf(num) or math.isinf(den):
+        return 0.0
+    if den <= 0.0 or num <= 0.0:
+        return 0.0
+    scaled = num * 100.0
+    raw = (scaled / den) if not math.isinf(scaled) else ((num / den) * 100.0)
     if math.isnan(raw) or math.isinf(raw):
         return 0.0
     return max(0.0, round(raw, 1))
@@ -903,7 +936,11 @@ def build_initial_baseline(regions: Optional[List[Any]] = None) -> SubsidyPayloa
             total_budget_sum += tot_b
             disbursed_budget_sum += max(0, tot_b - rem_b)
 
-        if status_key not in alert_counts and (cats or (isinstance(r, dict) and "overall_depletion_rate" in r)):
+        if status_key not in alert_counts and (
+            cats
+            or (isinstance(r, dict) and "overall_depletion_rate" in r)
+            or hasattr(r, "overall_depletion_rate")
+        ):
             if cats:
                 reg_rate = _calc_rate_percent(reg_app, reg_ann)
             else:

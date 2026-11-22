@@ -100,7 +100,9 @@ function resolveBrandId(input: string, brands: BrandReliability[] = []): string 
   if (clean.includes('benz') || clean.includes('벤츠') || clean.includes('mercedes')) return 'mercedes-benz';
   if (clean.includes('bmw')) return 'bmw';
   if (clean.includes('polestar') || clean.includes('폴스타')) return 'polestar';
-  if (clean.includes('gm') || clean.includes('chevrolet') || clean.includes('쉐보레')) return 'gm';
+  if (clean.includes('gm') || clean.includes('chevrolet') || clean.includes('쉐보레')) {
+    return brands.find((b) => b.id.toLowerCase().includes('gm'))?.id || 'gm-chevrolet';
+  }
 
   return null;
 }
@@ -302,12 +304,12 @@ const BrandRankingItem = React.memo(function BrandRankingItem({
   const dsiInfo = getDsiSeverityLevel(safeDsi);
   const barColor =
     safeDsi < 50
-      ? 'bg-emerald-500'
+      ? 'bg-emerald-600'
       : safeDsi < 60
-      ? 'bg-amber-400'
+      ? 'bg-amber-700'
       : safeDsi < 65
-      ? 'bg-orange-500'
-      : 'bg-rose-500';
+      ? 'bg-orange-700'
+      : 'bg-rose-600';
   const modelCount = Array.isArray(brand?.models) ? brand.models.length : 0;
   const criticalRate = Number.isFinite(brand?.critical_issue_rate) ? brand.critical_issue_rate : 0;
 
@@ -349,7 +351,7 @@ const BrandRankingItem = React.memo(function BrandRankingItem({
       {/* Pure CSS Bar */}
       <div
         aria-hidden="true"
-        className="w-full bg-slate-200 rounded-full h-3.5 overflow-hidden relative"
+        className="w-full bg-slate-200 border border-slate-300 rounded-full h-3.5 overflow-hidden relative"
       >
         <div
           className={`h-full rounded-full transition-all duration-500 motion-reduce:transition-none ${barColor}`}
@@ -774,8 +776,36 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
   const RADAR_CX = 250;
   const RADAR_CY = 235;
-  const RADAR_RADIUS = 118;
+  const RADAR_RADIUS = 104;
   const RADAR_MAX_VAL = 55;
+
+  const wrapRadarLabel = (label: string): string[] => {
+    const clean = (label || '').trim();
+    if (clean.length <= 11) return [clean];
+    const ampIdx = clean.indexOf(' & ');
+    if (ampIdx > 0 && ampIdx <= 12) {
+      return [clean.slice(0, ampIdx + 2).trim(), clean.slice(ampIdx + 2).trim()];
+    }
+    const mid = Math.ceil(clean.length / 2);
+    let splitIdx = -1;
+    let bestDist = Infinity;
+    for (let idx = 1; idx < clean.length - 1; idx++) {
+      if (clean[idx] === '·' || clean[idx] === ' ') {
+        const dist = Math.abs(idx - mid);
+        if (dist < bestDist) {
+          bestDist = dist;
+          splitIdx = idx;
+        }
+      }
+    }
+    if (splitIdx > 0) {
+      const sepOffset = clean[splitIdx] === '·' ? splitIdx + 1 : splitIdx;
+      const first = clean.slice(0, sepOffset).trim();
+      const second = clean.slice(sepOffset).trim();
+      if (first && second) return [first, second];
+    }
+    return [clean];
+  };
 
   // Radar chart axes and coordinates computation
   const radarAxes = useMemo(() => {
@@ -803,7 +833,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       const rawCountB = typeof distB === 'object' && distB ? Number(distB.count) : 0;
       const countB = Number.isFinite(rawCountB) ? Math.max(0, Math.floor(rawCountB)) : 0;
 
-      const indShare = Number.isFinite(cat.industry_share_pct) ? cat.industry_share_pct : 0;
+      const indShare = Number.isFinite(cat.industry_share_pct) ? Math.max(0, cat.industry_share_pct) : 0;
 
       const rA = (Math.min(maxVal, Math.max(0, shareA)) / maxVal) * radius;
       const rB = (Math.min(maxVal, Math.max(0, shareB)) / maxVal) * radius;
@@ -1006,18 +1036,25 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
   }, [hasActiveRadar, activeChartTab]);
 
   // Escape key listener to dismiss hovered SVG brand detail card
-  const hasHoveredSvgBrand = Boolean(hoveredSvgBrand);
+  const hoveredSvgBrandId = hoveredSvgBrand?.id || null;
   useEffect(() => {
-    if (!hasHoveredSvgBrand || activeChartTab !== 'brand_ranking') return;
+    if (!hoveredSvgBrandId || activeChartTab !== 'brand_ranking') return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
+        const wasInTooltip = Boolean(
+          document.activeElement &&
+            document.getElementById('brand-dsi-svg-tooltip')?.contains(document.activeElement)
+        );
         setHoveredSvgBrand(null);
+        if (wasInTooltip) {
+          document.getElementById(`brand-dsi-bar-${hoveredSvgBrandId}`)?.focus();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hasHoveredSvgBrand, activeChartTab]);
+  }, [hoveredSvgBrandId, activeChartTab]);
 
   const handleBrandToggle = useCallback((brandId: string) => {
     setSelectedBrand((prev) => (prev === brandId ? 'ALL' : brandId));
@@ -1447,19 +1484,19 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   className="flex flex-wrap items-center gap-4 text-xs font-semibold list-none m-0 p-0"
                 >
                   <li className="flex items-center gap-1.5 text-slate-800">
-                    <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block shadow-sm" aria-hidden="true" />
+                    <span className="w-3 h-3 rounded-full bg-emerald-600 inline-block shadow-sm" aria-hidden="true" />
                     <span>안전 (&lt;50점)</span>
                   </li>
                   <li className="flex items-center gap-1.5 text-slate-800">
-                    <span className="w-3 h-3 rounded-full bg-amber-400 inline-block shadow-sm" aria-hidden="true" />
+                    <span className="w-3 h-3 rounded-full bg-amber-700 inline-block shadow-sm" aria-hidden="true" />
                     <span>보통 (50~59점)</span>
                   </li>
                   <li className="flex items-center gap-1.5 text-slate-800">
-                    <span className="w-3 h-3 rounded-full bg-orange-500 inline-block shadow-sm" aria-hidden="true" />
+                    <span className="w-3 h-3 rounded-full bg-orange-700 inline-block shadow-sm" aria-hidden="true" />
                     <span>주의 (60~64점)</span>
                   </li>
                   <li className="flex items-center gap-1.5 text-slate-800">
-                    <span className="w-3 h-3 rounded-full bg-rose-500 inline-block shadow-sm" aria-hidden="true" />
+                    <span className="w-3 h-3 rounded-full bg-rose-600 inline-block shadow-sm" aria-hidden="true" />
                     <span>위험 (65점 이상)</span>
                   </li>
                 </ul>
@@ -1550,6 +1587,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       return (
                         <g
                           key={brand.id}
+                          id={`brand-dsi-bar-${brand.id}`}
                           tabIndex={0}
                           role="button"
                           aria-pressed={selectedBrand === brand.id}
@@ -1619,6 +1657,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   </svg>
                   {/* Live SVG Bar Tooltip Card */}
                   <div
+                    id="brand-dsi-svg-tooltip"
                     role="status"
                     aria-live="polite"
                     aria-atomic="true"
@@ -1924,18 +1963,57 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         <circle cx={axis.xA} cy={axis.yA} r={25} fill="transparent" />
                         <circle cx={axis.xB} cy={axis.yB} r={25} fill="transparent" />
 
-                        {/* Category Axis Label */}
-                        <text
-                          x={axis.labelX}
-                          y={axis.labelY}
-                          textAnchor={axis.textAnchor}
-                          fill={isActive ? '#93c5fd' : '#f8fafc'}
-                          fontSize="11"
-                          fontWeight={isActive ? 'bold' : '600'}
-                          className="transition-colors"
-                        >
-                          {axis.label}
-                        </text>
+                        {/* Category Axis Label (wrapped safely within 500x480 viewBox) */}
+                        {(() => {
+                          const labelLines = wrapRadarLabel(axis.label);
+                          const startY =
+                            labelLines.length > 1 && axis.sin < -0.5
+                              ? axis.labelY - 10
+                              : axis.labelY;
+                          return (
+                            <text
+                              x={axis.labelX}
+                              y={startY}
+                              textAnchor={axis.textAnchor}
+                              fill={isActive ? '#93c5fd' : '#f8fafc'}
+                              fontSize="11"
+                              fontWeight={isActive ? 'bold' : '600'}
+                              className="transition-colors"
+                            >
+                              {labelLines.map((line, lineIdx) => (
+                                <tspan
+                                  key={`${axis.code}-line-${lineIdx}`}
+                                  x={axis.labelX}
+                                  dy={lineIdx === 0 ? 0 : 13}
+                                >
+                                  {line}
+                                </tspan>
+                              ))}
+                            </text>
+                          );
+                        })()}
+
+                        {/* Explicit SVG focus/active rings around vertices for Safari/WebKit visibility */}
+                        {isActive && (
+                          <>
+                            <circle
+                              cx={axis.xA}
+                              cy={axis.yA}
+                              r={isOverlapping ? 12 : 10}
+                              fill="none"
+                              stroke="#60a5fa"
+                              strokeWidth="2"
+                            />
+                            <circle
+                              cx={axis.xB}
+                              cy={axis.yB}
+                              r={isOverlapping ? 9 : 10}
+                              fill="none"
+                              stroke="#fda4af"
+                              strokeWidth="2"
+                            />
+                          </>
+                        )}
 
                         {/* Brand A vertex circle (enlarged ring when overlapping Brand B) */}
                         <circle
@@ -2392,7 +2470,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               aria-describedby="reliability-search-hint"
               aria-label="차종, 브랜드, 결함 증상 검색"
               placeholder="차종명, 브랜드, 결함 증상(ICCU, 배터리, 옥토밸브, 백색가루 등) 검색..."
-              className="w-full pl-10 pr-10 py-2.5 min-h-[44px] bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus:bg-white transition placeholder-slate-500"
+              className="w-full pl-10 pr-11 py-2.5 min-h-[44px] bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus:bg-white transition placeholder-slate-500"
             />
             <span id="reliability-search-hint" className="sr-only">
               검색어를 입력하면 실시간으로 차종 목록이 필터링됩니다. ESC 키를 누르면 검색어가 초기화됩니다.

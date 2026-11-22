@@ -97,6 +97,7 @@ function getSortAria(
 
 interface SubsidyTableRowProps {
   region: RegionEntry;
+  regionKey: string;
   selectedCategory: CategoryType;
   isExpanded: boolean;
   onToggleExpand: (regionId: string) => void;
@@ -105,6 +106,7 @@ interface SubsidyTableRowProps {
 
 const SubsidyTableRow = memo(function SubsidyTableRow({
   region,
+  regionKey,
   selectedCategory,
   isExpanded,
   onToggleExpand,
@@ -129,6 +131,8 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
   const hasMunis = munis.length > 0;
   const regionName = region?.name_ko || '해당 지역';
   const regionId = region?.region_id || region?.iso_code || region?.name_ko || 'unknown';
+  const toggleKey = regionKey || regionId;
+  const safeDomId = String(toggleKey).replace(/\s+/g, '-');
   const categoryLabel = selectedCategory === 'passenger' ? '전기승용' : selectedCategory === 'commercial' ? '전기화물' : '전기승합';
   const effectiveStatus = normalizeTableStatus(cat?.status, depletionRate);
   const isDepleted = effectiveStatus === 'DEPLETED' || depletionRate >= 100;
@@ -138,8 +142,8 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
 
   // Memoized stable row handlers to prevent recreating closures on every render
   const handleToggle = useCallback(() => {
-    onToggleExpand(regionId);
-  }, [onToggleExpand, regionId]);
+    onToggleExpand(toggleKey);
+  }, [onToggleExpand, toggleKey]);
 
   const handleSelectCalc = useCallback(() => {
     onSelectForCalc(regionId);
@@ -298,7 +302,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
               type="button"
               onClick={handleToggle}
               aria-expanded={isExpanded}
-              aria-controls={'muni-details-table-' + regionId}
+              aria-controls={'muni-details-table-' + safeDomId}
               aria-label={`${regionName} 세부 시·군·구 ${munis.length}개 현황 ${isExpanded ? '접기' : '보기'}`}
               className="px-2.5 py-1.5 min-h-[44px] min-w-[44px] inline-flex items-center justify-center text-xs rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium border border-slate-500 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
@@ -327,7 +331,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
         <tr hidden={!isExpanded} className={!isExpanded ? 'hidden' : ''}>
           <td colSpan={10} className="p-0 bg-slate-900/90 border-b border-slate-800">
             <div
-              id={'muni-details-table-' + regionId}
+              id={'muni-details-table-' + safeDomId}
               className="p-4 space-y-2"
             >
               <div className="flex items-center justify-between text-xs text-slate-300 font-bold mb-2">
@@ -421,6 +425,7 @@ export const SubsidyTableView = memo(function SubsidyTableView({
         <SubsidyTableRow
           key={regionKey}
           region={region}
+          regionKey={regionKey}
           selectedCategory={selectedCategory}
           isExpanded={Boolean(expandedRegions[regionKey])}
           onToggleExpand={onToggleExpand}

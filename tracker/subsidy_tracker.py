@@ -7,6 +7,7 @@ nationwide aggregations, fallback resilience, and atomic persistence.
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation, ROUND_CEILING
 import http.client
 import ipaddress
 import json
@@ -97,7 +98,11 @@ MAX_RESPONSE_BYTES: int = 10 * 1024 * 1024
 _RE_URL_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 _DISALLOWED_ENDPOINT_HOSTS: Set[str] = {
     "localhost",
+    "localhost.localdomain",
+    "ip6-localhost",
+    "ip6-loopback",
     "metadata.google.internal",
+    "metadata.goog",
     "metadata",
     "instance-data",
 }
@@ -112,12 +117,20 @@ _STANDARD_ENDPOINT_PORTS: Set[int] = {80, 443, 8080, 8443, 8000, 8888}
 _NAT64_WELL_KNOWN_PREFIX = ipaddress.IPv6Network("64:ff9b::/96")
 _NAT64_LOCAL_PREFIX = ipaddress.IPv6Network("64:ff9b:1::/48")
 _CGNAT_PREFIX = ipaddress.IPv4Network("100.64.0.0/10")
+_ORCHID_V2_PREFIX = ipaddress.IPv6Network("2001:20::/28")
+_SRV6_SID_PREFIX = ipaddress.IPv6Network("5f00::/16")
 _IPV4_TRANSLATED_PREFIX = ipaddress.IPv6Network("::ffff:0:0/96")
 _IPV4_COMPAT_PREFIX = ipaddress.IPv6Network("::/96")
 
 try:
-    from utils.http_client import is_safe_ip as _is_safe_ip
+    from utils.http_client import (
+        ResilientHTTPHandler as _ResilientHTTPHandler,
+        ResilientHTTPSHandler as _ResilientHTTPSHandler,
+        is_safe_ip as _is_safe_ip,
+    )
 except ImportError:
+    _ResilientHTTPHandler = None
+    _ResilientHTTPSHandler = None
     def _is_safe_ip(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
         """Check if an IP address is publicly routable and safe from SSRF."""
         if getattr(ip, "scope_id", None):
@@ -136,6 +149,8 @@ except ImportError:
         if isinstance(ip, ipaddress.IPv4Address) and ip in _CGNAT_PREFIX:
             return False
         if isinstance(ip, ipaddress.IPv6Address):
+            if ip in _ORCHID_V2_PREFIX or ip in _SRV6_SID_PREFIX:
+                return False
             if ip.ipv4_mapped and not _is_safe_ip(ip.ipv4_mapped):
                 return False
             if ip.sixtofour and not _is_safe_ip(ip.sixtofour):
@@ -149,6 +164,7 @@ except ImportError:
                 or ip in _NAT64_LOCAL_PREFIX
                 or ip in _IPV4_TRANSLATED_PREFIX
                 or ip in _IPV4_COMPAT_PREFIX
+                or ((int(ip) >> 32) & 0xFFFFFFFF) in (0x00005EFE, 0x02005EFE)
             ):
                 embedded_v4 = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
                 if not _is_safe_ip(embedded_v4):
@@ -249,13 +265,18 @@ class _SafeEndpointRedirectHandler(urllib.request.HTTPRedirectHandler):
         self.allow_private_ips = allow_private_ips
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        is_safe, reason = _validate_endpoint_url(newurl, allow_private_ips=self.allow_private_ips)
+        resolved_url = (
+            urllib.parse.urljoin(req.full_url, newurl)
+            if isinstance(newurl, str)
+            else newurl
+        )
+        is_safe, reason = _validate_endpoint_url(resolved_url, allow_private_ips=self.allow_private_ips)
         if not is_safe:
-            logger.warning("SSRF defense blocked redirect from %s to %s: %s", req.full_url, newurl, reason)
+            logger.warning("SSRF defense blocked redirect from %s to %s: %s", req.full_url, resolved_url, reason)
             raise urllib.error.HTTPError(
-                newurl, 403, f"SSRF Blocked: Unsafe redirect target ({reason})", headers, fp
+                resolved_url, 403, f"SSRF Blocked: Unsafe redirect target ({reason})", headers, fp
             )
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
+        return super().redirect_request(req, fp, code, msg, headers, resolved_url)
 
 try:
     from utils.http_client import robust_decode
@@ -400,6 +421,23 @@ def _clean_num(val: Any) -> Any:
     return val
 
 
+_RE_PLAIN_INT = re.compile(r"^[+-]?\d+$")
+
+
+def _to_non_neg_int(val: Any) -> Optional[int]:
+    """Convert numeric input to non-negative int preserving precision for large integer strings."""
+    if type(val) is int:
+        return val if val > 0 else 0
+    cleaned = _clean_num(val)
+    if isinstance(cleaned, str) and _RE_PLAIN_INT.match(cleaned):
+        iv = int(cleaned)
+        return iv if iv > 0 else 0
+    f = float(cleaned)
+    if math.isnan(f) or math.isinf(f):
+        return None
+    return max(0, int(f))
+
+
 def calculate_depletion_rate(
     applied: Union[int, float, str, None] = 0,
     announced: Union[int, float, str, None] = None,
@@ -434,25 +472,41 @@ def calculate_depletion_rate(
             or isinstance(applied, bool)
         ):
             return 0.0
-        quota_val = float(_clean_num(target_quota))
-        applied_val = float(_clean_num(applied))
-        if math.isnan(quota_val) or math.isnan(applied_val) or math.isinf(quota_val) or math.isinf(applied_val):
-            return 0.0
-        if quota_val <= 0.0 or applied_val <= 0.0:
-            return 0.0
-        scaled = applied_val * 100.0
-        raw_rate = (scaled / quota_val) if not math.isinf(scaled) else ((applied_val / quota_val) * 100.0)
-        if math.isnan(raw_rate):
-            return 0.0
-        if math.isinf(raw_rate):
-            if clamp_100 or clamp:
-                rate = 100.0
-            else:
+        clean_quota = _clean_num(target_quota)
+        clean_applied = _clean_num(applied)
+        try:
+            quota_val = float(clean_quota)
+            applied_val = float(clean_applied)
+        except OverflowError:
+            q_int = _to_non_neg_int(clean_quota)
+            a_int = _to_non_neg_int(clean_applied)
+            if q_int is None or a_int is None or q_int <= 0 or a_int <= 0:
                 return 0.0
+            raw_rate = (a_int * 100) / q_int
+            if math.isnan(raw_rate) or math.isinf(raw_rate):
+                rate = 100.0 if (clamp_100 or clamp) else 0.0
+            else:
+                rate = max(0.0, round(raw_rate, 1))
+                if clamp_100 or clamp:
+                    rate = min(100.0, rate)
         else:
-            rate = max(0.0, round(raw_rate, 1))
-            if clamp_100 or clamp:
-                rate = min(100.0, rate)
+            if math.isnan(quota_val) or math.isnan(applied_val) or math.isinf(quota_val) or math.isinf(applied_val):
+                return 0.0
+            if quota_val <= 0.0 or applied_val <= 0.0:
+                return 0.0
+            scaled = applied_val * 100.0
+            raw_rate = (scaled / quota_val) if not math.isinf(scaled) else ((applied_val / quota_val) * 100.0)
+            if math.isnan(raw_rate):
+                return 0.0
+            if math.isinf(raw_rate):
+                if clamp_100 or clamp:
+                    rate = 100.0
+                else:
+                    return 0.0
+            else:
+                rate = max(0.0, round(raw_rate, 1))
+                if clamp_100 or clamp:
+                    rate = min(100.0, rate)
         if max_rate is not None and not isinstance(max_rate, bool):
             try:
                 mr = float(_clean_num(max_rate))
@@ -502,12 +556,10 @@ def calculate_remaining_units(
             return 0
         if type(target_quota) is int and type(applied) is int:
             return max(0, max(0, target_quota) - max(0, applied))
-        quota_f = float(_clean_num(target_quota))
-        applied_f = float(_clean_num(applied))
-        if math.isnan(quota_f) or math.isnan(applied_f) or math.isinf(quota_f) or math.isinf(applied_f):
+        safe_quota = _to_non_neg_int(target_quota)
+        safe_applied = _to_non_neg_int(applied)
+        if safe_quota is None or safe_applied is None:
             return 0
-        safe_quota = max(0, int(quota_f))
-        safe_applied = max(0, int(applied_f))
         return max(0, safe_quota - safe_applied)
     except (TypeError, ValueError, OverflowError):
         return 0
@@ -530,12 +582,10 @@ def calculate_waitlist_units(
             return 0
         if type(target_quota) is int and type(applied) is int:
             return max(0, max(0, applied) - max(0, target_quota))
-        quota_f = float(_clean_num(target_quota))
-        applied_f = float(_clean_num(applied))
-        if math.isnan(quota_f) or math.isnan(applied_f) or math.isinf(quota_f) or math.isinf(applied_f):
+        safe_quota = _to_non_neg_int(target_quota)
+        safe_applied = _to_non_neg_int(applied)
+        if safe_quota is None or safe_applied is None:
             return 0
-        safe_quota = max(0, int(quota_f))
-        safe_applied = max(0, int(applied_f))
         return max(0, safe_applied - safe_quota)
     except (TypeError, ValueError, OverflowError):
         return 0
@@ -575,12 +625,10 @@ def calculate_pending_deliveries(
             return 0
         if type(applied) is int and type(delivered) is int:
             return max(0, max(0, applied) - max(0, delivered))
-        applied_f = float(_clean_num(applied))
-        delivered_f = float(_clean_num(delivered))
-        if math.isnan(applied_f) or math.isnan(delivered_f) or math.isinf(applied_f) or math.isinf(delivered_f):
+        safe_applied = _to_non_neg_int(applied)
+        safe_delivered = _to_non_neg_int(delivered)
+        if safe_applied is None or safe_delivered is None:
             return 0
-        safe_applied = max(0, int(applied_f))
-        safe_delivered = max(0, int(delivered_f))
         return max(0, safe_applied - safe_delivered)
     except (TypeError, ValueError, OverflowError):
         return 0
@@ -670,7 +718,13 @@ def predict_exhaustion_days(
             return 0
         if f_vel <= 0.0:
             return None
-        days = int(math.ceil(f_rem / f_vel))
+        try:
+            dec_rem = Decimal(str(_clean_num(remaining_units))) if isinstance(remaining_units, (int, str)) else Decimal(str(f_rem))
+            dec_vel = Decimal(str(_clean_num(daily_velocity))) if isinstance(daily_velocity, (int, str)) else Decimal(str(f_vel))
+            days_dec = (dec_rem / dec_vel).to_integral_value(rounding=ROUND_CEILING)
+            days = int(days_dec)
+        except (InvalidOperation, ZeroDivisionError, OverflowError, ValueError):
+            days = int(math.ceil(f_rem / f_vel))
         return max(0, days)
     except (TypeError, ValueError, ZeroDivisionError, OverflowError):
         return None
@@ -699,7 +753,9 @@ def predict_exhaustion_date(
         elif isinstance(start_date, str):
             clean_s = start_date.strip()
             if "T" in clean_s or "t" in clean_s:
-                iso_s = clean_s[:-1] + "+00:00" if clean_s.endswith(("Z", "z")) else clean_s
+                iso_s = clean_s.replace("t", "T", 1)
+                if iso_s.endswith(("Z", "z")):
+                    iso_s = iso_s[:-1] + "+00:00"
                 base_dt = datetime.fromisoformat(iso_s)
             else:
                 base_dt = datetime.strptime(clean_s[:10], "%Y-%m-%d")
@@ -1182,7 +1238,7 @@ class SubsidyTracker:
         except (ValueError, TypeError, OverflowError):
             safe_backoff = 0.05
         closed_exc_ids: Set[int] = set()
-        safe_retries = max(1, _safe_int_metric(max_retries, 3))
+        safe_retries = min(100, max(1, _safe_int_metric(max_retries, 3)))
         for attempt in range(1, safe_retries + 1):
             try:
                 req = urllib.request.Request(
@@ -1193,9 +1249,25 @@ class SubsidyTracker:
                     },
                 )
                 if getattr(urllib.request.urlopen, "__module__", "") == "urllib.request":
-                    opener = urllib.request.build_opener(
+                    handlers: List[urllib.request.BaseHandler] = [
                         _SafeEndpointRedirectHandler(allow_private_ips=self.allow_private_ips)
-                    )
+                    ]
+                    if _ResilientHTTPHandler is not None and _ResilientHTTPSHandler is not None:
+                        handlers.append(
+                            _ResilientHTTPHandler(
+                                connect_timeout=self.timeout_seconds,
+                                read_timeout=self.timeout_seconds,
+                                allow_private_ips=self.allow_private_ips,
+                            )
+                        )
+                        handlers.append(
+                            _ResilientHTTPSHandler(
+                                connect_timeout=self.timeout_seconds,
+                                read_timeout=self.timeout_seconds,
+                                allow_private_ips=self.allow_private_ips,
+                            )
+                        )
+                    opener = urllib.request.build_opener(*handlers)
                     ctx_mgr = opener.open(req, timeout=self.timeout_seconds)
                 else:
                     ctx_mgr = urllib.request.urlopen(req, timeout=self.timeout_seconds)
@@ -1404,9 +1476,11 @@ class SubsidyTracker:
         payload.metadata.total_regions_tracked = sum(1 for r in payload.regions if r is not None)
         total_munis = 0
         for r in payload.regions:
+            if r is None:
+                continue
             munis = r.get("municipalities", []) if isinstance(r, dict) else getattr(r, "municipalities", [])
             if isinstance(munis, (list, tuple)):
-                total_munis += len(munis)
+                total_munis += sum(1 for m in munis if m is not None)
         if total_munis > 0 or payload.metadata.total_municipalities_tracked <= 0:
             payload.metadata.total_municipalities_tracked = total_munis
 
@@ -1620,7 +1694,10 @@ class SubsidyTracker:
             seen_matrix_dirs = set()
             matrix_files: List[Path] = []
             for p in unique_destinations:
-                parent_dir = Path(p).parent.resolve()
+                try:
+                    parent_dir = Path(p).parent.resolve()
+                except (OSError, RuntimeError):
+                    parent_dir = Path(p).parent.absolute()
                 if parent_dir not in seen_matrix_dirs:
                     seen_matrix_dirs.add(parent_dir)
                     matrix_files.append(parent_dir / "models_subsidy_matrix.json")
@@ -1897,7 +1974,10 @@ def export_models_subsidy_matrix(target_dirs: Optional[List[Union[str, Path]]] =
         target_dirs = []
         for c in candidates:
             if c.exists():
-                r_key = str(c.resolve())
+                try:
+                    r_key = str(c.resolve())
+                except (OSError, RuntimeError):
+                    r_key = str(c.absolute())
                 if r_key not in seen_dirs:
                     seen_dirs.add(r_key)
                     target_dirs.append(c)
@@ -1907,7 +1987,10 @@ def export_models_subsidy_matrix(target_dirs: Optional[List[Union[str, Path]]] =
     dest_files: List[Path] = []
     seen_files: Set[str] = set()
     for d in target_dirs:
-        dest_file = Path(d).resolve() / "models_subsidy_matrix.json"
+        try:
+            dest_file = Path(d).resolve() / "models_subsidy_matrix.json"
+        except (OSError, RuntimeError):
+            dest_file = Path(d).absolute() / "models_subsidy_matrix.json"
         key = str(dest_file)
         if key not in seen_files:
             seen_files.add(key)

@@ -483,7 +483,11 @@ export function validateRecallDatabaseSchema(raw: unknown): {
       total_affected_vehicles_kdm:
         typeof db.metadata?.total_affected_vehicles_kdm === 'number' && Number.isFinite(db.metadata.total_affected_vehicles_kdm) && db.metadata.total_affected_vehicles_kdm >= 0
           ? db.metadata.total_affected_vehicles_kdm + 0
-          : validRecalls.reduce((sum, r) => sum + (Number.isFinite(r.affected_kdm_units) && r.affected_kdm_units > 0 ? r.affected_kdm_units : 0), 0),
+          : validRecalls.reduce((sum, r) => {
+              const units = Number.isFinite(r.affected_kdm_units) && r.affected_kdm_units > 0 ? r.affected_kdm_units : 0;
+              const next = sum + units;
+              return Number.isFinite(next) ? next : Number.MAX_VALUE;
+            }, 0),
       active_fire_campaigns:
         typeof db.metadata?.active_fire_campaigns === 'number' && Number.isFinite(db.metadata.active_fire_campaigns) && db.metadata.active_fire_campaigns >= 0
           ? db.metadata.active_fire_campaigns + 0
@@ -787,6 +791,16 @@ export function isModelMatchForCampaign(queryModel: string, campaignTargetModel:
     .filter(Boolean)
     .flatMap((s) => expandSlashVariants(s));
 
+  const preparedSubTrims =
+    subTrims.length > 1
+      ? subTrims
+          .map((sub) => {
+            const subNorm = normalize(sub);
+            return { sub, subNorm, subNums: extractModelDigits(sub) };
+          })
+          .filter((entry) => entry.subNorm && /[a-zA-Z0-9가-힣]/.test(entry.subNorm))
+      : [];
+
   for (const target of targets) {
     const targetNorm = normalize(target);
     if (!targetNorm || !/[a-zA-Z0-9가-힣]/.test(targetNorm)) {
@@ -807,18 +821,12 @@ export function isModelMatchForCampaign(queryModel: string, campaignTargetModel:
     }
 
     // Sub-trims in query (e.g. "볼트 EV / EUV" matching "볼트 EV", "i4 eDrive40 / M50" matching "i4 M50")
-    if (subTrims.length > 1) {
-      for (const sub of subTrims) {
-        const subNorm = normalize(sub);
-        if (!subNorm || !/[a-zA-Z0-9가-힣]/.test(subNorm)) {
-          continue;
-        }
-        if (
-          (subNorm === targetNorm || targetNorm.includes(subNorm) || subNorm.includes(targetNorm)) &&
-          passesCollisionGuards(sub, extractModelDigits(sub), target, targetNums)
-        ) {
-          return true;
-        }
+    for (const { sub, subNorm, subNums } of preparedSubTrims) {
+      if (
+        (subNorm === targetNorm || targetNorm.includes(subNorm) || subNorm.includes(targetNorm)) &&
+        passesCollisionGuards(sub, subNums, target, targetNums)
+      ) {
+        return true;
       }
     }
   }
@@ -1218,9 +1226,9 @@ export function isYearMatchForCampaign(year?: number, targetModelYears?: string)
   let hasValidSegment = false;
 
   for (const segment of segments) {
-    // 1. Closed range: "2021 ~ 2024", "2021-2024", or "2021.03 ~ 2024.05"
+    // 1. Closed range: "2021 ~ 2024", "2021-2024", "2021.03 ~ 2024.05", or "2021-03-01 ~ 2024-05-01"
     const rangeMatch = segment.match(
-      /(?<![0-9])(\d{4})(?:\.\d{1,2}(?:\.\d{1,2})?)?\s*[~–—-]\s*(\d{4})(?:\.\d{1,2}(?:\.\d{1,2})?)?(?![0-9])/
+      /(?<![0-9])(\d{4})(?:[.\-/]\d{1,2}(?![0-9])(?:[.\-/]\d{1,2}(?![0-9]))?)?\s*[~–—-]\s*(\d{4})(?:[.\-/]\d{1,2}(?![0-9])(?:[.\-/]\d{1,2}(?![0-9]))?)?(?![0-9])/
     );
     if (rangeMatch) {
       hasValidSegment = true;
@@ -1235,7 +1243,7 @@ export function isYearMatchForCampaign(year?: number, targetModelYears?: string)
     // 2. Open-ended future range: "2022 ~", "2022~", "2022 ~ 현재", "2022 이후", "2022+"
     // Structured without adjacent unbounded quantifiers to prevent catastrophic backtracking (ReDoS)
     const openRangeMatch = segment.match(
-      /(?<![0-9])(\d{4})(?:\.\d{1,2}(?:\.\d{1,2})?)?\s*(?:[~–—-]\s*)?(?:현재|present|이후|\+)|(?<![0-9])(\d{4})(?:\.\d{1,2}(?:\.\d{1,2})?)?\s*[~–—-]\s*$/i
+      /(?<![0-9])(\d{4})(?:[.\-/]\d{1,2}(?![0-9])(?:[.\-/]\d{1,2}(?![0-9]))?)?\s*(?:[~–—-]\s*)?(?:현재|present|이후|\+)|(?<![0-9])(\d{4})(?:[.\-/]\d{1,2}(?![0-9])(?:[.\-/]\d{1,2}(?![0-9]))?)?\s*[~–—-]\s*$/i
     );
     if (openRangeMatch) {
       hasValidSegment = true;
@@ -1246,7 +1254,7 @@ export function isYearMatchForCampaign(year?: number, targetModelYears?: string)
 
     // 3. Before range: "2022 이전", "~ 2022", "~2022"
     const beforeRangeMatch = segment.match(
-      /(?:^\s*[~–—-]\s*(\d{4})(?:\.\d{1,2}(?:\.\d{1,2})?)?(?![0-9]))|(?:(?<![0-9])(\d{4})(?:\.\d{1,2}(?:\.\d{1,2})?)?\s*(?:이전|까지|before))/i
+      /(?:^\s*[~–—-]\s*(\d{4})(?:[.\-/]\d{1,2}(?![0-9])(?:[.\-/]\d{1,2}(?![0-9]))?)?(?![0-9]))|(?:(?<![0-9])(\d{4})(?:[.\-/]\d{1,2}(?![0-9])(?:[.\-/]\d{1,2}(?![0-9]))?)?\s*(?:이전|까지|before))/i
     );
     if (beforeRangeMatch) {
       hasValidSegment = true;
@@ -1630,7 +1638,7 @@ export function checkRecallsByModel(
       return false;
     }
 
-    if (year !== undefined && !isYearMatchForCampaign(year, campaign.target_model_years)) {
+    if (validYear !== undefined && !isYearMatchForCampaign(validYear, campaign.target_model_years)) {
       return false;
     }
 
@@ -1762,12 +1770,13 @@ export function getModelsForBrand(brand: string, customDb?: RecallDatabase): str
   recalls
     .filter((r) => r && (isBrandMatch(r?.brand) || (canonicalBrand === '제네시스' && r?.brand && normalizeManufacturer(r.brand) === '현대자동차')))
     .forEach((r) => {
+      const directBrandMatch = isBrandMatch(r?.brand);
       if (typeof r?.target_model === 'string' && r.target_model) {
         r.target_model.split(',').forEach((tm) => {
           const cleanModel = tm.replace(/\s*\([^)]*\)/g, '').trim();
           if (cleanModel) {
             if (canonicalBrand === '제네시스') {
-              if (cleanModel.includes('제네시스') || /^g(?:v|70|80|90)/i.test(cleanModel)) {
+              if (directBrandMatch || cleanModel.includes('제네시스') || /^g(?:v|70|80|90)/i.test(cleanModel)) {
                 const stripped = cleanModel.replace(/^제네시스\s*/, '').trim();
                 if (stripped) models.add(stripped);
                 models.add(cleanModel);
