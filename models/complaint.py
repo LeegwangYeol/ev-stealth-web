@@ -211,6 +211,27 @@ RE_UNICODE_SPACES: re.Pattern[str] = re.compile(r"[\u00a0\u1680\u2000-\u200a\u20
 FULLWIDTH_TRANS: Dict[int, int] = {i: i - 0xFEE0 for i in range(0xFF01, 0xFF5F)}
 
 
+def _coerce_raw_str(val: Any) -> str:
+    """Coerce scalar or bytes/bytearray to str cleanly; None and bool yield empty string."""
+    if val is None or isinstance(val, bool):
+        return ""
+    if isinstance(val, (bytes, bytearray)):
+        raw_b = bytes(val)
+        try:
+            return raw_b.decode("utf-8")
+        except UnicodeDecodeError:
+            try:
+                return raw_b.decode("cp949")
+            except UnicodeDecodeError:
+                return raw_b.decode("utf-8", errors="replace")
+    if isinstance(val, str):
+        return val
+    try:
+        return str(val)
+    except Exception:
+        return ""
+
+
 def sanitize_string(val: Any, max_len: int = 50_000) -> str:
     """Safely coerces input to str, strips null bytes, control chars, BiDi overrides & surrogates,
     normalizes NFC, and caps length.
@@ -219,28 +240,19 @@ def sanitize_string(val: Any, max_len: int = 50_000) -> str:
     """
     if val is None or val is False:
         return ""
-    if isinstance(val, (bytes, bytearray)):
-        raw_b = bytes(val)
-        try:
-            val_str = raw_b.decode("utf-8")
-        except UnicodeDecodeError:
-            try:
-                val_str = raw_b.decode("cp949")
-            except UnicodeDecodeError:
-                val_str = raw_b.decode("utf-8", errors="replace")
-    elif isinstance(val, str):
-        val_str = val
-    else:
-        try:
-            val_str = str(val)
-        except Exception:
-            return ""
+    val_str = _coerce_raw_str(val)
 
     if not val_str:
         return ""
 
-    if len(val_str) > max_len:
-        val_str = val_str[:max_len]
+    try:
+        limit = max(0, int(max_len)) if (max_len is not None and not isinstance(max_len, bool)) else 50_000
+    except (ValueError, TypeError, OverflowError):
+        limit = 50_000
+    if limit == 0:
+        return ""
+    if len(val_str) > limit:
+        val_str = val_str[:limit]
 
     val_str = RE_INVALID_CHARS.sub("", val_str)
     val_str = RE_UNICODE_SPACES.sub(" ", val_str)
@@ -299,6 +311,8 @@ def parse_date_str(created_at: Any) -> str:
     if isinstance(created_at, (int, float)) and not isinstance(created_at, bool):
         try:
             ts = float(created_at)
+            if math.isnan(ts) or math.isinf(ts):
+                return today_iso
             if 1_000_000_000 <= ts <= 2_500_000_000:
                 dt = datetime.fromtimestamp(ts, tz=timezone.utc)
                 return dt.strftime("%Y-%m-%d")
@@ -315,9 +329,9 @@ def parse_date_str(created_at: Any) -> str:
     # Relative Korean date keywords and time-only stamps
     if s in ("오늘", "방금") or _RE_TIME_ONLY.match(s):
         return today_iso
-    if s == "어제":
+    if s == "어제" or s.startswith(("어제 ", "어제(")):
         return (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
-    if s in ("그제", "그저께"):
+    if s in ("그제", "그저께") or s.startswith(("그제 ", "그제(", "그저께 ", "그저께(")):
         return (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%d")
 
     current_year = datetime.now(timezone.utc).year
@@ -424,8 +438,11 @@ class RawPost:
         source: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
-        self.platform = sanitize_string(str(source or platform or "unknown"), max_len=256)
-        self.post_id = sanitize_string(str(id if id is not None else (post_id if post_id is not None else "")), max_len=256)
+        self.platform = sanitize_string(source, max_len=256) or sanitize_string(platform, max_len=256) or "unknown"
+        raw_pid = id if (id is not None and not isinstance(id, bool)) else (
+            post_id if (post_id is not None and not isinstance(post_id, bool)) else ""
+        )
+        self.post_id = sanitize_string(raw_pid, max_len=256)
         self.url = sanitize_string(url, max_len=2048)
         self.title = sanitize_string(title, max_len=10_000)
         self.content = sanitize_string(content, max_len=100_000)
@@ -527,27 +544,27 @@ class RawPost:
 
         raw_comments = _get("comments") or _get("comment_list")
         comments = (
-            [str(c) for c in raw_comments if c is not None]
+            [_coerce_raw_str(c) for c in raw_comments if c is not None and not isinstance(c, bool)]
             if isinstance(raw_comments, (list, tuple, set))
             else []
         )
         pid = _get("post_id", None)
-        if pid is None or (isinstance(pid, str) and not pid.strip()):
+        if pid is None or isinstance(pid, bool) or (isinstance(pid, str) and not pid.strip()):
             for k in ("id", "postId", "article_id", "doc_id"):
                 cand = _get(k, None)
-                if cand is not None and not (isinstance(cand, str) and not cand.strip()):
+                if cand is not None and not isinstance(cand, bool) and not (isinstance(cand, str) and not cand.strip()):
                     pid = cand
                     break
-        post_id = str(pid) if pid is not None else ""
+        post_id = _coerce_raw_str(pid)
 
         meta = _get("platform_metadata")
         meta_dict = meta if isinstance(meta, dict) else {}
 
-        title = str(_get("title") or _get("post_title") or _get("subject") or "")
-        url = str(_get("url") or _get("post_url") or _get("link") or "")
-        content = str(_get("content") or _get("raw_quote") or _get("body") or _get("text") or _get("defect_topic") or "")
-        author = str(_get("author") or _get("author_badge") or meta_dict.get("author_badge") or meta_dict.get("author") or "")
-        created_at = str(
+        title = _coerce_raw_str(_get("title") or _get("post_title") or _get("subject") or "")
+        url = _coerce_raw_str(_get("url") or _get("post_url") or _get("link") or "")
+        content = _coerce_raw_str(_get("content") or _get("raw_quote") or _get("body") or _get("text") or _get("defect_topic") or "")
+        author = _coerce_raw_str(_get("author") or _get("author_badge") or meta_dict.get("author_badge") or meta_dict.get("author") or "")
+        created_at = _coerce_raw_str(
             _get("created_at")
             or _get("created_at=")
             or _get("collected_at")
@@ -560,7 +577,7 @@ class RawPost:
         )
 
         return cls(
-            platform=str(_get("source") or _get("platform") or "unknown"),
+            platform=_coerce_raw_str(_get("source") or _get("platform") or "unknown") or "unknown",
             post_id=post_id,
             url=url,
             title=title,
@@ -660,14 +677,14 @@ def validate_report_entry(entry: Any, strict: bool = False) -> Tuple[bool, str]:
 
     # 1. Identifier validation (must have non-empty id or post_id)
     raw_id = _get("id")
-    if raw_id is None or not str(raw_id).strip():
+    if raw_id is None or isinstance(raw_id, bool) or not _coerce_raw_str(raw_id).strip():
         raw_id = _get("post_id")
-    if raw_id is None or not str(raw_id).strip():
+    if raw_id is None or isinstance(raw_id, bool) or not _coerce_raw_str(raw_id).strip():
         return False, "Missing or empty required field: 'id'"
 
     # 2. Content validation (must have title, summary, quote, or content)
     has_text = any(
-        _get(k) is not None and str(_get(k)).strip() != ""
+        _get(k) is not None and not isinstance(_get(k), bool) and _coerce_raw_str(_get(k)).strip() != ""
         for k in ("title", "post_title", "summary", "verbatim_quote", "raw_quote", "content")
     )
     if not has_text:
@@ -1071,12 +1088,14 @@ class ComplaintRecord:
         def _get_str(*keys: str, default: str = "") -> str:
             for k in keys:
                 val = _get(k)
-                if val is not None and str(val).strip() != "":
-                    return str(val).strip()
+                if val is not None and not isinstance(val, bool):
+                    coerced = _coerce_raw_str(val)
+                    if coerced.strip() != "":
+                        return coerced.strip()
             for k in keys:
                 val = _get(k)
-                if val is not None:
-                    return str(val)
+                if val is not None and not isinstance(val, bool):
+                    return _coerce_raw_str(val)
             return default
 
         # 1. post_id / id
@@ -1169,7 +1188,7 @@ class ComplaintRecord:
         if isinstance(raw_slang, str):
             slang_terms: List[str] = [s.strip() for s in raw_slang.split(",") if s.strip()]
         elif isinstance(raw_slang, (list, tuple, set)):
-            slang_terms = [str(s) for s in raw_slang if s is not None]
+            slang_terms = [_coerce_raw_str(s) for s in raw_slang if s is not None and not isinstance(s, bool)]
         else:
             slang_terms = []
 
@@ -1212,7 +1231,7 @@ class ComplaintRecord:
         raw_sev = _get("severity")
         if raw_sev is None:
             raw_sev = _get("severity_tier")
-        severity = str(raw_sev).strip() if raw_sev is not None else None
+        severity = _coerce_raw_str(raw_sev).strip() if (raw_sev is not None and not isinstance(raw_sev, bool)) else None
 
         # 19. confidence_score
         confidence_score = _safe_float(_get("confidence_score", 0.0), default=0.0)
@@ -1335,10 +1354,10 @@ class DailyReportStatistics:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "total_scraped": self.total_scraped,
-            "total_filtered_defects": self.total_filtered_defects,
+            "total_scraped": max(0, _safe_int(self.total_scraped)),
+            "total_filtered_defects": max(0, _safe_int(self.total_filtered_defects)),
             "avg_negativity_score": _safe_round(self.avg_negativity_score, 2),
-            "critical_defect_count": self.critical_defect_count,
+            "critical_defect_count": max(0, _safe_int(self.critical_defect_count)),
         }
 
     def __getitem__(self, key: str) -> Any:
@@ -1346,7 +1365,7 @@ class DailyReportStatistics:
             if key == "avg_negativity_score":
                 return _safe_round(self.avg_negativity_score, 2)
             if key in ("total_scraped", "total_filtered_defects", "critical_defect_count"):
-                return getattr(self, key)
+                return max(0, _safe_int(getattr(self, key)))
             if hasattr(self, key) and not key.startswith("_"):
                 val = getattr(self, key)
                 if not callable(val):
@@ -1582,7 +1601,8 @@ class DailyReportPayload:
         if not isinstance(data, dict):
             return False, [f"Root payload must be an object, got {type(data).__name__}"]
 
-        if "generated_at" not in data or not str(data["generated_at"]).strip():
+        gen_at = data.get("generated_at")
+        if gen_at is None or isinstance(gen_at, bool) or not _coerce_raw_str(gen_at).strip():
             errors.append("Missing required field: 'generated_at'")
         if "reports" not in data or not isinstance(data["reports"], list):
             errors.append("Missing or non-list field: 'reports'")

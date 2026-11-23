@@ -222,6 +222,8 @@ class StatisticalRanker:
         Calculate Smooth Corpus-level TF-IDF:
         TF-IDF(t) = TF(t) * (ln((1 + N) / (1 + DF(t))) + 1.0)
         """
+        if not isinstance(term, str) or not term:
+            return 0.0
         tf = self.term_freq.get(term, 0)
         df = self.doc_freq.get(term, 0)
         if tf == 0 or df == 0 or self.num_docs == 0:
@@ -499,7 +501,7 @@ class StatisticalRanker:
             mean_dsi = round(sum(dsi_vals) / len(dsi_vals), 1) if dsi_vals else 7.0
             category = TERM_CATEGORY_MAP.get(term, "General Defect")
             quotes = sub_ranker.term_sample_quotes.get(term, [])
-            sample_q = quotes[0] if quotes else f"{term} 관련 결함 이슈"
+            sample_q = re.sub(r'\s+', ' ', quotes[0]).strip() if quotes else f"{term} 관련 결함 이슈"
             if len(sample_q) > 85:
                 sample_q = sample_q[:82] + "..."
 

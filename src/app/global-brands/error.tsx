@@ -47,9 +47,9 @@ export default function GlobalBrandsGuideError({ error, reset }: ErrorProps) {
       aria-atomic="true"
       aria-labelledby="global-brands-error-heading"
       aria-describedby="global-brands-error-description"
-      className="min-h-[60vh] flex items-center justify-center px-4 py-12 outline-none focus:outline-none"
+      className="min-h-[60vh] flex items-center justify-center px-2 sm:px-4 py-12 outline-none focus:outline-none"
     >
-      <div className="max-w-xl w-full bg-white border border-slate-200 rounded-3xl p-8 sm:p-10 shadow-xl text-center space-y-6">
+      <div className="max-w-xl w-full bg-white border border-slate-200 rounded-3xl p-5 sm:p-10 shadow-xl text-center space-y-6">
         <div
           className="w-16 h-16 mx-auto rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center text-3xl shadow-inner"
           aria-hidden="true"

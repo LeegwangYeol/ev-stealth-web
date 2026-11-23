@@ -10,10 +10,17 @@ Encapsulates:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation, ROUND_HALF_EVEN, localcontext
 import math
+import re
 from typing import Any, Dict, List, Optional, Union
 
 from tracker.subsidy_models import AlertSeverity, PopularModelEntry, RegionRecord, SubsidyPayload
+
+_RE_PLAIN_INT = re.compile(r"^[+-]?\d+$")
+_DEC_QUANT_1 = Decimal("0.1")
+_DEC_MAN = Decimal(10_000)
+_DEC_EOK = Decimal(100_000_000)
 
 
 def _safe_int_val(val: Any, default: int = 0) -> int:
@@ -22,10 +29,22 @@ def _safe_int_val(val: Any, default: int = 0) -> int:
         return default
     if type(val) is int:
         return val
+    if isinstance(val, Decimal):
+        if not val.is_finite():
+            return default
+        try:
+            return int(val)
+        except (ValueError, TypeError, OverflowError):
+            return default
     if isinstance(val, str):
         val = val.strip().replace(",", "")
         if not val:
             return default
+        if _RE_PLAIN_INT.match(val):
+            try:
+                return int(val)
+            except (ValueError, OverflowError):
+                return default
     try:
         f = float(val)
         if math.isnan(f) or math.isinf(f):
@@ -129,8 +148,25 @@ def _safe_sev(record: Any) -> float:
     return _safe_float_val(raw, 0.0)
 
 
-def _format_scaled_unit(scaled_val: float, unit_suffix: str) -> str:
+def _format_scaled_unit(scaled_val: Union[float, Decimal], unit_suffix: str) -> str:
     """Format a scaled KRW value (in 만 or 억) without -0.0 or floating-point .0 drift."""
+    if isinstance(scaled_val, Decimal):
+        if not scaled_val.is_finite():
+            return f"0{unit_suffix}"
+        try:
+            needed_prec = max(28, abs(scaled_val.adjusted()) + 10)
+            if needed_prec > 10000:
+                return f"{float(scaled_val):,.1f}{unit_suffix}"
+            with localcontext() as ctx:
+                ctx.prec = needed_prec
+                rounded = scaled_val.quantize(_DEC_QUANT_1, rounding=ROUND_HALF_EVEN)
+        except (InvalidOperation, ValueError, OverflowError):
+            rounded = Decimal("0")
+        if rounded == 0:
+            rounded = Decimal("0")
+        if rounded % 1 != 0:
+            return f"{rounded:,.1f}{unit_suffix}"
+        return f"{int(rounded):,}{unit_suffix}"
     rounded = round(scaled_val, 1)
     if rounded == 0.0:
         rounded = 0.0
@@ -156,28 +192,42 @@ def format_currency_krw(amount: Any, unit: str = "auto") -> str:
         if not amount:
             return "0원"
     try:
-        f = float(amount)
-        if math.isnan(f) or math.isinf(f):
+        if isinstance(amount, Decimal):
+            d = amount
+        elif isinstance(amount, (int, str)):
+            d = Decimal(str(amount))
+        else:
+            f = float(amount)
+            if math.isnan(f) or math.isinf(f):
+                return "0원"
+            d = Decimal(str(f))
+        if not d.is_finite():
             return "0원"
-        if f == 0.0:
-            f = 0.0
-    except (ValueError, TypeError, OverflowError):
+        if d == 0:
+            d = Decimal(0)
+    except (InvalidOperation, ValueError, TypeError, OverflowError):
         return "0원"
 
     unit_lower = str(unit).strip().lower()
     if unit_lower in ("billion", "억 원", "억원", "eok"):
-        return _format_scaled_unit(f, "억 원")
+        return _format_scaled_unit(d, "억 원")
 
-    if unit_lower in ("man", "만 원", "만원"):
-        return _format_scaled_unit(f / 10_000, "만 원")
+    needed_prec = max(28, abs(d.adjusted()) + 16)
+    if needed_prec > 10000:
+        return "0원"
 
-    # auto mode
-    if abs(f) >= 100_000_000:  # >= 1억 원
-        return _format_scaled_unit(f / 100_000_000, "억 원")
-    elif abs(f) >= 10_000:  # >= 1만 원
-        return _format_scaled_unit(f / 10_000, "만 원")
-    else:
-        return f"{int(f):,}원"
+    with localcontext() as ctx:
+        ctx.prec = needed_prec
+        if unit_lower in ("man", "만 원", "만원"):
+            return _format_scaled_unit(d / _DEC_MAN, "만 원")
+
+        # auto mode
+        if abs(d) >= _DEC_EOK:  # >= 1억 원
+            return _format_scaled_unit(d / _DEC_EOK, "억 원")
+        elif abs(d) >= _DEC_MAN:  # >= 1만 원
+            return _format_scaled_unit(d / _DEC_MAN, "만 원")
+        else:
+            return f"{int(d):,}원"
 
 
 def format_percentage(val: Any, decimals: int = 1) -> str:
@@ -387,6 +437,7 @@ class ReportGenerator:
         if not safe_target:
             safe_target = "KR-11"
         reg_name = _REGION_NAMES.get(safe_target.upper(), _REGION_NAMES.get(safe_target, safe_target))
+        reg_name = str(reg_name).replace("\n", " ").replace("\r", " ")
 
         lines = [
             f"## 🚗 주요 인기 전기차 국비·지방비 보조금 및 실구매가 매트릭스 (기준: {reg_name})",
@@ -522,7 +573,7 @@ class ReportGenerator:
         if records is None:
             records = []
         elif not isinstance(records, (list, tuple)):
-            if hasattr(records, "__iter__") and not isinstance(records, (str, bytes, dict)):
+            if hasattr(records, "__iter__") and not isinstance(records, (str, bytes, bytearray, dict)):
                 records = list(records)
             else:
                 records = []

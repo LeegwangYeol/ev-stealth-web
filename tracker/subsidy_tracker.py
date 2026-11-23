@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_CEILING
+from fractions import Fraction
 import http.client
 import ipaddress
 import json
@@ -94,6 +95,8 @@ def _find_repo_root() -> Path:
 
 # Maximum bounded response read size (10MB) to prevent memory exhaustion
 MAX_RESPONSE_BYTES: int = 10 * 1024 * 1024
+# Maximum bounded cache file size (50MB) to prevent OOM on corrupted/special files
+MAX_CACHE_BYTES: int = 50 * 1024 * 1024
 
 _RE_URL_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 _DISALLOWED_ENDPOINT_HOSTS: Set[str] = {
@@ -108,6 +111,7 @@ _DISALLOWED_ENDPOINT_HOSTS: Set[str] = {
 }
 _DISALLOWED_ENDPOINT_SUFFIXES: Tuple[str, ...] = (
     ".localhost",
+    ".cluster.local",
     ".internal",
     ".localdomain",
     ".intranet",
@@ -223,7 +227,19 @@ def _validate_endpoint_url(url: str, allow_private_ips: bool = False) -> Tuple[b
             return False, f"Hostname '{host_lower}' matches disallowed internal suffix '{suffix}'"
 
     try:
-        ip = ipaddress.ip_address(host_lower)
+        host_ascii = host_lower.encode("idna").decode("ascii").lower().strip().rstrip(".")
+    except UnicodeError as exc:
+        return False, f"Invalid IDNA hostname '{host_lower}': {exc}"
+    if not host_ascii:
+        return False, "Missing hostname in URL"
+    if host_ascii in _DISALLOWED_ENDPOINT_HOSTS:
+        return False, f"Disallowed hostname '{host_ascii}'"
+    for suffix in _DISALLOWED_ENDPOINT_SUFFIXES:
+        if host_ascii.endswith(suffix):
+            return False, f"Hostname '{host_ascii}' matches disallowed internal suffix '{suffix}'"
+
+    try:
+        ip = ipaddress.ip_address(host_ascii)
         if not _is_safe_ip(ip):
             return False, f"Unsafe IP address {ip}"
         return True, "Safe public IP"
@@ -231,7 +247,7 @@ def _validate_endpoint_url(url: str, allow_private_ips: bool = False) -> Tuple[b
         pass
 
     try:
-        packed = socket.inet_aton(host_lower)
+        packed = socket.inet_aton(host_ascii)
         ip4 = ipaddress.IPv4Address(packed)
         if not _is_safe_ip(ip4):
             return False, f"Unsafe encoded IP address {ip4}"
@@ -240,19 +256,19 @@ def _validate_endpoint_url(url: str, allow_private_ips: bool = False) -> Tuple[b
         pass
 
     try:
-        addr_info = socket.getaddrinfo(host_lower, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        addr_info = socket.getaddrinfo(host_ascii, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
         for _family, _socktype, _proto, _canonname, sockaddr in addr_info:
             ip_str = sockaddr[0]
             try:
                 resolved_ip = ipaddress.ip_address(ip_str)
                 if not _is_safe_ip(resolved_ip):
-                    return False, f"Domain '{host_lower}' resolves to unsafe IP {resolved_ip}"
+                    return False, f"Domain '{host_ascii}' resolves to unsafe IP {resolved_ip}"
             except ValueError:
                 continue
     except socket.gaierror:
         pass
     except Exception as exc:
-        logger.debug("DNS check notice for %s: %s", host_lower, exc)
+        logger.debug("DNS check notice for %s: %s", host_ascii, exc)
 
     return True, "Safe URL"
 
@@ -276,7 +292,31 @@ class _SafeEndpointRedirectHandler(urllib.request.HTTPRedirectHandler):
             raise urllib.error.HTTPError(
                 resolved_url, 403, f"SSRF Blocked: Unsafe redirect target ({reason})", headers, fp
             )
-        return super().redirect_request(req, fp, code, msg, headers, resolved_url)
+        new_req = super().redirect_request(req, fp, code, msg, headers, resolved_url)
+        if new_req is not None:
+            try:
+                old_p = urllib.parse.urlsplit(req.full_url)
+                new_p = urllib.parse.urlsplit(new_req.full_url)
+                old_origin = (
+                    (old_p.scheme or "").lower(),
+                    (old_p.hostname or "").lower().rstrip("."),
+                    old_p.port or (443 if (old_p.scheme or "").lower() == "https" else 80),
+                )
+                new_origin = (
+                    (new_p.scheme or "").lower(),
+                    (new_p.hostname or "").lower().rstrip("."),
+                    new_p.port or (443 if (new_p.scheme or "").lower() == "https" else 80),
+                )
+                if old_origin != new_origin:
+                    for hdr in list(new_req.headers.keys()):
+                        if hdr.lower() in ("authorization", "proxy-authorization", "cookie"):
+                            new_req.remove_header(hdr)
+                    for hdr in list(getattr(new_req, "unredirected_hdrs", {}).keys()):
+                        if hdr.lower() in ("authorization", "proxy-authorization", "cookie"):
+                            del new_req.unredirected_hdrs[hdr]
+            except Exception:
+                pass
+        return new_req
 
 try:
     from utils.http_client import robust_decode
@@ -426,8 +466,15 @@ _RE_PLAIN_INT = re.compile(r"^[+-]?\d+$")
 
 def _to_non_neg_int(val: Any) -> Optional[int]:
     """Convert numeric input to non-negative int preserving precision for large integer strings."""
+    if val is None or isinstance(val, bool):
+        return None
     if type(val) is int:
         return val if val > 0 else 0
+    if isinstance(val, Decimal):
+        if not val.is_finite():
+            return None
+        iv = int(val)
+        return iv if iv > 0 else 0
     cleaned = _clean_num(val)
     if isinstance(cleaned, str) and _RE_PLAIN_INT.match(cleaned):
         iv = int(cleaned)
@@ -475,20 +522,36 @@ def calculate_depletion_rate(
         clean_quota = _clean_num(target_quota)
         clean_applied = _clean_num(applied)
         try:
+            if isinstance(clean_quota, str) and _RE_PLAIN_INT.match(clean_quota) and len(clean_quota.lstrip("+-")) > 300:
+                raise OverflowError
+            if isinstance(clean_applied, str) and _RE_PLAIN_INT.match(clean_applied) and len(clean_applied.lstrip("+-")) > 300:
+                raise OverflowError
             quota_val = float(clean_quota)
             applied_val = float(clean_applied)
         except OverflowError:
             q_int = _to_non_neg_int(clean_quota)
             a_int = _to_non_neg_int(clean_applied)
-            if q_int is None or a_int is None or q_int <= 0 or a_int <= 0:
+            if q_int is None or a_int is None or a_int <= 0:
                 return 0.0
-            raw_rate = (a_int * 100) / q_int
-            if math.isnan(raw_rate) or math.isinf(raw_rate):
-                rate = 100.0 if (clamp_100 or clamp) else 0.0
+            if q_int <= 0:
+                try:
+                    q_flt = float(clean_quota)
+                    if math.isnan(q_flt) or math.isinf(q_flt) or q_flt <= 0.0:
+                        return 0.0
+                    rate = 100.0 if (clamp_100 or clamp) else 0.0
+                except (ValueError, TypeError, OverflowError):
+                    return 0.0
             else:
-                rate = max(0.0, round(raw_rate, 1))
-                if clamp_100 or clamp:
-                    rate = min(100.0, rate)
+                try:
+                    raw_rate = (a_int * 100) / q_int
+                    if math.isnan(raw_rate) or math.isinf(raw_rate):
+                        rate = 100.0 if (clamp_100 or clamp) else 0.0
+                    else:
+                        rate = max(0.0, round(raw_rate, 1))
+                        if clamp_100 or clamp:
+                            rate = min(100.0, rate)
+                except OverflowError:
+                    rate = 100.0 if (clamp_100 or clamp) else 0.0
         else:
             if math.isnan(quota_val) or math.isnan(applied_val) or math.isinf(quota_val) or math.isinf(applied_val):
                 return 0.0
@@ -719,10 +782,30 @@ def predict_exhaustion_days(
         if f_vel <= 0.0:
             return None
         try:
-            dec_rem = Decimal(str(_clean_num(remaining_units))) if isinstance(remaining_units, (int, str)) else Decimal(str(f_rem))
-            dec_vel = Decimal(str(_clean_num(daily_velocity))) if isinstance(daily_velocity, (int, str)) else Decimal(str(f_vel))
-            days_dec = (dec_rem / dec_vel).to_integral_value(rounding=ROUND_CEILING)
-            days = int(days_dec)
+            if isinstance(remaining_units, Decimal):
+                dec_rem = remaining_units
+            elif isinstance(remaining_units, (int, str)):
+                dec_rem = Decimal(str(_clean_num(remaining_units)))
+            else:
+                dec_rem = Decimal(str(f_rem))
+
+            if isinstance(daily_velocity, Decimal):
+                dec_vel = daily_velocity
+            elif isinstance(daily_velocity, (int, str)):
+                dec_vel = Decimal(str(_clean_num(daily_velocity)))
+            else:
+                dec_vel = Decimal(str(f_vel))
+
+            if (
+                dec_rem.is_finite()
+                and dec_vel.is_finite()
+                and abs(dec_rem.adjusted()) <= 1000
+                and abs(dec_vel.adjusted()) <= 1000
+            ):
+                days = math.ceil(Fraction(dec_rem) / Fraction(dec_vel))
+            else:
+                days_dec = (dec_rem / dec_vel).to_integral_value(rounding=ROUND_CEILING)
+                days = int(days_dec)
         except (InvalidOperation, ZeroDivisionError, OverflowError, ValueError):
             days = int(math.ceil(f_rem / f_vel))
         return max(0, days)
@@ -752,8 +835,8 @@ def predict_exhaustion_date(
             base_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=timezone.utc)
         elif isinstance(start_date, str):
             clean_s = start_date.strip()
-            if "T" in clean_s or "t" in clean_s:
-                iso_s = clean_s.replace("t", "T", 1)
+            if "T" in clean_s or "t" in clean_s or (" " in clean_s and ":" in clean_s):
+                iso_s = clean_s.replace("t", "T", 1) if "t" in clean_s else clean_s
                 if iso_s.endswith(("Z", "z")):
                     iso_s = iso_s[:-1] + "+00:00"
                 base_dt = datetime.fromisoformat(iso_s)
@@ -799,14 +882,19 @@ def classify_region_group(region: Union[RegionRecord, Dict[str, Any], str, None]
             return REGIONAL_GROUP_METROPOLITAN
         return REGIONAL_GROUP_OTHER
 
-    iso_code = _metric_val(region, "iso_code", "") or _metric_val(region, "region_id", "")
+    iso_code = (
+        _metric_val(region, "iso_code", "")
+        or _metric_val(region, "region_id", "")
+        or _metric_val(region, "code", "")
+        or _metric_val(region, "id", "")
+    )
     iso_upper = str(iso_code).strip().upper()
     if iso_upper in METROPOLITAN_CITY_CODES or iso_upper == "KR-50":
         return REGIONAL_GROUP_METROPOLITAN
     if iso_upper in PROVINCE_CODES:
         return REGIONAL_GROUP_PROVINCES
 
-    name_ko = str(_metric_val(region, "name_ko", "")).strip()
+    name_ko = str(_metric_val(region, "name_ko", "") or _metric_val(region, "name", "")).strip()
     for prov in PROVINCE_PATTERNS_KO:
         if prov in name_ko:
             return REGIONAL_GROUP_PROVINCES
@@ -908,8 +996,24 @@ def _safe_int_metric(val: Any, default: int = 0) -> int:
         return default
     if type(val) is int:
         return val
+    if isinstance(val, Decimal):
+        if not val.is_finite():
+            return default
+        try:
+            return int(val)
+        except (ValueError, TypeError, OverflowError):
+            return default
+    cleaned = _clean_num(val)
+    if isinstance(cleaned, str):
+        if not cleaned:
+            return default
+        if _RE_PLAIN_INT.match(cleaned):
+            try:
+                return int(cleaned)
+            except (ValueError, OverflowError):
+                return default
     try:
-        f = float(_clean_num(val))
+        f = float(cleaned)
         if math.isnan(f) or math.isinf(f):
             return default
         return int(f)
@@ -1016,10 +1120,11 @@ class SubsidyTracker:
                 if rem_ratio_units == 0:
                     safe_rem_budget = 0
                 else:
-                    try:
-                        scaled_rem_budget = int(round((safe_total_budget * rem_ratio_units) / safe_ann))
-                    except OverflowError:
-                        scaled_rem_budget = (safe_total_budget * rem_ratio_units) // safe_ann
+                    prod = safe_total_budget * rem_ratio_units
+                    if prod < (1 << 52):
+                        scaled_rem_budget = int(round(prod / safe_ann))
+                    else:
+                        scaled_rem_budget = round(Fraction(prod, safe_ann))
                     safe_rem_budget = min(
                         safe_total_budget,
                         max(0, scaled_rem_budget),
@@ -1407,6 +1512,11 @@ class SubsidyTracker:
 
         try:
             logger.info("Loading cached snapshot from %s", target_path)
+            file_size = target_path.stat().st_size
+            if file_size > MAX_CACHE_BYTES:
+                raise ValueError(
+                    f"Cache file exceeds maximum allowed size ({file_size} > {MAX_CACHE_BYTES}): {target_path}"
+                )
             raw_bytes = target_path.read_bytes()
             if not raw_bytes or not raw_bytes.strip():
                 raise ValueError(f"Cache file is empty (0 bytes): {target_path}")

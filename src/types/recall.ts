@@ -47,6 +47,8 @@ export interface OfficialRecallCampaign {
   service_center_contact: string;
   official_link: string;
   status: RecallStatus;
+  recall_date?: string;
+  date?: string;
 }
 
 export interface BatterySafetyProfile {

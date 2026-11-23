@@ -114,7 +114,7 @@ function resolveBrand(inputBrand: string, availableBrands: string[]): string | u
   if (!inputBrand || typeof inputBrand !== 'string' || !Array.isArray(availableBrands)) {
     return undefined;
   }
-  const normalized = inputBrand.trim().toLowerCase();
+  const normalized = inputBrand.trim().toLowerCase().slice(0, 100);
   if (!normalized) return undefined;
 
   const direct = availableBrands.find((b) => b && typeof b === 'string' && b.toLowerCase() === normalized);
@@ -149,7 +149,7 @@ function resolveModelAndBrand(
   let resolvedModel: string | undefined;
 
   if (modelParam) {
-    const cleanModel = modelParam.trim();
+    const cleanModel = modelParam.trim().slice(0, 200);
     const cleanLower = cleanModel.toLowerCase();
     const withoutParens = cleanLower.replace(/\([^)]*\)/g, '').trim();
 
@@ -349,7 +349,8 @@ function SearchParamsWatcher({
     );
 
     if (resolved) {
-      const parsedYear = yearParam ? parseInt(yearParam, 10) : undefined;
+      const cleanYearParam = yearParam ? yearParam.trim() : '';
+      const parsedYear = /^\d{4}$/.test(cleanYearParam) ? parseInt(cleanYearParam, 10) : undefined;
       const validYear =
         typeof parsedYear === 'number' && !isNaN(parsedYear) && MODEL_YEAR_OPTIONS.includes(parsedYear)
           ? parsedYear
@@ -520,9 +521,10 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
       setIsSearchingVin(false);
       const cleanVin = normalizeVinInput(vin);
       const isExactLength = cleanVin.length === 17;
+      vinInputRef.current = cleanVin;
       setVinInput(cleanVin);
-      setVinTouched(true);
-      setVinBlurred(!isExactLength);
+      setVinTouched(cleanVin.length > 0);
+      setVinBlurred(cleanVin.length > 0 && !isExactLength);
       setVinSubmitted(false);
       setActiveCheckerMode('VIN');
       if (cleanVin.length > 0) {
@@ -632,6 +634,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     }
     setIsSearchingVin(false);
     setActiveCheckerMode('VIN');
+    vinInputRef.current = cleanSample;
     setVinInput(cleanSample);
     setVinTouched(true);
     setVinBlurred(false);
@@ -810,16 +813,23 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
   );
 
   // Active VIN error state for accessible form feedback
-  // Only display intrusive error alerts when illegal characters (I, O, Q) are entered,
+  // Only display intrusive error alerts when illegal characters (I, O, Q or non-alphanumeric) are entered,
   // when blur occurs on an incomplete VIN, or when submitted.
-  const cleanVinLength = normalizeVinInput(vinInput).length;
+  const cleanVinNormalized = normalizeVinInput(vinInput);
+  const cleanVinLength = cleanVinNormalized.length;
   const hasIllegalVinChars = /[IOQ]/i.test(vinInput);
+  const hasInvalidNonAlnumChars = cleanVinLength > 0 && /[^A-HJ-NPR-Z0-9]/.test(cleanVinNormalized);
   const showVinError =
     hasIllegalVinChars ||
+    hasInvalidNonAlnumChars ||
     (vinSubmitted && !vinValidation.valid) ||
     (vinBlurred && cleanVinLength > 0 && !vinValidation.valid) ||
     (vinTouched && cleanVinLength === 17 && !vinValidation.valid);
-  const vinError = showVinError ? (vinValidation.error || '차대번호(VIN) 17자리를 입력해 주십시오.') : '';
+  const vinError = showVinError
+    ? (hasInvalidNonAlnumChars && !hasIllegalVinChars && cleanVinLength !== 17
+        ? '차대번호는 영문 대문자와 숫자(I, O, Q 제외)로만 구성되어야 합니다.'
+        : (vinValidation.error || '차대번호(VIN) 17자리를 입력해 주십시오.'))
+    : '';
 
   // Directory filter active checks & accessible reset helpers
   const isBatteryFiltered =
@@ -1073,6 +1083,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                           clearTimeout(vinDebounceTimerRef.current);
                         }
                         setIsSearchingVin(false);
+                        vinInputRef.current = '';
                         setVinInput('');
                         setVinTouched(false);
                         setVinBlurred(false);
@@ -1155,6 +1166,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                       clearTimeout(vinDebounceTimerRef.current);
                     }
                     setIsSearchingVin(false);
+                    vinInputRef.current = '';
                     setVinInput('');
                     setVinTouched(false);
                     setVinBlurred(false);
@@ -1883,7 +1895,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
             <label htmlFor="recall-brand-filter" className="text-xs font-semibold text-slate-300 mr-2">제조사 필터:</label>
             <select
               id="recall-brand-filter"
-              aria-label="제조사 브랜드별 리콜 필터"
+              aria-label="제조사 필터 (브랜드별 리콜 선택)"
               value={selectedRecallBrandFilter}
               onChange={(e) => setSelectedRecallBrandFilter(e.target.value)}
               className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
@@ -2198,7 +2210,7 @@ export const RecallCard = React.memo(function RecallCard({
           aria-controls={`${panelIdPrefix}${campaign.id}`}
           aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '상세 및 행동요령 펼치기'}`}
           onClick={() => toggleRecallExpansion(campaign.id)}
-          className="self-start text-xs text-blue-300 hover:text-blue-200 font-semibold px-2.5 py-1 min-h-[44px] inline-flex items-center justify-center rounded bg-slate-800 border border-slate-700 hover:bg-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+          className="self-start text-xs text-blue-300 hover:text-blue-200 font-semibold px-2.5 py-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded bg-slate-800 border border-slate-700 hover:bg-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
         >
           {isExpanded ? '닫기 ▲' : '상세 및 행동요령 ▼'}
         </button>

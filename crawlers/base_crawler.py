@@ -35,10 +35,10 @@ def _unescape_url_entities(raw_url: str) -> str:
 
 
 def _sanitize_referer(referer: Optional[str]) -> Optional[str]:
-    """Strip CR/LF control characters from Referer header values."""
+    """Strip CR/LF and other ASCII control characters from Referer header values."""
     if not referer or not isinstance(referer, str):
         return None
-    cleaned = referer.replace("\r", "").replace("\n", "").strip()
+    cleaned = "".join(c for c in referer if ord(c) >= 32 and ord(c) != 127).strip()
     return cleaned or None
 
 
@@ -141,16 +141,17 @@ class BaseCrawler(abc.ABC):
         self._cache_lock = threading.RLock()
 
         # Resolve explicit connect and read timeouts
+        scalar_timeout = _positive_float(timeout, -1.0) if not isinstance(timeout, (tuple, list)) else -1.0
         if connect_timeout is not None:
             self._connect_timeout = _positive_float(connect_timeout, 5.0)
         elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
             self._connect_timeout = _positive_float(timeout[0], 5.0)
-        elif isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(float(timeout)) and float(timeout) > 0 and (float(timeout) != 15.0 or client is None):
-            self._connect_timeout = min(5.0, float(timeout))
+        elif scalar_timeout > 0 and (scalar_timeout != 15.0 or client is None):
+            self._connect_timeout = min(5.0, scalar_timeout)
         elif client is not None and hasattr(client, "connect_timeout") and isinstance(getattr(client, "connect_timeout", None), (int, float)):
             self._connect_timeout = _positive_float(client.connect_timeout, 5.0)
-        elif isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(float(timeout)) and float(timeout) > 0:
-            self._connect_timeout = min(5.0, float(timeout))
+        elif scalar_timeout > 0:
+            self._connect_timeout = min(5.0, scalar_timeout)
         else:
             self._connect_timeout = 5.0
 
@@ -158,12 +159,12 @@ class BaseCrawler(abc.ABC):
             self._read_timeout = _positive_float(read_timeout, 15.0)
         elif isinstance(timeout, (tuple, list)) and len(timeout) >= 2:
             self._read_timeout = _positive_float(timeout[1], 15.0)
-        elif isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(float(timeout)) and float(timeout) > 0 and (float(timeout) != 15.0 or client is None):
-            self._read_timeout = float(timeout)
+        elif scalar_timeout > 0 and (scalar_timeout != 15.0 or client is None):
+            self._read_timeout = scalar_timeout
         elif client is not None and hasattr(client, "read_timeout") and isinstance(getattr(client, "read_timeout", None), (int, float)):
             self._read_timeout = _positive_float(client.read_timeout, 15.0)
-        elif isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and math.isfinite(float(timeout)) and float(timeout) > 0:
-            self._read_timeout = float(timeout)
+        elif scalar_timeout > 0:
+            self._read_timeout = scalar_timeout
         else:
             self._read_timeout = 15.0
 
@@ -274,16 +275,20 @@ class BaseCrawler(abc.ABC):
 
     def _store_cached_post(self, post_url: str, detail: Dict[str, Any]) -> None:
         """Store parsed post detail in bounded LRU in-memory cache when caching is enabled."""
-        if not self.enable_cache or not post_url or not isinstance(detail, dict):
+        if not self.enable_cache or not post_url or not isinstance(post_url, str) or not isinstance(detail, dict):
             return
         if MAX_POST_CACHE_SIZE <= 0:
             return
+        key = post_url.strip()
+        if not key:
+            return
         with self._cache_lock:
-            if post_url in self._post_cache:
-                self._post_cache.move_to_end(post_url)
-            while len(self._post_cache) >= MAX_POST_CACHE_SIZE:
-                self._post_cache.popitem(last=False)
-            self._post_cache[post_url] = copy.deepcopy(detail)
+            if key in self._post_cache:
+                self._post_cache.move_to_end(key)
+            else:
+                while len(self._post_cache) >= MAX_POST_CACHE_SIZE:
+                    self._post_cache.popitem(last=False)
+            self._post_cache[key] = copy.deepcopy(detail)
 
     def _fallback_cached_post(self, post_url: str) -> Optional[Dict[str, Any]]:
         """Retrieve cached post detail for fallback when cache_fallback is enabled."""
@@ -380,16 +385,22 @@ class BaseCrawler(abc.ABC):
 
     def is_circuit_open(self, url_or_host: Optional[str] = None) -> bool:
         """Check if circuit breaker is OPEN for the target crawler host."""
+        target = url_or_host or self.base_url or ""
         if hasattr(self.client, "is_circuit_open"):
-            target = url_or_host or self.base_url or ""
             return bool(self.client.is_circuit_open(target))
+        cb = getattr(self.client, "circuit_breaker", None)
+        if cb is not None and hasattr(cb, "is_open"):
+            return bool(cb.is_open(target))
         return False
 
     def get_circuit_state(self, url_or_host: Optional[str] = None) -> str:
         """Return the circuit breaker state (CLOSED, OPEN, HALF_OPEN) for this host."""
+        target = url_or_host or self.base_url or ""
         if hasattr(self.client, "get_circuit_state"):
-            target = url_or_host or self.base_url or ""
             return str(self.client.get_circuit_state(target))
+        cb = getattr(self.client, "circuit_breaker", None)
+        if cb is not None and hasattr(cb, "get_state"):
+            return str(cb.get_state(target))
         return "CLOSED"
 
     def load_seed_fallback(
@@ -403,10 +414,12 @@ class BaseCrawler(abc.ABC):
             return []
         seed_posts: List[Dict[str, Any]] = []
         target_platform = (platform_name or getattr(self, "platform", "") or "").lower().strip()
-        seed_files = [
-            f"raw_{target_platform}_emerging.json" if target_platform else "",
-            "compiled_complaints.json",
-        ]
+        seed_files: List[str] = []
+        if target_platform:
+            seed_files.append(f"raw_{target_platform}_emerging.json")
+            if target_platform == "bobaedream":
+                seed_files.append("raw_bobae_emerging.json")
+        seed_files.append("compiled_complaints.json")
         curr_p = Path(__file__).resolve().parent
         search_dirs = [
             curr_p.parent / "data",

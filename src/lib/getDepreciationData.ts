@@ -493,6 +493,9 @@ export function getDepreciationDatabase(): DepreciationDatabase {
         isPlainRecord(rawDepreciationData.adjustment_factors.battery_chemistry) &&
         isPlainRecord(rawDepreciationData.adjustment_factors.mileage_sensitivity) &&
         isPlainRecord(rawDepreciationData.chemistries) &&
+        Object.keys(fb.chemistries).every((k) =>
+          isPlainRecord((rawDepreciationData.chemistries as Record<string, unknown>)[k])
+        ) &&
         Array.isArray(rawDepreciationData.battery_replacement_costs) &&
         rawDepreciationData.battery_replacement_costs.length > 0 &&
         rawDepreciationData.battery_replacement_costs.every(isPlainRecord) &&
@@ -501,6 +504,11 @@ export function getDepreciationDatabase(): DepreciationDatabase {
         rawDepreciationData.subsidy_clawback_schedule.tiers.length > 0 &&
         rawDepreciationData.subsidy_clawback_schedule.tiers.every(isPlainRecord) &&
         isPlainRecord(rawDepreciationData.subsidy_clawback_schedule.transfer_rules) &&
+        Object.keys(fb.subsidy_clawback_schedule.transfer_rules).every((k) =>
+          isPlainRecord(
+            (rawDepreciationData.subsidy_clawback_schedule.transfer_rules as Record<string, unknown>)[k]
+          )
+        ) &&
         isPlainRecord(rawDepreciationData.tco_parameters) &&
         isPlainRecord(rawDepreciationData.tco_parameters.fuel_tariffs) &&
         isPlainRecord(rawDepreciationData.tco_parameters.efficiency_baselines) &&
@@ -560,6 +568,13 @@ export function getDepreciationDatabase(): DepreciationDatabase {
         BatteryChemistryAdjustment
       >;
       for (const [chemKey, candidate] of Object.entries(rawAdjBatteryChem)) {
+        if (
+          chemKey === '__proto__' ||
+          chemKey === 'constructor' ||
+          chemKey === 'prototype'
+        ) {
+          continue;
+        }
         if (isPlainRecord(candidate)) {
           const baseEntry = Object.prototype.hasOwnProperty.call(fb.adjustment_factors.battery_chemistry, chemKey)
             ? (fb.adjustment_factors.battery_chemistry as Record<string, BatteryChemistryAdjustment>)[chemKey]
@@ -933,14 +948,14 @@ export function calculateDepreciation(
   const mileageKm =
     parsedMileage === Infinity
       ? 10_000_000
+      : parsedMileage === -Infinity
+      ? 0
       : Number.isFinite(parsedMileage)
       ? clamp(parsedMileage, 0, 10_000_000)
       : defaultMileage;
 
-  const {
-    modelId,
-    winterSeason = false,
-  } = safeInput;
+  const { modelId } = safeInput;
+  const winterSeason = safeInput.winterSeason === true;
   const priceBasis: PriceBasis = safeInput.priceBasis === 'effective' ? 'effective' : 'msrp';
 
   const explicitModel = isPlainRecord(safeInput.model)
@@ -1290,6 +1305,8 @@ export function simulateBatteryHealth(
   const rawMileage =
     parsedInputTotalKm === Infinity
       ? 10_000_000
+      : parsedInputTotalKm === -Infinity
+      ? 0
       : Number.isFinite(parsedInputTotalKm)
       ? parsedInputTotalKm
       : safeYears * safeAnnualKm;
@@ -1356,7 +1373,7 @@ export function simulateBatteryHealth(
       : 5.2;
   const safeCapacity = packCapacityKwh;
 
-  const energyThroughputKwh = safeMileage / Math.max(1.0, safeEfficiency);
+  const energyThroughputKwh = safeMileage / safeEfficiency;
   const equivalentFullCycles = energyThroughputKwh / Math.max(10.0, safeCapacity);
   const safeCycles = Number.isFinite(equivalentFullCycles) ? normalizeZero(Math.max(0, equivalentFullCycles)) : 0;
 
@@ -1613,20 +1630,14 @@ export function calculateSubsidyClawback(
   for (const t of tiers) {
     if (!isPlainRecord(t)) continue;
     const minM = finiteNonNegOr(t.min_months, 0);
-    if (
-      t.max_months_exclusive === null ||
-      t.max_months_exclusive === undefined ||
-      t.max_months_exclusive === Infinity
-    ) {
+    const rawMaxM = t.max_months_exclusive !== undefined ? t.max_months_exclusive : t.max_months;
+    if (rawMaxM === null || rawMaxM === undefined || rawMaxM === Infinity) {
       if (normalizedMonths >= minM) {
         matchedTier = t as unknown as ClawbackTier;
         break;
       }
-    } else if (
-      typeof t.max_months_exclusive === 'number' &&
-      Number.isFinite(t.max_months_exclusive)
-    ) {
-      if (normalizedMonths >= minM && normalizedMonths < t.max_months_exclusive) {
+    } else if (typeof rawMaxM === 'number' && Number.isFinite(rawMaxM)) {
+      if (normalizedMonths >= minM && normalizedMonths < rawMaxM) {
         matchedTier = t as unknown as ClawbackTier;
         break;
       }
@@ -1915,9 +1926,9 @@ export function calculateTcoComparison(
   );
   const safeIceEff = clamp(finitePosOr(iceFuelEconomy, 12.0), 0.5, 1000);
 
-  const evCostPerKm = normalizeZero(blendedTariff / Math.max(1.0, safeEvEff));
+  const evCostPerKm = normalizeZero(blendedTariff / safeEvEff);
   const iceCostPerKm = normalizeZero(
-    fuelTariffs.ice_gasoline_krw_per_liter / Math.max(1.0, safeIceEff)
+    fuelTariffs.ice_gasoline_krw_per_liter / safeIceEff
   );
 
   // 2. Base ICE Tax Calculation (hoisted outside yearly loop)

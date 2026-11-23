@@ -903,20 +903,22 @@ export default function Latest2026Page() {
               <strong>차주 리얼 후기:</strong> &quot;8,000만 원짜리 차를 뽑자마자 고전압 배터리를 통째로 뜯어내야 한다고 해서 환불을 요구 중이다.&quot;
             </li>
             <li>
-              <strong>출처:</strong>{' '}
-              <a
-                href="https://m.bobaedream.co.kr/board/bbs_view/best/1008916/2/8?cmt=1"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="현대 아이오닉 9 보배드림 아이오닉9 배터리 결함 제보 (새 창에서 열림)"
-                className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] min-w-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
-              >
-                <span>보배드림 아이오닉9 배터리 결함</span>
-                <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-                <span className="sr-only"> (새 창에서 열림)</span>
-              </a>
+              <strong>출처:</strong>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <a
+                  href="https://m.bobaedream.co.kr/board/bbs_view/best/1008916/2/8?cmt=1"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="현대 아이오닉 9 보배드림 아이오닉9 배터리 결함 제보 (새 창에서 열림)"
+                  className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] min-w-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
+                >
+                  <span>보배드림 아이오닉9 배터리 결함</span>
+                  <svg className="w-3.5 h-3.5 shrink-0" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  <span className="sr-only"> (새 창에서 열림)</span>
+                </a>
+              </div>
             </li>
           </ul>
         </div>

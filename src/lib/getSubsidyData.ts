@@ -232,7 +232,14 @@ function parseNonNegIntOrKrw(
   maxKrw?: number
 ): number {
   if (typeof value === 'number') {
-    return Number.isFinite(value) && value >= 0 ? (value === 0 ? 0 : value) : fallback;
+    if (!Number.isFinite(value) || value < 0) {
+      return fallback;
+    }
+    const capped =
+      typeof maxKrw === 'number' && Number.isFinite(maxKrw) && maxKrw >= 0
+        ? Math.min(maxKrw, value)
+        : value;
+    return capped === 0 ? 0 : capped;
   }
   if (typeof value === 'string') {
     const parsed = parseSubsidyNumber(value, { allowNegative: true, defaultKrw: -1, maxKrw });

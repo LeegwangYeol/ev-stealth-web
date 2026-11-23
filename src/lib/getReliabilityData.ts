@@ -474,7 +474,7 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
  * Uses master trends database if data parameter is omitted.
  */
 export function getAllEnrichedModels(data?: ReliabilityTrendsDatabase | null): EnrichedModelItem[] {
-  return getAllEnrichedModelsPure(data === undefined ? getReliabilityTrendsData() : data);
+  return getAllEnrichedModelsPure(data === undefined ? ensureTrendsDatabaseLoaded() : data);
 }
 
 /**
@@ -482,7 +482,7 @@ export function getAllEnrichedModels(data?: ReliabilityTrendsDatabase | null): E
  * Uses master trends database if data parameter is omitted.
  */
 export function calculateReliabilityKPIs(data?: ReliabilityTrendsDatabase | null): ReliabilityKPIs {
-  return calculateReliabilityKPIsPure(data === undefined ? getReliabilityTrendsData() : data);
+  return calculateReliabilityKPIsPure(data === undefined ? ensureTrendsDatabaseLoaded() : data);
 }
 
 /**
@@ -493,7 +493,7 @@ export function getModelReliabilityById(
   modelId: string,
   data?: ReliabilityTrendsDatabase | null
 ): EnrichedModelItem | undefined {
-  return getModelReliabilityByIdPure(modelId, data === undefined ? getReliabilityTrendsData() : data);
+  return getModelReliabilityByIdPure(modelId, data === undefined ? ensureTrendsDatabaseLoaded() : data);
 }
 
 /**
@@ -504,7 +504,7 @@ export function getDefectsForModel(
   modelId: string,
   data?: ReliabilityTrendsDatabase | null
 ): YearEvaluation[] {
-  return getDefectsForModelPure(modelId, data === undefined ? getReliabilityTrendsData() : data);
+  return getDefectsForModelPure(modelId, data === undefined ? ensureTrendsDatabaseLoaded() : data);
 }
 
 /**
@@ -527,7 +527,7 @@ export function getModelYearEvaluation(
   year: number | string,
   data?: ReliabilityTrendsDatabase | null
 ): YearEvaluation | undefined {
-  return getModelYearEvaluationPure(modelId, year, data === undefined ? getReliabilityTrendsData() : data);
+  return getModelYearEvaluationPure(modelId, year, data === undefined ? ensureTrendsDatabaseLoaded() : data);
 }
 
 /**
@@ -558,7 +558,8 @@ export function getBrandWithFallback(
  * Defaults baselineIndustryDsi to master database average if omitted.
  */
 export function calculateStealthScore(input?: StealthScoreInput | null): StealthScoreResult {
-  let baseline = input?.baselineIndustryDsi;
+  const safeInput = input && typeof input === 'object' ? input : {};
+  let baseline = safeInput.baselineIndustryDsi;
   if (baseline === undefined || baseline === null) {
     try {
       const db = ensureTrendsDatabaseLoaded();
@@ -568,7 +569,7 @@ export function calculateStealthScore(input?: StealthScoreInput | null): Stealth
     }
   }
   return calculateStealthScorePure({
-    ...(input ?? {}),
+    ...safeInput,
     baselineIndustryDsi: baseline,
   });
 }

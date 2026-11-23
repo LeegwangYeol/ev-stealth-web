@@ -121,6 +121,25 @@ class FileLock:
     _process_locks: "weakref.WeakValueDictionary[str, threading.RLock]" = weakref.WeakValueDictionary()
     _meta_lock = threading.Lock()
 
+    @staticmethod
+    def _sanitize_float_param(
+        value: Any,
+        default: float,
+        min_val: float,
+        max_val: Optional[float] = None,
+    ) -> float:
+        """Normalize numeric lock timing parameters, guarding against bool, NaN, Inf, and overflow."""
+        if value is None or isinstance(value, bool):
+            return default
+        try:
+            f_val = float(value)
+        except (ValueError, TypeError, OverflowError):
+            return default
+        if math.isnan(f_val) or math.isinf(f_val):
+            return default
+        bounded = max(min_val, f_val)
+        return min(bounded, max_val) if max_val is not None else bounded
+
     def __init__(
         self,
         lock_path: Union[str, Path],
@@ -132,14 +151,11 @@ class FileLock:
         if not lock_path or not str(lock_path).strip():
             raise ValueError("lock_path cannot be empty")
         self.lock_path = str(Path(lock_path).resolve())
-        t_val = float(timeout) if (timeout is not None and not isinstance(timeout, bool)) else 10.0
         timeout_max = getattr(threading, "TIMEOUT_MAX", 9223372036.0)
-        self.timeout = 10.0 if (math.isnan(t_val) or math.isinf(t_val)) else min(max(0.0, t_val), timeout_max)
-        p_val = float(poll_interval) if (poll_interval is not None and not isinstance(poll_interval, bool)) else 0.02
-        self.poll_interval = 0.02 if (math.isnan(p_val) or math.isinf(p_val)) else max(0.001, p_val)
-        s_val = float(stale_timeout) if (stale_timeout is not None and not isinstance(stale_timeout, bool)) else 300.0
-        self.stale_timeout = 300.0 if (math.isnan(s_val) or math.isinf(s_val)) else max(0.1, s_val)
-        self.fail_on_timeout = fail_on_timeout
+        self.timeout = self._sanitize_float_param(timeout, 10.0, 0.0, timeout_max)
+        self.poll_interval = self._sanitize_float_param(poll_interval, 0.02, 0.001, timeout_max)
+        self.stale_timeout = self._sanitize_float_param(stale_timeout, 300.0, 0.1, timeout_max)
+        self.fail_on_timeout = bool(fail_on_timeout)
         self.fd: Optional[int] = None
         self.acquired: bool = False
         self._thread_lock_depth: int = 0
@@ -160,6 +176,12 @@ class FileLock:
     def is_locked(self) -> bool:
         """Return True if this lock is currently held by this thread."""
         return self.acquired and self.fd is not None
+
+    def _sleep_bounded(self, start_time: float) -> None:
+        """Sleep up to poll_interval without overshooting timeout."""
+        remaining = self.timeout - (time.monotonic() - start_time)
+        if remaining > 0.0:
+            time.sleep(min(self.poll_interval, remaining))
 
     def _release_thread_lock(self) -> None:
         """Release one acquisition depth of the per-path thread RLock if held."""
@@ -264,7 +286,7 @@ class FileLock:
                                 self.acquired = False
                                 self._release_thread_lock()
                                 break
-                            time.sleep(self.poll_interval)
+                            self._sleep_bounded(start_time)
                             self.fd = os.open(self.lock_path, flags, 0o644)
                             continue
                         self.acquired = True
@@ -316,7 +338,7 @@ class FileLock:
                                     self.acquired = False
                                     self._release_thread_lock()
                                     break
-                                time.sleep(self.poll_interval)
+                                self._sleep_bounded(start_time)
                             stale_breaks += 1
                             self.fd = os.open(self.lock_path, flags, 0o644)
                             continue
@@ -340,7 +362,7 @@ class FileLock:
                             self.acquired = False
                             self._release_thread_lock()
                             break
-                        time.sleep(self.poll_interval)
+                        self._sleep_bounded(start_time)
             elif msvcrt is not None:
                 start_time = time.monotonic()
                 stale_breaks = 0
@@ -394,7 +416,7 @@ class FileLock:
                                     self.acquired = False
                                     self._release_thread_lock()
                                     break
-                                time.sleep(self.poll_interval)
+                                self._sleep_bounded(start_time)
                             stale_breaks += 1
                             self.fd = os.open(self.lock_path, flags, 0o644)
                             continue
@@ -417,7 +439,7 @@ class FileLock:
                             self.acquired = False
                             self._release_thread_lock()
                             break
-                        time.sleep(self.poll_interval)
+                        self._sleep_bounded(start_time)
             else:
                 self.acquired = True
 
@@ -592,7 +614,7 @@ def cleanup_stale_lock_files(
                 continue
             if not any(name.startswith(p) for p in prefixes):
                 continue
-            if not entry.is_file():
+            if entry.is_symlink() or not entry.is_file():
                 continue
             try:
                 st = entry.stat()
@@ -941,6 +963,16 @@ def _json_default(obj: Any) -> Any:
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
+def _sanitize_temp_prefix(temp_prefix: Any, default: str) -> str:
+    """Ensure temporary file prefix stays strictly within target directory (no path traversal)."""
+    if not temp_prefix or not isinstance(temp_prefix, str):
+        return default
+    cleaned = temp_prefix.strip()
+    if not cleaned or "/" in cleaned or "\\" in cleaned or ".." in cleaned or "\x00" in cleaned:
+        return default
+    return cleaned
+
+
 def _maybe_cleanup_global_temp_locks() -> None:
     """Throttled cleanup of stale lock files in system tempdir (outside per-file FileLock)."""
     global _last_temp_dir_cleanup_time
@@ -1000,8 +1032,7 @@ def atomic_write_json(
     dest_dir = dest.parent
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    if not temp_prefix or not isinstance(temp_prefix, str) or not temp_prefix.strip():
-        temp_prefix = ".tmp_subsidy_"
+    temp_prefix = _sanitize_temp_prefix(temp_prefix, ".tmp_subsidy_")
 
     if _pre_encoded_content is None:
         # Convert object with to_dict / as_dict / model_dump / dataclass if present
@@ -1295,8 +1326,7 @@ def atomic_write_text(
 
     if not isinstance(content, str):
         content = str(content)
-    if not temp_prefix or not isinstance(temp_prefix, str) or not temp_prefix.strip():
-        temp_prefix = ".tmp_text_"
+    temp_prefix = _sanitize_temp_prefix(temp_prefix, ".tmp_text_")
 
     # Determine POSIX permission target
     target_mode = mode

@@ -25,9 +25,13 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
 
   const handleRetry = () => {
     try {
-      startTransition(() => {
-        reset();
-      });
+      if (typeof reset === 'function') {
+        startTransition(() => {
+          reset();
+        });
+      } else if (typeof window !== 'undefined') {
+        window.location.reload();
+      }
     } catch {
       if (typeof window !== 'undefined') {
         window.location.reload();

@@ -63,8 +63,14 @@ def _sanitize_matcher_text(val: Any, max_len: int) -> str:
     if not val_str:
         return ""
 
-    if len(val_str) > max_len:
-        val_str = val_str[:max_len]
+    try:
+        limit = max(0, int(max_len)) if (max_len is not None and not isinstance(max_len, bool)) else MAX_MATCHER_CONTENT_LEN
+    except (ValueError, TypeError, OverflowError):
+        limit = MAX_MATCHER_CONTENT_LEN
+    if limit == 0:
+        return ""
+    if len(val_str) > limit:
+        val_str = val_str[:limit]
 
     val_str = RE_INVALID_CHARS.sub("", val_str)
     val_str = RE_UNICODE_SPACES.sub(" ", val_str)
@@ -106,8 +112,8 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     (re.compile(r"(?<![a-zA-Z0-9])ST1(?![a-zA-Z0-9])", re.IGNORECASE), "ST1", BRAND_HYUNDAI),
     (re.compile(r"((?:제네시스\s*)?(?:(?:electrified|일렉트리파이드)\s*gv\s*90|gv\s*90))(?![0-9])", re.IGNORECASE), "GV90", BRAND_HYUNDAI),
     (re.compile(r"((?:제네시스\s*)?(?:(?:electrified|일렉트리파이드)\s*gv\s*60|gv\s*60))(?![0-9])", re.IGNORECASE), "GV60", BRAND_HYUNDAI),
-    (re.compile(r"((?:제네시스\s*)?(?:(?:electrified|일렉트리파이드)\s*gv\s*70|gv\s*70\s*(?:전동화|ev|일렉트릭|전기차))|(?<![a-zA-Z0-9])gv\s*70e(?![a-zA-Z0-9]))", re.IGNORECASE), "GV70 EV", BRAND_HYUNDAI),
-    (re.compile(r"((?:제네시스\s*)?(?:(?:electrified|일렉트리파이드)\s*g\s*80|g\s*80\s*(?:전동화|ev|일렉트릭|전기차))|(?<![a-zA-Z0-9])g\s*80e(?![a-zA-Z0-9]))", re.IGNORECASE), "G80 EV", BRAND_HYUNDAI),
+    (re.compile(r"((?:제네시스\s*)?(?:(?:electrified|일렉트리파이드)\s*gv\s*70|gv\s*70\s*(?:전동화|ev|일렉트릭|전기차)|(?<![a-zA-Z0-9])gv\s*70e(?![a-zA-Z0-9])))", re.IGNORECASE), "GV70 EV", BRAND_HYUNDAI),
+    (re.compile(r"((?:제네시스\s*)?(?:(?:electrified|일렉트리파이드)\s*g\s*80|g\s*80\s*(?:전동화|ev|일렉트릭|전기차)|(?<![a-zA-Z0-9])g\s*80e(?![a-zA-Z0-9])))", re.IGNORECASE), "G80 EV", BRAND_HYUNDAI),
     (re.compile(r"(제네시스\s*(?:전기차|ev|일렉트릭|전동화)|(?:electrified|일렉트리파이드)\s*제네시스|genesis\s*(?:ev|electric))", re.IGNORECASE), "제네시스 EV", BRAND_HYUNDAI),
     (re.compile(r"(제네시스|genesis)", re.IGNORECASE), "제네시스", BRAND_HYUNDAI),
 
@@ -135,7 +141,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     # -----------------------------------------------------------------
     # Tesla Models & Colloquialisms
     # -----------------------------------------------------------------
-    (re.compile(r"(모델\s*(?:3|쓰리|스리)\s*하이랜드|model\s*3\s*highland|m3\s*(?:highland|하이랜드)|(?<![가-힣a-zA-Z0-9])하이랜드" + PARTICLE_LOOKAHEAD + r"|(?<![a-zA-Z0-9])highland(?![a-zA-Z0-9]))", re.IGNORECASE), "Model 3 Highland", BRAND_TESLA),
+    (re.compile(r"(모델\s*(?:3|쓰리|스리)\s*하이랜드|model\s*3\s*highland|(?<![a-zA-Z0-9])m3\s*(?:highland|하이랜드)|(?<![가-힣a-zA-Z0-9])하이랜드" + PARTICLE_LOOKAHEAD + r"|(?<![a-zA-Z0-9])highland(?![a-zA-Z0-9]))", re.IGNORECASE), "Model 3 Highland", BRAND_TESLA),
     (re.compile(
         r"(모델\s*(?:3|쓰리|스리)(?![0-9])|model\s*3(?![0-9])|(?:테슬라\s*(?:모삼|모\s*3(?![0-9]))|(?<![가-힣a-zA-Z0-9])(?:모삼|모\s*3(?![0-9])))"
         r"|(?:테슬라\s*)?삼식이"
@@ -153,7 +159,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     ), "Model 3", BRAND_TESLA),
     (re.compile(r"(모델\s*(?:y|와이)\s*주니퍼|model\s*y\s*juniper|my\s*(?:주니퍼|juniper)|(?<![가-힣a-zA-Z0-9])주니퍼(?!\s*(?:네트웍스|networks|라우터|router|스위치|switch))" + PARTICLE_LOOKAHEAD + r"|(?<![a-zA-Z0-9])juniper(?!\s*(?:networks|router|switch))(?![a-zA-Z0-9]))", re.IGNORECASE), "Model Y Juniper", BRAND_TESLA),
     (re.compile(
-        r"(모델\s*(?:y|와이)|model\s*y|(?:테슬라\s*(?:모와|모\s*[y와])|(?<![가-힣a-zA-Z0-9])(?:모와|모\s*[y와]))"
+        r"(모델\s*(?:y|와이)|model\s*y|(?:테슬라\s*(?:모와|모\s*[y와])|(?<![가-힣a-zA-Z0-9])모\s*y|(?<![가-힣a-zA-Z0-9])모와(?=\s*(?:rwd|awd|lwd|lr|p|롱레인지|롱레|스탠다드|스탠|퍼포먼스|퍼포|주니퍼|차주|오너|출고|인도|계약|단차|결함|승차감|전비|충전|배터리|사이드|시승|중고)|[은는이가을를의에과와도만로랑]))"
         r"|(?:테슬라\s*|tesla\s*)my"
         r"|\bmy(?=[은는이가을를의에과와도만로랑처조마나한께보부까]|으로|보다|부터|까지|처럼|조차|마저|한테|입|했|하|인|임|일)"
         r"|\bmy\s*(?:rwd|awd|lwd|lr|p|롱레인지|롱레|스탠다드|스탠|퍼포먼스|퍼포|차주|오너|출고|인도|계약|단차|결함|승차감)"
@@ -398,8 +404,13 @@ def _find_and_resolve_candidates(text: str) -> Optional[Tuple[str, str]]:
         return surviving[0].brand, surviving[0].model_name
 
     # Multiple candidates: score based on ownership affinity, defect affinity, and leftmost position
+    has_specific_genesis = any(
+        c.model_name in ("GV90", "GV60", "GV70 EV", "G80 EV") for c in surviving
+    )
     for c in surviving:
         c.score = 100.0 - (c.start * 0.5)
+        if has_specific_genesis and c.model_name in ("제네시스", "제네시스 EV"):
+            c.score -= 100.0
         trailing = text[c.end:c.end + 25]
         if OWNERSHIP_AFFINITY_PATTERN.search(trailing):
             c.score += 80.0

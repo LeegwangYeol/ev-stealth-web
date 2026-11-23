@@ -47,9 +47,9 @@ export default function Latest2026Error({ error, reset }: ErrorProps) {
       aria-atomic="true"
       aria-labelledby="latest-2026-error-heading"
       aria-describedby="latest-2026-error-description"
-      className="min-h-[60vh] flex items-center justify-center px-4 py-12 outline-none focus:outline-none"
+      className="min-h-[60vh] flex items-center justify-center px-2 sm:px-4 py-12 outline-none focus:outline-none"
     >
-      <div className="max-w-xl w-full bg-white border border-slate-200 rounded-3xl p-8 sm:p-10 shadow-xl text-center space-y-6">
+      <div className="max-w-xl w-full bg-white border border-slate-200 rounded-3xl p-5 sm:p-10 shadow-xl text-center space-y-6">
         <div
           className="w-16 h-16 mx-auto rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center text-3xl shadow-inner"
           aria-hidden="true"

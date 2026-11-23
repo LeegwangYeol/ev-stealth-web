@@ -190,12 +190,23 @@ def is_safe_url(
     host_lower = hostname.lower().strip().rstrip(".")
     if not host_lower:
         return False, "Missing hostname in URL"
+    if any(ch.isspace() for ch in host_lower):
+        return False, "SSRF blocked: Whitespace in hostname"
 
     if allow_private_ips:
         return True, "Private IPs allowed by configuration"
 
     if "%" in host_lower:
         return False, "SSRF blocked: IPv6 zone ID not allowed"
+
+    # Normalize Unicode / fullwidth IDN hostnames to canonical ASCII before literal host/IP checks
+    if not host_lower.isascii():
+        try:
+            host_lower = host_lower.encode("idna").decode("ascii").lower().strip().rstrip(".")
+        except UnicodeError as e:
+            return False, f"SSRF blocked: Invalid IDNA hostname ({e})"
+        if not host_lower:
+            return False, "Missing hostname in URL"
 
     # 3. Check disallowed hostnames & suffixes
     if host_lower in DISALLOWED_HOSTS:
@@ -482,16 +493,28 @@ class ResilientHTTPSConnection(http.client.HTTPSConnection):
         connect_timeout: float = 5.0,
         read_timeout: float = 15.0,
         allow_private_ips: bool = True,
+        allowed_ports: Optional[Set[int]] = None,
         **kwargs,
     ):
         self._conn_timeout = _normalize_timeout(connect_timeout, 5.0)
         self._read_timeout = _normalize_timeout(read_timeout, 15.0)
         self._allow_private_ips = bool(allow_private_ips)
+        self._allowed_ports = set(allowed_ports) if allowed_ports is not None else None
         super().__init__(*args, **kwargs)
 
     def connect(self):
         if self._tunnel_host and not self._allow_private_ips:
-            is_safe, reason = is_safe_url(f"https://{self._tunnel_host}")
+            tunnel_host = str(self._tunnel_host).strip()
+            if ":" in tunnel_host and not tunnel_host.startswith("["):
+                tunnel_host_fmt = f"[{tunnel_host}]"
+            else:
+                tunnel_host_fmt = tunnel_host
+            tunnel_port = getattr(self, "_tunnel_port", None)
+            port_suffix = f":{tunnel_port}" if tunnel_port is not None else ""
+            is_safe, reason = is_safe_url(
+                f"https://{tunnel_host_fmt}{port_suffix}",
+                allowed_ports=self._allowed_ports,
+            )
             if not is_safe:
                 raise OSError(f"SSRF blocked: Unsafe tunnel host '{self._tunnel_host}' ({reason})")
         self.sock = _create_safe_connection(
@@ -533,29 +556,40 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
             )
         new_req = super().redirect_request(req, fp, code, msg, headers, newurl)
         if new_req is not None:
-            # Strip sensitive credentials on cross-origin redirects
+            # Strip sensitive credentials on cross-origin redirects (fail-safe on parse errors)
+            strip_credentials = True
+            strip_referer = False
             try:
                 old_p = urllib.parse.urlsplit(req.full_url)
                 new_p = urllib.parse.urlsplit(new_req.full_url)
+                old_scheme = (old_p.scheme or "").lower()
+                new_scheme = (new_p.scheme or "").lower()
                 old_origin = (
-                    (old_p.scheme or "").lower(),
+                    old_scheme,
                     (old_p.hostname or "").lower().rstrip("."),
-                    old_p.port or (443 if (old_p.scheme or "").lower() == "https" else 80),
+                    old_p.port or (443 if old_scheme == "https" else 80),
                 )
                 new_origin = (
-                    (new_p.scheme or "").lower(),
+                    new_scheme,
                     (new_p.hostname or "").lower().rstrip("."),
-                    new_p.port or (443 if (new_p.scheme or "").lower() == "https" else 80),
+                    new_p.port or (443 if new_scheme == "https" else 80),
                 )
-                if old_origin != new_origin:
-                    for hdr in list(new_req.headers.keys()):
-                        if hdr.lower() in ("authorization", "proxy-authorization", "cookie"):
-                            new_req.remove_header(hdr)
-                    for hdr in list(getattr(new_req, "unredirected_hdrs", {}).keys()):
-                        if hdr.lower() in ("authorization", "proxy-authorization", "cookie"):
-                            del new_req.unredirected_hdrs[hdr]
+                strip_credentials = (old_origin != new_origin)
+                strip_referer = (old_scheme == "https" and new_scheme == "http")
             except Exception:
-                pass
+                strip_credentials = True
+                strip_referer = True
+
+            if strip_credentials or strip_referer:
+                headers_to_strip = {"authorization", "proxy-authorization", "cookie"} if strip_credentials else set()
+                if strip_referer:
+                    headers_to_strip.add("referer")
+                for hdr in list(new_req.headers.keys()):
+                    if hdr.lower() in headers_to_strip:
+                        new_req.remove_header(hdr)
+                for hdr in list(getattr(new_req, "unredirected_hdrs", {}).keys()):
+                    if hdr.lower() in headers_to_strip:
+                        del new_req.unredirected_hdrs[hdr]
             if hasattr(req, "_connect_timeout"):
                 new_req._connect_timeout = req._connect_timeout
             if hasattr(req, "_read_timeout"):
@@ -603,17 +637,20 @@ class ResilientHTTPSHandler(urllib.request.HTTPSHandler):
         read_timeout: float = 15.0,
         context=None,
         allow_private_ips: bool = True,
+        allowed_ports: Optional[Set[int]] = None,
         **kwargs,
     ):
         super().__init__(context=context, **kwargs)
         self._connect_timeout = _normalize_timeout(connect_timeout, 5.0)
         self._read_timeout = _normalize_timeout(read_timeout, 15.0)
         self._allow_private_ips = bool(allow_private_ips)
+        self._allowed_ports = set(allowed_ports) if allowed_ports is not None else None
 
     def https_open(self, req):
         conn_to = getattr(req, "_connect_timeout", self._connect_timeout)
         read_to = getattr(req, "_read_timeout", self._read_timeout)
         allow_priv = self._allow_private_ips
+        allowed_ports = self._allowed_ports
 
         def _factory(host, **kwargs):
             ctx = getattr(self, "_context", None)
@@ -626,6 +663,7 @@ class ResilientHTTPSHandler(urllib.request.HTTPSHandler):
                 connect_timeout=conn_to,
                 read_timeout=read_to,
                 allow_private_ips=allow_priv,
+                allowed_ports=allowed_ports,
                 **kwargs,
             )
         return self.do_open(_factory, req)
@@ -676,6 +714,11 @@ class CircuitBreaker:
                     return parsed.hostname.lower().rstrip(".")
             except Exception:
                 pass
+        try:
+            ipaddress.ip_address(s.strip("[]"))
+            return s.strip("[]").lower()
+        except ValueError:
+            pass
         try:
             parsed = urllib.parse.urlsplit("//" + s)
             if parsed.hostname:
@@ -795,7 +838,7 @@ class CircuitBreaker:
             tripped = False
 
             cooldown = self.cooldown_seconds
-            if retry_after is not None:
+            if retry_after is not None and not isinstance(retry_after, bool):
                 try:
                     ra_val = float(retry_after)
                     if math.isfinite(ra_val) and ra_val > 0:
@@ -1029,12 +1072,14 @@ class SafeHttpClient:
                     read_timeout=self._read_timeout,
                     context=ssl_ctx,
                     allow_private_ips=self.allow_private_ips,
+                    allowed_ports=self.allowed_ports,
                 )
             else:
                 https_handler = ResilientHTTPSHandler(
                     connect_timeout=self._connect_timeout,
                     read_timeout=self._read_timeout,
                     allow_private_ips=self.allow_private_ips,
+                    allowed_ports=self.allowed_ports,
                 )
             http_handler = ResilientHTTPHandler(
                 connect_timeout=self._connect_timeout,
@@ -1385,7 +1430,10 @@ class SafeHttpClient:
         self.last_response_from_cache = False
         self._sleep_with_jitter()
 
-        active_ua = (
+        def _sanitize_header_value(val: Any) -> str:
+            return str(val).replace("\r", "").replace("\n", "").replace("\x00", "")
+
+        active_ua = _sanitize_header_value(
             self.user_agent
             or (self.get_random_user_agent() if self.rotate_user_agent else self._session_user_agent)
         )
@@ -1401,16 +1449,30 @@ class SafeHttpClient:
             "Upgrade-Insecure-Requests": "1",
         }
         if self.default_headers:
-            req_headers.update(self.default_headers)
-        if referer:
-            req_headers["Referer"] = referer
-        if headers:
-            for k, v in headers.items():
-                # Case-insensitive update to avoid duplicate headers like User-Agent vs user-agent
-                matching_keys = [ek for ek in req_headers if ek.lower() == k.lower()]
+            for k, v in self.default_headers.items():
+                if v is None or not str(k).strip():
+                    continue
+                clean_k = _sanitize_header_value(k).strip()
+                if not clean_k or ":" in clean_k:
+                    continue
+                matching_keys = [ek for ek in req_headers if ek.lower() == clean_k.lower()]
                 for mk in matching_keys:
                     del req_headers[mk]
-                req_headers[k] = v
+                req_headers[clean_k] = _sanitize_header_value(v)
+        if referer:
+            req_headers["Referer"] = _sanitize_header_value(referer)
+        if headers:
+            for k, v in headers.items():
+                if v is None or not str(k).strip():
+                    continue
+                clean_k = _sanitize_header_value(k).strip()
+                if not clean_k or ":" in clean_k:
+                    continue
+                # Case-insensitive update to avoid duplicate headers like User-Agent vs user-agent
+                matching_keys = [ek for ek in req_headers if ek.lower() == clean_k.lower()]
+                for mk in matching_keys:
+                    del req_headers[mk]
+                req_headers[clean_k] = _sanitize_header_value(v)
 
         has_custom_ua = bool(
             self.user_agent
@@ -1475,6 +1537,7 @@ class SafeHttpClient:
                     # Stream-read up to max_response_size to prevent memory exhaustion
                     chunks = []
                     bytes_read = 0
+                    incomplete_salvaged = False
                     start_stream_time = time.time()
                     max_stream_duration = max(30.0, eff_read_timeout * 3.0)
                     while True:
@@ -1482,10 +1545,16 @@ class SafeHttpClient:
                             logger.warning(
                                 f"Response stream from {norm_url} exceeded wall-clock deadline ({max_stream_duration}s). Truncating."
                             )
+                            incomplete_salvaged = True
                             break
                         single_read = False
+                        read_chunk_size = (
+                            min(65536, self.max_response_size - bytes_read)
+                            if self.max_response_size > 0
+                            else 65536
+                        )
                         try:
-                            chunk = resp.read(65536)
+                            chunk = resp.read(read_chunk_size)
                         except TypeError:
                             chunk = resp.read()
                             single_read = True
@@ -1500,7 +1569,8 @@ class SafeHttpClient:
                                 bytes_read += len(partial)
                             if attempt < eff_retries:
                                 raise  # Let outer retry loop attempt a clean request
-                            # On last attempt, break to salvage already-read bytes
+                            # On last attempt, break to salvage already-read bytes without caching truncated body
+                            incomplete_salvaged = True
                             break
                         if not chunk:
                             break
@@ -1527,9 +1597,12 @@ class SafeHttpClient:
                     decoded_text = robust_decode(raw_bytes, declared_encoding=detected_encoding)
 
                     if status_code is not None and (status_code == 200 or (is_half_open_probe and status_code < 400)):
-                        self.circuit_breaker.record_success(norm_url)
-                        if is_cacheable_method and status_code == 200 and decoded_text:
-                            self.set_cached_response(norm_url, status_code, decoded_text, raw_bytes)
+                        if not incomplete_salvaged:
+                            self.circuit_breaker.record_success(norm_url)
+                            if is_cacheable_method and status_code == 200 and decoded_text:
+                                self.set_cached_response(norm_url, status_code, decoded_text, raw_bytes)
+                        elif is_half_open_probe:
+                            self.circuit_breaker.record_failure(norm_url, status_code=status_code)
                     elif is_half_open_probe and (status_code is None or status_code >= 400):
                         self.circuit_breaker.record_failure(norm_url, status_code=status_code)
 
@@ -1636,6 +1709,11 @@ class SafeHttpClient:
                 Exception,
             ) as ex:
                 reason = getattr(ex, "reason", None)
+                if "ssrf blocked:" in str(ex).lower() or (reason and "ssrf blocked:" in str(reason).lower()):
+                    logger.warning(f"SSRF defense aborted connection to {norm_url}: {ex}")
+                    if is_half_open_probe:
+                        self.circuit_breaker.record_failure(norm_url)
+                    return 0, "", b""
                 is_timeout = (
                     isinstance(ex, (TimeoutError, socket.timeout))
                     or (isinstance(ex, urllib.error.URLError) and "timed out" in str(ex).lower())

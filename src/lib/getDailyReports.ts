@@ -236,8 +236,8 @@ export function maskSensitiveTokens(text?: unknown): string {
     .replace(/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g, '[REDACTED_AWS_KEY]')
     // OpenAI / AI secret keys (including project-scoped sk-proj-... keys)
     .replace(/\bsk-(?:proj-)?[a-zA-Z0-9_-]{20,}\b/g, '[REDACTED_KEY]')
-    // Key-value credential pairs (api_key=..., secret=..., password=...)
-    .replace(/(?<=(?:api[_-]?key|secret|password|passwd|auth[_-]?token|access[_-]?token)\s*[:=]\s*["']?)[a-zA-Z0-9_\-.~+/]{8,}(?=["']?)/gi, '[REDACTED_SECRET]');
+    // Key-value credential pairs (api_key=..., secret=..., password=...) - linear capture avoids lookbehind ReDoS
+    .replace(/((?:api[_-]?key|secret|password|passwd|auth[_-]?token|access[_-]?token)\s*[:=]\s*["']?)[a-zA-Z0-9_\-.~+/]{8,}/gi, '$1[REDACTED_SECRET]');
 }
 
 /**
@@ -344,6 +344,16 @@ function isPrivateOrInternalHost(rawHost: string): boolean {
     }
     if (h0 === 0x2002 || h0 === 0x3ffe) {
       return true;
+    }
+    if (h0 === 0x3fff) {
+      const seg1 = parts[1] ?? '';
+      if (seg1 !== '' && !/^[0-9a-f]{1,4}$/.test(seg1)) {
+        return true;
+      }
+      const h1 = seg1 === '' ? 0 : parseInt(seg1, 16);
+      if (!Number.isFinite(h1) || Number.isNaN(h1) || h1 <= 0x0fff) {
+        return true;
+      }
     }
     if (h0 === 0x2001) {
       const seg1 = parts[1] ?? '';
@@ -667,7 +677,7 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
   if (typeof rawDsiCandidate === 'string') {
     const trimmedDsi = rawDsiCandidate.trim();
     if (trimmedDsi.startsWith('{') && trimmedDsi.endsWith('}')) {
-      rawDsiCandidate = safeJsonParse<Record<string, unknown>>(trimmedDsi, {});
+      rawDsiCandidate = safeJsonParse<Record<string, unknown> | null>(trimmedDsi, null);
     }
   }
   const rawDsi = rawDsiCandidate && typeof rawDsiCandidate === 'object' && !Array.isArray(rawDsiCandidate)

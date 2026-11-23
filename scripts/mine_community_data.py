@@ -13,6 +13,7 @@ burst cooldowns (every 18 requests), User-Agent rotation, and exponential backof
 import argparse
 import json
 import logging
+import math
 import os
 import random
 import sys
@@ -54,8 +55,18 @@ class CommunityDataMiningOrchestrator:
         slang_path: Optional[str] = None,
         output_path: Optional[str] = None,
     ):
-        self.min_delay = min_delay
-        self.max_delay = max_delay
+        safe_min = (
+            float(min_delay)
+            if not isinstance(min_delay, bool) and isinstance(min_delay, (int, float)) and math.isfinite(min_delay)
+            else 1.5
+        )
+        safe_max = (
+            float(max_delay)
+            if not isinstance(max_delay, bool) and isinstance(max_delay, (int, float)) and math.isfinite(max_delay)
+            else 3.5
+        )
+        self.min_delay = max(0.0, safe_min)
+        self.max_delay = max(self.min_delay, safe_max)
         self.slang_path = slang_path or os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "slang_dict.json"
         )
@@ -80,8 +91,14 @@ class CommunityDataMiningOrchestrator:
     def _load_slang_dict(self) -> Dict[str, Any]:
         if os.path.exists(self.slang_path):
             try:
-                with open(self.slang_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                def _reject_const(c: str) -> Any:
+                    raise ValueError(f"Non-standard JSON constant: {c}")
+
+                with open(self.slang_path, "r", encoding="utf-8-sig") as f:
+                    data = json.load(f, parse_constant=_reject_const)
+                if isinstance(data, dict):
+                    return data
+                logger.warning("Slang dict must be a JSON object, got %s", type(data).__name__)
             except Exception as e:
                 logger.warning(f"Failed to load slang dict: {e}")
         return {}
@@ -89,7 +106,7 @@ class CommunityDataMiningOrchestrator:
     def sleep_polite(self):
         """Execute randomized sleep with jitter between requests."""
         sleep_sec = random.uniform(self.min_delay, self.max_delay)
-        time.sleep(sleep_sec)
+        time.sleep(max(0.0, sleep_sec))
 
     def run_mining_pipeline(
         self,
@@ -101,6 +118,8 @@ class CommunityDataMiningOrchestrator:
         """
         Execute full mining across selected platforms and keywords.
         """
+        if isinstance(limit_per_target, bool) or not isinstance(limit_per_target, int) or limit_per_target < 1:
+            limit_per_target = 5
         target_platforms = platforms or ["bobaedream", "dcinside", "blind", "cafe_portal"]
         target_keywords = keywords or ["BYD", "아토3", "씰", "T4K", "중국 전기차", "마사다"]
 

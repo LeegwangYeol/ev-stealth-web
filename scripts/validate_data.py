@@ -161,12 +161,19 @@ def validate_database(
         
         # Instantiate ComplaintRecord safely
         try:
+            raw_id = raw_rec.get("id")
+            if isinstance(raw_id, bool) or (isinstance(raw_id, float) and not math.isfinite(raw_id)) or (
+                raw_id is not None and not isinstance(raw_id, (str, int))
+            ):
+                errors.append(f"{prefix} Invalid id type '{type(raw_id).__name__}'")
+                continue
+
             slang_terms = raw_rec.get("slang_terms")
             if not isinstance(slang_terms, list):
                 slang_terms = [str(slang_terms)] if slang_terms is not None else []
 
             rec = ComplaintRecord(
-                id=str(raw_rec.get("id") or ""),
+                id=raw_id.strip() if isinstance(raw_id, str) else (str(raw_id) if raw_id is not None else ""),
                 platform=str(raw_rec.get("platform") or ""),
                 board_name=str(raw_rec.get("board_name") or ""),
                 post_url=str(raw_rec.get("post_url") or ""),
@@ -350,11 +357,23 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
             errors.append(f"{prefix}: Expected dict, got {type(reg).__name__}")
             continue
 
-        raw_iso = reg.get("iso_code") or reg.get("region_id") or ""
-        iso = raw_iso.strip() if isinstance(raw_iso, str) else ""
+        raw_iso = reg.get("iso_code")
+        raw_reg_id = reg.get("region_id")
+        bad_iso_val = None
+        if "iso_code" in reg and raw_iso is not None and not isinstance(raw_iso, str):
+            bad_iso_val = raw_iso
+        elif "region_id" in reg and raw_reg_id is not None and not isinstance(raw_reg_id, str):
+            bad_iso_val = raw_reg_id
+
+        iso = ""
+        if isinstance(raw_iso, str) and raw_iso.strip():
+            iso = raw_iso.strip()
+        elif isinstance(raw_reg_id, str) and raw_reg_id.strip():
+            iso = raw_reg_id.strip()
+
         prefix = f"Region [{idx}] ({iso or 'MISSING'}):"
-        if raw_iso and not isinstance(raw_iso, str):
-            errors.append(f"{prefix} Invalid iso_code/region_id type '{type(raw_iso).__name__}'")
+        if bad_iso_val is not None:
+            errors.append(f"{prefix} Invalid iso_code/region_id type '{type(bad_iso_val).__name__}'")
         elif not iso:
             errors.append(f"{prefix} Missing iso_code/region_id")
         elif iso in seen_iso:
@@ -418,7 +437,9 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
                         errors.append(f"{prefix} Category '{cname}' unknown status '{status}', expected one of {expected_tiers}")
 
         munis = reg.get("municipalities")
-        if isinstance(munis, list):
+        if "municipalities" in reg and munis is not None and not isinstance(munis, list):
+            errors.append(f"{prefix} 'municipalities' must be a list, got {type(munis).__name__}")
+        elif isinstance(munis, list):
             total_munis += len(munis)
             for midx, muni in enumerate(munis):
                 if not isinstance(muni, dict):
@@ -469,8 +490,11 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
 
     # 5. Popular models matrix validation
     models = data.get("popular_models_matrix")
-    if isinstance(models, list):
+    if "popular_models_matrix" in data and models is not None and not isinstance(models, list):
+        errors.append(f"'popular_models_matrix' must be a list, got {type(models).__name__}")
+    elif isinstance(models, list):
         stats["popular_models_count"] = len(models)
+        seen_pop_ids = set()
         for midx, m in enumerate(models):
             if not isinstance(m, dict):
                 errors.append(f"Popular model [{midx}] is not a dict")
@@ -478,6 +502,18 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
             for req_k in ("model_id", "name_ko", "base_price_krw", "price_subsidy_ratio", "national_subsidy_krw"):
                 if req_k not in m:
                     errors.append(f"Popular model [{midx}] ({m.get('model_id', 'UNKNOWN')}) missing key '{req_k}'")
+            pop_mid = m.get("model_id")
+            if "model_id" in m:
+                if not isinstance(pop_mid, str) or not pop_mid.strip():
+                    errors.append(f"Popular model [{midx}] invalid or empty model_id '{pop_mid}'")
+                else:
+                    pop_mid_clean = pop_mid.strip()
+                    if pop_mid_clean in seen_pop_ids:
+                        errors.append(f"Popular model [{midx}] duplicate model_id '{pop_mid_clean}'")
+                    seen_pop_ids.add(pop_mid_clean)
+            pop_name = m.get("name_ko")
+            if "name_ko" in m and (not isinstance(pop_name, str) or not pop_name.strip()):
+                errors.append(f"Popular model [{midx}] ({m.get('model_id', 'UNKNOWN')}) invalid or empty name_ko")
             price = m.get("base_price_krw")
             ratio = m.get("price_subsidy_ratio")
             nat_sub = m.get("national_subsidy_krw")
@@ -665,6 +701,13 @@ def validate_daily_reports(file_path: Union[str, Path]) -> Tuple[bool, List[str]
             if rf not in r:
                 errors.append(f"{prefix} Missing required field '{rf}'")
 
+        for str_req in ("source", "title", "date", "vehicle_model", "defect_category", "summary"):
+            if str_req in r and (not isinstance(r[str_req], str) or not r[str_req].strip()):
+                errors.append(f"{prefix} Field '{str_req}' must be a non-empty string")
+        for str_field in ("url", "defect_category_ko", "verbatim_quote"):
+            if str_field in r and not isinstance(r[str_field], str):
+                errors.append(f"{prefix} Field '{str_field}' must be a string, got {type(r[str_field]).__name__}")
+
         if "sentiment_score" in r and not _is_finite_number(r["sentiment_score"]):
             errors.append(f"{prefix} sentiment_score must be a finite number, got {r['sentiment_score']}")
 
@@ -738,6 +781,16 @@ def validate_data_parity(
 
     with repair_lock:
         for fname in target_files:
+            if (
+                not isinstance(fname, str)
+                or not fname
+                or fname in (".", "..")
+                or Path(fname).name != fname
+                or os.sep in fname
+                or (os.altsep and os.altsep in fname)
+            ):
+                errors.append(f"Unsafe target filename rejected for parity check: {fname!r}")
+                continue
             hashes: Dict[str, str] = {}
             authoritative_path: Optional[Path] = None
             auth_hash: Optional[str] = None

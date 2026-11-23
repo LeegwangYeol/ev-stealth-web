@@ -166,7 +166,7 @@ export interface SanitizeUrlOptions {
 /**
  * Dangerous parameter keys and expressions associated with Prototype Pollution attacks.
  */
-export const PROTOTYPE_POLLUTION_REGEX = /(?:^|[.[\]\s'"])(?:__proto__|constructor|prototype|Object\.prototype)(?:[.[\]\s'"]|$)/i;
+export const PROTOTYPE_POLLUTION_REGEX = /(?:^|[.[\]\s'"])(?:__proto__|constructor|prototype|Object\.prototype|__defineGetter__|__defineSetter__|__lookupGetter__|__lookupSetter__)(?:[.[\]\s'"]|$)/i;
 
 /**
  * Decodes HTML entities (numeric decimal/hex and named entities) to uncover obfuscated URI schemes.
@@ -331,12 +331,13 @@ export function isOpenRedirect(raw: string): boolean {
  */
 export function isPrototypePollutionKey(key: string): boolean {
   if (!key || typeof key !== 'string') return false;
-  const cleanRaw = key.replace(/[\x00-\x1f\x7f]/g, '');
+  const stripControl = /[\x00-\x1f\x7f-\x9f\u00ad\u200b-\u200f\ufeff\u2028-\u202f\u2060-\u206f]/g;
+  const cleanRaw = key.replace(stripControl, '');
   // Raw check
   if (PROTOTYPE_POLLUTION_REGEX.test(cleanRaw)) return true;
   // Decoded check to uncover percent-encoded keys (%5f%5fproto%5f%5f, %63onstructor, __proto__%00, etc.)
   try {
-    const decoded = safeDecodePercent(key).replace(/[\x00-\x1f\x7f]/g, '');
+    const decoded = safeDecodePercent(key).replace(stripControl, '');
     if (PROTOTYPE_POLLUTION_REGEX.test(decoded)) return true;
   } catch {
     // Malformed encoding in key
@@ -448,6 +449,9 @@ export function parseSafeQueryParams(input?: unknown): Record<string, string> {
  */
 export function extractHostname(urlOrHost?: unknown): string {
   if (!urlOrHost || typeof urlOrHost !== 'string') return '';
+  if (/[\x00-\x1f\x7f-\x9f\u00ad\u200b-\u200f\u2028-\u202f\u2060-\u206f\ufeff]/u.test(urlOrHost)) {
+    return '';
+  }
   const trimmed = urlOrHost.trim();
   if (!trimmed || trimmed.includes('\\') || trimmed.startsWith('/')) return '';
 
@@ -460,6 +464,7 @@ export function extractHostname(urlOrHost?: unknown): string {
     const parsed = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)
       ? new URL(trimmed)
       : new URL('http://' + trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
     if (parsed.username || parsed.password) return '';
     return (parsed.hostname || '').toLowerCase().replace(/\.+$/, '');
   } catch {
@@ -614,11 +619,18 @@ export function sanitizeSafeUrl(url?: unknown, options?: SanitizeUrlOptions): st
 
   // 10. Safe internal relative routes (must start with / and not followed by / or \ or encoded slashes, no backslashes anywhere in path)
   if (/^\/(?![/\\])/.test(trimmed) && !/[\s<>"'\\]/.test(trimmed) && !/^\/(?:%2f|%5c)/i.test(trimmed)) {
-    // Reject dot-segment paths (e.g. /..//evil.com) that normalize to a protocol-relative //host path
+    // Reject dot-segment paths (e.g. /..//evil.com, /..%2f/evil.com) that normalize to a protocol-relative //host path
     try {
       const resolvedPath = new URL(trimmed, 'http://safe-internal.local').pathname;
       if (resolvedPath.startsWith('//')) {
         return '#';
+      }
+      const decodedTrimmed = decodedCheck.trim();
+      if (decodedTrimmed.startsWith('/')) {
+        const resolvedDecodedPath = new URL(decodedTrimmed, 'http://safe-internal.local').pathname;
+        if (resolvedDecodedPath.startsWith('//')) {
+          return '#';
+        }
       }
     } catch {
       return '#';

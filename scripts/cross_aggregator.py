@@ -437,8 +437,10 @@ class CrossAggregator:
 
         clean_records = [r for r in (records or []) if isinstance(r, dict)]
         for r in clean_records:
-            ts = str(r.get("collected_at") or "")
-            match = re.search(r"\b(202[4-6])\b", ts)
+            meta = r.get("platform_metadata")
+            post_date = meta.get("post_date") if isinstance(meta, dict) else ""
+            ts = str(r.get("collected_at") or r.get("date") or post_date or "")
+            match = re.search(r"(?<!\d)(202[4-6])(?:(?!\d)|(?=\d{4}(?!\d)))", ts)
             year = match.group(1) if match else "2026"
 
             tier = str(r.get("sentiment_tier") or "NEGATIVE")
@@ -594,8 +596,11 @@ class CrossAggregator:
             return 0.0, 0, 1.0
         if not all(isinstance(row, (list, tuple)) for row in contingency_matrix):
             return 0.0, 0, 1.0
+        row_lengths = {len(row) for row in contingency_matrix}
+        if len(row_lengths) != 1:
+            return 0.0, 0, 1.0
         num_rows = len(contingency_matrix)
-        num_cols = min((len(row) for row in contingency_matrix), default=0)
+        num_cols = next(iter(row_lengths), 0)
 
         if num_rows <= 1 or num_cols <= 1:
             return 0.0, 0, 1.0
@@ -652,8 +657,8 @@ class CrossAggregator:
 def main():
     """CLI test harness for cross aggregator."""
     data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "compiled_complaints.json")
-    with open(data_path, "r", encoding="utf-8") as f:
-        records = json.load(f)
+    with open(data_path, "r", encoding="utf-8-sig") as f:
+        records = json.load(f, parse_constant=lambda c: (_ for _ in ()).throw(ValueError(f"Invalid JSON constant: {c}")))
 
     aggregator = CrossAggregator()
     results = aggregator.analyze(records)

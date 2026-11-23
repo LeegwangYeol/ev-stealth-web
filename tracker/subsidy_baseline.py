@@ -9,8 +9,10 @@ Provinces) and 160+ municipalities.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from fractions import Fraction
 import math
+import re
 from typing import Any, Dict, List, Optional, Union
 
 from tracker.subsidy_models import (
@@ -81,16 +83,34 @@ DEFAULT_ALERT_THRESHOLDS: Dict[str, AlertThresholdConfig] = {
 }
 
 
+_RE_PLAIN_INT = re.compile(r"^[+-]?\d+$")
+_DEC_ZERO = Decimal(0)
+_DEC_TIER_1 = Decimal(55_000_000)
+_DEC_TIER_2 = Decimal(85_000_000)
+
+
 def _safe_int_val(val: Any, default: int = 0) -> int:
     """Safely convert value to int, catching None, bool, NaN, Inf, ValueError, TypeError, and OverflowError."""
     if val is None or isinstance(val, bool):
         return default
     if type(val) is int:
         return val
+    if isinstance(val, Decimal):
+        if not val.is_finite():
+            return default
+        try:
+            return int(val)
+        except (ValueError, TypeError, OverflowError):
+            return default
     if isinstance(val, str):
         val = val.strip().replace(",", "")
         if not val:
             return default
+        if _RE_PLAIN_INT.match(val):
+            try:
+                return int(val)
+            except (ValueError, OverflowError):
+                return default
     try:
         f = float(val)
         if math.isnan(f) or math.isinf(f):
@@ -100,7 +120,7 @@ def _safe_int_val(val: Any, default: int = 0) -> int:
         return default
 
 
-def calculate_price_cap_ratio(msrp: Union[int, float, str, None]) -> float:
+def calculate_price_cap_ratio(msrp: Union[int, float, Decimal, str, None]) -> float:
     """Statutory 2026 Korean EV subsidy ratio tiers: 1.0 (<=55M), 0.5 (55M-85M), 0.0 (>85M)."""
     if msrp is None or isinstance(msrp, bool):
         return 0.0
@@ -112,12 +132,34 @@ def calculate_price_cap_ratio(msrp: Union[int, float, str, None]) -> float:
         if msrp <= 85_000_000:
             return 0.5
         return 0.0
+    if type(msrp) is float:
+        if math.isnan(msrp) or math.isinf(msrp) or msrp <= 0.0:
+            return 0.0
+        if msrp <= 55_000_000.0:
+            return 1.0
+        if msrp <= 85_000_000.0:
+            return 0.5
+        return 0.0
+    if isinstance(msrp, (Decimal, str)):
+        try:
+            if isinstance(msrp, str):
+                cleaned = msrp.strip().replace(",", "")
+                if not cleaned:
+                    return 0.0
+                d_msrp = Decimal(cleaned)
+            else:
+                d_msrp = msrp
+            if not d_msrp.is_finite() or d_msrp <= _DEC_ZERO:
+                return 0.0
+            if d_msrp <= _DEC_TIER_1:
+                return 1.0
+            if d_msrp <= _DEC_TIER_2:
+                return 0.5
+            return 0.0
+        except (InvalidOperation, ValueError, TypeError, OverflowError):
+            return 0.0
 
     try:
-        if isinstance(msrp, str):
-            msrp = msrp.strip().replace(",", "")
-            if not msrp:
-                return 0.0
         f_msrp = float(msrp)
         if math.isnan(f_msrp) or math.isinf(f_msrp):
             return 0.0
@@ -139,11 +181,21 @@ def _coerce_non_negative_int(v: Any) -> int:
         return 0
     if type(v) is int:
         return v if v > 0 else 0
+    if isinstance(v, Decimal):
+        if not v.is_finite() or v <= _DEC_ZERO:
+            return 0
+        try:
+            return int(v)
+        except (ValueError, TypeError, OverflowError):
+            return 0
     try:
         if isinstance(v, str):
             v = v.strip().replace(",", "")
             if not v:
                 return 0
+            if _RE_PLAIN_INT.match(v):
+                iv = int(v)
+                return iv if iv > 0 else 0
         f = float(v)
         if math.isnan(f) or math.isinf(f) or f <= 0.0:
             return 0
@@ -153,10 +205,10 @@ def _coerce_non_negative_int(v: Any) -> int:
 
 
 def calculate_net_subsidy(
-    model_national: Union[int, float, str, None],
-    max_national: Union[int, float, str, None],
-    max_local: Union[int, float, str, None],
-    msrp: Union[int, float, str, None],
+    model_national: Union[int, float, Decimal, str, None],
+    max_national: Union[int, float, Decimal, str, None],
+    max_local: Union[int, float, Decimal, str, None],
+    msrp: Union[int, float, Decimal, str, None],
 ) -> Dict[str, Union[int, float]]:
     """Calculate national subsidy, local subsidy, total subsidy, and net consumer purchase price."""
     safe_msrp = _coerce_non_negative_int(msrp)
@@ -174,23 +226,28 @@ def calculate_net_subsidy(
             "price_cap_ratio": 0.0,
         }
 
-    try:
-        effective_national = safe_model_nat if ratio == 1.0 else int(round(safe_model_nat * ratio))
-    except OverflowError:
-        effective_national = round(Fraction(safe_model_nat, 2)) if ratio == 0.5 else 0
+    if ratio == 1.0:
+        effective_national = safe_model_nat
+    elif safe_model_nat < (1 << 52):
+        effective_national = int(round(safe_model_nat * ratio))
+    else:
+        effective_national = round(Fraction(safe_model_nat, 2))
 
     if safe_max_nat > 0 and safe_model_nat > 0:
         if safe_model_nat >= safe_max_nat:
-            try:
-                effective_local = safe_max_loc if ratio == 1.0 else int(round(safe_max_loc * ratio))
-            except OverflowError:
-                effective_local = round(Fraction(safe_max_loc, 2)) if ratio == 0.5 else 0
+            if ratio == 1.0:
+                effective_local = safe_max_loc
+            elif safe_max_loc < (1 << 52):
+                effective_local = int(round(safe_max_loc * ratio))
+            else:
+                effective_local = round(Fraction(safe_max_loc, 2))
         else:
-            try:
-                effective_local = int(round((safe_max_loc * safe_model_nat * ratio) / safe_max_nat))
-            except OverflowError:
+            prod = safe_max_loc * safe_model_nat
+            if prod < (1 << 52):
+                effective_local = int(round((prod * ratio) / safe_max_nat))
+            else:
                 denom = safe_max_nat * 2 if ratio == 0.5 else safe_max_nat
-                effective_local = round(Fraction(safe_max_loc * safe_model_nat, denom))
+                effective_local = round(Fraction(prod, denom))
     else:
         effective_local = 0
     total_subsidy = effective_national + effective_local
@@ -208,18 +265,36 @@ def _calc_rate_percent(numerator: Any, denominator: Any) -> float:
     """Compute percentage rounded to 1 decimal place, scaling numerator first to prevent float drift."""
     if numerator is None or denominator is None or isinstance(numerator, bool) or isinstance(denominator, bool):
         return 0.0
+    clean_num = numerator.strip().replace(",", "") if isinstance(numerator, str) else numerator
+    clean_den = denominator.strip().replace(",", "") if isinstance(denominator, str) else denominator
+    if clean_num == "" or clean_den == "":
+        return 0.0
     try:
-        num = float(numerator)
-        den = float(denominator)
+        if isinstance(clean_num, str) and _RE_PLAIN_INT.match(clean_num) and len(clean_num.lstrip("+-")) > 300:
+            raise OverflowError
+        if isinstance(clean_den, str) and _RE_PLAIN_INT.match(clean_den) and len(clean_den.lstrip("+-")) > 300:
+            raise OverflowError
+        num = float(clean_num)
+        den = float(clean_den)
     except (ValueError, TypeError, OverflowError):
-        if isinstance(numerator, int) and isinstance(denominator, int) and denominator > 0 and numerator > 0:
-            try:
-                raw = (numerator * 100) / denominator
+        try:
+            n_val = int(clean_num) if isinstance(clean_num, str) and _RE_PLAIN_INT.match(clean_num) else (
+                int(clean_num) if isinstance(clean_num, Decimal) and clean_num.is_finite() else (
+                    clean_num if isinstance(clean_num, int) else int(float(clean_num))
+                )
+            )
+            d_val = int(clean_den) if isinstance(clean_den, str) and _RE_PLAIN_INT.match(clean_den) else (
+                int(clean_den) if isinstance(clean_den, Decimal) and clean_den.is_finite() else (
+                    clean_den if isinstance(clean_den, int) else int(float(clean_den))
+                )
+            )
+            if d_val > 0 and n_val > 0:
+                raw = (n_val * 100) / d_val
                 if math.isnan(raw) or math.isinf(raw):
                     return 0.0
                 return max(0.0, round(raw, 1))
-            except (OverflowError, ZeroDivisionError):
-                return 0.0
+        except (ValueError, TypeError, OverflowError, ZeroDivisionError, InvalidOperation):
+            return 0.0
         return 0.0
     if math.isnan(num) or math.isnan(den) or math.isinf(num) or math.isinf(den):
         return 0.0
@@ -902,7 +977,7 @@ def build_initial_baseline(regions: Optional[List[Any]] = None) -> SubsidyPayloa
             continue
         munis = r.get("municipalities", []) if isinstance(r, dict) else getattr(r, "municipalities", [])
         total_municipalities += len(munis or []) if isinstance(munis, (list, tuple)) else 0
-        status_val = r.get("overall_status") if isinstance(r, dict) else getattr(r, "overall_status", "")
+        status_val = (r.get("overall_status") or r.get("status")) if isinstance(r, dict) else getattr(r, "overall_status", "")
         status_val = getattr(status_val, "value", status_val)
         status_key = str(status_val or "").split(".")[-1].strip().lower()
 
@@ -938,13 +1013,18 @@ def build_initial_baseline(regions: Optional[List[Any]] = None) -> SubsidyPayloa
 
         if status_key not in alert_counts and (
             cats
-            or (isinstance(r, dict) and "overall_depletion_rate" in r)
+            or (isinstance(r, dict) and ("overall_depletion_rate" in r or "depletion_rate" in r))
             or hasattr(r, "overall_depletion_rate")
         ):
             if cats:
                 reg_rate = _calc_rate_percent(reg_app, reg_ann)
             else:
-                raw_rate = r.get("overall_depletion_rate") if isinstance(r, dict) else getattr(r, "overall_depletion_rate", 0.0)
+                if isinstance(r, dict):
+                    raw_rate = r.get("overall_depletion_rate")
+                    if raw_rate is None:
+                        raw_rate = r.get("depletion_rate", 0.0)
+                else:
+                    raw_rate = getattr(r, "overall_depletion_rate", 0.0)
                 if raw_rate is None or isinstance(raw_rate, bool):
                     reg_rate = 0.0
                 else:

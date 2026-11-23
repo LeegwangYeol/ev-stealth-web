@@ -9,9 +9,13 @@ import os
 import sys
 from typing import Any, Dict, List, Optional, Union
 
-# Add root directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add root directory to path (and append scripts/ so scripts/run_*.py never shadow root entrypoints)
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.append(_SCRIPTS_DIR)
 
 from scrapers.common_utils import ComplaintRecord
 from tracker.atomic_writer import atomic_write_json

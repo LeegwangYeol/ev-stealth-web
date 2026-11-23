@@ -267,8 +267,9 @@ const REGION_SUFFIX_RE = /(특별시|광역시|특별자치시|특별자치도|�
 const MODEL_CLEAN_RE = /[\s\-_]+/g;
 const DATE_ONLY_RE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})(?:\s*(?:Z|UTC|GMT))?$/i;
 const US_DATE_ONLY_RE = /^(\d{1,2})([-/.])(\d{1,2})\2(\d{4})(?:\s*(?:Z|UTC|GMT))?$/i;
-const DATETIME_RE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})[Tt ](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:\s*(?:(Z|UTC|GMT)|(?:UTC|GMT)?\s*([+-])(\d{2})(?::?(\d{2}))?))?$/i;
-const EXPLICIT_TZ_RE = /(?:GMT|UTC|Z|(?:GMT|UTC)?\s*([+-])(\d{2}):?(\d{2}))\s*$/i;
+const DATETIME_RE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})[Tt ](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:\s*(?:(Z|UTC|GMT)|(?:UTC|GMT)?\s*([+-])(?:(\d{2})(\d{2})|(\d{1,2})(?::(\d{2}))?)))?$/i;
+const EXPLICIT_TZ_RE = /(?:(?:GMT|UTC)\s*([+-])(?:(\d{2})(\d{2})|(\d{1,2})(?::(\d{2}))?)|([+-])(\d{2}):?(\d{2})|GMT|UTC|Z)(?:\s*\([^)]*\))?\s*$/i;
+const SHORT_NUMERIC_ONLY_RE = /^[+-]?\d{1,3}$/;
 const ISO_YEAR_MONTH_RE = /^\d{4}(?:-\d{2})?$/;
 const NAMED_MONTH_DAY_RE = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b[^0-9]*(\d{1,2})\b|\b(\d{1,2})\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i;
 const MONTH_NAME_TO_INDEX: Readonly<Record<string, number>> = {
@@ -324,10 +325,10 @@ function getRegionLookupIndex(regions: readonly RegionEntry[]): RegionLookupInde
   for (let i = 0; i < len; i++) {
     const r = regions[i];
     if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
-    const rid = typeof r.region_id === 'string' ? r.region_id.toLowerCase() : '';
-    const iso = typeof r.iso_code === 'string' ? r.iso_code.toLowerCase() : '';
-    const ko = typeof r.name_ko === 'string' ? r.name_ko.toLowerCase() : '';
-    const en = typeof r.name_en === 'string' ? r.name_en.toLowerCase() : '';
+    const rid = typeof r.region_id === 'string' ? r.region_id.trim().toLowerCase() : '';
+    const iso = typeof r.iso_code === 'string' ? r.iso_code.trim().toLowerCase() : '';
+    const ko = typeof r.name_ko === 'string' ? r.name_ko.trim().toLowerCase() : '';
+    const en = typeof r.name_en === 'string' ? r.name_en.trim().toLowerCase() : '';
 
     if (rid) {
       if (!idOrIsoMap.has(rid)) idOrIsoMap.set(rid, r);
@@ -454,7 +455,7 @@ export function getRegionByIdFromList(
       const r = regions[i];
       if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
       if (!r.name_ko || typeof r.name_ko !== 'string') continue;
-      const lowerKo = r.name_ko.toLowerCase();
+      const lowerKo = r.name_ko.trim().toLowerCase();
       const rStripped = lowerKo.replace(REGION_SUFFIX_RE, '');
       if (
         (rStripped && rStripped === stripped) ||
@@ -841,8 +842,8 @@ function parseUtcStartDate(startDate?: Date | string | null): Date | null {
 
     let offsetMinutes = 0;
     if (dtMatch[10]) {
-      const tzHour = Number(dtMatch[11]);
-      const tzMin = dtMatch[12] ? Number(dtMatch[12]) : 0;
+      const tzHour = Number(dtMatch[11] ?? dtMatch[13]);
+      const tzMin = Number(dtMatch[12] ?? dtMatch[14] ?? 0);
       if (tzHour > 23 || tzMin > 59) {
         return null;
       }
@@ -862,6 +863,10 @@ function parseUtcStartDate(startDate?: Date | string | null): Date | null {
     return dt;
   }
 
+  if (SHORT_NUMERIC_ONLY_RE.test(s)) {
+    return null;
+  }
+
   const parsed = new Date(s);
   if (Number.isNaN(parsed.getTime())) {
     return null;
@@ -870,13 +875,14 @@ function parseUtcStartDate(startDate?: Date | string | null): Date | null {
   const tzMatch = EXPLICIT_TZ_RE.exec(s);
   const hasExplicitTz = Boolean(tzMatch);
   let offsetMinutes = 0;
-  if (tzMatch && tzMatch[1]) {
-    const tzHour = Number(tzMatch[2]);
-    const tzMin = Number(tzMatch[3]);
+  const tzSign = tzMatch?.[1] ?? tzMatch?.[6];
+  if (tzMatch && tzSign) {
+    const tzHour = Number(tzMatch[2] ?? tzMatch[4] ?? tzMatch[7]);
+    const tzMin = Number(tzMatch[3] ?? tzMatch[5] ?? tzMatch[8] ?? 0);
     if (tzHour > 23 || tzMin > 59) {
       return null;
     }
-    offsetMinutes = (tzMatch[1] === '+' ? 1 : -1) * (tzHour * 60 + tzMin);
+    offsetMinutes = (tzSign === '+' ? 1 : -1) * (tzHour * 60 + tzMin);
   }
 
   const namedMatch = NAMED_MONTH_DAY_RE.exec(s);
@@ -1081,7 +1087,7 @@ export function parseSubsidyNumber(
   // 5. If no Korean unit was matched, parse as standard raw number with commas/currency symbols
   if (!matchedKoreanUnit) {
     const stripped = clean.replace(CURRENCY_STRIP_RE, '');
-    if (!STRICT_NUMBER_RE.test(stripped)) {
+    if ((sign !== '' && /^[+-]/.test(stripped)) || !STRICT_NUMBER_RE.test(stripped)) {
       return fallback;
     }
     const val = parseFloat(stripped);

@@ -152,6 +152,9 @@ export const GlobalNavListener = memo(function GlobalNavListener() {
         const main = document.getElementById('main-content');
         if (main) {
           main.focus();
+          if (typeof main.scrollIntoView === 'function') {
+            main.scrollIntoView({ block: 'start' });
+          }
           if (skipLinkRafId !== null) {
             cancelAnimationFrame(skipLinkRafId);
           }

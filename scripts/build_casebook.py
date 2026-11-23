@@ -26,11 +26,29 @@ def _reject_json_constant(constant: str) -> Any:
     raise ValueError(f"Non-standard JSON constant: {constant}")
 
 
+def _escape_md_cell(val: Any) -> str:
+    """Escape pipes and collapse line breaks for safe Markdown table rendering."""
+    if val is None:
+        return ""
+    return str(val).replace("\r", " ").replace("\n", " ").replace("|", "\\|").strip()
+
+
+def _sanitize_md_url(val: Any) -> str:
+    """Allow only http/https URLs in Markdown links and escape closing parens/whitespace."""
+    if not isinstance(val, str):
+        return "#"
+    u = val.strip()
+    if not u.lower().startswith(("http://", "https://")):
+        return "#"
+    return u.replace(" ", "%20").replace("(", "%28").replace(")", "%29")
+
+
 def load_json_file(file_path: Path) -> Any:
     """Load and parse JSON file."""
-    if not file_path.exists():
-        raise FileNotFoundError(f"Required file not found: {file_path}")
-    with open(file_path, "r", encoding="utf-8-sig") as f:
+    p = Path(file_path)
+    if not p.exists():
+        raise FileNotFoundError(f"Required file not found: {p}")
+    with open(p, "r", encoding="utf-8-sig") as f:
         return json.load(f, parse_constant=_reject_json_constant)
 
 
@@ -86,11 +104,12 @@ def build_slang_dictionary_section(slang_dict: Dict[str, Any]) -> str:
         for term, data in slang_dict.items():
             if not isinstance(data, dict):
                 continue
-            category = str(data.get("category") or "")
-            meaning = str(data.get("meaning") or "").replace("\n", " ")
-            context = str(data.get("context") or "").replace("\n", " ")
-            example = str(data.get("example") or "").replace("\n", " ")
-            lines.append(f"| **{term}** | `{category}` | {meaning} | {context} | *\"{example}\"* |")
+            safe_term = _escape_md_cell(term)
+            category = _escape_md_cell(data.get("category") or "")
+            meaning = _escape_md_cell(data.get("meaning") or "")
+            context = _escape_md_cell(data.get("context") or "")
+            example = _escape_md_cell(data.get("example") or "")
+            lines.append(f"| **{safe_term}** | `{category}` | {meaning} | {context} | *\"{example}\"* |")
 
     lines.extend([
         "",
@@ -170,18 +189,20 @@ def build_case_studies_section(category_key: str, category_title: str, complaint
             slangs = []
         slang_display = ", ".join([f"`{s}`" for s in slangs]) if slangs else "해당 없음 (일반 불만)"
 
+        safe_url = _sanitize_md_url(post_url)
+        display_url = _escape_md_cell(post_url) if safe_url != "#" else "#"
         lines.extend([
             f"### [사례 Case-{case_id}] {post_title}",
             "",
             "| 항목 | 상세 내용 |",
             "|---|---|",
-            f"| **사례 ID** | `{case_id}` |",
-            f"| **대상 차량** | **{vehicle}** |",
-            f"| **수집 플랫폼** | `{platform}` ({board_name}) |",
-            f"| **결함 주제** | {topic} |",
-            f"| **심각도 등급** | `{severity}` |",
-            f"| **검출 은어** | {slang_display} |",
-            f"| **원본 링크** | [{post_url}]({post_url}) |",
+            f"| **사례 ID** | `{_escape_md_cell(case_id)}` |",
+            f"| **대상 차량** | **{_escape_md_cell(vehicle)}** |",
+            f"| **수집 플랫폼** | `{_escape_md_cell(platform)}` ({_escape_md_cell(board_name)}) |",
+            f"| **결함 주제** | {_escape_md_cell(topic)} |",
+            f"| **심각도 등급** | `{_escape_md_cell(severity)}` |",
+            f"| **검출 은어** | {_escape_md_cell(slang_display)} |",
+            f"| **원본 링크** | [{display_url}]({safe_url}) |",
             "",
             "#### 날것 그대로의 유저 코멘트 (Raw User Voice)",
             f"> \"{quote}\"",
@@ -255,7 +276,7 @@ def build_source_index_section(complaints: List[Dict[str, Any]]) -> str:
         r_c = veh_cats["rain_driving"]
         h_c = veh_cats["hill_climbing"]
         tot = p_c + c_c + r_c + h_c
-        lines.append(f"| **{v}** | {p_c}건 | {c_c}건 | {r_c}건 | {h_c}건 | **{tot}건** |")
+        lines.append(f"| **{_escape_md_cell(v)}** | {p_c}건 | {c_c}건 | {r_c}건 | {h_c}건 | **{tot}건** |")
 
     lines.extend([
         "",
@@ -266,13 +287,13 @@ def build_source_index_section(complaints: List[Dict[str, Any]]) -> str:
     ])
 
     for c in valid_complaints:
-        cid = c.get("id", "")
-        cat = c.get("category", "")
-        veh = c.get("target_vehicle", "")
-        plat = c.get("platform", "")
-        board = c.get("board_name", "")
-        url = c.get("post_url", "")
-        lines.append(f"| `{cid}` | `{cat}` | {veh} | `{plat}` | {board} | [링크 바로가기]({url}) |")
+        cid = _escape_md_cell(c.get("id", ""))
+        cat = _escape_md_cell(c.get("category", ""))
+        veh = _escape_md_cell(c.get("target_vehicle", ""))
+        plat = _escape_md_cell(c.get("platform", ""))
+        board = _escape_md_cell(c.get("board_name", ""))
+        safe_url = _sanitize_md_url(c.get("post_url", ""))
+        lines.append(f"| `{cid}` | `{cat}` | {veh} | `{plat}` | {board} | [링크 바로가기]({safe_url}) |")
 
     lines.extend([
         "",
@@ -287,8 +308,11 @@ def build_source_index_section(complaints: List[Dict[str, Any]]) -> str:
 
 def build_casebook(data_path: Path, slang_path: Path, output_path: Path) -> None:
     """Compile and write CASEBOOK.md."""
-    raw_complaints = load_json_file(data_path)
-    raw_slang_dict = load_json_file(slang_path)
+    data_p = Path(data_path)
+    slang_p = Path(slang_path)
+    out_p = Path(output_path)
+    raw_complaints = load_json_file(data_p)
+    raw_slang_dict = load_json_file(slang_p)
     complaints = raw_complaints if isinstance(raw_complaints, list) else []
     slang_dict = raw_slang_dict if isinstance(raw_slang_dict, dict) else {}
 
@@ -324,13 +348,13 @@ def build_casebook(data_path: Path, slang_path: Path, output_path: Path) -> None
 
     atomic_write_text(
         casebook_content,
-        output_path,
+        out_p,
         encoding="utf-8",
         mode=0o644,
         temp_prefix=".tmp_casebook_",
     )
 
-    print(f"[SUCCESS] CASEBOOK.md successfully generated at: {output_path}")
+    print(f"[SUCCESS] CASEBOOK.md successfully generated at: {out_p}")
     print(f"Total Bytes: {len(casebook_content.encode('utf-8')):,} bytes")
 
 

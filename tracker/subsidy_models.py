@@ -8,9 +8,13 @@ popular vehicle price/subsidy matrices.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from decimal import Decimal, InvalidOperation
 from enum import Enum
 import math
+import re
 from typing import Any, Dict, List, Optional, Union
+
+_RE_PLAIN_INT = re.compile(r"^[+-]?\d+$")
 
 
 def _safe_int(val: Any, default: int = 0) -> int:
@@ -22,10 +26,22 @@ def _safe_int(val: Any, default: int = 0) -> int:
         return default
     if type(val) is int:
         return val
+    if isinstance(val, Decimal):
+        if not val.is_finite():
+            return default
+        try:
+            return int(val)
+        except (ValueError, TypeError, OverflowError):
+            return default
     if isinstance(val, str):
         val = val.strip().replace(",", "")
         if not val:
             return default
+        if _RE_PLAIN_INT.match(val):
+            try:
+                return int(val)
+            except (ValueError, OverflowError):
+                return default
     try:
         f = float(val)
         if math.isnan(f) or math.isinf(f):
@@ -73,18 +89,36 @@ def _safe_rate_percent(numerator: Any, denominator: Any) -> float:
     """Compute rounded percentage (1 decimal) scaling numerator first to avoid float drift."""
     if numerator is None or denominator is None or isinstance(numerator, bool) or isinstance(denominator, bool):
         return 0.0
+    clean_num = numerator.strip().replace(",", "") if isinstance(numerator, str) else numerator
+    clean_den = denominator.strip().replace(",", "") if isinstance(denominator, str) else denominator
+    if clean_num == "" or clean_den == "":
+        return 0.0
     try:
-        num = float(numerator)
-        den = float(denominator)
+        if isinstance(clean_num, str) and _RE_PLAIN_INT.match(clean_num) and len(clean_num.lstrip("+-")) > 300:
+            raise OverflowError
+        if isinstance(clean_den, str) and _RE_PLAIN_INT.match(clean_den) and len(clean_den.lstrip("+-")) > 300:
+            raise OverflowError
+        num = float(clean_num)
+        den = float(clean_den)
     except (ValueError, TypeError, OverflowError):
-        if isinstance(numerator, int) and isinstance(denominator, int) and denominator > 0 and numerator > 0:
-            try:
-                raw = (numerator * 100) / denominator
+        try:
+            n_val = int(clean_num) if isinstance(clean_num, str) and _RE_PLAIN_INT.match(clean_num) else (
+                int(clean_num) if isinstance(clean_num, Decimal) and clean_num.is_finite() else (
+                    clean_num if isinstance(clean_num, int) else int(float(clean_num))
+                )
+            )
+            d_val = int(clean_den) if isinstance(clean_den, str) and _RE_PLAIN_INT.match(clean_den) else (
+                int(clean_den) if isinstance(clean_den, Decimal) and clean_den.is_finite() else (
+                    clean_den if isinstance(clean_den, int) else int(float(clean_den))
+                )
+            )
+            if d_val > 0 and n_val > 0:
+                raw = (n_val * 100) / d_val
                 if math.isnan(raw) or math.isinf(raw):
                     return 0.0
                 return max(0.0, round(raw, 1))
-            except (OverflowError, ZeroDivisionError):
-                return 0.0
+        except (ValueError, TypeError, OverflowError, ZeroDivisionError, InvalidOperation):
+            return 0.0
         return 0.0
     if math.isnan(num) or math.isnan(den) or math.isinf(num) or math.isinf(den):
         return 0.0
@@ -947,7 +981,7 @@ class PopularModelEntry:
             return data
         if not isinstance(data, dict):
             data = {}
-        reg_samples = data.get("regional_subsidy_samples")
+        reg_samples = _first_not_none(data, "regional_subsidy_samples", "samples")
         if not isinstance(reg_samples, dict):
             reg_samples = {}
         return cls(

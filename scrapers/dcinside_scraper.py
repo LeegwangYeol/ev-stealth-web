@@ -329,7 +329,7 @@ class DCInsideScraper:
                 for c in comments_data:
                     if not isinstance(c, dict):
                         continue
-                    if c.get("del_yn") == "Y" or c.get("is_delete"):
+                    if str(c.get("del_yn") or "").upper() == "Y" or bool(c.get("is_delete")):
                         continue
                     memo = c.get("memo") or c.get("comment_memo") or c.get("msg") or ""
                     cleaned = clean_html_text(str(memo))
@@ -449,16 +449,32 @@ class DCInsideScraper:
         # Author / IP Badge extraction
         author_badge = ""
         author_type = "dc_fixed_nick"
-        writer_match = re.search(
-            r'<(td|div)\b[^>]*\bclass=["\'][^"\']*\bgall_writer\b[^"\']*["\'][^>]*>(?:(?!</\1>).)*?<span\b[^>]*\bclass=["\'][^"\']*\bnickname\b[^"\']*["\'][^>]*>(.*?)</span>',
+        writer_open = re.search(
+            r'<(td|div)\b[^>]*\bclass=["\'][^"\']*\bgall_writer\b[^"\']*["\'][^>]*>',
             html_content,
-            re.DOTALL | re.IGNORECASE,
+            re.IGNORECASE,
         )
-        if writer_match:
-            author_badge = clean_html_text(writer_match.group(2))
+        writer_region = (
+            extract_balanced_tag_content(
+                html_content,
+                r'<(?:td|div)\b[^>]*\bclass=["\'][^"\']*\bgall_writer\b[^"\']*["\'][^>]*>',
+                tag_name=writer_open.group(1),
+            )
+            if writer_open
+            else ""
+        )
+        if writer_region:
+            nick_match = re.search(
+                r'<span\b[^>]*\bclass=["\'][^"\']*\bnickname\b[^"\']*["\'][^>]*>(.*?)</span>',
+                writer_region,
+                re.DOTALL | re.IGNORECASE,
+            )
+            if nick_match:
+                author_badge = clean_html_text(nick_match.group(1))
+        ip_search_region = writer_region if writer_open else html_content.split("writing_view_box", 1)[0]
         ip_match = re.search(
             r'<span\b[^>]*\bclass=["\'][^"\']*\bip\b[^"\']*["\'][^>]*>\(([0-9.*]+)\)</span>',
-            html_content,
+            ip_search_region,
             re.IGNORECASE,
         )
         if ip_match:
@@ -494,7 +510,7 @@ class DCInsideScraper:
 
         view_count = 0
         view_match = re.search(
-            r'<span\b[^>]*\bclass=["\'][^"\']*\bgall_count\b[^"\']*["\'][^>]*>조회수?\s*([0-9,]+)</span>',
+            r'<span\b[^>]*\bclass=["\'][^"\']*\bgall_count\b[^"\']*["\'][^>]*>조회수?\s*(?:<[^>]+>\s*)*([0-9,]+)',
             html_content,
             re.IGNORECASE,
         )
@@ -506,13 +522,13 @@ class DCInsideScraper:
 
         upvote_count = 0
         upvote_match = re.search(
-            r'<span\b[^>]*\bclass=["\'][^"\']*\bgall_reply_num\b[^"\']*["\'][^>]*>추천\s*([0-9,]+)</span>',
+            r'<span\b[^>]*\bclass=["\'][^"\']*\bgall_reply_num\b[^"\']*["\'][^>]*>추천\s*(?:<[^>]+>\s*)*([0-9,]+)',
             html_content,
             re.IGNORECASE,
         )
         if not upvote_match:
             upvote_match = re.search(
-                r'<p\b[^>]*\bclass=["\'][^"\']*\bup_num\b[^"\']*["\'][^>]*>([0-9,]+)</p>',
+                r'<p\b[^>]*\bclass=["\'][^"\']*\bup_num\b[^"\']*["\'][^>]*>(?:<[^>]+>\s*)*([0-9,]+)',
                 html_content,
                 re.IGNORECASE,
             )
@@ -532,24 +548,24 @@ class DCInsideScraper:
 
         # Body extraction
         body_text = ""
-        body_match = re.search(
-            r'<div\b[^>]*\bclass=["\'][^"\']*\bwriting_view_box\b[^"\']*["\'][^>]*>(.*?)</div>\s*<!--\s*//writing_view_box',
-            html_content,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if body_match:
-            body_text = clean_html_text(body_match.group(1))
-        else:
-            for open_pat in (
-                r'<div\b[^>]*\bclass=["\'][^"\']*\bwriting_view_box\b[^"\']*["\'][^>]*>',
-                r'<div\b[^>]*\bclass=["\'][^"\']*\bwrite_div\b[^"\']*["\'][^>]*>',
-                r'<div\b[^>]*\bclass=["\'][^"\']*\bthum-txt[^"\']*["\'][^>]*>',
-            ):
-                inner_html = extract_balanced_tag_content(html_content, open_pat, tag_name="div")
-                if inner_html:
-                    body_text = clean_html_text(inner_html)
-                    if body_text:
-                        break
+        for open_pat in (
+            r'<div\b[^>]*\bclass=["\'][^"\']*\bwriting_view_box\b[^"\']*["\'][^>]*>',
+            r'<div\b[^>]*\bclass=["\'][^"\']*\bwrite_div\b[^"\']*["\'][^>]*>',
+            r'<div\b[^>]*\bclass=["\'][^"\']*\bthum-txt[^"\']*["\'][^>]*>',
+        ):
+            inner_html = extract_balanced_tag_content(html_content, open_pat, tag_name="div")
+            if inner_html:
+                body_text = clean_html_text(inner_html)
+                if body_text:
+                    break
+        if not body_text:
+            body_match = re.search(
+                r'<div\b[^>]*\bclass=["\'][^"\']*\bwriting_view_box\b[^"\']*["\'][^>]*>(.*?)</div>\s*<!--\s*//writing_view_box',
+                html_content,
+                re.DOTALL | re.IGNORECASE,
+            )
+            if body_match:
+                body_text = clean_html_text(body_match.group(1))
 
         # Comments extraction from DOM
         comments = []

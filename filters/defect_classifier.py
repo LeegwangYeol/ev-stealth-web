@@ -42,8 +42,10 @@ from filters.slang_lexicon import (
     _RE_MEGI,
     _RE_RICE_COOKER_APP,
     _RE_TCAM_KO,
+    _RE_WATER_LEAK,
     _decode_bytes_safely,
     find_matching_slang,
+    matches_slang_entry,
 )
 from filters.spam_filter import (
     CATEGORY_KEYWORD_MAP,
@@ -252,7 +254,37 @@ _EXCLUDED_NEGATOR_PATTERNS: Tuple[str, ...] = (
     "형편없", "쓸데없", "터무니없", "어림없", "정신없", "부질없", "보잘것없",
     "끊임없", "쉴새없", "수없", "끝없", "한없", "어김없", "가차없",
     "이유없", "원인없", "전조없", "예고없",
+    "경고없", "양심없", "개념없", "상식없", "기약없", "변명없",
 )
+_RE_SAGO_SIP: re.Pattern[str] = re.compile(r"사고\s*싶")
+_SYMPTOM_EMISSION_DEFECTS: Tuple[str, ...] = (
+    "잡소리", "소음", "풍절음", "누수", "에러", "이음", "고주파음", "귀신소리",
+    "고래소리", "밥솥", "밥솥소리", "경고등", "결함", "고장", "하자", "단차",
+    "문제", "이상", "불량",
+)
+_EXPECTED_OUTPUT_NOUNS: Tuple[str, ...] = (
+    "소리", "바람", "손잡이", "도어캐치", "캐치", "물", "전기", "열", "냉기",
+    "온풍", "화면", "영상", "에어컨", "히터", "깜빡이",
+)
+_HEARSAY_CONTRASTIVE_PREFIXES: Tuple[str, ...] = (
+    "난다더니", "들린다더니", "보인다더니", "나온다더니",
+    "나온다니", "나온대서", "나온다는데", "난다는데", "들린다는데", "보인다는데",
+)
+_UNSPACED_AN_NA_PERCEPTION: Tuple[str, ...] = (
+    "안남", "안나옴", "안나와", "안나요", "안납니다", "안나네", "안나고", "안나서", "안나는", "안나면", "안나오",
+)
+_WATER_SYMPTOM_KEYS: Tuple[str, ...] = ("물 새", "물 샜", "물 차", "물 고이")
+
+
+def _has_symptom_predicate(text_str: str) -> bool:
+    """Check SYMPTOM_PREDICATES against text_str with boundary safety for water-leak terms."""
+    for symptom in SYMPTOM_PREDICATES:
+        if symptom in _WATER_SYMPTOM_KEYS:
+            if _RE_WATER_LEAK.search(text_str) is not None:
+                return True
+        elif symptom in text_str:
+            return True
+    return False
 _SPACED_EOPDA_SUBJECTS: Tuple[str, ...] = (
     "대책", "대책이", "대책도",
     "답", "답이", "답도",
@@ -329,8 +361,14 @@ def sanitize_text(val: Any, max_len: int = MAX_TEXT_LENGTH) -> str:
     if not val_str:
         return ""
 
-    if len(val_str) > max_len:
-        val_str = val_str[:max_len]
+    try:
+        limit = max(0, int(max_len)) if (max_len is not None and not isinstance(max_len, bool)) else MAX_TEXT_LENGTH
+    except (ValueError, TypeError, OverflowError):
+        limit = MAX_TEXT_LENGTH
+    if limit == 0:
+        return ""
+    if len(val_str) > limit:
+        val_str = val_str[:limit]
 
     val_str = RE_INVALID_CHARS.sub("", val_str)
     val_str = RE_UNICODE_SPACES.sub(" ", val_str)
@@ -356,6 +394,7 @@ class DefectClassifier:
         self.standard_intensifiers = STANDARD_INTENSIFIERS
         self.diminishers = DIMINISHERS
         self.concessives = set(CONCESSIVES)
+        self._sorted_concessives: Tuple[str, ...] = tuple(sorted(self.concessives, key=len, reverse=True))
 
     def normalize_date(self, date_val: Any, default: Optional[str] = None) -> str:
         """Instance method to normalize dates."""
@@ -394,9 +433,13 @@ class DefectClassifier:
         
         text_lower = text_str.lower()
         if "깜빡이" in text_str and not any(mc in text_lower for mc in MALFUNCTION_CUES):
-            has_symptom = any(symptom in text_str for symptom in SYMPTOM_PREDICATES if symptom != "깜빡이")
+            has_symptom = any(
+                (_RE_WATER_LEAK.search(text_str) is not None) if symptom in _WATER_SYMPTOM_KEYS else (symptom in text_str)
+                for symptom in SYMPTOM_PREDICATES
+                if symptom != "깜빡이"
+            )
         else:
-            has_symptom = any(symptom in text_str for symptom in SYMPTOM_PREDICATES)
+            has_symptom = _has_symptom_predicate(text_str)
 
         # If text explicitly mentions defect slang or defect nouns, treat symptom as verified
         matched_slang = find_matching_slang(text_str)
@@ -422,7 +465,11 @@ class DefectClassifier:
         if any(
             (_RE_DEFECT_HAJA.search(text_lower) is not None)
             if dk == "하자"
-            else (_matches_compound_phrase(dk, text_lower) if dk in ("iccu", "bms") else (dk in text_lower))
+            else (
+                (_RE_WATER_LEAK.search(text_lower) is not None)
+                if dk in _WATER_SYMPTOM_KEYS
+                else (_matches_compound_phrase(dk, text_lower) if dk in ("iccu", "bms") else (dk in text_lower))
+            )
             for dk in defect_keywords
         ):
             has_symptom = True
@@ -503,7 +550,7 @@ class DefectClassifier:
 
         return has_defect_word and has_praise_word and has_laughing
 
-    def _is_negator_in_window(self, window: List[str]) -> bool:
+    def _is_negator_in_window(self, window: List[str], allow_emission_negation: bool = False) -> bool:
         """Check if any token in the window is a genuine negator, respecting token boundaries and exclusions."""
         for j, w in enumerate(window):
             w_strip = str(w or "").strip()
@@ -518,19 +565,28 @@ class DefectClassifier:
             if w_strip == "안":
                 if j > 0 and window[j - 1] in ("말도", "말이", "납득이", "납득", "이해가", "이해"):
                     continue
-                # Hearsay contrastive: '안 난다더니', '안 들린다더니', '안 보인다더니'
+                # Hearsay contrastive: '안 난다더니', '안 들린다더니', '안 보인다더니', '안 나온다더니'
                 if j + 1 < len(window) and any(
-                    window[j + 1].startswith(p) for p in ("난다더니", "들린다더니", "보인다더니")
+                    window[j + 1].startswith(p) for p in _HEARSAY_CONTRASTIVE_PREFIXES
                 ):
                     continue
                 if j + 1 < len(window):
-                    if any(window[j + 1].startswith(mv) for mv in _MALFUNCTION_VERBS):
+                    nxt = window[j + 1]
+                    if (
+                        allow_emission_negation
+                        and nxt.startswith(("나오", "나와", "나옴", "나왔"))
+                        and not any(any(noun in prev for noun in _EXPECTED_OUTPUT_NOUNS) for prev in window[1:j])
+                    ):
+                        return True
+                    if any(nxt.startswith(mv) for mv in _MALFUNCTION_VERBS):
                         continue
                     return True
                 continue
 
             # Rhetorical and hearsay contrastive exclusions: '없기는 개뿔', '없기는커녕', '없다더니', '없다는데'
             if w_strip.startswith(("없기는", "없다더니", "없다는데", "없다지만", "없긴")):
+                continue
+            if w_strip == "없을" and j + 1 < len(window) and window[j + 1].startswith("줄"):
                 continue
             if w_strip.startswith("없") and j > 0 and window[j - 1] in _SPACED_EOPDA_SUBJECTS:
                 continue
@@ -552,8 +608,17 @@ class DefectClassifier:
             if w_strip.startswith("없") or _RE_ATTACHED_EOPDA.search(w_strip):
                 return True
 
-            # Perception verb negation (e.g. 안들림, 안들려, 안들립니다, 안보임, 안보여, 안보입니다, 안느껴짐, 안느껴져, 안남, 안나요, 안납니다)
-            if w_strip.startswith("안") and any(w_strip.startswith(p) for p in ("안들", "안보", "안느껴", "안남", "안나")):
+            # Perception verb negation (e.g. 안들림, 안보임, 안느껴짐, 안남, 안나요, 안나옴)
+            # Exclude '안나감/안나가...' (won't move/accelerate) and hearsay forms.
+            if (
+                w_strip.startswith("안")
+                and not w_strip.startswith(("안나가", "안나감", "안나간", "안나갔"))
+                and not w_strip.endswith(("다더니", "다는데", "다지만", "다니", "대서"))
+                and (
+                    w_strip.startswith(("안들", "안보", "안느껴"))
+                    or w_strip.startswith(_UNSPACED_AN_NA_PERCEPTION)
+                )
+            ):
                 return True
 
             # 2. Exact match for single-character negator '못'
@@ -620,7 +685,7 @@ class DefectClassifier:
                     continue
                 window_end = min(len(tokens), i + 5)
                 window = tokens[i:window_end]
-                if self._is_negator_in_window(window):
+                if self._is_negator_in_window(window, allow_emission_negation=(dw_lower in _SYMPTOM_EMISSION_DEFECTS)):
                     negated.append(dw)
                     break
 
@@ -640,7 +705,7 @@ class DefectClassifier:
                         continue
                     window_end = min(len(tokens), i + m + 5)
                     window = tokens[i:window_end]
-                    if self._is_negator_in_window(window):
+                    if self._is_negator_in_window(window, allow_emission_negation=(dw_lower in _SYMPTOM_EMISSION_DEFECTS)):
                         negated.append(dw)
                         break
 
@@ -648,12 +713,18 @@ class DefectClassifier:
 
     @staticmethod
     def _is_positive_negated_in_clause(pos_word: str, clause_tokens: List[str]) -> bool:
-        """Return True if a positive lexicon term is locally negated (e.g. '훌륭하지 않다', '안 좋다')."""
+        """Return True if a positive lexicon term is locally negated (e.g. '훌륭하지 않다', '안 좋다', '불만족', '비추천')."""
         if not clause_tokens:
             return False
         for idx, tok in enumerate(clause_tokens):
             if pos_word not in tok:
                 continue
+            if tok.startswith(("불" + pos_word, "비" + pos_word, "안" + pos_word, "못" + pos_word)):
+                return True
+            if pos_word.startswith("좋") and tok.startswith("안좋"):
+                return True
+            if "지않" in tok or "지못" in tok:
+                return True
             if idx > 0 and clause_tokens[idx - 1] in ("안", "못"):
                 return True
             if tok.endswith(("안함", "못함", "안됨", "아님")):
@@ -679,7 +750,11 @@ class DefectClassifier:
 
         # Split clauses at mid-clause concessive connectives when trailing text exists
         expanded_clauses: List[str] = []
-        sorted_concs = sorted(self.concessives, key=len, reverse=True)
+        sorted_concs = (
+            self._sorted_concessives
+            if len(self.concessives) == len(self._sorted_concessives)
+            else tuple(sorted(self.concessives, key=len, reverse=True))
+        )
         for raw_c in clauses:
             c = str(raw_c or "").strip()
             if not c:
@@ -723,39 +798,11 @@ class DefectClassifier:
 
             for slang_entry, slang_nfc, slang_lower in _SLANG_TERM_LOWER_PAIRS:
                 term = slang_entry.term
-                if term == "씰":
-                    if "씰링" in clause or not _RE_BYD_SEAL.search(clause):
-                        continue
-                elif term == "밥솥":
-                    if _RE_RICE_COOKER_APP.search(clause) and not any(
-                        w in clause for w in ("소리", "취사소리", "이음", "고주파", "모터", "인버터", "잡소리")
-                    ):
-                        continue
-                    if slang_lower not in clause_lower:
-                        continue
-                elif term == "전손":
-                    if not _RE_JEONSON.search(clause):
-                        continue
-                elif term == "티캠":
-                    if not _RE_TCAM_KO.search(clause):
-                        continue
-                elif term == "ICCU":
-                    if not _RE_BOUNDED_ICCU.search(clause):
-                        continue
-                elif term == "V2L":
+                if term.lower() in ("v2l", "깜빡이", "웨더스트립"):
                     if not any(mc in clause_lower for mc in MALFUNCTION_CUES):
                         continue
-                    if not _RE_BOUNDED_V2L.search(clause):
-                        continue
-                elif term == "메기":
-                    if not _RE_MEGI.search(clause):
-                        continue
-                else:
-                    if term.lower() in ("깜빡이", "웨더스트립"):
-                        if not any(mc in clause_lower for mc in MALFUNCTION_CUES):
-                            continue
-                    if slang_lower not in clause_lower:
-                        continue
+                if not matches_slang_entry(slang_entry, clause, clause_lower, term_lower=slang_lower):
+                    continue
 
                 is_term_negated = any(dw in term or term in dw for dw in negated_defects)
                 if is_term_negated:
@@ -773,6 +820,8 @@ class DefectClassifier:
             matched_clause_negs: List[str] = []
             for neg_word in _SORTED_NEGATIVE_WORDS:
                 if neg_word in clause and not any(neg_word in already for already in matched_clause_negs):
+                    if neg_word == "사고" and "사고" not in _RE_SAGO_SIP.sub("", clause):
+                        continue
                     matched_clause_negs.append(neg_word)
                     base_val = NEGATIVE_LEXICON[neg_word]
                     if any(dw in neg_word or neg_word in dw for dw in negated_defects):
@@ -966,7 +1015,7 @@ class DefectClassifier:
             confidence += 0.25 * (max_sev / 5.0)
 
         # 3. Operational symptom predicate
-        has_symptom = any(sym in text_str for sym in SYMPTOM_PREDICATES)
+        has_symptom = _has_symptom_predicate(text_str)
         if has_symptom:
             confidence += 0.20
 

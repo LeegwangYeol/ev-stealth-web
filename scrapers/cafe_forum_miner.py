@@ -194,7 +194,7 @@ class CafeForumMiner:
         items = []
         seen_urls: Set[str] = set()
         matches = re.findall(
-            r'<a\b[^>]*\bhref=["\']((?:https?://(?:www\.)?ppomppu\.co\.kr)?(?:/zboard/)?view\.php\?[^"\']*\bid=car\b[^"\']*)["\'][^>]*>(.*?)</a>',
+            r'<a\b[^>]*\bhref=["\']((?:(?:https?:)?//(?:www\.)?ppomppu\.co\.kr)?(?:/zboard/)?view\.php\?[^"\']*\bid=car\b[^"\']*)["\'][^>]*>(.*?)</a>',
             html_content,
             re.IGNORECASE | re.DOTALL,
         )
@@ -274,7 +274,8 @@ class CafeForumMiner:
             re.IGNORECASE | re.DOTALL,
         )
         for attrs, href, raw_title in matches:
-            if "subject_fixed" not in attrs and "subject_fixed" not in raw_title and "list_subject" not in attrs:
+            attrs_lower = attrs.lower()
+            if "subject_fixed" not in attrs_lower and "subject_fixed" not in raw_title.lower() and "list_subject" not in attrs_lower:
                 continue
             clean_title = clean_html_text(raw_title)
             if not clean_title or len(clean_title) < 4:

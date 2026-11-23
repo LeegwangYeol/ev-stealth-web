@@ -19,6 +19,10 @@ export interface SubsidyTableViewProps {
   onSelectForCalc: (regionId: string) => void;
 }
 
+// Pure Helper: Normalize numeric metrics to finite non-negative numbers without -0
+const toSafeNonNeg = (value: unknown): number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+
 // Module-level frozen fallbacks (Zero-GC pressure)
 const EMPTY_REGIONS: readonly RegionEntry[] = Object.freeze([]);
 const EMPTY_MUNIS: readonly MunicipalityMetrics[] = Object.freeze([]);
@@ -113,19 +117,19 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
   onSelectForCalc,
 }: SubsidyTableRowProps) {
   const cat: CategoryMetrics = region?.categories?.[selectedCategory] ?? FALLBACK_CATEGORY_METRICS;
-  const announced = Number.isFinite(cat?.announced_units) ? Math.max(0, cat.announced_units) : 0;
-  const applied = Number.isFinite(cat?.applied_units) ? Math.max(0, cat.applied_units) : 0;
+  const announced = toSafeNonNeg(cat?.announced_units);
+  const applied = toSafeNonNeg(cat?.applied_units);
   const remaining = Number.isFinite(cat?.remaining_units)
-    ? Math.max(0, cat.remaining_units)
-    : Math.max(0, announced - applied);
+    ? toSafeNonNeg(cat.remaining_units)
+    : Math.max(0, announced - applied) || 0;
   const depletionRate = Number.isFinite(cat?.depletion_rate)
-    ? Math.max(0, cat.depletion_rate)
+    ? toSafeNonNeg(cat.depletion_rate)
     : announced > 0
-    ? (applied / announced) * 100
+    ? ((applied / announced) * 100) || 0
     : 0;
 
-  const maxLocalSubsidy = Number.isFinite(cat?.max_local_subsidy_krw) ? Math.max(0, cat.max_local_subsidy_krw) : 0;
-  const maxTotalSubsidy = Number.isFinite(cat?.max_total_subsidy_krw) ? Math.max(0, cat.max_total_subsidy_krw) : 0;
+  const maxLocalSubsidy = toSafeNonNeg(cat?.max_local_subsidy_krw);
+  const maxTotalSubsidy = toSafeNonNeg(cat?.max_total_subsidy_krw);
 
   const munis = Array.isArray(region?.municipalities) ? region.municipalities : EMPTY_MUNIS;
   const hasMunis = munis.length > 0;
@@ -165,22 +169,22 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
     if (!shouldRenderMunis) return null;
     return munis.map((muni, idx) => {
       if (!muni || typeof muni !== 'object') return null;
-      const muniAnnounced = Number.isFinite(muni.announced_units) ? Math.max(0, muni.announced_units) : 0;
-      const muniApplied = Number.isFinite(muni.applied_units) ? Math.max(0, muni.applied_units) : 0;
+      const muniAnnounced = toSafeNonNeg(muni.announced_units);
+      const muniApplied = toSafeNonNeg(muni.applied_units);
       const muniRemaining = Number.isFinite(muni.remaining_units)
-        ? Math.max(0, muni.remaining_units)
-        : Math.max(0, muniAnnounced - muniApplied);
+        ? toSafeNonNeg(muni.remaining_units)
+        : Math.max(0, muniAnnounced - muniApplied) || 0;
       const muniDepletion = Number.isFinite(muni.depletion_rate)
-        ? Math.max(0, muni.depletion_rate)
+        ? toSafeNonNeg(muni.depletion_rate)
         : muniAnnounced > 0
-        ? (muniApplied / muniAnnounced) * 100
+        ? ((muniApplied / muniAnnounced) * 100) || 0
         : 0;
-      const muniLocalSubsidy = Number.isFinite(muni.local_subsidy_krw) ? Math.max(0, muni.local_subsidy_krw) : 0;
+      const muniLocalSubsidy = toSafeNonNeg(muni.local_subsidy_krw);
       const muniStatus = normalizeTableStatus(muni.status, muniDepletion);
 
       return (
-        <tr key={muni.muni_id || `${regionId}-${muni.name_ko || 'muni'}-${idx}`} className="hover:bg-slate-900/50">
-          <th scope="row" className="p-2 font-medium text-slate-200 sticky left-0 bg-slate-950 z-10 border-r border-slate-800">
+        <tr key={muni.muni_id || `${regionId}-${muni.name_ko || 'muni'}-${idx}`} className="group hover:bg-slate-900/50">
+          <th scope="row" className="p-2 font-medium text-slate-200 sticky left-0 bg-slate-950 group-hover:bg-slate-900 z-10 border-r border-slate-800">
             {muni.name_ko || '세부 지자체'}
           </th>
           <td className="p-2 text-right font-mono text-slate-300">

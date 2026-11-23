@@ -243,8 +243,8 @@ class BlindScraper:
                 logger.debug(f"Next.js SSR parsing notice for topic feed: {e}")
 
         # Fallback to DOM regex extraction
-        # Pattern: <a ... href="/kr/post/..." ...>
-        pattern = r'<a\b[^>]*\bhref=["\'](/kr/post/[^"\']+)["\'][^>]*>(.*?)</a>'
+        # Pattern: <a ... href="/kr/post/..." or "https://www.teamblind.com/kr/post/..." ...>
+        pattern = r'<a\b[^>]*\bhref=["\']((?:https?://(?:www\.)?teamblind\.com)?/kr/post/[^"\']+)["\'][^>]*>(.*?)</a>'
         matches = re.findall(pattern, html_content, re.IGNORECASE | re.DOTALL)
         seen_urls = set()
 
@@ -493,7 +493,7 @@ class BlindScraper:
             c_veh, c_cat = self.classify_text(comment)
             if c_cat and len(comment) >= 15:
                 # Extract commenter company if prefixed e.g. [LG에너지솔루션]
-                c_comp_match = re.match(r"^\[(.*?)\]\s*(.*)", comment)
+                c_comp_match = re.match(r"^\[([^\]]+)\]\s*(.*)", comment, re.DOTALL)
                 if c_comp_match:
                     c_badge = c_comp_match.group(1)
                     c_text = c_comp_match.group(2)

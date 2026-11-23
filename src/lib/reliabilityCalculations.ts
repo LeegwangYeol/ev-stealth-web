@@ -543,6 +543,9 @@ function enrichModelItem(brand: BrandReliability, model: ModelReliability): Enri
             return {
               ...y,
               year: parsedYear !== null ? Math.floor(parsedYear) + 0 : 0,
+              ...(typeof y.verdict === 'string' && y.verdict.trim()
+                ? { verdict: sanitizeVerdict(y.verdict) }
+                : {}),
               dsi_score: normalizeReliabilityScore(y.dsi_score, 0),
               incident_rate:
                 parsedIncident !== null
@@ -727,6 +730,7 @@ export function getModelReliabilityById(
 
   let exactNameMatch: { brand: BrandReliability; model: ModelReliability } | undefined;
   let partialMatch: { brand: BrandReliability; model: ModelReliability } | undefined;
+  let bestPartialScore = -1;
 
   for (const brand of data.brands) {
     if (!brand || typeof brand !== 'object' || !Array.isArray(brand.models)) continue;
@@ -745,14 +749,18 @@ export function getModelReliabilityById(
         continue;
       }
 
-      // Priority 3: Fallback substring match (require length >= 2 to prevent 1-char false positives)
-      if (
-        !partialMatch &&
-        normalized.length >= 2 &&
-        ((mIdNorm.length >= 2 && (mIdNorm.includes(normalized) || normalized.includes(mIdNorm))) ||
-          (mNameNorm.length >= 2 && (mNameNorm.includes(normalized) || normalized.includes(mNameNorm))))
-      ) {
-        partialMatch = { brand, model };
+      // Priority 3: Fallback substring match (require length >= 2, prefer longest overlap)
+      if (normalized.length >= 2) {
+        let score = -1;
+        if (mIdNorm.length >= 2 && (mIdNorm.includes(normalized) || normalized.includes(mIdNorm))) {
+          score = Math.min(mIdNorm.length, normalized.length) * 2 + 1;
+        } else if (mNameNorm.length >= 2 && (mNameNorm.includes(normalized) || normalized.includes(mNameNorm))) {
+          score = Math.min(mNameNorm.length, normalized.length) * 2;
+        }
+        if (score > bestPartialScore) {
+          bestPartialScore = score;
+          partialMatch = { brand, model };
+        }
       }
     }
   }
@@ -1415,7 +1423,7 @@ function parsePeriodicDate(
 
   // 2. Full or partial delimited date: YYYY-MM-DD, YYYY.MM.DD, YYYY/MM/DD, YYYY-MM, and ISO-8601 timestamps
   const fullMatch = dateStr.match(
-    /^(\d{4})[-/. ](\d{1,2})(?:[-/. ](\d{1,2})(?:$|(?:T|\s+)(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:\s*(?:(Z)|([+-])(\d{2}):?(\d{2})))?))?$/i
+    /^(\d{4})[-/. ](\d{1,2})(?:[-/. ](\d{1,2})(?:$|(?:T|\s+)(\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:\s*(?:(Z)|([+-])(\d{2}):?(\d{2})))?))?$/i
   );
   if (fullMatch) {
     const parsedY = Number(fullMatch[1]);

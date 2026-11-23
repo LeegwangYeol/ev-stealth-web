@@ -52,6 +52,15 @@ TARGET_BOARDS = {
 
 RE_HTML_COMMENTS = re.compile(r"<!--.*?-->", re.DOTALL)
 RE_SCRIPT_STYLE = re.compile(r"<(script|style)[^>]*>.*?</\1\s*>", re.DOTALL | re.IGNORECASE)
+RE_COMMENT_OR_SCRIPT = re.compile(
+    r"<!--.*?-->|<(script|style)\b[^>]*>.*?</\1\s*>",
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+def _mask_comments_and_scripts(html_str: str) -> str:
+    """Replace HTML comments and script/style blocks with equal-length spaces in one pass."""
+    return RE_COMMENT_OR_SCRIPT.sub(lambda m: " " * len(m.group(0)), html_str)
 
 
 def _canonicalize_bobaedream_href(raw_href: str) -> Optional[str]:
@@ -85,6 +94,8 @@ def _canonicalize_bobaedream_href(raw_href: str) -> Optional[str]:
         port = parsed_out.port
     except ValueError:
         return None
+    if not parsed_out.hostname or any(c.isspace() for c in (parsed_out.netloc or "")):
+        return None
     if _has_unsafe_authority(parsed_out):
         return None
     host = (parsed_out.hostname or "").lower().rstrip(".")
@@ -105,16 +116,13 @@ def extract_container_content(html_str: str, tag_name: str, class_name: str) -> 
     if not html_str or not isinstance(html_str, str) or not tag_name or not class_name:
         return ""
 
-    # Mask comments and scripts with equal-length whitespace so dummy tags inside them
-    # do not prematurely decrement depth counters, while preserving exact character offsets.
-    def _repl(m: re.Match[str]) -> str:
-        return " " * len(m.group(0))
+    # Mask comments and scripts with equal-length whitespace in a single left-to-right pass
+    # so dummy tags or comment tokens inside scripts do not corrupt offsets or depth counters.
+    masked = _mask_comments_and_scripts(html_str)
 
-    masked = RE_HTML_COMMENTS.sub(_repl, html_str)
-    masked = RE_SCRIPT_STYLE.sub(_repl, masked)
-
+    cls_esc = re.escape(class_name)
     pattern = re.compile(
-        rf"<{re.escape(tag_name)}\b[^>]*?(?<=\s)class\s*=\s*(?:[\"'][^\"']*\b{re.escape(class_name)}\b[^\"']*[\"']|{re.escape(class_name)}(?=[\s>]))[^>]*>",
+        rf"<{re.escape(tag_name)}\b[^>]*?(?<=\s)class\s*=\s*(?:[\"'](?:[^\"']*\s)?{cls_esc}(?:\s[^\"']*)?[\"']|{cls_esc}(?=[\s>]))[^>]*>",
         re.IGNORECASE,
     )
     match = pattern.search(masked)
@@ -187,7 +195,7 @@ def is_deleted_or_restricted(html_content: Optional[str]) -> Tuple[bool, str]:
     if not html_content or not isinstance(html_content, str) or not html_content.strip():
         return True, "empty_content"
 
-    # 1. Cloudflare / Bot challenge / WAF blocking
+    # 1. Unconditional Cloudflare challenge & explicit HTTP error title blocks
     if (
         "<title>Just a moment...</title>" in html_content
         or "cf-browser-verification" in html_content
@@ -195,26 +203,34 @@ def is_deleted_or_restricted(html_content: Optional[str]) -> Tuple[bool, str]:
         or "challenges.cloudflare.com" in html_content
     ):
         return True, "cloudflare_challenge"
-    if re.search(r"(?:비정상적인|잘못된)\s*(?:접근|요청)입니다", html_content, re.IGNORECASE):
-        return True, "abnormal_access_blocked"
-    if re.search(r"(?:접근이\s*차단되었습니다|(?:차단된|제한된)\s*(?:아이피|IP))", html_content, re.IGNORECASE):
-        return True, "ip_blocked"
-    if re.search(r"(?:자동\s*방지\s*문자|보안\s*문자를\s*입력|reCAPTCHA|hCaptcha)", html_content, re.IGNORECASE):
-        return True, "captcha_challenge"
     if re.search(r"<title>\s*(?:403\s+Forbidden|429\s+Too\s+Many\s+Requests|Access\s+Denied)\s*</title>", html_content, re.IGNORECASE):
         return True, "access_denied"
-    if re.search(r"(?:서비스\s*점검\s*중|시스템\s*점검\s*중)", html_content, re.IGNORECASE):
-        return True, "service_maintenance"
 
     # 2. Check if page has actual substantial article body:
-    # If a page contains a large bodyCont (> 50 chars), only alert(...) can indicate deletion
+    # If a page contains a large article body (> 50 chars), only alert(...) or explicit error titles indicate blocking/deletion
     has_large_body = False
-    body_inner = extract_container_content(html_content, "div", "bodyCont")
-    if not body_inner:
+    for body_cls in ("bodyCont", "content01"):
+        body_inner = extract_container_content(html_content, "div", body_cls)
+        if body_inner and len(clean_html_text(body_inner)) > 50:
+            has_large_body = True
+            break
+    if not has_large_body:
         body_match = re.search(r'class=["\']bodyCont["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
+        if not body_match:
+            body_match = re.search(r'<div\b[^>]*\bid=["\']print_area["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
         body_inner = body_match.group(1) if body_match else ""
-    if body_inner and len(clean_html_text(body_inner)) > 50:
-        has_large_body = True
+        if body_inner and len(clean_html_text(body_inner)) > 50:
+            has_large_body = True
+
+    if not has_large_body:
+        if re.search(r"(?:비정상적인|잘못된)\s*(?:접근|요청)입니다", html_content, re.IGNORECASE):
+            return True, "abnormal_access_blocked"
+        if re.search(r"(?:접근이\s*차단되었습니다|(?:차단된|제한된)\s*(?:아이피|IP))", html_content, re.IGNORECASE):
+            return True, "ip_blocked"
+        if re.search(r"(?:자동\s*방지\s*문자|보안\s*문자를\s*입력|reCAPTCHA|hCaptcha)", html_content, re.IGNORECASE):
+            return True, "captcha_challenge"
+        if re.search(r"(?:서비스\s*점검\s*중|시스템\s*점검\s*중)", html_content, re.IGNORECASE):
+            return True, "service_maintenance"
 
     # Deleted or Non-existent posts
     deleted_patterns = [
@@ -457,7 +473,15 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
                 dt = datetime.datetime(year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
             except ValueError:
                 if month == 2 and day == 29:
-                    dt = datetime.datetime(now.year - 1, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
+                    dt = None
+                    for offset in range(1, 5):
+                        try:
+                            dt = datetime.datetime(now.year - offset, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
+                            break
+                        except ValueError:
+                            continue
+                    if dt is None:
+                        raise
                 else:
                     raise
             if year == now.year and dt > now + datetime.timedelta(days=1):
@@ -530,10 +554,12 @@ class BobaeDreamCrawler(BaseCrawler):
         """Apply polite delay with uniform jitter between crawler requests."""
         raw_low = min_s if min_s is not None else self.min_delay
         raw_high = max_s if max_s is not None else self.max_delay
+        if isinstance(raw_low, bool) or isinstance(raw_high, bool):
+            return
         try:
             low = max(0.0, float(raw_low))
             high = max(0.0, float(raw_high))
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             return
         if math.isfinite(low) and math.isfinite(high) and high > 0 and low <= high:
             time.sleep(random.uniform(low, high))
@@ -579,10 +605,7 @@ class BobaeDreamCrawler(BaseCrawler):
         """
         raw_code = str(board_code).strip() if board_code is not None else ""
         code = urllib.parse.quote(raw_code or "national", safe="")
-        try:
-            eff_page = max(1, int(float(page)))
-        except (ValueError, TypeError, OverflowError):
-            eff_page = 1
+        eff_page = _normalize_pages(page, default=1, max_pages=100000)
         kw_str = str(keyword).strip() if keyword is not None else ""
         encoded_kw = encode_euc_kr_query(kw_str)
         raw_key = str(s_key).strip() if s_key is not None else ""
@@ -599,10 +622,7 @@ class BobaeDreamCrawler(BaseCrawler):
         """
         raw_code = str(board_code).strip() if board_code is not None else ""
         code = urllib.parse.quote(raw_code or "national", safe="")
-        try:
-            eff_page = max(1, int(float(page)))
-        except (ValueError, TypeError, OverflowError):
-            eff_page = 1
+        eff_page = _normalize_pages(page, default=1, max_pages=100000)
         return f"{BOBAE_LIST_URL}?code={code}&page={eff_page}"
 
     def parse_list_page(self, html_content: str, board_code: str) -> List[Dict[str, Any]]:
@@ -621,6 +641,7 @@ class BobaeDreamCrawler(BaseCrawler):
             logger.warning(f"BobaeDream list page blocked by anti-scraping: {reason}")
             return []
 
+        scan_html = _mask_comments_and_scripts(html_content)
         items: List[Dict[str, Any]] = []
         seen_nos = set()
 
@@ -662,7 +683,7 @@ class BobaeDreamCrawler(BaseCrawler):
             re.IGNORECASE | re.DOTALL,
         )
 
-        for match in link_pattern.finditer(html_content):
+        for match in link_pattern.finditer(scan_html):
             raw_href = match.group(1)
             raw_title = match.group(2)
 
@@ -691,7 +712,7 @@ class BobaeDreamCrawler(BaseCrawler):
                 r'<a\s+[^>]*\bhref=["\']([^"\']*view(?:\.php)?[^"\']*No=(\d+)[^"\']*code=([^"\'&]+)[^"\']*)["\'][^>]*>(.*?)</a>',
                 re.IGNORECASE | re.DOTALL,
             )
-            for full_href_raw, post_no, code, raw_title in alt_pattern.findall(html_content):
+            for full_href_raw, post_no, code, raw_title in alt_pattern.findall(scan_html):
                 _append_item(full_href_raw, post_no, code, raw_title)
 
         return items
@@ -699,11 +720,7 @@ class BobaeDreamCrawler(BaseCrawler):
     @staticmethod
     def _extract_balanced_matches(html_str: str, tag_name: str, open_pattern: re.Pattern[str]) -> List[str]:
         """Extract inner HTML of all matched tags using balanced depth tracking."""
-        def _repl(m: re.Match[str]) -> str:
-            return " " * len(m.group(0))
-
-        masked = RE_HTML_COMMENTS.sub(_repl, html_str)
-        masked = RE_SCRIPT_STYLE.sub(_repl, masked)
+        masked = _mask_comments_and_scripts(html_str)
         tag_re = re.compile(rf"<(/?)({re.escape(tag_name)})\b([^>]*)>", re.IGNORECASE)
         results: List[str] = []
         pos = 0
@@ -916,44 +933,53 @@ class BobaeDreamCrawler(BaseCrawler):
                 "status": block_reason,
             }
 
-        # 2. Title - resilient against attribute order, tag structures, and entities
+        # Mask comments/scripts for DOM metadata extraction (keep raw html_content for AJAX script URL)
+        masked_html = _mask_comments_and_scripts(html_content)
+
+        # 2. Title - resilient against attribute order, tag structures, empty leading tags, and entities
         title = ""
-        title_match = re.search(r'<strong\b(?=[^>]*\bclass=["\']?[^"\'>]*\btitle\b)[^>]*>(.*?)</strong>', html_content, re.DOTALL | re.IGNORECASE)
-        if not title_match:
-            title_match = re.search(r'<dt\b(?=[^>]*\bclass=["\']?[^"\'>]*\btit\b)[^>]*>(.*?)</dt>', html_content, re.DOTALL | re.IGNORECASE)
-        if not title_match:
-            title_match = re.search(r'<h[1-3]\b(?=[^>]*\bclass=["\']?[^"\'>]*title)[^>]*>(.*?)</h[1-3]>', html_content, re.DOTALL | re.IGNORECASE)
-        if not title_match:
-            title_match = re.search(r'<meta\b(?=[^>]*\bproperty=["\']og:title["\'])[^>]*\bcontent=["\']([^"\']*)["\']', html_content, re.IGNORECASE)
-        if not title_match:
-            title_match = re.search(r'<meta\b(?=[^>]*\bcontent=["\']([^"\']*)["\'])[^>]*\bproperty=["\']og:title["\']', html_content, re.IGNORECASE)
-        if not title_match:
-            title_tag = re.search(r'<title[^>]*>(.*?)</title>', html_content, re.DOTALL | re.IGNORECASE)
+        for pat in (
+            r'<strong\b(?=[^>]*\bclass=["\']?[^"\'>]*\btitle\b)[^>]*>(.*?)</strong>',
+            r'<dt\b(?=[^>]*\bclass=["\']?[^"\'>]*\btit\b)[^>]*>(.*?)</dt>',
+            r'<h[1-3]\b(?=[^>]*\bclass=["\']?[^"\'>]*title)[^>]*>(.*?)</h[1-3]>',
+            r'<meta\b(?=[^>]*\bproperty=["\']og:title["\'])[^>]*\bcontent=["\']([^"\']*)["\']',
+            r'<meta\b(?=[^>]*\bcontent=["\']([^"\']*)["\'])[^>]*\bproperty=["\']og:title["\']',
+        ):
+            m = re.search(pat, masked_html, re.DOTALL | re.IGNORECASE)
+            if m:
+                candidate = clean_title_text(m.group(1))
+                if candidate:
+                    title = candidate
+                    break
+        if not title:
+            title_tag = re.search(r'<title[^>]*>(.*?)</title>', masked_html, re.DOTALL | re.IGNORECASE)
             if title_tag:
                 clean_t = clean_title_text(title_tag.group(1))
                 clean_t = re.sub(r"\s*-\s*보배드림.*$", "", clean_t).strip()
                 if clean_t:
                     title = clean_t
-        if title_match and not title:
-            title = clean_title_text(title_match.group(1))
 
         # 3. Author & Date
         author = ""
-        author_match = re.search(r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\bauthor\b)[^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
-        if not author_match:
-            author_match = re.search(r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\buserNick\b)[^>]*>(.*?)</span>', html_content, re.DOTALL | re.IGNORECASE)
-        if not author_match:
-            author_match = re.search(r'<dt\b(?=[^>]*\bclass=["\']?[^"\'>]*\bwriter\b)[^>]*>(.*?)</dt>', html_content, re.DOTALL | re.IGNORECASE)
-        if author_match:
-            author = clean_title_text(author_match.group(1))
+        for apat in (
+            r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\bauthor\b)[^>]*>(.*?)</span>',
+            r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\buserNick\b)[^>]*>(.*?)</span>',
+            r'<dt\b(?=[^>]*\bclass=["\']?[^"\'>]*\bwriter\b)[^>]*>(.*?)</dt>',
+        ):
+            am = re.search(apat, masked_html, re.DOTALL | re.IGNORECASE)
+            if am:
+                cand_author = clean_title_text(am.group(1))
+                if cand_author:
+                    author = cand_author
+                    break
 
         raw_date = ""
         # Support <span>, <td>, <em>, or <div> containing class="date"
-        date_match = re.search(r'<(?:span|td|em|div|p)\b[^>]*class=["\'][^"\']*\bdate\b[^"\']*["\'][^>]*>(.*?)</(?:span|td|em|div|p)>', html_content, re.DOTALL | re.IGNORECASE)
+        date_match = re.search(r'<(?:span|td|em|div|p)\b[^>]*class=["\'][^"\']*\bdate\b[^"\']*["\'][^>]*>(.*?)</(?:span|td|em|div|p)>', masked_html, re.DOTALL | re.IGNORECASE)
         if date_match:
             raw_date = clean_html_text(date_match.group(1))
         if not raw_date:
-            generic_date = re.search(r'(\d{4}[.\-/]\d{2}[.\-/]\d{2}(?:[\sT]+\d{2}:\d{2}(?::\d{2})?)?)', html_content)
+            generic_date = re.search(r'(\d{4}[.\-/]\d{2}[.\-/]\d{2}(?:[\sT]+\d{2}:\d{2}(?::\d{2})?)?)', masked_html)
             if generic_date:
                 raw_date = generic_date.group(1)
 
@@ -1019,11 +1045,14 @@ class BobaeDreamCrawler(BaseCrawler):
 
         # LSP compliance: if board_code is passed a URL (as in base crawler fetch_post(url, referer)), handle gracefully
         if isinstance(board_code, str) and board_code.strip().lower().startswith(("http://", "https://")):
-            referer = board_code
+            if referer is None:
+                referer = board_code
             board_code = "national"
 
+        base_url = kwargs.get("base_url")
+        eff_base_url = base_url.strip() if isinstance(base_url, str) and base_url.strip() else BOBAE_BASE_URL
         # Defensively normalize relative URLs and semicolon-terminated HTML entities (&amp; -> &)
-        eff_url = self._normalize_fetch_url(post_url, base_url=BOBAE_BASE_URL)
+        eff_url = self._normalize_fetch_url(post_url, base_url=eff_base_url)
         if not eff_url:
             logger.warning(f"Unsafe or invalid BobaeDream post_url provided: {post_url!r}")
             return None
@@ -1035,7 +1064,6 @@ class BobaeDreamCrawler(BaseCrawler):
 
         if not self.client:
             return None
-        base_url = kwargs.get("base_url")
         self.ensure_warm_up(base_url)
         eff_referer = _sanitize_referer(referer) or f"{BOBAE_BASE_URL}/"
         timeout = self._resolve_timeout_arg(
@@ -1264,6 +1292,8 @@ class BobaeDreamCrawler(BaseCrawler):
         seen_keys: Set[Tuple[str, str]] = set()
 
         for board in target_boards:
+            if not isinstance(board, str) or not board.strip():
+                continue
             remaining_limit = (eff_limit - len(all_posts)) if eff_limit is not None else None
             board_posts = self.search_board(board, keyword, pages=max_pages, limit=remaining_limit)
             for p in board_posts:

@@ -149,7 +149,7 @@ def format_daily_report_payload(
     generated_at: Optional[str] = None,
 ) -> DailyReportPayload:
     """Transform complaint records into a validated DailyReportPayload object."""
-    if generated_at is None:
+    if generated_at is None or not str(generated_at).strip():
         generated_at = datetime.now(timezone.utc).isoformat()
 
     if complaints is None or not isinstance(complaints, Iterable) or isinstance(complaints, (str, bytes, bytearray)):
@@ -477,8 +477,11 @@ def read_daily_reports(
     if not path or not str(path).strip():
         return {"reports": [], "statistics": {}}
 
-    p = Path(path).resolve()
-    if not p.exists() or p.is_dir():
+    try:
+        p = Path(path).resolve()
+        if not p.exists() or p.is_dir():
+            return {"reports": [], "statistics": {}}
+    except (OSError, ValueError, RuntimeError):
         return {"reports": [], "statistics": {}}
 
     from tracker.atomic_writer import (

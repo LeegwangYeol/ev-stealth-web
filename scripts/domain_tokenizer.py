@@ -12,9 +12,18 @@ Zero external runtime dependencies. Standard library only.
 
 from dataclasses import dataclass, field
 import json
+import logging
+import math
 import os
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+logger = logging.getLogger(__name__)
+
+
+def _reject_json_constant(constant: str) -> Any:
+    """Reject non-standard JSON constants (NaN, Infinity, -Infinity)."""
+    raise ValueError(f"Non-standard JSON constant: {constant}")
 
 
 @dataclass
@@ -50,6 +59,9 @@ class AutomotiveTrie:
         cleaned = word.strip()
         if not cleaned:
             return
+        if isinstance(severity_weight, bool) or not isinstance(severity_weight, (int, float)) or not math.isfinite(severity_weight):
+            severity_weight = 1.0
+        cat_str = str(domain_category) if domain_category is not None else "general"
 
         curr = self.root
         for char in cleaned:
@@ -60,8 +72,8 @@ class AutomotiveTrie:
         if not curr.is_end:
             self.term_count += 1
         curr.is_end = True
-        curr.domain_category = domain_category
-        curr.severity_weight = severity_weight
+        curr.domain_category = cat_str
+        curr.severity_weight = float(severity_weight)
         curr.canonical_name = canonical_name or cleaned
 
     def search_longest_prefix(
@@ -73,7 +85,14 @@ class AutomotiveTrie:
         Greedy longest-prefix match from start_idx in text.
         Returns: (matched_surface, domain_category, severity_weight, canonical_name, next_idx) or None.
         """
-        if not isinstance(text, str) or not text or start_idx < 0:
+        if (
+            not isinstance(text, str)
+            or not text
+            or isinstance(start_idx, bool)
+            or not isinstance(start_idx, int)
+            or start_idx < 0
+            or start_idx >= len(text)
+        ):
             return None
         curr = self.root
         longest_match = None
@@ -489,15 +508,17 @@ class DomainTokenizer:
         if dict_path:
             try:
                 with open(dict_path, "r", encoding="utf-8-sig") as f:
-                    slang_data = json.load(f)
+                    slang_data = json.load(f, parse_constant=_reject_json_constant)
                 if isinstance(slang_data, dict):
                     for term, info in slang_data.items():
-                        cat = info.get("category", "slang") if isinstance(info, dict) else "slang"
+                        if not isinstance(term, str) or not term.strip():
+                            continue
+                        cat = str(info.get("category") or "slang") if isinstance(info, dict) else "slang"
                         self.trie.insert(term, domain_category=cat, severity_weight=2.0, canonical_name=term)
                         if " " in term:
                             self.trie.insert(term.replace(" ", ""), domain_category=cat, severity_weight=2.0, canonical_name=term)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Failed to load slang dictionary from %s: %s", dict_path, exc)
 
     def strip_affixes(self, token_str: str) -> str:
         """Strip Josa and Eomi from token string."""

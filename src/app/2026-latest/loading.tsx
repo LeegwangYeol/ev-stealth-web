@@ -13,9 +13,9 @@ export default function Latest2026Loading() {
       <div aria-hidden="true" className="space-y-8">
         {/* Nav & Breadcrumb Skeleton */}
         <div className="space-y-3 mb-6">
-          <div className="flex justify-between items-center">
-            <div className="h-5 bg-slate-200 rounded-lg w-48" />
-            <div className="h-7 bg-slate-100 rounded-lg w-28" />
+          <div className="flex justify-between items-center gap-2">
+            <div className="h-5 bg-slate-200 rounded-lg w-36 sm:w-48" />
+            <div className="h-7 bg-slate-100 rounded-lg w-24 sm:w-28" />
           </div>
           <div className="h-12 bg-slate-100 rounded-2xl border border-slate-200" />
         </div>

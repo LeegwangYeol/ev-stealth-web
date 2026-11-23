@@ -838,6 +838,7 @@ export default function PdiChecklistClient() {
                 id={contentId}
                 role="region"
                 aria-labelledby={buttonId}
+                hidden={isCollapsed}
                 className={`divide-y divide-gray-100 ${isCollapsed ? 'hidden print:block' : 'block'}`}
               >
                 {(itemsByCategory.get(category) || []).map((item) => (

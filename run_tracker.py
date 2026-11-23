@@ -250,9 +250,9 @@ def sync_defect_reports(
         quarantine_corrupted_file,
     )
 
-    if web_dir is not None and not str(web_dir).strip():
+    if web_dir is not None and str(web_dir).strip() in ("", "."):
         web_dir = None
-    if root_dir is not None and not str(root_dir).strip():
+    if root_dir is not None and str(root_dir).strip() in ("", "."):
         root_dir = None
 
     logger.info("Synchronizing defect reports (daily_reports.json)...")
@@ -291,6 +291,8 @@ def sync_defect_reports(
         )
 
         public_reports_paths: List[Path] = []
+        if web_dir and (Path(web_dir) / "public" / "data").exists():
+            public_reports_paths.append(Path(web_dir) / "public" / "data" / "daily_reports.json")
         if web_dir and (Path(web_dir).parent / "public" / "data").exists():
             public_reports_paths.append(Path(web_dir).parent / "public" / "data" / "daily_reports.json")
         if web_dir and (Path(web_dir).parent.parent / "public" / "data").exists():
@@ -361,15 +363,15 @@ def sync_defect_reports(
         if run_crawler:
             try:
                 from run_scraper import ScraperPipeline
-                pipeline = ScraperPipeline()
-                res = pipeline.run(
-                    sources="all",
-                    limit=10,
-                    sync_web=True,
-                    web_dir=web_dir,
-                    dry_run=dry_run,
-                )
-                written_paths.extend(res.get("written_paths", []))
+                with ScraperPipeline() as pipeline:
+                    res = pipeline.run(
+                        sources="all",
+                        limit=10,
+                        sync_web=True,
+                        web_dir=web_dir,
+                        dry_run=dry_run,
+                    )
+                    written_paths.extend(res.get("written_paths", []))
             except Exception as exc:
                 logger.warning(
                     "Crawler execution in sync_defect_reports encountered: %s. Falling back to mirror synchronization.",
@@ -1053,7 +1055,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         # Print output to stdout according to --format
         if args.format == "json":
-            print(json.dumps(payload.to_dict(), indent=2, ensure_ascii=False, allow_nan=False))
+            from tracker.atomic_writer import _json_default, sanitize_nan_inf
+            clean_payload = sanitize_nan_inf(payload.to_dict())
+            print(json.dumps(clean_payload, indent=2, ensure_ascii=False, allow_nan=False, default=_json_default))
         elif args.format in ("markdown", "md"):
             briefing = tracker.generate_briefing(payload, fallback_used=fallback_used)
             print("\n" + briefing + "\n")

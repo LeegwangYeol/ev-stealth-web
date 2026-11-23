@@ -88,7 +88,7 @@ const globalJsonLd = {
         "@type": "SearchAction",
         "target": {
           "@type": "EntryPoint",
-          "urlTemplate": `${SITE_URL}/recall-portal?search={search_term_string}`,
+          "urlTemplate": `${SITE_URL}/recall-portal?model={search_term_string}`,
         },
         "query-input": "required name=search_term_string",
       },
@@ -224,16 +224,16 @@ export default function RootLayout({
 
             {/* Desktop Navigation Bar */}
             <nav aria-label="데스크톱 내비게이션" data-testid="desktop-nav" className="hidden md:flex flex-wrap items-center justify-end gap-x-2 lg:gap-x-3 gap-y-1 text-xs lg:text-sm font-medium">
-              <Link href="/subsidy-tracker" prefetch={true} aria-label="보조금 실시간 소진율 (전국 지자체 추적기)" className="text-amber-400 hover:text-white font-semibold transition flex items-center gap-1 min-h-[44px] px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
+              <Link href="/subsidy-tracker" prefetch={true} aria-label="보조금 실시간 소진율 (전국 지자체 추적기)" className="text-amber-400 hover:text-white font-semibold transition flex items-center gap-1 min-h-[44px] min-w-[44px] px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
                 <span aria-hidden="true">⚡</span> 보조금 실시간 소진율
               </Link>
-              <Link href="/depreciation-calculator" prefetch={true} aria-label="감가상각 시뮬레이터 (잔존가치 및 배터리 수명 계산기)" className="text-emerald-400 hover:text-white font-semibold transition flex items-center gap-1 min-h-[44px] px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
+              <Link href="/depreciation-calculator" prefetch={true} aria-label="감가상각 시뮬레이터 (잔존가치 및 배터리 수명 계산기)" className="text-emerald-400 hover:text-white font-semibold transition flex items-center gap-1 min-h-[44px] min-w-[44px] px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
                 <span aria-hidden="true">📉</span> 감가상각 시뮬레이터
               </Link>
-              <Link href="/reliability-analytics" prefetch={false} aria-label="스텔스 품질 점수 (DSI 결함 및 신뢰성 분석)" className="text-blue-300 hover:text-white font-semibold transition flex items-center gap-1 min-h-[44px] px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
+              <Link href="/reliability-analytics" prefetch={false} aria-label="스텔스 품질 점수 (DSI 결함 및 신뢰성 분석)" className="text-blue-300 hover:text-white font-semibold transition flex items-center gap-1 min-h-[44px] min-w-[44px] px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
                 <span aria-hidden="true">📊</span> 스텔스 품질 점수
               </Link>
-              <Link href="/recall-portal" prefetch={false} aria-label="통합 리콜 현황 (국토부·NHTSA 공인 리콜 포털)" className="text-slate-200 hover:text-white font-medium transition flex items-center gap-1 min-h-[44px] px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
+              <Link href="/recall-portal" prefetch={false} aria-label="통합 리콜 현황 (국토부·NHTSA 공인 리콜 포털)" className="text-slate-200 hover:text-white font-medium transition flex items-center gap-1 min-h-[44px] min-w-[44px] px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
                 <span aria-hidden="true">🚨</span> 통합 리콜 현황
               </Link>
               <Link href="/2026-latest" prefetch={false} aria-label="2026 최신 결함 분석" className="text-slate-200 hover:text-white font-medium transition min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">

@@ -337,6 +337,8 @@ def is_safe_url(
         addr_info = socket.getaddrinfo(dns_host, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
         if addr_info:
             for family, socktype, proto, canonname, sockaddr in addr_info:
+                if isinstance(sockaddr, tuple) and len(sockaddr) >= 4 and sockaddr[3]:
+                    return False, f"SSRF blocked: Domain '{host_lower}' resolved to scoped IPv6 address"
                 ip_str = sockaddr[0]
                 try:
                     resolved_ip = ipaddress.ip_address(ip_str)
@@ -542,6 +544,8 @@ def _create_safe_connection(
     host, port = address
     addr_list = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
     for _, _, _, _, sockaddr in addr_list:
+        if isinstance(sockaddr, tuple) and len(sockaddr) >= 4 and sockaddr[3]:
+            raise OSError(f"SSRF blocked: Domain '{host}' resolved to scoped IPv6 address")
         ip_str = sockaddr[0]
         try:
             resolved_ip = ipaddress.ip_address(ip_str)
@@ -617,11 +621,13 @@ class ResilientHTTPSConnection(http.client.HTTPSConnection):
         connect_timeout: float = 5.0,
         read_timeout: float = 15.0,
         allow_private_ips: bool = True,
+        allowed_ports: Optional[Set[int]] = None,
         **kwargs,
     ):
         self._conn_timeout = _positive_float(connect_timeout, 5.0)
         self._read_timeout = _positive_float(read_timeout, 15.0)
         self._allow_private_ips = bool(allow_private_ips)
+        self._allowed_ports = set(allowed_ports) if allowed_ports is not None else None
         super().__init__(*args, **kwargs)
 
     def connect(self):
@@ -631,8 +637,13 @@ class ResilientHTTPSConnection(http.client.HTTPSConnection):
                 if ":" in str(self._tunnel_host) and not str(self._tunnel_host).startswith("[")
                 else str(self._tunnel_host)
             )
-            tunnel_url = f"https://{tunnel_host}:{self._tunnel_port}" if getattr(self, "_tunnel_port", None) else f"https://{tunnel_host}"
-            is_safe, reason = is_safe_url(tunnel_url)
+            tunnel_port = getattr(self, "_tunnel_port", None)
+            tunnel_url = f"https://{tunnel_host}:{tunnel_port}" if tunnel_port is not None else f"https://{tunnel_host}"
+            is_safe, reason = is_safe_url(
+                tunnel_url,
+                allow_private_ips=self._allow_private_ips,
+                allowed_ports=self._allowed_ports,
+            )
             if not is_safe:
                 raise OSError(f"SSRF blocked: Unsafe tunnel host '{self._tunnel_host}' ({reason})")
         self.sock = _create_safe_connection(
@@ -748,17 +759,20 @@ class ResilientHTTPSHandler(urllib.request.HTTPSHandler):
         read_timeout: float = 15.0,
         context=None,
         allow_private_ips: bool = True,
+        allowed_ports: Optional[Set[int]] = None,
         **kwargs,
     ):
         super().__init__(context=context, **kwargs)
         self._connect_timeout = _positive_float(connect_timeout, 5.0)
         self._read_timeout = _positive_float(read_timeout, 15.0)
         self._allow_private_ips = bool(allow_private_ips)
+        self._allowed_ports = set(allowed_ports) if allowed_ports is not None else None
 
     def https_open(self, req):
         conn_to = getattr(req, "_connect_timeout", self._connect_timeout)
         read_to = getattr(req, "_read_timeout", self._read_timeout)
         allow_priv = self._allow_private_ips
+        allowed_ports = self._allowed_ports
 
         def _factory(host, **kwargs):
             ctx = getattr(self, "_context", None)
@@ -771,6 +785,7 @@ class ResilientHTTPSHandler(urllib.request.HTTPSHandler):
                 connect_timeout=conn_to,
                 read_timeout=read_to,
                 allow_private_ips=allow_priv,
+                allowed_ports=allowed_ports,
                 **kwargs,
             )
         return self.do_open(_factory, req)
@@ -794,6 +809,7 @@ class CircuitBreaker:
         failure_threshold: int = 3,
         cooldown_seconds: float = 30.0,
         half_open_max_probes: int = 1,
+        max_hosts: int = 1000,
     ):
         try:
             ft = int(failure_threshold) if failure_threshold is not None and not isinstance(failure_threshold, bool) else 3
@@ -806,8 +822,22 @@ class CircuitBreaker:
         except (ValueError, TypeError, OverflowError):
             hp = 1
         self.half_open_max_probes = max(1, hp)
+        try:
+            mh = int(max_hosts) if max_hosts is not None and not isinstance(max_hosts, bool) else 1000
+        except (ValueError, TypeError, OverflowError):
+            mh = 1000
+        self.max_hosts = max(1, mh)
         self._lock = threading.Lock()
-        self._hosts: Dict[str, Dict[str, Any]] = {}
+        self._hosts: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
+
+    def _normalize_host(self, raw_host: str) -> str:
+        host = raw_host.lower().strip().rstrip(".")
+        if host and not host.isascii():
+            try:
+                host = host.encode("idna").decode("ascii").lower().strip().rstrip(".")
+            except UnicodeError:
+                pass
+        return host
 
     def _extract_host(self, url_or_host: str) -> str:
         if not url_or_host:
@@ -817,7 +847,7 @@ class CircuitBreaker:
             try:
                 parsed = urllib.parse.urlsplit(s)
                 if parsed.hostname:
-                    return parsed.hostname.lower().rstrip(".")
+                    return self._normalize_host(parsed.hostname)
             except Exception:
                 pass
         try:
@@ -828,10 +858,22 @@ class CircuitBreaker:
         try:
             parsed = urllib.parse.urlsplit("//" + s)
             if parsed.hostname:
-                return parsed.hostname.lower().rstrip(".")
+                return self._normalize_host(parsed.hostname)
         except Exception:
             pass
-        return s.lower().split(":")[0].split("/")[0].rstrip(".")
+        return self._normalize_host(s.split(":")[0].split("/")[0])
+
+    def _evict_if_full(self) -> None:
+        while len(self._hosts) >= self.max_hosts:
+            victim = None
+            for k, v in self._hosts.items():
+                if v.get("state") == CircuitBreakerState.CLOSED:
+                    victim = k
+                    break
+            if victim is None:
+                self._hosts.popitem(last=False)
+            else:
+                del self._hosts[victim]
 
     def record_probe(self, url_or_host: str) -> None:
         """Record that a canary probe is in-flight for this host during HALF_OPEN state."""
@@ -938,12 +980,15 @@ class CircuitBreaker:
             return False
         with self._lock:
             if host not in self._hosts:
+                self._evict_if_full()
                 self._hosts[host] = {
                     "state": CircuitBreakerState.CLOSED,
                     "failure_count": 0,
                     "tripped_until": 0.0,
                     "probe_count": 0,
                 }
+            else:
+                self._hosts.move_to_end(host)
             info = self._hosts[host]
             info["failure_count"] = info.get("failure_count", 0) + 1
             tripped = False
@@ -1179,6 +1224,7 @@ class SafeHttpClient:
                 connect_timeout=self._connect_timeout,
                 read_timeout=self._read_timeout,
                 allow_private_ips=self.allow_private_ips,
+                allowed_ports=self.allowed_ports,
             )
             self.opener = urllib.request.build_opener(
                 cookie_processor, redirect_handler, http_handler, https_handler
@@ -1538,6 +1584,24 @@ class SafeHttpClient:
                     pass
 
     @staticmethod
+    def _get_header_ci(headers: Any, name: str) -> str:
+        """Retrieve a header value case-insensitively across HTTPMessage and plain dicts."""
+        if not headers:
+            return ""
+        val = None
+        if hasattr(headers, "get"):
+            val = headers.get(name)
+            if val is None:
+                val = headers.get(name.lower())
+        if val is None and hasattr(headers, "items"):
+            target = name.lower()
+            for hk, hv in headers.items():
+                if str(hk).lower() == target:
+                    val = hv
+                    break
+        return str(val) if val is not None else ""
+
+    @staticmethod
     def _parse_retry_after(he: urllib.error.HTTPError) -> Optional[float]:
         """Parse standard HTTP Retry-After header (seconds or RFC date)."""
         if not hasattr(he, "headers") or not he.headers:
@@ -1612,6 +1676,9 @@ class SafeHttpClient:
             logger.error("SafeHttpClient opener is not initialized.")
             return 0, "", b""
 
+        eff_method = (method or "GET").upper()
+        is_cacheable_method = eff_method in ("GET", "HEAD")
+
         # Host-level Circuit Breaker guard (atomic check + HALF_OPEN probe reservation)
         cb_allowed = (
             self.circuit_breaker.try_acquire(norm_url)
@@ -1623,7 +1690,7 @@ class SafeHttpClient:
                 f"Circuit breaker is OPEN for {norm_url} (tripped due to repeated 403/429/503 errors). "
                 f"Fast-failing request."
             )
-            if self.cache_fallback:
+            if self.cache_fallback and is_cacheable_method:
                 cached = self.get_cached_response(norm_url)
                 if cached is not None:
                     logger.warning(
@@ -1686,7 +1753,6 @@ class SafeHttpClient:
             except (ValueError, TypeError, OverflowError):
                 eff_retries = 3
 
-            eff_method = (method or "GET").upper()
             for attempt in range(1, eff_retries + 1):
                 if attempt > 1:
                     ua_keys = [k for k in req_headers if str(k).lower() == "user-agent"]
@@ -1728,10 +1794,12 @@ class SafeHttpClient:
                                 )
                                 stream_truncated = True
                                 break
+                            single_read = False
                             try:
                                 chunk = resp.read(65536)
                             except TypeError:
                                 chunk = resp.read()
+                                single_read = True
                             except http.client.IncompleteRead as ire:
                                 partial_bytes = ire.partial if isinstance(ire.partial, (bytes, bytearray)) else b""
                                 logger.warning(
@@ -1759,30 +1827,21 @@ class SafeHttpClient:
                                 )
                                 stream_truncated = True
                                 break
-                            if len(chunk) > 65536:
+                            if single_read or len(chunk) > 65536:
                                 break
                         raw_bytes = b"".join(chunks)
                         if self.max_response_size > 0 and len(raw_bytes) > self.max_response_size:
                             raw_bytes = raw_bytes[: self.max_response_size]
 
                         # Detect charset from response headers (case-insensitive for plain dicts)
-                        content_type_hdr = ""
-                        if hasattr(resp, "headers") and resp.headers:
-                            if hasattr(resp.headers, "get"):
-                                content_type_hdr = resp.headers.get("Content-Type", "")
-                                if not content_type_hdr and hasattr(resp.headers, "items"):
-                                    for hk, hv in resp.headers.items():
-                                        if str(hk).lower() == "content-type":
-                                            content_type_hdr = hv
-                                            break
-                        content_type = str(content_type_hdr) if content_type_hdr is not None else ""
+                        content_type = self._get_header_ci(getattr(resp, "headers", None), "Content-Type")
                         detected_encoding = encoding or self._detect_encoding(content_type, raw_bytes)
                         decoded_text = robust_decode(raw_bytes, declared_encoding=detected_encoding)
 
                         if 200 <= status_code < 400:
                             self.circuit_breaker.record_success(norm_url)
                             cb_resolved = True
-                            if status_code == 200 and decoded_text and not stream_truncated:
+                            if is_cacheable_method and status_code == 200 and decoded_text and not stream_truncated:
                                 self.set_cached_response(norm_url, status_code, decoded_text, raw_bytes)
                         elif status_code in (403, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524):
                             self.circuit_breaker.record_failure(norm_url, status_code=status_code)
@@ -1841,7 +1900,7 @@ class SafeHttpClient:
                             elif self.circuit_breaker.get_state(norm_url) == CircuitBreakerState.HALF_OPEN:
                                 self.circuit_breaker.record_success(norm_url)
                                 cb_resolved = True
-                            if he.code in (403, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524) and self.cache_fallback:
+                            if is_cacheable_method and he.code in (403, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524) and self.cache_fallback:
                                 cached = self.get_cached_response(norm_url)
                                 if cached is not None:
                                     logger.warning(
@@ -1863,9 +1922,7 @@ class SafeHttpClient:
                                     raw_bytes = bytes(raw_bytes)
                                 if self.max_response_size > 0 and len(raw_bytes) > self.max_response_size:
                                     raw_bytes = raw_bytes[: self.max_response_size]
-                                err_ct = ""
-                                if hasattr(he, "headers") and he.headers and hasattr(he.headers, "get"):
-                                    err_ct = str(he.headers.get("Content-Type", "") or "")
+                                err_ct = self._get_header_ci(getattr(he, "headers", None), "Content-Type")
                                 err_enc = encoding or self._detect_encoding(err_ct, raw_bytes)
                                 decoded_text = robust_decode(raw_bytes, declared_encoding=err_enc)
                                 return he.code, decoded_text, raw_bytes
@@ -1899,7 +1956,7 @@ class SafeHttpClient:
                     else:
                         self.circuit_breaker.record_failure(norm_url)
                         cb_resolved = True
-                        if self.cache_fallback:
+                        if self.cache_fallback and is_cacheable_method:
                             cached = self.get_cached_response(norm_url)
                             if cached is not None:
                                 logger.warning(
@@ -1909,7 +1966,7 @@ class SafeHttpClient:
                                 return cached
                         break
 
-            if self.cache_fallback:
+            if self.cache_fallback and is_cacheable_method:
                 cached = self.get_cached_response(norm_url)
                 if cached is not None:
                     logger.warning(
@@ -2022,7 +2079,8 @@ def robust_decode(raw_bytes: Union[bytes, bytearray, memoryview, str, None], dec
         try:
             return raw_bytes.decode("utf-8-sig")
         except UnicodeDecodeError:
-            pass
+            if not norm_declared or norm_declared == "utf-8":
+                return raw_bytes.decode("utf-8-sig", errors="replace")
     if raw_bytes.startswith((b"\xff\xfe", b"\xfe\xff")) and (not norm_declared or norm_declared.startswith("utf-16")):
         try:
             return raw_bytes.decode("utf-16")
@@ -2061,18 +2119,25 @@ def extract_balanced_tag_content(
     if not m:
         return ""
     start = m.end()
-    tag_re = re.compile(rf"<(/?){re.escape(tag_name)}\b[^>]*>", re.IGNORECASE)
+    esc_tag = re.escape(tag_name)
+    token_re = re.compile(
+        rf"<!--.*?-->|<(script|style)\b[^>]*>.*?</\1\s*>|<(/?){esc_tag}\b[^>]*>",
+        re.IGNORECASE | re.DOTALL,
+    )
     depth = 1
-    for tm in tag_re.finditer(html_content, start):
+    for tm in token_re.finditer(html_content, start):
+        close_slash = tm.group(2)
+        if close_slash is None:
+            continue
         token = tm.group(0)
-        if tm.group(1) == "/":
+        if close_slash == "/":
             depth -= 1
             if depth == 0:
                 return html_content[start : tm.start()]
         elif not token.rstrip().endswith("/>"):
             depth += 1
     # Unclosed tag fallback: up to first closing tag or end
-    close_m = re.search(rf"</{re.escape(tag_name)}\s*>", html_content[start:], re.IGNORECASE)
+    close_m = re.search(rf"</{esc_tag}\s*>", html_content[start:], re.IGNORECASE)
     if close_m:
         return html_content[start : start + close_m.start()]
     return html_content[start:]
@@ -2080,15 +2145,17 @@ def extract_balanced_tag_content(
 
 def bounded_cache_set(cache: Dict[str, Any], key: str, value: Any, max_size: int = 500) -> None:
     """Store key/value in an in-memory cache dict with FIFO eviction beyond max_size."""
+    if max_size <= 0:
+        return
     if key in cache:
         cache[key] = value
         return
-    if max_size > 0 and len(cache) >= max_size:
+    while len(cache) >= max_size:
         try:
             oldest_key = next(iter(cache))
             del cache[oldest_key]
         except StopIteration:
-            pass
+            break
     cache[key] = value
 
 
@@ -2115,7 +2182,7 @@ _RE_SCRIPT_STYLE = re.compile(
 _RE_BLOCK_TAGS = re.compile(
     r"<(br|p|/p|div|/div|li|/li|h\d|/h\d|tr|/tr|dt|/dt|dd|/dd)\b[^>]*>", re.IGNORECASE
 )
-_RE_ANY_TAG = re.compile(r"<[^>]+>")
+_RE_ANY_TAG = re.compile(r"</?[a-zA-Z!?][^>]*>")
 _RE_TRAILING_TAG = re.compile(r"<[a-zA-Z/][^<]*$")
 _RE_HORIZONTAL_WS = re.compile(r"[ \t]+")
 
@@ -2154,12 +2221,14 @@ def extract_meta_content(html_content: str, prop_name: str) -> str:
     """Extract content from a <meta> tag matching property/name regardless of attribute order."""
     if not html_content or not isinstance(html_content, str) or not prop_name:
         return ""
+    scrubbed = _RE_HTML_COMMENT.sub(" ", html_content)
+    scrubbed = _RE_SCRIPT_STYLE.sub(" ", scrubbed)
     prop_pat = re.compile(
         rf'\b(?:property|name)\s*=\s*(?:"{re.escape(prop_name)}"|\'{re.escape(prop_name)}\')',
         re.IGNORECASE,
     )
     content_pat = re.compile(r'\bcontent\s*=\s*(?:"([^"]*)"|\'([^\']*)\')', re.IGNORECASE)
-    for meta_m in re.finditer(r"<meta\b[^>]*>", html_content, re.IGNORECASE):
+    for meta_m in re.finditer(r'''<meta\b(?:[^>"']|"[^"]*"|'[^']*')*>''', scrubbed, re.IGNORECASE):
         tag = meta_m.group(0)
         if prop_pat.search(tag):
             cm = content_pat.search(tag)

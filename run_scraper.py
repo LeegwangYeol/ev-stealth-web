@@ -195,6 +195,8 @@ def _atomic_copy_file(src_path: Union[str, Path], dest_path: Union[str, Path]) -
     from tracker.atomic_writer import FileLock, get_lock_path
 
     dest = Path(dest_path).resolve()
+    if dest.is_dir():
+        raise IsADirectoryError(f"Target path is an existing directory: {dest}")
     src_p = Path(src_path)
     try:
         if src_p.resolve() == dest and dest.is_file():
@@ -659,10 +661,13 @@ class ScraperPipeline:
             return
         temp_file: Optional[Path] = None
         try:
+            from tracker.atomic_writer import _json_default, sanitize_nan_inf
+
             cache_file = self._get_harvest_cache_path()
             temp_file = cache_file.with_suffix(f".tmp.{os.getpid()}.{threading.get_ident()}")
+            clean_posts = sanitize_nan_inf(posts)
             with open(temp_file, "w", encoding="utf-8") as f:
-                json.dump(posts, f, ensure_ascii=False, allow_nan=False)
+                json.dump(clean_posts, f, ensure_ascii=False, allow_nan=False, default=_json_default)
                 f.flush()
                 os.fsync(f.fileno())
             try:
@@ -913,28 +918,51 @@ class ScraperPipeline:
         # If scrape produced 0 defects, check if an existing authentic mirror file already exists
         existing_mirror: Optional[str] = None
         if len(defect_complaints) == 0:
-            for p in unique_paths:
-                if _is_valid_daily_report(p):
-                    existing_mirror = p
-                    break
-            # Fallback to canonical repository baseline mirror if unique target paths do not exist yet
+            def _is_nonempty_daily_report(path_cand: str) -> Tuple[bool, bool]:
+                try:
+                    pc = Path(path_cand)
+                    if not pc.is_file() or pc.stat().st_size == 0:
+                        return (False, False)
+                    with open(pc, "r", encoding="utf-8-sig") as f:
+                        d = json.load(f, parse_constant=_reject_json_constant)
+                    if (
+                        isinstance(d, dict)
+                        and "reports" in d
+                        and isinstance(d["reports"], list)
+                        and all(isinstance(r, dict) for r in d["reports"])
+                    ):
+                        return (True, len(d["reports"]) > 0)
+                except Exception:
+                    pass
+                return (False, False)
+
+            candidate_mirror_paths: List[str] = list(unique_paths)
+            baseline_candidates = [
+                _resolve_web_reports_path(web_dir),
+                _resolve_root_reports_path(),
+                _resolve_public_reports_path(web_dir),
+                REPO_ROOT / "ev-stealth-web" / "data" / "daily_reports.json",
+                REPO_ROOT / "public" / "data" / "daily_reports.json",
+                Path(DEFAULT_OUTPUT_PATH),
+            ]
+            for bc in baseline_candidates:
+                try:
+                    bp = str(bc.resolve()) if hasattr(bc, "resolve") else str(bc)
+                    if bp not in candidate_mirror_paths:
+                        candidate_mirror_paths.append(bp)
+                except Exception:
+                    pass
+            first_empty_valid: Optional[str] = None
+            for cand_p in candidate_mirror_paths:
+                is_valid, has_reports = _is_nonempty_daily_report(cand_p)
+                if is_valid:
+                    if has_reports:
+                        existing_mirror = cand_p
+                        break
+                    if first_empty_valid is None:
+                        first_empty_valid = cand_p
             if existing_mirror is None:
-                baseline_candidates = [
-                    _resolve_web_reports_path(web_dir),
-                    _resolve_root_reports_path(),
-                    _resolve_public_reports_path(web_dir),
-                    REPO_ROOT / "ev-stealth-web" / "data" / "daily_reports.json",
-                    REPO_ROOT / "public" / "data" / "daily_reports.json",
-                    Path(DEFAULT_OUTPUT_PATH),
-                ]
-                for bc in baseline_candidates:
-                    try:
-                        bp = str(bc.resolve()) if hasattr(bc, "resolve") else str(bc)
-                        if _is_valid_daily_report(bp):
-                            existing_mirror = bp
-                            break
-                    except Exception:
-                        pass
+                existing_mirror = first_empty_valid
 
         for out_path in unique_paths:
             try:

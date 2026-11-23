@@ -26,6 +26,17 @@ import SubsidyErrorBoundary from '@/components/subsidy/SubsidyErrorBoundary';
 import SubsidyBadge from '@/components/subsidy/SubsidyBadge';
 import SubsidyProgressBar from '@/components/subsidy/SubsidyProgressBar';
 
+// Pure Helper: Normalize numeric metrics to finite non-negative numbers without -0
+const toSafeNonNeg = (value: unknown): number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+
+const TIMESTAMP_OPTIONS: Intl.DateTimeFormatOptions = {
+  month: 'long',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+};
+
 // Pure Helper: Normalize status aliases to canonical 5-tier AlertSeverity
 const normalizeAlertSeverity = (
   status?: AlertSeverity | string | null,
@@ -326,12 +337,7 @@ const TrackerHeader = React.memo(function TrackerHeader({
           데이터 갱신 시각:{' '}
           <ClientTimestamp
             isoString={generatedAt}
-            options={{
-              month: 'long',
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            }}
+            options={TIMESTAMP_OPTIONS}
           />
         </span>
       </div>
@@ -563,11 +569,13 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   // Sync selectedModelId and selectedRegionId on query param navigation
   useEffect(() => {
     if (urlModel) {
-      const canonical = getModelByIdFromList(initialData?.popular_models_matrix, urlModel)?.model_id;
+      const matchedModel = getModelByIdFromList(initialData?.popular_models_matrix, urlModel);
+      const canonical = matchedModel?.model_id || matchedModel?.name_ko;
       setSelectedModelId(canonical || urlModel);
     }
     if (urlRegion) {
-      const canonical = getRegionByIdFromList(initialData?.regions, urlRegion)?.region_id;
+      const matchedRegion = getRegionByIdFromList(initialData?.regions, urlRegion);
+      const canonical = matchedRegion?.region_id || matchedRegion?.iso_code || matchedRegion?.name_ko;
       setSelectedRegionId(canonical || urlRegion);
     }
   }, [urlModel, urlRegion, initialData?.popular_models_matrix, initialData?.regions]);
@@ -620,12 +628,16 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         const matchRegion =
           (typeof region.name_ko === 'string' ? region.name_ko : '').toLowerCase().includes(trimmedQuery) ||
           (typeof region.name_en === 'string' ? region.name_en : '').toLowerCase().includes(trimmedQuery) ||
-          (typeof region.iso_code === 'string' ? region.iso_code : '').toLowerCase().includes(trimmedQuery);
+          (typeof region.iso_code === 'string' ? region.iso_code : '').toLowerCase().includes(trimmedQuery) ||
+          (typeof region.region_id === 'string' ? region.region_id : '').toLowerCase().includes(trimmedQuery);
 
         const matchMuni =
           Array.isArray(region.municipalities) &&
           region.municipalities.some(
-            (m) => m && typeof m.name_ko === 'string' && m.name_ko.toLowerCase().includes(trimmedQuery)
+            (m) =>
+              m &&
+              ((typeof m.name_ko === 'string' && m.name_ko.toLowerCase().includes(trimmedQuery)) ||
+                (typeof m.name_en === 'string' && m.name_en.toLowerCase().includes(trimmedQuery)))
           );
 
         if (!matchRegion && !matchMuni) return false;
@@ -691,7 +703,8 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   }, []);
 
   const handleSortChange = useCallback((newSort: RegionSortOption) => {
-    setSortOption(newSort);
+    const normalized = String(newSort || 'DEPLETION_DESC').toUpperCase();
+    setSortOption(isSortOption(normalized) ? normalized : 'DEPLETION_DESC');
   }, []);
 
   const handleSelectAlertFilter = useCallback((key: AlertSeverity) => {
@@ -702,10 +715,9 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
     setZoneFilter('ALL');
     setAlertFilter('ALL');
     setSupplementaryOnly(false);
-    if (nameKo) {
-      setSearchQuery(nameKo);
-      setDebouncedQuery(nameKo);
-    }
+    const nextQuery = nameKo ? nameKo.trim() : '';
+    setSearchQuery(nextQuery);
+    setDebouncedQuery(nextQuery);
     handleSelectRegionForCalc(regionId);
   }, [handleSelectRegionForCalc]);
 
@@ -780,8 +792,9 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
     }
   }, []);
 
-  // Performance & Stability: Memoized regional cards to prevent re-render cascades
+  // Performance & Stability: Memoized regional cards to prevent re-render cascades (skipped in table mode)
   const renderedGridCards = useMemo(() => {
+    if (viewMode !== 'grid') return null;
     return filteredRegions.map((regionItem, idx) => {
       const regionKey = regionItem.region_id || regionItem.iso_code || regionItem.name_ko || `region-${idx}`;
       return (
@@ -796,7 +809,11 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         />
       );
     });
-  }, [filteredRegions, selectedCategory, expandedRegions, toggleRegionExpand, handleSelectRegionForCalc]);
+  }, [viewMode, filteredRegions, selectedCategory, expandedRegions, toggleRegionExpand, handleSelectRegionForCalc]);
+
+  const activeCategoryShortLabel =
+    selectedCategory === 'passenger' ? '전기승용' : selectedCategory === 'commercial' ? '전기화물' : '전기승합';
+  const normalizedSortValue = String(sortOption || 'DEPLETION_DESC').toUpperCase();
 
   return (
     <div className="space-y-10 py-6 text-slate-100 max-w-6xl mx-auto">
@@ -931,7 +948,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             <label htmlFor="region-sort-select" className="sr-only">지자체 정렬 방식</label>
             <select
               id="region-sort-select"
-              value={sortOption}
+              value={normalizedSortValue}
               onChange={(e) => {
                 if (isSortOption(e.target.value)) {
                   handleSortChange(e.target.value);
@@ -956,9 +973,9 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         <div className="flex items-center justify-between text-xs text-slate-300 pt-2 border-t border-slate-800">
           <span id="filter-feedback-status" role="status" aria-live="polite" aria-atomic="true">
             {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || deferredSearchQuery.trim() !== '' || supplementaryOnly) ? (
-              <>필터 적용 중: 총 <strong>{filteredRegions.length}</strong>개 지역 표시 중 ({SORT_OPTION_LABELS[sortOption] || ''})</>
+              <>{activeCategoryShortLabel} · 필터 적용 중: 총 <strong>{filteredRegions.length}</strong>개 지역 표시 중 ({SORT_OPTION_LABELS[sortOption] || ''})</>
             ) : (
-              <>전체 <strong>{filteredRegions.length}</strong>개 지역 표시 중 ({SORT_OPTION_LABELS[sortOption] || ''})</>
+              <>{activeCategoryShortLabel} · 전체 <strong>{filteredRegions.length}</strong>개 지역 표시 중 ({SORT_OPTION_LABELS[sortOption] || ''})</>
             )}
           </span>
           {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || searchQuery.trim() !== '' || supplementaryOnly) && (
@@ -1043,11 +1060,11 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
             <div className="flex flex-wrap items-center justify-center gap-2 pt-1 max-w-xl mx-auto">
               {deferredSearchQuery.trim() !== '' && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-200">
-                  <span>검색어: <strong>&ldquo;{deferredSearchQuery}&rdquo;</strong></span>
+                  <span>검색어: <strong>&ldquo;{deferredSearchQuery.trim()}&rdquo;</strong></span>
                   <button
                     type="button"
                     onClick={handleClearSearch}
-                    aria-label={`검색어 "${deferredSearchQuery}" 제거`}
+                    aria-label={`검색어 "${deferredSearchQuery.trim()}" 제거`}
                     className="ml-1 text-slate-300 hover:text-white font-bold p-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                   >
                     ✕
@@ -1639,7 +1656,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             <select
               id="model-select"
               aria-label="차량 모델 선택"
-              value={models.length === 0 ? '' : (activeModel?.model_id || selectedModelId)}
+              value={models.length === 0 ? '' : (activeModel?.model_id || activeModel?.name_ko || selectedModelId)}
               onChange={handleModelSelectChange}
               className="w-full py-3 px-3.5 min-h-[44px] rounded-xl bg-slate-950 border border-slate-500 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
             >
@@ -1683,9 +1700,9 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             {/* Selected Model Spec Card - Solid Opaque Background */}
             {activeModel && (
               <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex flex-wrap items-center justify-between text-xs text-slate-300 gap-2">
-                <span>배터리: <strong>{activeModel.battery_type || 'N/A'}</strong> ({activeModel.battery_capacity_kwh ?? 0} kWh)</span>
-                <span>1회 충전 주행거리: <strong>{activeModel.rated_range_km ?? 0} km</strong></span>
-                <span>기본 출고가: <strong>{((Number.isFinite(activeModel.base_price_krw) ? Math.max(0, activeModel.base_price_krw) : 0) / 10000).toLocaleString()}만 원</strong></span>
+                <span>배터리: <strong>{activeModel.battery_type || 'N/A'}</strong> ({toSafeNonNeg(activeModel.battery_capacity_kwh)} kWh)</span>
+                <span>1회 충전 주행거리: <strong>{toSafeNonNeg(activeModel.rated_range_km)} km</strong></span>
+                <span>기본 출고가: <strong>{(toSafeNonNeg(activeModel.base_price_krw) / 10000).toLocaleString()}만 원</strong></span>
               </div>
             )}
           </div>
@@ -1698,7 +1715,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             <select
               id="region-select"
               aria-label="거주 지자체 (시·도) 선택"
-              value={regions.length === 0 ? '' : (activeRegionForCalc?.region_id || selectedRegionId)}
+              value={regions.length === 0 ? '' : (activeRegionForCalc?.region_id || activeRegionForCalc?.iso_code || activeRegionForCalc?.name_ko || selectedRegionId)}
               onChange={handleRegionSelectChange}
               aria-describedby="region-residency-note"
               className="w-full py-3 px-3.5 min-h-[44px] rounded-xl bg-slate-950 border border-slate-500 text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 cursor-pointer font-medium"
@@ -1949,11 +1966,11 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               최종 실구매 체감가 (소비자 부담액)
             </span>
             <div className="text-3xl sm:text-4xl font-black text-emerald-400 tracking-tight">
-              {Math.round((Number.isFinite(calculationResult.netPurchasePriceKrw) ? calculationResult.netPurchasePriceKrw : 0) / 10000).toLocaleString()}
+              {(Math.round(toSafeNonNeg(calculationResult.netPurchasePriceKrw) / 10000) || 0).toLocaleString()}
               <span className="text-xl sm:text-2xl font-bold ml-1 text-emerald-200">만 원</span>
             </div>
             <div className="text-[11px] text-emerald-300">
-              (정확한 금액: {(Number.isFinite(calculationResult.netPurchasePriceKrw) ? calculationResult.netPurchasePriceKrw : 0).toLocaleString()}원)
+              (정확한 금액: {toSafeNonNeg(calculationResult.netPurchasePriceKrw).toLocaleString()}원)
             </div>
           </div>
 

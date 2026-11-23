@@ -120,6 +120,30 @@ function formatSignedManWon(krw: number): string {
   return `${sign}${manWon.toLocaleString()}`;
 }
 
+/**
+ * Formats a non-negative KRW amount in 만 원 units without NaN or "-0" artifacts.
+ */
+function formatNonNegativeManWon(krw: number): number {
+  const safeKrw = Number.isFinite(krw) ? Math.max(0, krw) : 0;
+  return Math.round(safeKrw / 10000) || 0;
+}
+
+/**
+ * Formats a finite numeric value safely, preventing NaN and "-0" output.
+ */
+function safeFiniteNumber(val: number, fallback = 0): number {
+  if (!Number.isFinite(val)) return fallback;
+  return Object.is(val, -0) || val === 0 ? 0 : val;
+}
+
+/**
+ * Formats a non-negative loss percentage without "-0%" or "-NaN%" artifacts.
+ */
+function formatLossPct(val: number): string {
+  const safe = Number.isFinite(val) ? Math.max(0, val) : 0;
+  return safe > 0 ? `-${safe}%` : '0%';
+}
+
 export const getChemistryBadge = (chem: string) => {
   const upper = String(chem ?? '').toUpperCase();
   if (upper.includes('LFP')) {
@@ -249,8 +273,8 @@ const ModelGridCard = memo(function ModelGridCard({
   const netRaw = Number.isFinite(model.net_purchase_price_krw) && model.net_purchase_price_krw >= 0
     ? model.net_purchase_price_krw
     : 48_000_000;
-  const msrpManWon = Math.round(msrpRaw / 10000);
-  const netManWon = Math.round(netRaw / 10000);
+  const msrpManWon = Math.round(msrpRaw / 10000) || 0;
+  const netManWon = Math.round(netRaw / 10000) || 0;
 
   return (
     <button
@@ -415,6 +439,10 @@ export default function DepreciationCalculatorClient({
       return matchesBrand && matchesSearch;
     });
   }, [models, activeBrand, deferredSearchQuery]);
+
+  // Refs for focus restoration when conditional reset buttons unmount
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const nationalSubsidyInputRef = useRef<HTMLInputElement>(null);
 
   // Effective Purchase Price Baseline & Validation
   const parsedCustomPrice = useMemo(() => {
@@ -814,7 +842,8 @@ export default function DepreciationCalculatorClient({
   }, [tcoResult?.totalCumulativeSavingsKrw, safeYears]);
 
   // Debounced live calculation announcement to prevent AT chatter during rapid slider scrubbing
-  const rawLiveSummary = `${selectedModel.brand_name_ko} ${selectedModel.model_name} ${holdingYears}년 보유 기준 예상 잔존 시세는 ${(Math.round((depResult.estimatedResidualPriceKrw || 0) / 10000) || 0).toLocaleString()}만 원(잔존율 ${depResult.adjustedResidualPct}%), 배터리 잔여 수명은 ${safeSohPct.toFixed(1)}%, ${holdingYears}개년 누적 절감액은 ${formatSignedManWon(tcoResult.totalCumulativeSavingsKrw ?? 0)}만 원입니다.`;
+  const safeResidualPctForAnnouncement = safeFiniteNumber(depResult.adjustedResidualPct, 0);
+  const rawLiveSummary = `${selectedModel.brand_name_ko} ${selectedModel.model_name} ${holdingYears}년 보유 기준 예상 잔존 시세는 ${formatNonNegativeManWon(depResult.estimatedResidualPriceKrw).toLocaleString()}만 원(잔존율 ${safeResidualPctForAnnouncement}%), 배터리 잔여 수명은 ${safeSohPct.toFixed(1)}%, ${holdingYears}개년 누적 절감액은 ${formatSignedManWon(tcoResult.totalCumulativeSavingsKrw ?? 0)}만 원입니다.`;
   const [liveSummaryAnnouncement, setLiveSummaryAnnouncement] = useState<string>(rawLiveSummary);
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -891,15 +920,15 @@ export default function DepreciationCalculatorClient({
         {/* Quick Market Highlight Bar */}
         <div className="mt-6 pt-4 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-slate-300">
           <div className="flex items-center gap-2 bg-slate-800/50 px-3 py-2 rounded-lg">
-            <span className="text-emerald-400 font-bold">✓ 800V 프리미엄:</span>
+            <span className="text-emerald-400 font-bold"><span aria-hidden="true">✓ </span>800V 프리미엄:</span>
             <span>E-GMP 18분 초고속 충전 차종 잔존가치 +3.5% 방어</span>
           </div>
           <div className="flex items-center gap-2 bg-slate-800/50 px-3 py-2 rounded-lg">
-            <span className="text-amber-400 font-bold">⚠️ 워런티 클리프:</span>
+            <span className="text-amber-400 font-bold"><span aria-hidden="true">⚠️ </span>워런티 클리프:</span>
             <span>배터리 보증 만료 2년 전부터 -6%~-14% 감가 가속</span>
           </div>
           <div className="flex items-center gap-2 bg-slate-800/50 px-3 py-2 rounded-lg">
-            <span className="text-blue-400 font-bold">📋 법정 환수 규정:</span>
+            <span className="text-blue-400 font-bold"><span aria-hidden="true">📋 </span>법정 환수 규정:</span>
             <span>24개월 미만 관외 이전 시 지방비 70%~20% 반납 의무</span>
           </div>
         </div>
@@ -913,7 +942,7 @@ export default function DepreciationCalculatorClient({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-              <span>⚡</span> 빠른 시나리오 프리셋:
+              <span aria-hidden="true">⚡</span> 빠른 시나리오 프리셋:
             </span>
             <span className="text-xs text-slate-600 hidden md:inline">
               운행 목적에 맞는 조건을 한 번에 세팅합니다
@@ -965,7 +994,7 @@ export default function DepreciationCalculatorClient({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 id="vehicle-selector-heading" className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
-              <span>🚘</span> 비교 분석 차량 선택
+              <span aria-hidden="true">🚘</span> 비교 분석 차량 선택
             </h2>
             <p className="text-xs sm:text-sm text-slate-600">
               국내 주요 {models.length}개 대표 EV 모델 (배터리 케미스트리, 전압 플랫폼, 워런티 기본 탑재)
@@ -976,6 +1005,7 @@ export default function DepreciationCalculatorClient({
           <div className="relative w-full sm:w-64">
             <label htmlFor="vehicle-search-input" className="sr-only">전기차 모델 검색</label>
             <input
+              ref={searchInputRef}
               id="vehicle-search-input"
               type="text"
               maxLength={200}
@@ -1043,6 +1073,7 @@ export default function DepreciationCalculatorClient({
                   onClick={() => {
                     setSearchQuery('');
                     setSelectedBrand('all');
+                    searchInputRef.current?.focus();
                   }}
                   className="mt-3 px-3.5 py-1.5 min-h-[44px] inline-flex items-center justify-center text-xs font-semibold text-blue-700 bg-white hover:bg-blue-50 rounded-lg transition border border-slate-300 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                 >
@@ -1064,7 +1095,7 @@ export default function DepreciationCalculatorClient({
         <div className="border-b border-slate-200 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h2 id="simulation-controls-heading" className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
-              <span>⚙️</span> 정밀 시뮬레이션 제어기
+              <span aria-hidden="true">⚙️</span> 정밀 시뮬레이션 제어기
             </h2>
             <p className="text-xs sm:text-sm text-slate-600">
               보유 기간, 연간 주행거리, 급속 충전 비율 및 실구매가격을 조정하여 잔존가치와 배터리 수명을 실시간 예측합니다.
@@ -1289,7 +1320,7 @@ export default function DepreciationCalculatorClient({
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-slate-700 hover:bg-slate-100'
                 }`}
-                aria-label="출고가(MSRP, 권장소비자가격) 기준"
+                aria-label="출고가(MSRP): 권장소비자가격 기준"
               >
                 출고가(MSRP)
               </button>
@@ -1303,12 +1334,20 @@ export default function DepreciationCalculatorClient({
                 <input
                   id="customPriceInputField"
                   type="number"
+                  inputMode="numeric"
                   min="0"
                   max="10000000000"
                   step="100000"
                   value={customPriceInput !== null ? customPriceInput : currentPurchasePrice}
                   onChange={(e) => {
                     setCustomPriceInput(e.target.value);
+                  }}
+                  onBlur={() => {
+                    if (customPriceInput !== null && customPriceInput.trim() === '') {
+                      setCustomPriceInput(null);
+                    } else if (customPriceInput !== null && Object.is(Number(customPriceInput.trim()), -0)) {
+                      setCustomPriceInput('0');
+                    }
                   }}
                   aria-invalid={hasPriceError}
                   aria-describedby={hasPriceError ? "custom-price-error-msg custom-price-hint" : "custom-price-hint"}
@@ -1406,25 +1445,33 @@ export default function DepreciationCalculatorClient({
               {holdingYears}년차 예상 잔존 시세
             </div>
             <div className="text-lg sm:text-2xl font-black text-blue-950 mt-1 break-keep">
-              {Math.round((depResult.estimatedResidualPriceKrw || 0) / 10000).toLocaleString()}{' '}
+              {formatNonNegativeManWon(depResult.estimatedResidualPriceKrw).toLocaleString()}{' '}
               <span className="text-xs sm:text-sm font-semibold text-blue-900">만 원</span>
             </div>
             <div className="text-[11px] text-blue-900 font-semibold mt-1">
-              신차 대비 {Number.isFinite(depResult.adjustedResidualPct) ? depResult.adjustedResidualPct : 0}% 잔존
+              신차 대비 {safeFiniteNumber(depResult.adjustedResidualPct, 0)}% 잔존
             </div>
           </div>
 
           {/* KPI 2: Total Depreciation Amount */}
-          <div className="bg-gradient-to-br from-slate-50 to-rose-50 border border-slate-200 rounded-xl p-3 sm:p-4">
-            <div className="text-xs font-bold text-slate-800">누적 감가 손실액</div>
-            <div className="text-lg sm:text-2xl font-black text-rose-800 mt-1 break-keep">
-              -{Math.round((depResult.depreciationAmountKrw || 0) / 10000).toLocaleString()}{' '}
-              <span className="text-xs sm:text-sm font-semibold text-rose-900">만 원</span>
-            </div>
-            <div className="text-[11px] text-slate-700 mt-1">
-              연평균 감가: -{Math.round((depResult.depreciationAmountKrw || 0) / safeYears / 10000).toLocaleString()}만 원/년
-            </div>
-          </div>
+          {(() => {
+            const depManWon = formatNonNegativeManWon(depResult.depreciationAmountKrw);
+            const annualDepManWon = formatNonNegativeManWon(
+              (Number.isFinite(depResult.depreciationAmountKrw) ? depResult.depreciationAmountKrw : 0) / safeYears
+            );
+            return (
+              <div className="bg-gradient-to-br from-slate-50 to-rose-50 border border-slate-200 rounded-xl p-3 sm:p-4">
+                <div className="text-xs font-bold text-slate-800">누적 감가 손실액</div>
+                <div className="text-lg sm:text-2xl font-black text-rose-800 mt-1 break-keep">
+                  {depManWon > 0 ? `-${depManWon.toLocaleString()}` : '0'}{' '}
+                  <span className="text-xs sm:text-sm font-semibold text-rose-900">만 원</span>
+                </div>
+                <div className="text-[11px] text-slate-700 mt-1">
+                  연평균 감가: {annualDepManWon > 0 ? `-${annualDepManWon.toLocaleString()}` : '0'}만 원/년
+                </div>
+              </div>
+            );
+          })()}
 
           {/* KPI 3: VS EV Class Average */}
           <div className={`${
@@ -1605,8 +1652,8 @@ export default function DepreciationCalculatorClient({
                       fontWeight="bold"
                     >
                       {chartViewMode === 'price'
-                        ? `${Math.round(safeEvPrice / 10000).toLocaleString()}`
-                        : `${safeEvPct.toFixed(0)}%`}
+                        ? `${formatNonNegativeManWon(safeEvPrice).toLocaleString()}`
+                        : `${safeFiniteNumber(safeEvPct, 0).toFixed(0)}%`}
                     </text>
 
                     {/* Bar 2: EV Class Average */}
@@ -1683,80 +1730,89 @@ export default function DepreciationCalculatorClient({
           </div>
 
           {/* Factor Breakdown Chips */}
-          <div className="pt-2 border-t border-slate-800 grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs text-slate-300">
-            <div className="bg-slate-800/80 p-2.5 rounded-lg">
-              <span className="text-slate-300 block text-[11px]">워런티 클리프 영향</span>
-              <strong
-                className={
-                  depResult.factorAdjustments.warrantyCliffPenalty < 0
-                    ? 'text-rose-400'
-                    : 'text-emerald-400'
-                }
-              >
-                {depResult.factorAdjustments.warrantyCliffPenalty > 0 ? '+' : ''}
-                {depResult.factorAdjustments.warrantyCliffPenalty}%
-              </strong>
-            </div>
-            <div className="bg-slate-800/80 p-2.5 rounded-lg">
-              <span className="text-slate-300 block text-[11px]">배터리 화학 노화 보정</span>
-              <strong
-                className={
-                  depResult.factorAdjustments.batteryChemistryBonus < 0
-                    ? 'text-rose-400'
-                    : 'text-emerald-400'
-                }
-              >
-                {depResult.factorAdjustments.batteryChemistryBonus >= 0 ? '+' : ''}
-                {depResult.factorAdjustments.batteryChemistryBonus}%
-              </strong>
-            </div>
-            <div className="bg-slate-800/80 p-2.5 rounded-lg">
-              <span className="text-slate-300 block text-[11px]">800V/400V 플랫폼</span>
-              <strong
-                className={
-                  depResult.factorAdjustments.architectureAdjustment >= 0
-                    ? 'text-emerald-400'
-                    : 'text-amber-400'
-                }
-              >
-                {depResult.factorAdjustments.architectureAdjustment >= 0 ? '+' : ''}
-                {depResult.factorAdjustments.architectureAdjustment}%
-              </strong>
-            </div>
-            <div className="bg-slate-800/80 p-2.5 rounded-lg">
-              <span className="text-slate-300 block text-[11px]">풀스택 OTA 성숙도</span>
-              <strong
-                className={
-                  depResult.factorAdjustments.otaAdjustment >= 0
-                    ? 'text-emerald-400'
-                    : 'text-amber-400'
-                }
-              >
-                {depResult.factorAdjustments.otaAdjustment >= 0 ? '+' : ''}
-                {depResult.factorAdjustments.otaAdjustment}%
-              </strong>
-            </div>
-            <div className="bg-slate-800/80 p-2.5 rounded-lg col-span-2 sm:col-span-1">
-              <span className="text-slate-300 block text-[11px]">주행거리 마일리지 편차</span>
-              <strong
-                className={
-                  depResult.factorAdjustments.mileageAdjustment >= 0
-                    ? 'text-emerald-400'
-                    : 'text-rose-400'
-                }
-              >
-                {depResult.factorAdjustments.mileageAdjustment >= 0 ? '+' : ''}
-                {depResult.factorAdjustments.mileageAdjustment}%
-              </strong>
-            </div>
-          </div>
+          {(() => {
+            const warrantyCliffVal = safeFiniteNumber(depResult.factorAdjustments?.warrantyCliffPenalty ?? 0);
+            const chemistryBonusVal = safeFiniteNumber(depResult.factorAdjustments?.batteryChemistryBonus ?? 0);
+            const archAdjVal = safeFiniteNumber(depResult.factorAdjustments?.architectureAdjustment ?? 0);
+            const otaAdjVal = safeFiniteNumber(depResult.factorAdjustments?.otaAdjustment ?? 0);
+            const mileageAdjVal = safeFiniteNumber(depResult.factorAdjustments?.mileageAdjustment ?? 0);
+            return (
+              <div className="pt-2 border-t border-slate-800 grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs text-slate-300">
+                <div className="bg-slate-800/80 p-2.5 rounded-lg">
+                  <span className="text-slate-300 block text-[11px]">워런티 클리프 영향</span>
+                  <strong
+                    className={
+                      warrantyCliffVal < 0
+                        ? 'text-rose-400'
+                        : 'text-emerald-400'
+                    }
+                  >
+                    {warrantyCliffVal > 0 ? '+' : ''}
+                    {warrantyCliffVal}%
+                  </strong>
+                </div>
+                <div className="bg-slate-800/80 p-2.5 rounded-lg">
+                  <span className="text-slate-300 block text-[11px]">배터리 화학 노화 보정</span>
+                  <strong
+                    className={
+                      chemistryBonusVal < 0
+                        ? 'text-rose-400'
+                        : 'text-emerald-400'
+                    }
+                  >
+                    {chemistryBonusVal >= 0 ? '+' : ''}
+                    {chemistryBonusVal}%
+                  </strong>
+                </div>
+                <div className="bg-slate-800/80 p-2.5 rounded-lg">
+                  <span className="text-slate-300 block text-[11px]">800V/400V 플랫폼</span>
+                  <strong
+                    className={
+                      archAdjVal >= 0
+                        ? 'text-emerald-400'
+                        : 'text-amber-400'
+                    }
+                  >
+                    {archAdjVal >= 0 ? '+' : ''}
+                    {archAdjVal}%
+                  </strong>
+                </div>
+                <div className="bg-slate-800/80 p-2.5 rounded-lg">
+                  <span className="text-slate-300 block text-[11px]">풀스택 OTA 성숙도</span>
+                  <strong
+                    className={
+                      otaAdjVal >= 0
+                        ? 'text-emerald-400'
+                        : 'text-amber-400'
+                    }
+                  >
+                    {otaAdjVal >= 0 ? '+' : ''}
+                    {otaAdjVal}%
+                  </strong>
+                </div>
+                <div className="bg-slate-800/80 p-2.5 rounded-lg col-span-2 sm:col-span-1">
+                  <span className="text-slate-300 block text-[11px]">주행거리 마일리지 편차</span>
+                  <strong
+                    className={
+                      mileageAdjVal >= 0
+                        ? 'text-emerald-400'
+                        : 'text-rose-400'
+                    }
+                  >
+                    {mileageAdjVal >= 0 ? '+' : ''}
+                    {mileageAdjVal}%
+                  </strong>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Pros and Cons for Resale Defense */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
           <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-4">
             <h3 className="text-xs font-bold text-emerald-950 flex items-center gap-1.5 mb-1.5">
-              <span>👍</span> 중고차 잔존가치 방어 강점 (Pros)
+              <span aria-hidden="true">👍</span> 중고차 잔존가치 방어 강점 (Pros)
             </h3>
             <p className="text-xs sm:text-sm text-emerald-950 leading-relaxed font-medium">
               {depResult.keyPros}
@@ -1765,7 +1821,7 @@ export default function DepreciationCalculatorClient({
 
           <div className="bg-rose-50/60 border border-rose-200 rounded-xl p-4">
             <h3 className="text-xs font-bold text-rose-950 flex items-center gap-1.5 mb-1.5">
-              <span>⚠️</span> 주요 감가 하방 리스크 요인 (Cons)
+              <span aria-hidden="true">⚠️</span> 주요 감가 하방 리스크 요인 (Cons)
             </h3>
             <p className="text-xs sm:text-sm text-rose-950 leading-relaxed font-medium">
               {depResult.keyCons}
@@ -1782,7 +1838,7 @@ export default function DepreciationCalculatorClient({
         <div className="border-b border-slate-200 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h2 id="battery-health-heading" className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
-              <span>🔋</span> 배터리 수명(SoH) 열화 및 교체비용 리스크
+              <span aria-hidden="true">🔋</span> 배터리 수명(SoH) 열화 및 교체비용 리스크
             </h2>
             <p className="text-xs sm:text-sm text-slate-600">
               아레니우스(Arrhenius) 캘린더 노화 및 DCFC 급속 충전 기계적 피로도 결합 시뮬레이션
@@ -1861,25 +1917,25 @@ export default function DepreciationCalculatorClient({
               <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
                 <span className="text-xs text-slate-600 font-medium block">캘린더 노화 (시간/온도)</span>
                 <span className="text-lg font-bold text-slate-800">
-                  -{batteryHealth.calendarLossPct}%
+                  {formatLossPct(batteryHealth.calendarLossPct)}
                 </span>
               </div>
               <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
                 <span className="text-xs text-slate-600 font-medium block">사이클 피로 (충방전)</span>
                 <span className="text-lg font-bold text-slate-800">
-                  -{batteryHealth.cyclicLossPct}%
+                  {formatLossPct(batteryHealth.cyclicLossPct)}
                 </span>
               </div>
               <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
                 <span className="text-xs text-slate-600 font-medium block">등가 완전충전 사이클</span>
                 <span className="text-lg font-bold text-blue-700">
-                  {batteryHealth.equivalentFullCycles} 회
+                  {safeFiniteNumber(batteryHealth.equivalentFullCycles, 0).toLocaleString()} 회
                 </span>
               </div>
               <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
                 <span className="text-xs text-slate-600 font-medium block">혹한기 주행 유지율</span>
                 <span className="text-lg font-bold text-slate-800">
-                  {batteryHealth.winterRangeRetentionPct}%
+                  {safeFiniteNumber(batteryHealth.winterRangeRetentionPct, 100)}%
                 </span>
               </div>
             </div>
@@ -1896,23 +1952,23 @@ export default function DepreciationCalculatorClient({
             >
               <div>
                 <div className="text-xs font-bold uppercase tracking-wide">
-                  제조사 공식 배터리 보증 상태: {selectedModel.warranty?.years ?? 10}년 /{' '}
-                  {(selectedModel.warranty?.km ?? 200_000).toLocaleString()} km
+                  제조사 공식 배터리 보증 상태: {safeFiniteNumber(selectedModel.warranty?.years ?? 10, 10)}년 /{' '}
+                  {safeFiniteNumber(selectedModel.warranty?.km ?? 200_000, 200_000).toLocaleString()} km
                 </div>
                 <div className="text-sm font-semibold mt-0.5">
                   {depResult.warrantyStatus.isExpired ? (
                     <span className="text-red-950 font-extrabold">
-                      🚨 보증 기간/주행거리 만료 — 배터리 고장 시 전액 차주 자부담 리스크
+                      <span aria-hidden="true">🚨 </span>보증 기간/주행거리 만료 — 배터리 고장 시 전액 차주 자부담 리스크
                     </span>
                   ) : depResult.warrantyStatus.isApproachingCliff ? (
                     <span className="text-amber-950 font-extrabold">
-                      ⚠️ 워런티 클리프 진입: 잔여 {depResult.warrantyStatus.remainingYears}년 /{' '}
-                      {depResult.warrantyStatus.remainingKm.toLocaleString()} km
+                      <span aria-hidden="true">⚠️ </span>워런티 클리프 진입: 잔여 {safeFiniteNumber(depResult.warrantyStatus.remainingYears, 0)}년 /{' '}
+                      {safeFiniteNumber(depResult.warrantyStatus.remainingKm, 0).toLocaleString()} km
                     </span>
                   ) : (
                     <span className="text-emerald-950 font-bold">
-                      ✅ 보증 유효 안전 구간 (잔여 {depResult.warrantyStatus.remainingYears}년 /{' '}
-                      {depResult.warrantyStatus.remainingKm.toLocaleString()} km)
+                      <span aria-hidden="true">✅ </span>보증 유효 안전 구간 (잔여 {safeFiniteNumber(depResult.warrantyStatus.remainingYears, 0)}년 /{' '}
+                      {safeFiniteNumber(depResult.warrantyStatus.remainingKm, 0).toLocaleString()} km)
                     </span>
                   )}
                 </div>
@@ -1921,7 +1977,7 @@ export default function DepreciationCalculatorClient({
               <div className="text-right text-xs">
                 <span className="text-slate-700">보증 기준 잔존율:</span>{' '}
                 <strong className="text-slate-950 font-extrabold">
-                  {selectedModel.warranty?.guarantee_retention_pct ?? 70}% 이상
+                  {safeFiniteNumber(selectedModel.warranty?.guarantee_retention_pct ?? 70, 70)}% 이상
                 </strong>
               </div>
             </div>
@@ -1930,7 +1986,7 @@ export default function DepreciationCalculatorClient({
             <div className="bg-slate-900 text-white rounded-xl p-4 border border-slate-800 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                  <span>🛠️</span> 공식 배터리 팩 교체 비용 견적 ({replacementCostTier.segment_name})
+                  <span aria-hidden="true">🛠️</span> 공식 배터리 팩 교체 비용 견적 ({replacementCostTier.segment_name})
                 </span>
                 <span className="text-[11px] text-slate-300">
                   용량 {Number.isFinite(selectedModel.battery_specs?.capacity_kwh) ? selectedModel.battery_specs.capacity_kwh : 77.4} kWh 기준
@@ -1941,23 +1997,23 @@ export default function DepreciationCalculatorClient({
                 <div className="bg-slate-800 p-3 rounded-lg border border-slate-700">
                   <span className="text-slate-300 block">순정 신품 팩 (공임·냉각수 포함)</span>
                   <span className="text-base font-extrabold text-white block mt-1">
-                    {((replacementCostTier.costs?.total_new_installed_krw ?? 0) / 10000).toLocaleString()}만 원
+                    {formatNonNegativeManWon(replacementCostTier.costs?.total_new_installed_krw ?? 0).toLocaleString()}만 원
                   </span>
                   <span className="text-[11px] text-blue-400 font-medium">
-                    ${(replacementCostTier.costs?.total_new_installed_usd ?? 0).toLocaleString()} USD
+                    ${safeFiniteNumber(replacementCostTier.costs?.total_new_installed_usd ?? 0, 0).toLocaleString()} USD
                   </span>
                 </div>
 
                 <div className="bg-slate-800 p-3 rounded-lg border border-slate-700">
                   <span className="text-slate-300 block">공식 재제조(Reman) 팩</span>
                   <span className="text-base font-extrabold text-slate-200 block mt-1">
-                    {replacementCostTier.costs?.total_reman_installed_krw
-                      ? `${(replacementCostTier.costs.total_reman_installed_krw / 10000).toLocaleString()}만 원`
+                    {Number.isFinite(replacementCostTier.costs?.total_reman_installed_krw) && (replacementCostTier.costs?.total_reman_installed_krw ?? 0) > 0
+                      ? `${formatNonNegativeManWon(replacementCostTier.costs.total_reman_installed_krw ?? 0).toLocaleString()}만 원`
                       : '공급 불가'}
                   </span>
                   <span className="text-[11px] text-slate-300 font-medium">
-                    {replacementCostTier.costs?.total_reman_installed_usd
-                      ? `$${replacementCostTier.costs.total_reman_installed_usd.toLocaleString()} USD`
+                    {Number.isFinite(replacementCostTier.costs?.total_reman_installed_usd) && (replacementCostTier.costs?.total_reman_installed_usd ?? 0) > 0
+                      ? `$${safeFiniteNumber(replacementCostTier.costs.total_reman_installed_usd ?? 0, 0).toLocaleString()} USD`
                       : '-'}
                   </span>
                 </div>
@@ -1965,10 +2021,10 @@ export default function DepreciationCalculatorClient({
                 <div className="bg-slate-800 p-3 rounded-lg border border-slate-700">
                   <span className="text-slate-300 block">순수 공임 및 냉각수 충진</span>
                   <span className="text-base font-extrabold text-slate-300 block mt-1">
-                    {((replacementCostTier.costs?.labor_coolant_krw ?? 0) / 10000).toLocaleString()}만 원
+                    {formatNonNegativeManWon(replacementCostTier.costs?.labor_coolant_krw ?? 0).toLocaleString()}만 원
                   </span>
                   <span className="text-[11px] text-slate-300 font-medium">
-                    ${(replacementCostTier.costs?.labor_coolant_usd ?? 0).toLocaleString()} USD
+                    ${safeFiniteNumber(replacementCostTier.costs?.labor_coolant_usd ?? 0, 0).toLocaleString()} USD
                   </span>
                 </div>
               </div>
@@ -1986,7 +2042,7 @@ export default function DepreciationCalculatorClient({
           <div>
             <div className="flex items-center gap-2">
               <h2 id="clawback-calculator-heading" className="text-lg sm:text-xl font-bold text-slate-900">
-                ⚖️ 2년 의무운행기간 보조금 환수 계산기
+                <span aria-hidden="true">⚖️ </span>2년 의무운행기간 보조금 환수 계산기
               </h2>
               <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-950 font-bold">
                 법정 규정
@@ -2018,7 +2074,7 @@ export default function DepreciationCalculatorClient({
             <div className="font-bold">
               {clawbackResult.isExempt
                 ? '보조금 환수 면제 대상 (0원 납부)'
-                : `보조금 환수 대상 고지: 예상 환수액 ${clawbackResult.totalClawbackKrw.toLocaleString()}원 (회수요율 ${(clawbackResult.effectiveClawbackRate * 100).toFixed(0)}% 적용)`}
+                : `보조금 환수 대상 고지: 예상 환수액 ${safeFiniteNumber(clawbackResult.totalClawbackKrw, 0).toLocaleString()}원 (회수요율 ${(safeFiniteNumber(clawbackResult.effectiveClawbackRate, 0) * 100).toFixed(0)}% 적용)`}
             </div>
             <p className={`leading-relaxed font-medium ${clawbackResult.isExempt ? 'text-emerald-950' : 'text-amber-950'}`}>
               {clawbackResult.explanation}
@@ -2141,6 +2197,7 @@ export default function DepreciationCalculatorClient({
                     onClick={() => {
                       setCustomLocalSubsidyInput(null);
                       setCustomNationalSubsidyInput(null);
+                      nationalSubsidyInputRef.current?.focus();
                     }}
                     className="text-[11px] text-blue-400 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded min-h-[44px] px-2 inline-flex items-center"
                     aria-label="보조금 기본값 복원: 차량 기본 보조금으로 초기화"
@@ -2155,13 +2212,22 @@ export default function DepreciationCalculatorClient({
                     국비 보조금 (원)
                   </label>
                   <input
+                    ref={nationalSubsidyInputRef}
                     id="nationalSubsidyInput"
                     type="number"
+                    inputMode="numeric"
                     min="0"
                     max="100000000"
                     step="100000"
                     value={customNationalSubsidyInput !== null ? customNationalSubsidyInput : effectiveNationalSubsidy}
                     onChange={(e) => setCustomNationalSubsidyInput(e.target.value)}
+                    onBlur={() => {
+                      if (customNationalSubsidyInput !== null && customNationalSubsidyInput.trim() === '') {
+                        setCustomNationalSubsidyInput(null);
+                      } else if (customNationalSubsidyInput !== null && Object.is(Number(customNationalSubsidyInput.trim()), -0)) {
+                        setCustomNationalSubsidyInput('0');
+                      }
+                    }}
                     aria-invalid={hasNationalSubsidyError}
                     aria-describedby={hasNationalSubsidyError ? "national-subsidy-error-msg national-subsidy-hint" : "national-subsidy-hint"}
                     className={`w-full px-3 py-2 min-h-[44px] rounded bg-slate-800 border text-right font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900 ${
@@ -2185,11 +2251,19 @@ export default function DepreciationCalculatorClient({
                   <input
                     id="localSubsidyInput"
                     type="number"
+                    inputMode="numeric"
                     min="0"
                     max="100000000"
                     step="100000"
                     value={customLocalSubsidyInput !== null ? customLocalSubsidyInput : effectiveLocalSubsidy}
                     onChange={(e) => setCustomLocalSubsidyInput(e.target.value)}
+                    onBlur={() => {
+                      if (customLocalSubsidyInput !== null && customLocalSubsidyInput.trim() === '') {
+                        setCustomLocalSubsidyInput(null);
+                      } else if (customLocalSubsidyInput !== null && Object.is(Number(customLocalSubsidyInput.trim()), -0)) {
+                        setCustomLocalSubsidyInput('0');
+                      }
+                    }}
                     aria-invalid={hasLocalSubsidyError}
                     aria-describedby={hasLocalSubsidyError ? "local-subsidy-error-msg local-subsidy-hint" : "local-subsidy-hint"}
                     className={`w-full px-3 py-2 min-h-[44px] rounded bg-slate-800 border text-right font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900 ${
@@ -2216,11 +2290,11 @@ export default function DepreciationCalculatorClient({
                   clawbackResult.totalClawbackKrw > 0 ? 'text-amber-400' : 'text-emerald-400'
                 }`}
               >
-                {clawbackResult.totalClawbackKrw.toLocaleString()}{' '}
+                {safeFiniteNumber(clawbackResult.totalClawbackKrw, 0).toLocaleString()}{' '}
                 <span className="text-sm font-semibold text-slate-300">원</span>
               </div>
               <div className="text-[11px] text-slate-300 mt-1">
-                회수요율: {(clawbackResult.effectiveClawbackRate * 100).toFixed(0)}% (
+                회수요율: {(safeFiniteNumber(clawbackResult.effectiveClawbackRate, 0) * 100).toFixed(0)}% (
                 {clawbackResult.nationalClawbackKrw > 0
                   ? `국비: ${clawbackResult.nationalClawbackKrw.toLocaleString()}원, 지방비: ${clawbackResult.localClawbackKrw.toLocaleString()}원`
                   : `지방비: ${clawbackResult.localClawbackKrw.toLocaleString()}원`}
@@ -2309,7 +2383,7 @@ export default function DepreciationCalculatorClient({
         <div className="border-b border-slate-200 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 id="tco-comparison-heading" className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
-              <span>📊</span> 5개년 총소유비용 (TCO) & 경제성 비교
+              <span aria-hidden="true">📊</span> 5개년 총소유비용 (TCO) & 경제성 비교
             </h2>
             <p className="text-xs sm:text-sm text-slate-600">
               전기 충전비(완속/급속 가중평균) vs 가솔린 주유비, 자동차세(정액 13만 vs 배기량), 고속도로·주차 감면
@@ -2351,7 +2425,7 @@ export default function DepreciationCalculatorClient({
               <span className="text-xs font-semibold text-slate-700">만 원</span>
             </span>
             <span className="text-[11px] text-slate-700 mt-1 block">
-              km당: 전기 {tcoResult.evFuelCostPerKm}원 vs 가솔린 {tcoResult.iceFuelCostPerKm}원
+              km당: 전기 {safeFiniteNumber(tcoResult.evFuelCostPerKm, 0)}원 vs 가솔린 {safeFiniteNumber(tcoResult.iceFuelCostPerKm, 0)}원
             </span>
           </div>
 
@@ -2429,15 +2503,19 @@ export default function DepreciationCalculatorClient({
                       </span>
                     )}
                   </th>
-                  <td className="py-2 px-3">{row.cumulativeKm.toLocaleString()} km</td>
-                  <td className="py-2 px-3">{Math.round(row.evElectricityCostKrw / 10000).toLocaleString()}만 원</td>
-                  <td className="py-2 px-3">{Math.round(row.iceFuelCostKrw / 10000).toLocaleString()}만 원</td>
+                  <td className="py-2 px-3">{safeFiniteNumber(row.cumulativeKm, 0).toLocaleString()} km</td>
+                  <td className="py-2 px-3">{formatNonNegativeManWon(row.evElectricityCostKrw).toLocaleString()}만 원</td>
+                  <td className="py-2 px-3">{formatNonNegativeManWon(row.iceFuelCostKrw).toLocaleString()}만 원</td>
                   <td className="py-2 px-3">
-                    {(row.evAutomobileTaxKrw / 10000).toLocaleString(undefined, { maximumFractionDigits: 1 })}만 원
+                    {safeFiniteNumber(row.evAutomobileTaxKrw / 10000, 0).toLocaleString(undefined, { maximumFractionDigits: 1 })}만 원
                   </td>
-                  <td className="py-2 px-3">{Math.round(row.iceAutomobileTaxKrw / 10000).toLocaleString()}만 원</td>
+                  <td className="py-2 px-3">{formatNonNegativeManWon(row.iceAutomobileTaxKrw).toLocaleString()}만 원</td>
                   <td className="py-2 px-3">
-                    {Math.round((row.tollSavingsKrw + row.parkingSavingsKrw + row.maintenanceSavingsKrw) / 10000).toLocaleString()}만 원
+                    {formatNonNegativeManWon(
+                      safeFiniteNumber(row.tollSavingsKrw, 0) +
+                        safeFiniteNumber(row.parkingSavingsKrw, 0) +
+                        safeFiniteNumber(row.maintenanceSavingsKrw, 0)
+                    ).toLocaleString()}만 원
                   </td>
                   <td className="py-2 px-3 text-right font-semibold text-emerald-800">
                     {formatSignedManWon(row.annualNetSavingsKrw)}만 원
@@ -2457,7 +2535,7 @@ export default function DepreciationCalculatorClient({
         >
           <div className="space-y-1">
             <span className="font-bold text-slate-800 flex items-center gap-1.5">
-              <span>💡</span> {holdingYears}년 종합 경제성 최종 판정:
+              <span aria-hidden="true">💡</span> {holdingYears}년 종합 경제성 최종 판정:
             </span>
             <p className="text-slate-700">
               신차 구입가 대비 감가 손실 차액에 {holdingYears}개년 누적 운행비 절감액을 합산한 최종 실질 비용 평가입니다.
@@ -2472,7 +2550,7 @@ export default function DepreciationCalculatorClient({
 
       {/* 9. STATUTORY & DATA SOURCES FOOTNOTE */}
       <aside aria-label="데이터 출처 및 산정 근거" className="bg-slate-100 rounded-xl p-4 text-xs text-slate-700 space-y-1 leading-relaxed border border-slate-200">
-        <div className="font-semibold text-slate-800">📌 데이터 출처 및 산정 근거 고지:</div>
+        <div className="font-semibold text-slate-800"><span aria-hidden="true">📌 </span>데이터 출처 및 산정 근거 고지:</div>
         <div>
           • 중고차 실거래 시세: 엔카닷컴(Encar) 2024~2026 실거래 지수, 케이카(K Car) 월간 전기차 시세표, 보험개발원(KIDI) 차량기준가액표
         </div>

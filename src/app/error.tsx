@@ -24,9 +24,13 @@ export default function ErrorBoundary({ error, reset }: ErrorProps) {
 
   const handleRetry = () => {
     try {
-      startTransition(() => {
-        reset();
-      });
+      if (typeof reset === 'function') {
+        startTransition(() => {
+          reset();
+        });
+      } else if (typeof window !== 'undefined') {
+        window.location.reload();
+      }
     } catch {
       if (typeof window !== 'undefined') {
         window.location.reload();

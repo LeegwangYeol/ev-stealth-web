@@ -1638,7 +1638,47 @@ _RE_JEONSON: re.Pattern[str] = re.compile(r"(?<![안회충감운금완])전손(?
 _RE_TCAM_KO: re.Pattern[str] = re.compile(r"(?<![가-힣])티캠")
 _RE_BOUNDED_ICCU: re.Pattern[str] = re.compile(r"(?<![a-zA-Z0-9])iccu(?![a-zA-Z])", re.IGNORECASE)
 _RE_BOUNDED_V2L: re.Pattern[str] = re.compile(r"(?<![a-zA-Z0-9])v2l(?![a-zA-Z])", re.IGNORECASE)
-_RE_MEGI: re.Pattern[str] = re.compile(r"(?<![헤꾸꼬도])메기(?!탕|매운탕)")
+_RE_MEGI: re.Pattern[str] = re.compile(r"(?<![헤해꾸꼬도])메기(?!탕|매운탕|찜|구이)")
+_RE_WATER_LEAK: re.Pattern[str] = re.compile(r"(?<![가-힣])물\s*(?:차|찼|새|샜|고이)")
+
+_BOUNDED_ASCII_SLANG_REGEXES: Dict[str, re.Pattern[str]] = {
+    "ICCU 폭탄": re.compile(r"(?<![a-zA-Z0-9])iccu 폭탄", re.IGNORECASE),
+    "ICCU폭탄": re.compile(r"(?<![a-zA-Z0-9])iccu폭탄", re.IGNORECASE),
+    "ICCU": _RE_BOUNDED_ICCU,
+    "V2L": _RE_BOUNDED_V2L,
+    "BMS 에러": re.compile(r"(?<![a-zA-Z0-9])bms 에러", re.IGNORECASE),
+    "TCAM 먹통": re.compile(r"(?<![a-zA-Z0-9])tcam 먹통", re.IGNORECASE),
+    "MCU 블랙아웃": re.compile(r"(?<![a-zA-Z0-9])mcu 블랙아웃", re.IGNORECASE),
+    "OTA 벽돌": re.compile(r"(?<![a-zA-Z0-9])ota 벽돌", re.IGNORECASE),
+    "DSM 블랙아웃": re.compile(r"(?<![a-zA-Z0-9])dsm 블랙아웃", re.IGNORECASE),
+    "12V 방전 지옥": re.compile(r"(?<![a-zA-Z0-9])12v 방전 지옥", re.IGNORECASE),
+    "12V 방전": re.compile(r"(?<![a-zA-Z0-9])12v 방전", re.IGNORECASE),
+}
+
+
+def matches_slang_entry(entry: SlangEntry, text_nfc: str, text_lower: str, term_lower: Optional[str] = None) -> bool:
+    """Return True if a slang entry matches the normalized text with idiom/boundary guards."""
+    term = entry.term
+    if term == "씰":
+        return "씰링" not in text_nfc and _RE_BYD_SEAL.search(text_nfc) is not None
+    if term == "밥솥":
+        if _RE_RICE_COOKER_APP.search(text_nfc) and not any(
+            w in text_nfc for w in ("소리", "취사소리", "이음", "고주파", "모터", "인버터", "잡소리")
+        ):
+            return False
+        t_low = term_lower if term_lower is not None else term.lower()
+        return term in text_nfc or t_low in text_lower
+    if term == "전손":
+        return _RE_JEONSON.search(text_nfc) is not None
+    if term == "티캠":
+        return _RE_TCAM_KO.search(text_nfc) is not None
+    if term == "메기":
+        return _RE_MEGI.search(text_nfc) is not None
+    bounded = _BOUNDED_ASCII_SLANG_REGEXES.get(term)
+    if bounded is not None:
+        return bounded.search(text_nfc) is not None
+    t_low = term_lower if term_lower is not None else term.lower()
+    return t_low in text_lower
 
 
 def _decode_bytes_safely(raw_bytes: Union[bytes, bytearray]) -> str:
@@ -1703,35 +1743,7 @@ def find_matching_slang(text: Any, max_length: int = 50_000) -> List[SlangEntry]
 
     matches: List[SlangEntry] = []
     # Match longer terms first (e.g. 'ICCU 폭탄' before 'ICCU')
-    for entry, term_nfc, term_lower in _SLANG_ENTRY_LOWER_PAIRS:
-        if entry.term == "씰":
-            # Protect against false-positive matching of rubber door seals / weatherstrip / silicone sealing
-            if "씰링" in text_nfc or not _RE_BYD_SEAL.search(text_nfc):
-                continue
-            matches.append(entry)
-        elif entry.term == "밥솥":
-            # Protect against literal kitchen electric rice cookers in camping/V2L contexts
-            if _RE_RICE_COOKER_APP.search(text_nfc) and not any(
-                w in text_nfc for w in ("소리", "취사소리", "이음", "고주파", "모터", "인버터", "잡소리")
-            ):
-                continue
-            if term_nfc in text_nfc or term_lower in text_lower:
-                matches.append(entry)
-        elif entry.term == "전손":
-            if _RE_JEONSON.search(text_nfc):
-                matches.append(entry)
-        elif entry.term == "티캠":
-            if _RE_TCAM_KO.search(text_nfc):
-                matches.append(entry)
-        elif entry.term == "ICCU":
-            if _RE_BOUNDED_ICCU.search(text_nfc):
-                matches.append(entry)
-        elif entry.term == "V2L":
-            if _RE_BOUNDED_V2L.search(text_nfc):
-                matches.append(entry)
-        elif entry.term == "메기":
-            if _RE_MEGI.search(text_nfc):
-                matches.append(entry)
-        elif term_lower in text_lower:
+    for entry, _term_nfc, term_lower in _SLANG_ENTRY_LOWER_PAIRS:
+        if matches_slang_entry(entry, text_nfc, text_lower, term_lower=term_lower):
             matches.append(entry)
     return matches

@@ -31,6 +31,7 @@ from filters.slang_lexicon import (
     STOCK_TERMS,
     _RE_JEONSON,
     _RE_TCAM_KO,
+    _RE_WATER_LEAK,
     _decode_bytes_safely,
     find_matching_slang,
 )
@@ -72,8 +73,14 @@ def sanitize_input(val: Any, max_len: int = MAX_TEXT_LENGTH) -> str:
     if not val_str:
         return ""
 
-    if len(val_str) > max_len:
-        val_str = val_str[:max_len]
+    try:
+        limit = max(0, int(max_len)) if (max_len is not None and not isinstance(max_len, bool)) else MAX_TEXT_LENGTH
+    except (ValueError, TypeError, OverflowError):
+        limit = MAX_TEXT_LENGTH
+    if limit and len(val_str) > limit:
+        val_str = val_str[:limit]
+    elif limit == 0:
+        return ""
 
     val_str = RE_INVALID_CHARS.sub("", val_str)
     val_str = RE_UNICODE_SPACES.sub(" ", val_str)
@@ -109,6 +116,28 @@ _RE_BOUNDED_CATEGORY_KEYWORDS: Dict[str, re.Pattern[str]] = {
 }
 _RE_DEFECT_HAJA: re.Pattern[str] = re.compile(r"(?<![가-힣])하자(?!마자|고|면)")
 _RE_GLASS_KEYWORD: re.Pattern[str] = re.compile(r"(?<![불자])유리(?!하|한|할|해|함|히)")
+_BOUNDED_FINANCIAL_REGEXES: Dict[str, re.Pattern[str]] = {
+    "주가": re.compile(r"(?<![가-힣])주가|(?:[가-힣]{2,}차|(?![차입거자])[가-힣])주가"),
+    "매도": re.compile(r"(?<![가-힣])매도|풀매도"),
+    "매수": re.compile(r"(?<![가-힣])매수|풀매수"),
+    "실적": re.compile(r"(?<![현사])실적"),
+    "주주": re.compile(r"(?<![입차매])주주(?!변|민|말)"),
+}
+_NEUTRAL_FEATURE_SLANG_TERMS: Tuple[str, ...] = ("v2l", "깜빡이", "웨더스트립")
+_SPAM_SLANG_MALFUNCTION_CUES: Tuple[str, ...] = (
+    "오류", "차단", "과열", "먹통", "방전", "고장", "안 됨", "안됨", "에러",
+    "경고등", "중단", "안 켜", "미작동", "소리 안", "소리도 안", "소리안", "버튼식",
+    "불량", "버그", "안 나", "꺼지", "꺼짐", "꺼졌", "이탈", "찢어", "빠져",
+    "풍절음", "누수", "들뜸", "틈새",
+)
+
+
+def _matches_financial_term(term: str, text_str: str) -> bool:
+    """Match stock/financial terms while avoiding Korean non-financial homographs (e.g. 차주가, 구매도, 현실적)."""
+    pat = _BOUNDED_FINANCIAL_REGEXES.get(term)
+    if pat is not None:
+        return pat.search(text_str) is not None
+    return term in text_str
 
 
 def matches_category_keyword(category: str, keyword: str, text_lower: str) -> bool:
@@ -465,13 +494,32 @@ class SpamFilter:
         has_defect_keyword = any(
             (_RE_DEFECT_HAJA.search(text_lower) is not None)
             if dk == "하자"
-            else ((_RE_JEONSON.search(text_lower) is not None) if dk == "전손" else (dk in text_lower))
+            else (
+                (_RE_JEONSON.search(text_lower) is not None)
+                if dk == "전손"
+                else (
+                    (_RE_WATER_LEAK.search(text_lower) is not None)
+                    if dk in ("물 새", "물 차", "물 고이")
+                    else (dk in text_lower)
+                )
+            )
             for dk in DEFECT_QUESTION_KEYWORDS
         )
 
         try:
             slang_matches = find_matching_slang(text_str)
-            has_defect_slang = any(e.defect_category is not None for e in slang_matches)
+            has_malfunction_cue: Optional[bool] = None
+            has_defect_slang = False
+            for e in slang_matches:
+                if e.defect_category is None:
+                    continue
+                if e.term.lower() in _NEUTRAL_FEATURE_SLANG_TERMS:
+                    if has_malfunction_cue is None:
+                        has_malfunction_cue = any(mc in text_lower for mc in _SPAM_SLANG_MALFUNCTION_CUES)
+                    if not has_malfunction_cue:
+                        continue
+                has_defect_slang = True
+                break
         except Exception:
             has_defect_slang = False
 
@@ -555,7 +603,9 @@ class SpamFilter:
         # -----------------------------------------------------------------
         # 4. Financial / Stock Market & Crypto Speculation
         # -----------------------------------------------------------------
-        matched_stock_terms = [term for term in self.financial_terms if term and term in text_str]
+        matched_stock_terms = [
+            term for term in self.financial_terms if term and _matches_financial_term(term, text_str)
+        ]
         if len(matched_stock_terms) >= 2:
             if is_owner_complaint:
                 pure_trading_terms = [

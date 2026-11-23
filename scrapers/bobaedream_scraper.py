@@ -220,7 +220,7 @@ class BobaedreamScraper:
             return []
         items = []
         # Match list entries with view links without polynomial regex backtracking
-        pattern = r'<a\b[^>]*\bhref=["\']([^"\'>\s]*view\?[^"\'>\s]*)["\'][^>]*>(.*?)</a>'
+        pattern = r'<a\b[^>]*\bhref=["\']([^"\'>\s]*view(?:\.php)?\?[^"\'>\s]*)["\'][^>]*>(.*?)</a>'
         matches = re.findall(pattern, html_content, re.IGNORECASE | re.DOTALL)
 
         seen_nos = set()
@@ -314,7 +314,7 @@ class BobaedreamScraper:
             return []
         items = []
         seen_keys = set()
-        pattern = r'<dt[^>]*>\s*<a\b[^>]*\bhref=["\']([^"\']*view\?[^"\']*)["\'][^>]*>(.*?)</a>'
+        pattern = r'<dt[^>]*>\s*<a\b[^>]*\bhref=["\']([^"\']*view(?:\.php)?\?[^"\']*)["\'][^>]*>(.*?)</a>'
         matches = re.findall(pattern, html_content, re.IGNORECASE | re.DOTALL)
 
         for href, raw_title in matches:
@@ -449,24 +449,24 @@ class BobaedreamScraper:
 
         # Body extraction
         body_text = ""
-        body_match = re.search(
-            r'<div\b[^>]*\bclass=["\'][^"\']*\bbodyCont\b[^"\']*["\'][^>]*>(.*?)</div>\s*<!--\s*//bodyCont',
-            html_content,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if body_match:
-            body_text = clean_html_text(body_match.group(1))
-        else:
-            for open_pat in (
-                r'<div\b[^>]*\bclass=["\'][^"\']*\bbodyCont\b[^"\']*["\'][^>]*>',
-                r'<div\b[^>]*\bid=["\']print_area["\'][^>]*>',
-                r'<div\b[^>]*\bclass=["\'][^"\']*\bcontent01\b[^"\']*["\'][^>]*>',
-            ):
-                inner_html = extract_balanced_tag_content(html_content, open_pat, tag_name="div")
-                if inner_html:
-                    body_text = clean_html_text(inner_html)
-                    if body_text:
-                        break
+        for open_pat in (
+            r'<div\b[^>]*\bclass=["\'][^"\']*\bbodyCont\b[^"\']*["\'][^>]*>',
+            r'<div\b[^>]*\bid=["\']print_area["\'][^>]*>',
+            r'<div\b[^>]*\bclass=["\'][^"\']*\bcontent01\b[^"\']*["\'][^>]*>',
+        ):
+            inner_html = extract_balanced_tag_content(html_content, open_pat, tag_name="div")
+            if inner_html:
+                body_text = clean_html_text(inner_html)
+                if body_text:
+                    break
+        if not body_text:
+            body_match = re.search(
+                r'<div\b[^>]*\bclass=["\'][^"\']*\bbodyCont\b[^"\']*["\'][^>]*>(.*?)</div>\s*<!--\s*//bodyCont',
+                html_content,
+                re.DOTALL | re.IGNORECASE,
+            )
+            if body_match:
+                body_text = clean_html_text(body_match.group(1))
 
         # Comments extraction
         comments = []

@@ -60,6 +60,9 @@ export const getDepletionColor = (rate: number, status?: string) => {
   };
 };
 
+const toSafeNonNeg = (value: unknown): number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+
 export const SubsidyProgressBar = memo(function SubsidyProgressBar({
   depletionRate,
   deliveredUnits,
@@ -73,25 +76,25 @@ export const SubsidyProgressBar = memo(function SubsidyProgressBar({
 }: SubsidyProgressBarProps) {
   const safeRegionName = (regionName || '해당 지역').trim();
   const safeCategoryLabel = (categoryLabel || '전기차').trim();
-  const displayAnnounced = Number.isFinite(announcedUnits) && announcedUnits > 0 ? announcedUnits : 0;
+  const displayAnnounced = toSafeNonNeg(announcedUnits);
   const safeAnnounced = displayAnnounced > 0 ? displayAnnounced : 1;
-  const safeDelivered = Number.isFinite(deliveredUnits) ? Math.max(0, deliveredUnits) : 0;
-  const safeApplied = Number.isFinite(appliedUnits) ? Math.max(0, appliedUnits) : 0;
+  const safeDelivered = toSafeNonNeg(deliveredUnits);
+  const safeApplied = toSafeNonNeg(appliedUnits);
   const safeDepletion = Number.isFinite(depletionRate)
-    ? Math.max(0, depletionRate)
+    ? toSafeNonNeg(depletionRate)
     : displayAnnounced > 0
-    ? (safeApplied / safeAnnounced) * 100
+    ? ((safeApplied / safeAnnounced) * 100) || 0
     : 0;
   const safeRemaining = Number.isFinite(remainingUnits)
-    ? Math.max(0, remainingUnits)
-    : Math.max(0, displayAnnounced - safeApplied);
+    ? toSafeNonNeg(remainingUnits)
+    : Math.max(0, displayAnnounced - safeApplied) || 0;
 
   const rawDeliveredPct = displayAnnounced > 0 ? Math.round((safeDelivered / safeAnnounced) * 100) : 0;
-  const deliveredPct = Number.isFinite(rawDeliveredPct) ? Math.min(100, Math.max(0, rawDeliveredPct)) : 0;
+  const deliveredPct = Number.isFinite(rawDeliveredPct) ? Math.min(100, Math.max(0, rawDeliveredPct)) || 0 : 0;
   const rawPendingPct = safeDepletion - deliveredPct;
-  const pendingPct = Number.isFinite(rawPendingPct) ? Math.max(0, Math.min(100 - deliveredPct, rawPendingPct)) : 0;
-  const remainingPct = Math.max(0, 100 - (deliveredPct + pendingPct));
-  const pendingCount = Math.max(0, safeApplied - safeDelivered);
+  const pendingPct = Number.isFinite(rawPendingPct) ? Math.max(0, Math.min(100 - deliveredPct, rawPendingPct)) || 0 : 0;
+  const remainingPct = Math.max(0, 100 - (deliveredPct + pendingPct)) || 0;
+  const pendingCount = Math.max(0, safeApplied - safeDelivered) || 0;
   const colorScheme = getDepletionColor(safeDepletion, status);
   const cleanStatusLabel = getStatusLabel(status).replace(/^[^a-zA-Z0-9가-힣]+\s*/, '');
 

@@ -97,8 +97,7 @@ export const EMPTY_RECALL_DATABASE: RecallDatabase = Object.freeze({
   recalls: Object.freeze([]) as unknown as OfficialRecallCampaign[],
 }) as unknown as RecallDatabase;
 
-// Year code mapping according to ISO 3779 standard (Position 10)
-// Supports full 30-year automotive cycle (2010 - 2039)
+// Year code mapping according to ISO 3779 standard (Position 10, 2010 - 2030)
 export const VIN_YEAR_MAP: Readonly<Record<string, number>> = Object.freeze({
   A: 2010,
   B: 2011,
@@ -695,6 +694,66 @@ export function verifyVinChecksum(vin: string): {
   };
 }
 
+function normalizeModelStr(str: string): string {
+  return str.toLowerCase().replace(/[\s\-_/()[\]+.,&]+/g, '');
+}
+
+function cleanModelBase(name: string): string {
+  return name.replace(/\s*\([^)]*\)/g, '').trim();
+}
+
+function stripNonModelNumericTokens(str: string): string {
+  return str
+    .replace(/\b(?:19|20)\d{2}(?:my)?\b/gi, '')
+    .replace(/\b[24]wd\b/gi, '')
+    .replace(/(?<![0-9])\d+\s*세대(?![0-9])/g, '')
+    .replace(/\b\d+(?:\.\d+)?\s*kwh\b/gi, '');
+}
+
+// Safely extracts model designation digits while ignoring drivetrains (2WD/4WD),
+// generation counters (1세대, 2세대), 4-digit years (2020-2030, 2024MY), and battery capacities (77.4kWh)
+function extractModelDigits(str: string): string[] {
+  return stripNonModelNumericTokens(str).match(/\d+/g) || [];
+}
+
+// Expands slash-separated trims while preserving base model prefix (e.g. "i4 eDrive40 / M50" -> ["i4 edrive40 / m50", "i4 edrive40", "i4 m50"])
+function expandSlashVariants(raw: string): string[] {
+  const parts = raw.split('/').map((s) => s.trim()).filter(Boolean);
+  if (parts.length <= 1) return [raw];
+  const variants: string[] = [raw, parts[0]];
+  const firstWords = parts[0].split(/\s+/);
+  const basePrefix = firstWords.length > 1 ? firstWords[0] : '';
+  for (let i = 1; i < parts.length; i++) {
+    const part = parts[i];
+    if (basePrefix && !part.startsWith(basePrefix)) {
+      variants.push(`${basePrefix} ${part}`);
+    } else {
+      variants.push(part);
+    }
+  }
+  return variants;
+}
+
+function hasAttachedDigitTokenCollision(a: string, b: string): boolean {
+  const tokensA = stripNonModelNumericTokens(a).toLowerCase().split(/[^a-z0-9가-힣]+/).filter(Boolean);
+  const tokensB = stripNonModelNumericTokens(b).toLowerCase().split(/[^a-z0-9가-힣]+/).filter(Boolean);
+
+  const checkPair = (bareList: string[], suffixedList: string[]): boolean => {
+    for (const bare of bareList) {
+      if (!/^[a-z가-힣]+$/.test(bare)) continue;
+      for (const tok of suffixedList) {
+        const m = tok.match(/^([a-z가-힣]+)\d+$/);
+        if (m && m[1] === bare) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  return checkPair(tokensA, tokensB) || checkPair(tokensB, tokensA);
+}
+
 /**
  * Checks whether a vehicle model name matches any model in a campaign's comma-separated target_model string.
  * Prevents false-positive collisions across distinct models (e.g. "아이오닉 5" vs "아이오닉 EV", "모델 Y" vs "모델 3").
@@ -709,45 +768,13 @@ export function isModelMatchForCampaign(queryModel: string, campaignTargetModel:
     return false;
   }
 
-  const normalize = (str: string) => str.toLowerCase().replace(/[\s\-_/()[\]+.,&]+/g, '');
-  const cleanBase = (name: string) => name.replace(/\s*\([^)]*\)/g, '').trim();
-
-  const queryClean = cleanBase(queryModel).toLowerCase();
-  const queryNorm = normalize(queryClean);
+  const queryClean = cleanModelBase(queryModel).toLowerCase();
+  const queryNorm = normalizeModelStr(queryClean);
 
   // Require query to contain at least one alphanumeric or Korean character
   if (!queryNorm || !/[a-zA-Z0-9가-힣]/.test(queryNorm)) {
     return false;
   }
-
-  // Safely extracts model designation digits while ignoring drivetrains (2WD/4WD),
-  // generation counters (1세대, 2세대), 4-digit years (2020-2030, 2024MY), and battery capacities (77.4kWh)
-  const extractModelDigits = (str: string): string[] => {
-    const stripped = str
-      .replace(/\b(?:19|20)\d{2}(?:my)?\b/gi, '')
-      .replace(/\b[24]wd\b/gi, '')
-      .replace(/(?<![0-9])\d+\s*세대(?![0-9])/g, '')
-      .replace(/\b\d+(?:\.\d+)?\s*kwh\b/gi, '');
-    return stripped.match(/\d+/g) || [];
-  };
-
-  // Expands slash-separated trims while preserving base model prefix (e.g. "i4 eDrive40 / M50" -> ["i4 edrive40 / m50", "i4 edrive40", "i4 m50"])
-  const expandSlashVariants = (raw: string): string[] => {
-    const parts = raw.split('/').map((s) => s.trim()).filter(Boolean);
-    if (parts.length <= 1) return [raw];
-    const variants: string[] = [raw, parts[0]];
-    const firstWords = parts[0].split(/\s+/);
-    const basePrefix = firstWords.length > 1 ? firstWords[0] : '';
-    for (let i = 1; i < parts.length; i++) {
-      const part = parts[i];
-      if (basePrefix && !part.startsWith(basePrefix)) {
-        variants.push(`${basePrefix} ${part}`);
-      } else {
-        variants.push(part);
-      }
-    }
-    return variants;
-  };
 
   const queryNums = extractModelDigits(queryClean);
   const queryLetter = queryClean.match(/(?:모델|model)\s*([a-z0-9])/i);
@@ -760,6 +787,11 @@ export function isModelMatchForCampaign(queryModel: string, campaignTargetModel:
   ): boolean => {
     // 1. Number collision check: e.g. "아이오닉 5" vs "아이오닉 6", "EV6" vs "EV9"
     if (candidateNums.length > 0 && targetNums.length > 0 && candidateNums.join(',') !== targetNums.join(',')) {
+      return false;
+    }
+
+    // 1b. Attached-digit model code check: e.g. "iX" vs "iX3", "GV" vs "GV60"
+    if (hasAttachedDigitTokenCollision(candidate, target)) {
       return false;
     }
 
@@ -783,9 +815,9 @@ export function isModelMatchForCampaign(queryModel: string, campaignTargetModel:
     return true;
   };
 
-  const rawTargets = campaignTargetModel.split(',').map((t) => cleanBase(t).toLowerCase()).filter(Boolean);
+  const rawTargets = campaignTargetModel.split(',').map((t) => cleanModelBase(t).toLowerCase()).filter(Boolean);
   const targets = rawTargets.flatMap((t) => expandSlashVariants(t));
-  const subTrims = cleanBase(queryModel)
+  const subTrims = cleanModelBase(queryModel)
     .split(',')
     .map((s) => s.toLowerCase().trim())
     .filter(Boolean)
@@ -795,14 +827,14 @@ export function isModelMatchForCampaign(queryModel: string, campaignTargetModel:
     subTrims.length > 1
       ? subTrims
           .map((sub) => {
-            const subNorm = normalize(sub);
+            const subNorm = normalizeModelStr(sub);
             return { sub, subNorm, subNums: extractModelDigits(sub) };
           })
           .filter((entry) => entry.subNorm && /[a-zA-Z0-9가-힣]/.test(entry.subNorm))
       : [];
 
   for (const target of targets) {
-    const targetNorm = normalize(target);
+    const targetNorm = normalizeModelStr(target);
     if (!targetNorm || !/[a-zA-Z0-9가-힣]/.test(targetNorm)) {
       continue;
     }
@@ -872,6 +904,13 @@ export function parseRecallDate(dateStr?: string | null): Date | null {
     /^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})(?:$|(?:T|\s+)(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|([+-])(\d{2}):?(\d{2}))?$)/i
   );
   if (delimiterMatch) {
+    const year = parseInt(delimiterMatch[1], 10);
+    const month = parseInt(delimiterMatch[2], 10);
+    const day = parseInt(delimiterMatch[3], 10);
+    const baseDate = buildValidatedUtcDate(year, month, day);
+    if (!baseDate) {
+      return null;
+    }
     if (delimiterMatch[4] !== undefined) {
       const hour = parseInt(delimiterMatch[4], 10);
       const minute = parseInt(delimiterMatch[5], 10);
@@ -879,19 +918,25 @@ export function parseRecallDate(dateStr?: string | null): Date | null {
       if (hour > 23 || minute > 59 || second > 59) {
         return null;
       }
+      let offsetMinutes = 0;
       if (delimiterMatch[8] !== undefined) {
         const tzHour = parseInt(delimiterMatch[8], 10);
         const tzMin = parseInt(delimiterMatch[9], 10);
         if (tzHour > 23 || tzMin > 59) {
           return null;
         }
+        const sign = delimiterMatch[7] === '-' ? -1 : 1;
+        offsetMinutes = sign * (tzHour * 60 + tzMin);
       }
+      const utcMs = Date.UTC(year, month - 1, day, hour, minute, second) - offsetMinutes * 60_000;
+      const d = new Date(utcMs);
+      const utcYear = d.getUTCFullYear();
+      if (isNaN(d.getTime()) || utcYear < 1990 || utcYear > 2040) {
+        return null;
+      }
+      return d;
     }
-    return buildValidatedUtcDate(
-      parseInt(delimiterMatch[1], 10),
-      parseInt(delimiterMatch[2], 10),
-      parseInt(delimiterMatch[3], 10)
-    );
+    return baseDate;
   }
 
   // 1b. Korean dot notation with optional spaces & trailing dot: "2024. 3. 18." or "2024. 03. 18"
@@ -1138,10 +1183,13 @@ export function sortRecallsByDate(
   const getSortTimestamp = (c: OfficialRecallCampaign): number => {
     if (!c || typeof c !== 'object') return -1;
 
-    // 1. Explicit date / recall_date
-    const rawDate = (c as unknown as Record<string, unknown>).recall_date || (c as unknown as Record<string, unknown>).date;
-    if (typeof rawDate === 'string') {
-      const parsed = parseRecallDate(rawDate);
+    // 1. Explicit recall_date / date
+    if (typeof c.recall_date === 'string') {
+      const parsed = parseRecallDate(c.recall_date);
+      if (parsed) return parsed.getTime();
+    }
+    if (typeof c.date === 'string') {
+      const parsed = parseRecallDate(c.date);
       if (parsed) return parsed.getTime();
     }
 
@@ -1216,8 +1264,11 @@ export function isYearMatchForCampaign(year?: number, targetModelYears?: string)
   }
   if (!targetModelYears || typeof targetModelYears !== 'string' || !targetModelYears.trim()) return true;
 
-  // Clean target string: remove Korean year particle "년", "년식", "년형"
-  const cleanTarget = targetModelYears.replace(/년(?:식|형)?/g, '').trim();
+  // Clean target string: remove Korean year particle "년", "년식", "년형" and month/day sub-tokens
+  const cleanTarget = targetModelYears
+    .replace(/년(?:식|형)?/g, '')
+    .replace(/(?<![0-9])\d{1,2}\s*월(?:\s*\d{1,2}\s*일)?/g, '')
+    .trim();
 
   // Split disjoint segments separated by comma or semicolon
   const segments = cleanTarget.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
@@ -1228,7 +1279,7 @@ export function isYearMatchForCampaign(year?: number, targetModelYears?: string)
   for (const segment of segments) {
     // 1. Closed range: "2021 ~ 2024", "2021-2024", "2021.03 ~ 2024.05", or "2021-03-01 ~ 2024-05-01"
     const rangeMatch = segment.match(
-      /(?<![0-9])(\d{4})(?:[.\-/]\d{1,2}(?![0-9])(?:[.\-/]\d{1,2}(?![0-9]))?)?\s*[~–—-]\s*(\d{4})(?:[.\-/]\d{1,2}(?![0-9])(?:[.\-/]\d{1,2}(?![0-9]))?)?(?![0-9])/
+      /(?<![0-9])((?:19|20)\d{2})(?:[.\-/]\d{1,2}(?![0-9])(?:[.\-/]\d{1,2}(?![0-9]))?)?\s*[~–—-]\s*((?:19|20)\d{2})(?:[.\-/]\d{1,2}(?![0-9])(?:[.\-/]\d{1,2}(?![0-9]))?)?(?![0-9])/
     );
     if (rangeMatch) {
       hasValidSegment = true;
@@ -1243,7 +1294,7 @@ export function isYearMatchForCampaign(year?: number, targetModelYears?: string)
     // 2. Open-ended future range: "2022 ~", "2022~", "2022 ~ 현재", "2022 이후", "2022+"
     // Structured without adjacent unbounded quantifiers to prevent catastrophic backtracking (ReDoS)
     const openRangeMatch = segment.match(
-      /(?<![0-9])(\d{4})(?:[.\-/]\d{1,2}(?![0-9])(?:[.\-/]\d{1,2}(?![0-9]))?)?\s*(?:[~–—-]\s*)?(?:현재|present|이후|\+)|(?<![0-9])(\d{4})(?:[.\-/]\d{1,2}(?![0-9])(?:[.\-/]\d{1,2}(?![0-9]))?)?\s*[~–—-]\s*$/i
+      /(?<![0-9])((?:19|20)\d{2})(?:[.\-/]\d{1,2}(?![0-9])(?:[.\-/]\d{1,2}(?![0-9]))?)?\s*(?:[~–—-]\s*)?(?:현재|present|이후|\+)|(?<![0-9])((?:19|20)\d{2})(?:[.\-/]\d{1,2}(?![0-9])(?:[.\-/]\d{1,2}(?![0-9]))?)?\s*[~–—-]\s*$/i
     );
     if (openRangeMatch) {
       hasValidSegment = true;
@@ -1254,7 +1305,7 @@ export function isYearMatchForCampaign(year?: number, targetModelYears?: string)
 
     // 3. Before range: "2022 이전", "~ 2022", "~2022"
     const beforeRangeMatch = segment.match(
-      /(?:^\s*[~–—-]\s*(\d{4})(?:[.\-/]\d{1,2}(?![0-9])(?:[.\-/]\d{1,2}(?![0-9]))?)?(?![0-9]))|(?:(?<![0-9])(\d{4})(?:[.\-/]\d{1,2}(?![0-9])(?:[.\-/]\d{1,2}(?![0-9]))?)?\s*(?:이전|까지|before))/i
+      /(?:^\s*[~–—-]\s*((?:19|20)\d{2})(?:[.\-/]\d{1,2}(?![0-9])(?:[.\-/]\d{1,2}(?![0-9]))?)?(?![0-9]))|(?:(?<![0-9])((?:19|20)\d{2})(?:[.\-/]\d{1,2}(?![0-9])(?:[.\-/]\d{1,2}(?![0-9]))?)?\s*(?:이전|까지|before))/i
     );
     if (beforeRangeMatch) {
       hasValidSegment = true;
@@ -1264,7 +1315,7 @@ export function isYearMatchForCampaign(year?: number, targetModelYears?: string)
     }
 
     // 4. Single year match: "2022"
-    const singleYearMatch = segment.match(/(?<![0-9])(\d{4})(?![0-9])/);
+    const singleYearMatch = segment.match(/(?<![0-9])((?:19|20)\d{2})(?![0-9])/);
     if (singleYearMatch) {
       hasValidSegment = true;
       if (parseInt(singleYearMatch[1], 10) === year) {
@@ -1449,7 +1500,7 @@ export function decodeVinAndCheckRecalls(rawVin: string, customDb?: RecallDataba
   let matchedBatteryProfile: BatterySafetyProfile | undefined;
   if (decodedModel) {
     const modelMatches = batteryProfiles.filter((bp) => {
-      if (!bp || typeof bp.model_name !== 'string') return false;
+      if (!bp || typeof bp !== 'object' || typeof bp.model_name !== 'string') return false;
       if (
         decodedBrand !== '기타/미확인 브랜드' &&
         typeof bp.brand === 'string' &&
@@ -1508,7 +1559,7 @@ export function decodeVinAndCheckRecalls(rawVin: string, customDb?: RecallDataba
       return false;
     }
 
-    if (decodedYear && !isYearMatchForCampaign(decodedYear, campaign.target_model_years)) {
+    if (decodedYear !== undefined && !isYearMatchForCampaign(decodedYear, campaign.target_model_years)) {
       return false;
     }
 
@@ -1695,12 +1746,18 @@ export function getDistinctBrands(customDb?: RecallDatabase): string[] {
   const recalls = Array.isArray(db.recalls) ? db.recalls : [];
 
   batteryProfiles.forEach((p) => {
-    const normalized = normalizeManufacturer(p?.brand);
-    if (normalized) brands.add(normalized);
+    if (!p || typeof p !== 'object') return;
+    const normalized = normalizeManufacturer(p.brand);
+    if (normalized && !DANGEROUS_PROTO_KEYS.has(normalized.toLowerCase())) {
+      brands.add(normalized);
+    }
   });
   recalls.forEach((r) => {
-    const normalized = normalizeManufacturer(r?.brand);
-    if (normalized) brands.add(normalized);
+    if (!r || typeof r !== 'object') return;
+    const normalized = normalizeManufacturer(r.brand);
+    if (normalized && !DANGEROUS_PROTO_KEYS.has(normalized.toLowerCase())) {
+      brands.add(normalized);
+    }
   });
   return Array.from(brands);
 }

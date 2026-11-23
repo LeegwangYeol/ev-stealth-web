@@ -668,9 +668,14 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           }
         }
 
+        const safeId =
+          (typeof r.id === 'string' || typeof r.id === 'number') && String(r.id).trim()
+            ? String(r.id).trim()
+            : `report_${idx + 1}`;
+
         return {
           ...r,
-          id: r.id ? String(r.id) : `report_${idx + 1}`,
+          id: safeId,
           date: displayDate,
           source: (r.source || '').toLowerCase() || 'bobaedream',
           url: sanitizeReportUrl(r.url),
@@ -1303,7 +1308,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               aria-describedby="admin-defect-search-hint"
               aria-label="전기차 결함 제보 및 은어 검색"
               placeholder="제목, 요약, 실차주 원문 코멘트, 차종, 은어(#ICCU폭탄 등) 실시간 검색..."
-              className="w-full pl-10 pr-11 py-2.5 min-h-[44px] text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition placeholder-slate-600"
+              className="w-full pl-10 pr-11 py-2.5 min-h-[44px] text-sm text-slate-900 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus:bg-white transition placeholder-slate-600 [&::-webkit-search-cancel-button]:appearance-none"
             />
             <span id="admin-defect-search-hint" className="sr-only">
               검색어를 입력하면 실시간으로 목록이 필터링됩니다. ESC 키를 누르면 입력한 검색어가 초기화됩니다.
@@ -2170,7 +2175,7 @@ const DefectReportCard = memo(function DefectReportCard({
                   ? 'bg-orange-700'
                   : safeSentimentPct >= 40
                   ? 'bg-amber-700'
-                  : 'bg-emerald-600'
+                  : 'bg-emerald-700'
               }`}
               style={{ width: `${safeSentimentPct}%` }}
             />

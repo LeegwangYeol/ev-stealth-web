@@ -152,7 +152,7 @@ def normalize_url_for_key(url: Optional[str]) -> str:
         return ""
     u = str(url).strip()
     u = u.split("#")[0]
-    u = re.sub(r"^https?://(www\.)?", "", u)
+    u = re.sub(r"^https?://(www\.)?", "", u, flags=re.IGNORECASE)
     return u.rstrip("/")
 
 
@@ -236,6 +236,8 @@ def merge_report_records(existing: Dict[str, Any], incoming: Dict[str, Any]) -> 
         merged["created_at"] = inc_created
         if incoming.get("date"):
             merged["date"] = str(incoming["date"])[:10]
+    elif not str(merged.get("date") or "").strip() and incoming.get("date"):
+        merged["date"] = str(incoming["date"])[:10]
 
     # 3. Slang tags: set union preserving deterministic order
     ex_tags = _coerce_str_list(merged.get("slang_tags"))
@@ -273,6 +275,10 @@ def merge_report_records(existing: Dict[str, Any], incoming: Dict[str, Any]) -> 
             merged["negativity_score"] = round(ex_neg_opt, 4)
         if _safe_finite_float(merged.get("sentiment_score"), None) is None:
             merged["sentiment_score"] = round(ex_neg_opt, 4)
+    else:
+        for score_key in ("negativity_score", "sentiment_score"):
+            if score_key in merged and _safe_finite_float(merged.get(score_key), None) is None:
+                merged.pop(score_key, None)
 
     severity_order = {"INFO": 0, "LOW": 1, "CAUTION": 2, "MEDIUM": 3, "WARNING": 4, "HIGH": 5, "CRITICAL": 6}
     ex_sev_key = str(merged.get("severity") or "").strip().upper()
@@ -283,23 +289,29 @@ def merge_report_records(existing: Dict[str, Any], incoming: Dict[str, Any]) -> 
         if inc_sev_rank > ex_sev_rank:
             merged["severity"] = inc_sev_key
 
-    # 5. DSI breakdown: combine metrics
+    # 5. DSI breakdown: combine metrics and strip non-finite entries
     ex_dsi = merged.get("dsi_breakdown")
     inc_dsi = incoming.get("dsi_breakdown")
+    clean_ex_dsi: Dict[str, float] = (
+        {
+            dim: f_val
+            for dim, val in ex_dsi.items()
+            for f_val in (_safe_finite_float(val),)
+            if f_val is not None
+        }
+        if isinstance(ex_dsi, dict)
+        else {}
+    )
     if isinstance(inc_dsi, dict):
-        if not isinstance(ex_dsi, dict):
-            merged["dsi_breakdown"] = {
-                k: v for k, v in ((dim, _safe_finite_float(val)) for dim, val in inc_dsi.items()) if v is not None
-            }
-        else:
-            merged_dsi = dict(ex_dsi)
-            for dim, val in inc_dsi.items():
-                f_val = _safe_finite_float(val)
-                if f_val is not None:
-                    ex_f = _safe_finite_float(merged_dsi.get(dim))
-                    if ex_f is None or ex_f < f_val:
-                        merged_dsi[dim] = f_val
-            merged["dsi_breakdown"] = merged_dsi
+        for dim, val in inc_dsi.items():
+            f_val = _safe_finite_float(val)
+            if f_val is not None:
+                ex_f = clean_ex_dsi.get(dim)
+                if ex_f is None or ex_f < f_val:
+                    clean_ex_dsi[dim] = f_val
+        merged["dsi_breakdown"] = clean_ex_dsi
+    elif isinstance(ex_dsi, dict):
+        merged["dsi_breakdown"] = clean_ex_dsi
 
     # 6. Authenticity flag
     inc_auth = incoming.get("is_authentic_defect")
@@ -575,12 +587,12 @@ def compute_report_statistics(
 
     # Find top model and platform (guard against unhashable values)
     model_counter = Counter(
-        str(r.get("vehicle_model"))
+        r.get("vehicle_model").strip()
         for r in clean_reports
         if isinstance(r.get("vehicle_model"), str) and r.get("vehicle_model").strip()
     )
     platform_counter = Counter(
-        str(r.get("platform") or r.get("source"))
+        str(r.get("platform") or r.get("source")).strip()
         for r in clean_reports
         if isinstance(r.get("platform") or r.get("source"), str) and str(r.get("platform") or r.get("source")).strip()
     )
@@ -669,6 +681,8 @@ def _reject_json_constant(constant: str) -> Any:
 
 def validate_reports_file(path: Union[str, Path]) -> bool:
     """Validate that path exists and parses to valid JSON with a 'reports' key or list."""
+    if not path or not isinstance(path, (str, os.PathLike)):
+        return False
     p = Path(path)
     if is_corrupted_or_quarantined_filename(p):
         return False
