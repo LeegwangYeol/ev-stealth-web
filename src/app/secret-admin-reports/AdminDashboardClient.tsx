@@ -190,6 +190,7 @@ const SEVERITY_WEIGHT: Record<string, number> = {
 };
 
 interface DefectReportWithTimestamp extends AdminDefectReportItem {
+  _uid: string;
   _timestamp: number;
   _searchIndex: string;
   _spacelessIndex: string;
@@ -581,7 +582,11 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
   const { dedupedReports, duplicatesRemovedCount } = useMemo(() => {
     const rawList = Array.isArray(safeData?.reports) ? safeData.reports : [];
     const dedupResult = deduplicateReports(rawList);
-    const existingDedup = safeData?.statistics?.duplicates_removed ?? 0;
+    const rawExistingDedup = safeData?.statistics?.duplicates_removed;
+    const existingDedup =
+      typeof rawExistingDedup === 'number' && Number.isFinite(rawExistingDedup)
+        ? Math.max(0, Math.floor(rawExistingDedup))
+        : 0;
     return {
       dedupedReports: dedupResult.reports,
       duplicatesRemovedCount: Math.max(dedupResult.summary.duplicatesRemoved, existingDedup),
@@ -654,7 +659,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           catKo,
           ...slangList,
         ];
-        const searchIndex = searchTokens.join(' ').toLowerCase();
+        const searchIndex = searchTokens.join(' ').normalize('NFC').toLowerCase();
         const spacelessIndex = searchIndex.replace(/\s+/g, '');
 
         // Standardize clean display date YYYY-MM-DD (validating calendar bounds)
@@ -672,12 +677,17 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           (typeof r.id === 'string' || typeof r.id === 'number') && String(r.id).trim()
             ? String(r.id).trim()
             : `report_${idx + 1}`;
+        const cleanSource =
+          maskSensitiveData(stripHtmlTags(typeof r.source === 'string' ? r.source : ''))
+            .trim()
+            .toLowerCase() || 'bobaedream';
 
         return {
           ...r,
           id: safeId,
+          _uid: `${cleanSource}-${safeId}-${idx}`,
           date: displayDate,
-          source: (r.source || '').toLowerCase() || 'bobaedream',
+          source: cleanSource,
           url: sanitizeReportUrl(r.url),
           defect_category: catCode,
           defect_category_ko: catKo,
@@ -702,15 +712,15 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
   const rawStats = safeData?.statistics;
   const statistics = useMemo(() => {
     const totalScraped = typeof rawStats?.total_scraped === 'number' && Number.isFinite(rawStats.total_scraped)
-      ? Math.max(0, rawStats.total_scraped)
+      ? Math.max(0, Math.floor(rawStats.total_scraped)) + 0
       : Math.max(0, reports.length * 7);
 
     const totalFiltered = typeof rawStats?.total_filtered_defects === 'number' && Number.isFinite(rawStats.total_filtered_defects)
-      ? Math.max(0, rawStats.total_filtered_defects)
+      ? Math.max(0, Math.floor(rawStats.total_filtered_defects)) + 0
       : reports.length;
 
     const criticalCount = typeof rawStats?.critical_defect_count === 'number' && Number.isFinite(rawStats.critical_defect_count)
-      ? Math.max(0, rawStats.critical_defect_count)
+      ? Math.max(0, Math.floor(rawStats.critical_defect_count)) + 0
       : reports.filter((r) => String(r.severity || '').toUpperCase() === 'CRITICAL').length;
 
     const avgScore = typeof rawStats?.avg_negativity_score === 'number' && Number.isFinite(rawStats.avg_negativity_score)
@@ -741,13 +751,20 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
       if (topSrcEntry) computedTopPlatform = topSrcEntry[0];
     }
 
+    const safeTopModel = typeof rawStats?.top_model === 'string'
+      ? maskSensitiveData(stripHtmlTags(rawStats.top_model)).trim()
+      : '';
+    const safeTopPlatform = typeof rawStats?.top_platform === 'string'
+      ? maskSensitiveData(stripHtmlTags(rawStats.top_platform)).trim()
+      : '';
+
     return {
       total_scraped: totalScraped,
       total_filtered_defects: totalFiltered,
       avg_negativity_score: avgScore,
       critical_defect_count: criticalCount,
-      top_model: rawStats?.top_model || computedTopModel,
-      top_platform: rawStats?.top_platform || computedTopPlatform,
+      top_model: safeTopModel || computedTopModel,
+      top_platform: safeTopPlatform || computedTopPlatform,
     };
   }, [rawStats, reports]);
 
@@ -842,7 +859,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
   // Filtered and sorted reports with fast precomputed index and optimized tokenization
   const filteredReports = useMemo(() => {
-    const rawQuery = deferredSearchQuery.trim().toLowerCase().slice(0, 200);
+    const rawQuery = deferredSearchQuery.trim().normalize('NFC').toLowerCase().slice(0, 200);
     const selectedCategoryLabel =
       selectedCategory !== 'ALL'
         ? CATEGORY_TABS.find((c) => c.code === selectedCategory)?.label
@@ -1088,7 +1105,9 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 text-xs text-slate-300">
             <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
               <span className="block text-slate-300 font-mono">파이프라인 버전</span>
-              <span className="font-semibold text-slate-200">v{safeData?.pipeline_version || '1.0.0'}</span>
+              <span className="font-semibold text-slate-200">
+                v{maskSensitiveData(stripHtmlTags(typeof safeData?.pipeline_version === 'string' ? safeData.pipeline_version : '')) || '1.0.0'}
+              </span>
             </div>
             <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
               <span className="block text-slate-300 font-mono">최종 수집 시각</span>
@@ -1302,7 +1321,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               onKeyDown={(e) => {
                 if (e.key === 'Escape' && searchQuery) {
                   e.preventDefault();
-                  setSearchQuery('');
+                  handleClearSearch();
                 }
               }}
               aria-describedby="admin-defect-search-hint"
@@ -1652,7 +1671,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                   const isExt = isExternalUrl(safeUrl);
                   const overallIdx = (validCurrentPage - 1) * pageSize + idx + 1;
                   return (
-                    <tr key={`report-row-${report.id}`} className="hover:bg-slate-50 transition border-b border-slate-100">
+                    <tr key={`report-row-${report._uid}`} className="hover:bg-slate-50 transition border-b border-slate-100">
                       <th scope="row" className="px-3 py-3 font-semibold text-slate-900 whitespace-nowrap">
                         제보 #{overallIdx}
                       </th>
@@ -1667,7 +1686,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                       <td className="px-3 py-3 whitespace-nowrap">{getSourceBadge(report.source || 'N/A', safeUrl, viewMode === 'table' ? undefined : -1)}</td>
                       <td className="px-3 py-3 text-slate-900 font-medium max-w-xs" title={report.title}>
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <span id={`report-table-title-${report.id}`} className="truncate"><span>{report.title}</span></span>
+                          <span id={`report-table-title-${report._uid}`} className="truncate"><span>{report.title}</span></span>
                           {isExt ? (
                             <a
                               href={safeUrl}
@@ -1675,7 +1694,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                               rel="noopener noreferrer"
                               tabIndex={viewMode === 'table' ? undefined : -1}
                               aria-label="게시글 원문 보기"
-                              aria-describedby={`report-table-title-${report.id}`}
+                              aria-describedby={`report-table-title-${report._uid}`}
                               title="게시글 원문 보기 (새 창에서 열림)"
                               className="shrink-0 inline-flex items-center min-h-[44px] px-2 py-1 focus:bg-blue-700 focus:text-white rounded focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 text-blue-700 underline text-xs font-semibold"
                             >
@@ -1772,7 +1791,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
               <div className="space-y-4">
                 {paginatedReports.map((report: DefectReportWithTimestamp) => (
                   <DefectReportCard
-                    key={report.id}
+                    key={report._uid}
                     report={report}
                     onTagClick={handleTagClick}
                     onOpenModal={handleOpenModal}

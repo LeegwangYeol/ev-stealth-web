@@ -67,7 +67,7 @@ def _canonicalize_bobaedream_href(raw_href: str) -> Optional[str]:
     """Validate and canonicalize a BobaeDream href, blocking unsafe schemes and external hosts."""
     if not raw_href or not isinstance(raw_href, str):
         return None
-    full_href = _unescape_url_entities(raw_href.strip())
+    full_href = _unescape_url_entities(raw_href.strip()).strip()
     if not full_href or any(ord(c) < 32 or ord(c) == 127 for c in full_href):
         return None
     try:
@@ -323,15 +323,20 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
         except (ValueError, OverflowError):
             return now.isoformat()
 
-    # "어제 [HH:MM[:SS]]"
+    # "어제 [(오전|오후|AM|PM) HH:MM[:SS]]"
     if raw.startswith("어제"):
         yesterday = now - datetime.timedelta(days=1)
-        time_part = re.search(r"(\d{1,2}):(\d{2})(?::(\d{2}))?", raw)
+        time_part = re.search(r"(?:(오전|오후|AM|PM)\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?", raw, re.IGNORECASE)
         if time_part:
             try:
-                h = int(time_part.group(1))
-                m = int(time_part.group(2))
-                s = int(time_part.group(3)) if time_part.group(3) else 0
+                meridiem = time_part.group(1).upper() if time_part.group(1) else None
+                h = int(time_part.group(2))
+                if meridiem in ("오후", "PM") and h < 12:
+                    h += 12
+                elif meridiem in ("오전", "AM") and h == 12:
+                    h = 0
+                m = int(time_part.group(3))
+                s = int(time_part.group(4)) if time_part.group(4) else 0
                 return yesterday.replace(hour=h, minute=m, second=s, microsecond=0).isoformat()
             except (ValueError, OverflowError):
                 return yesterday.isoformat()
@@ -379,19 +384,20 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
 
     # Case 3: Korean format with 년, 월, 일: "2026년 9월 8일 10:15:00"
     kr_date = re.search(
-        r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일(?:\s*(?:\([월화수목금토일A-Za-z]+\))?\s*(?:(오전|오후)\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
+        r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일(?:\s*(?:\([월화수목금토일A-Za-z]+\))?\s*(?:(오전|오후|AM|PM)\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?)?",
         raw,
+        re.IGNORECASE,
     )
     if kr_date:
         try:
             y = int(kr_date.group(1))
             m = int(kr_date.group(2))
             d = int(kr_date.group(3))
-            meridiem = kr_date.group(4)
+            meridiem = kr_date.group(4).upper() if kr_date.group(4) else None
             h = int(kr_date.group(5)) if kr_date.group(5) else 12
-            if meridiem == "오후" and h < 12:
+            if meridiem in ("오후", "PM") and h < 12:
                 h += 12
-            elif meridiem == "오전" and h == 12:
+            elif meridiem in ("오전", "AM") and h == 12:
                 h = 0
             mi = int(kr_date.group(6)) if kr_date.group(6) else 0
             s = int(kr_date.group(7)) if kr_date.group(7) else 0
@@ -474,7 +480,7 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
             except ValueError:
                 if month == 2 and day == 29:
                     dt = None
-                    for offset in range(1, 5):
+                    for offset in range(1, 9):
                         try:
                             dt = datetime.datetime(now.year - offset, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
                             break
@@ -485,7 +491,19 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
                 else:
                     raise
             if year == now.year and dt > now + datetime.timedelta(days=1):
-                dt = dt.replace(year=now.year - 1)
+                if month == 2 and day == 29:
+                    rolled = None
+                    for offset in range(1, 9):
+                        try:
+                            rolled = dt.replace(year=now.year - offset)
+                            break
+                        except ValueError:
+                            continue
+                    if rolled is None:
+                        raise ValueError("No valid leap year found")
+                    dt = rolled
+                else:
+                    dt = dt.replace(year=now.year - 1)
             return dt.isoformat()
         except (ValueError, OverflowError):
             return now.isoformat()
@@ -687,7 +705,7 @@ class BobaeDreamCrawler(BaseCrawler):
             raw_href = match.group(1)
             raw_title = match.group(2)
 
-            full_href = _unescape_url_entities(raw_href.strip())
+            full_href = _unescape_url_entities(raw_href.strip()).strip()
             # Extract post_no from query param (No=, no=, b_no=, bm_no=) or path (/bbs_view/.../123, /view/123)
             no_match = re.search(
                 r"(?:[?&](?:b_|bm_)?no=(\d+)|/(?:bbs_view/[^/]+/|view/)(\d+))",
@@ -706,14 +724,20 @@ class BobaeDreamCrawler(BaseCrawler):
 
             _append_item(raw_href, post_no, extracted_code, raw_title)
 
-        # Fallback regex if href parameters were ordered differently or single quotes
+        # Fallback regex if href parameters were ordered differently or single quotes (linear-time, ReDoS-safe)
         if not items:
-            alt_pattern = re.compile(
-                r'<a\s+[^>]*\bhref=["\']([^"\']*view(?:\.php)?[^"\']*No=(\d+)[^"\']*code=([^"\'&]+)[^"\']*)["\'][^>]*>(.*?)</a>',
+            alt_anchor_re = re.compile(
+                r'<a\s+[^>]*\bhref\s*=\s*(?:"([^"]*)"|\'([^\']*)\')[^>]*>(.*?)</a>',
                 re.IGNORECASE | re.DOTALL,
             )
-            for full_href_raw, post_no, code, raw_title in alt_pattern.findall(scan_html):
-                _append_item(full_href_raw, post_no, code, raw_title)
+            for dq_href, sq_href, raw_title in alt_anchor_re.findall(scan_html):
+                full_href_raw = dq_href or sq_href
+                if not full_href_raw or "view" not in full_href_raw.lower():
+                    continue
+                no_m = re.search(r"No=(\d+)", full_href_raw, re.IGNORECASE)
+                code_m = re.search(r"code=([^&]+)", full_href_raw, re.IGNORECASE)
+                if no_m and code_m:
+                    _append_item(full_href_raw, no_m.group(1), code_m.group(1), raw_title)
 
         return items
 
@@ -942,12 +966,13 @@ class BobaeDreamCrawler(BaseCrawler):
             r'<strong\b(?=[^>]*\bclass=["\']?[^"\'>]*\btitle\b)[^>]*>(.*?)</strong>',
             r'<dt\b(?=[^>]*\bclass=["\']?[^"\'>]*\btit\b)[^>]*>(.*?)</dt>',
             r'<h[1-3]\b(?=[^>]*\bclass=["\']?[^"\'>]*title)[^>]*>(.*?)</h[1-3]>',
-            r'<meta\b(?=[^>]*\bproperty=["\']og:title["\'])[^>]*\bcontent=["\']([^"\']*)["\']',
-            r'<meta\b(?=[^>]*\bcontent=["\']([^"\']*)["\'])[^>]*\bproperty=["\']og:title["\']',
+            r'<meta\b(?=[^>]*\bproperty=["\']og:title["\'])[^>]*\bcontent=(?:"([^"]*)"|\'([^\']*)\')',
+            r'<meta\b(?=[^>]*\bcontent=(?:"([^"]*)"|\'([^\']*)\'))[^>]*\bproperty=["\']og:title["\']',
         ):
             m = re.search(pat, masked_html, re.DOTALL | re.IGNORECASE)
             if m:
-                candidate = clean_title_text(m.group(1))
+                raw_cand = next((g for g in m.groups() if g is not None), "")
+                candidate = clean_title_text(raw_cand)
                 if candidate:
                     title = candidate
                     break
@@ -998,10 +1023,16 @@ class BobaeDreamCrawler(BaseCrawler):
                 body_match = re.search(r'<div class=["\']bodyCont["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
             if not body_match:
                 body_match = re.search(r'<div id=["\']print_area["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
-            if not body_match:
-                body_match = re.search(r'<div class=["\']content01["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
             if body_match:
                 content = clean_html_text(body_match.group(1)).replace("\xa0", " ").strip()
+            if not content:
+                content01_extracted = extract_container_content(html_content, "div", "content01")
+                if content01_extracted:
+                    content = clean_html_text(content01_extracted).replace("\xa0", " ").strip()
+            if not content:
+                body_match = re.search(r'<div class=["\']content01["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
+                if body_match:
+                    content = clean_html_text(body_match.group(1)).replace("\xa0", " ").strip()
 
         # 5. Comments (Static + Dynamic AJAX)
         comments: List[str] = []

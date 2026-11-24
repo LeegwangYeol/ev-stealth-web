@@ -204,7 +204,7 @@ def test_mobile_drawer_markup_and_accessibility():
         code = f.read()
 
     assert '<details className="md:hidden relative group" id="mobile-nav-drawer"' in code
-    assert 'aria-haspopup="dialog"' in code
+    assert 'aria-haspopup="dialog"' not in code
     assert 'aria-expanded="false"' in code
     assert 'aria-controls="mobile-nav-panel"' in code
     assert 'max-w-[calc(100vw-2rem)]' in code

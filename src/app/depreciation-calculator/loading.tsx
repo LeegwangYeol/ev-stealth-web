@@ -3,6 +3,7 @@ export default function DepreciationCalculatorLoading() {
     <div
       role="status"
       aria-live="polite"
+      aria-busy="true"
       aria-label="감가상각 시뮬레이터 및 배터리 수명 계산기 로딩 중"
       className="space-y-8 py-6 animate-pulse motion-reduce:animate-none"
     >

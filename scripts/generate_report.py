@@ -29,7 +29,7 @@ from scripts.domain_tokenizer import DomainTokenizer
 from scripts.sentiment_engine import SentimentEngine
 from scripts.statistical_ranker import StatisticalRanker
 from scripts.cross_aggregator import CrossAggregator
-from scripts.build_casebook import build_casebook
+from scripts.build_casebook import _escape_md_cell, build_casebook
 
 
 def generate_statistical_report_content(
@@ -39,12 +39,36 @@ def generate_statistical_report_content(
 ) -> str:
     """Generate the complete publication-grade STATISTICAL_REPORT.md document."""
 
-    # 1. Run Pipeline Analysis
+    # 1. Run Pipeline Analysis (reuse ranker's fitted corpus and sentiments when already processed)
     clean_records = [r for r in (records or []) if isinstance(r, dict)]
-    top30_keywords = ranker.compute_top_keywords(clean_records, top_n=30)
+    fitted_recs = getattr(ranker, "_fitted_records", None)
+    already_fitted = (
+        isinstance(fitted_recs, list)
+        and len(fitted_recs) == len(clean_records)
+        and all(a is b for a, b in zip(clean_records, fitted_recs))
+    )
+    top30_keywords = ranker.compute_top_keywords(None if already_fitted else clean_records, top_n=30)
     ngrams_bi = ranker.extract_ngrams(n=2, min_freq=2, top_k=10)
     ngrams_tri = ranker.extract_ngrams(n=3, min_freq=2, top_k=8)
-    agg_results = aggregator.analyze(clean_records)
+    doc_sentiments = getattr(ranker, "doc_sentiments", None)
+    fitted_after = getattr(ranker, "_fitted_records", None)
+    precomputed_sentiments = (
+        {id(rec): sent for rec, sent in zip(fitted_after, doc_sentiments)}
+        if (
+            isinstance(fitted_after, list)
+            and isinstance(doc_sentiments, list)
+            and len(fitted_after) == len(doc_sentiments) == len(clean_records)
+            and all(a is b for a, b in zip(clean_records, fitted_after))
+        )
+        else None
+    )
+    agg_results = (
+        aggregator.analyze(clean_records, precomputed_sentiments=precomputed_sentiments)
+        if precomputed_sentiments is not None
+        and "analyze" not in getattr(aggregator, "__dict__", {})
+        and type(aggregator).analyze is CrossAggregator.analyze
+        else aggregator.analyze(clean_records)
+    )
 
     platforms = agg_results["platforms"]
     brands = agg_results["brands"]
@@ -94,7 +118,7 @@ def generate_statistical_report_content(
     ])
 
     for plat_key, pdata in sorted(platforms.items(), key=lambda x: x[1]["total_cases"], reverse=True):
-        pname = pdata["platform_name"]
+        pname = _escape_md_cell(pdata["platform_name"])
         cases = pdata["total_cases"]
         share = pdata["volume_share_pct"]
         tok_cnt = int(cases * 85.4)
@@ -428,7 +452,11 @@ def main():
     print(f"[SUCCESS] STATISTICAL_REPORT.md generated: {args.output} ({len(report_content.encode('utf-8')):,} bytes)")
 
     # Update Casebook
-    build_casebook(args.input, args.slang, args.casebook)
+    try:
+        build_casebook(args.input, args.slang, args.casebook)
+    except (FileNotFoundError, OSError, json.JSONDecodeError, ValueError) as exc:
+        print(f"[ERROR] Failed to build casebook: {exc}")
+        sys.exit(1)
 
     # Run E2E verification if requested
     if args.verify:

@@ -8,12 +8,9 @@ import { usePathname } from 'next/navigation';
  * strips query parameters, hash fragments, and trailing slashes.
  */
 function normalizePath(raw: string | null | undefined): string {
-  if (!raw) return '/';
+  if (!raw || typeof raw !== 'string') return '/';
   const clean = raw.split('?')[0].split('#')[0];
-  if (clean.length > 1 && clean.endsWith('/')) {
-    return clean.slice(0, -1);
-  }
-  return clean || '/';
+  return clean.replace(/\/+$/, '') || '/';
 }
 
 /**

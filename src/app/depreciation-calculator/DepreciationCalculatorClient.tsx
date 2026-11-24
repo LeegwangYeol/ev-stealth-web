@@ -182,7 +182,7 @@ export const getChemistryBadge = (chem: string) => {
 };
 
 export const getDefenseTierBadge = (tier: string) => {
-  const safeTier = tier || 'D';
+  const safeTier = (typeof tier === 'string' ? tier.trim() : '') || 'D';
   switch (safeTier) {
     case 'S':
       return (
@@ -425,17 +425,17 @@ export default function DepreciationCalculatorClient({
   // Filtered models with deferred search to prevent typing stutter
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const filteredModels = useMemo(() => {
-    const q = deferredSearchQuery.trim().toLowerCase();
+    const q = deferredSearchQuery.normalize('NFC').trim().toLowerCase();
     return models.filter((m) => {
       const brandId = m.brand_id || 'generic';
       const matchesBrand = activeBrand === 'all' || brandId === activeBrand;
       const matchesSearch =
         !q ||
-        (m.model_name || '').toLowerCase().includes(q) ||
-        (m.brand_name_ko || '').toLowerCase().includes(q) ||
-        (m.brand_name_en || '').toLowerCase().includes(q) ||
-        (m.battery_specs?.chemistry || '').toLowerCase().includes(q) ||
-        (m.segment || '').toLowerCase().includes(q);
+        (m.model_name || '').normalize('NFC').toLowerCase().includes(q) ||
+        (m.brand_name_ko || '').normalize('NFC').toLowerCase().includes(q) ||
+        (m.brand_name_en || '').normalize('NFC').toLowerCase().includes(q) ||
+        (m.battery_specs?.chemistry || '').normalize('NFC').toLowerCase().includes(q) ||
+        (m.segment || '').normalize('NFC').toLowerCase().includes(q);
       return matchesBrand && matchesSearch;
     });
   }, [models, activeBrand, deferredSearchQuery]);
@@ -1013,7 +1013,7 @@ export default function DepreciationCalculatorClient({
               onChange={(e) => setSearchQuery(e.target.value.slice(0, 200))}
               placeholder="모델명, 제조사, 배터리 검색..."
               aria-describedby="vehicle-search-hint"
-              className="w-full px-3.5 py-2 pl-9 min-h-[44px] rounded-xl border border-slate-300 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:border-blue-500 bg-slate-50 placeholder-slate-500"
+              className="w-full px-3.5 py-2 pl-9 min-h-[44px] rounded-xl border border-slate-300 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:border-blue-500 bg-slate-50 placeholder-slate-600"
               aria-label="전기차 모델 검색"
             />
             <span id="vehicle-search-hint" className="sr-only">전기차 모델명, 브랜드, 배터리 종류로 필터링합니다.</span>
@@ -1543,7 +1543,7 @@ export default function DepreciationCalculatorClient({
             tabIndex={0}
             role="region"
             aria-label="연차별 잔존가치 프로젝션 비교 차트 스크롤 영역"
-            className="w-full overflow-x-auto table-scroll-container rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="w-full overflow-x-auto table-scroll-container rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
           >
             <div className="sm:hidden flex items-center justify-between px-3 py-1.5 text-[11px] font-medium text-slate-400 bg-slate-900 border-b border-slate-800 select-none" aria-hidden="true"><span>← 좌우로 밀어서 1~5년 차트 비교</span><span className="text-[10px] text-blue-400 font-semibold">차트 스크롤 ↔</span></div>
             <svg

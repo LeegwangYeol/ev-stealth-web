@@ -7,18 +7,18 @@ import runpy
 import sys
 from pathlib import Path
 
-CURRENT_DIR = Path(__file__).resolve().parent
+CURRENT_FILE = Path(__file__).resolve()
+CURRENT_DIR = CURRENT_FILE.parent
 
 CANDIDATES = [
     CURRENT_DIR.parent / "run_tracker.py",
-    CURRENT_DIR / "run_tracker.py",
     CURRENT_DIR.parent / "ev-stealth-web" / "run_tracker.py",
     CURRENT_DIR.parent.parent / "run_tracker.py",
 ]
 
 TARGET_SCRIPT = None
 for cand in CANDIDATES:
-    if cand.is_file():
+    if cand.is_file() and cand.resolve() != CURRENT_FILE:
         TARGET_SCRIPT = cand
         break
 
@@ -31,4 +31,6 @@ if __name__ == "__main__":
     try:
         runpy.run_path(str(TARGET_SCRIPT), run_name="__main__")
     except SystemExit as se:
-        sys.exit(se.code if isinstance(se.code, int) else 1)
+        if se.code is None:
+            sys.exit(0)
+        sys.exit(se.code if isinstance(se.code, int) and not isinstance(se.code, bool) else 1)

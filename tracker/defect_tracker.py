@@ -21,6 +21,7 @@ import shutil
 import tempfile
 import threading
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
+import unicodedata
 
 logger = logging.getLogger("defect_tracker")
 
@@ -35,6 +36,15 @@ _SEVERITY_TIER_MAP: Dict[str, float] = {
 }
 
 
+def _norm_text(val: Any) -> str:
+    """Unwrap Enum values and normalize non-ASCII text (e.g. Hangul NFD/NFC) to NFC."""
+    unwrapped = getattr(val, "value", val)
+    if unwrapped is None:
+        return ""
+    text = unwrapped if isinstance(unwrapped, str) else str(unwrapped)
+    return text if text.isascii() else unicodedata.normalize("NFC", text)
+
+
 def _extract_category(obj: Any, uppercase: bool = True, allow_non_str: bool = False) -> str:
     """Extract normalized defect category, falling back across keys if blank/whitespace."""
     for key in ("defect_category", "category"):
@@ -43,21 +53,21 @@ def _extract_category(obj: Any, uppercase: bool = True, allow_non_str: bool = Fa
         if raw_cat is None:
             continue
         if isinstance(raw_cat, str):
-            stripped = raw_cat.strip()
+            stripped = _norm_text(raw_cat).strip()
             if stripped:
                 return stripped.upper() if uppercase else stripped
         elif allow_non_str:
-            stripped = str(raw_cat).strip()
+            stripped = _norm_text(raw_cat).strip()
             if stripped:
                 return stripped.upper() if uppercase else stripped
     return "UNKNOWN"
 
 
 def _extract_val(obj: Any, key: str, default: Any = None) -> Any:
-    """Safely extract field from either a dict, a domain object, or a sequence."""
+    """Safely extract field from either a dict/Mapping, a domain object, or a sequence."""
     if obj is None:
         return default
-    if isinstance(obj, dict):
+    if isinstance(obj, Mapping):
         val = obj.get(key, default)
     elif hasattr(obj, key):
         val = getattr(obj, key, default)
@@ -69,6 +79,18 @@ def _extract_val(obj: Any, key: str, default: Any = None) -> Any:
     else:
         val = default
     return default if val is None else val
+
+
+def _extract_first_non_blank(obj: Any, *keys: str) -> str:
+    """Return the first non-None, non-whitespace-only normalized text value across candidate keys."""
+    for key in keys:
+        val = _extract_val(obj, key)
+        if val is None:
+            continue
+        text = _norm_text(val)
+        if text.strip():
+            return text
+    return ""
 
 
 def _to_record_dict(obj: Any) -> Dict[str, Any]:
@@ -182,7 +204,9 @@ class DefectTracker:
         base_dir: Optional[Union[str, Path]] = None,
         **kwargs: Any,
     ) -> None:
-        self.reports_file: Optional[Path] = Path(reports_file) if reports_file else None
+        self.reports_file: Optional[Path] = (
+            Path(reports_file) if reports_file and str(reports_file).strip() else None
+        )
         repo_root = _find_repo_root()
         cwd = Path.cwd()
         if root_data_dir:
@@ -265,28 +289,55 @@ class DefectTracker:
         self._filter_engine = engine
 
     @staticmethod
-    def validate_report_file(file_path: Union[str, Path]) -> bool:
-        """Validate that target file exists, contains valid JSON, and has a 'reports' list key."""
+    def _validate_report_payload(data: Any) -> bool:
+        """Return True if parsed JSON payload is a dict with a 'reports' list of dicts."""
+        return (
+            isinstance(data, dict)
+            and "reports" in data
+            and isinstance(data["reports"], list)
+            and all(isinstance(r, dict) for r in data["reports"])
+        )
+
+    @classmethod
+    def _validate_and_load_report_file(
+        cls, file_path: Optional[Union[str, Path]]
+    ) -> Optional[Dict[str, Any]]:
+        """Validate and parse target report JSON file in a single pass, returning parsed dict or None."""
         from tracker.atomic_writer import is_corrupted_or_quarantined_filename
 
-        p = Path(file_path)
-        if is_corrupted_or_quarantined_filename(p):
-            return False
+        if not file_path or not str(file_path).strip():
+            return None
+        p: Optional[Path] = None
         try:
+            p = Path(file_path)
+            if is_corrupted_or_quarantined_filename(p):
+                return None
             if not p.is_file() or p.stat().st_size == 0:
-                return False
+                return None
             with open(p, "r", encoding="utf-8-sig") as f:
                 data = json.load(f)
-            if not isinstance(data, dict):
-                return False
-            if "reports" not in data or not isinstance(data["reports"], list):
-                return False
-            if not all(isinstance(r, dict) for r in data["reports"]):
-                return False
-            return True
+            if not cls._validate_report_payload(data):
+                return None
+            return data
         except Exception as exc:
-            logger.warning("Defect report validation failed for %s: %s", p, exc)
+            logger.warning("Defect report validation failed for %s: %s", p or file_path, exc)
+            return None
+
+    @classmethod
+    def _validate_report_bytes(cls, raw_bytes: bytes) -> bool:
+        """Validate already-read report bytes in memory without re-opening the file."""
+        if not raw_bytes:
             return False
+        try:
+            data = json.loads(raw_bytes.decode("utf-8-sig"))
+            return cls._validate_report_payload(data)
+        except Exception:
+            return False
+
+    @staticmethod
+    def validate_report_file(file_path: Optional[Union[str, Path]]) -> bool:
+        """Validate that target file exists, contains valid JSON, and has a 'reports' list key."""
+        return DefectTracker._validate_and_load_report_file(file_path) is not None
 
     def get_root_reports_path(self) -> Path:
         """Resolve path to root daily_reports.json."""
@@ -302,11 +353,8 @@ class DefectTracker:
             return self.public_data_dir / "daily_reports.json"
         return None
 
-    def resolve_primary_reports_path(self) -> Optional[Path]:
-        """Find the active authoritative defect reports file between root, web, and public."""
-        if self.reports_file and self.validate_report_file(self.reports_file):
-            return self.reports_file
-
+    def _candidate_report_paths_by_mtime(self) -> List[Path]:
+        """Return existing candidate report paths sorted by mtime descending (without parsing JSON)."""
         existing: List[Tuple[float, Path]] = []
         for p in (self.get_root_reports_path(), self.get_web_reports_path(), self.get_public_reports_path()):
             if p is None:
@@ -316,9 +364,28 @@ class DefectTracker:
                     existing.append((p.stat().st_mtime, p))
             except OSError:
                 continue
-
         existing.sort(key=lambda item: item[0], reverse=True)
-        for _, cand in existing:
+        return [cand for _, cand in existing]
+
+    def _resolve_and_load_primary_reports(self) -> Tuple[Optional[Path], Optional[Dict[str, Any]]]:
+        """Resolve active authoritative defect reports file and return (path, data) from one JSON parse."""
+        if self.reports_file:
+            loaded = self._validate_and_load_report_file(self.reports_file)
+            if loaded is not None:
+                return self.reports_file, loaded
+
+        for cand in self._candidate_report_paths_by_mtime():
+            loaded = self._validate_and_load_report_file(cand)
+            if loaded is not None:
+                return cand, loaded
+        return None, None
+
+    def resolve_primary_reports_path(self) -> Optional[Path]:
+        """Find the active authoritative defect reports file between root, web, and public."""
+        if self.reports_file and self.validate_report_file(self.reports_file):
+            return self.reports_file
+
+        for cand in self._candidate_report_paths_by_mtime():
             if self.validate_report_file(cand):
                 return cand
         return None
@@ -410,18 +477,73 @@ class DefectTracker:
     ) -> Optional[List[Dict[str, Any]]]:
         """Ensure in-memory report cache and category index are up to date; optionally return copied dicts."""
         is_primary = file_path is None
-        if file_path is not None and not str(file_path).strip():
+        if file_path is not None and (not str(file_path).strip() or "\x00" in str(file_path)):
             return [] if copy_dicts else None
-        raw_target = Path(file_path) if file_path is not None else self.resolve_primary_reports_path()
+
+        can_fast_primary = (
+            is_primary
+            and "resolve_primary_reports_path" not in self.__dict__
+            and type(self).resolve_primary_reports_path is DefectTracker.resolve_primary_reports_path
+            and "validate_report_file" not in self.__dict__
+            and type(self).validate_report_file is DefectTracker.validate_report_file
+            and "load_full_report_data" not in self.__dict__
+            and type(self).load_full_report_data is DefectTracker.load_full_report_data
+        )
+
+        # Fast stat-only cache hit check for primary path before any JSON parsing
+        if can_fast_primary:
+            with self._cache_lock:
+                cached_path = self._cached_reports_path if (self._cached_reports is not None and self._cached_is_primary) else None
+                cached_mtime = self._cached_reports_mtime
+                cached_sig = self._cached_reports_sig
+            if cached_path is not None:
+                newest_candidates = self._candidate_report_paths_by_mtime()
+                expected_primary = self.reports_file if (self.reports_file and self.reports_file.is_file()) else (newest_candidates[0] if newest_candidates else None)
+                if expected_primary is not None:
+                    try:
+                        expected_resolved = expected_primary.resolve()
+                    except (OSError, ValueError):
+                        expected_resolved = expected_primary
+                    if expected_resolved == cached_path:
+                        try:
+                            cur_stat = cached_path.stat()
+                            if cur_stat.st_mtime == cached_mtime and (cur_stat.st_mtime_ns, cur_stat.st_size) == cached_sig:
+                                with self._cache_lock:
+                                    if (
+                                        self._cached_reports is not None
+                                        and self._cached_reports_path == cached_path
+                                        and self._cached_reports_mtime == cached_mtime
+                                        and self._cached_reports_sig == cached_sig
+                                    ):
+                                        return [_to_record_dict(r) for r in self._cached_reports] if copy_dicts else None
+                        except (OSError, ValueError):
+                            pass
+
+        preloaded_data: Optional[Dict[str, Any]] = None
+        try:
+            if file_path is not None:
+                raw_target = Path(file_path)
+            elif can_fast_primary:
+                raw_target, preloaded_data = self._resolve_and_load_primary_reports()
+            else:
+                raw_target = self.resolve_primary_reports_path()
+        except (OSError, ValueError):
+            return [] if copy_dicts else None
         target: Optional[Path] = None
         if raw_target is not None:
             try:
                 target = raw_target.resolve()
-            except OSError:
+            except (OSError, ValueError):
                 target = raw_target
 
         pre_stat: Optional[os.stat_result] = None
-        if target and target.exists():
+        target_exists = False
+        if target:
+            try:
+                target_exists = target.exists()
+            except (OSError, ValueError):
+                target_exists = False
+        if target and target_exists:
             try:
                 pre_stat = target.stat()
                 current_mtime = pre_stat.st_mtime
@@ -436,14 +558,20 @@ class DefectTracker:
                         if is_primary:
                             self._cached_is_primary = True
                         return [_to_record_dict(r) for r in self._cached_reports] if copy_dicts else None
-            except OSError:
+            except (OSError, ValueError):
                 pre_stat = None
 
-        data = self.load_full_report_data(file_path=target)
+        data = preloaded_data if preloaded_data is not None else self.load_full_report_data(file_path=target)
         reports = data.get("reports", [])
 
         with self._cache_lock:
-            if target and target.exists():
+            post_exists = False
+            if target:
+                try:
+                    post_exists = target.exists()
+                except (OSError, ValueError):
+                    post_exists = False
+            if target and post_exists:
                 try:
                     post_stat = target.stat()
                     # Guard against TOCTOU: if file changed while reading, retain pre_stat so next read reloads
@@ -459,7 +587,7 @@ class DefectTracker:
                     self._cached_reports_sig = (effective_stat.st_mtime_ns, effective_stat.st_size)
                     self._cached_reports_path = target
                     self._cached_is_primary = is_primary
-                except OSError:
+                except (OSError, ValueError):
                     self._cached_reports_mtime = None
                     self._cached_reports_sig = None
                     self._cached_reports_path = None
@@ -513,7 +641,7 @@ class DefectTracker:
         candidate_source: Optional[List[Any]] = None
         if reports is None:
             if "load_reports" not in self.__dict__ and type(self).load_reports is DefectTracker.load_reports:
-                if file_path is not None and not str(file_path).strip():
+                if file_path is not None and (not str(file_path).strip() or "\x00" in str(file_path)):
                     return []
                 self._ensure_reports_loaded(file_path=file_path, copy_dicts=False)
                 use_cache = True
@@ -525,17 +653,39 @@ class DefectTracker:
             use_cache = False
 
         cat_raw = getattr(category, "value", category)
-        cat_upper = cat_raw.strip().upper() if (cat_raw and isinstance(cat_raw, str) and cat_raw.strip()) else None
-        brand_lower = vehicle_brand.strip().lower() if (vehicle_brand and isinstance(vehicle_brand, str) and vehicle_brand.strip()) else None
-        model_lower = vehicle_model.strip().lower() if (vehicle_model and isinstance(vehicle_model, str) and vehicle_model.strip()) else None
-        kw_lower = keyword.strip().lower() if (keyword and isinstance(keyword, str) and keyword.strip()) else None
+        cat_upper = (
+            _norm_text(cat_raw).strip().upper()
+            if (cat_raw and isinstance(cat_raw, str) and cat_raw.strip())
+            else None
+        )
+        brand_raw = getattr(vehicle_brand, "value", vehicle_brand)
+        brand_lower = (
+            _norm_text(brand_raw).strip().lower()
+            if (brand_raw and isinstance(brand_raw, str) and brand_raw.strip())
+            else None
+        )
+        model_raw = getattr(vehicle_model, "value", vehicle_model)
+        model_lower = (
+            _norm_text(model_raw).strip().lower()
+            if (model_raw and isinstance(model_raw, str) and model_raw.strip())
+            else None
+        )
+        kw_raw = getattr(keyword, "value", keyword)
+        kw_lower = (
+            _norm_text(kw_raw).strip().lower()
+            if (kw_raw and isinstance(kw_raw, str) and kw_raw.strip())
+            else None
+        )
 
         resolved_req_path: Optional[Path] = None
         if file_path is not None:
             try:
                 resolved_req_path = Path(file_path).resolve()
-            except OSError:
-                resolved_req_path = Path(file_path)
+            except (OSError, ValueError):
+                try:
+                    resolved_req_path = Path(file_path)
+                except (TypeError, ValueError):
+                    return []
 
         cache_key: Optional[Tuple[Any, ...]] = None
         candidate_pool: Optional[List[Any]] = None
@@ -590,14 +740,16 @@ class DefectTracker:
                     continue
 
             # Brand filter
-            brand_val = _extract_val(r, "vehicle_brand") or _extract_val(r, "brand") or ""
-            if brand_lower and brand_lower not in str(brand_val).lower():
-                continue
+            if brand_lower:
+                brand_val = _extract_first_non_blank(r, "vehicle_brand", "brand")
+                if brand_lower not in brand_val.lower():
+                    continue
 
             # Model filter
-            model_val = _extract_val(r, "vehicle_model") or _extract_val(r, "model") or ""
-            if model_lower and model_lower not in str(model_val).lower():
-                continue
+            if model_lower:
+                model_val = _extract_first_non_blank(r, "vehicle_model", "model")
+                if model_lower not in model_val.lower():
+                    continue
 
             # Severity filter
             if norm_min_sev is not None:
@@ -612,9 +764,7 @@ class DefectTracker:
                         effective_sev = None
 
                 if effective_sev is None:
-                    raw_sev = _extract_val(r, "severity") or _extract_val(r, "severity_tier") or ""
-                    raw_sev = getattr(raw_sev, "value", raw_sev)
-                    raw_tier = str(raw_sev).strip().upper()
+                    raw_tier = _extract_first_non_blank(r, "severity", "severity_tier").strip().upper()
                     effective_sev = _SEVERITY_TIER_MAP.get(raw_tier, 0.0)
 
                 if effective_sev < norm_min_sev:
@@ -622,13 +772,15 @@ class DefectTracker:
 
             # Keyword search across title, defect_topic, summary, verbatim_quote, and raw_quote
             if kw_lower:
-                combined_text = " ".join([
-                    str(_extract_val(r, "title", "")),
-                    str(_extract_val(r, "defect_topic", "")),
-                    str(_extract_val(r, "summary", "")),
-                    str(_extract_val(r, "verbatim_quote", "")),
-                    str(_extract_val(r, "raw_quote", "")),
-                ]).lower()
+                combined_text = _norm_text(
+                    " ".join([
+                        str(_extract_val(r, "title", "")),
+                        str(_extract_val(r, "defect_topic", "")),
+                        str(_extract_val(r, "summary", "")),
+                        str(_extract_val(r, "verbatim_quote", "")),
+                        str(_extract_val(r, "raw_quote", "")),
+                    ])
+                ).lower()
                 if kw_lower not in combined_text:
                     continue
 
@@ -655,24 +807,8 @@ class DefectTracker:
 
     def get_statistics(self, file_path: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
         """Return high-level statistics and category breakdown for defect reports."""
-        def _get_val(obj: Any, key: str, default: Any = None) -> Any:
-            if obj is None:
-                return default
-            if isinstance(obj, dict):
-                val = obj.get(key, default)
-            elif hasattr(obj, key):
-                val = getattr(obj, key, default)
-            elif hasattr(obj, "__getitem__"):
-                try:
-                    val = obj[key]
-                except (KeyError, TypeError, IndexError):
-                    val = default
-            else:
-                val = default
-            return default if val is None else val
-
         full_data: Optional[Dict[str, Any]] = None
-        if file_path is not None and not str(file_path).strip():
+        if file_path is not None and (not str(file_path).strip() or "\x00" in str(file_path)):
             full_data = {"reports": [], "statistics": {}}
         elif (
             "load_full_report_data" not in self.__dict__
@@ -683,18 +819,22 @@ class DefectTracker:
             if file_path is not None:
                 try:
                     resolved_req_path = Path(file_path).resolve()
-                except OSError:
-                    resolved_req_path = Path(file_path)
-            with self._cache_lock:
-                target_mismatch = (
-                    (resolved_req_path is not None and self._cached_reports_path != resolved_req_path)
-                    or (resolved_req_path is None and not self._cached_is_primary)
-                )
-                if not target_mismatch:
-                    full_data = self._cached_full_data
+                except (OSError, ValueError):
+                    try:
+                        resolved_req_path = Path(file_path)
+                    except (TypeError, ValueError):
+                        full_data = {"reports": [], "statistics": {}}
+            if full_data is None:
+                with self._cache_lock:
+                    target_mismatch = (
+                        (resolved_req_path is not None and self._cached_reports_path != resolved_req_path)
+                        or (resolved_req_path is None and not self._cached_is_primary)
+                    )
+                    if not target_mismatch:
+                        full_data = self._cached_full_data
         if full_data is None:
             full_data = self.load_full_report_data(file_path=file_path)
-        stats = _get_val(full_data, "statistics")
+        stats = _extract_val(full_data, "statistics")
         if stats and isinstance(stats, dict):
             stat_copy = dict(stats)
             for int_key in ("total_filtered_defects", "critical_defect_count"):
@@ -718,14 +858,15 @@ class DefectTracker:
                         if math.isnan(f_avg) or math.isinf(f_avg):
                             stat_copy["avg_negativity_score"] = 0.0
                         else:
-                            stat_copy["avg_negativity_score"] = round(f_avg, 2)
+                            rounded_avg = round(f_avg, 2)
+                            stat_copy["avg_negativity_score"] = 0.0 if rounded_avg == 0.0 else rounded_avg
                     except (ValueError, TypeError, OverflowError):
                         stat_copy["avg_negativity_score"] = 0.0
 
             # Ensure category_distribution is always populated
             if "category_distribution" not in stat_copy or not isinstance(stat_copy["category_distribution"], dict):
                 cat_dist: Dict[str, int] = {}
-                fd_dist = _get_val(full_data, "category_distribution")
+                fd_dist = _extract_val(full_data, "category_distribution")
                 if fd_dist and isinstance(fd_dist, dict):
                     for k, v in fd_dist.items():
                         if isinstance(v, bool):
@@ -736,8 +877,8 @@ class DefectTracker:
                                 cat_dist[str(k)] = int(f_v)
                         except (ValueError, TypeError, OverflowError):
                             pass
-                elif _get_val(full_data, "top_defect_categories"):
-                    top_cats = _get_val(full_data, "top_defect_categories")
+                elif _extract_val(full_data, "top_defect_categories"):
+                    top_cats = _extract_val(full_data, "top_defect_categories")
                     if isinstance(top_cats, list):
                         for item in top_cats:
                             if isinstance(item, dict) and "category" in item and "count" in item:
@@ -762,7 +903,7 @@ class DefectTracker:
                                 pass
 
                 if not cat_dist:
-                    reports = _get_val(full_data, "reports", [])
+                    reports = _extract_val(full_data, "reports", [])
                     if isinstance(reports, (list, tuple)):
                         for r in reports:
                             cat = _extract_category(r, uppercase=False, allow_non_str=True)
@@ -775,7 +916,7 @@ class DefectTracker:
             return stat_copy
 
         # Compute on-the-fly from reports list
-        reports = _get_val(full_data, "reports", [])
+        reports = _extract_val(full_data, "reports", [])
         if not isinstance(reports, (list, tuple)):
             reports = []
         total = len(reports)
@@ -787,7 +928,7 @@ class DefectTracker:
             cat = _extract_category(r, uppercase=False, allow_non_str=True)
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
-            dsi = _get_val(r, "severity_index")
+            dsi = _extract_val(r, "severity_index")
             effective_dsi: Optional[float] = None
             if dsi is not None and not isinstance(dsi, bool):
                 try:
@@ -797,9 +938,7 @@ class DefectTracker:
                 except (ValueError, TypeError, OverflowError):
                     effective_dsi = None
 
-            sev_raw = _get_val(r, "severity_tier") or _get_val(r, "severity") or ""
-            sev_raw = getattr(sev_raw, "value", sev_raw)
-            sev_str = str(sev_raw).strip().upper()
+            sev_str = _extract_first_non_blank(r, "severity_tier", "severity").strip().upper()
             is_critical = (
                 sev_str == "CRITICAL"
                 or (effective_dsi is not None and effective_dsi >= 7.0)
@@ -807,7 +946,7 @@ class DefectTracker:
             if is_critical:
                 critical_count += 1
 
-            neg = _get_val(r, "negativity_score")
+            neg = _extract_val(r, "negativity_score")
             if neg is not None and not isinstance(neg, bool):
                 try:
                     f_neg = float(neg)
@@ -819,11 +958,12 @@ class DefectTracker:
         avg_neg = (sum(negativities) / len(negativities)) if negativities else 0.0
         if math.isnan(avg_neg) or math.isinf(avg_neg):
             avg_neg = 0.0
+        rounded_avg = round(avg_neg, 2)
 
         return {
             "total_filtered_defects": total,
             "critical_defect_count": critical_count,
-            "avg_negativity_score": round(avg_neg, 2),
+            "avg_negativity_score": 0.0 if rounded_avg == 0.0 else rounded_avg,
             "category_distribution": category_counts,
         }
 
@@ -915,13 +1055,14 @@ class DefectTracker:
             return []
 
         # Resolve paths
+        has_web_dir = bool(web_dir and str(web_dir).strip())
         root_path = self.get_root_reports_path()
-        web_path = (Path(web_dir) / "daily_reports.json") if web_dir else self.get_web_reports_path()
+        web_path = (Path(web_dir) / "daily_reports.json") if has_web_dir else self.get_web_reports_path()
 
         public_path: Optional[Path] = None
-        if web_dir and (Path(web_dir).parent / "public" / "data").exists():
+        if has_web_dir and (Path(web_dir).parent / "public" / "data").exists():
             public_path = Path(web_dir).parent / "public" / "data" / "daily_reports.json"
-        elif web_dir and (Path(web_dir).parent.parent / "public" / "data").exists():
+        elif has_web_dir and (Path(web_dir).parent.parent / "public" / "data").exists():
             public_path = Path(web_dir).parent.parent / "public" / "data" / "daily_reports.json"
         else:
             public_path = self.get_public_reports_path()
@@ -963,14 +1104,29 @@ class DefectTracker:
 
                 candidate_paths.sort(key=_safe_mtime, reverse=True)
 
+                use_builtin_validator = (
+                    "validate_report_file" not in self.__dict__
+                    and type(self).validate_report_file is DefectTracker.validate_report_file
+                )
                 source_path: Optional[Path] = None
+                cached_source_bytes: Optional[bytes] = None
                 for cand in candidate_paths:
                     if is_corrupted_or_quarantined_filename(cand):
                         continue
-                    if self.validate_report_file(cand):
+                    if use_builtin_validator:
+                        try:
+                            if cand.is_file() and cand.stat().st_size > 0:
+                                raw_bytes = cand.read_bytes()
+                                if self._validate_report_bytes(raw_bytes):
+                                    source_path = cand
+                                    cached_source_bytes = raw_bytes
+                                    break
+                        except Exception as exc:
+                            logger.warning("Defect report validation failed for %s: %s", cand, exc)
+                    elif self.validate_report_file(cand):
                         source_path = cand
                         break
-                    elif quarantine_corrupted:
+                    if quarantine_corrupted:
                         if quarantine_corrupted_file(cand) is not None:
                             quarantined_any = True
 
@@ -992,7 +1148,7 @@ class DefectTracker:
                 if source_path and target_paths:
                     try:
                         source_stat = source_path.stat()
-                        source_bytes = source_path.read_bytes()
+                        source_bytes = cached_source_bytes if cached_source_bytes is not None else source_path.read_bytes()
                         source_hash = hashlib.sha256(source_bytes).hexdigest()
                     except Exception as e:
                         logger.error("Failed to inspect source defect report %s: %s", source_path, e)
@@ -1002,6 +1158,7 @@ class DefectTracker:
                         if tgt.exists():
                             if is_corrupted_or_quarantined_filename(tgt):
                                 continue
+                            tgt_bytes: Optional[bytes] = None
                             try:
                                 tgt_bytes = tgt.read_bytes()
                                 h_tgt = hashlib.sha256(tgt_bytes).hexdigest()
@@ -1017,7 +1174,12 @@ class DefectTracker:
                             except Exception as e:
                                 logger.warning("Error inspecting target %s: %s", tgt, e)
 
-                            if not self.validate_report_file(tgt):
+                            is_tgt_valid = (
+                                self._validate_report_bytes(tgt_bytes)
+                                if (use_builtin_validator and tgt_bytes is not None)
+                                else self.validate_report_file(tgt)
+                            )
+                            if not is_tgt_valid:
                                 if quarantine_corrupted:
                                     if quarantine_corrupted_file(tgt) is not None:
                                         quarantined_any = True

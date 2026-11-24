@@ -63,7 +63,7 @@ export const DEFAULT_SUBSIDY_THRESHOLDS: Readonly<Record<AlertSeverity, Readonly
     label_ko: '원활 (신청 여유)',
     severity: 'HEALTHY' as AlertSeverity,
     color_hex: '#10B981',
-    badge_class: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    badge_class: 'bg-emerald-950 text-emerald-200 border-emerald-400',
     recommended_action: '보조금 잔여량이 충분하여 신청 접수 후 통상 1~2주 내 교부 결정됩니다.',
   }),
   CAUTION: Object.freeze({
@@ -72,7 +72,7 @@ export const DEFAULT_SUBSIDY_THRESHOLDS: Readonly<Record<AlertSeverity, Readonly
     label_ko: '주의 (소진 가속)',
     severity: 'CAUTION' as AlertSeverity,
     color_hex: '#F59E0B',
-    badge_class: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+    badge_class: 'bg-amber-950 text-amber-200 border-amber-400',
     recommended_action: '출고 예정 시기가 1~2개월 이내인 경우 조속한 서류 접수를 권장합니다.',
   }),
   WARNING: Object.freeze({
@@ -81,7 +81,7 @@ export const DEFAULT_SUBSIDY_THRESHOLDS: Readonly<Record<AlertSeverity, Readonly
     label_ko: '경고 (마감 임박)',
     severity: 'WARNING' as AlertSeverity,
     color_hex: '#F97316',
-    badge_class: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+    badge_class: 'bg-orange-950 text-orange-200 border-orange-400',
     recommended_action: '잔여 예산 소진이 임박했습니다. 즉시 출고 가능한 실재고 매칭이 필요합니다.',
   }),
   CRITICAL: Object.freeze({
@@ -90,7 +90,7 @@ export const DEFAULT_SUBSIDY_THRESHOLDS: Readonly<Record<AlertSeverity, Readonly
     label_ko: '위험 (잔여 극소)',
     severity: 'CRITICAL' as AlertSeverity,
     color_hex: '#EF4444',
-    badge_class: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+    badge_class: 'bg-rose-950 text-rose-200 border-rose-400',
     recommended_action: '선착순 마감 직전입니다. 담당 지자체 문의 및 추경 예산 편성 여부를 확인하세요.',
   }),
   DEPLETED: Object.freeze({
@@ -99,7 +99,7 @@ export const DEFAULT_SUBSIDY_THRESHOLDS: Readonly<Record<AlertSeverity, Readonly
     label_ko: '마감 (접수 종료)',
     severity: 'DEPLETED' as AlertSeverity,
     color_hex: '#6B7280',
-    badge_class: 'bg-slate-800 text-slate-200 border-slate-600',
+    badge_class: 'bg-slate-950 text-slate-100 border-slate-400',
     recommended_action: '2026년 공고 예산이 전액 소진되었습니다. 취소분 대기 접수 또는 차년도 사업을 준비하세요.',
   }),
 });
@@ -325,10 +325,10 @@ function getRegionLookupIndex(regions: readonly RegionEntry[]): RegionLookupInde
   for (let i = 0; i < len; i++) {
     const r = regions[i];
     if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
-    const rid = typeof r.region_id === 'string' ? r.region_id.trim().toLowerCase() : '';
-    const iso = typeof r.iso_code === 'string' ? r.iso_code.trim().toLowerCase() : '';
-    const ko = typeof r.name_ko === 'string' ? r.name_ko.trim().toLowerCase() : '';
-    const en = typeof r.name_en === 'string' ? r.name_en.trim().toLowerCase() : '';
+    const rid = typeof r.region_id === 'string' ? r.region_id.trim().normalize('NFC').toLowerCase() : '';
+    const iso = typeof r.iso_code === 'string' ? r.iso_code.trim().normalize('NFC').toLowerCase() : '';
+    const ko = typeof r.name_ko === 'string' ? r.name_ko.trim().normalize('NFC').toLowerCase() : '';
+    const en = typeof r.name_en === 'string' ? r.name_en.trim().normalize('NFC').toLowerCase() : '';
 
     if (rid) {
       if (!idOrIsoMap.has(rid)) idOrIsoMap.set(rid, r);
@@ -375,8 +375,8 @@ function getModelLookupIndex(models: readonly PopularModelEntry[]): ModelLookupI
   for (let i = 0; i < len; i++) {
     const m = models[i];
     if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
-    const idNorm = typeof m.model_id === 'string' ? m.model_id.trim().toLowerCase() : '';
-    const koNorm = typeof m.name_ko === 'string' ? m.name_ko.trim().toLowerCase() : '';
+    const idNorm = typeof m.model_id === 'string' ? m.model_id.trim().normalize('NFC').toLowerCase() : '';
+    const koNorm = typeof m.name_ko === 'string' ? m.name_ko.trim().normalize('NFC').toLowerCase() : '';
 
     if (idNorm && !exactMap.has(idNorm)) exactMap.set(idNorm, m);
     if (koNorm && !exactMap.has(koNorm)) exactMap.set(koNorm, m);
@@ -413,7 +413,7 @@ export function getRegionByIdFromList(
   regionId: string
 ): RegionEntry | undefined {
   if (!regionId || typeof regionId !== 'string' || !Array.isArray(regions)) return undefined;
-  const trimmed = regionId.trim();
+  const trimmed = regionId.trim().normalize('NFC');
   const normalized = trimmed.toLowerCase();
   if (!normalized) return undefined;
 
@@ -455,7 +455,7 @@ export function getRegionByIdFromList(
       const r = regions[i];
       if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
       if (!r.name_ko || typeof r.name_ko !== 'string') continue;
-      const lowerKo = r.name_ko.trim().toLowerCase();
+      const lowerKo = r.name_ko.trim().normalize('NFC').toLowerCase();
       const rStripped = lowerKo.replace(REGION_SUFFIX_RE, '');
       if (
         (rStripped && rStripped === stripped) ||
@@ -480,7 +480,7 @@ export function getModelByIdFromList(
   modelId: string
 ): PopularModelEntry | undefined {
   if (!modelId || typeof modelId !== 'string' || !Array.isArray(models)) return undefined;
-  const normalized = modelId.trim().toLowerCase();
+  const normalized = modelId.trim().normalize('NFC').toLowerCase();
   if (!normalized) return undefined;
 
   const index = getModelLookupIndex(models);
@@ -493,7 +493,7 @@ export function getModelByIdFromList(
   for (let i = 0; i < models.length; i++) {
     const m = models[i];
     if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
-    if (typeof m.name_ko === 'string' && m.name_ko.toLowerCase().includes(normalized)) {
+    if (typeof m.name_ko === 'string' && m.name_ko.normalize('NFC').toLowerCase().includes(normalized)) {
       return m;
     }
   }
@@ -509,10 +509,10 @@ export function getModelByIdFromList(
     const m = models[i];
     if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
     const cleanId = typeof m.model_id === 'string'
-      ? m.model_id.toLowerCase().replace(MODEL_CLEAN_RE, '')
+      ? m.model_id.normalize('NFC').toLowerCase().replace(MODEL_CLEAN_RE, '')
       : '';
     const cleanKo = typeof m.name_ko === 'string'
-      ? m.name_ko.toLowerCase().replace(MODEL_CLEAN_RE, '')
+      ? m.name_ko.normalize('NFC').toLowerCase().replace(MODEL_CLEAN_RE, '')
       : '';
     if ((cleanId && cleanId.includes(cleanQuery)) || (cleanKo && cleanKo.includes(cleanQuery))) {
       return m;
@@ -1024,7 +1024,7 @@ export function parseSubsidyNumber(
     return fallback;
   }
 
-  const raw = input.trim();
+  const raw = input.trim().normalize('NFC');
   if (!raw) {
     return fallback;
   }
@@ -1216,7 +1216,7 @@ export function parseModelSubsidy(model: unknown): ParsedModelSubsidy {
   const rawRatio = m.price_subsidy_ratio ?? m.priceSubsidyRatio;
   let priceSubsidyRatio = 1.0;
   if (typeof rawRatio === 'number' && Number.isFinite(rawRatio) && rawRatio >= 0) {
-    priceSubsidyRatio = Math.min(1.0, rawRatio);
+    priceSubsidyRatio = rawRatio === 0 ? 0 : Math.min(1.0, rawRatio);
   } else {
     priceSubsidyRatio = getPriceSubsidyRatio(basePriceKrw);
   }
@@ -1381,9 +1381,11 @@ export function compareRegions(
   sortOption: RegionSortOption = 'DEPLETION_DESC',
   categoryKey: 'passenger' | 'commercial' | 'bus' = 'passenger'
 ): number {
-  if (!a && !b) return 0;
-  if (!a) return 1;
-  if (!b) return -1;
+  const validA = isPlainObject(a);
+  const validB = isPlainObject(b);
+  if (!validA && !validB) return 0;
+  if (!validA) return 1;
+  if (!validB) return -1;
 
   const normalizedSort = typeof sortOption === 'string' && sortOption.trim()
     ? sortOption.trim().toUpperCase()
@@ -1576,9 +1578,11 @@ export function compareModels(
   b: PopularModelEntry | null | undefined,
   sortOption: ModelSortOption = 'PRICE_ASC'
 ): number {
-  if (!a && !b) return 0;
-  if (!a) return 1;
-  if (!b) return -1;
+  const validA = isPlainObject(a);
+  const validB = isPlainObject(b);
+  if (!validA && !validB) return 0;
+  if (!validA) return 1;
+  if (!validB) return -1;
 
   const normalizedSort = typeof sortOption === 'string' && sortOption.trim()
     ? sortOption.trim().toUpperCase()
@@ -2058,7 +2062,7 @@ export function getDepletionBadgeStyle(rate: number): {
     return {
       severity: 'DEPLETED',
       colorHex: '#6B7280',
-      badgeClass: 'bg-slate-800 text-slate-200 border-slate-600',
+      badgeClass: 'bg-slate-950 text-slate-100 border-slate-400',
       labelKo: '마감 (접수 종료)',
     };
   }
@@ -2066,7 +2070,7 @@ export function getDepletionBadgeStyle(rate: number): {
     return {
       severity: 'CRITICAL',
       colorHex: '#EF4444',
-      badgeClass: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+      badgeClass: 'bg-rose-950 text-rose-200 border-rose-400',
       labelKo: '위험 (잔여 극소)',
     };
   }
@@ -2074,7 +2078,7 @@ export function getDepletionBadgeStyle(rate: number): {
     return {
       severity: 'WARNING',
       colorHex: '#F97316',
-      badgeClass: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+      badgeClass: 'bg-orange-950 text-orange-200 border-orange-400',
       labelKo: '경고 (마감 임박)',
     };
   }
@@ -2082,14 +2086,14 @@ export function getDepletionBadgeStyle(rate: number): {
     return {
       severity: 'CAUTION',
       colorHex: '#F59E0B',
-      badgeClass: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+      badgeClass: 'bg-amber-950 text-amber-200 border-amber-400',
       labelKo: '주의 (소진 가속)',
     };
   }
   return {
     severity: 'HEALTHY',
     colorHex: '#10B981',
-    badgeClass: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    badgeClass: 'bg-emerald-950 text-emerald-200 border-emerald-400',
     labelKo: '원활 (신청 여유)',
   };
 }
@@ -2148,7 +2152,7 @@ const METROPOLITAN_CITY_CODE_SET: ReadonlySet<string> = new Set(METROPOLITAN_CIT
 const PROVINCE_CODE_SET: ReadonlySet<string> = new Set(PROVINCE_CODES);
 
 function resolveRegionAliasCode(raw: string): string {
-  const trimmed = raw.trim();
+  const trimmed = raw.trim().normalize('NFC');
   const lower = trimmed.toLowerCase();
   if (Object.prototype.hasOwnProperty.call(REGION_ALIAS_MAP, lower)) {
     return REGION_ALIAS_MAP[lower].toUpperCase();
@@ -2165,7 +2169,7 @@ export function classifyRegionGroup(
   if (!region) return 'other';
 
   if (typeof region === 'string') {
-    const ident = region.trim();
+    const ident = region.trim().normalize('NFC');
     if (!ident) return 'other';
     const canonical = resolveRegionAliasCode(ident);
     if (METROPOLITAN_CITY_CODE_SET.has(canonical)) return 'metropolitan_cities';
@@ -2195,7 +2199,7 @@ export function classifyRegionGroup(
   if (METROPOLITAN_CITY_CODE_SET.has(code)) return 'metropolitan_cities';
   if (PROVINCE_CODE_SET.has(code)) return 'provinces';
 
-  const nameKo = safeString(region.name_ko).trim();
+  const nameKo = safeString(region.name_ko).trim().normalize('NFC');
   for (const city of METROPOLITAN_CITIES) {
     if (nameKo.startsWith(city)) return 'metropolitan_cities';
   }

@@ -133,10 +133,13 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
 
   const munis = Array.isArray(region?.municipalities) ? region.municipalities : EMPTY_MUNIS;
   const hasMunis = munis.length > 0;
-  const regionName = region?.name_ko || '해당 지역';
-  const regionId = region?.region_id || region?.iso_code || region?.name_ko || 'unknown';
+  const regionName = (typeof region?.name_ko === 'string' && region.name_ko.trim()) || '해당 지역';
+  const regionId =
+    (typeof region?.region_id === 'string' && region.region_id.trim()) ||
+    (typeof region?.iso_code === 'string' && region.iso_code.trim()) ||
+    regionName;
   const toggleKey = regionKey || regionId;
-  const safeDomId = String(toggleKey).replace(/\s+/g, '-');
+  const safeDomId = String(toggleKey).trim().replace(/\s+/g, '-') || 'unknown';
   const categoryLabel = selectedCategory === 'passenger' ? '전기승용' : selectedCategory === 'commercial' ? '전기화물' : '전기승합';
   const effectiveStatus = normalizeTableStatus(cat?.status, depletionRate);
   const isDepleted = effectiveStatus === 'DEPLETED' || depletionRate >= 100;
@@ -422,8 +425,13 @@ export const SubsidyTableView = memo(function SubsidyTableView({
   }, [normSort, onSortChange]);
 
   // Performance & Stability: Memoization of filtered/sorted rows to prevent unnecessary DOM mutations
+  const validRegions = useMemo(
+    () => (Array.isArray(regions) ? regions.filter((r) => Boolean(r && typeof r === 'object' && !Array.isArray(r))) : EMPTY_REGIONS),
+    [regions]
+  );
+
   const renderedRows = useMemo(() => {
-    return (regions || EMPTY_REGIONS).map((region, idx) => {
+    return validRegions.map((region, idx) => {
       const regionKey = region.region_id || region.iso_code || region.name_ko || `region-${idx}`;
       return (
         <SubsidyTableRow
@@ -437,7 +445,7 @@ export const SubsidyTableView = memo(function SubsidyTableView({
         />
       );
     });
-  }, [regions, selectedCategory, expandedRegions, onToggleExpand, onSelectForCalc]);
+  }, [validRegions, selectedCategory, expandedRegions, onToggleExpand, onSelectForCalc]);
 
   return (
     <div

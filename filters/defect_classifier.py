@@ -403,20 +403,38 @@ class DefectClassifier:
     # -----------------------------------------------------------------
     # STAGE 1: Noise & Exclusion Filter
     # -----------------------------------------------------------------
-    def evaluate_stage1_noise(self, text: Any, url: Any = "") -> Tuple[bool, str]:
+    def evaluate_stage1_noise(
+        self,
+        text: Any,
+        url: Any = "",
+        slang_matches: Optional[List[SlangEntry]] = None,
+        _pre_sanitized: bool = False,
+    ) -> Tuple[bool, str]:
         """Delegate Stage 1 noise filtering to SpamFilter with bulletproof null-checks."""
+        if (
+            type(self.spam_filter).evaluate_stage1_noise is SpamFilter.evaluate_stage1_noise
+            and "evaluate_stage1_noise" not in getattr(self.spam_filter, "__dict__", {})
+        ):
+            return self.spam_filter.evaluate_stage1_noise(
+                text, url, slang_matches=slang_matches, _pre_sanitized=_pre_sanitized
+            )
         return self.spam_filter.evaluate_stage1_noise(text, url)
 
     # -----------------------------------------------------------------
     # STAGE 2: Ownership Anchor & Operational Symptom Verification
     # -----------------------------------------------------------------
-    def evaluate_stage2_ownership(self, text: Any) -> Tuple[bool, str]:
+    def evaluate_stage2_ownership(
+        self,
+        text: Any,
+        slang_matches: Optional[List[SlangEntry]] = None,
+        _pre_sanitized: bool = False,
+    ) -> Tuple[bool, str]:
         """Verify real ownership anchor and operational symptom predicates.
 
         Returns:
             (is_authentic_owner, reason)
         """
-        text_str = sanitize_text(text)
+        text_str = text if (_pre_sanitized and isinstance(text, str)) else sanitize_text(text)
         if not text_str or len(text_str) <= 1:
             return False, "Missing first-person ownership anchor: empty or single-character text"
 
@@ -442,7 +460,7 @@ class DefectClassifier:
             has_symptom = _has_symptom_predicate(text_str)
 
         # If text explicitly mentions defect slang or defect nouns, treat symptom as verified
-        matched_slang = find_matching_slang(text_str)
+        matched_slang = slang_matches if slang_matches is not None else find_matching_slang(text_str)
         feature_terms = {"v2l", "깜빡이", "웨더스트립"}
         for e in matched_slang:
             if e.defect_category is not None:
@@ -490,12 +508,17 @@ class DefectClassifier:
     # -----------------------------------------------------------------
     # STAGE 3: Negation, Concessive Scoping, & Sarcasm Resolution
     # -----------------------------------------------------------------
-    def evaluate_stage3_scoping(self, text: Any) -> Dict[str, Any]:
+    def evaluate_stage3_scoping(
+        self,
+        text: Any,
+        slang_matches: Optional[List[SlangEntry]] = None,
+        _pre_sanitized: bool = False,
+    ) -> Dict[str, Any]:
         """Perform token-level negation, concessive clause reweighting, and sarcasm inversion.
 
         Returns analysis dict with polarity, negation status, sarcasm status.
         """
-        text_str = sanitize_text(text)
+        text_str = text if (_pre_sanitized and isinstance(text, str)) else sanitize_text(text)
         if not text_str:
             return {
                 "polarity": 0.0,
@@ -505,11 +528,9 @@ class DefectClassifier:
             }
 
         # Split into sentences or clauses using pre-compiled regex
-        clauses = RE_CLAUSE_SPLIT.split(text_str)
-        if len(clauses) > 100:
-            clauses = clauses[:100]
+        clauses = RE_CLAUSE_SPLIT.split(text_str, maxsplit=100)[:100]
 
-        is_sarcastic = self._detect_sarcasm(text_str)
+        is_sarcastic = self._detect_sarcasm(text_str, _pre_sanitized=True)
 
         tokens = RE_TOKENS.findall(text_str)
         if len(tokens) > 500:
@@ -530,7 +551,13 @@ class DefectClassifier:
                 is_sarcastic = False
 
         # Polarity calculation with concessive handling
-        polarity, matches = self._calculate_polarity(clauses, is_sarcastic, negated_defects)
+        polarity, matches = self._calculate_polarity(
+            clauses,
+            is_sarcastic,
+            negated_defects,
+            text_str=text_str,
+            slang_matches=slang_matches,
+        )
 
         return {
             "polarity": polarity,
@@ -539,9 +566,9 @@ class DefectClassifier:
             "matched_terms": matches,
         }
 
-    def _detect_sarcasm(self, text: Any) -> bool:
+    def _detect_sarcasm(self, text: Any, _pre_sanitized: bool = False) -> bool:
         """Detect sarcastic praise: defect noun + superlative praise + laughing markers."""
-        text_str = sanitize_text(text)
+        text_str = text if (_pre_sanitized and isinstance(text, str)) else sanitize_text(text)
         if not text_str:
             return False
         has_defect_word = any(w in text_str for w in _SARCASM_DEFECT_WORDS)
@@ -650,7 +677,8 @@ class DefectClassifier:
         affirmative_occurrences = (
             "돼서", "됐다", "됨", "터져서", "터짐", "났음", "났다", "생겨서", "생김", "생겼", "심해서", "심함", "터져", "터졌",
             "발생", "발생해", "발생함", "발생했다", "나타나", "나타남", "나타났다", "시작", "시작됨",
-            "심하", "심해요", "심한", "개심함", "개판", "난리", "오지", "폭발"
+            "심하", "심해요", "심한", "개심함", "개판", "난리", "오지", "폭발",
+            "떴는데", "떴음", "떴다", "떠서", "뜨고", "뜸",
         )
 
         for dw in _SINGLE_PART_DEFECT_TERMS:
@@ -666,6 +694,9 @@ class DefectClassifier:
                         continue
                 elif dw_lower == "티캠":
                     if _RE_TCAM_KO.search(tok_lower) is None:
+                        continue
+                elif dw_lower == "이음":
+                    if "이음새" in tok_lower or not (dw_lower in tok_lower or tok_lower.startswith(dw_lower)):
                         continue
                 elif dw_lower == "이상":
                     if not (dw_lower in tok_lower or tok_lower.startswith(dw_lower)):
@@ -739,6 +770,8 @@ class DefectClassifier:
         clauses: List[str],
         is_sarcastic: bool,
         negated_defects: List[str],
+        text_str: Optional[str] = None,
+        slang_matches: Optional[List[SlangEntry]] = None,
     ) -> Tuple[float, List[str]]:
         """Calculate weighted polarity across clauses."""
         if is_sarcastic:
@@ -747,6 +780,34 @@ class DefectClassifier:
         total_score = 0.0
         total_weight = 0.0
         matched_terms: List[str] = []
+
+        # Pre-filter lexicon entries once at document level so per-clause scans only check relevant terms
+        if slang_matches is not None:
+            matched_slang_terms = {e.term for e in slang_matches}
+            doc_lower = text_str.lower() if text_str is not None else ""
+            doc_slang_pairs = tuple(
+                p
+                for p in _SLANG_TERM_LOWER_PAIRS
+                if p[0].term in matched_slang_terms
+                or (p[0].term in ("씰", "밥솥") and (text_str is None or p[2] in doc_lower))
+            )
+        elif text_str is not None:
+            doc_lower = text_str.lower()
+            doc_slang_pairs = tuple(
+                p
+                for p in _SLANG_TERM_LOWER_PAIRS
+                if (p[0].term in ("씰", "밥솥") and p[2] in doc_lower)
+                or matches_slang_entry(p[0], text_str, doc_lower, term_lower=p[2])
+            )
+        else:
+            doc_slang_pairs = _SLANG_TERM_LOWER_PAIRS
+
+        if text_str is not None:
+            doc_neg_words = tuple(w for w in _SORTED_NEGATIVE_WORDS if w in text_str)
+            doc_pos_words = tuple(w for w in _SORTED_POSITIVE_WORDS if w in text_str)
+        else:
+            doc_neg_words = _SORTED_NEGATIVE_WORDS
+            doc_pos_words = _SORTED_POSITIVE_WORDS
 
         # Split clauses at mid-clause concessive connectives when trailing text exists
         expanded_clauses: List[str] = []
@@ -796,7 +857,7 @@ class DefectClassifier:
             clause_tokens: Optional[List[str]] = None
             clause_intensifier: Optional[float] = None
 
-            for slang_entry, slang_nfc, slang_lower in _SLANG_TERM_LOWER_PAIRS:
+            for slang_entry, slang_nfc, slang_lower in doc_slang_pairs:
                 term = slang_entry.term
                 if term.lower() in ("v2l", "깜빡이", "웨더스트립"):
                     if not any(mc in clause_lower for mc in MALFUNCTION_CUES):
@@ -804,7 +865,10 @@ class DefectClassifier:
                 if not matches_slang_entry(slang_entry, clause, clause_lower, term_lower=slang_lower):
                     continue
 
-                is_term_negated = any(dw in term or term in dw for dw in negated_defects)
+                is_term_negated = any(
+                    (dw == term if dw == "이상" else (dw in term or term in dw))
+                    for dw in negated_defects
+                )
                 if is_term_negated:
                     term_polarity = -slang_entry.default_polarity * 0.85
                 else:
@@ -817,39 +881,41 @@ class DefectClassifier:
                 total_weight += weight
                 matched_terms.append(term)
 
-            matched_clause_negs: List[str] = []
-            for neg_word in _SORTED_NEGATIVE_WORDS:
-                if neg_word in clause and not any(neg_word in already for already in matched_clause_negs):
-                    if neg_word == "사고" and "사고" not in _RE_SAGO_SIP.sub("", clause):
-                        continue
-                    matched_clause_negs.append(neg_word)
-                    base_val = NEGATIVE_LEXICON[neg_word]
-                    if any(dw in neg_word or neg_word in dw for dw in negated_defects):
-                        term_polarity = 0.70
-                    else:
-                        term_polarity = base_val
-                    if clause_intensifier is None:
-                        clause_intensifier = self._get_intensifier_multiplier(clause)
-                    weight = 2.5 * clause_multiplier * clause_intensifier
-                    total_score += term_polarity * weight
-                    total_weight += weight
-                    matched_terms.append(neg_word)
+            if doc_neg_words:
+                matched_clause_negs: List[str] = []
+                for neg_word in doc_neg_words:
+                    if neg_word in clause and not any(neg_word in already for already in matched_clause_negs):
+                        if neg_word == "사고" and "사고" not in _RE_SAGO_SIP.sub("", clause):
+                            continue
+                        matched_clause_negs.append(neg_word)
+                        base_val = NEGATIVE_LEXICON[neg_word]
+                        if any(dw in neg_word or neg_word in dw for dw in negated_defects):
+                            term_polarity = 0.70
+                        else:
+                            term_polarity = base_val
+                        if clause_intensifier is None:
+                            clause_intensifier = self._get_intensifier_multiplier(clause)
+                        weight = 2.5 * clause_multiplier * clause_intensifier
+                        total_score += term_polarity * weight
+                        total_weight += weight
+                        matched_terms.append(neg_word)
 
-            matched_clause_pos: List[str] = []
-            for pos_word in _SORTED_POSITIVE_WORDS:
-                if pos_word in clause and not any(pos_word in already for already in matched_clause_pos):
-                    matched_clause_pos.append(pos_word)
-                    base_val = POSITIVE_LEXICON[pos_word]
-                    if clause_tokens is None:
-                        clause_tokens = RE_TOKENS.findall(clause)
-                    if self._is_positive_negated_in_clause(pos_word, clause_tokens):
-                        term_polarity = -base_val * 0.85
-                    else:
-                        term_polarity = base_val
-                    weight = 1.5 * clause_multiplier
-                    total_score += term_polarity * weight
-                    total_weight += weight
-                    matched_terms.append(pos_word)
+            if doc_pos_words:
+                matched_clause_pos: List[str] = []
+                for pos_word in doc_pos_words:
+                    if pos_word in clause and not any(pos_word in already for already in matched_clause_pos):
+                        matched_clause_pos.append(pos_word)
+                        base_val = POSITIVE_LEXICON[pos_word]
+                        if clause_tokens is None:
+                            clause_tokens = RE_TOKENS.findall(clause)
+                        if self._is_positive_negated_in_clause(pos_word, clause_tokens):
+                            term_polarity = -base_val * 0.85
+                        else:
+                            term_polarity = base_val
+                        weight = 1.5 * clause_multiplier
+                        total_score += term_polarity * weight
+                        total_weight += weight
+                        matched_terms.append(pos_word)
 
             if has_conc and not is_post_concessive:
                 is_post_concessive = True
@@ -861,6 +927,8 @@ class DefectClassifier:
 
         final_polarity = total_score / total_weight
         clamped_polarity = max(-1.0, min(1.0, final_polarity))
+        if clamped_polarity == 0.0:
+            clamped_polarity = 0.0
         return clamped_polarity, matched_terms
 
     def _get_intensifier_multiplier(self, clause: str) -> float:
@@ -909,9 +977,14 @@ class DefectClassifier:
     # -----------------------------------------------------------------
     # STAGE 4: Defect Actionability Gate & 5-Pillar Classification
     # -----------------------------------------------------------------
-    def classify_defect_category(self, text: Any, slang_matches: Optional[List[SlangEntry]] = None) -> str:
+    def classify_defect_category(
+        self,
+        text: Any,
+        slang_matches: Optional[List[SlangEntry]] = None,
+        _pre_sanitized: bool = False,
+    ) -> str:
         """Assign one of the 5 canonical categories with high-precision compound rules and priority resolution."""
-        text_str = sanitize_text(text)
+        text_str = text if (_pre_sanitized and isinstance(text, str)) else sanitize_text(text)
         if not text_str:
             return "BUILD_QUALITY"
 
@@ -987,9 +1060,10 @@ class DefectClassifier:
         slang_matches: Optional[List[SlangEntry]] = None,
         polarity: float = 0.0,
         negated_defects: Optional[List[str]] = None,
+        _pre_sanitized: bool = False,
     ) -> float:
         """Calculate statistical confidence score [0.0, 1.0] for defect classification and false-positive suppression."""
-        text_str = sanitize_text(text)
+        text_str = text if (_pre_sanitized and isinstance(text, str)) else sanitize_text(text)
         if not text_str or len(text_str) <= 1:
             return 0.0
 
@@ -1046,9 +1120,10 @@ class DefectClassifier:
         text: Any,
         category: str,
         slang_matches: Optional[List[SlangEntry]] = None,
+        _pre_sanitized: bool = False,
     ) -> Tuple[float, DSIBreakdown]:
         """Calculate 5-Dimensional Defect Severity Index (DSI 0.0 ~ 10.0)."""
-        text_str = sanitize_text(text)
+        text_str = text if (_pre_sanitized and isinstance(text, str)) else sanitize_text(text)
         slang_matches = slang_matches if slang_matches is not None else find_matching_slang(text_str)
         actionable_slang = self._filter_actionable_slang(slang_matches, text_str.lower())
 
@@ -1125,8 +1200,8 @@ class DefectClassifier:
         elif isinstance(post, dict):
             post = RawPost.from_dict(post)
         elif not isinstance(post, RawPost):
-            # Arbitrary non-string object (e.g. int, float, list)
-            post = RawPost(title="", content=str(post or ""))
+            # Arbitrary non-RawPost input (str, bytes, scalar, list, etc.)
+            post = RawPost(title="", content=post)
 
         title_str = sanitize_text(post.title, max_len=10_000)
         content_str = sanitize_text(post.content, max_len=50_000)
@@ -1159,12 +1234,24 @@ class DefectClassifier:
         vm_content = content_str[:10_000] if len(content_str) > 10_000 else content_str
         brand, model = extract_vehicle_info(title_str, vm_content)
 
-        # Matched slang entries
+        # Matched slang entries (scanned once and reused across stages)
         slang_matches = find_matching_slang(full_text)
         slang_terms = [e.term for e in slang_matches]
 
+        def _get_verbatim_quote() -> str:
+            if (
+                type(self)._extract_verbatim_quote is DefectClassifier._extract_verbatim_quote
+                and "_extract_verbatim_quote" not in self.__dict__
+            ):
+                if len(content_str) >= 15:
+                    return content_str
+                return f"{title_str} {content_str}".strip()
+            return self._extract_verbatim_quote(post)
+
         # STAGE 1: Noise & Exclusion Filter
-        is_discarded, s1_reason = self.evaluate_stage1_noise(full_text, post.url)
+        is_discarded, s1_reason = self.evaluate_stage1_noise(
+            full_text, post.url, slang_matches=slang_matches, _pre_sanitized=True
+        )
         if is_discarded:
             return ComplaintRecord(
                 id=post.post_id,
@@ -1177,7 +1264,7 @@ class DefectClassifier:
                 vehicle_model=model,
                 defect_category="BUILD_QUALITY",
                 summary="Filtered by Stage 1 Noise & Exclusion",
-                verbatim_quote=self._extract_verbatim_quote(post),
+                verbatim_quote=_get_verbatim_quote(),
                 slang_terms_detected=slang_terms,
                 sentiment_polarity=0.0,
                 negativity_score=0.5,
@@ -1188,7 +1275,9 @@ class DefectClassifier:
             )
 
         # STAGE 2: Ownership Anchor Validation
-        is_owner, s2_reason = self.evaluate_stage2_ownership(full_text)
+        is_owner, s2_reason = self.evaluate_stage2_ownership(
+            full_text, slang_matches=slang_matches, _pre_sanitized=True
+        )
         if not is_owner:
             return ComplaintRecord(
                 id=post.post_id,
@@ -1201,7 +1290,7 @@ class DefectClassifier:
                 vehicle_model=model,
                 defect_category="BUILD_QUALITY",
                 summary="Filtered by Stage 2 Ownership Verification",
-                verbatim_quote=self._extract_verbatim_quote(post),
+                verbatim_quote=_get_verbatim_quote(),
                 slang_terms_detected=slang_terms,
                 sentiment_polarity=0.0,
                 negativity_score=0.5,
@@ -1212,18 +1301,25 @@ class DefectClassifier:
             )
 
         # STAGE 3: Negation, Concessive Scoping, & Sarcasm Resolution
-        stage3_res = self.evaluate_stage3_scoping(full_text)
+        stage3_res = self.evaluate_stage3_scoping(
+            full_text, slang_matches=slang_matches, _pre_sanitized=True
+        )
         polarity = stage3_res["polarity"]
         negativity_score = max(0.0, min(1.0, (1.0 - polarity) / 2.0))
 
         # STAGE 4: Defect Actionability Gate & 5-Pillar Classification
-        category = self.classify_defect_category(full_text, slang_matches)
-        dsi_score, dsi_breakdown = self.compute_dsi(full_text, category, slang_matches)
+        category = self.classify_defect_category(full_text, slang_matches, _pre_sanitized=True)
+        dsi_score, dsi_breakdown = self.compute_dsi(full_text, category, slang_matches, _pre_sanitized=True)
         confidence_score = self.calculate_confidence(
-            full_text, category, slang_matches, polarity, stage3_res.get("negated_defects", [])
+            full_text,
+            category,
+            slang_matches,
+            polarity,
+            stage3_res.get("negated_defects", []),
+            _pre_sanitized=True,
         )
 
-        verbatim_quote = self._extract_verbatim_quote(post)
+        verbatim_quote = _get_verbatim_quote()
         qualifies = (polarity <= -0.30 or dsi_score >= 3.5) and len(verbatim_quote) >= 15 and confidence_score >= 0.35
 
         if polarity >= 0.30:
@@ -1262,10 +1358,10 @@ class DefectClassifier:
         )
 
     def classify(self, post_or_text: Any) -> ComplaintRecord:
-        """Alias for process_post allowing direct text, dict, or RawPost with bulletproof type safety."""
+        """Alias for process_post allowing direct text, bytes, dict, or RawPost with bulletproof type safety."""
         if post_or_text is None:
             return self.process_post(RawPost())
-        if isinstance(post_or_text, str):
+        if isinstance(post_or_text, (str, bytes, bytearray)):
             raw = RawPost(title="", content=post_or_text)
             return self.process_post(raw)
         if isinstance(post_or_text, RawPost):
@@ -1273,7 +1369,7 @@ class DefectClassifier:
         if isinstance(post_or_text, dict):
             return self.process_post(RawPost.from_dict(post_or_text))
         # Non-string scalar, list, or arbitrary object
-        return self.process_post(RawPost(title="", content=str(post_or_text or "")))
+        return self.process_post(RawPost(title="", content=post_or_text))
 
     def _extract_verbatim_quote(self, post: RawPost) -> str:
         """Extract the most emotional and colloquial verbatim quote from the post."""

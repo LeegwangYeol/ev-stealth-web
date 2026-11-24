@@ -4,10 +4,10 @@ import sys
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
-if SCRIPTS_DIR not in sys.path:
-    sys.path.insert(0, SCRIPTS_DIR)
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
+if SCRIPTS_DIR not in sys.path:
+    sys.path.append(SCRIPTS_DIR)
 
 from part1_tesla_hyundai import tesla_records, hyundai_records
 from part2_kia_genesis_mercedes import kia_records, genesis_records, mercedes_records

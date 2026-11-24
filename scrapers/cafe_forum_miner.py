@@ -36,6 +36,7 @@ from scrapers.common_utils import (
     extract_slang_terms,
     load_platform_seed_records,
     normalize_scraper_url,
+    polite_delay,
     resolve_timeout_pair,
     robust_decode,
     save_complaints_json,
@@ -119,7 +120,7 @@ class CafeForumMiner:
 
     def sleep_polite(self):
         """Randomized sleep with jitter between requests."""
-        time.sleep(random.uniform(self.min_delay, self.max_delay))
+        polite_delay(self.min_delay, self.max_delay)
 
     def _load_slang_dict(self) -> Dict[str, Any]:
         if os.path.exists(self.slang_path):
@@ -308,7 +309,14 @@ class CafeForumMiner:
 
         platform = str(raw_data.get("platform") or "naver_cafe")
         board_name = str(raw_data.get("board_name") or "전기차 커뮤니티")
-        post_url = str(raw_data.get("post_url") or "")
+        raw_post_url = str(raw_data.get("post_url") or "").strip()
+        if raw_post_url:
+            if any(ord(c) < 32 or ord(c) == 127 for c in raw_post_url):
+                return None
+            parsed_url = urllib.parse.urlsplit(raw_post_url)
+            if parsed_url.scheme and parsed_url.scheme.lower() not in ("http", "https"):
+                return None
+        post_url = raw_post_url
         post_title = str(raw_data.get("post_title") or "중국 전기차 사용자 결함 리포트")
         target_vehicle = str(raw_data.get("target_vehicle") or "BYD Atto 3")
         category = str(raw_data.get("category") or "")
@@ -337,7 +345,7 @@ class CafeForumMiner:
         # ID generation
         rec_id = str(raw_data.get("id") or "")
         if not rec_id:
-            h = hashlib.md5(f"{post_url}_{raw_quote[:50]}".encode("utf-8")).hexdigest()[:6]
+            h = hashlib.md5(f"{post_url}_{raw_quote[:50]}".encode("utf-8", errors="replace")).hexdigest()[:6]
             rec_id = f"CASE_{category.upper()[:4]}_{h}"
 
         collected_at = str(raw_data.get("collected_at") or datetime.now(timezone.utc).isoformat())

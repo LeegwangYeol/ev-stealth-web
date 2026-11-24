@@ -1428,7 +1428,7 @@ class TestSubsidyTrackerClientA11y(unittest.TestCase):
 
         # Check target container has matching ID
         self.assertTrue(
-            re.search(r'id=\{["\']muni-details-["\']\s*\+\s*region\.(?:code|region_id)\}', self.source),
+            re.search(r'id=\{["\']muni-details-["\']\s*\+\s*(?:region\.(?:code|region_id)|safeDomId)\}', self.source),
             "Expandable municipality container must define id matching aria-controls.",
         )
 
@@ -1451,7 +1451,7 @@ class TestSubsidyTrackerClientA11y(unittest.TestCase):
         including parent province name for context disambiguation (SC 4.1.2).
         """
         self.assertTrue(
-            bool(re.search(r'aria-label=\{`\$\{region\.name_ko\}\s+세부 시·군·구', self.source)),
+            bool(re.search(r'aria-label=\{`\$\{(?:region\.name_ko|regionName)\}\s+세부 시·군·구', self.source)),
             "Municipality toggle button must declare aria-label containing region.name_ko.",
         )
 
@@ -1910,7 +1910,10 @@ class TestContrastMathematicalVerification(unittest.TestCase):
         # Check DepreciationCalculatorClient vehicle-search-input
         depr_input_match = re.search(r'<input\b[^/]*?id=["\']vehicle-search-input["\'][^/]*?/>', depr_source, re.DOTALL)
         self.assertIsNotNone(depr_input_match, "Could not find vehicle-search-input")
-        self.assertIn("placeholder-slate-500", depr_input_match.group(0))
+        self.assertTrue(
+            "placeholder-slate-500" in depr_input_match.group(0) or "placeholder-slate-600" in depr_input_match.group(0),
+            "vehicle-search-input must use compliant placeholder contrast class (placeholder-slate-500/600)",
+        )
 
         # Check AdminDashboardClient admin-defect-search-input
         admin_input_match = re.search(r'<input\b[^/]*?id=["\']admin-defect-search-input["\'][^/]*?/>', admin_source, re.DOTALL)

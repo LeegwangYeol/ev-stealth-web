@@ -397,6 +397,34 @@ function isPrivateOrInternalHost(rawHost: string): boolean {
   );
 }
 
+function stripSensitiveParamsFromUrlObj(urlObj: URL): boolean {
+  let modified = false;
+  for (const paramKey of Array.from(urlObj.searchParams.keys())) {
+    if (REPORT_SENSITIVE_QUERY_KEYS.has(paramKey.toLowerCase())) {
+      urlObj.searchParams.delete(paramKey);
+      modified = true;
+    }
+  }
+  // Strip sensitive OAuth/token parameters if leaked in hash fragments (e.g. #access_token=...)
+  if (urlObj.hash && urlObj.hash.includes('=')) {
+    const rawFragment = urlObj.hash.slice(1);
+    const hashParams = new URLSearchParams(rawFragment);
+    let hashModified = false;
+    for (const hashKey of Array.from(hashParams.keys())) {
+      if (REPORT_SENSITIVE_QUERY_KEYS.has(hashKey.toLowerCase())) {
+        hashParams.delete(hashKey);
+        hashModified = true;
+      }
+    }
+    if (hashModified) {
+      const nextHash = hashParams.toString();
+      urlObj.hash = nextHash ? `#${nextHash}` : '';
+      modified = true;
+    }
+  }
+  return modified;
+}
+
 /**
  * Safely sanitizes external URLs to prevent javascript:, data:, vbscript: or other XSS injections,
  * blocks internal/private network addresses (SSRF protection), and strips sensitive query parameters.
@@ -425,33 +453,15 @@ export function sanitizeReportUrl(rawUrl?: unknown): string {
         return '#';
       }
 
-      // Strip sensitive tokens/credentials from query parameters (case-insensitive)
-      let modified = false;
-      for (const paramKey of Array.from(urlObj.searchParams.keys())) {
-        if (REPORT_SENSITIVE_QUERY_KEYS.has(paramKey.toLowerCase())) {
-          urlObj.searchParams.delete(paramKey);
-          modified = true;
-        }
-      }
-      // Strip sensitive OAuth/token parameters if leaked in hash fragments (e.g. #access_token=...)
-      if (urlObj.hash && urlObj.hash.includes('=')) {
-        const rawFragment = urlObj.hash.slice(1);
-        const hashParams = new URLSearchParams(rawFragment);
-        let hashModified = false;
-        for (const hashKey of Array.from(hashParams.keys())) {
-          if (REPORT_SENSITIVE_QUERY_KEYS.has(hashKey.toLowerCase())) {
-            hashParams.delete(hashKey);
-            hashModified = true;
-          }
-        }
-        if (hashModified) {
-          const nextHash = hashParams.toString();
-          urlObj.hash = nextHash ? `#${nextHash}` : '';
-          modified = true;
-        }
-      }
-      if (modified) {
+      if (stripSensitiveParamsFromUrlObj(urlObj)) {
         return sanitizeSafeUrl(urlObj.toString());
+      }
+    } else if (safeBase.startsWith('/')) {
+      const urlObj = new URL(safeBase, 'http://safe-internal.local');
+      if (stripSensitiveParamsFromUrlObj(urlObj)) {
+        const safePath = urlObj.pathname.replace(/^\/{2,}/, '/');
+        const searchStr = urlObj.searchParams.toString() ? `?${urlObj.searchParams.toString()}` : '';
+        return sanitizeSafeUrl(safePath + searchStr + (urlObj.hash || ''));
       }
     }
   } catch {
@@ -703,6 +713,9 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
     safeDate = new Date().toISOString().split('T')[0];
   }
 
+  const rawCatKo = firstSafeString(raw.defect_category_ko);
+  const safeCatKo = rawCatKo && !isForbiddenPrototypeKey(rawCatKo) ? maskSensitiveData(rawCatKo) : '';
+
   return {
     id: firstSafeId(raw.id, raw.post_id) || `report_${safeIndex + 1}`,
     source: firstSafeString(raw.source, raw.platform).toLowerCase() || 'bobaedream',
@@ -714,7 +727,7 @@ export function normalizeReport(raw: Record<string, unknown>, index: number): De
     vehicle_brand: firstSafeString(raw.vehicle_brand) || undefined,
     target_vehicle: firstSafeString(raw.target_vehicle) || undefined,
     defect_category: catInfo.code,
-    defect_category_ko: firstSafeString(raw.defect_category_ko) || catInfo.ko,
+    defect_category_ko: safeCatKo || catInfo.ko,
     summary: maskSensitiveData(firstSafeString(raw.summary, raw.defect_summary, raw.defect_topic)) || '결함 상세 내용 요약',
     verbatim_quote: maskSensitiveData(firstSafeString(raw.verbatim_quote, raw.raw_quote, raw.content)) || '원문 없음',
     slang_tags: slangTags,

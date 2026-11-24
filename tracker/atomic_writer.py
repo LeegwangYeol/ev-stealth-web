@@ -7,6 +7,7 @@ and corrupted payload isolation/quarantine routines.
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from collections.abc import Mapping
 import contextlib
 import dataclasses
@@ -42,6 +43,7 @@ import weakref
 logger = logging.getLogger(__name__)
 
 _last_temp_dir_cleanup_time: float = -60.0
+_last_dest_dir_cleanup_times: "OrderedDict[Tuple[str, str], float]" = OrderedDict()
 _cleanup_meta_lock = threading.Lock()
 
 
@@ -983,6 +985,24 @@ def _maybe_cleanup_global_temp_locks() -> None:
                 _last_temp_dir_cleanup_time = time.monotonic()
 
 
+def _maybe_cleanup_dest_dir(dest_dir: Path, temp_prefix: str, interval_seconds: float = 60.0) -> None:
+    """Throttled cleanup of orphaned temp/lock files in dest_dir to avoid directory sweeps on every write."""
+    key = (str(dest_dir), temp_prefix)
+    now = time.monotonic()
+    with _cleanup_meta_lock:
+        last = _last_dest_dir_cleanup_times.get(key)
+        if last is not None and (now - last) <= interval_seconds:
+            _last_dest_dir_cleanup_times.move_to_end(key)
+            return
+        _last_dest_dir_cleanup_times[key] = now
+        _last_dest_dir_cleanup_times.move_to_end(key)
+        while len(_last_dest_dir_cleanup_times) > 256:
+            _last_dest_dir_cleanup_times.popitem(last=False)
+
+    cleanup_stale_temp_files(dest_dir, prefix=temp_prefix, max_age_seconds=3600.0)
+    cleanup_stale_lock_files(dest_dir, max_age_seconds=3600.0)
+
+
 def atomic_write_json(
     data: Any,
     target_path: Union[str, Path],
@@ -1076,8 +1096,7 @@ def atomic_write_json(
                 except OSError:
                     target_mode = 0o644
 
-            cleanup_stale_temp_files(dest_dir, prefix=temp_prefix, max_age_seconds=3600.0)
-            cleanup_stale_lock_files(dest_dir, max_age_seconds=3600.0)
+            _maybe_cleanup_dest_dir(dest_dir, temp_prefix)
 
             # Create temp file in the same directory to ensure atomic os.replace across filesystem boundaries
             if _pre_encoded_content is not None:
@@ -1352,8 +1371,7 @@ def atomic_write_text(
                 except OSError:
                     target_mode = 0o644
 
-            cleanup_stale_temp_files(dest_dir, prefix=temp_prefix, max_age_seconds=3600.0)
-            cleanup_stale_lock_files(dest_dir, max_age_seconds=3600.0)
+            _maybe_cleanup_dest_dir(dest_dir, temp_prefix)
 
             suffix = dest.suffix if dest.suffix else ".txt"
             with tempfile.NamedTemporaryFile(

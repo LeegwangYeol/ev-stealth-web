@@ -38,7 +38,9 @@ def _safe_finite_float(val: Any, default: float) -> float:
         return default
     try:
         f = float(val)
-        return f if math.isfinite(f) else default
+        if not math.isfinite(f):
+            return default
+        return 0.0 if f == 0.0 else f
     except (ValueError, TypeError):
         return default
 
@@ -56,7 +58,11 @@ class CrossAggregator:
         self.tokenizer = tokenizer or DomainTokenizer()
         self.sentiment_engine = sentiment_engine or SentimentEngine(self.tokenizer)
 
-    def analyze(self, records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def analyze(
+        self,
+        records: List[Dict[str, Any]],
+        precomputed_sentiments: Optional[Dict[int, Any]] = None,
+    ) -> Dict[str, Any]:
         """
         Execute comprehensive multi-dimensional aggregation across:
         1. Platforms
@@ -69,8 +75,10 @@ class CrossAggregator:
         for r in (records or []):
             if not isinstance(r, dict):
                 continue
-            full_text = f"{r.get('post_title') or ''} {r.get('defect_topic') or ''} {r.get('raw_quote') or ''}"
-            sent_res = self.sentiment_engine.classify(full_text)
+            sent_res = precomputed_sentiments.get(id(r)) if precomputed_sentiments is not None else None
+            if sent_res is None:
+                full_text = f"{r.get('post_title') or ''} {r.get('defect_topic') or ''} {r.get('raw_quote') or ''}"
+                sent_res = self.sentiment_engine.classify(full_text)
 
             rec_copy = dict(r)
             rec_copy["sentiment_tier"] = sent_res.tier_label
@@ -235,8 +243,9 @@ class CrossAggregator:
         })
 
         clean_records = [r for r in (records or []) if isinstance(r, dict)]
+        quote_tok_len_cache: Dict[str, int] = {}
         for r in clean_records:
-            plat = str(r.get("platform") or "unknown").lower()
+            plat = (str(r.get("platform") or "").strip() or "unknown").lower()
             tier = str(r.get("sentiment_tier") or "NEGATIVE")
             dsi = _safe_finite_float(r.get("dsi_score"), 5.0)
             board = str(r.get("board_name") or "")
@@ -244,8 +253,10 @@ class CrossAggregator:
             raw_slangs = r.get("slang_terms")
             slangs = raw_slangs if isinstance(raw_slangs, (list, tuple, set)) else []
 
-            tokens = self.tokenizer.tokenize(quote)
-            tok_len = max(1, len(tokens))
+            tok_len = quote_tok_len_cache.get(quote)
+            if tok_len is None:
+                tok_len = max(1, len(self.tokenizer.tokenize(quote)))
+                quote_tok_len_cache[quote] = tok_len
 
             group = platform_groups[plat]
             group["count"] += 1
@@ -325,7 +336,7 @@ class CrossAggregator:
 
         clean_records = [r for r in (records or []) if isinstance(r, dict)]
         for r in clean_records:
-            veh = str(r.get("target_vehicle") or "Unknown EV")
+            veh = str(r.get("target_vehicle") or "").strip() or "Unknown EV"
             cat = str(r.get("category") or "parking")
             dsi = _safe_finite_float(r.get("dsi_score"), 5.0)
 
@@ -651,7 +662,7 @@ class CrossAggregator:
         else:
             p_val = 0.20
 
-        return round(chi2_stat, 3), dof, p_val
+        return (round(chi2_stat, 3) + 0.0), dof, p_val
 
 
 def main():

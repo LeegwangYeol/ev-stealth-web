@@ -5,7 +5,31 @@ import JsonLd from '@/components/JsonLd';
 
 export const dynamic = 'force-static';
 
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://ev-stealth-web.vercel.app').replace(/\/+$/, '');
+const rawSiteUrl =
+  (process.env.NEXT_PUBLIC_SITE_URL || '').trim().replace(/\/+$/, '') ||
+  'https://ev-stealth-web.vercel.app';
+const normalizedSiteUrl =
+  /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawSiteUrl) || rawSiteUrl.startsWith('//')
+    ? rawSiteUrl
+    : `https://${rawSiteUrl}`;
+
+function resolveSiteUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (
+      (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+      !parsed.username &&
+      !parsed.password
+    ) {
+      return parsed.origin;
+    }
+  } catch {
+    // fallback below
+  }
+  return 'https://ev-stealth-web.vercel.app';
+}
+
+const SITE_URL = resolveSiteUrl(normalizedSiteUrl);
 
 const depreciationJsonLd = {
   '@context': 'https://schema.org',

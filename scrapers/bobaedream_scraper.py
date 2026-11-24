@@ -34,11 +34,13 @@ from scrapers.common_utils import (
     extract_defect_topic,
     extract_meta_content,
     extract_slang_terms,
+    is_allowed_domain_url,
     load_platform_seed_records,
     normalize_scraper_url,
     polite_delay,
     resolve_timeout_pair,
     robust_decode,
+    safe_non_negative_int,
     save_complaints_json,
     strip_non_body_html,
 )
@@ -131,7 +133,7 @@ class BobaedreamScraper:
 
     def sleep_polite(self):
         """Randomized sleep with jitter between requests."""
-        time.sleep(random.uniform(self.min_delay, self.max_delay))
+        polite_delay(self.min_delay, self.max_delay)
 
     def _load_slang_dict(self) -> Dict[str, Any]:
         if os.path.exists(self.slang_path):
@@ -244,7 +246,7 @@ class BobaedreamScraper:
                 continue
 
             full_url = normalize_scraper_url(href, BOBAE_BASE_URL)
-            if not full_url:
+            if not full_url or not is_allowed_domain_url(full_url, ("bobaedream.co.kr",)):
                 continue
             items.append({
                 "title": clean_title,
@@ -323,7 +325,7 @@ class BobaedreamScraper:
                 continue
 
             full_url = normalize_scraper_url(href, BOBAE_BASE_URL)
-            if not full_url:
+            if not full_url or not is_allowed_domain_url(full_url, ("bobaedream.co.kr",)):
                 continue
             code_match = re.search(r"[?&]code=([a-zA-Z0-9_]+)", full_url, re.IGNORECASE)
             no_match = re.search(r"[?&]no=([0-9]+)", full_url, re.IGNORECASE)
@@ -432,7 +434,13 @@ class BobaedreamScraper:
             published_at = date_match.group(1).replace(".", "-").replace("/", "-")
 
         view_count = 0
-        view_match = re.search(r'조회수?\s*[:]?\s*(?:<[^>]+>\s*)*([0-9,]+)', body_html_region)
+        view_match = (
+            re.search(r'조회수?\s*[:]?\s*(?:<[^>]+>\s*)*([0-9,]+)', date_container.group(1))
+            if date_container
+            else None
+        )
+        if not view_match:
+            view_match = re.search(r'조회수?\s*[:]?\s*(?:<[^>]+>\s*)*([0-9,]+)', body_html_region)
         if view_match:
             try:
                 view_count = int(view_match.group(1).replace(",", ""))
@@ -440,7 +448,13 @@ class BobaedreamScraper:
                 pass
 
         upvote_count = 0
-        upvote_match = re.search(r'추천\s*[:]?\s*(?:<[^>]+>\s*)*([0-9,]+)', body_html_region)
+        upvote_match = (
+            re.search(r'추천\s*[:]?\s*(?:<[^>]+>\s*)*([0-9,]+)', date_container.group(1))
+            if date_container
+            else None
+        )
+        if not upvote_match:
+            upvote_match = re.search(r'추천\s*[:]?\s*(?:<[^>]+>\s*)*([0-9,]+)', body_html_region)
         if upvote_match:
             try:
                 upvote_count = int(upvote_match.group(1).replace(",", ""))
@@ -454,7 +468,7 @@ class BobaedreamScraper:
             r'<div\b[^>]*\bid=["\']print_area["\'][^>]*>',
             r'<div\b[^>]*\bclass=["\'][^"\']*\bcontent01\b[^"\']*["\'][^>]*>',
         ):
-            inner_html = extract_balanced_tag_content(html_content, open_pat, tag_name="div")
+            inner_html = extract_balanced_tag_content(body_html_region, open_pat, tag_name="div")
             if inner_html:
                 body_text = clean_html_text(inner_html)
                 if body_text:
@@ -531,7 +545,7 @@ class BobaedreamScraper:
         veh, cat = self.classify_text(combined_post)
         if cat and len(body) >= 20:
             slang = extract_slang_terms(combined_post, self.slang_dict)
-            rec_id = f"BOBAE_{cat.upper()[:4]}_{int(hashlib.sha256(url.encode('utf-8')).hexdigest(), 16) % 100000:05d}"
+            rec_id = f"BOBAE_{cat.upper()[:4]}_{int(hashlib.sha256(url.encode('utf-8', errors='replace')).hexdigest(), 16) % 100000:05d}"
             severity = self._determine_severity(cat, combined_post)
             topic = self._extract_defect_topic(cat, combined_post)
             records.append(ComplaintRecord(
@@ -549,8 +563,8 @@ class BobaedreamScraper:
                 platform_metadata={
                     "author_type": "bobae_user",
                     "author_badge": author,
-                    "view_count": post_data.get("view_count", 0),
-                    "upvote_count": post_data.get("upvote_count", 0),
+                    "view_count": safe_non_negative_int(post_data.get("view_count"), 0),
+                    "upvote_count": safe_non_negative_int(post_data.get("upvote_count"), 0),
                     "comment_count": len(comments),
                     "published_at": published_at,
                 }
@@ -563,7 +577,7 @@ class BobaedreamScraper:
             c_veh, c_cat = self.classify_text(comment)
             if c_cat and len(comment) >= 15:
                 c_slang = extract_slang_terms(comment, self.slang_dict)
-                rec_id = f"BOBAE_{c_cat.upper()[:4]}_{int(hashlib.sha256((url + str(idx)).encode('utf-8')).hexdigest(), 16) % 100000:05d}"
+                rec_id = f"BOBAE_{c_cat.upper()[:4]}_{int(hashlib.sha256((url + str(idx)).encode('utf-8', errors='replace')).hexdigest(), 16) % 100000:05d}"
                 severity = self._determine_severity(c_cat, comment)
                 topic = self._extract_defect_topic(c_cat, comment)
                 records.append(ComplaintRecord(
@@ -623,6 +637,7 @@ def main():
     parser.add_argument("--output", type=str, default=default_output, help="Output JSON path")
     args = parser.parse_args()
 
+    eff_limit = max(0, int(args.limit))
     with BobaedreamScraper() as scraper:
         all_records = []
         consecutive_failures = 0
@@ -643,7 +658,7 @@ def main():
                     consecutive_failures += 1
                 else:
                     consecutive_failures = 0
-                for item in items[:args.limit]:
+                for item in items[:eff_limit]:
                     post_data = scraper.fetch_post_detail(item["url"])
                     if post_data:
                         records = scraper.extract_complaint_records(post_data, board_name=BOBAE_BOARDS.get(b_code, f"보배드림 ({b_code})"))
@@ -651,7 +666,7 @@ def main():
 
         if not all_records and scraper.cache_fallback:
             logger.warning("No records harvested from live Bobaedream site. Falling back to seed datasets.")
-            all_records = scraper.load_seed_records(limit=args.limit * len(args.boards))
+            all_records = scraper.load_seed_records(limit=eff_limit * len(args.boards))
 
         save_complaints_json(all_records, args.output)
         print(f"Collected {len(all_records)} records from Bobaedream.")

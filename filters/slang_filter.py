@@ -75,7 +75,9 @@ class SlangFilter:
             return False
         if term_or_category is None:
             return True
-        norm_raw = unicodedata.normalize("NFC", str(term_or_category)).strip()
+        if isinstance(term_or_category, bool):
+            return False
+        norm_raw = sanitize_text(term_or_category, max_len=256)
         target = norm_raw.upper()
         if not target:
             return False

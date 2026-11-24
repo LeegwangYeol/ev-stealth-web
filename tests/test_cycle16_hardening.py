@@ -708,7 +708,10 @@ class TestCycle16WCAGAccessibilityInvariants(unittest.TestCase):
         self.assertIn('role="region"', sub_content)
         self.assertIn('aria-label="보조금 긴급 소진 주의보"', sub_content)
         self.assertIn('role="alert"', sub_content)
-        self.assertIn("${region.name_ko}", sub_content)
+        self.assertTrue(
+            "${region.name_ko}" in sub_content or "${regionName}" in sub_content,
+            "SubsidyTrackerClient.tsx must include region name in municipality toggle aria-label.",
+        )
 
     def test_21_heading_hierarchy_monotonicity_across_app_router(self) -> None:
         """All App Router page routes must have exactly one <h1> and maintain monotonic heading sequence."""

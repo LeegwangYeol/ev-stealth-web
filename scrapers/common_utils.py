@@ -88,6 +88,70 @@ DEFAULT_FALLBACK_USER_AGENT: str = (
 )
 
 
+def _non_negative_finite_float(value: Any, default: float = 0.0) -> float:
+    """Convert value to a non-negative finite float, or return default."""
+    if value is None or isinstance(value, bool):
+        return default
+    try:
+        num = float(value)
+    except (ValueError, TypeError):
+        return default
+    if not math.isfinite(num) or num < 0:
+        return default
+    return 0.0 if num == 0.0 else num
+
+
+def safe_non_negative_int(value: Any, default: int = 0) -> int:
+    """Convert value (including comma-separated strings) to a non-negative int, rejecting bool/NaN/Inf."""
+    if value is None or isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return max(0, value)
+    if isinstance(value, float):
+        if not math.isfinite(value) or value < 0:
+            return default
+        return int(value)
+    if isinstance(value, str):
+        cleaned = value.strip().replace(",", "")
+        if not cleaned:
+            return default
+        try:
+            num = float(cleaned)
+        except ValueError:
+            return default
+        if not math.isfinite(num) or num < 0:
+            return default
+        return int(num)
+    return default
+
+
+def is_allowed_domain_url(url: Optional[str], allowed_domains: Tuple[str, ...]) -> bool:
+    """Return True if url is an http/https URL whose host matches one of allowed_domains or their subdomains."""
+    if not url or not isinstance(url, str):
+        return False
+    try:
+        parsed = urllib.parse.urlsplit(url.strip())
+    except Exception:
+        return False
+    if (parsed.scheme or "").lower() not in ("http", "https"):
+        return False
+    host = (parsed.hostname or "").lower().strip().rstrip(".")
+    if not host:
+        return False
+    for domain in allowed_domains:
+        dom = domain.lower().strip().rstrip(".")
+        if host == dom or host.endswith(f".{dom}"):
+            return True
+    return False
+
+
+def _sanitize_header_text(value: Any) -> str:
+    """Strip CR/LF/NUL control characters from HTTP header keys/values."""
+    if value is None:
+        return ""
+    return str(value).replace("\r", "").replace("\n", "").replace("\x00", "")
+
+
 def _positive_float(value: Any, default: float) -> float:
     """Convert value to a positive finite float, or return default."""
     if value is None or isinstance(value, bool):
@@ -273,11 +337,12 @@ def is_safe_url(
     if not host_lower:
         return False, "Missing hostname in URL"
 
+    try:
+        explicit_port = parsed.port
+    except ValueError:
+        return False, "SSRF blocked: Invalid port in URL"
+
     if allowed_ports is not None:
-        try:
-            explicit_port = parsed.port
-        except ValueError:
-            return False, "SSRF blocked: Invalid port in URL"
         eff_port = explicit_port if explicit_port is not None else (443 if scheme == "https" else 80)
         if eff_port not in allowed_ports:
             return False, f"SSRF blocked: Disallowed port {eff_port}"
@@ -307,12 +372,8 @@ def is_safe_url(
                 return False, f"SSRF blocked: Hostname '{cand}' matches disallowed internal suffix '{suffix}'"
 
     ports_set = allowed_ports if allowed_ports is not None else STANDARD_SAFE_PORTS
-    try:
-        parsed_port = parsed.port
-    except ValueError:
-        return False, "SSRF blocked: Invalid port in URL"
-    if parsed_port is not None and parsed_port not in ports_set:
-        return False, f"SSRF blocked: Disallowed port {parsed_port}"
+    if explicit_port is not None and explicit_port not in ports_set:
+        return False, f"SSRF blocked: Disallowed port {explicit_port}"
 
     for cand in host_candidates:
         try:
@@ -458,7 +519,7 @@ COMMON_CATEGORY_KEYWORDS: Dict[str, List[str]] = {
 def get_random_headers(referer: Optional[str] = None) -> Dict[str, str]:
     """Generate modern browser headers with rotated User-Agent."""
     headers = {
-        "User-Agent": random.choice(USER_AGENT_POOL),
+        "User-Agent": random.choice(USER_AGENT_POOL) if USER_AGENT_POOL else DEFAULT_FALLBACK_USER_AGENT,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
         "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         "Accept-Encoding": "identity",
@@ -468,16 +529,21 @@ def get_random_headers(referer: Optional[str] = None) -> Dict[str, str]:
         "Sec-Fetch-Site": "same-origin",
         "Upgrade-Insecure-Requests": "1"
     }
-    if referer:
-        headers["Referer"] = referer
+    if referer and isinstance(referer, str):
+        safe_ref = _sanitize_header_text(referer).strip()
+        if safe_ref:
+            headers["Referer"] = safe_ref
     return headers
 
 
 def polite_delay(min_delay: float = 1.5, max_delay: float = 3.5):
     """Enforce polite sleep with randomized jitter between requests."""
-    if max_delay <= 0:
+    a = _non_negative_finite_float(min_delay, 0.0)
+    b = _non_negative_finite_float(max_delay, 0.0)
+    low, high = min(a, b), max(a, b)
+    if high <= 0:
         return
-    sleep_time = random.uniform(max(0.0, min_delay), max(0.0, max_delay))
+    sleep_time = random.uniform(low, high)
     if sleep_time > 0:
         time.sleep(sleep_time)
 
@@ -518,7 +584,7 @@ class ComplaintRecord:
             errors.append(f"Invalid category '{self.category}'. Must be one of {VALID_CATEGORIES}")
         if not self.defect_topic or not isinstance(self.defect_topic, str):
             errors.append("Invalid or missing 'defect_topic'")
-        if not self.raw_quote or len(self.raw_quote.strip()) < 5:
+        if not self.raw_quote or not isinstance(self.raw_quote, str) or len(self.raw_quote.strip()) < 5:
             errors.append("Invalid or too short 'raw_quote'")
         if not isinstance(self.slang_terms, list):
             errors.append("'slang_terms' must be a list")
@@ -1242,7 +1308,7 @@ class SafeHttpClient:
 
     def _cache_key(self, url: str) -> str:
         norm = (url or "").strip()
-        return hashlib.sha256(norm.encode("utf-8")).hexdigest()
+        return hashlib.sha256(norm.encode("utf-8", errors="replace")).hexdigest()
 
     def get_cached_response(self, url: str) -> Optional[Tuple[int, str, bytes]]:
         """Retrieve cached (status_code, decoded_text, raw_bytes) if present."""
@@ -1463,7 +1529,7 @@ class SafeHttpClient:
 
         with self._rate_lock:
             now = time.time()
-            elapsed = now - self.last_request_time
+            elapsed = max(0.0, now - self.last_request_time)
             req_num = self.request_count
             self.request_count += 1
 
@@ -1712,10 +1778,16 @@ class SafeHttpClient:
             req_headers = get_random_headers(referer=referer)
             if headers:
                 for k, v in headers.items():
-                    matching_keys = [ek for ek in req_headers if ek.lower() == str(k).lower()]
+                    if k is None or v is None:
+                        continue
+                    safe_k = _sanitize_header_text(k).strip()
+                    if not safe_k:
+                        continue
+                    safe_v = _sanitize_header_text(v)
+                    matching_keys = [ek for ek in req_headers if ek.lower() == safe_k.lower()]
                     for mk in matching_keys:
                         del req_headers[mk]
-                    req_headers[k] = v
+                    req_headers[safe_k] = safe_v
 
             payload_bytes = None
             if data is not None:
@@ -1726,7 +1798,7 @@ class SafeHttpClient:
                 elif isinstance(data, bytes):
                     payload_bytes = data
                 elif isinstance(data, str):
-                    payload_bytes = data.encode("utf-8")
+                    payload_bytes = data.encode("utf-8", errors="replace")
 
             # Resolve explicit connect and read timeouts
             if connect_timeout is not None:
@@ -2313,6 +2385,7 @@ def determine_complaint_severity(category: str, text: str) -> str:
 
 def extract_defect_topic(category: str, text: str) -> str:
     """Derive standardized technical defect topic string matching inventory."""
+    text = text if isinstance(text, str) else (str(text) if text is not None else "")
     if category == "parking":
         if "어라운드뷰" in text or "왜곡" in text or "어안" in text or "프레임" in text:
             return "3D 어라운드뷰 왜곡 및 프레임 드랍으로 인한 휠/차체 긁힘"
@@ -2436,22 +2509,44 @@ def load_platform_seed_records(
 
 def extract_slang_terms(text: str, slang_dictionary: Dict[str, Any]) -> List[str]:
     """Find all matching slang terms present in the text."""
-    if not text or not slang_dictionary:
+    if not text or not isinstance(text, str) or not slang_dictionary:
+        return []
+    if hasattr(slang_dictionary, "keys"):
+        keys_iter = slang_dictionary.keys()
+    elif isinstance(slang_dictionary, (list, tuple, set, frozenset)):
+        keys_iter = slang_dictionary
+    else:
         return []
     found_terms = []
     text_lower = text.lower()
-    keys_iter = slang_dictionary.keys() if hasattr(slang_dictionary, "keys") else slang_dictionary
     for term in keys_iter:
+        if term is None:
+            continue
         term_str = str(term)
+        if not term_str:
+            continue
         term_lower = term_str.lower()
         if term_lower in text_lower or (term_lower != term_str and term_str in text):
             found_terms.append(term_str)
     return sorted(set(found_terms))
 
 
+def _sanitize_json_value(value: Any) -> Any:
+    """Recursively normalize non-finite floats (NaN/Inf/-0.0) so JSON output is strictly RFC-8259 compliant."""
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            return None
+        return 0.0 if value == 0.0 else value
+    if isinstance(value, dict):
+        return {str(k): _sanitize_json_value(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_sanitize_json_value(v) for v in value]
+    return value
+
+
 def save_complaints_json(records: List[Union[ComplaintRecord, Dict[str, Any]]], output_path: str):
     """Save complaint records into formatted JSON file atomically and safely."""
-    if not output_path:
+    if not output_path or not isinstance(output_path, (str, os.PathLike)):
         logger.warning("Empty output_path provided to save_complaints_json")
         return
     temp_path = None
@@ -2460,14 +2555,14 @@ def save_complaints_json(records: List[Union[ComplaintRecord, Dict[str, Any]]], 
         out_dir = os.path.dirname(abs_output)
         os.makedirs(out_dir, exist_ok=True)
         data = []
-        for r in records:
+        for r in (records or ()):
             if isinstance(r, ComplaintRecord):
-                data.append(r.to_dict())
+                data.append(_sanitize_json_value(r.to_dict()))
             elif isinstance(r, dict):
-                data.append(r)
+                data.append(_sanitize_json_value(r))
             else:
                 try:
-                    data.append(dict(r))
+                    data.append(_sanitize_json_value(dict(r)))
                 except Exception:
                     continue
 
@@ -2477,7 +2572,7 @@ def save_complaints_json(records: List[Union[ComplaintRecord, Dict[str, Any]]], 
             suffix=".json",
         )
         with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+            json.dump(data, f, ensure_ascii=False, indent=2, allow_nan=False)
         os.replace(temp_path, abs_output)
         temp_path = None
         logger.info(f"Saved {len(data)} complaint records to {output_path}")
@@ -2493,10 +2588,13 @@ def save_complaints_json(records: List[Union[ComplaintRecord, Dict[str, Any]]], 
 
 def load_complaints_json(input_path: str) -> List[Dict[str, Any]]:
     """Load complaint records from JSON file with fault-tolerant error recovery."""
-    if not input_path or not os.path.exists(input_path):
+    if not input_path or not isinstance(input_path, (str, os.PathLike)):
         logger.warning(f"File not found or empty path: {input_path}")
         return []
     try:
+        if not os.path.isfile(input_path):
+            logger.warning(f"File not found or empty path: {input_path}")
+            return []
         with open(input_path, "r", encoding="utf-8") as f:
             content = f.read().strip()
             if not content:

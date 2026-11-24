@@ -44,8 +44,13 @@ function areTimestampPropsEqual(
   if (prevProps.options === nextProps.options) {
     return true;
   }
-  if (!prevProps.options || !nextProps.options) {
-    return false;
+  if (
+    !prevProps.options ||
+    !nextProps.options ||
+    typeof prevProps.options !== 'object' ||
+    typeof nextProps.options !== 'object'
+  ) {
+    return prevProps.options === nextProps.options;
   }
   const prevKeys = Object.keys(prevProps.options) as (keyof Intl.DateTimeFormatOptions)[];
   const nextKeys = Object.keys(nextProps.options) as (keyof Intl.DateTimeFormatOptions)[];
@@ -79,17 +84,19 @@ function ClientTimestampBase({
       ? timestamp
       : '';
   const effectiveIso = rawVal.trim();
+  const safeFallback = typeof fallback === 'string' ? fallback : '방금 전';
+  const safeLocale = typeof locale === 'string' && locale.trim().length > 0 ? locale.trim() : 'ko-KR';
 
   const fallbackText = useMemo(() => {
-    if (!effectiveIso) return fallback;
+    if (!effectiveIso) return safeFallback;
     return effectiveIso.includes('T')
       ? effectiveIso.replace('T', ' ').substring(0, 19) + (effectiveIso.endsWith('Z') ? ' (UTC)' : '')
       : effectiveIso;
-  }, [effectiveIso, fallback]);
+  }, [effectiveIso, safeFallback]);
 
   const { formattedText, validIso } = useMemo(() => {
     if (!effectiveIso) {
-      return { formattedText: fallback, validIso: undefined };
+      return { formattedText: safeFallback, validIso: undefined };
     }
     try {
       const date = new Date(effectiveIso);
@@ -100,12 +107,12 @@ function ClientTimestampBase({
         }
         try {
           if (format === 'date') {
-            return { formattedText: date.toLocaleDateString(locale, options), validIso: iso };
+            return { formattedText: date.toLocaleDateString(safeLocale, options), validIso: iso };
           }
           if (format === 'time') {
-            return { formattedText: date.toLocaleTimeString(locale, options), validIso: iso };
+            return { formattedText: date.toLocaleTimeString(safeLocale, options), validIso: iso };
           }
-          return { formattedText: date.toLocaleString(locale, options), validIso: iso };
+          return { formattedText: date.toLocaleString(safeLocale, options), validIso: iso };
         } catch {
           return { formattedText: fallbackText, validIso: iso };
         }
@@ -114,7 +121,7 @@ function ClientTimestampBase({
       return { formattedText: fallbackText, validIso: undefined };
     }
     return { formattedText: fallbackText, validIso: undefined };
-  }, [mounted, effectiveIso, locale, options, format, fallback, fallbackText]);
+  }, [mounted, effectiveIso, safeLocale, options, format, safeFallback, fallbackText]);
 
   const displayText = mounted ? formattedText : fallbackText;
 

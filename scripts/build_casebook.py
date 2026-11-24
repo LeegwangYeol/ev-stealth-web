@@ -7,6 +7,7 @@ Authoritative Deliverable Generator for Milestone M3.
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -34,13 +35,21 @@ def _escape_md_cell(val: Any) -> str:
 
 
 def _sanitize_md_url(val: Any) -> str:
-    """Allow only http/https URLs in Markdown links and escape closing parens/whitespace."""
+    """Allow only http/https URLs in Markdown links and escape characters that break Markdown/tables."""
     if not isinstance(val, str):
         return "#"
-    u = val.strip()
+    u = re.sub(r"[\x00-\x1f\x7f]+", "", val).strip()
     if not u.lower().startswith(("http://", "https://")):
         return "#"
-    return u.replace(" ", "%20").replace("(", "%28").replace(")", "%29")
+    return (
+        u.replace(" ", "%20")
+        .replace("(", "%28")
+        .replace(")", "%29")
+        .replace("|", "%7C")
+        .replace("<", "%3C")
+        .replace(">", "%3E")
+        .replace('"', "%22")
+    )
 
 
 def load_json_file(file_path: Path) -> Any:
@@ -171,20 +180,22 @@ def build_case_studies_section(category_key: str, category_title: str, complaint
     for idx, c in enumerate(category_cases, 1):
         if not isinstance(c, dict):
             continue
-        case_id = c.get("id", f"UNKNOWN_{idx}")
-        post_title = c.get("post_title", "")
-        vehicle = c.get("target_vehicle", "")
-        platform = c.get("platform", "")
-        board_name = c.get("board_name", "")
-        post_url = c.get("post_url", "")
-        topic = c.get("defect_topic", "")
-        quote = c.get("raw_quote", "")
-        severity = c.get("severity", "functional_failure")
+        case_id = c.get("id") if c.get("id") is not None else f"UNKNOWN_{idx}"
+        post_title = _escape_md_cell(c.get("post_title") or "")
+        vehicle = _escape_md_cell(c.get("target_vehicle") or "")
+        platform = c.get("platform") or ""
+        board_name = _escape_md_cell(c.get("board_name") or "")
+        post_url = c.get("post_url") or ""
+        topic = _escape_md_cell(c.get("defect_topic") or "")
+        raw_quote_val = c.get("raw_quote")
+        quote_str = str(raw_quote_val) if raw_quote_val is not None else ""
+        quote_md = quote_str.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\n> ")
+        severity = c.get("severity") or "functional_failure"
         raw_slangs = c.get("slang_terms")
         if isinstance(raw_slangs, (list, tuple, set)):
-            slangs = [str(s) for s in raw_slangs if s is not None and str(s).strip()]
+            slangs = [str(s).replace("`", "'") for s in raw_slangs if s is not None and str(s).strip()]
         elif isinstance(raw_slangs, str) and raw_slangs.strip():
-            slangs = [raw_slangs.strip()]
+            slangs = [raw_slangs.strip().replace("`", "'")]
         else:
             slangs = []
         slang_display = ", ".join([f"`{s}`" for s in slangs]) if slangs else "해당 없음 (일반 불만)"
@@ -192,20 +203,20 @@ def build_case_studies_section(category_key: str, category_title: str, complaint
         safe_url = _sanitize_md_url(post_url)
         display_url = _escape_md_cell(post_url) if safe_url != "#" else "#"
         lines.extend([
-            f"### [사례 Case-{case_id}] {post_title}",
+            f"### [사례 Case-{_escape_md_cell(case_id)}] {post_title}",
             "",
             "| 항목 | 상세 내용 |",
             "|---|---|",
             f"| **사례 ID** | `{_escape_md_cell(case_id)}` |",
-            f"| **대상 차량** | **{_escape_md_cell(vehicle)}** |",
-            f"| **수집 플랫폼** | `{_escape_md_cell(platform)}` ({_escape_md_cell(board_name)}) |",
-            f"| **결함 주제** | {_escape_md_cell(topic)} |",
+            f"| **대상 차량** | **{vehicle}** |",
+            f"| **수집 플랫폼** | `{_escape_md_cell(platform)}` ({board_name}) |",
+            f"| **결함 주제** | {topic} |",
             f"| **심각도 등급** | `{_escape_md_cell(severity)}` |",
             f"| **검출 은어** | {_escape_md_cell(slang_display)} |",
             f"| **원본 링크** | [{display_url}]({safe_url}) |",
             "",
             "#### 날것 그대로의 유저 코멘트 (Raw User Voice)",
-            f"> \"{quote}\"",
+            f"> \"{quote_md}\"",
             "",
             "#### 기술적 원인 분석 및 배경 맥락",
             f"- **결함 매커니즘**: {topic} 관련 하드웨어/소프트웨어 제어 알고리즘 한계 및 센서/배터리/모터 물리적 특성 기인.",
@@ -259,7 +270,7 @@ def build_source_index_section(complaints: List[Dict[str, Any]]) -> str:
     total_complaints = len(valid_complaints) or 1
     for p, cnt in sorted(platform_counts.items(), key=lambda x: x[1], reverse=True):
         ratio = (cnt / total_complaints) * 100
-        lines.append(f"| `{p}` | {cnt}건 | {ratio:.1f}% | 보배드림 국산차/수입차/자유, 디시 전기차갤, 네이버 카페 등 |")
+        lines.append(f"| `{_escape_md_cell(p)}` | {cnt}건 | {ratio:.1f}% | 보배드림 국산차/수입차/자유, 디시 전기차갤, 네이버 카페 등 |")
 
     lines.extend([
         "",

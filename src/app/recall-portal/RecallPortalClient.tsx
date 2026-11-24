@@ -174,17 +174,17 @@ function resolveModelAndBrand(
     // Collect all candidate items with their brand and model defensively
     const candidates: Array<{ brand: string; model: string }> = [];
     (initialDatabase?.battery_profiles || []).forEach((p) => {
-      if (p?.brand && p?.model_name) {
+      if (typeof p?.brand === 'string' && p.brand && typeof p?.model_name === 'string' && p.model_name) {
         candidates.push({ brand: p.brand, model: p.model_name });
       }
     });
     (initialDatabase?.vin_prefixes || []).forEach((vp) => {
-      if (vp?.brand && vp?.model_name) {
+      if (typeof vp?.brand === 'string' && vp.brand && typeof vp?.model_name === 'string' && vp.model_name) {
         candidates.push({ brand: vp.brand, model: vp.model_name });
       }
     });
     (initialDatabase?.recalls || []).forEach((r) => {
-      if (r?.brand && r?.target_model) {
+      if (typeof r?.brand === 'string' && r.brand && typeof r?.target_model === 'string' && r.target_model) {
         r.target_model.split(',').forEach((mStr) => {
           const clean = mStr.trim();
           if (clean) candidates.push({ brand: r.brand, model: clean });
@@ -498,18 +498,27 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     [initialDatabase?.metadata]
   );
 
+  const cancelPendingVinSearch = useCallback(() => {
+    if (vinDebounceTimerRef.current) {
+      clearTimeout(vinDebounceTimerRef.current);
+      vinDebounceTimerRef.current = null;
+    }
+    setIsSearchingVin(false);
+  }, []);
+
   // Handler for query parameter auto-selection (?model=..., ?brand=...)
   const handleSelectFromParams = useCallback(
     (brand: string, model: string, year?: number) => {
+      cancelPendingVinSearch();
       setSelectedBrand(brand);
       setSelectedModel(model);
-      setSelectedYear(typeof year === 'number' ? year : '');
+      setSelectedYear(typeof year === 'number' && Number.isFinite(year) ? year : '');
       setActiveCheckerMode('MODEL');
       const result = checkRecallsByModel(brand, model, year, initialDatabase);
       setCheckResult(result);
       focusResultSection();
     },
-    [initialDatabase, focusResultSection]
+    [initialDatabase, focusResultSection, cancelPendingVinSearch]
   );
 
   // Handler for VIN query parameter auto-selection (?vin=...)
@@ -664,7 +673,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
       return;
     }
 
-    const yr = typeof selectedYear === 'number' ? selectedYear : undefined;
+    const yr = typeof selectedYear === 'number' && Number.isFinite(selectedYear) ? selectedYear : undefined;
     const result = checkRecallsByModel(selectedBrand, selectedModel, yr, initialDatabase);
     setCheckResult(result);
     focusResultSection();
@@ -686,10 +695,14 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
       batteryProfiles
         .filter((profile): profile is BatterySafetyProfile => Boolean(profile))
         .map((profile) => {
-          const combinedRaw = `${profile.brand || ''} ${profile.model_name || ''} ${profile.cell_supplier || ''} ${profile.cell_chemistry || ''}`.toLowerCase();
+          const brandStr = typeof profile.brand === 'string' ? profile.brand : '';
+          const modelStr = typeof profile.model_name === 'string' ? profile.model_name : '';
+          const supplierStr = typeof profile.cell_supplier === 'string' ? profile.cell_supplier : '';
+          const chemStr = typeof profile.cell_chemistry === 'string' ? profile.cell_chemistry : '';
+          const combinedRaw = `${brandStr} ${modelStr} ${supplierStr} ${chemStr}`.toLowerCase();
           return {
             profile,
-            supplierLower: (profile.cell_supplier || '').toLowerCase(),
+            supplierLower: supplierStr.toLowerCase(),
             combinedRaw,
             combinedNorm: normalizeSearchText(combinedRaw),
           };
@@ -747,12 +760,19 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
       .filter((r): r is OfficialRecallCampaign => Boolean(r))
       .map((recall) => {
         const canonicalBrand = normalizeManufacturer(recall.brand);
-        const targetModelLower = (recall.target_model || '').toLowerCase();
-        const combinedRaw = `${recall.campaign_no || ''} ${recall.brand || ''} ${recall.target_model || ''} ${recall.defect_title || ''} ${recall.defect_detail || ''} ${recall.risk_level_ko || ''} ${recall.remedy_type_ko || ''}`.toLowerCase();
+        const targetModelStr = typeof recall.target_model === 'string' ? recall.target_model : '';
+        const targetModelLower = targetModelStr.toLowerCase();
+        const campaignNoStr = typeof recall.campaign_no === 'string' ? recall.campaign_no : '';
+        const brandStr = typeof recall.brand === 'string' ? recall.brand : '';
+        const defectTitleStr = typeof recall.defect_title === 'string' ? recall.defect_title : '';
+        const defectDetailStr = typeof recall.defect_detail === 'string' ? recall.defect_detail : '';
+        const riskLevelKoStr = typeof recall.risk_level_ko === 'string' ? recall.risk_level_ko : '';
+        const remedyTypeKoStr = typeof recall.remedy_type_ko === 'string' ? recall.remedy_type_ko : '';
+        const combinedRaw = `${campaignNoStr} ${brandStr} ${targetModelStr} ${defectTitleStr} ${defectDetailStr} ${riskLevelKoStr} ${remedyTypeKoStr}`.toLowerCase();
         return {
           recall,
           canonicalBrand,
-          brandLower: (recall.brand || '').toLowerCase(),
+          brandLower: brandStr.toLowerCase(),
           mentionsGenesis:
             canonicalBrand === '현대자동차' &&
             (targetModelLower.includes('제네시스') || targetModelLower.includes('genesis')),
@@ -856,14 +876,6 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
     document.getElementById('recall-catalog-search-input')?.focus();
   }, []);
 
-  const cancelPendingVinSearch = useCallback(() => {
-    if (vinDebounceTimerRef.current) {
-      clearTimeout(vinDebounceTimerRef.current);
-      vinDebounceTimerRef.current = null;
-    }
-    setIsSearchingVin(false);
-  }, []);
-
   const handleModeKeyDown = (e: React.KeyboardEvent, currentMode: 'VIN' | 'MODEL') => {
     let nextMode: 'VIN' | 'MODEL' | null = null;
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
@@ -948,7 +960,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
             <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm">
               <span className="text-xs text-slate-300 font-medium">분석 리콜 캠페인</span>
               <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
-                {metadata?.total_campaigns ?? 0}
+                {Number.isFinite(metadata?.total_campaigns)
+                  ? (metadata.total_campaigns === 0 ? 0 : metadata.total_campaigns)
+                  : 0}
                 <span className="text-xs font-normal text-slate-300 ml-1">건 (정부 공시)</span>
               </div>
             </div>
@@ -957,7 +971,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
               <span className="text-xs text-slate-300 font-medium">국내 출시(KDM) 대상 차량</span>
               <div className="text-xl sm:text-2xl font-black text-amber-400 mt-0.5">
                 {Number.isFinite(metadata?.total_affected_vehicles_kdm)
-                  ? metadata.total_affected_vehicles_kdm.toLocaleString()
+                  ? (metadata.total_affected_vehicles_kdm === 0 ? 0 : metadata.total_affected_vehicles_kdm).toLocaleString()
                   : '0'}
                 <span className="text-xs font-normal text-slate-300 ml-1">대</span>
               </div>
@@ -966,7 +980,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
             <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm">
               <span className="text-xs text-slate-300 font-medium">긴급 화재 특별주의보</span>
               <div className="text-xl sm:text-2xl font-black text-red-400 mt-0.5">
-                {metadata?.active_fire_campaigns ?? 0}
+                {Number.isFinite(metadata?.active_fire_campaigns)
+                  ? (metadata.active_fire_campaigns === 0 ? 0 : metadata.active_fire_campaigns)
+                  : 0}
                 <span className="text-xs font-normal text-slate-300 ml-1">개 차종</span>
               </div>
             </div>
@@ -974,7 +990,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
             <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 shadow-sm">
               <span className="text-xs text-slate-300 font-medium">OTA 무선 조치 지원율</span>
               <div className="text-xl sm:text-2xl font-black text-emerald-400 mt-0.5">
-                {Number.isFinite(metadata?.ota_remedy_rate_pct) ? metadata.ota_remedy_rate_pct : 0}
+                {Number.isFinite(metadata?.ota_remedy_rate_pct)
+                  ? (metadata.ota_remedy_rate_pct === 0 ? 0 : metadata.ota_remedy_rate_pct)
+                  : 0}
                 <span className="text-xs font-normal text-slate-300 ml-1">% (방문 불필요)</span>
               </div>
             </div>
@@ -1293,7 +1311,14 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     id="year-select"
                     aria-label="3. 생산 연식 선택"
                     value={selectedYear}
-                    onChange={(e) => setSelectedYear(e.target.value ? Number(e.target.value) : '')}
+                    onChange={(e) => {
+                      if (!e.target.value) {
+                        setSelectedYear('');
+                        return;
+                      }
+                      const parsed = Number(e.target.value);
+                      setSelectedYear(Number.isFinite(parsed) ? parsed : '');
+                    }}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                   >
                     <option value="">전체 연식 확인</option>
@@ -1430,7 +1455,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
                         <h2 id="search-result-heading" className="text-xl sm:text-2xl font-black mt-1">
                           {checkResult.decodedBrand || '미확인 브랜드'} {checkResult.decodedModel?.trim() ? checkResult.decodedModel : '미확인 모델'}{' '}
-                          {checkResult.decodedYear ? `${checkResult.decodedYear}년식` : ''} 판정 결과
+                          {typeof checkResult.decodedYear === 'number' && Number.isFinite(checkResult.decodedYear) && checkResult.decodedYear > 0
+                            ? `${checkResult.decodedYear}년식`
+                            : ''} 판정 결과
                         </h2>
 
                         <p className="text-sm text-slate-200 mt-1 max-w-3xl leading-relaxed">
@@ -1491,7 +1518,9 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                           {checkResult.batteryProfile.fire_incident_status_ko || '모니터링 대상'}
                         </span>
                         <span className="text-xs px-3 py-1 rounded-full font-bold bg-blue-950 text-blue-200 border border-blue-700">
-                          완충 권장 한도: {typeof checkResult.batteryProfile.recommended_soc_limit === 'number' ? checkResult.batteryProfile.recommended_soc_limit : 100}%
+                          완충 권장 한도: {Number.isFinite(checkResult.batteryProfile.recommended_soc_limit)
+                            ? (checkResult.batteryProfile.recommended_soc_limit === 0 ? 0 : checkResult.batteryProfile.recommended_soc_limit)
+                            : 100}%
                         </span>
                       </div>
                     </div>
@@ -1623,7 +1652,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   aria-atomic="true"
                   className="text-xs text-slate-300"
                 >
-                  {batterySearch || isBatteryFiltered
+                  {batterySearch.trim() || isBatteryFiltered
                     ? `검색 결과: ${filteredBatteryProfiles.length}개 차종 (전체 ${batteryProfiles.length}개)`
                     : `총 ${batteryProfiles.length}개 차종`}
                 </span>
@@ -1824,7 +1853,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                   aria-atomic="true"
                   className="text-xs text-slate-300"
                 >
-                  {recallSearch || isRecallFiltered
+                  {recallSearch.trim() || isRecallFiltered
                     ? `검색 결과: ${filteredRecalls.length}건 (전체 ${recalls.length}건)`
                     : `전체 공시 리콜 대장 (${recalls.length}건)`}
                 </span>
@@ -2058,7 +2087,9 @@ export const BatterySafetyCard = React.memo(function BatterySafetyCard({
   const cellSupplier = p.cell_supplier || '정보 없음';
   const cellChemistry = p.cell_chemistry || '정보 없음';
   const statusKo = p.fire_incident_status_ko || '모니터링 대상';
-  const socLimit = typeof p.recommended_soc_limit === 'number' ? p.recommended_soc_limit : 100;
+  const socLimit = Number.isFinite(p.recommended_soc_limit)
+    ? (p.recommended_soc_limit === 0 ? 0 : p.recommended_soc_limit)
+    : 100;
   const advisory = p.underground_parking_advisory || '아파트 관리사무소 화재 예방 수칙 준수 권장';
   const bmsFeatures = p.bms_safety_features || 'BMS 안전 제어 시스템 탑재';
 
@@ -2208,7 +2239,7 @@ export const RecallCard = React.memo(function RecallCard({
           type="button"
           aria-expanded={isExpanded}
           aria-controls={`${panelIdPrefix}${campaign.id}`}
-          aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '상세 및 행동요령 펼치기'}`}
+          aria-label={`${targetModel} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '상세 및 행동요령 펼치기'}`}
           onClick={() => toggleRecallExpansion(campaign.id)}
           className="self-start text-xs text-blue-300 hover:text-blue-200 font-semibold px-2.5 py-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded bg-slate-800 border border-slate-700 hover:bg-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
         >
@@ -2233,7 +2264,7 @@ export const RecallCard = React.memo(function RecallCard({
           <span className="ml-3 font-semibold text-slate-200">대상 대수: </span>
           <span className="text-amber-300 font-semibold">
             {Number.isFinite(campaign?.affected_kdm_units)
-              ? campaign.affected_kdm_units.toLocaleString()
+              ? (campaign.affected_kdm_units === 0 ? 0 : campaign.affected_kdm_units).toLocaleString()
               : '0'}대
           </span>
         </div>
@@ -2343,7 +2374,9 @@ export const BatterySafetyTableView = React.memo(function BatterySafetyTableView
                   </span>
                 </td>
                 <td className="p-3.5 text-center font-bold text-blue-300 whitespace-nowrap">
-                  {typeof p.recommended_soc_limit === 'number' ? `${p.recommended_soc_limit}%` : '100%'}
+                  {Number.isFinite(p.recommended_soc_limit)
+                    ? `${p.recommended_soc_limit === 0 ? 0 : p.recommended_soc_limit}%`
+                    : '100%'}
                 </td>
                 <td className="p-3.5 text-xs text-slate-300 min-w-[220px] max-w-sm whitespace-normal leading-relaxed">
                   {p.underground_parking_advisory || '화재 예방 수칙 준수'}
@@ -2450,7 +2483,7 @@ export const RecallTableView = React.memo(function RecallTableView({
                   </td>
                   <td className="p-3.5 text-right font-mono text-amber-300 font-bold whitespace-nowrap">
                     {Number.isFinite(campaign.affected_kdm_units)
-                      ? `${campaign.affected_kdm_units.toLocaleString()}대`
+                      ? `${(campaign.affected_kdm_units === 0 ? 0 : campaign.affected_kdm_units).toLocaleString()}대`
                       : '0대'}
                   </td>
                   <td className="p-3.5 text-center whitespace-nowrap">

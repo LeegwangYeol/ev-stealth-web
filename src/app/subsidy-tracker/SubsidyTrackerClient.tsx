@@ -30,6 +30,14 @@ import SubsidyProgressBar from '@/components/subsidy/SubsidyProgressBar';
 const toSafeNonNeg = (value: unknown): number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
 
+// Pure Helper: Normalize custom MSRP numeric input (strip non-digits, collapse leading zeros, cap at 10B KRW)
+const normalizeMsrpDigits = (raw: string): string => {
+  const digits = raw.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '').slice(0, 11);
+  if (!digits) return '';
+  const parsed = parseInt(digits, 10);
+  return Number.isFinite(parsed) && parsed > 10_000_000_000 ? '10000000000' : digits;
+};
+
 const TIMESTAMP_OPTIONS: Intl.DateTimeFormatOptions = {
   month: 'long',
   day: 'numeric',
@@ -580,8 +588,20 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
     }
   }, [urlModel, urlRegion, initialData?.popular_models_matrix, initialData?.regions]);
 
-  const regions = useMemo(() => (Array.isArray(initialData?.regions) ? initialData.regions : []), [initialData?.regions]);
-  const models = useMemo(() => (Array.isArray(initialData?.popular_models_matrix) ? initialData.popular_models_matrix : []), [initialData?.popular_models_matrix]);
+  const regions = useMemo(
+    () =>
+      Array.isArray(initialData?.regions)
+        ? initialData.regions.filter((r) => Boolean(r && typeof r === 'object' && !Array.isArray(r)))
+        : [],
+    [initialData?.regions]
+  );
+  const models = useMemo(
+    () =>
+      Array.isArray(initialData?.popular_models_matrix)
+        ? initialData.popular_models_matrix.filter((m) => Boolean(m && typeof m === 'object' && !Array.isArray(m)))
+        : [],
+    [initialData?.popular_models_matrix]
+  );
 
   const summary = useMemo(() => initialData?.nationwide_summary || FALLBACK_SUMMARY, [initialData?.nationwide_summary]);
   const thresholds = useMemo(() => initialData?.alert_thresholds || FALLBACK_THRESHOLDS, [initialData?.alert_thresholds]);
@@ -1216,8 +1236,16 @@ const RegionCard = React.memo(function RegionCard({
   const rawStatus = typeof cat?.status === 'string' ? cat.status.trim() : '';
   const effectiveStatus = rawStatus ? normalizeAlertSeverity(rawStatus, safeDepletion) : resolveAlertSeverity(undefined, safeDepletion);
 
-  const regionName = region?.name_ko || '해당 지역';
-  const regionId = region?.region_id || region?.iso_code || region?.name_ko || 'unknown';
+  const regionName = (typeof region?.name_ko === 'string' && region.name_ko.trim()) || '해당 지역';
+  const regionId =
+    (typeof region?.region_id === 'string' && region.region_id.trim()) ||
+    (typeof region?.iso_code === 'string' && region.iso_code.trim()) ||
+    regionName;
+  const expandKey = regionKey || regionId;
+  const safeDomId =
+    String((typeof region?.region_id === 'string' && region.region_id.trim()) || expandKey)
+      .trim()
+      .replace(/\s+/g, '-') || 'unknown';
   const munis = useMemo(
     () => (Array.isArray(region?.municipalities) ? region.municipalities : EMPTY_MUNIS),
     [region?.municipalities]
@@ -1358,10 +1386,10 @@ const RegionCard = React.memo(function RegionCard({
           <div className="pt-2">
             <button
               type="button"
-              onClick={() => toggleRegionExpand(region.region_id || regionKey || regionId)}
+              onClick={() => toggleRegionExpand(expandKey)}
               aria-expanded={isExpanded}
-              aria-controls={'muni-details-' + region.region_id}
-              aria-label={`${region.name_ko} 세부 시·군·구 ${munis.length}개 현황 ${isExpanded ? '접기' : '보기'}`}
+              aria-controls={'muni-details-' + safeDomId}
+              aria-label={`${regionName} 세부 시·군·구 ${munis.length}개 현황 ${isExpanded ? '접기' : '보기'}`}
               className="w-full py-2.5 px-3 min-h-[44px] rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-xs font-medium flex items-center justify-between transition border border-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
               <span>세부 시·군·구 {munis.length}개 현황 보기</span>
@@ -1370,8 +1398,8 @@ const RegionCard = React.memo(function RegionCard({
 
             {/* Preserved in DOM with hidden attribute so aria-controls never breaks */}
             <div
-              id={'muni-details-' + region.region_id}
-              data-card-id={'muni-details-card-' + regionId}
+              id={'muni-details-' + safeDomId}
+              data-card-id={'muni-details-card-' + safeDomId}
               hidden={!isExpanded}
               tabIndex={0}
               role="region"
@@ -1461,13 +1489,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
   }, [onSelectRegionId]);
 
   const handleCustomMsrpChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/[^0-9]/g, '').slice(0, 11);
-    if (!digits) {
-      setCustomMsrpInput('');
-      return;
-    }
-    const parsed = parseInt(digits, 10);
-    setCustomMsrpInput(Number.isFinite(parsed) && parsed > 10_000_000_000 ? '10000000000' : digits);
+    setCustomMsrpInput(normalizeMsrpDigits(e.target.value));
   }, []);
 
   const handleCustomMsrpKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1479,22 +1501,10 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
 
     if (e.key === 'Backspace' && start > 1 && val[start - 1] === ',') {
       e.preventDefault();
-      const nextRaw = (val.slice(0, start - 2) + val.slice(start)).replace(/[^0-9]/g, '').slice(0, 11);
-      if (!nextRaw) {
-        setCustomMsrpInput('');
-      } else {
-        const parsed = parseInt(nextRaw, 10);
-        setCustomMsrpInput(Number.isFinite(parsed) && parsed > 10_000_000_000 ? '10000000000' : nextRaw);
-      }
+      setCustomMsrpInput(normalizeMsrpDigits(val.slice(0, start - 2) + val.slice(start)));
     } else if (e.key === 'Delete' && start < val.length - 1 && val[start] === ',') {
       e.preventDefault();
-      const nextRaw = (val.slice(0, start) + val.slice(start + 2)).replace(/[^0-9]/g, '').slice(0, 11);
-      if (!nextRaw) {
-        setCustomMsrpInput('');
-      } else {
-        const parsed = parseInt(nextRaw, 10);
-        setCustomMsrpInput(Number.isFinite(parsed) && parsed > 10_000_000_000 ? '10000000000' : nextRaw);
-      }
+      setCustomMsrpInput(normalizeMsrpDigits(val.slice(0, start) + val.slice(start + 2)));
     }
   }, []);
 
@@ -1506,8 +1516,9 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
   const modelsMap = useMemo(() => {
     const map = new Map<string, PopularModelEntry>();
     for (const m of models) {
-      if (m?.model_id) {
-        map.set(m.model_id.toLowerCase(), m);
+      if (typeof m?.model_id === 'string') {
+        const id = m.model_id.trim().toLowerCase();
+        if (id && !map.has(id)) map.set(id, m);
       }
     }
     for (const m of models) {
@@ -1522,11 +1533,13 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
   const regionsMap = useMemo(() => {
     const map = new Map<string, RegionEntry>();
     for (const r of regions) {
-      if (r?.region_id) {
-        map.set(r.region_id.toLowerCase(), r);
+      if (typeof r?.region_id === 'string') {
+        const rid = r.region_id.trim().toLowerCase();
+        if (rid && !map.has(rid)) map.set(rid, r);
       }
-      if (r?.iso_code) {
-        map.set(r.iso_code.toLowerCase(), r);
+      if (typeof r?.iso_code === 'string') {
+        const iso = r.iso_code.trim().toLowerCase();
+        if (iso && !map.has(iso)) map.set(iso, r);
       }
     }
     for (const r of regions) {
@@ -1674,16 +1687,24 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             {/* Quick Pills for Top Models */}
             <div role="group" aria-label="인기 전기차 모델 빠른 선택" className="flex flex-wrap gap-1.5 pt-1">
               {topModels.map((m, idx) => {
-                const isSelected = (activeModel?.model_id || selectedModelId) === m.model_id;
-                const displayName = (typeof m.name_ko === 'string' ? m.name_ko : m.model_id || '').replace(BRAND_PREFIX_REGEX, '');
+                const pillId =
+                  (typeof m.model_id === 'string' && m.model_id) ||
+                  (typeof m.name_ko === 'string' && m.name_ko) ||
+                  '';
+                const activeId =
+                  (typeof activeModel?.model_id === 'string' && activeModel.model_id) ||
+                  (typeof activeModel?.name_ko === 'string' && activeModel.name_ko) ||
+                  selectedModelId;
+                const isSelected = Boolean(pillId && activeId === pillId);
+                const displayName = (typeof m.name_ko === 'string' ? m.name_ko : (typeof m.model_id === 'string' ? m.model_id : '')).replace(BRAND_PREFIX_REGEX, '');
                 return (
                   <button
-                    key={m.model_id || `top-model-${idx}`}
+                    key={pillId || `top-model-${idx}`}
                     type="button"
                     aria-pressed={isSelected}
-                    aria-label={`${m.name_ko || displayName} 모델 선택`}
+                    aria-label={`${(typeof m.name_ko === 'string' && m.name_ko) || displayName} 모델 선택`}
                     onClick={() => {
-                      if (m.model_id) onSelectModelId(m.model_id);
+                      if (pillId) onSelectModelId(pillId);
                     }}
                     className={`px-2.5 py-1 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                       isSelected
@@ -1910,7 +1931,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             <div className="flex justify-between items-center text-slate-300">
               <span>차량 출고가 (MSRP)</span>
               <span className="font-semibold text-slate-100">
-                {(Number.isFinite(calculationResult.msrpKrw) ? calculationResult.msrpKrw : 0).toLocaleString()}원
+                {toSafeNonNeg(calculationResult.msrpKrw).toLocaleString()}원
               </span>
             </div>
 
@@ -1924,14 +1945,14 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             <div className="flex justify-between items-center text-blue-400">
               <span>(-) 국비 보조금</span>
               <span className="font-semibold">
-                -{(Number.isFinite(calculationResult.nationalSubsidyKrw) ? calculationResult.nationalSubsidyKrw : 0).toLocaleString()}원
+                -{toSafeNonNeg(calculationResult.nationalSubsidyKrw).toLocaleString()}원
               </span>
             </div>
 
             <div className="flex justify-between items-center text-blue-400">
               <span>(-) 지자체 지방비 보조금</span>
               <span className="font-semibold">
-                -{(Number.isFinite(calculationResult.localSubsidyKrw) ? calculationResult.localSubsidyKrw : 0).toLocaleString()}원
+                -{toSafeNonNeg(calculationResult.localSubsidyKrw).toLocaleString()}원
               </span>
             </div>
 
@@ -1939,7 +1960,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               <div className="flex justify-between items-center text-emerald-400">
                 <span>(-) 추가 지원 &amp; 특별 가산금</span>
                 <span className="font-semibold">
-                  -{(Number.isFinite(calculationResult.additionalGrantsKrw) ? calculationResult.additionalGrantsKrw : 0).toLocaleString()}원
+                  -{toSafeNonNeg(calculationResult.additionalGrantsKrw).toLocaleString()}원
                 </span>
               </div>
             )}
@@ -1950,7 +1971,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             <div className="flex justify-between items-center text-xs text-slate-300">
               <span>총 지원 혜택 금액</span>
               <span className="font-bold text-slate-200">
-                {(Number.isFinite(calculationResult.totalSubsidyKrw) ? calculationResult.totalSubsidyKrw : 0).toLocaleString()}원
+                {toSafeNonNeg(calculationResult.totalSubsidyKrw).toLocaleString()}원
               </span>
             </div>
           </div>
@@ -1988,7 +2009,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
             </div>
             <p>{calculationResult.warningNotice}</p>
             <div className="text-[11px] text-slate-300 pt-1 border-t border-slate-800 flex flex-wrap justify-between gap-1">
-              <span>거주 요건: 최소 {Number.isFinite(calculationResult.residencyRequirementDays) ? calculationResult.residencyRequirementDays : 30}일 이상</span>
+              <span>거주 요건: 최소 {Number.isFinite(calculationResult.residencyRequirementDays) ? Math.max(0, calculationResult.residencyRequirementDays) : 30}일 이상</span>
               <span>2년 의무 운행 기간 (관외 이전 시 환수)</span>
             </div>
           </div>

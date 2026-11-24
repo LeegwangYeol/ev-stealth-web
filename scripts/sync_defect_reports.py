@@ -132,9 +132,21 @@ def _safe_finite_float(val: Any, default: Optional[float] = None) -> Optional[fl
         return default
     try:
         num = float(val)
-        return num if math.isfinite(num) else default
+        if not math.isfinite(num):
+            return default
+        return 0.0 if num == 0.0 else num
     except (ValueError, TypeError):
         return default
+
+
+def _first_non_empty_str(*values: Any, default: str = "") -> str:
+    """Return the first stripped non-empty string representation, or default."""
+    for val in values:
+        if val is not None:
+            s = str(val).strip()
+            if s:
+                return s
+    return default
 
 
 def normalize_text_for_key(text: Optional[str]) -> str:
@@ -230,14 +242,15 @@ def merge_report_records(existing: Dict[str, Any], incoming: Dict[str, Any]) -> 
             merged[text_key] = inc_val
 
     # 2. Date / Created_at: take the most detailed timestamp
-    ex_created = str(merged.get("created_at") or "")
-    inc_created = str(incoming.get("created_at") or "")
+    ex_created = str(merged.get("created_at") or "").strip()
+    inc_created = str(incoming.get("created_at") or "").strip()
+    inc_date = str(incoming.get("date") or "").strip()[:10]
     if inc_created and (not ex_created or inc_created > ex_created):
         merged["created_at"] = inc_created
-        if incoming.get("date"):
-            merged["date"] = str(incoming["date"])[:10]
-    elif not str(merged.get("date") or "").strip() and incoming.get("date"):
-        merged["date"] = str(incoming["date"])[:10]
+        if inc_date:
+            merged["date"] = inc_date
+    elif not str(merged.get("date") or "").strip() and inc_date:
+        merged["date"] = inc_date
 
     # 3. Slang tags: set union preserving deterministic order
     ex_tags = _coerce_str_list(merged.get("slang_tags"))
@@ -268,13 +281,14 @@ def merge_report_records(existing: Dict[str, Any], incoming: Dict[str, Any]) -> 
     if inc_neg is None:
         inc_neg = _safe_finite_float(incoming.get("sentiment_score"), None)
     if inc_neg is not None and (ex_neg_opt is None or inc_neg > ex_neg_opt):
-        merged["negativity_score"] = round(inc_neg, 4)
-        merged["sentiment_score"] = round(inc_neg, 4)
+        score_val = round(inc_neg, 4) + 0.0
+        merged["negativity_score"] = score_val
+        merged["sentiment_score"] = score_val
     elif ex_neg_opt is not None:
-        if _safe_finite_float(merged.get("negativity_score"), None) is None:
-            merged["negativity_score"] = round(ex_neg_opt, 4)
-        if _safe_finite_float(merged.get("sentiment_score"), None) is None:
-            merged["sentiment_score"] = round(ex_neg_opt, 4)
+        cur_neg = _safe_finite_float(merged.get("negativity_score"), None)
+        cur_sent = _safe_finite_float(merged.get("sentiment_score"), None)
+        merged["negativity_score"] = round(ex_neg_opt if cur_neg is None else cur_neg, 4) + 0.0
+        merged["sentiment_score"] = round(ex_neg_opt if cur_sent is None else cur_sent, 4) + 0.0
     else:
         for score_key in ("negativity_score", "sentiment_score"):
             if score_key in merged and _safe_finite_float(merged.get(score_key), None) is None:
@@ -405,55 +419,52 @@ def normalize_report_item(item: Dict[str, Any], default_idx: int = 1) -> Dict[st
         normalized["id"] = f"defect_{short_hash}"
 
     # Required: source (string)
-    normalized["source"] = str(item.get("source") or item.get("platform") or "community").strip()
+    normalized["source"] = _first_non_empty_str(item.get("source"), item.get("platform"), default="community")
 
     # Optional: platform
-    if item.get("platform"):
-        normalized["platform"] = str(item["platform"]).strip()
-    else:
-        normalized["platform"] = normalized["source"]
+    normalized["platform"] = _first_non_empty_str(item.get("platform"), default=normalized["source"])
 
     # Optional: url & post_url
-    url_val = item.get("url") or item.get("post_url")
+    url_val = _first_non_empty_str(item.get("url"), item.get("post_url"))
     if url_val:
-        normalized["url"] = str(url_val).strip()
-        normalized["post_url"] = str(url_val).strip()
+        normalized["url"] = url_val
+        normalized["post_url"] = url_val
 
     # Required: title (string)
-    title = str(item.get("title") or item.get("post_title") or "Untitled Defect Report").strip()
+    title = _first_non_empty_str(item.get("title"), item.get("post_title"), default="Untitled Defect Report")
     normalized["title"] = title
-    normalized["post_title"] = str(item.get("post_title") or title).strip()
+    normalized["post_title"] = _first_non_empty_str(item.get("post_title"), default=title)
 
     # Optional: author
     if "author" in item and item["author"] is not None:
         normalized["author"] = str(item["author"]).strip()
 
     # Required: date (string, YYYY-MM-DD)
-    date_val = str(item.get("date") or item.get("created_at") or "")[:10]
+    date_val = _first_non_empty_str(item.get("date"), item.get("created_at"))[:10]
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_val):
         date_val = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     normalized["date"] = date_val
 
     # Optional: created_at (string, ISO-8601)
-    if item.get("created_at"):
-        normalized["created_at"] = str(item["created_at"]).strip()
-    else:
-        normalized["created_at"] = f"{date_val}T00:00:00+00:00"
+    created_at_val = _first_non_empty_str(item.get("created_at"))
+    normalized["created_at"] = created_at_val or f"{date_val}T00:00:00+00:00"
 
     # Optional: vehicle_brand
-    if item.get("vehicle_brand"):
-        normalized["vehicle_brand"] = str(item["vehicle_brand"]).strip()
+    brand_val = _first_non_empty_str(item.get("vehicle_brand"))
+    if brand_val:
+        normalized["vehicle_brand"] = brand_val
 
     # Required: vehicle_model (string)
-    model = str(item.get("vehicle_model") or item.get("target_vehicle") or "전기차").strip()
+    model = _first_non_empty_str(item.get("vehicle_model"), item.get("target_vehicle"), default="전기차")
     normalized["vehicle_model"] = model
-    if item.get("target_vehicle"):
-        normalized["target_vehicle"] = str(item["target_vehicle"]).strip()
+    target_veh_val = _first_non_empty_str(item.get("target_vehicle"))
+    if target_veh_val:
+        normalized["target_vehicle"] = target_veh_val
     elif normalized.get("vehicle_brand"):
         normalized["target_vehicle"] = f"{normalized['vehicle_brand']} {model}".strip()
 
     # Required: defect_category (DefectCategoryCode)
-    cat = str(item.get("defect_category") or item.get("category") or "BUILD_QUALITY").strip().upper()
+    cat = _first_non_empty_str(item.get("defect_category"), item.get("category"), default="BUILD_QUALITY").upper()
     if cat not in VALID_DEFECT_CATEGORIES:
         cat = "BUILD_QUALITY"
     normalized["defect_category"] = cat
@@ -468,18 +479,17 @@ def normalize_report_item(item: Dict[str, Any], default_idx: int = 1) -> Dict[st
         "SERVICE_REPAIR_COST": "AS/수리비",
         "COLD_WEATHER": "저온/동절기",
     }
-    raw_ko = item.get("defect_category_ko")
-    ko_str = str(raw_ko).strip() if raw_ko is not None else ""
+    ko_str = _first_non_empty_str(item.get("defect_category_ko"))
     normalized["defect_category_ko"] = ko_str or category_ko_map.get(cat, "기타 결함")
 
     # Required: summary (string)
-    summary = str(item.get("summary") or "").strip()
+    summary = _first_non_empty_str(item.get("summary"))
     if not summary:
         summary = f"[{model}] {normalized['defect_category_ko']}: {title}"
     normalized["summary"] = summary
 
     # Optional: verbatim_quote & raw_quote
-    quote = str(item.get("verbatim_quote") or item.get("raw_quote") or "").strip()
+    quote = _first_non_empty_str(item.get("verbatim_quote"), item.get("raw_quote"))
     if quote:
         normalized["verbatim_quote"] = quote
         normalized["raw_quote"] = quote
@@ -499,21 +509,22 @@ def normalize_report_item(item: Dict[str, Any], default_idx: int = 1) -> Dict[st
         raw_score = item.get("negativity_score")
     score = _safe_finite_float(raw_score, 0.5)
     assert score is not None
-    normalized["sentiment_score"] = round(max(0.0, min(1.0, score)), 4)
+    normalized["sentiment_score"] = round(max(0.0, min(1.0, score)), 4) + 0.0
 
     # Optional: sentiment_polarity (number)
     pol = _safe_finite_float(item.get("sentiment_polarity"))
     if pol is not None:
-        normalized["sentiment_polarity"] = round(pol, 4)
+        normalized["sentiment_polarity"] = round(pol, 4) + 0.0
 
     # Optional: negativity_score (number)
     neg = _safe_finite_float(item.get("negativity_score"), normalized["sentiment_score"])
     assert neg is not None
-    normalized["negativity_score"] = round(max(0.0, min(1.0, neg)), 4)
+    normalized["negativity_score"] = round(max(0.0, min(1.0, neg)), 4) + 0.0
 
     # Optional: sentiment_tier (string)
-    if item.get("sentiment_tier"):
-        normalized["sentiment_tier"] = str(item["sentiment_tier"]).strip()
+    tier_val = _first_non_empty_str(item.get("sentiment_tier"))
+    if tier_val:
+        normalized["sentiment_tier"] = tier_val
     else:
         ns = normalized["negativity_score"]
         if ns >= 0.85:
@@ -526,7 +537,7 @@ def normalize_report_item(item: Dict[str, Any], default_idx: int = 1) -> Dict[st
             normalized["sentiment_tier"] = "POSITIVE"
 
     # Required: severity (SeverityLevel)
-    sev = str(item.get("severity") or "MEDIUM").strip().upper()
+    sev = _first_non_empty_str(item.get("severity"), default="MEDIUM").upper()
     if sev not in VALID_SEVERITIES:
         sev = "MEDIUM"
     normalized["severity"] = sev
@@ -534,7 +545,7 @@ def normalize_report_item(item: Dict[str, Any], default_idx: int = 1) -> Dict[st
     # Optional: severity_index (number)
     sev_idx = _safe_finite_float(item.get("severity_index"))
     if sev_idx is not None:
-        normalized["severity_index"] = round(sev_idx, 2)
+        normalized["severity_index"] = round(sev_idx, 2) + 0.0
 
     # Optional: is_authentic_defect (boolean)
     if "is_authentic_defect" in item and item["is_authentic_defect"] is not None:
@@ -592,9 +603,15 @@ def compute_report_statistics(
         if isinstance(r.get("vehicle_model"), str) and r.get("vehicle_model").strip()
     )
     platform_counter = Counter(
-        str(r.get("platform") or r.get("source")).strip()
+        plat
         for r in clean_reports
-        if isinstance(r.get("platform") or r.get("source"), str) and str(r.get("platform") or r.get("source")).strip()
+        for plat in (
+            _first_non_empty_str(
+                r.get("platform") if isinstance(r.get("platform"), str) else None,
+                r.get("source") if isinstance(r.get("source"), str) else None,
+            ),
+        )
+        if plat
     )
 
     stats: Dict[str, Any] = {
@@ -679,27 +696,35 @@ def _reject_json_constant(constant: str) -> Any:
     raise ValueError(f"Non-standard JSON constant: {constant}")
 
 
-def validate_reports_file(path: Union[str, Path]) -> bool:
-    """Validate that path exists and parses to valid JSON with a 'reports' key or list."""
+def _validate_and_load_reports_file(path: Union[str, Path]) -> Optional[Tuple[List[Dict[str, Any]], Dict[str, Any]]]:
+    """Validate and parse defect report JSON file in a single pass, returning (reports, metadata) or None."""
     if not path or not isinstance(path, (str, os.PathLike)):
-        return False
+        return None
     p = Path(path)
     if is_corrupted_or_quarantined_filename(p):
-        return False
-    if not p.is_file() or p.stat().st_size == 0:
-        return False
+        return None
     try:
+        if not p.is_file() or p.stat().st_size == 0:
+            return None
         with open(p, "r", encoding="utf-8-sig") as f:
             data = json.load(f, parse_constant=_reject_json_constant)
         if isinstance(data, dict):
-            if "reports" in data and isinstance(data["reports"], list):
-                return all(isinstance(item, dict) for item in data["reports"])
+            reports = data.get("reports")
+            if isinstance(reports, list) and all(isinstance(item, dict) for item in reports):
+                meta = {k: v for k, v in data.items() if k != "reports"}
+                return reports, meta
         elif isinstance(data, list):
-            return all(isinstance(item, dict) for item in data)
-        return False
+            if all(isinstance(item, dict) for item in data):
+                return data, {}
+        return None
     except Exception as exc:
         logger.debug("Validation failed for %s: %s", p, exc)
-        return False
+        return None
+
+
+def validate_reports_file(path: Union[str, Path]) -> bool:
+    """Validate that path exists and parses to valid JSON with a 'reports' key or list."""
+    return _validate_and_load_reports_file(path) is not None
 
 
 def load_reports_from_file(path: Path) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
@@ -910,11 +935,18 @@ def sync_defect_reports(
         existing_candidates = [p for p in all_target_paths if p.is_file()]
 
         valid_sources: List[Path] = []
+        cached_sources: Dict[Path, Tuple[List[Dict[str, Any]], Dict[str, Any], float]] = {}
         for cand in existing_candidates:
             if is_corrupted_or_quarantined_filename(cand):
                 continue
-            if validate_reports_file(cand):
+            loaded = _validate_and_load_reports_file(cand)
+            if loaded is not None:
+                reps, meta = loaded
                 valid_sources.append(cand)
+                try:
+                    cached_sources[cand] = (reps, meta, cand.stat().st_mtime)
+                except OSError:
+                    cached_sources[cand] = (reps, meta, 0.0)
             elif quarantine_corrupted:
                 logger.warning("Quarantining invalid/corrupted defect report file: %s", cand)
                 quarantine_corrupted_file(cand)
@@ -922,15 +954,6 @@ def sync_defect_reports(
         if not valid_sources:
             logger.error("No valid candidate defect report files found among %s. Aborting sync.", existing_candidates)
             return []
-
-        # Parse each valid source once and cache reports + metadata to avoid redundant disk reads
-        cached_sources: Dict[Path, Tuple[List[Dict[str, Any]], Dict[str, Any], float]] = {}
-        for cand in valid_sources:
-            try:
-                reps, meta = load_reports_from_file(cand)
-                cached_sources[cand] = (reps, meta, cand.stat().st_mtime)
-            except Exception as e:
-                logger.warning("Could not read valid candidate %s: %s", cand, e)
 
         # Sort candidate sources by report count (descending) and mtime (descending)
         def _source_weight(path: Path) -> Tuple[int, float]:

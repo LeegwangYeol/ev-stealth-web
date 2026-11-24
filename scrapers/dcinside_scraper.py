@@ -34,11 +34,13 @@ from scrapers.common_utils import (
     extract_defect_topic,
     extract_meta_content,
     extract_slang_terms,
+    is_allowed_domain_url,
     load_platform_seed_records,
     normalize_scraper_url,
     polite_delay,
     resolve_timeout_pair,
     robust_decode,
+    safe_non_negative_int,
     save_complaints_json,
     strip_non_body_html,
 )
@@ -128,7 +130,7 @@ class DCInsideScraper:
 
     def sleep_polite(self):
         """Randomized sleep with jitter between requests."""
-        time.sleep(random.uniform(self.min_delay, self.max_delay))
+        polite_delay(self.min_delay, self.max_delay)
 
     def _load_slang_dict(self) -> Dict[str, Any]:
         if os.path.exists(self.slang_path):
@@ -227,8 +229,11 @@ class DCInsideScraper:
         tit_pattern = r'<td[^>]*class=["\'][^"\']*\bgall_tit\b[^"\']*["\'][^>]*>(?:(?!</td>).)*?<a\b[^>]*\bhref=["\']([^"\']+)["\'][^>]*>(.*?)</a>'
         rows = re.findall(tr_pattern, html_content, re.IGNORECASE | re.DOTALL)
 
+        seen_nos = set()
         for tr_pre, post_no, tr_post, row_body in rows:
             if "ub-notice" in (tr_pre + tr_post).lower():
+                continue
+            if post_no in seen_nos:
                 continue
             tit_match = re.search(tit_pattern, row_body, re.IGNORECASE | re.DOTALL)
             if not tit_match:
@@ -242,8 +247,9 @@ class DCInsideScraper:
                 continue
 
             full_url = normalize_scraper_url(href, DC_BASE_URL)
-            if not full_url:
+            if not full_url or not is_allowed_domain_url(full_url, ("dcinside.com",)):
                 continue
+            seen_nos.add(post_no)
             safe_gid = urllib.parse.quote(str(gallery_id or "").strip(), safe="")
             mobile_url = f"{DC_MOBILE_BASE_URL}/board/{safe_gid}/{post_no}"
 
@@ -547,13 +553,14 @@ class DCInsideScraper:
                 e_s_n_o = html.unescape(val_match.group(1))
 
         # Body extraction
+        body_html_region = strip_non_body_html(html_content)
         body_text = ""
         for open_pat in (
             r'<div\b[^>]*\bclass=["\'][^"\']*\bwriting_view_box\b[^"\']*["\'][^>]*>',
             r'<div\b[^>]*\bclass=["\'][^"\']*\bwrite_div\b[^"\']*["\'][^>]*>',
             r'<div\b[^>]*\bclass=["\'][^"\']*\bthum-txt[^"\']*["\'][^>]*>',
         ):
-            inner_html = extract_balanced_tag_content(html_content, open_pat, tag_name="div")
+            inner_html = extract_balanced_tag_content(body_html_region, open_pat, tag_name="div")
             if inner_html:
                 body_text = clean_html_text(inner_html)
                 if body_text:
@@ -636,7 +643,7 @@ class DCInsideScraper:
         veh, cat = self.classify_text(combined_post)
         if cat and len(body) >= 20:
             slang = extract_slang_terms(combined_post, self.slang_dict)
-            rec_id = f"DC_{cat.upper()[:4]}_{int(hashlib.sha256(url.encode('utf-8')).hexdigest(), 16) % 100000:05d}"
+            rec_id = f"DC_{cat.upper()[:4]}_{int(hashlib.sha256(url.encode('utf-8', errors='replace')).hexdigest(), 16) % 100000:05d}"
             severity = self._determine_severity(cat, combined_post)
             topic = self._extract_defect_topic(cat, combined_post)
             records.append(ComplaintRecord(
@@ -654,8 +661,8 @@ class DCInsideScraper:
                 platform_metadata={
                     "author_type": author_type,
                     "author_badge": author_badge,
-                    "view_count": post_data.get("view_count", 0),
-                    "upvote_count": post_data.get("upvote_count", 0),
+                    "view_count": safe_non_negative_int(post_data.get("view_count"), 0),
+                    "upvote_count": safe_non_negative_int(post_data.get("upvote_count"), 0),
                     "comment_count": len(comments),
                     "published_at": published_at,
                 }
@@ -668,7 +675,7 @@ class DCInsideScraper:
             c_veh, c_cat = self.classify_text(comment)
             if c_cat and len(comment) >= 15:
                 c_slang = extract_slang_terms(comment, self.slang_dict)
-                rec_id = f"DC_{c_cat.upper()[:4]}_{int(hashlib.sha256((url + str(idx)).encode('utf-8')).hexdigest(), 16) % 100000:05d}"
+                rec_id = f"DC_{c_cat.upper()[:4]}_{int(hashlib.sha256((url + str(idx)).encode('utf-8', errors='replace')).hexdigest(), 16) % 100000:05d}"
                 severity = self._determine_severity(c_cat, comment)
                 topic = self._extract_defect_topic(c_cat, comment)
                 records.append(ComplaintRecord(
@@ -728,6 +735,7 @@ def main():
     parser.add_argument("--output", type=str, default=default_output, help="Output JSON path")
     args = parser.parse_args()
 
+    eff_limit = max(0, int(args.limit))
     with DCInsideScraper() as scraper:
         all_records = []
         consecutive_failures = 0
@@ -747,7 +755,7 @@ def main():
                     consecutive_failures += 1
                 else:
                     consecutive_failures = 0
-                for item in items[:args.limit]:
+                for item in items[:eff_limit]:
                     post_data = scraper.fetch_post_detail(gall, item["post_id"])
                     if post_data:
                         records = scraper.extract_complaint_records(post_data)
@@ -755,7 +763,7 @@ def main():
 
         if not all_records and scraper.cache_fallback:
             logger.warning("No records harvested from live DCInside site. Falling back to seed datasets.")
-            all_records = scraper.load_seed_records(limit=args.limit * len(args.galleries))
+            all_records = scraper.load_seed_records(limit=eff_limit * len(args.galleries))
 
         save_complaints_json(all_records, args.output)
         print(f"Collected {len(all_records)} records from DC Inside.")

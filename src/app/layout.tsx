@@ -261,7 +261,6 @@ export default function RootLayout({
               <summary
                 aria-label="모바일 내비게이션 메뉴 토글"
                 role="button"
-                aria-haspopup="dialog"
                 aria-expanded="false"
                 aria-controls="mobile-nav-panel"
                 className="list-none [&::-webkit-details-marker]:hidden shrink-0 whitespace-nowrap flex items-center gap-1.5 px-2.5 xs:px-3 py-2 min-h-[44px] min-w-[44px] rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-sm font-medium cursor-pointer border border-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 select-none"

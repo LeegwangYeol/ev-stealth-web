@@ -70,8 +70,6 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
         if math.isnan(val) or math.isinf(val):
             return safe_default
         return 0.0 if val == 0.0 else val
-    if type(val) is int:
-        return float(val)
     if isinstance(val, str):
         val = val.strip().replace(",", "")
         if not val:
@@ -946,7 +944,7 @@ class PopularModelEntry:
                             break
         if entry is None:
             return 0
-        if isinstance(entry, (int, float, str)) and not isinstance(entry, bool):
+        if isinstance(entry, (int, float, str, Decimal)) and not isinstance(entry, bool):
             return max(0, _safe_int(entry, 0))
         if isinstance(entry, dict):
             if entry.get(subsidy_type) is not None:

@@ -156,18 +156,25 @@ def _format_scaled_unit(scaled_val: Union[float, Decimal], unit_suffix: str) -> 
         try:
             needed_prec = max(28, abs(scaled_val.adjusted()) + 10)
             if needed_prec > 10000:
-                return f"{float(scaled_val):,.1f}{unit_suffix}"
+                return f"0{unit_suffix}"
             with localcontext() as ctx:
                 ctx.prec = needed_prec
                 rounded = scaled_val.quantize(_DEC_QUANT_1, rounding=ROUND_HALF_EVEN)
+                if rounded == 0:
+                    rounded = Decimal("0")
+                if rounded % 1 != 0:
+                    return f"{rounded:,.1f}{unit_suffix}"
+                return f"{rounded:,.0f}{unit_suffix}"
         except (InvalidOperation, ValueError, OverflowError):
-            rounded = Decimal("0")
-        if rounded == 0:
-            rounded = Decimal("0")
-        if rounded % 1 != 0:
-            return f"{rounded:,.1f}{unit_suffix}"
-        return f"{int(rounded):,}{unit_suffix}"
-    rounded = round(scaled_val, 1)
+            return f"0{unit_suffix}"
+    if math.isnan(scaled_val) or math.isinf(scaled_val):
+        return f"0{unit_suffix}"
+    try:
+        rounded = round(scaled_val, 1)
+    except (ValueError, TypeError, OverflowError):
+        return f"0{unit_suffix}"
+    if math.isnan(rounded) or math.isinf(rounded):
+        return f"0{unit_suffix}"
     if rounded == 0.0:
         rounded = 0.0
     if rounded % 1 != 0:
@@ -233,7 +240,7 @@ def format_currency_krw(amount: Any, unit: str = "auto") -> str:
 def format_percentage(val: Any, decimals: int = 1) -> str:
     """Safely format percentage value with specified decimal precision."""
     f = _safe_float_val(val, 0.0)
-    dec = max(0, _safe_int_val(decimals, 1))
+    dec = min(15, max(0, _safe_int_val(decimals, 1)))
     rounded = round(f, dec)
     if rounded == 0.0:
         rounded = 0.0

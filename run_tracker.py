@@ -204,7 +204,12 @@ def validate_defect_reports_file(file_path: Union[str, Path]) -> bool:
     """Validate that target file contains valid JSON syntax and expected schema ('reports' list key)."""
     from tracker.atomic_writer import is_corrupted_or_quarantined_filename
 
-    p = Path(file_path)
+    if not file_path:
+        return False
+    try:
+        p = Path(file_path)
+    except (TypeError, ValueError):
+        return False
     if is_corrupted_or_quarantined_filename(p):
         return False
     try:
@@ -250,10 +255,12 @@ def sync_defect_reports(
         quarantine_corrupted_file,
     )
 
-    if web_dir is not None and str(web_dir).strip() in ("", "."):
-        web_dir = None
-    if root_dir is not None and str(root_dir).strip() in ("", "."):
-        root_dir = None
+    if web_dir is not None:
+        stripped_web = str(web_dir).strip()
+        web_dir = None if stripped_web in ("", ".") else Path(stripped_web)
+    if root_dir is not None:
+        stripped_root = str(root_dir).strip()
+        root_dir = None if stripped_root in ("", ".") else Path(stripped_root)
 
     logger.info("Synchronizing defect reports (daily_reports.json)...")
     if dry_run:

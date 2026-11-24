@@ -454,17 +454,25 @@ class SpamFilter:
         self.political_terms = list(political_terms if political_terms is not None else POLITICAL_TERMS)
         self.ownership_anchors = list(ownership_anchors if ownership_anchors is not None else OWNERSHIP_ANCHORS)
 
-    def evaluate_stage1_noise(self, text: Any, url: Any = "") -> Tuple[bool, str]:
+    def evaluate_stage1_noise(
+        self,
+        text: Any,
+        url: Any = "",
+        slang_matches: Optional[List[Any]] = None,
+        _pre_sanitized: bool = False,
+    ) -> Tuple[bool, str]:
         """Check if post is journalistic news, stock trading, commercial spam, politics, or baseless flaming.
 
         Args:
             text: Text content of the post (title + body + comments). Safely coerced and sanitized.
             url: Post URL or shared link. Safely coerced and sanitized.
+            slang_matches: Optional pre-computed slang matches for text to avoid rescanning the lexicon.
+            _pre_sanitized: Internal flag when text was already sanitized via sanitize_text/sanitize_input.
 
         Returns:
             (is_discarded, reason): True if discarded, with descriptive reason string.
         """
-        text_str = sanitize_input(text, MAX_TEXT_LENGTH)
+        text_str = text if (_pre_sanitized and isinstance(text, str)) else sanitize_input(text, MAX_TEXT_LENGTH)
         url_str = sanitize_input(url, MAX_URL_LENGTH)
 
         # 0. Basic Noise, Length, and Emoji/Symbol Checks
@@ -507,10 +515,10 @@ class SpamFilter:
         )
 
         try:
-            slang_matches = find_matching_slang(text_str)
+            resolved_slang = slang_matches if slang_matches is not None else find_matching_slang(text_str)
             has_malfunction_cue: Optional[bool] = None
             has_defect_slang = False
-            for e in slang_matches:
+            for e in resolved_slang:
                 if e.defect_category is None:
                     continue
                 if e.term.lower() in _NEUTRAL_FEATURE_SLANG_TERMS:

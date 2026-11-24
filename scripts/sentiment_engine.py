@@ -329,6 +329,8 @@ class SentimentEngine:
             final_polarity = -0.55 if has_severe else -0.15
 
         final_polarity = max(-1.0, min(1.0, round(final_polarity, 3)))
+        if final_polarity == 0.0:
+            final_polarity = 0.0
 
         # Assign 4-Tier Label
         if final_polarity >= 0.30:
@@ -348,14 +350,14 @@ class SentimentEngine:
             0.15 * s_social +
             0.10 * s_convenience
         )
-        dsi_score = round(max(0.0, min(10.0, dsi_score)), 2)
+        dsi_score = round(max(0.0, min(10.0, dsi_score)), 2) + 0.0
 
         breakdown = {
-            "safety": round(s_safety, 2),
-            "functional": round(s_functional, 2),
-            "economic": round(s_economic, 2),
-            "social": round(s_social, 2),
-            "convenience": round(s_convenience, 2)
+            "safety": round(s_safety, 2) + 0.0,
+            "functional": round(s_functional, 2) + 0.0,
+            "economic": round(s_economic, 2) + 0.0,
+            "social": round(s_social, 2) + 0.0,
+            "convenience": round(s_convenience, 2) + 0.0,
         }
 
         # Deduplicate detected complaints

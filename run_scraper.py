@@ -832,7 +832,8 @@ class ScraperPipeline:
 
         # 3. Determine output file targets
         target_paths: List[str] = []
-        custom_out = output_path.strip() if output_path and str(output_path).strip() and str(output_path).strip() != "." else None
+        raw_out_str = str(output_path).strip() if output_path is not None else ""
+        custom_out = raw_out_str if raw_out_str and raw_out_str != "." else None
 
         if custom_out:
             custom_p = Path(custom_out)

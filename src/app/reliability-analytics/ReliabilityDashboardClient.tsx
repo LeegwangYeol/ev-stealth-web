@@ -140,6 +140,7 @@ function resolveCategoryKey(input: string, categories: DefectCategoryMetadata[] 
 
 interface IndexedModelItem extends EnrichedModelItem {
   _searchIndex: string;
+  _spacelessIndex: string;
   _categoryMatch: Set<string>;
   _verdicts: Set<ModelYearVerdict>;
   _hasEarlyYear: boolean;
@@ -214,7 +215,9 @@ const HeatmapRow = React.memo(function HeatmapRow({
           );
         }
 
-        const safeDsi = Number.isFinite(evalData.dsi_score) ? evalData.dsi_score : 0;
+        const safeDsi = Number.isFinite(evalData.dsi_score)
+          ? Math.min(100, Math.max(0, evalData.dsi_score)) + 0
+          : 0;
         const primaryDefect = evalData.primary_defect || '특이 결함 없음';
         const rawQuote = evalData.raw_quote || '';
 
@@ -306,7 +309,9 @@ const BrandRankingItem = React.memo(function BrandRankingItem({
   isSelected,
   onToggle,
 }: BrandRankingItemProps) {
-  const safeDsi = Number.isFinite(brand?.overall_dsi) ? brand.overall_dsi : 0;
+  const safeDsi = Number.isFinite(brand?.overall_dsi)
+    ? Math.min(100, Math.max(0, brand.overall_dsi)) + 0
+    : 0;
   const dsiWidth = `${Math.min(100, Math.max(15, safeDsi))}%`;
   const dsiInfo = getDsiSeverityLevel(safeDsi);
   const barColor =
@@ -318,7 +323,9 @@ const BrandRankingItem = React.memo(function BrandRankingItem({
       ? 'bg-orange-700'
       : 'bg-rose-600';
   const modelCount = Array.isArray(brand?.models) ? brand.models.length : 0;
-  const criticalRate = Number.isFinite(brand?.critical_issue_rate) ? brand.critical_issue_rate : 0;
+  const criticalRate = Number.isFinite(brand?.critical_issue_rate)
+    ? Math.min(100, Math.max(0, brand.critical_issue_rate)) + 0
+    : 0;
 
   return (
     <button
@@ -386,7 +393,9 @@ const CategoryShareCard = React.memo(function CategoryShareCard({
     border: 'border-slate-200',
   };
   const dotColor = (cat?.code && CATEGORY_BG_COLORS[cat.code]) || 'bg-slate-500';
-  const sharePct = Number.isFinite(cat?.industry_share_pct) ? cat.industry_share_pct : 0;
+  const sharePct = Number.isFinite(cat?.industry_share_pct)
+    ? Math.min(100, Math.max(0, cat.industry_share_pct)) + 0
+    : 0;
 
   return (
     <button
@@ -610,11 +619,13 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
         ...evalTexts,
       ]
         .join(' ')
+        .normalize('NFC')
         .toLowerCase();
 
       return {
         ...m,
         _searchIndex: searchCorpus,
+        _spacelessIndex: searchCorpus.replace(/\s+/g, ''),
         _categoryMatch: categoryMatch,
         _verdicts: verdicts,
         _hasEarlyYear: hasEarlyYear,
@@ -654,7 +665,8 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
   // Filtered models using pre-computed indexes (zero allocations during filter loop)
   const filteredModels = useMemo(() => {
-    const q = deferredSearchQuery.trim().toLowerCase();
+    const q = deferredSearchQuery.trim().normalize('NFC').toLowerCase().slice(0, 200);
+    const qSpaceless = q.replace(/\s+/g, '');
 
     return allModels.filter((model) => {
       // Brand filter
@@ -677,8 +689,12 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       if (selectedYearRange === 'MID' && !model._hasMidYear) return false;
       if (selectedYearRange === 'LATE' && !model._hasLateYear) return false;
 
-      // Deferred Search query (single substring check)
-      if (q && !model._searchIndex.includes(q)) {
+      // Deferred Search query (single substring check with Korean spacing tolerance)
+      if (
+        q &&
+        !model._searchIndex.includes(q) &&
+        !(qSpaceless && model._spacelessIndex.includes(qSpaceless))
+      ) {
         return false;
       }
 
@@ -932,8 +948,12 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
   const radarSvgDesc = useMemo(() => {
     if (!brandAObj || !brandBObj) return '두 제조사의 6대 결함 부문 레이더 차트 비교입니다.';
-    const dsiA = Number.isFinite(brandAObj.overall_dsi) ? brandAObj.overall_dsi : 0;
-    const dsiB = Number.isFinite(brandBObj.overall_dsi) ? brandBObj.overall_dsi : 0;
+    const dsiA = Number.isFinite(brandAObj.overall_dsi)
+      ? Math.min(100, Math.max(0, brandAObj.overall_dsi)) + 0
+      : 0;
+    const dsiB = Number.isFinite(brandBObj.overall_dsi)
+      ? Math.min(100, Math.max(0, brandBObj.overall_dsi)) + 0
+      : 0;
     return `${brandAObj.name_ko}(DSI ${dsiA}점, 청색)와 ${brandBObj.name_ko}(DSI ${dsiB}점, 적색)의 6대 결함 부문(배터리, 구동계, 소프트웨어, 조립품질, 수리비, 혹한기) 점유율을 회색 산업 평균선과 대조한 방사형 레이더 차트입니다. 아래에 상세 비교 데이터 표가 제공됩니다.`;
   }, [brandAObj, brandBObj]);
 
@@ -1175,12 +1195,12 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             <tbody>
               <tr>
                 <th scope="row">분석 결함 제보</th>
-                <td>{(Number.isFinite(metadata?.total_records_analyzed) ? metadata.total_records_analyzed : 0).toLocaleString('ko-KR')}건</td>
+                <td>{(Number.isFinite(metadata?.total_records_analyzed) ? Math.max(0, Math.floor(metadata.total_records_analyzed)) + 0 : 0).toLocaleString('ko-KR')}건</td>
                 <td>{brands.length}개 브랜드 · {metadata.models_count || allModels.length}개 모델 조사</td>
               </tr>
               <tr>
                 <th scope="row">산업 평균 DSI 점수</th>
-                <td>{Number.isFinite(metadata?.avg_industry_dsi) ? metadata.avg_industry_dsi : 0} / 100점</td>
+                <td>{Number.isFinite(metadata?.avg_industry_dsi) ? Math.min(100, Math.max(0, metadata.avg_industry_dsi)) + 0 : 0} / 100점</td>
                 <td>결함 심각도 지수 (높을수록 위험)</td>
               </tr>
               <tr>
@@ -1190,7 +1210,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               </tr>
               <tr>
                 <th scope="row">최다 결함 발생 부문</th>
-                <td>{topCategory ? `${Number.isFinite(topCategory.industry_share_pct) ? topCategory.industry_share_pct : 0}%` : '0%'}</td>
+                <td>{topCategory ? `${Number.isFinite(topCategory.industry_share_pct) ? Math.min(100, Math.max(0, topCategory.industry_share_pct)) + 0 : 0}%` : '0%'}</td>
                 <td>{topCategory ? topCategory.label_ko : '데이터 없음'}</td>
               </tr>
             </tbody>
@@ -1206,7 +1226,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           >
             <h3 id="kpi-records-heading" className="text-xs sm:text-sm text-slate-300 font-medium">분석 결함 제보</h3>
             <div className="text-2xl sm:text-3xl font-black text-white mt-1">
-              {(Number.isFinite(metadata?.total_records_analyzed) ? metadata.total_records_analyzed : 0).toLocaleString('ko-KR')}건
+              {(Number.isFinite(metadata?.total_records_analyzed) ? Math.max(0, Math.floor(metadata.total_records_analyzed)) + 0 : 0).toLocaleString('ko-KR')}건
             </div>
             <div id="kpi-records-desc" className="text-xs text-blue-300 mt-1 font-medium">
               {brands.length}개 브랜드 · {metadata.models_count || allModels.length}개 모델 조사
@@ -1221,7 +1241,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           >
             <h3 id="kpi-dsi-heading" className="text-xs sm:text-sm text-slate-300 font-medium">산업 평균 DSI 점수</h3>
             <div className="text-2xl sm:text-3xl font-black text-amber-400 mt-1">
-              {Number.isFinite(metadata?.avg_industry_dsi) ? metadata.avg_industry_dsi : 0}
+              {Number.isFinite(metadata?.avg_industry_dsi) ? Math.min(100, Math.max(0, metadata.avg_industry_dsi)) + 0 : 0}
               <span className="text-sm font-normal text-slate-300 ml-1">/ 100</span>
             </div>
             <div id="kpi-dsi-desc" className="text-xs text-amber-300 mt-1 font-medium">
@@ -1252,7 +1272,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           >
             <h3 id="kpi-category-heading" className="text-xs sm:text-sm text-slate-300 font-medium">최다 결함 발생 부문</h3>
             <div className="text-2xl sm:text-3xl font-black text-emerald-400 mt-1">
-              {topCategory ? `${Number.isFinite(topCategory.industry_share_pct) ? topCategory.industry_share_pct : 0}%` : '0%'}
+              {topCategory ? `${Number.isFinite(topCategory.industry_share_pct) ? Math.min(100, Math.max(0, topCategory.industry_share_pct)) + 0 : 0}%` : '0%'}
             </div>
             <div id="kpi-category-desc" className="text-xs text-emerald-300 mt-1 font-medium">
               {topCategory ? topCategory.label_ko : '데이터 없음'}
@@ -1460,7 +1480,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Link
-                      href={`/recall-portal?model=${encodeURIComponent(hoveredCell.modelName)}`}
+                      href={`/recall-portal?model=${encodeURIComponent(hoveredCell.modelName || '')}`}
                       prefetch={false}
                       className="px-3 py-1.5 min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 inline-flex items-center gap-1"
                     >
@@ -2162,9 +2182,15 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Brand A Score Card */}
                 {brandAObj && (() => {
-                  const safeDsiA = Number.isFinite(brandAObj.overall_dsi) ? brandAObj.overall_dsi : 0;
-                  const safeCritA = Number.isFinite(brandAObj.critical_issue_rate) ? brandAObj.critical_issue_rate : 0;
-                  const safeReportsA = Number.isFinite(brandAObj.total_reports) ? brandAObj.total_reports : 0;
+                  const safeDsiA = Number.isFinite(brandAObj.overall_dsi)
+                    ? Math.min(100, Math.max(0, brandAObj.overall_dsi)) + 0
+                    : 0;
+                  const safeCritA = Number.isFinite(brandAObj.critical_issue_rate)
+                    ? Math.min(100, Math.max(0, brandAObj.critical_issue_rate)) + 0
+                    : 0;
+                  const safeReportsA = Number.isFinite(brandAObj.total_reports)
+                    ? Math.max(0, Math.floor(brandAObj.total_reports)) + 0
+                    : 0;
                   return (
                   <div className="bg-slate-50 rounded-2xl p-5 border border-blue-200 shadow-sm space-y-4">
                     <div className="flex items-center justify-between">
@@ -2245,9 +2271,15 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
                 {/* Brand B Score Card */}
                 {brandBObj && (() => {
-                  const safeDsiB = Number.isFinite(brandBObj.overall_dsi) ? brandBObj.overall_dsi : 0;
-                  const safeCritB = Number.isFinite(brandBObj.critical_issue_rate) ? brandBObj.critical_issue_rate : 0;
-                  const safeReportsB = Number.isFinite(brandBObj.total_reports) ? brandBObj.total_reports : 0;
+                  const safeDsiB = Number.isFinite(brandBObj.overall_dsi)
+                    ? Math.min(100, Math.max(0, brandBObj.overall_dsi)) + 0
+                    : 0;
+                  const safeCritB = Number.isFinite(brandBObj.critical_issue_rate)
+                    ? Math.min(100, Math.max(0, brandBObj.critical_issue_rate)) + 0
+                    : 0;
+                  const safeReportsB = Number.isFinite(brandBObj.total_reports)
+                    ? Math.max(0, Math.floor(brandBObj.total_reports)) + 0
+                    : 0;
                   return (
                   <div className="bg-slate-50 rounded-2xl p-5 border border-rose-200 shadow-sm space-y-4">
                     <div className="flex items-center justify-between">
@@ -2329,8 +2361,12 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
               {/* Head-to-Head Durability Summary */}
               {brandAObj && brandBObj && (() => {
-                const safeDsiA = Number.isFinite(brandAObj.overall_dsi) ? brandAObj.overall_dsi : 0;
-                const safeDsiB = Number.isFinite(brandBObj.overall_dsi) ? brandBObj.overall_dsi : 0;
+                const safeDsiA = Number.isFinite(brandAObj.overall_dsi)
+                  ? Math.min(100, Math.max(0, brandAObj.overall_dsi)) + 0
+                  : 0;
+                const safeDsiB = Number.isFinite(brandBObj.overall_dsi)
+                  ? Math.min(100, Math.max(0, brandBObj.overall_dsi)) + 0
+                  : 0;
                 const dsiDiff = Math.abs(safeDsiB - safeDsiA).toFixed(1);
 
                 return (
@@ -2863,7 +2899,9 @@ interface ModelCardItemProps {
 
 const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItemProps) {
   const gradeStyle = getGradeBadgeStyle(model.overall_grade);
-  const safeDsi = Number.isFinite(model?.avg_dsi) ? model.avg_dsi : 0;
+  const safeDsi = Number.isFinite(model?.avg_dsi)
+    ? Math.min(100, Math.max(0, model.avg_dsi)) + 0
+    : 0;
   const dsiInfo = getDsiSeverityLevel(safeDsi);
 
   return (
@@ -2944,7 +2982,9 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
               model.year_evaluations.map((yEval, idx) => {
                 if (!yEval || typeof yEval !== 'object') return null;
                 const vInfo = getVerdictBadgeInfo(yEval.verdict);
-                const safeRate = Number.isFinite(yEval.incident_rate) ? yEval.incident_rate : 0;
+                const safeRate = Number.isFinite(yEval.incident_rate)
+                  ? Math.min(100, Math.max(0, yEval.incident_rate)) + 0
+                  : 0;
 
                 return (
                   <li
@@ -3004,7 +3044,7 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
       {/* Card Action Link */}
       <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between">
         <Link
-          href={`/recall-portal?model=${encodeURIComponent(model.name)}`}
+          href={`/recall-portal?model=${encodeURIComponent(model.name || '')}`}
           prefetch={false}
           className="text-xs font-bold text-blue-800 hover:text-blue-950 min-h-[44px] flex items-center gap-1.5 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
         >

@@ -1066,11 +1066,17 @@ def build_initial_baseline(regions: Optional[List[Any]] = None) -> SubsidyPayloa
     try:
         total_budget_billion = round(total_budget_sum / 1_000_000_000, 1)
     except OverflowError:
-        total_budget_billion = float(total_budget_sum // 1_000_000_000)
+        try:
+            total_budget_billion = float(total_budget_sum // 1_000_000_000)
+        except OverflowError:
+            total_budget_billion = 0.0
     try:
         disbursed_budget_billion = max(0.0, round(disbursed_budget_sum / 1_000_000_000, 1))
     except OverflowError:
-        disbursed_budget_billion = max(0.0, float(disbursed_budget_sum // 1_000_000_000))
+        try:
+            disbursed_budget_billion = max(0.0, float(disbursed_budget_sum // 1_000_000_000))
+        except OverflowError:
+            disbursed_budget_billion = 0.0
 
     summary = NationwideSummary(
         total_announced_units=total_announced,

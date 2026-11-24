@@ -334,6 +334,7 @@ _RE_META_HTTP = re.compile(
     r'<meta[^>]+http-equiv=["\']?content-type["\']?[^>]+content=["\'][^"\']*charset=([\w\-]+)',
     flags=re.IGNORECASE,
 )
+_RE_HTTP_METHOD = re.compile(r"^[A-Z][A-Z0-9_-]*$")
 
 
 def clean_html_text(raw_html: Union[str, bytes, Any]) -> str:
@@ -352,14 +353,23 @@ def clean_html_text(raw_html: Union[str, bytes, Any]) -> str:
 
     # Remove null bytes and carriage controls
     cleaned = raw_html.replace("\x00", " ")
-    # Remove HTML comments
-    cleaned = _RE_HTML_COMMENT.sub(" ", cleaned)
+    # Remove HTML comments (bound scan to last '-->' to prevent O(N^2) ReDoS on unclosed '<!--')
+    last_comment_end = cleaned.rfind("-->")
+    if last_comment_end != -1:
+        end_idx = last_comment_end + 3
+        cleaned = _RE_HTML_COMMENT.sub(" ", cleaned[:end_idx]) + cleaned[end_idx:]
     # Remove script and style elements (handling unclosed tags gracefully)
     cleaned = _RE_HTML_SCRIPT_STYLE.sub(" ", cleaned)
-    # Replace block level tags with newlines
-    cleaned = _RE_HTML_BLOCK_TAGS.sub("\n", cleaned)
-    # Remove remaining HTML tags
-    cleaned = _RE_HTML_TAGS.sub(" ", cleaned)
+    # Replace block level tags with newlines (bound scan to last '>' to prevent O(N^2) backtracking)
+    last_gt = cleaned.rfind(">")
+    if last_gt != -1:
+        end_idx = last_gt + 1
+        cleaned = _RE_HTML_BLOCK_TAGS.sub("\n", cleaned[:end_idx]) + cleaned[end_idx:]
+    # Remove remaining HTML tags (bound scan to last '>' to prevent O(N^2) backtracking)
+    last_gt = cleaned.rfind(">")
+    if last_gt != -1:
+        end_idx = last_gt + 1
+        cleaned = _RE_HTML_TAGS.sub(" ", cleaned[:end_idx]) + cleaned[end_idx:]
     # Handle unclosed tag brackets at end of string
     cleaned = _RE_HTML_TRAILING.sub(" ", cleaned)
     # Decode HTML entities (&amp;, &lt;, etc.)
@@ -1156,10 +1166,11 @@ class SafeHttpClient:
         if not self.enable_cache or not url or not decoded_text:
             return
         key = self._cache_key(url)
+        raw_bytes_safe = bytes(raw_bytes) if raw_bytes is not None else b""
         entry = {
             "status": int(status_code),
             "text": str(decoded_text),
-            "raw": bytes(raw_bytes),
+            "raw": raw_bytes_safe,
             "time": time.time(),
             "url": str(url),
         }
@@ -1183,7 +1194,7 @@ class SafeHttpClient:
                     "url": str(url),
                     "status": int(status_code),
                     "text": str(decoded_text),
-                    "raw_hex": bytes(raw_bytes).hex(),
+                    "raw_hex": raw_bytes_safe.hex(),
                     "time": time.time(),
                 }
                 with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
@@ -1408,6 +1419,9 @@ class SafeHttpClient:
             return 0, "", b""
 
         method_upper = (method or "GET").strip().upper() or "GET"
+        if not _RE_HTTP_METHOD.match(method_upper):
+            logger.warning(f"Invalid HTTP method rejected: {method!r}")
+            return 0, "", b""
         is_cacheable_method = method_upper == "GET"
 
         # Host-level Circuit Breaker guard (atomic check + HALF_OPEN probe reservation)
@@ -1460,6 +1474,8 @@ class SafeHttpClient:
                     del req_headers[mk]
                 req_headers[clean_k] = _sanitize_header_value(v)
         if referer:
+            for mk in [ek for ek in req_headers if ek.lower() == "referer"]:
+                del req_headers[mk]
             req_headers["Referer"] = _sanitize_header_value(referer)
         if headers:
             for k, v in headers.items():
@@ -1848,6 +1864,11 @@ class SafeHttpClient:
         reset_val = None
         if hasattr(he.headers, "get"):
             reset_val = he.headers.get("X-RateLimit-Reset") or he.headers.get("x-ratelimit-reset")
+        if reset_val is None and hasattr(he.headers, "items"):
+            for k, v in he.headers.items():
+                if str(k).lower() == "x-ratelimit-reset":
+                    reset_val = v
+                    break
         if reset_val:
             try:
                 epoch = float(reset_val)
@@ -1867,11 +1888,17 @@ class SafeHttpClient:
         """
         max_backoff = getattr(self, "max_backoff", 30.0)
         factor = getattr(self, "backoff_factor", 1.5)
-        if retry_after is not None and retry_after >= 0:
-            if not self.enable_jitter:
-                return float(retry_after)
-            jitter = random.uniform(0.1, 0.5)
-            return min(max(max_backoff, 60.0), float(retry_after) + jitter)
+        if retry_after is not None and not isinstance(retry_after, bool):
+            try:
+                ra = float(retry_after)
+            except (ValueError, TypeError, OverflowError):
+                ra = -1.0
+            if math.isfinite(ra) and ra >= 0:
+                cap = max(max_backoff, 60.0)
+                if not self.enable_jitter:
+                    return min(cap, ra)
+                jitter = random.uniform(0.1, 0.5)
+                return min(cap, ra + jitter)
 
         exp_step = min(max(0, int(attempt)), 30)
         if not self.enable_jitter:

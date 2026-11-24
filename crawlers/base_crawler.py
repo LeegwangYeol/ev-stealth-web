@@ -202,7 +202,7 @@ class BaseCrawler(abc.ABC):
         """Normalize relative/entity-encoded URLs and reject malformed or unsafe authority syntax."""
         if not raw_url or not isinstance(raw_url, str) or not raw_url.strip():
             return None
-        eff_url = _unescape_url_entities(raw_url.strip())
+        eff_url = _unescape_url_entities(raw_url.strip()).strip()
         if not eff_url or any(ord(c) < 32 or ord(c) == 127 for c in eff_url):
             return None
         try:
@@ -415,7 +415,7 @@ class BaseCrawler(abc.ABC):
         seed_posts: List[Dict[str, Any]] = []
         target_platform = (platform_name or getattr(self, "platform", "") or "").lower().strip()
         seed_files: List[str] = []
-        if target_platform:
+        if target_platform and re.fullmatch(r"[a-z0-9_-]+", target_platform):
             seed_files.append(f"raw_{target_platform}_emerging.json")
             if target_platform == "bobaedream":
                 seed_files.append("raw_bobae_emerging.json")

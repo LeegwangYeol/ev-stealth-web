@@ -60,8 +60,11 @@ export const LEGACY_STORAGE_KEYS = ['ev_pdi_checklist_state', 'ev_pdi_checklist'
  * Guarantees prototype pollution safety, dirty array isolation, and fallback integrity.
  */
 function toSafeChecklistId(val: unknown): string | null {
-  if (typeof val === 'string' || typeof val === 'number') {
-    return String(val);
+  if (typeof val === 'string') {
+    return val;
+  }
+  if (typeof val === 'number' && Number.isFinite(val)) {
+    return val === 0 ? '0' : String(val);
   }
   return null;
 }
@@ -547,10 +550,10 @@ export default function PdiChecklistClient() {
   const checkedCount = useMemo(() => items.filter((i) => i.checked).length, [items]);
   const totalItems = items.length;
 
-  // Guard against division by zero and clamp strictly to [0, 100]
+  // Guard against division by zero / NaN and clamp strictly to [0, 100]
   const progress = useMemo(() => {
     const raw = items.length === 0 ? 0 : Math.round((checkedCount / items.length) * 100);
-    return Math.min(100, Math.max(0, raw));
+    return Math.min(100, Math.max(0, Number.isFinite(raw) ? (raw === 0 ? 0 : raw) : 0));
   }, [checkedCount, items.length]);
   const progressPercentage = progress;
 
@@ -741,7 +744,6 @@ export default function PdiChecklistClient() {
                 type="button"
                 role="tab"
                 aria-selected={isSelected}
-                aria-expanded={isSelected}
                 aria-controls="pdi-checklist-tabpanel"
                 tabIndex={isSelected ? 0 : -1}
                 onKeyDown={(e) => handleTabKeyDown(e, 0)}
@@ -768,7 +770,6 @@ export default function PdiChecklistClient() {
                 type="button"
                 role="tab"
                 aria-selected={isSelected}
-                aria-expanded={isSelected}
                 aria-controls="pdi-checklist-tabpanel"
                 tabIndex={isSelected ? 0 : -1}
                 onKeyDown={(e) => handleTabKeyDown(e, tabIndex)}

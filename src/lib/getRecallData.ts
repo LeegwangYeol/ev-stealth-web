@@ -536,27 +536,13 @@ export function normalizeManufacturer(brand?: string | null): string {
 
 let cachedRecallDatabase: RecallDatabase | null = null;
 
-function cloneRecallDatabase(db: RecallDatabase): RecallDatabase {
-  return {
-    metadata: {
-      ...db.metadata,
-      ...(Array.isArray(db.metadata.data_sources)
-        ? { data_sources: [...db.metadata.data_sources] }
-        : {}),
-    },
-    vin_prefixes: db.vin_prefixes.map((vp) => ({ ...vp })),
-    battery_profiles: db.battery_profiles.map((bp) => ({ ...bp })),
-    recalls: db.recalls.map((r) => ({ ...r })),
-  };
-}
-
 /**
  * Main safe loader for the EV Recall Database with strict schema validation
  * and defensive defaults. Caches validated static JSON payload for high-throughput reuse.
  */
 export function getRecallDatabase(): RecallDatabase {
   if (cachedRecallDatabase) {
-    return cloneRecallDatabase(cachedRecallDatabase);
+    return cachedRecallDatabase;
   }
   try {
     const validated = validateRecallDatabaseSchema(rawRecallData);
@@ -570,7 +556,7 @@ export function getRecallDatabase(): RecallDatabase {
         ...validated.database,
         recalls: sanitizedRecalls,
       };
-      return cloneRecallDatabase(cachedRecallDatabase);
+      return cachedRecallDatabase;
     }
     return {
       metadata: {
@@ -869,12 +855,32 @@ export function isModelMatchForCampaign(queryModel: string, campaignTargetModel:
 /**
  * Validates and constructs a UTC Date without calendar rollover (1990-2040).
  */
-function buildValidatedUtcDate(year: number, month: number, day: number): Date | null {
-  if (year < 1990 || year > 2040 || month < 1 || month > 12 || day < 1 || day > 31) {
+function buildValidatedUtcDate(
+  year: number,
+  month: number,
+  day: number,
+  hour = 0,
+  minute = 0,
+  second = 0
+): Date | null {
+  if (
+    year < 1990 ||
+    year > 2040 ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31 ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59 ||
+    second < 0 ||
+    second > 59
+  ) {
     return null;
   }
 
-  const d = new Date(Date.UTC(year, month - 1, day));
+  const d = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
   if (isNaN(d.getTime())) return null;
   // Strict calendar rollover guard (e.g. 2024-02-31 rolling over to March)
   if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) {
@@ -974,48 +980,60 @@ export function parseRecallDate(dateStr?: string | null): Date | null {
     /^([a-z]{3,9})\.?[\s\-/]+(\d{1,2})(?:st|nd|rd|th)?(?:,)?[\s\-/]+(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/i
   );
   if (monthFirstMatch) {
-    if (monthFirstMatch[4] !== undefined) {
-      const hour = parseInt(monthFirstMatch[4], 10);
-      const minute = parseInt(monthFirstMatch[5], 10);
-      const second = monthFirstMatch[6] !== undefined ? parseInt(monthFirstMatch[6], 10) : 0;
-      if (hour > 23 || minute > 59 || second > 59) return null;
-    }
+    const hour = monthFirstMatch[4] !== undefined ? parseInt(monthFirstMatch[4], 10) : 0;
+    const minute = monthFirstMatch[5] !== undefined ? parseInt(monthFirstMatch[5], 10) : 0;
+    const second = monthFirstMatch[6] !== undefined ? parseInt(monthFirstMatch[6], 10) : 0;
     const mKey = monthFirstMatch[1].toLowerCase();
     const month = Object.prototype.hasOwnProperty.call(ENGLISH_MONTH_MAP, mKey) ? ENGLISH_MONTH_MAP[mKey] : undefined;
     if (!month) return null;
-    return buildValidatedUtcDate(parseInt(monthFirstMatch[3], 10), month, parseInt(monthFirstMatch[2], 10));
+    return buildValidatedUtcDate(
+      parseInt(monthFirstMatch[3], 10),
+      month,
+      parseInt(monthFirstMatch[2], 10),
+      hour,
+      minute,
+      second
+    );
   }
 
   const dayFirstMatch = clean.match(
     /^(\d{1,2})(?:st|nd|rd|th)?[\s\-/]+([a-z]{3,9})\.?(?:,)?[\s\-/]+(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/i
   );
   if (dayFirstMatch) {
-    if (dayFirstMatch[4] !== undefined) {
-      const hour = parseInt(dayFirstMatch[4], 10);
-      const minute = parseInt(dayFirstMatch[5], 10);
-      const second = dayFirstMatch[6] !== undefined ? parseInt(dayFirstMatch[6], 10) : 0;
-      if (hour > 23 || minute > 59 || second > 59) return null;
-    }
+    const hour = dayFirstMatch[4] !== undefined ? parseInt(dayFirstMatch[4], 10) : 0;
+    const minute = dayFirstMatch[5] !== undefined ? parseInt(dayFirstMatch[5], 10) : 0;
+    const second = dayFirstMatch[6] !== undefined ? parseInt(dayFirstMatch[6], 10) : 0;
     const mKey = dayFirstMatch[2].toLowerCase();
     const month = Object.prototype.hasOwnProperty.call(ENGLISH_MONTH_MAP, mKey) ? ENGLISH_MONTH_MAP[mKey] : undefined;
     if (!month) return null;
-    return buildValidatedUtcDate(parseInt(dayFirstMatch[3], 10), month, parseInt(dayFirstMatch[1], 10));
+    return buildValidatedUtcDate(
+      parseInt(dayFirstMatch[3], 10),
+      month,
+      parseInt(dayFirstMatch[1], 10),
+      hour,
+      minute,
+      second
+    );
   }
 
   const yearFirstMonthNameMatch = clean.match(
     /^(\d{4})[\s\-/]+([a-z]{3,9})\.?[\s\-/]+(\d{1,2})(?:st|nd|rd|th)?(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/i
   );
   if (yearFirstMonthNameMatch) {
-    if (yearFirstMonthNameMatch[4] !== undefined) {
-      const hour = parseInt(yearFirstMonthNameMatch[4], 10);
-      const minute = parseInt(yearFirstMonthNameMatch[5], 10);
-      const second = yearFirstMonthNameMatch[6] !== undefined ? parseInt(yearFirstMonthNameMatch[6], 10) : 0;
-      if (hour > 23 || minute > 59 || second > 59) return null;
-    }
+    const hour = yearFirstMonthNameMatch[4] !== undefined ? parseInt(yearFirstMonthNameMatch[4], 10) : 0;
+    const minute = yearFirstMonthNameMatch[5] !== undefined ? parseInt(yearFirstMonthNameMatch[5], 10) : 0;
+    const second = yearFirstMonthNameMatch[6] !== undefined ? parseInt(yearFirstMonthNameMatch[6], 10) : 0;
     const mKey = yearFirstMonthNameMatch[2].toLowerCase();
     const month = Object.prototype.hasOwnProperty.call(ENGLISH_MONTH_MAP, mKey) ? ENGLISH_MONTH_MAP[mKey] : undefined;
     if (!month) return null;
-    return buildValidatedUtcDate(parseInt(yearFirstMonthNameMatch[1], 10), month, parseInt(yearFirstMonthNameMatch[3], 10));
+    return buildValidatedUtcDate(
+      parseInt(yearFirstMonthNameMatch[1], 10),
+      month,
+      parseInt(yearFirstMonthNameMatch[3], 10),
+      hour,
+      minute,
+      second
+    );
   }
 
   // 5. Fallback to standard Date.parse only for explicit RFC/ISO timestamps with a 4-digit year
@@ -1357,34 +1375,11 @@ function getSortedVinPrefixes(
   return sorted;
 }
 
-function isBrandCompatibleForLookup(
-  queryBrandLower: string,
-  queryCanonical: string,
-  targetBrand?: string
-): boolean {
-  if (!targetBrand || typeof targetBrand !== 'string') return false;
-  const targetClean = targetBrand.trim().toLowerCase();
-  if (!targetClean) return false;
-  const targetCanonical = normalizeManufacturer(targetBrand);
-  const allowSubstring = queryBrandLower.length >= 2 && targetClean.length >= 2;
-  return (
-    (Boolean(queryCanonical) && targetCanonical === queryCanonical) ||
-    targetClean === queryBrandLower ||
-    (allowSubstring && (targetClean.includes(queryBrandLower) || queryBrandLower.includes(targetClean))) ||
-    (Boolean(targetCanonical) &&
-      Boolean(queryCanonical) &&
-      targetCanonical.length >= 2 &&
-      queryCanonical.length >= 2 &&
-      (targetCanonical.toLowerCase().includes(queryCanonical.toLowerCase()) ||
-        queryCanonical.toLowerCase().includes(targetCanonical.toLowerCase())))
-  );
-}
-
 const BRAND_WORD_BOUNDARY_REGEX_CACHE = new Map<string, RegExp>();
 
 function matchesTargetBrandMention(campTargetLower: string, brandTermLower: string): boolean {
   if (!brandTermLower || brandTermLower.length < 2) return false;
-  if (/^[a-z0-9]+$/i.test(brandTermLower) && brandTermLower.length < 3) {
+  if (/^[a-z0-9]+$/i.test(brandTermLower) && brandTermLower.length <= 3) {
     let re = BRAND_WORD_BOUNDARY_REGEX_CACHE.get(brandTermLower);
     if (!re) {
       const escaped = brandTermLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1396,6 +1391,30 @@ function matchesTargetBrandMention(campTargetLower: string, brandTermLower: stri
     return re.test(campTargetLower);
   }
   return campTargetLower.includes(brandTermLower);
+}
+
+function matchesBrandSubstring(aLower: string, bLower: string): boolean {
+  if (aLower.length < 2 || bLower.length < 2) return false;
+  return matchesTargetBrandMention(aLower, bLower) || matchesTargetBrandMention(bLower, aLower);
+}
+
+function isBrandCompatibleForLookup(
+  queryBrandLower: string,
+  queryCanonical: string,
+  targetBrand?: string
+): boolean {
+  if (!targetBrand || typeof targetBrand !== 'string') return false;
+  const targetClean = targetBrand.trim().toLowerCase();
+  if (!targetClean) return false;
+  const targetCanonical = normalizeManufacturer(targetBrand);
+  return (
+    (Boolean(queryCanonical) && targetCanonical === queryCanonical) ||
+    targetClean === queryBrandLower ||
+    matchesBrandSubstring(targetClean, queryBrandLower) ||
+    (Boolean(targetCanonical) &&
+      Boolean(queryCanonical) &&
+      matchesBrandSubstring(targetCanonical.toLowerCase(), queryCanonical.toLowerCase()))
+  );
 }
 
 function deduplicateRecallsById(recalls: OfficialRecallCampaign[]): OfficialRecallCampaign[] {
@@ -1784,11 +1803,10 @@ export function getModelsForBrand(brand: string, customDb?: RecallDatabase): str
     if (!itemClean) return false;
     if (itemClean === cleanBrand) return true;
     const itemCanonical = normalizeManufacturer(itemBrand);
-    const allowSubstring = cleanBrand.length >= 2 && itemClean.length >= 2;
     return (
       (Boolean(canonicalBrand) && itemCanonical === canonicalBrand) ||
       itemCanonical.toLowerCase() === cleanBrand ||
-      (allowSubstring && (itemClean.includes(cleanBrand) || cleanBrand.includes(itemClean)))
+      matchesBrandSubstring(itemClean, cleanBrand)
     );
   };
 

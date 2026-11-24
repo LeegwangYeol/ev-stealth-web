@@ -7,13 +7,18 @@ Authoritative source:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Iterable, Mapping
+from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
+from enum import Enum
 import json
 import math
+from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional, Tuple, Union
 import unicodedata
+import uuid
 
 
 DEFECT_CATEGORY_KO_MAP: Dict[str, str] = {
@@ -154,16 +159,17 @@ def normalize_category(category: Any, default: str = "BUILD_QUALITY") -> str:
 
 
 def _safe_round(val: Any, decimals: int = 4, default: float = 0.0) -> float:
-    """Safely round numeric value, catching None, bool, NaN, Inf, and non-numeric inputs."""
+    """Safely round numeric value, catching None, bool, NaN, Inf, -0.0, and non-numeric inputs."""
     if val is None or isinstance(val, bool):
-        return default
+        return 0.0 if default == 0.0 else default
     try:
         f = float(val)
         if math.isnan(f) or math.isinf(f):
-            return default
-        return round(f, decimals)
+            return 0.0 if default == 0.0 else default
+        res = round(f, decimals)
+        return 0.0 if res == 0.0 else res
     except (ValueError, TypeError, OverflowError):
-        return default
+        return 0.0 if default == 0.0 else default
 
 
 def _safe_int(val: Any, default: int = 0) -> int:
@@ -180,26 +186,26 @@ def _safe_int(val: Any, default: int = 0) -> int:
 
 
 def _safe_float(val: Any, default: float = 0.0) -> float:
-    """Safely convert value to float, catching None, bool, NaN, Inf, and non-numeric inputs."""
+    """Safely convert value to float, catching None, bool, NaN, Inf, -0.0, and non-numeric inputs."""
     if val is None or isinstance(val, bool):
-        return default
+        return 0.0 if default == 0.0 else default
     try:
         f = float(val)
         if math.isnan(f) or math.isinf(f):
-            return default
-        return f
+            return 0.0 if default == 0.0 else default
+        return 0.0 if f == 0.0 else f
     except (ValueError, TypeError, OverflowError):
-        return default
+        return 0.0 if default == 0.0 else default
 
 
 def _safe_clamp(val: Any, min_val: float = -1.0, max_val: float = 1.0, default: float = 0.0) -> float:
     """Safely convert numeric value and clamp to [min_val, max_val]."""
     f = _safe_float(val, default)
     if f < min_val:
-        return min_val
-    if f > max_val:
-        return max_val
-    return f
+        f = min_val
+    elif f > max_val:
+        f = max_val
+    return 0.0 if f == 0.0 else f
 
 
 # Pre-compiled regex for stripping invalid characters: null bytes, non-printable control chars,
@@ -270,10 +276,11 @@ _RE_DATE_TS: re.Pattern[str] = re.compile(
 _RE_DATE_COMPACT_8: re.Pattern[str] = re.compile(
     r"(?:^|[^\d])((?:19|20)\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?:\d{4,6})?(?:$|[^\d])"
 )
-_RE_DATE_2: re.Pattern[str] = re.compile(r"(?:^|[^\d])(\d{2})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})")
+_RE_DATE_2: re.Pattern[str] = re.compile(r"(?:^|[^\d])(\d{2})\s*[./\-]\s*(\d{1,2})\s*[./\-]\s*(\d{1,2})(?:[^\d]|$)")
 _RE_DATE_COMPACT_6: re.Pattern[str] = re.compile(r"^(\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$")
 _RE_DATE_MD: re.Pattern[str] = re.compile(r"^(0[1-9]|1[0-2])[./\-](0[1-9]|[12]\d|3[01])$")
 _RE_TIME_ONLY: re.Pattern[str] = re.compile(r"^\d{1,2}:\d{2}(?::\d{2})?$")
+_RE_DAYS_AGO: re.Pattern[str] = re.compile(r"^(\d{1,4})\s*일\s*전$")
 
 
 def parse_date_str(created_at: Any) -> str:
@@ -333,6 +340,12 @@ def parse_date_str(created_at: Any) -> str:
         return (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
     if s in ("그제", "그저께") or s.startswith(("그제 ", "그제(", "그저께 ", "그저께(")):
         return (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%d")
+    match_days_ago = _RE_DAYS_AGO.match(s)
+    if match_days_ago:
+        days_ago = int(match_days_ago.group(1))
+        if 1 <= days_ago <= 3650:
+            return (datetime.now(timezone.utc) - timedelta(days=days_ago)).strftime("%Y-%m-%d")
+        return today_iso
 
     current_year = datetime.now(timezone.utc).year
 
@@ -675,16 +688,16 @@ def validate_report_entry(entry: Any, strict: bool = False) -> Tuple[bool, str]:
             return entry.get(k, default)
         return getattr(entry, k, default)
 
-    # 1. Identifier validation (must have non-empty id or post_id)
+    # 1. Identifier validation (must have non-empty id or post_id after sanitization)
     raw_id = _get("id")
-    if raw_id is None or isinstance(raw_id, bool) or not _coerce_raw_str(raw_id).strip():
+    if raw_id is None or isinstance(raw_id, bool) or not sanitize_string(raw_id, 256):
         raw_id = _get("post_id")
-    if raw_id is None or isinstance(raw_id, bool) or not _coerce_raw_str(raw_id).strip():
+    if raw_id is None or isinstance(raw_id, bool) or not sanitize_string(raw_id, 256):
         return False, "Missing or empty required field: 'id'"
 
-    # 2. Content validation (must have title, summary, quote, or content)
+    # 2. Content validation (must have title, summary, quote, or content after sanitization)
     has_text = any(
-        _get(k) is not None and not isinstance(_get(k), bool) and _coerce_raw_str(_get(k)).strip() != ""
+        _get(k) is not None and not isinstance(_get(k), bool) and sanitize_string(_get(k), 10_000) != ""
         for k in ("title", "post_title", "summary", "verbatim_quote", "raw_quote", "content")
     )
     if not has_text:
@@ -870,16 +883,21 @@ class ComplaintRecord:
 
     def __post_init__(self) -> None:
         """Sanitize default factory values, ensure copy resilience, clean corrupted chars, and clamp sentiment bounds."""
-        if self.slang_terms_detected is None:
+        if self.slang_terms_detected is None or isinstance(self.slang_terms_detected, bool):
             self.slang_terms_detected = []
-        elif isinstance(self.slang_terms_detected, str):
+        elif isinstance(self.slang_terms_detected, (str, bytes, bytearray)):
+            slang_str = sanitize_string(self.slang_terms_detected, 10_000)
             self.slang_terms_detected = [
-                sanitize_string(s, 256) for s in self.slang_terms_detected.split(",") if s.strip()
+                cleaned for s in slang_str.split(",") if (cleaned := sanitize_string(s, 256))
             ]
-        elif not isinstance(self.slang_terms_detected, list):
-            self.slang_terms_detected = [sanitize_string(s, 256) for s in self.slang_terms_detected if s is not None]
+        elif isinstance(self.slang_terms_detected, Iterable) and not isinstance(self.slang_terms_detected, dict):
+            self.slang_terms_detected = [
+                cleaned
+                for s in self.slang_terms_detected
+                if s is not None and not isinstance(s, bool) and (cleaned := sanitize_string(s, 256))
+            ]
         else:
-            self.slang_terms_detected = [sanitize_string(s, 256) for s in self.slang_terms_detected if s is not None]
+            self.slang_terms_detected = []
 
         # Sanitize text fields from null bytes, control chars, BiDi overrides, and surrogates
         self.id = sanitize_string(self.id, 256)
@@ -1419,16 +1437,50 @@ class DailyReportStatistics:
         )
 
 
+def _sanitize_json_value(val: Any) -> Any:
+    """Recursively sanitize values for RFC 8259 JSON output (no NaN, Inf, -0.0, or control chars)."""
+    if val is None or isinstance(val, bool):
+        return val
+    if isinstance(val, int):
+        return val
+    if isinstance(val, float):
+        return _safe_float(val, 0.0)
+    if isinstance(val, Decimal):
+        return _safe_float(val, 0.0)
+    if isinstance(val, complex):
+        return {
+            "real": _safe_float(val.real, 0.0),
+            "imag": _safe_float(val.imag, 0.0),
+        }
+    if isinstance(val, (datetime, date)):
+        return val.isoformat()
+    if isinstance(val, Path):
+        return sanitize_string(str(val))
+    if isinstance(val, uuid.UUID):
+        return str(val)
+    if isinstance(val, Enum):
+        return _sanitize_json_value(val.value)
+    if isinstance(val, (str, bytes, bytearray)):
+        return sanitize_string(val)
+    if is_dataclass(val) and not isinstance(val, type):
+        return _sanitize_json_value(asdict(val))
+    if isinstance(val, Mapping):
+        return {
+            (sanitize_string(k, 256) if isinstance(k, (str, bytes, bytearray)) else str(k)): _sanitize_json_value(v)
+            for k, v in val.items()
+        }
+    if isinstance(val, (list, tuple, set, frozenset)):
+        return [_sanitize_json_value(item) for item in val]
+    return sanitize_string(val)
+
+
 def _serialize_report_entry(r: Any) -> Dict[str, Any]:
     if hasattr(r, "to_admin_report_dict") and callable(r.to_admin_report_dict):
-        return r.to_admin_report_dict()
+        return _sanitize_json_value(r.to_admin_report_dict())
     if hasattr(r, "to_dict") and callable(r.to_dict):
-        return r.to_dict()
+        return _sanitize_json_value(r.to_dict())
     if isinstance(r, dict):
-        return {
-            k: sanitize_string(v) if isinstance(v, str) else v
-            for k, v in r.items()
-        }
+        return _sanitize_json_value(r)
     return {}
 
 
@@ -1442,6 +1494,23 @@ class DailyReportPayload:
     total_complaints_today: int = 0
     top_defect_categories: List[Dict[str, Any]] = field(default_factory=list)
     quarantined_reports: List[Dict[str, Any]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.generated_at = sanitize_string(self.generated_at, max_len=128) or datetime.now(timezone.utc).isoformat()
+        self.pipeline_version = sanitize_string(self.pipeline_version, max_len=64) or "1.0.0"
+        if not isinstance(self.statistics, DailyReportStatistics):
+            self.statistics = DailyReportStatistics.from_dict(self.statistics)
+        if not isinstance(self.reports, list):
+            self.reports = list(self.reports) if isinstance(self.reports, tuple) else []
+        self.total_complaints_today = max(0, _safe_int(self.total_complaints_today))
+        if not isinstance(self.top_defect_categories, list):
+            self.top_defect_categories = (
+                list(self.top_defect_categories) if isinstance(self.top_defect_categories, tuple) else []
+            )
+        if not isinstance(self.quarantined_reports, list):
+            self.quarantined_reports = (
+                list(self.quarantined_reports) if isinstance(self.quarantined_reports, tuple) else []
+            )
 
     @property
     def quarantined_count(self) -> int:
@@ -1488,16 +1557,24 @@ class DailyReportPayload:
         return len(self.to_dict())
 
     def to_dict(self) -> Dict[str, Any]:
+        stats_dict = (
+            self.statistics.to_dict()
+            if hasattr(self.statistics, "to_dict")
+            else DailyReportStatistics.from_dict(self.statistics).to_dict()
+        )
+        reports_list = self.reports if isinstance(self.reports, (list, tuple)) else []
+        top_cats = self.top_defect_categories if isinstance(self.top_defect_categories, (list, tuple)) else []
+        quarantined_list = self.quarantined_reports if isinstance(self.quarantined_reports, (list, tuple)) else []
         res = {
-            "generated_at": self.generated_at,
-            "pipeline_version": self.pipeline_version,
-            "statistics": self.statistics.to_dict() if hasattr(self.statistics, "to_dict") else dict(self.statistics),
-            "total_complaints_today": self.total_complaints_today,
-            "top_defect_categories": [dict(c) for c in self.top_defect_categories if isinstance(c, dict)],
-            "reports": [_serialize_report_entry(r) for r in self.reports],
+            "generated_at": sanitize_string(self.generated_at, max_len=128),
+            "pipeline_version": sanitize_string(self.pipeline_version, max_len=64) or "1.0.0",
+            "statistics": stats_dict,
+            "total_complaints_today": max(0, _safe_int(self.total_complaints_today)),
+            "top_defect_categories": [_sanitize_json_value(c) for c in top_cats if isinstance(c, dict)],
+            "reports": [_serialize_report_entry(r) for r in reports_list],
         }
-        if self.quarantined_reports:
-            res["quarantined_reports"] = [dict(q) for q in self.quarantined_reports if isinstance(q, dict)]
+        if quarantined_list:
+            res["quarantined_reports"] = [_sanitize_json_value(q) for q in quarantined_list if isinstance(q, dict)]
         return res
 
     @classmethod

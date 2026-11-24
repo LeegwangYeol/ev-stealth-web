@@ -19,4 +19,6 @@ if __name__ == "__main__":
     try:
         runpy.run_path(str(TARGET_SCRIPT), run_name="__main__")
     except SystemExit as se:
-        sys.exit(se.code if isinstance(se.code, int) else 1)
+        if se.code is None:
+            sys.exit(0)
+        sys.exit(se.code if isinstance(se.code, int) and not isinstance(se.code, bool) else 1)

@@ -787,6 +787,8 @@ def validate_data_parity(
                 or fname in (".", "..")
                 or Path(fname).name != fname
                 or os.sep in fname
+                or "\\" in fname
+                or "\x00" in fname
                 or (os.altsep and os.altsep in fname)
             ):
                 errors.append(f"Unsafe target filename rejected for parity check: {fname!r}")
@@ -1184,7 +1186,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0 if is_valid else 1
 
     except SystemExit as se:
-        return se.code if isinstance(se.code, int) else 1
+        if se.code is None:
+            return 0
+        return se.code if isinstance(se.code, int) and not isinstance(se.code, bool) else 1
     except Exception as exc:
         logger.exception("Validation execution failure: %s", exc)
         return 1

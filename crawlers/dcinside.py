@@ -415,7 +415,7 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
             except ValueError:
                 if month == 2 and day == 29:
                     dt = None
-                    for offset in range(1, 5):
+                    for offset in range(1, 9):
                         try:
                             dt = datetime.datetime(now.year - offset, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
                             break
@@ -426,7 +426,19 @@ def _normalize_iso_timestamp(raw_date_str: Optional[str]) -> str:
                 else:
                     raise
             if year == now.year and dt > now + datetime.timedelta(days=1):
-                dt = dt.replace(year=now.year - 1)
+                if month == 2 and day == 29:
+                    rolled = None
+                    for offset in range(1, 9):
+                        try:
+                            rolled = dt.replace(year=now.year - offset)
+                            break
+                        except ValueError:
+                            continue
+                    if rolled is None:
+                        raise ValueError("No valid leap year found")
+                    dt = rolled
+                else:
+                    dt = dt.replace(year=now.year - 1)
             return dt.isoformat()
         except (ValueError, OverflowError):
             return now.isoformat()
@@ -902,6 +914,44 @@ class DCInsideCrawler(BaseCrawler):
 
         return comments
 
+    @staticmethod
+    def _extract_balanced_comments(masked_html: str) -> List[str]:
+        """Extract inner HTML of comment containers (p/dd/span/div) using balanced tag depth."""
+        open_re = re.compile(
+            r'<(p|dd|span|div)\b(?=[^>]*\bclass\s*=\s*(?:"(?:[^"]*\s)?(?:usertxt|txt|comment_memo)(?:\s[^"]*)?"|\'(?:[^\']*\s)?(?:usertxt|txt|comment_memo)(?:\s[^\']*)?\'|(?:usertxt|txt|comment_memo)(?=[\s>])))[^>]*>',
+            re.IGNORECASE,
+        )
+        results: List[str] = []
+        pos = 0
+        while True:
+            m = open_re.search(masked_html, pos)
+            if not m:
+                break
+            if m.group(0).rstrip(">").rstrip().endswith("/"):
+                pos = m.end()
+                continue
+            tag = m.group(1)
+            tag_re = re.compile(rf"<(/?)({re.escape(tag)})\b([^>]*)>", re.IGNORECASE)
+            start_idx = m.end()
+            depth = 1
+            end_idx = len(masked_html)
+            next_pos = len(masked_html)
+            for inner_m in tag_re.finditer(masked_html, start_idx):
+                if inner_m.group(1):
+                    depth -= 1
+                    if depth == 0:
+                        end_idx = inner_m.start()
+                        next_pos = inner_m.end()
+                        break
+                else:
+                    attrs = inner_m.group(3)
+                    if attrs and attrs.rstrip().endswith("/"):
+                        continue
+                    depth += 1
+            results.append(masked_html[start_idx:end_idx])
+            pos = next_pos
+        return results
+
     def parse_post_detail(
         self,
         html_content: str,
@@ -987,12 +1037,13 @@ class DCInsideCrawler(BaseCrawler):
             r'<(?:span|div|h[1-6]|p)\b(?=[^>]*\bclass=["\']?[^"\'>]*\btitle_subject\b)[^>]*>(.*?)</(?:span|div|h[1-6]|p)>',
             r'<(?:span|div|h[1-6]|p)\b(?=[^>]*\bclass=["\']?[^"\'>]*\btitle_headtext\b)[^>]*>.*?</(?:span|div|h[1-6]|p)>\s*<(?:span|div|h[1-6]|p)[^>]*>(.*?)</(?:span|div|h[1-6]|p)>',
             r'<(?:h[1-6]|div|span)\b(?=[^>]*\bclass=["\']?[^"\'>]*\b(?:tit|gallview-tit-box)\b)[^>]*>(.*?)</(?:h[1-6]|div|span)>',
-            r'<meta\b(?=[^>]*\b(?:property|name)=["\']og:title["\'])[^>]*\bcontent=["\']([^"\']*)["\']',
-            r'<meta\b(?=[^>]*\bcontent=["\']([^"\']*)["\'])[^>]*\b(?:property|name)=["\']og:title["\']',
+            r'<meta\b(?=[^>]*\b(?:property|name)=["\']og:title["\'])[^>]*\bcontent=(?:"([^"]*)"|\'([^\']*)\')',
+            r'<meta\b(?=[^>]*\bcontent=(?:"([^"]*)"|\'([^\']*)\'))[^>]*\b(?:property|name)=["\']og:title["\']',
         ):
             m = re.search(pat, masked_html, re.DOTALL | re.IGNORECASE)
             if m:
-                candidate = clean_html_text(m.group(1))
+                raw_cand = next((g for g in m.groups() if g is not None), "")
+                candidate = clean_html_text(raw_cand)
                 if candidate:
                     title = candidate
                     break
@@ -1020,9 +1071,9 @@ class DCInsideCrawler(BaseCrawler):
         writer_scope_html = writer_scope_div or (writer_scope_td.group(0) if writer_scope_td else "")
         author_candidates = [
             (writer_scope_html, r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\bnickname\b)[^>]*>(.*?)</span>'),
-            (writer_scope_html, r'data-nick=["\']([^"\']+)["\']'),
+            (writer_scope_html, r'data-nick=(?:"([^"]+)"|\'([^\']+)\')'),
             (masked_html, r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\bnickname\b)[^>]*>(.*?)</span>'),
-            (masked_html, r'data-nick=["\']([^"\']+)["\']'),
+            (masked_html, r'data-nick=(?:"([^"]+)"|\'([^\']+)\')'),
             (masked_html, r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\bwriter\b)[^>]*>(.*?)</span>'),
         ]
         for scope, apat in author_candidates:
@@ -1030,7 +1081,8 @@ class DCInsideCrawler(BaseCrawler):
                 continue
             am = re.search(apat, scope, re.DOTALL | re.IGNORECASE)
             if am:
-                cand_author = clean_html_text(am.group(1))
+                raw_author = next((g for g in am.groups() if g is not None), "")
+                cand_author = clean_html_text(raw_author)
                 if cand_author:
                     author = cand_author
                     break
@@ -1079,24 +1131,30 @@ class DCInsideCrawler(BaseCrawler):
                 content = clean_html_text(extracted_m)
 
         if not content:
+            extracted_thum = extract_container_content(html_content, "div", "thum-txt") or extract_container_content(html_content, "div", "thum-txtin")
+            if extracted_thum:
+                content = clean_html_text(extracted_thum)
+
+        if not content:
             body_match = re.search(r'<div class=["\']thum-txt[^"\']*["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
             if body_match:
                 content = clean_html_text(body_match.group(1))
 
         if not content:
             meta_desc = re.search(
-                r'<meta\b(?=[^>]*\b(?:property|name)=["\']og:description["\'])[^>]*\bcontent=["\']([^"\']*)["\']',
+                r'<meta\b(?=[^>]*\b(?:property|name)=["\']og:description["\'])[^>]*\bcontent=(?:"([^"]*)"|\'([^\']*)\')',
                 masked_html,
                 re.IGNORECASE,
             )
             if not meta_desc:
                 meta_desc = re.search(
-                    r'<meta\b(?=[^>]*\bcontent=["\']([^"\']*)["\'])[^>]*\b(?:property|name)=["\']og:description["\']',
+                    r'<meta\b(?=[^>]*\bcontent=(?:"([^"]*)"|\'([^\']*)\'))[^>]*\b(?:property|name)=["\']og:description["\']',
                     masked_html,
                     re.IGNORECASE,
                 )
             if meta_desc:
-                content = clean_html_text(meta_desc.group(1))
+                raw_desc = next((g for g in meta_desc.groups() if g is not None), "")
+                content = clean_html_text(raw_desc)
 
         if content and "&" in content and re.search(r"&[a-zA-Z#0-9]+;", content):
             content = html.unescape(content)
@@ -1114,12 +1172,7 @@ class DCInsideCrawler(BaseCrawler):
 
         # Fallback to static comments in DOM if AJAX comments were empty
         if not comments:
-            dom_comments = re.findall(
-                r'<(p|dd|span|div)\b(?=[^>]*\bclass=["\']?[^"\'>]*\b(?:usertxt|txt|comment_memo)\b)[^>]*>(.*?)</\1>',
-                masked_html,
-                re.DOTALL | re.IGNORECASE,
-            )
-            for _, c_html in dom_comments:
+            for c_html in self._extract_balanced_comments(masked_html):
                 cleaned = clean_html_text(c_html)
                 if cleaned and "&" in cleaned and re.search(r"&[a-zA-Z#0-9]+;", cleaned):
                     cleaned = html.unescape(cleaned)

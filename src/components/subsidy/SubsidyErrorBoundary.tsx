@@ -83,12 +83,15 @@ export default class SubsidyErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
-      const baseId = this.props.boundaryId || 'subsidy-error';
+      const baseId = String(this.props.boundaryId || 'subsidy-error').trim().replace(/\s+/g, '-') || 'subsidy-error';
       const titleId = `${baseId}-title`;
       const descId = `${baseId}-desc`;
       const HeadingTag = this.props.headingLevel === 'h2' ? 'h2' : 'h3';
       const retryText = this.props.retryLabel || '다시 계산 시도';
-      const rawMsg = this.state.error?.message ? this.state.error.message.replace(/\s+/g, ' ').trim() : '';
+      const rawMsg =
+        typeof this.state.error?.message === 'string'
+          ? this.state.error.message.replace(/\s+/g, ' ').trim()
+          : '';
       const safeErrorMessage = rawMsg.length > 160 ? `${rawMsg.slice(0, 157)}...` : rawMsg;
 
       return (

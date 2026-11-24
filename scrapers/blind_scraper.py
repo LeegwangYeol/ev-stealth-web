@@ -33,12 +33,15 @@ from scrapers.common_utils import (
     extract_defect_topic,
     extract_meta_content,
     extract_slang_terms,
+    is_allowed_domain_url,
     load_platform_seed_records,
     normalize_scraper_url,
     polite_delay,
     resolve_timeout_pair,
     robust_decode,
+    safe_non_negative_int,
     save_complaints_json,
+    strip_non_body_html,
 )
 
 logger = logging.getLogger("BlindScraper")
@@ -118,7 +121,7 @@ class BlindScraper:
 
     def sleep_polite(self):
         """Randomized sleep with jitter between requests."""
-        time.sleep(random.uniform(self.min_delay, self.max_delay))
+        polite_delay(self.min_delay, self.max_delay)
 
     def _load_slang_dict(self) -> Dict[str, Any]:
         if os.path.exists(self.slang_path):
@@ -219,7 +222,7 @@ class BlindScraper:
                     else:
                         continue
                     url = normalize_scraper_url(raw_url, BLIND_BASE_URL)
-                    if not url:
+                    if not url or not is_allowed_domain_url(url, ("teamblind.com",)):
                         continue
                     user_obj = p.get("user") if isinstance(p.get("user"), dict) else {}
                     author_obj = p.get("author") if isinstance(p.get("author"), dict) else {}
@@ -330,8 +333,8 @@ class BlindScraper:
                     user = raw_user if isinstance(raw_user, dict) else {}
                     company = str(user.get("companyName") or user.get("company") or "블라인드 인증유저")
                     published_at = str(post.get("created_at") or post.get("registered_at") or "")
-                    view_count = post.get("view_count") or post.get("count_views") or 0
-                    upvote_count = post.get("like_count") or post.get("count_likes") or 0
+                    view_count = safe_non_negative_int(post.get("view_count") or post.get("count_views"), 0)
+                    upvote_count = safe_non_negative_int(post.get("like_count") or post.get("count_likes"), 0)
 
                     comments = []
                     raw_comments = post.get("comments") or page_props.get("comments") or []
@@ -392,12 +395,13 @@ class BlindScraper:
             if comp_clean:
                 company = comp_clean
 
+        body_html_region = strip_non_body_html(html_content)
         body = ""
         for open_pat in (
             r'<div\b[^>]*\bclass=["\'][^"\']*\barticle-content\b[^"\']*["\'][^>]*>',
             r'<div\b[^>]*\bclass=["\'][^"\']*\bpost-desc\b[^"\']*["\'][^>]*>',
         ):
-            inner_html = extract_balanced_tag_content(html_content, open_pat, tag_name="div")
+            inner_html = extract_balanced_tag_content(body_html_region, open_pat, tag_name="div")
             if inner_html:
                 body = clean_html_text(inner_html)
                 if body:
@@ -461,7 +465,7 @@ class BlindScraper:
         veh, cat = self.classify_text(combined_post)
         if cat and len(body) >= 20:
             slang = extract_slang_terms(combined_post, self.slang_dict)
-            rec_id = f"BLIND_{cat.upper()[:4]}_{int(hashlib.sha256(url.encode('utf-8')).hexdigest(), 16) % 100000:05d}"
+            rec_id = f"BLIND_{cat.upper()[:4]}_{int(hashlib.sha256(url.encode('utf-8', errors='replace')).hexdigest(), 16) % 100000:05d}"
             severity = self._determine_severity(cat, combined_post)
             topic = self._extract_defect_topic(cat, combined_post)
             records.append(ComplaintRecord(
@@ -479,8 +483,8 @@ class BlindScraper:
                 platform_metadata={
                     "author_type": "blind_verified_company",
                     "author_badge": company,
-                    "view_count": post_data.get("view_count", 0),
-                    "upvote_count": post_data.get("upvote_count", 0),
+                    "view_count": safe_non_negative_int(post_data.get("view_count"), 0),
+                    "upvote_count": safe_non_negative_int(post_data.get("upvote_count"), 0),
                     "comment_count": len(comments),
                     "published_at": published_at,
                 }
@@ -502,7 +506,7 @@ class BlindScraper:
                     c_text = comment
 
                 c_slang = extract_slang_terms(c_text, self.slang_dict)
-                rec_id = f"BLIND_{c_cat.upper()[:4]}_{int(hashlib.sha256((url + str(idx)).encode('utf-8')).hexdigest(), 16) % 100000:05d}"
+                rec_id = f"BLIND_{c_cat.upper()[:4]}_{int(hashlib.sha256((url + str(idx)).encode('utf-8', errors='replace')).hexdigest(), 16) % 100000:05d}"
                 severity = self._determine_severity(c_cat, c_text)
                 topic = self._extract_defect_topic(c_cat, c_text)
                 records.append(ComplaintRecord(

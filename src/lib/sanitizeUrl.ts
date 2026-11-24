@@ -461,9 +461,15 @@ export function extractHostname(urlOrHost?: unknown): string {
   }
 
   try {
-    const parsed = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)
-      ? new URL(trimmed)
-      : new URL('http://' + trimmed);
+    const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed);
+    if (
+      hasScheme
+        ? /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^/?#]*@/.test(trimmed)
+        : /^[^/?#]*@/.test(trimmed)
+    ) {
+      return '';
+    }
+    const parsed = hasScheme ? new URL(trimmed) : new URL('http://' + trimmed);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
     if (parsed.username || parsed.password) return '';
     return (parsed.hostname || '').toLowerCase().replace(/\.+$/, '');
@@ -738,7 +744,7 @@ const EXECUTABLE_BLOCK_TAGS = ['script', 'style', 'iframe', 'object', 'embed', '
  */
 function stripTagBlock(str: string, tagName: string): string {
   const openRe = new RegExp(`<${tagName}\\b`, 'gi');
-  const closeRe = new RegExp(`</${tagName}\\s*>`, 'gi');
+  const closeRe = new RegExp(`</${tagName}(?:\\s|>)`, 'gi');
   let result = '';
   let cursor = 0;
 
@@ -751,8 +757,15 @@ function stripTagBlock(str: string, tagName: string): string {
     const closeMatch = closeRe.exec(str);
     if (!closeMatch) break;
 
+    let closeEnd = closeMatch.index + closeMatch[0].length;
+    if (!closeMatch[0].endsWith('>')) {
+      const gtIdx = str.indexOf('>', closeEnd);
+      if (gtIdx === -1) break;
+      closeEnd = gtIdx + 1;
+    }
+
     result += str.slice(cursor, openMatch.index);
-    cursor = closeMatch.index + closeMatch[0].length;
+    cursor = closeEnd;
   }
 
   if (cursor === 0) return str;
@@ -762,9 +775,13 @@ function stripTagBlock(str: string, tagName: string): string {
 function stripExecutableBlocks(str: string): string {
   if (!str.includes('</')) return str;
   let current = str;
-  for (const tag of EXECUTABLE_BLOCK_TAGS) {
-    current = stripTagBlock(current, tag);
-    if (!current.includes('</')) break;
+  let prev = '';
+  while (current !== prev && current.includes('</')) {
+    prev = current;
+    for (const tag of EXECUTABLE_BLOCK_TAGS) {
+      current = stripTagBlock(current, tag);
+      if (!current.includes('</')) break;
+    }
   }
   return current;
 }

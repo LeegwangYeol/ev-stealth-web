@@ -49,6 +49,8 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
         else:
             f_def = float(default)
             safe_default = 0.0 if (math.isnan(f_def) or math.isinf(f_def)) else f_def
+        if safe_default == 0.0:
+            safe_default = 0.0
     except (ValueError, TypeError, OverflowError):
         safe_default = 0.0
 
@@ -59,7 +61,7 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
         f_val = float(clean_val)
         if math.isnan(f_val) or math.isinf(f_val):
             return safe_default
-        return f_val
+        return 0.0 if f_val == 0.0 else f_val
     except (ValueError, TypeError, OverflowError):
         return safe_default
 
@@ -242,10 +244,14 @@ def format_daily_report_payload(
             "ratio": ratio,
         })
 
+    avg_neg_rounded = round(avg_neg, 2)
+    if avg_neg_rounded == 0.0:
+        avg_neg_rounded = 0.0
+
     statistics = DailyReportStatistics(
         total_scraped=computed_total_scraped,
         total_filtered_defects=total_filtered,
-        avg_negativity_score=round(avg_neg, 2),
+        avg_negativity_score=avg_neg_rounded,
         critical_defect_count=critical_count,
     )
 

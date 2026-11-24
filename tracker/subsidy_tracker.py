@@ -206,6 +206,8 @@ def _validate_endpoint_url(url: str, allow_private_ips: bool = False) -> Tuple[b
     host_lower = hostname.lower().strip().rstrip(".")
     if not host_lower:
         return False, "Missing hostname in URL"
+    if any(ch.isspace() for ch in host_lower):
+        return False, "Whitespace in hostname"
     if "%" in host_lower:
         return False, "IPv6 zone ID not allowed in endpoint URL"
 
@@ -473,16 +475,28 @@ def _to_non_neg_int(val: Any) -> Optional[int]:
     if isinstance(val, Decimal):
         if not val.is_finite():
             return None
-        iv = int(val)
-        return iv if iv > 0 else 0
+        try:
+            iv = int(val)
+            return iv if iv > 0 else 0
+        except (ValueError, TypeError, OverflowError):
+            return None
     cleaned = _clean_num(val)
-    if isinstance(cleaned, str) and _RE_PLAIN_INT.match(cleaned):
-        iv = int(cleaned)
-        return iv if iv > 0 else 0
-    f = float(cleaned)
-    if math.isnan(f) or math.isinf(f):
+    if isinstance(cleaned, str):
+        if not cleaned:
+            return None
+        if _RE_PLAIN_INT.match(cleaned):
+            try:
+                iv = int(cleaned)
+                return iv if iv > 0 else 0
+            except (ValueError, OverflowError):
+                return None
+    try:
+        f = float(cleaned)
+        if math.isnan(f) or math.isinf(f):
+            return None
+        return max(0, int(f))
+    except (ValueError, TypeError, OverflowError):
         return None
-    return max(0, int(f))
 
 
 def calculate_depletion_rate(
@@ -1298,11 +1312,17 @@ class SubsidyTracker:
         try:
             total_budget_billion = round(total_budget_krw / 1_000_000_000, 1)
         except OverflowError:
-            total_budget_billion = float(total_budget_krw // 1_000_000_000)
+            try:
+                total_budget_billion = float(total_budget_krw // 1_000_000_000)
+            except OverflowError:
+                total_budget_billion = 0.0
         try:
             disbursed_budget_billion = max(0.0, round(disbursed_budget_krw / 1_000_000_000, 1))
         except OverflowError:
-            disbursed_budget_billion = max(0.0, float(disbursed_budget_krw // 1_000_000_000))
+            try:
+                disbursed_budget_billion = max(0.0, float(disbursed_budget_krw // 1_000_000_000))
+            except OverflowError:
+                disbursed_budget_billion = 0.0
 
         return NationwideSummary(
             total_announced_units=total_announced,
@@ -1344,6 +1364,29 @@ class SubsidyTracker:
             safe_backoff = 0.05
         closed_exc_ids: Set[int] = set()
         safe_retries = min(100, max(1, _safe_int_metric(max_retries, 3)))
+        use_custom_opener = getattr(urllib.request.urlopen, "__module__", "") == "urllib.request"
+        opener: Optional[urllib.request.OpenerDirector] = None
+        if use_custom_opener:
+            handlers: List[urllib.request.BaseHandler] = [
+                _SafeEndpointRedirectHandler(allow_private_ips=self.allow_private_ips)
+            ]
+            if _ResilientHTTPHandler is not None and _ResilientHTTPSHandler is not None:
+                handlers.append(
+                    _ResilientHTTPHandler(
+                        connect_timeout=self.timeout_seconds,
+                        read_timeout=self.timeout_seconds,
+                        allow_private_ips=self.allow_private_ips,
+                    )
+                )
+                handlers.append(
+                    _ResilientHTTPSHandler(
+                        connect_timeout=self.timeout_seconds,
+                        read_timeout=self.timeout_seconds,
+                        allow_private_ips=self.allow_private_ips,
+                    )
+                )
+            opener = urllib.request.build_opener(*handlers)
+
         for attempt in range(1, safe_retries + 1):
             try:
                 req = urllib.request.Request(
@@ -1353,32 +1396,13 @@ class SubsidyTracker:
                         "Accept-Encoding": "identity",
                     },
                 )
-                if getattr(urllib.request.urlopen, "__module__", "") == "urllib.request":
-                    handlers: List[urllib.request.BaseHandler] = [
-                        _SafeEndpointRedirectHandler(allow_private_ips=self.allow_private_ips)
-                    ]
-                    if _ResilientHTTPHandler is not None and _ResilientHTTPSHandler is not None:
-                        handlers.append(
-                            _ResilientHTTPHandler(
-                                connect_timeout=self.timeout_seconds,
-                                read_timeout=self.timeout_seconds,
-                                allow_private_ips=self.allow_private_ips,
-                            )
-                        )
-                        handlers.append(
-                            _ResilientHTTPSHandler(
-                                connect_timeout=self.timeout_seconds,
-                                read_timeout=self.timeout_seconds,
-                                allow_private_ips=self.allow_private_ips,
-                            )
-                        )
-                    opener = urllib.request.build_opener(*handlers)
+                if opener is not None:
                     ctx_mgr = opener.open(req, timeout=self.timeout_seconds)
                 else:
                     ctx_mgr = urllib.request.urlopen(req, timeout=self.timeout_seconds)
                 with ctx_mgr as resp:
                     final_url = getattr(resp, "geturl", lambda: None)()
-                    if isinstance(final_url, str) and final_url:
+                    if isinstance(final_url, str) and final_url and final_url != clean_url:
                         final_safe, final_reason = _validate_endpoint_url(
                             final_url, allow_private_ips=self.allow_private_ips
                         )

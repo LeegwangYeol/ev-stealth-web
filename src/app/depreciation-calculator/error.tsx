@@ -23,7 +23,11 @@ export default function DepreciationCalculatorError({ error, reset }: Depreciati
   const handleRetry = () => {
     try {
       startTransition(() => {
-        reset();
+        if (typeof reset === 'function') {
+          reset();
+        } else if (typeof window !== 'undefined') {
+          window.location.reload();
+        }
       });
     } catch {
       if (typeof window !== 'undefined') {
@@ -71,9 +75,9 @@ export default function DepreciationCalculatorError({ error, reset }: Depreciati
             배터리 노화(Arrhenius Kinetics) 및 5개년 잔존가치 연산 중 일시적인 계산 오류가 발생했습니다.
             기본 안전 프리셋으로 복구하려면 아래 &apos;다시 시도&apos; 버튼을 눌러주세요.
           </p>
-          {error?.digest && (
+          {typeof error?.digest === 'string' && error.digest.trim().length > 0 && (
             <p className="text-xs text-slate-700 font-mono pt-1">
-              오류 참조 코드: <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">{error.digest}</span>
+              오류 참조 코드: <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200 break-all">{error.digest}</span>
             </p>
           )}
         </div>
@@ -105,29 +109,29 @@ export default function DepreciationCalculatorError({ error, reset }: Depreciati
           </Link>
         </div>
 
-        <div className="pt-4 border-t border-slate-100 text-xs text-slate-700 flex flex-wrap justify-center gap-3">
+        <nav aria-label="주요 서비스 바로가기" className="pt-4 border-t border-slate-100 text-xs text-slate-700 flex flex-wrap justify-center gap-3">
           <Link
             href="/subsidy-tracker"
             prefetch={true}
-            className="hover:text-emerald-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+            className="hover:text-emerald-700 transition inline-flex items-center gap-1 px-3 py-1 min-h-[44px] min-w-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
           >
             <span aria-hidden="true">⚡</span> 보조금 추적기
           </Link>
           <Link
             href="/reliability-analytics"
             prefetch={false}
-            className="hover:text-blue-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="hover:text-blue-700 transition inline-flex items-center gap-1 px-3 py-1 min-h-[44px] min-w-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <span aria-hidden="true">📊</span> 결함 분석 포털
           </Link>
           <Link
             href="/recall-portal"
             prefetch={false}
-            className="hover:text-rose-700 transition inline-flex items-center gap-1 px-2 py-1 min-h-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+            className="hover:text-rose-700 transition inline-flex items-center gap-1 px-3 py-1 min-h-[44px] min-w-[44px] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
           >
             <span aria-hidden="true">🚨</span> 리콜 포털
           </Link>
-        </div>
+        </nav>
       </div>
     </div>
   );

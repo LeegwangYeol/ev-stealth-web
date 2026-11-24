@@ -264,7 +264,8 @@ assert(pdiSource.includes('aria-valuetext='), 'Progressbar defines descriptive a
 assert(pdiSource.includes('role="tablist"'), 'Category filter declares role="tablist"');
 assert(pdiSource.includes('role="tabpanel"'), 'Checklist container declares role="tabpanel"');
 assert(pdiSource.includes('tabIndex={0}'), 'Tabpanel declares tabIndex={0} for keyboard accessibility');
-assert(pdiSource.includes('aria-expanded={isSelected}'), 'Category filter tabs declare aria-expanded={isSelected}');
+assert(pdiSource.includes('aria-selected={isSelected}'), 'Category filter tabs declare aria-selected={isSelected}');
+assert(!pdiSource.includes('aria-expanded={isSelected}'), 'Category filter role="tab" buttons must not declare invalid aria-expanded');
 
 // Verify checkboxes declare aria-checked and native role
 assert(pdiSource.includes('type="checkbox"'), 'Checklist rows use native input type="checkbox"');

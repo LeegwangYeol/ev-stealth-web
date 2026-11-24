@@ -158,6 +158,8 @@ class StatisticalRanker:
         self.term_freq: Counter = Counter()
         self.tokenized_docs: List[List[str]] = []
         self.doc_dsi_scores: List[float] = []
+        self.doc_sentiments: List[Any] = []
+        self._fitted_records: List[Dict[str, Any]] = []
         self.term_sample_quotes: Dict[str, List[str]] = defaultdict(list)
         self.term_dsi_values: Dict[str, List[float]] = defaultdict(list)
 
@@ -173,6 +175,8 @@ class StatisticalRanker:
         self.term_freq.clear()
         self.tokenized_docs.clear()
         self.doc_dsi_scores.clear()
+        self.doc_sentiments.clear()
+        self._fitted_records.clear()
         self.term_sample_quotes.clear()
         self.term_dsi_values.clear()
 
@@ -183,6 +187,7 @@ class StatisticalRanker:
             if not isinstance(rec, dict):
                 continue
             valid_doc_count += 1
+            self._fitted_records.append(rec)
             raw_t = rec.get("post_title")
             raw_q = rec.get("raw_quote")
             raw_top = rec.get("defect_topic")
@@ -195,6 +200,7 @@ class StatisticalRanker:
             tokens = self.tokenizer.tokenize(full_text)
             sent_res = self.sentiment_engine.classify(full_text, tokens=tokens)
             dsi = sent_res.dsi_score
+            self.doc_sentiments.append(sent_res)
             self.doc_dsi_scores.append(dsi)
             doc_stems: List[str] = []
 
@@ -272,12 +278,17 @@ class StatisticalRanker:
                 continue
 
             p_joint = count / (total_ngrams or 1)
-            p_indep = 1.0
-            for w in gram:
-                p_indep *= (self.term_freq.get(w, 1) / total_tokens)
-
-            pmi = math.log2(p_joint / p_indep) if (p_joint > 0 and p_indep > 0) else 0.0
-            scored_ngrams.append((gram, count, round(pmi, 2)))
+            if p_joint > 0.0:
+                log_p_indep = sum(math.log2(max(1, self.term_freq.get(w, 1)) / total_tokens) for w in gram)
+                pmi = math.log2(p_joint) - log_p_indep
+                if not math.isfinite(pmi):
+                    pmi = 0.0
+            else:
+                pmi = 0.0
+            pmi_rounded = round(pmi, 2)
+            if pmi_rounded == 0.0:
+                pmi_rounded = 0.0
+            scored_ngrams.append((gram, count, pmi_rounded))
 
         scored_ngrams.sort(key=lambda x: (x[1], x[2]), reverse=True)
         return scored_ngrams[:top_k]
@@ -485,22 +496,62 @@ class StatisticalRanker:
         if not filtered_recs:
             filtered_recs = recs
 
-        sub_ranker = StatisticalRanker(filtered_recs, self.tokenizer, self.sentiment_engine)
+        can_slice_precomputed = (
+            (records is None or (len(recs) == len(self._fitted_records) and all(a is b for a, b in zip(recs, self._fitted_records))))
+            and len(self.tokenized_docs) == len(self._fitted_records)
+            and len(self.doc_dsi_scores) == len(self._fitted_records)
+        )
+
+        if can_slice_precomputed:
+            idx_by_rec_id = {id(rec): idx for idx, rec in enumerate(self._fitted_records)}
+            sub_term_freq: Counter = Counter()
+            sub_doc_freq: Counter = Counter()
+            sub_term_dsi_values: Dict[str, List[float]] = defaultdict(list)
+            sub_term_sample_quotes: Dict[str, List[str]] = defaultdict(list)
+            sub_seen_quotes: Dict[str, Set[str]] = defaultdict(set)
+            sub_num_docs = 0
+
+            for rec in filtered_recs:
+                doc_idx = idx_by_rec_id.get(id(rec))
+                if doc_idx is None:
+                    can_slice_precomputed = False
+                    break
+                sub_num_docs += 1
+                doc_stems = self.tokenized_docs[doc_idx]
+                dsi = self.doc_dsi_scores[doc_idx]
+                raw_q = rec.get("raw_quote")
+                quote = str(raw_q) if raw_q is not None else ""
+                for stem in doc_stems:
+                    sub_term_freq[stem] += 1
+                    sub_term_dsi_values[stem].append(dsi)
+                    if quote and quote not in sub_seen_quotes[stem]:
+                        sub_seen_quotes[stem].add(quote)
+                        sub_term_sample_quotes[stem].append(quote)
+                for unique_stem in set(doc_stems):
+                    sub_doc_freq[unique_stem] += 1
+
+        if not can_slice_precomputed:
+            sub_ranker = StatisticalRanker(filtered_recs, self.tokenizer, self.sentiment_engine)
+            sub_term_freq = sub_ranker.term_freq
+            sub_doc_freq = sub_ranker.doc_freq
+            sub_num_docs = sub_ranker.num_docs
+            sub_term_dsi_values = sub_ranker.term_dsi_values
+            sub_term_sample_quotes = sub_ranker.term_sample_quotes
 
         scored_terms = []
-        total_tokens = sum(sub_ranker.term_freq.values()) or 1
+        total_tokens = sum(sub_term_freq.values()) or 1
 
-        for term, count in sub_ranker.term_freq.items():
+        for term, count in sub_term_freq.items():
             if term in KOREAN_STOPWORDS or len(term) < 2:
                 continue
-            df = sub_ranker.doc_freq.get(term, 1)
-            smooth_idf = math.log((1.0 + sub_ranker.num_docs) / (1.0 + df)) + 1.0 if sub_ranker.num_docs > 0 else 1.0
+            df = sub_doc_freq.get(term, 1)
+            smooth_idf = math.log((1.0 + sub_num_docs) / (1.0 + df)) + 1.0 if sub_num_docs > 0 else 1.0
             weight = DOMAIN_SEVERITY_MAP.get(term, 1.2)
             ccs = (count ** 0.85) * smooth_idf * weight
-            dsi_vals = sub_ranker.term_dsi_values.get(term, [7.0])
+            dsi_vals = sub_term_dsi_values.get(term, [7.0])
             mean_dsi = round(sum(dsi_vals) / len(dsi_vals), 1) if dsi_vals else 7.0
             category = TERM_CATEGORY_MAP.get(term, "General Defect")
-            quotes = sub_ranker.term_sample_quotes.get(term, [])
+            quotes = sub_term_sample_quotes.get(term, [])
             sample_q = re.sub(r'\s+', ' ', quotes[0]).strip() if quotes else f"{term} 관련 결함 이슈"
             if len(sample_q) > 85:
                 sample_q = sample_q[:82] + "..."
@@ -526,8 +577,8 @@ class StatisticalRanker:
 def main():
     """CLI test harness for statistical ranker."""
     data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "compiled_complaints.json")
-    with open(data_path, "r", encoding="utf-8") as f:
-        records = json.load(f)
+    with open(data_path, "r", encoding="utf-8-sig") as f:
+        records = json.load(f, parse_constant=lambda c: (_ for _ in ()).throw(ValueError(f"Invalid JSON constant: {c}")))
 
     ranker = StatisticalRanker(records)
     top30 = ranker.compute_top_keywords(records, top_n=30)

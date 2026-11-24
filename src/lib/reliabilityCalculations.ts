@@ -239,18 +239,20 @@ export function aggregateCategoryComplaintCounts(
     }
   } else if (typeof inputs === 'object') {
     // Case C: inputs is a ReliabilityTrendsDatabase
-    if ('brands' in inputs && Array.isArray((inputs as ReliabilityTrendsDatabase).brands)) {
-      return aggregateCategoryComplaintCounts((inputs as ReliabilityTrendsDatabase).brands);
+    if ('brands' in inputs) {
+      return Array.isArray((inputs as ReliabilityTrendsDatabase).brands)
+        ? aggregateCategoryComplaintCounts((inputs as ReliabilityTrendsDatabase).brands)
+        : {};
     }
 
     // Case C2: inputs is a single BrandReliability object
     if ('category_distribution' in inputs) {
       const dist = (inputs as { category_distribution?: unknown }).category_distribution;
-      if (dist && typeof dist === 'object') {
-        return aggregateCategoryComplaintCounts(
-          dist as Parameters<typeof aggregateCategoryComplaintCounts>[0]
-        );
-      }
+      return dist && typeof dist === 'object'
+        ? aggregateCategoryComplaintCounts(
+            dist as Parameters<typeof aggregateCategoryComplaintCounts>[0]
+          )
+        : {};
     }
 
     // Case D: inputs is a Record<string, { count?: unknown } | number>
@@ -784,6 +786,23 @@ export function getDefectsForModel(
   );
 }
 
+const SHORT_ASCII_BRAND_REGEX_CACHE = new Map<string, RegExp>();
+
+function matchesBrandTokenOrSubstring(haystackLower: string, needleLower: string): boolean {
+  if (haystackLower.length < 2 || needleLower.length < 2) return false;
+  if (/^[a-z0-9]+$/.test(needleLower) && needleLower.length <= 3) {
+    let re = SHORT_ASCII_BRAND_REGEX_CACHE.get(needleLower);
+    if (!re) {
+      re = new RegExp(`\\b${needleLower}\\b`);
+      if (SHORT_ASCII_BRAND_REGEX_CACHE.size < 256) {
+        SHORT_ASCII_BRAND_REGEX_CACHE.set(needleLower, re);
+      }
+    }
+    return re.test(haystackLower);
+  }
+  return haystackLower.includes(needleLower);
+}
+
 /**
  * Finds a specific brand by ID or name from the reliability dataset.
  */
@@ -814,7 +833,10 @@ export function getBrandReliabilityById(
   return brands.find((b) => {
     const ko = typeof b.name_ko === 'string' ? b.name_ko.trim().toLowerCase() : '';
     const en = typeof b.name_en === 'string' ? b.name_en.trim().toLowerCase() : '';
-    return (ko.length >= 2 && ko.includes(normalized)) || (en.length >= 2 && en.includes(normalized));
+    return (
+      matchesBrandTokenOrSubstring(ko, normalized) ||
+      matchesBrandTokenOrSubstring(en, normalized)
+    );
   });
 }
 
@@ -1268,14 +1290,16 @@ export function resolveBrandReliability(
     if (aliasMatch) return aliasMatch;
   }
 
-  // Substring match (require length >= 2 to prevent 1-char false positives)
+  // Substring match (require length >= 2 to prevent 1-char false positives, and word boundary for short ASCII tokens)
   if (clean.length < 2) return undefined;
   return brands.find((b) => {
     const en = typeof b.name_en === 'string' ? b.name_en.trim().toLowerCase() : '';
     const ko = typeof b.name_ko === 'string' ? b.name_ko.trim().toLowerCase() : '';
     return (
-      (en.length >= 2 && (en.includes(clean) || clean.includes(en))) ||
-      (ko.length >= 2 && (ko.includes(clean) || clean.includes(ko)))
+      matchesBrandTokenOrSubstring(en, clean) ||
+      matchesBrandTokenOrSubstring(clean, en) ||
+      matchesBrandTokenOrSubstring(ko, clean) ||
+      matchesBrandTokenOrSubstring(clean, ko)
     );
   });
 }
