@@ -362,7 +362,7 @@ class DefectTracker:
             try:
                 if p.is_file():
                     existing.append((p.stat().st_mtime, p))
-            except OSError:
+            except (OSError, ValueError):
                 continue
         existing.sort(key=lambda item: item[0], reverse=True)
         return [cand for _, cand in existing]
@@ -498,7 +498,17 @@ class DefectTracker:
                 cached_sig = self._cached_reports_sig
             if cached_path is not None:
                 newest_candidates = self._candidate_report_paths_by_mtime()
-                expected_primary = self.reports_file if (self.reports_file and self.reports_file.is_file()) else (newest_candidates[0] if newest_candidates else None)
+                reports_file_ready = False
+                if self.reports_file is not None:
+                    try:
+                        reports_file_ready = self.reports_file.is_file()
+                    except (OSError, ValueError):
+                        reports_file_ready = False
+                expected_primary = (
+                    self.reports_file
+                    if reports_file_ready
+                    else (newest_candidates[0] if newest_candidates else None)
+                )
                 if expected_primary is not None:
                     try:
                         expected_resolved = expected_primary.resolve()
@@ -863,20 +873,25 @@ class DefectTracker:
                     except (ValueError, TypeError, OverflowError):
                         stat_copy["avg_negativity_score"] = 0.0
 
-            # Ensure category_distribution is always populated
+            def _coerce_count_map(raw_map: Mapping[Any, Any]) -> Dict[str, int]:
+                coerced: Dict[str, int] = {}
+                for k, v in raw_map.items():
+                    if isinstance(v, bool):
+                        continue
+                    try:
+                        f_v = float(v)
+                        if not (math.isnan(f_v) or math.isinf(f_v)):
+                            coerced[str(k)] = int(f_v)
+                    except (ValueError, TypeError, OverflowError):
+                        pass
+                return coerced
+
+            # Ensure category_distribution is always populated and sanitized
             if "category_distribution" not in stat_copy or not isinstance(stat_copy["category_distribution"], dict):
                 cat_dist: Dict[str, int] = {}
                 fd_dist = _extract_val(full_data, "category_distribution")
                 if fd_dist and isinstance(fd_dist, dict):
-                    for k, v in fd_dist.items():
-                        if isinstance(v, bool):
-                            continue
-                        try:
-                            f_v = float(v)
-                            if not (math.isnan(f_v) or math.isinf(f_v)):
-                                cat_dist[str(k)] = int(f_v)
-                        except (ValueError, TypeError, OverflowError):
-                            pass
+                    cat_dist = _coerce_count_map(fd_dist)
                 elif _extract_val(full_data, "top_defect_categories"):
                     top_cats = _extract_val(full_data, "top_defect_categories")
                     if isinstance(top_cats, list):
@@ -892,15 +907,7 @@ class DefectTracker:
                                 except (ValueError, TypeError, OverflowError):
                                     pass
                     elif isinstance(top_cats, dict):
-                        for k, v in top_cats.items():
-                            if isinstance(v, bool):
-                                continue
-                            try:
-                                f_v = float(v)
-                                if not (math.isnan(f_v) or math.isinf(f_v)):
-                                    cat_dist[str(k)] = int(f_v)
-                            except (ValueError, TypeError, OverflowError):
-                                pass
+                        cat_dist = _coerce_count_map(top_cats)
 
                 if not cat_dist:
                     reports = _extract_val(full_data, "reports", [])
@@ -911,7 +918,7 @@ class DefectTracker:
 
                 stat_copy["category_distribution"] = cat_dist
             else:
-                stat_copy["category_distribution"] = dict(stat_copy["category_distribution"])
+                stat_copy["category_distribution"] = _coerce_count_map(stat_copy["category_distribution"])
 
             return stat_copy
 
@@ -1052,6 +1059,10 @@ class DefectTracker:
         logger.info("DefectTracker: Synchronizing defect reports (daily_reports.json)...")
         if dry_run:
             logger.info("[DRY-RUN] DefectTracker sync skipped file persistence.")
+            return []
+
+        if web_dir is not None and "\x00" in str(web_dir):
+            logger.warning("DefectTracker sync aborted due to invalid web_dir path containing null byte.")
             return []
 
         # Resolve paths

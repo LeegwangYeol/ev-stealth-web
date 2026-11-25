@@ -190,8 +190,20 @@ class TestFrontendCycle16Fixes(unittest.TestCase):
     def test_depreciation_export_clawback_subtext_breakdown(self) -> None:
         """Verify export clawback subtext formatting showing national and local subsidies."""
         self.assertIn("clawbackResult.nationalClawbackKrw > 0", self.depreciation_client_code)
-        self.assertIn("국비: ${clawbackResult.nationalClawbackKrw.toLocaleString()}원, 지방비: ${clawbackResult.localClawbackKrw.toLocaleString()}원", self.depreciation_client_code)
-        self.assertIn("지방비: ${clawbackResult.localClawbackKrw.toLocaleString()}원", self.depreciation_client_code)
+        self.assertTrue(
+            "국비: ${clawbackResult.nationalClawbackKrw.toLocaleString()}원, 지방비: ${clawbackResult.localClawbackKrw.toLocaleString()}원"
+            in self.depreciation_client_code
+            or "국비: ${clawbackResult.nationalClawbackKrw.toLocaleString('ko-KR')}원, 지방비: ${clawbackResult.localClawbackKrw.toLocaleString('ko-KR')}원"
+            in self.depreciation_client_code,
+            "Combined national + local clawback breakdown string must be present",
+        )
+        self.assertTrue(
+            "지방비: ${clawbackResult.localClawbackKrw.toLocaleString()}원"
+            in self.depreciation_client_code
+            or "지방비: ${clawbackResult.localClawbackKrw.toLocaleString('ko-KR')}원"
+            in self.depreciation_client_code,
+            "Local-only clawback breakdown string must be present",
+        )
 
     # -------------------------------------------------------------------------
     # 3. getDailyReports Severity Tier & Metadata Preservation & Zero Fallback

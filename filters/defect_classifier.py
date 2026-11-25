@@ -38,6 +38,8 @@ from filters.slang_lexicon import (
     _RE_BOUNDED_ICCU,
     _RE_BOUNDED_V2L,
     _RE_BYD_SEAL,
+    _RE_DEFECT_GOJANG,
+    _RE_DEFECT_IEUM,
     _RE_JEONSON,
     _RE_MEGI,
     _RE_RICE_COOKER_APP,
@@ -326,7 +328,7 @@ _MALFUNCTION_VERBS: Tuple[str, ...] = (
     "움직이", "움직여", "움직임", "움직인", "움직였",
 )
 _MULTI_CHAR_NEGATORS: Tuple[str, ...] = tuple(
-    neg for neg in NEGATORS if neg not in ("안", "못", "없")
+    neg for neg in NEGATORS if neg not in ("안", "못", "없", "불가")
 )
 _SLANG_TERM_LOWER_PAIRS: Tuple[Tuple[SlangEntry, str, str], ...] = tuple(
     (entry, unicodedata.normalize("NFC", entry.term), unicodedata.normalize("NFC", entry.term).lower())
@@ -346,7 +348,7 @@ FULLWIDTH_TRANS: Dict[int, int] = {i: i - 0xFEE0 for i in range(0xFF01, 0xFF5F)}
 def sanitize_text(val: Any, max_len: int = MAX_TEXT_LENGTH) -> str:
     """Safely coerces input to str, strips null bytes, control chars, BiDi overrides & surrogates,
     normalizes NFC, and caps length."""
-    if val is None or val is False:
+    if val is None or isinstance(val, bool):
         return ""
     if isinstance(val, (bytes, bytearray)):
         val_str = _decode_bytes_safely(val)
@@ -484,9 +486,17 @@ class DefectClassifier:
             (_RE_DEFECT_HAJA.search(text_lower) is not None)
             if dk == "하자"
             else (
-                (_RE_WATER_LEAK.search(text_lower) is not None)
-                if dk in _WATER_SYMPTOM_KEYS
-                else (_matches_compound_phrase(dk, text_lower) if dk in ("iccu", "bms") else (dk in text_lower))
+                (_RE_DEFECT_GOJANG.search(text_lower) is not None)
+                if dk == "고장"
+                else (
+                    (_RE_DEFECT_IEUM.search(text_lower) is not None)
+                    if dk == "이음"
+                    else (
+                        (_RE_WATER_LEAK.search(text_lower) is not None)
+                        if dk in _WATER_SYMPTOM_KEYS
+                        else (_matches_compound_phrase(dk, text_lower) if dk in ("iccu", "bms") else (dk in text_lower))
+                    )
+                )
             )
             for dk in defect_keywords
         ):
@@ -648,9 +658,13 @@ class DefectClassifier:
             ):
                 return True
 
-            # 2. Exact match for single-character negator '못'
+            # 2. Perception-only negation for standalone '못' (avoid inverting functional failures like '문 못 열고')
             if w_strip == "못":
-                return True
+                if j + 1 < len(window) and window[j + 1].startswith(
+                    ("느끼", "느껴", "느꼈", "느낌", "듣", "들었", "들려", "들림", "들음", "보", "봤", "봄", "겪")
+                ):
+                    return True
+                continue
 
             # 3. Multi-character negators from NEGATORS
             for neg in _MULTI_CHAR_NEGATORS:
@@ -688,6 +702,9 @@ class DefectClassifier:
             for i, tok_lower in enumerate(tokens_lower):
                 if dw_lower == "하자":
                     if not tok_lower.startswith("하자") or tok_lower.startswith(("하자마자", "하자고", "하자면")):
+                        continue
+                elif dw_lower == "고장":
+                    if _RE_DEFECT_GOJANG.search(tok_lower) is None:
                         continue
                 elif dw_lower == "전손":
                     if _RE_JEONSON.search(tok_lower) is None:
@@ -886,6 +903,10 @@ class DefectClassifier:
                 for neg_word in doc_neg_words:
                     if neg_word in clause and not any(neg_word in already for already in matched_clause_negs):
                         if neg_word == "사고" and "사고" not in _RE_SAGO_SIP.sub("", clause):
+                            continue
+                        if neg_word == "하자" and _RE_DEFECT_HAJA.search(clause) is None:
+                            continue
+                        if neg_word == "고장" and _RE_DEFECT_GOJANG.search(clause) is None:
                             continue
                         matched_clause_negs.append(neg_word)
                         base_val = NEGATIVE_LEXICON[neg_word]

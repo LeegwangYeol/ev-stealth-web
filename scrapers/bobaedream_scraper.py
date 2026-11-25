@@ -181,9 +181,9 @@ class BobaedreamScraper:
         seen_nos = set()
         for page in range(1, eff_pages + 1):
             try:
-                encoded_kw = urllib.parse.quote(kw_str.encode("euc-kr"))
+                encoded_kw = urllib.parse.quote(kw_str.encode("euc-kr"), safe="")
             except UnicodeEncodeError:
-                encoded_kw = urllib.parse.quote(kw_str.encode("cp949", errors="replace"))
+                encoded_kw = urllib.parse.quote(kw_str.encode("cp949", errors="replace"), safe="")
 
             search_url = f"{BOBAE_LIST_URL}?code={safe_code}&s_cate=&s_key={safe_s_key}&search={encoded_kw}&page={page}"
             logger.info(f"Searching Bobaedream [{board_code}] for '{kw_str}' (Page {page})...")
@@ -235,7 +235,6 @@ class BobaedreamScraper:
             post_no = no_match.group(1)
             if post_no in seen_nos:
                 continue
-            seen_nos.add(post_no)
 
             clean_title = clean_html_text(raw_title)
             if (
@@ -248,6 +247,7 @@ class BobaedreamScraper:
             full_url = normalize_scraper_url(href, BOBAE_BASE_URL)
             if not full_url or not is_allowed_domain_url(full_url, ("bobaedream.co.kr",)):
                 continue
+            seen_nos.add(post_no)
             items.append({
                 "title": clean_title,
                 "url": full_url,
@@ -349,8 +349,8 @@ class BobaedreamScraper:
     def fetch_post_detail(self, post_url: str) -> Dict[str, Any]:
         """Fetch and parse post detail page including author, date, body, and comments."""
         norm_url = normalize_scraper_url(post_url, BOBAE_BASE_URL)
-        if not norm_url:
-            logger.warning(f"Invalid Bobaedream post_url provided: {post_url!r}")
+        if not norm_url or not is_allowed_domain_url(norm_url, ("bobaedream.co.kr",)):
+            logger.warning(f"Invalid or off-domain Bobaedream post_url provided: {post_url!r}")
             return {}
         self.ensure_warm_up()
         status, text, raw = self.client.request(
@@ -385,17 +385,19 @@ class BobaedreamScraper:
         """Extract title, metadata, body text, and comments from Bobaedream post HTML."""
         if not html_content or not isinstance(html_content, str):
             return {}
+        body_html_region = strip_non_body_html(html_content)
+
         # Title extraction
         title = ""
         title_match = re.search(
             r'<strong\b[^>]*\bclass=["\'][^"\']*\btitle\b[^"\']*["\'][^>]*>(.*?)</strong>',
-            html_content,
+            body_html_region,
             re.DOTALL | re.IGNORECASE,
         )
         if not title_match:
             title_match = re.search(
                 r'<dt\b[^>]*\bclass=["\'][^"\']*\btit\b[^"\']*["\'][^>]*>(.*?)</dt>',
-                html_content,
+                body_html_region,
                 re.DOTALL | re.IGNORECASE,
             )
         if title_match:
@@ -407,36 +409,35 @@ class BobaedreamScraper:
         author = ""
         author_match = re.search(
             r'<span\b[^>]*\bclass=["\'][^"\']*\bauthor\b[^"\']*["\'][^>]*>(.*?)</span>',
-            html_content,
+            body_html_region,
             re.DOTALL | re.IGNORECASE,
         )
         if not author_match:
             author_match = re.search(
                 r'<span\b[^>]*\bclass=["\'][^"\']*\buserNick\b[^"\']*["\'][^>]*>(.*?)</span>',
-                html_content,
+                body_html_region,
                 re.DOTALL | re.IGNORECASE,
             )
         if author_match:
             author = clean_html_text(author_match.group(1))
 
-        body_html_region = strip_non_body_html(html_content)
         published_at = ""
-        date_container = re.search(
-            r'<span\b[^>]*\bclass=["\'][^"\']*\b(?:countGroup|date|regdate|writerInfo)\b[^"\']*["\'][^>]*>(.*?)</span>',
+        date_container_html = extract_balanced_tag_content(
             body_html_region,
-            re.DOTALL | re.IGNORECASE,
+            r'<span\b[^>]*\bclass=["\'][^"\']*\b(?:countGroup|date|regdate|writerInfo)\b[^"\']*["\'][^>]*>',
+            tag_name="span",
         )
-        date_search_target = date_container.group(1) if date_container else body_html_region
+        date_search_target = date_container_html if date_container_html else body_html_region
         date_match = re.search(r'(\d{4}[.\-/]\d{2}[.\-/]\d{2}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)', date_search_target)
-        if not date_match and date_container:
+        if not date_match and date_container_html:
             date_match = re.search(r'(\d{4}[.\-/]\d{2}[.\-/]\d{2}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)', body_html_region)
         if date_match:
             published_at = date_match.group(1).replace(".", "-").replace("/", "-")
 
         view_count = 0
         view_match = (
-            re.search(r'조회수?\s*[:]?\s*(?:<[^>]+>\s*)*([0-9,]+)', date_container.group(1))
-            if date_container
+            re.search(r'조회수?\s*[:]?\s*(?:<[^>]+>\s*)*([0-9,]+)', date_container_html)
+            if date_container_html
             else None
         )
         if not view_match:
@@ -449,8 +450,8 @@ class BobaedreamScraper:
 
         upvote_count = 0
         upvote_match = (
-            re.search(r'추천\s*[:]?\s*(?:<[^>]+>\s*)*([0-9,]+)', date_container.group(1))
-            if date_container
+            re.search(r'추천\s*[:]?\s*(?:<[^>]+>\s*)*([0-9,]+)', date_container_html)
+            if date_container_html
             else None
         )
         if not upvote_match:
@@ -486,13 +487,13 @@ class BobaedreamScraper:
         comments = []
         comment_matches = re.findall(
             r'<dd\b[^>]*\bclass=["\'][^"\']*comment[^"\']*["\'][^>]*>((?:(?!</?dd\b).)*?)</dd>',
-            html_content,
+            body_html_region,
             re.DOTALL | re.IGNORECASE,
         )
         if not comment_matches:
             comment_matches = re.findall(
                 r'<dd\b[^>]*\bid=["\']cmt_\d+["\'][^>]*>((?:(?!</?dd\b).)*?)</dd>',
-                html_content,
+                body_html_region,
                 re.DOTALL | re.IGNORECASE,
             )
 

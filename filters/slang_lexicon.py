@@ -1640,6 +1640,8 @@ _RE_BOUNDED_ICCU: re.Pattern[str] = re.compile(r"(?<![a-zA-Z0-9])iccu(?![a-zA-Z]
 _RE_BOUNDED_V2L: re.Pattern[str] = re.compile(r"(?<![a-zA-Z0-9])v2l(?![a-zA-Z])", re.IGNORECASE)
 _RE_MEGI: re.Pattern[str] = re.compile(r"(?<![헤해꾸꼬도])메기(?!탕|매운탕|찜|구이)")
 _RE_WATER_LEAK: re.Pattern[str] = re.compile(r"(?<![가-힣])물\s*(?:차|찼|새|샜|고이)")
+_RE_DEFECT_GOJANG: re.Pattern[str] = re.compile(r"(?<![출입])고장")
+_RE_DEFECT_IEUM: re.Pattern[str] = re.compile(r"이음(?!새)")
 
 _BOUNDED_ASCII_SLANG_REGEXES: Dict[str, re.Pattern[str]] = {
     "ICCU 폭탄": re.compile(r"(?<![a-zA-Z0-9])iccu 폭탄", re.IGNORECASE),
@@ -1704,7 +1706,7 @@ def find_matching_slang(text: Any, max_length: int = 50_000) -> List[SlangEntry]
     - Non-breaking spaces (U+00A0 &nbsp;) and zero-width spaces (U+200B)
     - Null bytes, BiDi overrides, and oversized payloads (capped to 50,000 characters)
     """
-    if text is None or text is False:
+    if text is None or isinstance(text, bool):
         return []
     if isinstance(text, (bytes, bytearray)):
         raw_str = _decode_bytes_safely(text)

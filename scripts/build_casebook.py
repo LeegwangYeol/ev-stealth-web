@@ -42,9 +42,12 @@ def _sanitize_md_url(val: Any) -> str:
     if not u.lower().startswith(("http://", "https://")):
         return "#"
     return (
-        u.replace(" ", "%20")
+        u.replace("\\", "%5C")
+        .replace(" ", "%20")
         .replace("(", "%28")
         .replace(")", "%29")
+        .replace("[", "%5B")
+        .replace("]", "%5D")
         .replace("|", "%7C")
         .replace("<", "%3C")
         .replace(">", "%3E")
@@ -201,7 +204,11 @@ def build_case_studies_section(category_key: str, category_title: str, complaint
         slang_display = ", ".join([f"`{s}`" for s in slangs]) if slangs else "해당 없음 (일반 불만)"
 
         safe_url = _sanitize_md_url(post_url)
-        display_url = _escape_md_cell(post_url) if safe_url != "#" else "#"
+        display_url = (
+            _escape_md_cell(post_url).replace("[", "\\[").replace("]", "\\]")
+            if safe_url != "#"
+            else "#"
+        )
         lines.extend([
             f"### [사례 Case-{_escape_md_cell(case_id)}] {post_title}",
             "",
@@ -378,7 +385,11 @@ def main():
 
     args = parser.parse_args()
 
-    build_casebook(args.data_path, args.slang_path, args.output)
+    try:
+        build_casebook(args.data_path, args.slang_path, args.output)
+    except (FileNotFoundError, IsADirectoryError, OSError, json.JSONDecodeError, ValueError) as exc:
+        print(f"[ERROR] Failed to build casebook: {exc}")
+        sys.exit(1)
 
     if args.verify:
         import subprocess

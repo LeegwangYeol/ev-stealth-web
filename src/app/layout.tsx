@@ -260,7 +260,6 @@ export default function RootLayout({
             <details className="md:hidden relative group" id="mobile-nav-drawer" data-testid="mobile-drawer-toggle">
               <summary
                 aria-label="모바일 내비게이션 메뉴 토글"
-                role="button"
                 aria-expanded="false"
                 aria-controls="mobile-nav-panel"
                 className="list-none [&::-webkit-details-marker]:hidden shrink-0 whitespace-nowrap flex items-center gap-1.5 px-2.5 xs:px-3 py-2 min-h-[44px] min-w-[44px] rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-sm font-medium cursor-pointer border border-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 select-none"
@@ -271,8 +270,7 @@ export default function RootLayout({
                 <svg className="w-5 h-5 hidden group-open:block" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
-                <span className="group-open:hidden">메뉴 열기</span>
-                <span className="hidden group-open:inline">메뉴 닫기</span>
+                <span>메뉴</span>
               </summary>
 
               {/* Mobile Drawer Content */}

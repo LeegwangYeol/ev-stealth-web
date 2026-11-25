@@ -862,7 +862,11 @@ class TestCycle20MirrorParity(unittest.TestCase):
         """Verifies range sliders define localized aria-valuetext and live regions are polite."""
         dep_src = (APP_DIR / "depreciation-calculator" / "DepreciationCalculatorClient.tsx").read_text(encoding="utf-8")
         self.assertIn("aria-valuetext={`${holdingYears}년 보유`}", dep_src)
-        self.assertIn("aria-valuetext={`연간 ${annualMileageKm.toLocaleString()}km 주행`}", dep_src)
+        self.assertTrue(
+            "aria-valuetext={`연간 ${annualMileageKm.toLocaleString()}km 주행`}" in dep_src
+            or "aria-valuetext={`연간 ${annualMileageKm.toLocaleString('ko-KR')}km 주행`}" in dep_src,
+            "Annual mileage slider must declare localized aria-valuetext",
+        )
         self.assertIn("aria-valuetext={`급속 충전 비율 ${dcfcRatio}%`}", dep_src)
         self.assertIn("aria-valuetext={`${heldMonths}개월 운행`}", dep_src)
 

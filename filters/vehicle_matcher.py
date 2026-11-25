@@ -48,7 +48,7 @@ FULLWIDTH_TRANS: Dict[int, int] = {i: i - 0xFEE0 for i in range(0xFF01, 0xFF5F)}
 def _sanitize_matcher_text(val: Any, max_len: int) -> str:
     """Safely coerces input to str, strips null bytes, control chars, BiDi overrides & surrogates,
     normalizes NFC, and caps length."""
-    if val is None or val is False:
+    if val is None or isinstance(val, bool):
         return ""
     if isinstance(val, (bytes, bytearray)):
         val_str = _decode_bytes_safely(val)
@@ -159,11 +159,12 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     ), "Model 3", BRAND_TESLA),
     (re.compile(r"(모델\s*(?:y|와이)\s*(?:주니퍼|juniper)|model\s*y\s*(?:주니퍼|juniper)|my\s*(?:주니퍼|juniper)|(?<![가-힣a-zA-Z0-9])주니퍼(?!\s*(?:네트웍스|networks|라우터|router|스위치|switch))" + PARTICLE_LOOKAHEAD + r"|(?<![a-zA-Z0-9])juniper(?!\s*(?:networks|router|switch))(?![a-zA-Z0-9]))", re.IGNORECASE), "Model Y Juniper", BRAND_TESLA),
     (re.compile(
-        r"(모델\s*(?:y|와이)|model\s*y|(?:테슬라\s*(?:모와|모\s*[y와])|(?<![가-힣a-zA-Z0-9])모\s*y|(?<![가-힣a-zA-Z0-9])모와(?=\s*(?:rwd|awd|lwd|lr|p|롱레인지|롱레|스탠다드|스탠|퍼포먼스|퍼포|주니퍼|차주|오너|출고|인도|계약|단차|결함|승차감|전비|충전|배터리|사이드|시승|중고)|[은는이가을를의에과와도만로랑]))"
+        r"(모델\s*y(?![a-zA-Z0-9])|model\s*y(?![a-zA-Z0-9])"
+        r"|(?:모델\s*와이|(?:테슬라\s*(?:모와|모\s*[y와])|(?<![가-힣a-zA-Z0-9])모\s*y|(?<![가-힣a-zA-Z0-9])모와(?=\s*(?:rwd|awd|lwd|lr|p|롱레인지|롱레|스탠다드|스탠|퍼포먼스|퍼포|주니퍼|차주|오너|출고|인도|계약|단차|결함|승차감|전비|충전|배터리|사이드|시승|중고)|[은는이가을를의에과와도만로랑]))"
         r"|(?:테슬라\s*|tesla\s*)my"
         r"|\bmy(?=[은는이가을를의에과와도만로랑처조마나한께보부까]|으로|보다|부터|까지|처럼|조차|마저|한테|입|했|하|인|임|일)"
         r"|\bmy\s*(?:rwd|awd|lwd|lr|p|롱레인지|롱레|스탠다드|스탠|퍼포먼스|퍼포|차주|오너|출고|인도|계약|단차|결함|승차감)"
-        r")" + PARTICLE_LOOKAHEAD,
+        r")" + PARTICLE_LOOKAHEAD + r")",
         re.IGNORECASE,
     ), "Model Y", BRAND_TESLA),
     (re.compile(

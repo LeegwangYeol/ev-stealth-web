@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Mapping
 from datetime import date, datetime, timezone
+from decimal import Decimal
 import hashlib
 import json
 import math
@@ -42,7 +43,6 @@ DEFAULT_OUTPUT_PATH = str(
 
 def _safe_float(val: Any, default: float = 0.0) -> float:
     """Safely convert value to float, returning default on None, ValueError, TypeError, NaN, or Inf."""
-    from decimal import Decimal
     try:
         if isinstance(default, Decimal):
             safe_default = 0.0 if (default.is_nan() or default.is_infinite()) else float(default)
@@ -204,7 +204,6 @@ def format_daily_report_payload(
             if "confidence_score" in record_dict:
                 record_dict["confidence_score"] = _safe_float(record_dict.get("confidence_score"), 0.0)
             if isinstance(record_dict.get("dsi_breakdown"), Mapping):
-                from decimal import Decimal
                 cleaned_dsi: Dict[str, Any] = {}
                 for k, v in record_dict["dsi_breakdown"].items():
                     if isinstance(v, (int, float, Decimal)) or v is None:
@@ -487,7 +486,7 @@ def read_daily_reports(
         p = Path(path).resolve()
         if not p.exists() or p.is_dir():
             return {"reports": [], "statistics": {}}
-    except (OSError, ValueError, RuntimeError):
+    except (TypeError, OSError, ValueError, RuntimeError):
         return {"reports": [], "statistics": {}}
 
     from tracker.atomic_writer import (

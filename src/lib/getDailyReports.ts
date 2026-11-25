@@ -406,10 +406,13 @@ function stripSensitiveParamsFromUrlObj(urlObj: URL): boolean {
       modified = true;
     }
   }
-  // Strip sensitive OAuth/token parameters if leaked in hash fragments (e.g. #access_token=...)
+  // Strip sensitive OAuth/token parameters if leaked in hash fragments (e.g. #access_token=... or #/callback?access_token=...)
   if (urlObj.hash && urlObj.hash.includes('=')) {
     const rawFragment = urlObj.hash.slice(1);
-    const hashParams = new URLSearchParams(rawFragment);
+    const qIdx = rawFragment.indexOf('?');
+    const hashPrefix = qIdx !== -1 ? rawFragment.slice(0, qIdx) : '';
+    const hashQuery = qIdx !== -1 ? rawFragment.slice(qIdx + 1) : rawFragment;
+    const hashParams = new URLSearchParams(hashQuery);
     let hashModified = false;
     for (const hashKey of Array.from(hashParams.keys())) {
       if (REPORT_SENSITIVE_QUERY_KEYS.has(hashKey.toLowerCase())) {
@@ -418,8 +421,12 @@ function stripSensitiveParamsFromUrlObj(urlObj: URL): boolean {
       }
     }
     if (hashModified) {
-      const nextHash = hashParams.toString();
-      urlObj.hash = nextHash ? `#${nextHash}` : '';
+      const nextQuery = hashParams.toString();
+      if (hashPrefix) {
+        urlObj.hash = nextQuery ? `#${hashPrefix}?${nextQuery}` : `#${hashPrefix}`;
+      } else {
+        urlObj.hash = nextQuery ? `#${nextQuery}` : '';
+      }
       modified = true;
     }
   }

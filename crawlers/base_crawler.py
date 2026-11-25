@@ -25,6 +25,75 @@ logger = logging.getLogger("BaseCrawler")
 
 MAX_POST_CACHE_SIZE: int = 500
 _RE_SEMICOLON_HTML_ENTITY = re.compile(r"&(?:#\d+|#x[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]+);")
+_RE_OPEN_COMMENT_OR_SCRIPT = re.compile(r"<!--|<(script|style)\b[^>]*>", re.IGNORECASE)
+_RE_CLOSE_SCRIPT = re.compile(r"</script\s*>", re.IGNORECASE)
+_RE_CLOSE_STYLE = re.compile(r"</style\s*>", re.IGNORECASE)
+
+
+def _mask_comments_and_scripts(html_str: str) -> str:
+    """Replace HTML comments and script/style blocks with equal-length spaces in linear O(N) time."""
+    if not html_str:
+        return html_str
+    lower_html = html_str.lower()
+    if "<!--" not in html_str and "<script" not in lower_html and "<style" not in lower_html:
+        return html_str
+
+    last_comment_end = html_str.rfind("-->")
+    has_close_tag = {"script": True, "style": True}
+    parts: List[str] = []
+    pos = 0
+    n = len(html_str)
+
+    while pos < n:
+        m = _RE_OPEN_COMMENT_OR_SCRIPT.search(html_str, pos)
+        if not m:
+            parts.append(html_str[pos:])
+            break
+
+        tag_group = m.group(1)
+        if tag_group is None:
+            if last_comment_end == -1 or m.end() > last_comment_end:
+                parts.append(html_str[pos:m.end()])
+                pos = m.end()
+                continue
+            end_idx = html_str.find("-->", m.end())
+            if end_idx == -1:
+                parts.append(html_str[pos:m.end()])
+                pos = m.end()
+                continue
+            close_end = end_idx + 3
+            parts.append(html_str[pos:m.start()])
+            parts.append(" " * (close_end - m.start()))
+            pos = close_end
+        else:
+            tag_name = tag_group.lower()
+            if not has_close_tag[tag_name]:
+                parts.append(html_str[pos:m.end()])
+                pos = m.end()
+                continue
+            close_re = _RE_CLOSE_SCRIPT if tag_name == "script" else _RE_CLOSE_STYLE
+            close_m = close_re.search(html_str, m.end())
+            if close_m is None:
+                has_close_tag[tag_name] = False
+                parts.append(html_str[pos:m.end()])
+                pos = m.end()
+                continue
+            parts.append(html_str[pos:m.start()])
+            parts.append(" " * (close_m.end() - m.start()))
+            pos = close_m.end()
+
+    return "".join(parts)
+
+
+def _slice_to_last_close_tag(html_str: str, close_prefix: str) -> str:
+    """Bound regex dotall scans to the last matching closing tag (e.g. '</a', '</tr') to prevent O(N^2) ReDoS."""
+    idx = html_str.lower().rfind(close_prefix)
+    if idx == -1:
+        return ""
+    gt_idx = html_str.find(">", idx)
+    if gt_idx == -1:
+        return ""
+    return html_str[: gt_idx + 1]
 
 
 def _unescape_url_entities(raw_url: str) -> str:
@@ -46,7 +115,8 @@ def _has_unsafe_authority(parsed: urllib.parse.SplitResult) -> bool:
     """Reject userinfo (@) and backslashes in URL authority to prevent SSRF parser confusion."""
     if parsed.username is not None or parsed.password is not None:
         return True
-    if "\\" in (parsed.netloc or ""):
+    netloc = parsed.netloc or ""
+    if "@" in netloc or "\\" in netloc:
         return True
     return False
 
@@ -216,6 +286,8 @@ class BaseCrawler(abc.ABC):
                 return None
 
         eff_base = base_url if isinstance(base_url, str) and base_url.strip() else self.base_url
+        if isinstance(eff_base, str) and any(ord(c) < 32 or ord(c) == 127 for c in eff_base):
+            return None
         if eff_url.startswith("//"):
             base_scheme = "https"
             if isinstance(eff_base, str) and eff_base.strip():
@@ -230,6 +302,8 @@ class BaseCrawler(abc.ABC):
             if eff_base and isinstance(eff_base, str):
                 eff_url = urllib.parse.urljoin(eff_base.strip(), eff_url)
 
+        if any(ord(c) < 32 or ord(c) == 127 for c in eff_url):
+            return None
         try:
             parsed_out = urllib.parse.urlsplit(eff_url)
             _ = parsed_out.port

@@ -432,7 +432,11 @@ export const SubsidyTableView = memo(function SubsidyTableView({
 
   const renderedRows = useMemo(() => {
     return validRegions.map((region, idx) => {
-      const regionKey = region.region_id || region.iso_code || region.name_ko || `region-${idx}`;
+      const regionKey =
+        (typeof region.region_id === 'string' && region.region_id.trim()) ||
+        (typeof region.iso_code === 'string' && region.iso_code.trim()) ||
+        (typeof region.name_ko === 'string' && region.name_ko.trim()) ||
+        `region-${idx}`;
       return (
         <SubsidyTableRow
           key={regionKey}

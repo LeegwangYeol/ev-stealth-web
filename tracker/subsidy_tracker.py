@@ -116,6 +116,7 @@ _DISALLOWED_ENDPOINT_SUFFIXES: Tuple[str, ...] = (
     ".localdomain",
     ".intranet",
     ".lan",
+    ".home.arpa",
 )
 _STANDARD_ENDPOINT_PORTS: Set[int] = {80, 443, 8080, 8443, 8000, 8888}
 _NAT64_WELL_KNOWN_PREFIX = ipaddress.IPv6Network("64:ff9b::/96")
@@ -234,6 +235,8 @@ def _validate_endpoint_url(url: str, allow_private_ips: bool = False) -> Tuple[b
         return False, f"Invalid IDNA hostname '{host_lower}': {exc}"
     if not host_ascii:
         return False, "Missing hostname in URL"
+    if "%" in host_ascii:
+        return False, "IPv6 zone ID not allowed in endpoint URL"
     if host_ascii in _DISALLOWED_ENDPOINT_HOSTS:
         return False, f"Disallowed hostname '{host_ascii}'"
     for suffix in _DISALLOWED_ENDPOINT_SUFFIXES:
@@ -261,6 +264,8 @@ def _validate_endpoint_url(url: str, allow_private_ips: bool = False) -> Tuple[b
         addr_info = socket.getaddrinfo(host_ascii, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
         for _family, _socktype, _proto, _canonname, sockaddr in addr_info:
             ip_str = sockaddr[0]
+            if "%" in str(ip_str):
+                return False, f"Domain '{host_ascii}' resolves to scoped IP {ip_str}"
             try:
                 resolved_ip = ipaddress.ip_address(ip_str)
                 if not _is_safe_ip(resolved_ip):
@@ -296,28 +301,39 @@ class _SafeEndpointRedirectHandler(urllib.request.HTTPRedirectHandler):
             )
         new_req = super().redirect_request(req, fp, code, msg, headers, resolved_url)
         if new_req is not None:
+            strip_credentials = True
+            strip_referer = False
             try:
                 old_p = urllib.parse.urlsplit(req.full_url)
                 new_p = urllib.parse.urlsplit(new_req.full_url)
+                old_scheme = (old_p.scheme or "").lower()
+                new_scheme = (new_p.scheme or "").lower()
                 old_origin = (
-                    (old_p.scheme or "").lower(),
+                    old_scheme,
                     (old_p.hostname or "").lower().rstrip("."),
-                    old_p.port or (443 if (old_p.scheme or "").lower() == "https" else 80),
+                    old_p.port or (443 if old_scheme == "https" else 80),
                 )
                 new_origin = (
-                    (new_p.scheme or "").lower(),
+                    new_scheme,
                     (new_p.hostname or "").lower().rstrip("."),
-                    new_p.port or (443 if (new_p.scheme or "").lower() == "https" else 80),
+                    new_p.port or (443 if new_scheme == "https" else 80),
                 )
-                if old_origin != new_origin:
-                    for hdr in list(new_req.headers.keys()):
-                        if hdr.lower() in ("authorization", "proxy-authorization", "cookie"):
-                            new_req.remove_header(hdr)
-                    for hdr in list(getattr(new_req, "unredirected_hdrs", {}).keys()):
-                        if hdr.lower() in ("authorization", "proxy-authorization", "cookie"):
-                            del new_req.unredirected_hdrs[hdr]
+                strip_credentials = old_origin != new_origin
+                strip_referer = old_scheme == "https" and new_scheme == "http"
             except Exception:
-                pass
+                strip_credentials = True
+                strip_referer = True
+
+            if strip_credentials or strip_referer:
+                headers_to_strip = {"authorization", "proxy-authorization", "cookie"} if strip_credentials else set()
+                if strip_referer:
+                    headers_to_strip.add("referer")
+                for hdr in list(new_req.headers.keys()):
+                    if hdr.lower() in headers_to_strip:
+                        new_req.remove_header(hdr)
+                for hdr in list(getattr(new_req, "unredirected_hdrs", {}).keys()):
+                    if hdr.lower() in headers_to_strip:
+                        del new_req.unredirected_hdrs[hdr]
         return new_req
 
 try:
@@ -1240,7 +1256,11 @@ class SubsidyTracker:
             if r is None:
                 continue
             # Region overall status
-            st_raw = r.get("overall_status") if isinstance(r, dict) else getattr(r, "overall_status", "")
+            st_raw = (
+                (r.get("overall_status") or r.get("status"))
+                if isinstance(r, dict)
+                else getattr(r, "overall_status", "")
+            )
             if hasattr(st_raw, "value"):
                 st_raw = st_raw.value
             st_str = str(st_raw or "").strip()
@@ -1251,8 +1271,14 @@ class SubsidyTracker:
             if not isinstance(r_cats, dict):
                 r_cats = {}
 
-            if st_key not in alert_counts and (r_cats or (isinstance(r, dict) and "overall_depletion_rate" in r) or hasattr(r, "overall_depletion_rate")):
+            if st_key not in alert_counts and (
+                r_cats
+                or (isinstance(r, dict) and ("overall_depletion_rate" in r or "depletion_rate" in r))
+                or hasattr(r, "overall_depletion_rate")
+            ):
                 raw_rate = _metric_val(r, "overall_depletion_rate", None)
+                if raw_rate is None and isinstance(r, dict):
+                    raw_rate = r.get("depletion_rate")
                 if raw_rate is not None and not isinstance(raw_rate, bool):
                     try:
                         f_rate = float(_clean_num(raw_rate))
@@ -1367,6 +1393,12 @@ class SubsidyTracker:
         use_custom_opener = getattr(urllib.request.urlopen, "__module__", "") == "urllib.request"
         opener: Optional[urllib.request.OpenerDirector] = None
         if use_custom_opener:
+            if (_ResilientHTTPHandler is None or _ResilientHTTPSHandler is None) and not self.allow_private_ips:
+                logger.error(
+                    "Refusing live poll for %s: SSRF-safe socket-pinning HTTP/HTTPS handlers unavailable.",
+                    clean_url,
+                )
+                return None
             handlers: List[urllib.request.BaseHandler] = [
                 _SafeEndpointRedirectHandler(allow_private_ips=self.allow_private_ips)
             ]
@@ -1383,6 +1415,7 @@ class SubsidyTracker:
                         connect_timeout=self.timeout_seconds,
                         read_timeout=self.timeout_seconds,
                         allow_private_ips=self.allow_private_ips,
+                        allowed_ports=None if self.allow_private_ips else _STANDARD_ENDPOINT_PORTS,
                     )
                 )
             opener = urllib.request.build_opener(*handlers)

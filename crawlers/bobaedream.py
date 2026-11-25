@@ -23,10 +23,12 @@ from crawlers.base_crawler import (
     BaseCrawler,
     _has_unsafe_authority,
     _is_safe_client_url,
+    _mask_comments_and_scripts,
     _normalize_limit,
     _normalize_pages,
     _positive_float,
     _sanitize_referer,
+    _slice_to_last_close_tag,
     _unescape_url_entities,
 )
 from utils.http_client import SafeHttpClient, clean_html_text, encode_euc_kr_query, robust_decode
@@ -56,11 +58,6 @@ RE_COMMENT_OR_SCRIPT = re.compile(
     r"<!--.*?-->|<(script|style)\b[^>]*>.*?</\1\s*>",
     re.DOTALL | re.IGNORECASE,
 )
-
-
-def _mask_comments_and_scripts(html_str: str) -> str:
-    """Replace HTML comments and script/style blocks with equal-length spaces in one pass."""
-    return RE_COMMENT_OR_SCRIPT.sub(lambda m: " " * len(m.group(0)), html_str)
 
 
 def _canonicalize_bobaedream_href(raw_href: str) -> Optional[str]:
@@ -208,6 +205,7 @@ def is_deleted_or_restricted(html_content: Optional[str]) -> Tuple[bool, str]:
 
     # 2. Check if page has actual substantial article body:
     # If a page contains a large article body (> 50 chars), only alert(...) or explicit error titles indicate blocking/deletion
+    masked_html = _mask_comments_and_scripts(html_content)
     has_large_body = False
     for body_cls in ("bodyCont", "content01"):
         body_inner = extract_container_content(html_content, "div", body_cls)
@@ -215,21 +213,21 @@ def is_deleted_or_restricted(html_content: Optional[str]) -> Tuple[bool, str]:
             has_large_body = True
             break
     if not has_large_body:
-        body_match = re.search(r'class=["\']bodyCont["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
+        body_match = re.search(r'(?<=\s)class=["\']bodyCont["\'][^>]*>(.*?)</div>', masked_html, re.DOTALL | re.IGNORECASE)
         if not body_match:
-            body_match = re.search(r'<div\b[^>]*\bid=["\']print_area["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
+            body_match = re.search(r'<div\b[^>]*?(?<=\s)id=["\']print_area["\'][^>]*>(.*?)</div>', masked_html, re.DOTALL | re.IGNORECASE)
         body_inner = body_match.group(1) if body_match else ""
         if body_inner and len(clean_html_text(body_inner)) > 50:
             has_large_body = True
 
     if not has_large_body:
-        if re.search(r"(?:비정상적인|잘못된)\s*(?:접근|요청)입니다", html_content, re.IGNORECASE):
+        if re.search(r"(?:비정상적인|잘못된)\s*(?:접근|요청)입니다", masked_html, re.IGNORECASE):
             return True, "abnormal_access_blocked"
-        if re.search(r"(?:접근이\s*차단되었습니다|(?:차단된|제한된)\s*(?:아이피|IP))", html_content, re.IGNORECASE):
+        if re.search(r"(?:접근이\s*차단되었습니다|(?:차단된|제한된)\s*(?:아이피|IP))", masked_html, re.IGNORECASE):
             return True, "ip_blocked"
-        if re.search(r"(?:자동\s*방지\s*문자|보안\s*문자를\s*입력|reCAPTCHA|hCaptcha)", html_content, re.IGNORECASE):
+        if re.search(r"(?:자동\s*방지\s*문자|보안\s*문자를\s*입력|reCAPTCHA|hCaptcha)", masked_html, re.IGNORECASE):
             return True, "captcha_challenge"
-        if re.search(r"(?:서비스\s*점검\s*중|시스템\s*점검\s*중)", html_content, re.IGNORECASE):
+        if re.search(r"(?:서비스\s*점검\s*중|시스템\s*점검\s*중)", masked_html, re.IGNORECASE):
             return True, "service_maintenance"
 
     # Deleted or Non-existent posts
@@ -249,9 +247,11 @@ def is_deleted_or_restricted(html_content: Optional[str]) -> Tuple[bool, str]:
         r"작성자에\s*의해\s*삭제된\s*게시글",
     ]
     for pat in deleted_patterns:
-        if has_large_body and not pat.startswith("alert"):
+        is_alert = pat.startswith("alert")
+        if has_large_body and not is_alert:
             continue
-        if re.search(pat, html_content, re.IGNORECASE):
+        target_str = html_content if is_alert else masked_html
+        if re.search(pat, target_str, re.IGNORECASE):
             return True, "deleted_post"
 
     # 3. Secret / Restricted / Member-only posts
@@ -270,9 +270,11 @@ def is_deleted_or_restricted(html_content: Optional[str]) -> Tuple[bool, str]:
         r"성인\s*인증이\s*필요한\s*게시물입니다",
     ]
     for pat in restricted_patterns:
-        if has_large_body and not pat.startswith("alert"):
+        is_alert = pat.startswith("alert")
+        if has_large_body and not is_alert:
             continue
-        if re.search(pat, html_content, re.IGNORECASE):
+        target_str = html_content if is_alert else masked_html
+        if re.search(pat, target_str, re.IGNORECASE):
             return True, "restricted_post"
 
     return False, ""
@@ -660,6 +662,9 @@ class BobaeDreamCrawler(BaseCrawler):
             return []
 
         scan_html = _mask_comments_and_scripts(html_content)
+        a_scan_html = _slice_to_last_close_tag(scan_html, "</a")
+        if not a_scan_html:
+            return []
         items: List[Dict[str, Any]] = []
         seen_nos = set()
 
@@ -701,7 +706,7 @@ class BobaeDreamCrawler(BaseCrawler):
             re.IGNORECASE | re.DOTALL,
         )
 
-        for match in link_pattern.finditer(scan_html):
+        for match in link_pattern.finditer(a_scan_html):
             raw_href = match.group(1)
             raw_title = match.group(2)
 
@@ -730,12 +735,12 @@ class BobaeDreamCrawler(BaseCrawler):
                 r'<a\s+[^>]*\bhref\s*=\s*(?:"([^"]*)"|\'([^\']*)\')[^>]*>(.*?)</a>',
                 re.IGNORECASE | re.DOTALL,
             )
-            for dq_href, sq_href, raw_title in alt_anchor_re.findall(scan_html):
-                full_href_raw = dq_href or sq_href
+            for dq_href, sq_href, raw_title in alt_anchor_re.findall(a_scan_html):
+                full_href_raw = _unescape_url_entities((dq_href or sq_href).strip()).strip()
                 if not full_href_raw or "view" not in full_href_raw.lower():
                     continue
-                no_m = re.search(r"No=(\d+)", full_href_raw, re.IGNORECASE)
-                code_m = re.search(r"code=([^&]+)", full_href_raw, re.IGNORECASE)
+                no_m = re.search(r"[?&](?:b_|bm_)?no=(\d+)", full_href_raw, re.IGNORECASE)
+                code_m = re.search(r"[?&]code=([a-zA-Z0-9_-]+)", full_href_raw, re.IGNORECASE)
                 if no_m and code_m:
                     _append_item(full_href_raw, no_m.group(1), code_m.group(1), raw_title)
 
@@ -853,7 +858,7 @@ class BobaeDreamCrawler(BaseCrawler):
     def fetch_ajax_comments(
         self,
         ajax_url: str,
-        referer: str,
+        referer: Optional[str] = None,
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
     ) -> List[str]:
         """Fetch and parse dynamic comments from comment_list.php."""
@@ -963,15 +968,15 @@ class BobaeDreamCrawler(BaseCrawler):
         # 2. Title - resilient against attribute order, tag structures, empty leading tags, and entities
         title = ""
         for pat in (
-            r'<strong\b(?=[^>]*\bclass=["\']?[^"\'>]*\btitle\b)[^>]*>(.*?)</strong>',
-            r'<dt\b(?=[^>]*\bclass=["\']?[^"\'>]*\btit\b)[^>]*>(.*?)</dt>',
-            r'<h[1-3]\b(?=[^>]*\bclass=["\']?[^"\'>]*title)[^>]*>(.*?)</h[1-3]>',
-            r'<meta\b(?=[^>]*\bproperty=["\']og:title["\'])[^>]*\bcontent=(?:"([^"]*)"|\'([^\']*)\')',
-            r'<meta\b(?=[^>]*\bcontent=(?:"([^"]*)"|\'([^\']*)\'))[^>]*\bproperty=["\']og:title["\']',
+            r'<strong\b(?=[^>]*?(?<=\s)class=["\']?[^"\'>]*\btitle\b)[^>]*>(.*?)</strong>',
+            r'<dt\b(?=[^>]*?(?<=\s)class=["\']?[^"\'>]*\btit\b)[^>]*>(.*?)</dt>',
+            r'<(?P<tag>h[1-3])\b(?=[^>]*?(?<=\s)class=["\']?[^"\'>]*title)[^>]*>(.*?)</(?P=tag)>',
+            r'<meta\b(?=[^>]*?(?<=\s)property=["\']og:title["\'])[^>]*?(?<=\s)content=(?:"([^"]*)"|\'([^\']*)\')',
+            r'<meta\b(?=[^>]*?(?<=\s)content=(?:"([^"]*)"|\'([^\']*)\'))[^>]*?(?<=\s)property=["\']og:title["\']',
         ):
             m = re.search(pat, masked_html, re.DOTALL | re.IGNORECASE)
             if m:
-                raw_cand = next((g for g in m.groups() if g is not None), "")
+                raw_cand = next((g for g in m.groups() if g is not None and g != m.groupdict().get("tag")), "")
                 candidate = clean_title_text(raw_cand)
                 if candidate:
                     title = candidate
@@ -999,10 +1004,14 @@ class BobaeDreamCrawler(BaseCrawler):
                     break
 
         raw_date = ""
-        # Support <span>, <td>, <em>, or <div> containing class="date"
-        date_match = re.search(r'<(?:span|td|em|div|p)\b[^>]*class=["\'][^"\']*\bdate\b[^"\']*["\'][^>]*>(.*?)</(?:span|td|em|div|p)>', masked_html, re.DOTALL | re.IGNORECASE)
+        # Support <span>, <td>, <em>, <p>, or <div> containing class="date"
+        date_match = re.search(
+            r'<(?P<tag>span|td|em|div|p)\b[^>]*?(?<=\s)class=["\'][^"\']*\bdate\b[^"\']*["\'][^>]*>(.*?)</(?P=tag)>',
+            masked_html,
+            re.DOTALL | re.IGNORECASE,
+        )
         if date_match:
-            raw_date = clean_html_text(date_match.group(1))
+            raw_date = clean_html_text(date_match.group(2))
         if not raw_date:
             generic_date = re.search(r'(\d{4}[.\-/]\d{2}[.\-/]\d{2}(?:[\sT]+\d{2}:\d{2}(?::\d{2})?)?)', masked_html)
             if generic_date:
@@ -1018,11 +1027,11 @@ class BobaeDreamCrawler(BaseCrawler):
 
         if not content:
             # Fallback 1: check with comment anchor
-            body_match = re.search(r'<div class=["\']bodyCont["\'][^>]*>(.*?)</div>\s*<!--\s*//bodyCont', html_content, re.DOTALL | re.IGNORECASE)
+            body_match = re.search(r'<div\b[^>]*?(?<=\s)class=["\']bodyCont["\'][^>]*>(.*?)</div>\s*<!--\s*//bodyCont', html_content, re.DOTALL | re.IGNORECASE)
             if not body_match:
-                body_match = re.search(r'<div class=["\']bodyCont["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
+                body_match = re.search(r'<div\b[^>]*?(?<=\s)class=["\']bodyCont["\'][^>]*>(.*?)</div>', masked_html, re.DOTALL | re.IGNORECASE)
             if not body_match:
-                body_match = re.search(r'<div id=["\']print_area["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
+                body_match = re.search(r'<div\b[^>]*?(?<=\s)id=["\']print_area["\'][^>]*>(.*?)</div>', masked_html, re.DOTALL | re.IGNORECASE)
             if body_match:
                 content = clean_html_text(body_match.group(1)).replace("\xa0", " ").strip()
             if not content:
@@ -1030,7 +1039,7 @@ class BobaeDreamCrawler(BaseCrawler):
                 if content01_extracted:
                     content = clean_html_text(content01_extracted).replace("\xa0", " ").strip()
             if not content:
-                body_match = re.search(r'<div class=["\']content01["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
+                body_match = re.search(r'<div\b[^>]*?(?<=\s)class=["\']content01["\'][^>]*>(.*?)</div>', masked_html, re.DOTALL | re.IGNORECASE)
                 if body_match:
                     content = clean_html_text(body_match.group(1)).replace("\xa0", " ").strip()
 

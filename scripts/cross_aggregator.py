@@ -165,8 +165,8 @@ class CrossAggregator:
             title = str(r.get("post_title") or "").lower()
             combined = f"{veh} {quote} {title}"
 
-            tier = str(r.get("sentiment_tier") or "NEGATIVE")
-            cat = str(r.get("category") or "parking")
+            tier = str(r.get("sentiment_tier") or "NEGATIVE").strip() or "NEGATIVE"
+            cat = str(r.get("category") or "parking").strip() or "parking"
             dsi = _safe_finite_float(r.get("dsi_score"), 5.0)
             pol = _safe_finite_float(r.get("polarity_score"), -0.5)
 
@@ -337,7 +337,7 @@ class CrossAggregator:
         clean_records = [r for r in (records or []) if isinstance(r, dict)]
         for r in clean_records:
             veh = str(r.get("target_vehicle") or "").strip() or "Unknown EV"
-            cat = str(r.get("category") or "parking")
+            cat = str(r.get("category") or "parking").strip() or "parking"
             dsi = _safe_finite_float(r.get("dsi_score"), 5.0)
 
             # Determine segment
@@ -454,8 +454,8 @@ class CrossAggregator:
             match = re.search(r"(?<!\d)(202[4-6])(?:(?!\d)|(?=\d{4}(?!\d)))", ts)
             year = match.group(1) if match else "2026"
 
-            tier = str(r.get("sentiment_tier") or "NEGATIVE")
-            cat = str(r.get("category") or "parking")
+            tier = str(r.get("sentiment_tier") or "NEGATIVE").strip() or "NEGATIVE"
+            cat = str(r.get("category") or "parking").strip() or "parking"
             dsi = _safe_finite_float(r.get("dsi_score"), 5.0)
 
             grp = temporal_groups.get(year, temporal_groups["2026"])
@@ -523,7 +523,7 @@ class CrossAggregator:
 
         # Single O(N) pass over clean_records to populate all 4 contingency matrices
         for r in clean_records:
-            plat = str(r.get("platform") or "").lower()
+            plat = str(r.get("platform") or "").strip().lower()
             tier = r.get("sentiment_tier")
             cat = r.get("category")
             target_veh_lower = str(r.get("target_vehicle") or "").lower()

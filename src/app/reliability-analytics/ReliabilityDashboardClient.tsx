@@ -17,7 +17,17 @@ import {
   getVerdictBadgeInfo,
   getDsiSeverityLevel,
   getGradeBadgeStyle,
+  resolveBrandReliability,
 } from '@/lib/reliabilityCalculations';
+import { maskAuthor } from '@/lib/reportCalculations';
+import { stripHtmlTags } from '@/lib/sanitizeUrl';
+
+function sanitizeAndMaskText(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const stripped = stripHtmlTags(raw).trim();
+  if (!stripped) return '';
+  return maskAuthor(stripped).replace(/\b\d{6}-[1-4]\d{6}\b/g, '******-*******');
+}
 
 interface ReliabilityDashboardClientProps {
   initialData: ReliabilityTrendsDatabase;
@@ -73,25 +83,14 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
 /**
  * Fuzzy brand resolver for deep-linking query parameter (?brand=...)
  */
-function resolveBrandId(input: string, brands: BrandReliability[] = []): string | null {
+export function resolveBrandId(input: string, brands: BrandReliability[] = []): string | null {
   if (!input || !Array.isArray(brands)) return null;
   const clean = input.slice(0, 100).trim().toLowerCase();
   if (!clean) return null;
   if (clean === 'all') return 'ALL';
 
-  const exact = brands.find((b) => b?.id?.toLowerCase() === clean);
-  if (exact) return exact.id;
-
-  const match = brands.find((b) => {
-    if (!b) return false;
-    const en = (b.name_en || '').trim().toLowerCase();
-    const ko = (b.name_ko || '').trim().toLowerCase();
-    return (
-      (en.length > 0 && (clean === en || en.includes(clean) || clean.includes(en))) ||
-      (ko.length > 0 && (clean === ko || ko.includes(clean) || clean.includes(ko)))
-    );
-  });
-  if (match) return match.id;
+  const resolved = resolveBrandReliability(clean, { brands } as ReliabilityTrendsDatabase);
+  if (resolved?.id) return resolved.id;
 
   if (clean.includes('hyundai') || clean.includes('현대')) return 'hyundai';
   if (clean.includes('kia') || clean.includes('기아')) return 'kia';
@@ -101,7 +100,7 @@ function resolveBrandId(input: string, brands: BrandReliability[] = []): string 
   if (clean.includes('benz') || clean.includes('벤츠') || clean.includes('mercedes')) return 'mercedes-benz';
   if (clean.includes('bmw')) return 'bmw';
   if (clean.includes('polestar') || clean.includes('폴스타')) return 'polestar';
-  if (clean.includes('gm') || clean.includes('chevrolet') || clean.includes('쉐보레')) {
+  if (/(?:^|[^a-z])gm(?:[^a-z]|$)/.test(clean) || clean.includes('chevrolet') || clean.includes('쉐보레')) {
     return brands.find((b) => b.id.toLowerCase().includes('gm'))?.id || 'gm-chevrolet';
   }
 
@@ -218,8 +217,8 @@ const HeatmapRow = React.memo(function HeatmapRow({
         const safeDsi = Number.isFinite(evalData.dsi_score)
           ? Math.min(100, Math.max(0, evalData.dsi_score)) + 0
           : 0;
-        const primaryDefect = evalData.primary_defect || '특이 결함 없음';
-        const rawQuote = evalData.raw_quote || '';
+        const primaryDefect = sanitizeAndMaskText(evalData.primary_defect) || '특이 결함 없음';
+        const rawQuote = sanitizeAndMaskText(evalData.raw_quote);
 
         const cellColor =
           evalData.verdict === 'AVOID'
@@ -469,7 +468,7 @@ const RepairCostMatrixRow = React.memo(function RepairCostMatrixRow({ item }: Re
       </td>
       <td className="p-4 text-xs text-slate-700 leading-relaxed align-top">
         <span className="font-semibold text-rose-800 mr-1">주의:</span>
-        {item.critical_warning || '-'}
+        {sanitizeAndMaskText(item.critical_warning) || '-'}
       </td>
     </tr>
   );
@@ -495,6 +494,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
   const [compareBrandB, setCompareBrandB] = useState<string>('tesla');
   const [hoveredRadarCategory, setHoveredRadarCategory] = useState<string | null>(null);
   const [pinnedRadarCategory, setPinnedRadarCategory] = useState<string | null>(null);
+  const [focusedRadarCategory, setFocusedRadarCategory] = useState<string | null>(null);
   const [hoveredSvgBrand, setHoveredSvgBrand] = useState<BrandReliability | null>(null);
   const [cellPreview, setCellPreview] = useState<{
     modelName: string;
@@ -597,10 +597,12 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
           if (y.year >= 2024) hasLateYear = true;
         }
 
-        const symptoms = Array.isArray(y.chronic_symptoms) ? y.chronic_symptoms : [];
-        const defectText = `${y.primary_defect || ''} ${symptoms.join(' ')}`.toLowerCase();
+        const symptoms = Array.isArray(y.chronic_symptoms) ? y.chronic_symptoms.map((s) => sanitizeAndMaskText(s)).filter(Boolean) : [];
+        const cleanDefect = sanitizeAndMaskText(y.primary_defect);
+        const cleanQuote = sanitizeAndMaskText(y.raw_quote);
+        const defectText = `${cleanDefect} ${symptoms.join(' ')}`.toLowerCase();
         evalTexts.push(defectText);
-        if (y.raw_quote) evalTexts.push(y.raw_quote.toLowerCase());
+        if (cleanQuote) evalTexts.push(cleanQuote.toLowerCase());
 
         for (const [catKey, kws] of Object.entries(CATEGORY_KEYWORDS)) {
           if (!categoryMatch.has(catKey)) {
@@ -1028,6 +1030,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
     if (activeChartTab !== 'brand_compare') {
       setHoveredRadarCategory(null);
       setPinnedRadarCategory(null);
+      setFocusedRadarCategory(null);
     }
   }, [activeChartTab]);
 
@@ -1491,7 +1494,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                       type="button"
                       onClick={handleCloseCell}
                       aria-label="결함 세부정보 닫기 (Esc)"
-                      className="px-3 py-1.5 min-h-[44px] bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                      className="px-3 py-1.5 min-w-[44px] min-h-[44px] inline-flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                     >
                       닫기
                     </button>
@@ -1960,6 +1963,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   {/* Interactive Vertex Nodes and Labels (1 focusable group per axis with >=44px touch hit targets) */}
                   {radarAxes.map((axis) => {
                     const isActive = activeRadarCode === axis.code;
+                    const isFocused = focusedRadarCategory === axis.code;
                     const isPinned = pinnedRadarCategory === axis.code;
                     const isOverlapping = Math.hypot(axis.xA - axis.xB, axis.yA - axis.yB) < 8;
                     const togglePin = () =>
@@ -1985,8 +1989,14 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         className="cursor-pointer focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 focus-visible:outline-offset-2"
                         onMouseEnter={() => setHoveredRadarCategory(axis.code)}
                         onMouseLeave={() => setHoveredRadarCategory((prev) => (prev === axis.code ? null : prev))}
-                        onFocus={() => setHoveredRadarCategory(axis.code)}
-                        onBlur={() => setHoveredRadarCategory((prev) => (prev === axis.code ? null : prev))}
+                        onFocus={() => {
+                          setHoveredRadarCategory(axis.code);
+                          setFocusedRadarCategory(axis.code);
+                        }}
+                        onBlur={() => {
+                          setHoveredRadarCategory((prev) => (prev === axis.code ? null : prev));
+                          setFocusedRadarCategory((prev) => (prev === axis.code ? null : prev));
+                        }}
                         onClick={togglePin}
                         onKeyDown={handleVertexKeyDown}
                       >
@@ -2007,9 +2017,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                               x={axis.labelX}
                               y={startY}
                               textAnchor={axis.textAnchor}
-                              fill={isActive ? '#93c5fd' : '#f8fafc'}
+                              fill={isActive || isFocused ? '#93c5fd' : '#f8fafc'}
                               fontSize="11"
-                              fontWeight={isActive ? 'bold' : '600'}
+                              fontWeight={isActive || isFocused ? 'bold' : '600'}
                               className="transition-colors"
                             >
                               {labelLines.map((line, lineIdx) => (
@@ -2026,7 +2036,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         })()}
 
                         {/* Explicit SVG focus/active rings around vertices for Safari/WebKit visibility */}
-                        {isActive && (
+                        {(isActive || isFocused) && (
                           <>
                             <circle
                               cx={axis.xA}
@@ -3012,7 +3022,7 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
                       </span>
                     </div>
                     <div className="text-[11px] font-medium leading-snug">
-                      {yEval.primary_defect || '특이 결함 없음'}
+                      {sanitizeAndMaskText(yEval.primary_defect) || '특이 결함 없음'}
                     </div>
                     <div className="flex items-center justify-between text-[10px] text-slate-700 pt-1 border-t border-slate-200/40">
                       <span>발생률: <strong>{safeRate}%</strong></span>
@@ -3027,9 +3037,10 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
 
         {/* Authentic Owner Quote */}
         {(() => {
-          const firstQuote = model.year_evaluations?.find(
+          const rawFirstQuote = model.year_evaluations?.find(
             (y) => y && typeof y.raw_quote === 'string' && y.raw_quote.trim().length > 0
           )?.raw_quote;
+          const firstQuote = sanitizeAndMaskText(rawFirstQuote);
           if (!firstQuote) return null;
           return (
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-xs text-slate-700 italic">

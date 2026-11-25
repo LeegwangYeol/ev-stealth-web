@@ -875,7 +875,7 @@ export function parseRecallDate(dateStr?: string | null): Date | null {
 
   // 1. Try standard regex pattern for YYYY.MM.DD, YYYY-MM-DD, YYYY/MM/DD (with optional validated time suffix)
   const delimiterMatch = clean.match(
-    /^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})(?:$|(?:T|\s+)(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|([+-])(\d{2}):?(\d{2}))?$)/i
+    /^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})(?:$|(?:T|\s+)(\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|([+-])(\d{2}):?(\d{2}))?$)/i
   );
   if (delimiterMatch) {
     const year = parseInt(delimiterMatch[1], 10);
@@ -945,7 +945,7 @@ export function parseRecallDate(dateStr?: string | null): Date | null {
 
   // 4. Explicit UTC parsing for English month-name dates (avoids local-timezone shift and V8 calendar rollover)
   const monthFirstMatch = clean.match(
-    /^([a-z]{3,9})\.?[\s\-/]+(\d{1,2})(?:st|nd|rd|th)?(?:,)?[\s\-/]+(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/i
+    /^([a-z]{3,9})\.?[\s\-/]+(\d{1,2})(?:st|nd|rd|th)?(?:,)?[\s\-/]+(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/i
   );
   if (monthFirstMatch) {
     const hour = monthFirstMatch[4] !== undefined ? parseInt(monthFirstMatch[4], 10) : 0;
@@ -965,7 +965,7 @@ export function parseRecallDate(dateStr?: string | null): Date | null {
   }
 
   const dayFirstMatch = clean.match(
-    /^(\d{1,2})(?:st|nd|rd|th)?[\s\-/]+([a-z]{3,9})\.?(?:,)?[\s\-/]+(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/i
+    /^(\d{1,2})(?:st|nd|rd|th)?[\s\-/]+([a-z]{3,9})\.?(?:,)?[\s\-/]+(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/i
   );
   if (dayFirstMatch) {
     const hour = dayFirstMatch[4] !== undefined ? parseInt(dayFirstMatch[4], 10) : 0;
@@ -985,7 +985,7 @@ export function parseRecallDate(dateStr?: string | null): Date | null {
   }
 
   const yearFirstMonthNameMatch = clean.match(
-    /^(\d{4})[\s\-/]+([a-z]{3,9})\.?[\s\-/]+(\d{1,2})(?:st|nd|rd|th)?(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/i
+    /^(\d{4})[\s\-/]+([a-z]{3,9})\.?[\s\-/]+(\d{1,2})(?:st|nd|rd|th)?(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/i
   );
   if (yearFirstMonthNameMatch) {
     const hour = yearFirstMonthNameMatch[4] !== undefined ? parseInt(yearFirstMonthNameMatch[4], 10) : 0;
@@ -1352,7 +1352,7 @@ const BRAND_WORD_BOUNDARY_REGEX_CACHE = new Map<string, RegExp>();
 
 function matchesTargetBrandMention(campTargetLower: string, brandTermLower: string): boolean {
   if (!brandTermLower || brandTermLower.length < 2) return false;
-  if (/^[a-z0-9]+$/i.test(brandTermLower) && brandTermLower.length <= 3) {
+  if (/^[a-z0-9]+$/i.test(brandTermLower) && brandTermLower.length <= 4) {
     let re = BRAND_WORD_BOUNDARY_REGEX_CACHE.get(brandTermLower);
     if (!re) {
       const escaped = brandTermLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

@@ -771,7 +771,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   }, []);
 
   const handleSelectZone = useCallback((zone: ZoneFilter) => {
-    setZoneFilter(zone);
+    setZoneFilter((prev) => (zone === 'ALL' || prev === zone ? 'ALL' : zone));
   }, []);
 
   const handleResetFilters = useCallback(() => {
@@ -816,7 +816,11 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   const renderedGridCards = useMemo(() => {
     if (viewMode !== 'grid') return null;
     return filteredRegions.map((regionItem, idx) => {
-      const regionKey = regionItem.region_id || regionItem.iso_code || regionItem.name_ko || `region-${idx}`;
+      const regionKey =
+        (typeof regionItem.region_id === 'string' && regionItem.region_id.trim()) ||
+        (typeof regionItem.iso_code === 'string' && regionItem.iso_code.trim()) ||
+        (typeof regionItem.name_ko === 'string' && regionItem.name_ko.trim()) ||
+        `region-${idx}`;
       return (
         <RegionCard
           key={regionKey}
@@ -929,7 +933,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               value={searchQuery}
               onChange={handleSearchChange}
               placeholder="시·도 또는 세부 시·군·구 검색 (예: 서울, 수원, 성남, 대구, 포항, 울릉)"
-              className="w-full pl-10 pr-11 py-2.5 min-h-[44px] rounded-xl bg-slate-950 border border-slate-500 text-white placeholder-slate-300 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              className="w-full pl-10 pr-11 py-2.5 min-h-[44px] rounded-xl bg-slate-950 border border-slate-500 text-white placeholder-slate-300 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
             />
             {searchQuery && (
               <button
@@ -950,7 +954,11 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
                 key={zone.id}
                 type="button"
                 aria-pressed={zoneFilter === zone.id}
-                aria-label={`${zone.label} 권역 필터 ${zoneFilter === zone.id ? '해제' : '적용'}`}
+                aria-label={
+                  zone.id === 'ALL'
+                    ? '전국 전체 권역 보기'
+                    : `${zone.label} 권역 필터 ${zoneFilter === zone.id ? '해제' : '적용'}`
+                }
                 onClick={() => handleSelectZone(zone.id)}
                 className={`px-2.5 py-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg border font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                   zoneFilter === zone.id
@@ -1037,7 +1045,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               <button
                 type="button"
                 aria-pressed={viewMode === 'grid'}
-                aria-label="카드 그리드 형식으로 보기"
+                aria-label="카드 보기 (그리드 형식)"
                 onClick={handleSetViewGrid}
                 className={`px-3 py-1.5 min-h-[44px] inline-flex items-center justify-center gap-1 rounded-lg font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                   viewMode === 'grid'
@@ -1050,7 +1058,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               <button
                 type="button"
                 aria-pressed={viewMode === 'table'}
-                aria-label="표(테이블) 형식으로 보기"
+                aria-label="표로 보기 (테이블 형식)"
                 onClick={handleSetViewTable}
                 className={`px-3 py-1.5 min-h-[44px] inline-flex items-center justify-center gap-1 rounded-lg font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${
                   viewMode === 'table'
@@ -1622,7 +1630,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
       customMsrpNum =
         Number.isFinite(parsedCustomMsrp) && parsedCustomMsrp > 0
           ? parsedCustomMsrp
-          : (Number.isFinite(activeModel?.base_price_krw) ? activeModel!.base_price_krw : 0);
+          : toSafeNonNeg(activeModel?.base_price_krw);
     }
     return calculateNetSubsidyPure(
       activeModel,

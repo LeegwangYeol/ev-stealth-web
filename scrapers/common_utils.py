@@ -637,6 +637,13 @@ def _create_safe_connection(
                     sock.close()
                 except OSError:
                     pass
+        except Exception:
+            if sock is not None:
+                try:
+                    sock.close()
+                except OSError:
+                    pass
+            raise
     if err is not None:
         raise err
     raise OSError(f"getaddrinfo returns an empty list for {host}:{port}")
@@ -1722,6 +1729,7 @@ class SafeHttpClient:
 
         Returns: (status_code, decoded_text, raw_bytes)
         """
+        self.last_response_from_cache = False
         if not url or not isinstance(url, str) or not url.strip():
             logger.warning(f"Invalid or empty URL provided to request: {url!r}")
             return 0, "", b""
@@ -2111,9 +2119,9 @@ class SafeHttpClient:
         if not raw_bytes:
             return "utf-8"
 
-        # Check HTML meta charset in initial bytes
+        # Check HTML meta charset in initial bytes (ignoring HTML comments)
         head_bytes = bytes(raw_bytes[:16384]) if isinstance(raw_bytes, (bytearray, memoryview)) else raw_bytes[:16384]
-        prefix = head_bytes.decode("ascii", "ignore")
+        prefix = _RE_HTML_COMMENT.sub(" ", head_bytes.decode("ascii", "ignore"))
         meta_match = re.search(r'<meta\b[^>]*\bcharset\s*=\s*["\']?([\w\-]+)', prefix, re.IGNORECASE)
         if meta_match:
             return meta_match.group(1).strip().lower()
@@ -2170,7 +2178,17 @@ def robust_decode(raw_bytes: Union[bytes, bytearray, memoryview, str, None], dec
         seen.add(enc)
         try:
             return raw_bytes.decode(enc)
-        except (UnicodeDecodeError, LookupError):
+        except UnicodeDecodeError as ude:
+            if (
+                enc == "utf-8"
+                and norm_declared == "utf-8"
+                and ude.reason == "unexpected end of data"
+                and ude.end == len(raw_bytes)
+                and ude.start >= max(0, len(raw_bytes) - 3)
+            ):
+                return raw_bytes.decode("utf-8", errors="replace")
+            continue
+        except LookupError:
             continue
 
     if has_utf8_bom:

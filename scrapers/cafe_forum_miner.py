@@ -34,6 +34,7 @@ from scrapers.common_utils import (
     encode_euc_kr_query,
     extract_defect_topic,
     extract_slang_terms,
+    is_allowed_domain_url,
     load_platform_seed_records,
     normalize_scraper_url,
     polite_delay,
@@ -158,9 +159,9 @@ class CafeForumMiner:
 
         for page in range(1, eff_pages + 1):
             try:
-                encoded_kw = urllib.parse.quote(kw_str.encode("euc-kr"))
+                encoded_kw = urllib.parse.quote(kw_str.encode("euc-kr"), safe="")
             except UnicodeEncodeError:
-                encoded_kw = urllib.parse.quote(kw_str.encode("cp949", errors="replace"))
+                encoded_kw = urllib.parse.quote(kw_str.encode("cp949", errors="replace"), safe="")
 
             search_url = f"{POMPPU_CAR_URL}&search_type=sub_memo&keyword={encoded_kw}&page={page}"
             logger.info(f"Searching Pomppu Car Forum for '{kw_str}' (Page {page})...")
@@ -212,7 +213,7 @@ class CafeForumMiner:
                 continue
             post_no = no_match.group(1)
             full_url = normalize_scraper_url(href, f"{POMPPU_BASE_URL}/zboard")
-            if not full_url or full_url in seen_urls:
+            if not full_url or not is_allowed_domain_url(full_url, ("ppomppu.co.kr",)) or full_url in seen_urls:
                 continue
             seen_urls.add(full_url)
             items.append({
@@ -236,7 +237,7 @@ class CafeForumMiner:
             eff_pages = 1
 
         for page in range(0, eff_pages):
-            encoded_kw = urllib.parse.quote(kw_str)
+            encoded_kw = urllib.parse.quote(kw_str, safe="")
             search_url = f"{CLIEN_CAR_URL}?&od=T31&po={page}&sk=title&sv={encoded_kw}"
             logger.info(f"Searching Clien cm_car for '{kw_str}' (Page {page})...")
 
@@ -282,7 +283,7 @@ class CafeForumMiner:
             if not clean_title or len(clean_title) < 4:
                 continue
             full_url = normalize_scraper_url(href, CLIEN_BASE_URL)
-            if not full_url or full_url in seen_urls:
+            if not full_url or not is_allowed_domain_url(full_url, ("clien.net",)) or full_url in seen_urls:
                 continue
             seen_urls.add(full_url)
             items.append({
@@ -313,8 +314,21 @@ class CafeForumMiner:
         if raw_post_url:
             if any(ord(c) < 32 or ord(c) == 127 for c in raw_post_url):
                 return None
-            parsed_url = urllib.parse.urlsplit(raw_post_url)
-            if parsed_url.scheme and parsed_url.scheme.lower() not in ("http", "https"):
+            try:
+                parsed_url = urllib.parse.urlsplit(raw_post_url)
+            except ValueError:
+                return None
+            if (
+                "\\" in (parsed_url.netloc or "")
+                or any(c.isspace() for c in (parsed_url.netloc or ""))
+                or parsed_url.username is not None
+                or parsed_url.password is not None
+            ):
+                return None
+            if parsed_url.scheme:
+                if parsed_url.scheme.lower() not in ("http", "https") or not parsed_url.netloc:
+                    return None
+            elif raw_post_url.startswith("//") and not parsed_url.netloc:
                 return None
         post_url = raw_post_url
         post_title = str(raw_data.get("post_title") or "중국 전기차 사용자 결함 리포트")

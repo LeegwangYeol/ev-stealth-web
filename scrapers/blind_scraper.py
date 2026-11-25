@@ -165,7 +165,7 @@ class BlindScraper:
         """
         self.ensure_warm_up()
         results = []
-        encoded_topic = urllib.parse.quote(str(topic_name or "자동차"))
+        encoded_topic = urllib.parse.quote(str(topic_name or "자동차"), safe="")
         topic_url = f"{BLIND_KR_URL}/topics/{encoded_topic}"
 
         logger.info(f"Fetching Blind topic feed: {topic_url}")
@@ -253,13 +253,13 @@ class BlindScraper:
 
         for href, inner in matches:
             full_url = normalize_scraper_url(href, BLIND_BASE_URL)
-            if not full_url or full_url in seen_urls:
+            if not full_url or not is_allowed_domain_url(full_url, ("teamblind.com",)) or full_url in seen_urls:
                 continue
-            seen_urls.add(full_url)
 
             clean_title = clean_html_text(inner)
             if not clean_title or len(clean_title) < 2:
                 continue
+            seen_urls.add(full_url)
 
             items.append({
                 "url": full_url,
@@ -272,8 +272,8 @@ class BlindScraper:
     def fetch_post_detail(self, post_url: str) -> Dict[str, Any]:
         """Fetch and parse Blind post detail page."""
         norm_url = normalize_scraper_url(post_url, BLIND_BASE_URL)
-        if not norm_url:
-            logger.warning(f"Invalid Blind post_url provided: {post_url!r}")
+        if not norm_url or not is_allowed_domain_url(norm_url, ("teamblind.com",)):
+            logger.warning(f"Invalid or off-domain Blind post_url provided: {post_url!r}")
             return {}
         self.ensure_warm_up()
         status, text, raw = self.client.request(
@@ -367,10 +367,11 @@ class BlindScraper:
                 logger.debug(f"Failed to parse Blind __NEXT_DATA__: {e}")
 
         # 2. DOM & OpenGraph Fallback Extraction
+        body_html_region = strip_non_body_html(html_content)
         title = ""
         title_match = re.search(
             r'<h1\b[^>]*\bclass=["\'][^"\']*\barticle-title\b[^"\']*["\'][^>]*>(.*?)</h1>',
-            html_content,
+            body_html_region,
             re.DOTALL | re.IGNORECASE,
         )
         if title_match:
@@ -381,13 +382,13 @@ class BlindScraper:
         company = "블라인드 인증유저"
         company_match = re.search(
             r'<span\b[^>]*\bclass=["\'][^"\']*\bcompany\b[^"\']*["\'][^>]*>(.*?)</span>',
-            html_content,
+            body_html_region,
             re.DOTALL | re.IGNORECASE,
         )
         if not company_match:
             company_match = re.search(
                 r'<div\b[^>]*\bclass=["\'][^"\']*\bauthor-info\b[^"\']*["\'][^>]*>(?:(?!</div>).)*?<span\b[^>]*>(.*?)</span>',
-                html_content,
+                body_html_region,
                 re.DOTALL | re.IGNORECASE,
             )
         if company_match:
@@ -395,7 +396,6 @@ class BlindScraper:
             if comp_clean:
                 company = comp_clean
 
-        body_html_region = strip_non_body_html(html_content)
         body = ""
         for open_pat in (
             r'<div\b[^>]*\bclass=["\'][^"\']*\barticle-content\b[^"\']*["\'][^>]*>',
@@ -418,7 +418,7 @@ class BlindScraper:
         if not comment_matches:
             comment_matches = re.findall(
                 r'<p\b[^>]*\bclass=["\'][^"\']*\bcomment-text\b[^"\']*["\'][^>]*>(.*?)</p>',
-                html_content,
+                body_html_region,
                 re.DOTALL | re.IGNORECASE,
             )
 

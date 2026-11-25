@@ -335,6 +335,8 @@ _RE_META_HTTP = re.compile(
     flags=re.IGNORECASE,
 )
 _RE_HTTP_METHOD = re.compile(r"^[A-Z][A-Z0-9_-]*$")
+_RE_HTTP_HEADER_NAME = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
+_RE_HEADER_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0a-\x1f\x7f\r]")
 
 
 def clean_html_text(raw_html: Union[str, bytes, Any]) -> str:
@@ -1418,7 +1420,13 @@ class SafeHttpClient:
             logger.warning(f"SSRF defense blocked request to {norm_url}: {reason}")
             return 0, "", b""
 
-        method_upper = (method or "GET").strip().upper() or "GET"
+        if method is None:
+            method_upper = "GET"
+        elif not isinstance(method, str):
+            logger.warning(f"Invalid HTTP method type rejected: {method!r}")
+            return 0, "", b""
+        else:
+            method_upper = method.strip().upper() or "GET"
         if not _RE_HTTP_METHOD.match(method_upper):
             logger.warning(f"Invalid HTTP method rejected: {method!r}")
             return 0, "", b""
@@ -1445,7 +1453,7 @@ class SafeHttpClient:
         self._sleep_with_jitter()
 
         def _sanitize_header_value(val: Any) -> str:
-            return str(val).replace("\r", "").replace("\n", "").replace("\x00", "")
+            return _RE_HEADER_CONTROL_CHARS.sub("", str(val))
 
         active_ua = _sanitize_header_value(
             self.user_agent
@@ -1467,7 +1475,7 @@ class SafeHttpClient:
                 if v is None or not str(k).strip():
                     continue
                 clean_k = _sanitize_header_value(k).strip()
-                if not clean_k or ":" in clean_k:
+                if not clean_k or not _RE_HTTP_HEADER_NAME.match(clean_k):
                     continue
                 matching_keys = [ek for ek in req_headers if ek.lower() == clean_k.lower()]
                 for mk in matching_keys:
@@ -1482,7 +1490,7 @@ class SafeHttpClient:
                 if v is None or not str(k).strip():
                     continue
                 clean_k = _sanitize_header_value(k).strip()
-                if not clean_k or ":" in clean_k:
+                if not clean_k or not _RE_HTTP_HEADER_NAME.match(clean_k):
                     continue
                 # Case-insensitive update to avoid duplicate headers like User-Agent vs user-agent
                 matching_keys = [ek for ek in req_headers if ek.lower() == clean_k.lower()]

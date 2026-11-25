@@ -266,7 +266,7 @@ function parseNonNegFloat(value: unknown, fallback: number): number {
 
 function safeNonEmptyStr(value: unknown, fallback: string): string {
   if (typeof value !== 'string') return fallback;
-  const trimmed = value.trim();
+  const trimmed = value.trim().normalize('NFC');
   return trimmed.length > 0 ? trimmed : fallback;
 }
 
@@ -328,9 +328,9 @@ function normalizeMunicipalityMetrics(raw: unknown): MunicipalityMetrics | null 
     depletion_rate: depletionRate,
     status: resolveAlertSeverity(raw.status, depletionRate),
     local_subsidy_krw: localSubsidy,
-    ...(typeof raw.muni_id === 'string' && raw.muni_id.trim() ? { muni_id: raw.muni_id.trim() } : {}),
-    ...(typeof raw.name_en === 'string' && raw.name_en.trim() ? { name_en: raw.name_en.trim() } : {}),
-    ...(typeof raw.category === 'string' && raw.category.trim() ? { category: raw.category.trim() } : {}),
+    ...(typeof raw.muni_id === 'string' && raw.muni_id.trim() ? { muni_id: raw.muni_id.trim().normalize('NFC') } : {}),
+    ...(typeof raw.name_en === 'string' && raw.name_en.trim() ? { name_en: raw.name_en.trim().normalize('NFC') } : {}),
+    ...(typeof raw.category === 'string' && raw.category.trim() ? { category: raw.category.trim().normalize('NFC') } : {}),
     ...(delivered >= 0 ? { delivered_units: delivered } : {}),
     ...(totalSubsidy >= 0 ? { total_subsidy_krw: totalSubsidy } : {}),
   };
@@ -376,8 +376,8 @@ function normalizeRegionEntry(raw: unknown): RegionEntry | null {
     supplementary_budget_added: typeof raw.supplementary_budget_added === 'boolean' ? raw.supplementary_budget_added : false,
     categories: { passenger, commercial, bus },
     ...(municipalities ? { municipalities } : {}),
-    ...(typeof raw.notes === 'string' ? { notes: raw.notes } : {}),
-    ...(typeof raw.last_updated === 'string' && raw.last_updated.trim() ? { last_updated: raw.last_updated.trim() } : {}),
+    ...(typeof raw.notes === 'string' ? { notes: raw.notes.normalize('NFC') } : {}),
+    ...(typeof raw.last_updated === 'string' && raw.last_updated.trim() ? { last_updated: raw.last_updated.trim().normalize('NFC') } : {}),
   };
 }
 
@@ -397,11 +397,12 @@ function normalizePopularModelEntry(raw: unknown): PopularModelEntry | null {
   if (isPlainRecord(raw.regional_subsidy_samples)) {
     const cleanSamples: NonNullable<PopularModelEntry['regional_subsidy_samples']> = {};
     for (const key of Object.keys(raw.regional_subsidy_samples)) {
-      if (FORBIDDEN_PROTO_KEYS.has(key)) continue;
+      const normalizedKey = key.normalize('NFC');
+      if (FORBIDDEN_PROTO_KEYS.has(normalizedKey)) continue;
       const sample = raw.regional_subsidy_samples[key];
       if (!isPlainRecord(sample)) continue;
       const localSub = parseNonNegIntOrKrw(sample.local_subsidy_krw, -1);
-      Object.defineProperty(cleanSamples, key, {
+      Object.defineProperty(cleanSamples, normalizedKey, {
         value: {
           ...(localSub >= 0 ? { local_subsidy_krw: localSub } : {}),
           total_subsidy_krw: parseNonNegIntOrKrw(sample.total_subsidy_krw, 0),
@@ -464,7 +465,7 @@ export function normalizeSubsidyDataset(data: unknown): EVSubsidyDataset {
     data_sources: Array.isArray(rawMeta.data_sources)
       ? rawMeta.data_sources
           .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
-          .map((s) => s.trim())
+          .map((s) => s.trim().normalize('NFC'))
       : [...fbMeta.data_sources],
     total_regions_tracked: safeNonNegNum(rawMeta.total_regions_tracked, regions.length),
     total_municipalities_tracked: safeNonNegNum(

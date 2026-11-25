@@ -564,7 +564,7 @@ def normalize_report_item(item: Dict[str, Any], default_idx: int = 1) -> Dict[st
         for dim in ("safety", "functional", "economic", "social", "convenience"):
             dim_val = _safe_finite_float(raw_dsi.get(dim))
             if dim_val is not None:
-                clean_dsi[dim] = round(dim_val, 2)
+                clean_dsi[dim] = round(dim_val, 2) + 0.0
         if clean_dsi:
             normalized["dsi_breakdown"] = clean_dsi
 
@@ -590,7 +590,7 @@ def compute_report_statistics(
                 raw_neg = r.get("sentiment_score")
             neg_val = _safe_finite_float(raw_neg, 0.0)
             neg_scores.append(neg_val if neg_val is not None else 0.0)
-        avg_negativity = round(sum(neg_scores) / len(neg_scores), 3)
+        avg_negativity = round(sum(neg_scores) / len(neg_scores), 3) + 0.0
     else:
         avg_negativity = 0.0
 
@@ -1085,7 +1085,7 @@ def sync_defect_reports(
 # CLI ENTRYPOINT
 # =============================================================================
 
-def parse_cli_args() -> argparse.Namespace:
+def parse_cli_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
         description="Autonomous Defect Reports Synchronization and Deduplication Tool"
@@ -1130,16 +1130,16 @@ def parse_cli_args() -> argparse.Namespace:
         action="store_true",
         help="Enable verbose debug logging",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
-def main() -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     """CLI execution entrypoint."""
-    args = parse_cli_args()
-    if args.verbose:
-        logger.setLevel(logging.DEBUG)
-
     try:
+        args = parse_cli_args(argv)
+        if args.verbose:
+            logger.setLevel(logging.DEBUG)
+
         if args.check_only:
             root_p, web_p, _ = get_default_known_paths(args.root_dir, args.web_dir)
             logger.info("Checking schema and integrity of %s and %s...", root_p, web_p)
@@ -1166,6 +1166,10 @@ def main() -> int:
         )
         logger.info("Synchronization completed. Updated files: %d", len(written))
         return 0
+    except SystemExit as se:
+        if se.code is None:
+            return 0
+        return se.code if isinstance(se.code, int) and not isinstance(se.code, bool) else 1
     except Exception as exc:
         logger.exception("Synchronization aborted due to unhandled error: %s", exc)
         return 1

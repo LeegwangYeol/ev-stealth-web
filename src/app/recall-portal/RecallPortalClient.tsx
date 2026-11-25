@@ -1132,8 +1132,13 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                         </>
                       )}
                     </span>
-                    <span className="text-xs font-mono text-slate-300" aria-label={`현재 입력된 자리수: ${vinInput.replace(/[\s-]/g, '').length} / 17`}>
-                      {vinInput.replace(/[\s-]/g, '').length}/17
+                    <span className="text-xs font-mono text-slate-300">
+                      <span className="sr-only">
+                        현재 입력된 자리수: {vinInput.replace(/[\s-]/g, '').length} / 17
+                      </span>
+                      <span aria-hidden="true">
+                        {vinInput.replace(/[\s-]/g, '').length}/17
+                      </span>
                     </span>
                   </div>
                 </div>

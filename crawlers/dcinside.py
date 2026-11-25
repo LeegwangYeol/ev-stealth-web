@@ -20,11 +20,14 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from crawlers.base_crawler import (
     BaseCrawler,
+    _has_unsafe_authority,
     _is_safe_client_url,
+    _mask_comments_and_scripts,
     _normalize_limit,
     _normalize_pages,
     _positive_float,
     _sanitize_referer,
+    _slice_to_last_close_tag,
     _unescape_url_entities,
 )
 from utils.http_client import SafeHttpClient, clean_html_text, robust_decode
@@ -70,11 +73,6 @@ RE_COMMENT_OR_SCRIPT = re.compile(
     r"<!--.*?-->|<(script|style)\b[^>]*>.*?</\1\s*>",
     re.DOTALL | re.IGNORECASE,
 )
-
-
-def _mask_comments_and_scripts(html_str: str) -> str:
-    """Replace HTML comments and script/style blocks with equal-length spaces in one pass."""
-    return RE_COMMENT_OR_SCRIPT.sub(lambda m: " " * len(m.group(0)), html_str)
 RE_UB_CONTENT_ROW = re.compile(
     r'<tr\b(?=[^>]*\bub-content\b)[^>]*\bdata-no=["\']?(\d+)["\']?[^>]*>(.*?)</tr>',
     re.DOTALL | re.IGNORECASE,
@@ -90,6 +88,42 @@ RE_ESNO_INPUT = re.compile(
     r'<input\b(?=[^>]*\b(?:id|name)=["\']e_s_n_o["\'])[^>]*\bvalue=["\']([^"\']+)["\']',
     re.IGNORECASE,
 )
+
+
+def _extract_td_inner_by_class(row_html: str, class_token: str) -> Optional[str]:
+    """Extract inner HTML of the first <td> with class_token in strict O(N) time."""
+    if not row_html or not class_token:
+        return None
+    lower_html = row_html.lower()
+    token_lower = class_token.lower()
+    pos = 0
+    n = len(lower_html)
+    while pos < n:
+        td_start = lower_html.find("<td", pos)
+        if td_start == -1:
+            return None
+        after_td = td_start + 3
+        if after_td < n and lower_html[after_td] not in (" ", "\t", "\n", "\r", ">", "/"):
+            pos = after_td
+            continue
+        gt_idx = lower_html.find(">", after_td)
+        if gt_idx == -1:
+            return None
+        attrs = row_html[after_td:gt_idx]
+        if token_lower in attrs.lower():
+            cls_m = re.search(
+                r'(?<![\w-])class\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))',
+                attrs,
+                re.IGNORECASE,
+            )
+            cls_val = (cls_m.group(1) or cls_m.group(2) or cls_m.group(3) or "") if cls_m else ""
+            if token_lower in cls_val.lower():
+                close_idx = lower_html.find("</td>", gt_idx + 1)
+                if close_idx == -1:
+                    return None
+                return row_html[gt_idx + 1 : close_idx]
+        pos = gt_idx + 1
+    return None
 
 
 def extract_container_content(html_str: str, tag_name: str, class_name: str) -> str:
@@ -158,6 +192,7 @@ def is_deleted_or_restricted(html_content: Optional[str]) -> Tuple[bool, str]:
 
     # 2. Check if page has actual substantial article body:
     # If a page contains a large article container (> 50 chars), only alert(...) or explicit error titles indicate blocking/deletion
+    masked_html = _mask_comments_and_scripts(html_content)
     has_large_body = False
     for body_cls in ("write_div", "writing_view_box", "gallview-contents"):
         body_inner = extract_container_content(html_content, "div", body_cls)
@@ -165,19 +200,19 @@ def is_deleted_or_restricted(html_content: Optional[str]) -> Tuple[bool, str]:
             has_large_body = True
             break
     if not has_large_body:
-        write_div_match = re.search(r'class=["\']write_div["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
+        write_div_match = re.search(r'(?<=\s)class=["\']write_div["\'][^>]*>(.*?)</div>', masked_html, re.DOTALL | re.IGNORECASE)
         write_div_inner = write_div_match.group(1) if write_div_match else ""
         if write_div_inner and len(clean_html_text(write_div_inner)) > 50:
             has_large_body = True
 
     if not has_large_body:
-        if re.search(r"(?:비정상적인|잘못된)\s*(?:접근|요청)입니다", html_content, re.IGNORECASE):
+        if re.search(r"(?:비정상적인|잘못된)\s*(?:접근|요청)입니다", masked_html, re.IGNORECASE):
             return True, "abnormal_access_blocked"
-        if re.search(r"(?:접근이\s*차단되었습니다|(?:차단된|제한된)\s*(?:아이피|IP)|매니저가\s*차단)", html_content, re.IGNORECASE):
+        if re.search(r"(?:접근이\s*차단되었습니다|(?:차단된|제한된)\s*(?:아이피|IP)|매니저가\s*차단)", masked_html, re.IGNORECASE):
             return True, "ip_blocked"
-        if re.search(r"(?:자동\s*방지\s*문자|보안\s*문자를\s*입력|reCAPTCHA|hCaptcha)", html_content, re.IGNORECASE):
+        if re.search(r"(?:자동\s*방지\s*문자|보안\s*문자를\s*입력|reCAPTCHA|hCaptcha)", masked_html, re.IGNORECASE):
             return True, "captcha_challenge"
-        if re.search(r"(?:서비스\s*점검\s*중|시스템\s*점검\s*중)", html_content, re.IGNORECASE):
+        if re.search(r"(?:서비스\s*점검\s*중|시스템\s*점검\s*중)", masked_html, re.IGNORECASE):
             return True, "service_maintenance"
 
     # Deleted or Non-existent posts
@@ -197,9 +232,11 @@ def is_deleted_or_restricted(html_content: Optional[str]) -> Tuple[bool, str]:
         r"작성자에\s*의해\s*삭제된\s*게시글",
     ]
     for pat in deleted_patterns:
-        if has_large_body and not pat.startswith("alert"):
+        is_alert = pat.startswith("alert")
+        if has_large_body and not is_alert:
             continue
-        if re.search(pat, html_content, re.IGNORECASE):
+        target_str = html_content if is_alert else masked_html
+        if re.search(pat, target_str, re.IGNORECASE):
             return True, "deleted_post"
 
     # 3. Secret / Restricted / Member-only posts
@@ -218,9 +255,11 @@ def is_deleted_or_restricted(html_content: Optional[str]) -> Tuple[bool, str]:
         r"글쓰기(?:와\s*댓글)?이\s*제한된",
     ]
     for pat in restricted_patterns:
-        if has_large_body and not pat.startswith("alert"):
+        is_alert = pat.startswith("alert")
+        if has_large_body and not is_alert:
             continue
-        if re.search(pat, html_content, re.IGNORECASE):
+        target_str = html_content if is_alert else masked_html
+        if re.search(pat, target_str, re.IGNORECASE):
             return True, "restricted_post"
 
     return False, ""
@@ -588,15 +627,17 @@ class DCInsideCrawler(BaseCrawler):
             return []
 
         scan_html = _mask_comments_and_scripts(html_content)
+        tr_scan_html = _slice_to_last_close_tag(scan_html, "</tr")
         items: List[Dict[str, Any]] = []
         seen_nos = set()
 
         # Scan all <tr> rows having ub-content class so rows with or without data-no are both handled
         matches: List[re.Match[str]] = []
-        for tr_m in RE_ALL_TR.finditer(scan_html):
-            tr_attrs = tr_m.group(1)
-            if re.search(r'(?:^|[\s"\'])ub-content(?=$|[\s"\'])', tr_attrs, re.IGNORECASE):
-                matches.append(tr_m)
+        if tr_scan_html:
+            for tr_m in RE_ALL_TR.finditer(tr_scan_html):
+                tr_attrs = tr_m.group(1)
+                if re.search(r'(?:^|[\s"\'])ub-content(?=$|[\s"\'])', tr_attrs, re.IGNORECASE):
+                    matches.append(tr_m)
 
         for match in matches:
             tr_attrs = match.group(1)
@@ -604,11 +645,13 @@ class DCInsideCrawler(BaseCrawler):
             no_m = re.search(r'\bdata-no=["\']?(\d+)["\']?', tr_attrs, re.IGNORECASE)
             post_no = no_m.group(1) if no_m else ""
 
+            gall_num_inner = _extract_td_inner_by_class(row_html, "gall_num")
+            gall_num_text = clean_html_text(gall_num_inner).strip() if gall_num_inner is not None else ""
+
             # Check if post_no can be extracted from gall_num cell or href inside row
             if not post_no:
-                num_cell = re.search(r'<td[^>]*class=["\'][^"\']*gall_num[^"\']*["\'][^>]*>\s*(\d+)\s*</td>', row_html, re.IGNORECASE)
-                if num_cell:
-                    post_no = num_cell.group(1)
+                if gall_num_text.isdigit():
+                    post_no = gall_num_text
                 else:
                     href_no = RE_POST_NO.search(row_html)
                     if href_no:
@@ -617,11 +660,11 @@ class DCInsideCrawler(BaseCrawler):
             if not post_no or post_no in seen_nos:
                 continue
 
-            # Detect genuine notice row: class ub-notice or gall_num having "공지"
+            # Detect genuine notice row: class ub-notice or gall_num having "공지" / "설문" / "AD"
             is_notice = (
                 "ub-notice" in tr_attrs
                 or "ub-notice" in row_html[:200]
-                or bool(re.search(r'<td[^>]*class=["\'][^"\']*gall_num[^"\']*["\'][^>]*>\s*(?:<[^>]+>\s*)*(?:공지|설문|AD)(?:\s*</[^>]+>)*\s*</td>', row_html, re.IGNORECASE))
+                or gall_num_text.upper() in ("공지", "설문", "AD")
             )
             if is_notice:
                 continue
@@ -639,11 +682,11 @@ class DCInsideCrawler(BaseCrawler):
                 best_anchor = None
                 # Prefer anchor linking directly to post view (containing view, no=, or post_no)
                 for a_attrs, a_inner in anchors:
-                    href_m = re.search(r'\bhref\s*=\s*(?:"([^"]+)"|\'([^\']+)\'|([^\s>]+))', a_attrs, re.IGNORECASE)
-                    href_val = (href_m.group(1) or href_m.group(2) or href_m.group(3)) if href_m else ""
+                    href_m = re.search(r'(?<![\w-])href\s*=\s*(?:"([^"]+)"|\'([^\']+)\'|([^\s>]+))', a_attrs, re.IGNORECASE)
+                    href_val = _unescape_url_entities((href_m.group(1) or href_m.group(2) or href_m.group(3)).strip()).strip() if href_m else ""
                     if "reply_num" in a_attrs or "reply_numbox" in a_attrs:
                         continue
-                    if href_val.strip().lower().startswith("javascript:"):
+                    if href_val.lower().startswith("javascript:"):
                         continue
                     if "view" in href_val or "no=" in href_val or (post_no and post_no in href_val):
                         if clean_html_text(RE_REPLY_NUM.sub("", a_inner)).strip():
@@ -656,9 +699,9 @@ class DCInsideCrawler(BaseCrawler):
                     for a_attrs, a_inner in anchors:
                         if "reply_num" in a_attrs or "reply_numbox" in a_attrs:
                             continue
-                        href_m = re.search(r'\bhref\s*=\s*(?:"([^"]+)"|\'([^\']+)\'|([^\s>]+))', a_attrs, re.IGNORECASE)
-                        href_val = (href_m.group(1) or href_m.group(2) or href_m.group(3)) if href_m else ""
-                        if href_val.strip().lower().startswith("javascript:"):
+                        href_m = re.search(r'(?<![\w-])href\s*=\s*(?:"([^"]+)"|\'([^\']+)\'|([^\s>]+))', a_attrs, re.IGNORECASE)
+                        href_val = _unescape_url_entities((href_m.group(1) or href_m.group(2) or href_m.group(3)).strip()).strip() if href_m else ""
+                        if href_val.lower().startswith("javascript:"):
                             continue
                         candidates.append((href_val, a_inner))
                     if candidates:
@@ -687,7 +730,7 @@ class DCInsideCrawler(BaseCrawler):
             # Extract full title date if present (handle arbitrary attribute order)
             raw_date = ""
             date_match = re.search(
-                r'<td\b(?=[^>]*\bclass=["\']?[^"\'>]*\bgall_date\b)[^>]*\btitle=["\']([^"\']*)["\']',
+                r'<td\b(?=[^>]*?(?<=\s)class=["\']?[^"\'>]*\bgall_date\b)[^>]*?(?<=\s)title=["\']([^"\']*)["\']',
                 row_html,
                 re.IGNORECASE,
             )
@@ -715,28 +758,54 @@ class DCInsideCrawler(BaseCrawler):
 
         # Fallback if ub-content wasn't strictly found (e.g. mobile or alternative layout)
         if not items and not matches:
-            alt_pattern = re.compile(
-                r'<a[^>]*href=["\']?([^"\'\s>]*?(?:view/?\?[^"\'\s>]*no=|/(?:board|mgallery|mini)/[\w\-]+/|/view/)(\d+)[^"\'\s>]*)["\']?[^>]*>(.*?)</a>',
-                re.DOTALL | re.IGNORECASE,
-            )
-            for full_href, post_no, raw_title in alt_pattern.findall(scan_html):
-                if post_no in seen_nos:
-                    continue
-                # Strip reply numbers
-                raw_title = RE_REPLY_NUM.sub("", raw_title)
-                clean_title = clean_html_text(raw_title)
-                if clean_title and "&" in clean_title and re.search(r"&[a-zA-Z#0-9]+;", clean_title):
-                    clean_title = html.unescape(clean_title)
-                if not clean_title or len(clean_title) < 2 or clean_title.startswith("[공지]") or clean_title.startswith("공지:"):
-                    continue
-                seen_nos.add(post_no)
-                items.append({
-                    "post_id": post_no,
-                    "gallery_id": gallery_id,
-                    "url": self.build_post_url(gallery_id, post_no),
-                    "title": clean_title,
-                    "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                })
+            a_scan_html = _slice_to_last_close_tag(scan_html, "</a")
+            if a_scan_html:
+                alt_anchor_re = re.compile(
+                    r'<a\b[^>]*?(?<=\s)href\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))[^>]*>(.*?)</a>',
+                    re.DOTALL | re.IGNORECASE,
+                )
+                alt_no_re = re.compile(
+                    r'(?:view/?\?[^\s"\'>]*?(?:^|[?&])no=|/(?:board|mgallery(?:/board)?|mini(?:/board)?)/[\w\-]+/|/view/)(\d+)',
+                    re.IGNORECASE,
+                )
+                for dq_href, sq_href, uq_href, raw_title in alt_anchor_re.findall(a_scan_html):
+                    full_href = _unescape_url_entities((dq_href or sq_href or uq_href).strip()).strip()
+                    if not full_href or any(ord(c) < 32 or ord(c) == 127 for c in full_href):
+                        continue
+                    if full_href.lower().startswith("javascript:"):
+                        continue
+                    if full_href.startswith("//") or full_href.lower().startswith(("http://", "https://")):
+                        cand_url = f"https:{full_href}" if full_href.startswith("//") else full_href
+                        try:
+                            parsed_alt = urllib.parse.urlsplit(cand_url)
+                        except ValueError:
+                            continue
+                        if _has_unsafe_authority(parsed_alt):
+                            continue
+                        alt_host = (parsed_alt.hostname or "").lower().rstrip(".")
+                        if not (alt_host == "dcinside.com" or alt_host.endswith(".dcinside.com")):
+                            continue
+                    no_m = alt_no_re.search(full_href)
+                    if not no_m:
+                        continue
+                    post_no = no_m.group(1)
+                    if post_no in seen_nos:
+                        continue
+                    # Strip reply numbers
+                    raw_title = RE_REPLY_NUM.sub("", raw_title)
+                    clean_title = clean_html_text(raw_title)
+                    if clean_title and "&" in clean_title and re.search(r"&[a-zA-Z#0-9]+;", clean_title):
+                        clean_title = html.unescape(clean_title)
+                    if not clean_title or len(clean_title) < 2 or clean_title.startswith("[공지]") or clean_title.startswith("공지:"):
+                        continue
+                    seen_nos.add(post_no)
+                    items.append({
+                        "post_id": post_no,
+                        "gallery_id": gallery_id,
+                        "url": self.build_post_url(gallery_id, post_no),
+                        "title": clean_title,
+                        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    })
 
         return items
 
@@ -1034,15 +1103,26 @@ class DCInsideCrawler(BaseCrawler):
         # 2. Title - resilient against attribute order, tag structures, empty leading tags, and multi-class declarations
         title = ""
         for pat in (
-            r'<(?:span|div|h[1-6]|p)\b(?=[^>]*\bclass=["\']?[^"\'>]*\btitle_subject\b)[^>]*>(.*?)</(?:span|div|h[1-6]|p)>',
-            r'<(?:span|div|h[1-6]|p)\b(?=[^>]*\bclass=["\']?[^"\'>]*\btitle_headtext\b)[^>]*>.*?</(?:span|div|h[1-6]|p)>\s*<(?:span|div|h[1-6]|p)[^>]*>(.*?)</(?:span|div|h[1-6]|p)>',
-            r'<(?:h[1-6]|div|span)\b(?=[^>]*\bclass=["\']?[^"\'>]*\b(?:tit|gallview-tit-box)\b)[^>]*>(.*?)</(?:h[1-6]|div|span)>',
-            r'<meta\b(?=[^>]*\b(?:property|name)=["\']og:title["\'])[^>]*\bcontent=(?:"([^"]*)"|\'([^\']*)\')',
-            r'<meta\b(?=[^>]*\bcontent=(?:"([^"]*)"|\'([^\']*)\'))[^>]*\b(?:property|name)=["\']og:title["\']',
+            r'<(?P<tag>span|div|h[1-6]|p)\b(?=[^>]*?(?<=\s)class=["\']?[^"\'>]*\btitle_subject\b)[^>]*>(.*?)</(?P=tag)>',
+            r'<(?P<htag>span|div|h[1-6]|p)\b(?=[^>]*?(?<=\s)class=["\']?[^"\'>]*\btitle_headtext\b)[^>]*>.*?</(?P=htag)>\s*<(?P<tag>span|div|h[1-6]|p)\b[^>]*>(.*?)</(?P=tag)>',
+            r'<(?P<tag>h[1-6]|div|span)\b(?=[^>]*?(?<=\s)class=["\']?[^"\'>]*\b(?:tit|gallview-tit-box)\b)[^>]*>(.*?)</(?P=tag)>',
+            r'<meta\b(?=[^>]*?(?<=\s)(?:property|name)=["\']og:title["\'])[^>]*?(?<=\s)content=(?:"([^"]*)"|\'([^\']*)\')',
+            r'<meta\b(?=[^>]*?(?<=\s)content=(?:"([^"]*)"|\'([^\']*)\'))[^>]*?(?<=\s)(?:property|name)=["\']og:title["\']',
         ):
             m = re.search(pat, masked_html, re.DOTALL | re.IGNORECASE)
             if m:
-                raw_cand = next((g for g in m.groups() if g is not None), "")
+                gd = m.groupdict()
+                if gd.get("tag"):
+                    tag_name = gd["tag"]
+                    raw_cand = m.group(m.lastindex) if m.lastindex else ""
+                    if f"<{tag_name}" in raw_cand.lower():
+                        cls_m = re.search(r'\b(title_subject|gallview-tit-box|tit)\b', m.group(0), re.IGNORECASE)
+                        if cls_m:
+                            balanced = extract_container_content(html_content, tag_name, cls_m.group(1))
+                            if balanced:
+                                raw_cand = balanced
+                else:
+                    raw_cand = next((g for g in m.groups() if g is not None), "")
                 candidate = clean_html_text(raw_cand)
                 if candidate:
                     title = candidate
@@ -1093,7 +1173,7 @@ class DCInsideCrawler(BaseCrawler):
 
         raw_date = ""
         date_match = re.search(
-            r'<(?:span|td|div|li|em|p)\b(?=[^>]*\bclass=["\']?[^"\'>]*\bgall_date\b)[^>]*\btitle=["\']([^"\']*)["\']',
+            r'<(?:span|td|div|li|em|p)\b(?=[^>]*?(?<=\s)class=["\']?[^"\'>]*\bgall_date\b)[^>]*?(?<=\s)title=["\']([^"\']*)["\']',
             masked_html,
             re.IGNORECASE,
         )
@@ -1101,12 +1181,12 @@ class DCInsideCrawler(BaseCrawler):
             raw_date = date_match.group(1).strip()
         if not raw_date:
             date_match2 = re.search(
-                r'<(?:span|td|div|li|em|p)\b(?=[^>]*\bclass=["\']?[^"\'>]*\bgall_date\b)[^>]*>(.*?)</(?:span|td|div|li|em|p)>',
+                r'<(?P<tag>span|td|div|li|em|p)\b(?=[^>]*?(?<=\s)class=["\']?[^"\'>]*\bgall_date\b)[^>]*>(.*?)</(?P=tag)>',
                 masked_html,
                 re.DOTALL | re.IGNORECASE,
             )
             if date_match2:
-                raw_date = clean_html_text(date_match2.group(1))
+                raw_date = clean_html_text(date_match2.group(2))
         if not raw_date:
             generic_date = re.search(r'(\d{4}[.\-/]\d{2}[.\-/]\d{2}(?:[\sT]+\d{2}:\d{2}(?::\d{2})?)?)', masked_html)
             if generic_date:
@@ -1136,19 +1216,19 @@ class DCInsideCrawler(BaseCrawler):
                 content = clean_html_text(extracted_thum)
 
         if not content:
-            body_match = re.search(r'<div class=["\']thum-txt[^"\']*["\'][^>]*>(.*?)</div>', html_content, re.DOTALL | re.IGNORECASE)
+            body_match = re.search(r'<div\b[^>]*?(?<=\s)class=["\']thum-txt[^"\']*["\'][^>]*>(.*?)</div>', masked_html, re.DOTALL | re.IGNORECASE)
             if body_match:
                 content = clean_html_text(body_match.group(1))
 
         if not content:
             meta_desc = re.search(
-                r'<meta\b(?=[^>]*\b(?:property|name)=["\']og:description["\'])[^>]*\bcontent=(?:"([^"]*)"|\'([^\']*)\')',
+                r'<meta\b(?=[^>]*?(?<=\s)(?:property|name)=["\']og:description["\'])[^>]*?(?<=\s)content=(?:"([^"]*)"|\'([^\']*)\')',
                 masked_html,
                 re.IGNORECASE,
             )
             if not meta_desc:
                 meta_desc = re.search(
-                    r'<meta\b(?=[^>]*\bcontent=(?:"([^"]*)"|\'([^\']*)\'))[^>]*\b(?:property|name)=["\']og:description["\']',
+                    r'<meta\b(?=[^>]*?(?<=\s)content=(?:"([^"]*)"|\'([^\']*)\'))[^>]*?(?<=\s)(?:property|name)=["\']og:description["\']',
                     masked_html,
                     re.IGNORECASE,
                 )

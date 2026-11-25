@@ -117,7 +117,7 @@ function formatSignedManWon(krw: number): string {
   const safeKrw = Number.isFinite(krw) ? krw : 0;
   const manWon = Math.round(safeKrw / 10000) || 0;
   const sign = manWon >= 0 ? '+' : '';
-  return `${sign}${manWon.toLocaleString()}`;
+  return `${sign}${manWon.toLocaleString('ko-KR')}`;
 }
 
 /**
@@ -280,7 +280,7 @@ const ModelGridCard = memo(function ModelGridCard({
     <button
       type="button"
       aria-pressed={isSelected}
-      aria-label={`${model.brand_name_ko} ${model.model_name}, ${model.segment}, 배터리 ${model.battery_specs?.chemistry ?? 'NCM'}, 잔존가치 방어 Tier ${model.resale_defense_tier}, 실구매가 ${netManWon.toLocaleString()}만 원`}
+      aria-label={`${model.brand_name_ko} ${model.model_name}, ${model.segment}, 배터리 ${model.battery_specs?.chemistry ?? 'NCM'}, 잔존가치 방어 Tier ${model.resale_defense_tier}, 실구매가 ${netManWon.toLocaleString('ko-KR')}만 원`}
       onClick={() => onSelect(model)}
       className={`text-left p-3.5 min-h-[44px] rounded-xl border transition relative flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
         isSelected
@@ -322,13 +322,13 @@ const ModelGridCard = memo(function ModelGridCard({
         <div>
           <span className="text-slate-700">출고가:</span>{' '}
           <span className="font-semibold text-slate-800">
-            {msrpManWon.toLocaleString()}만 원
+            {msrpManWon.toLocaleString('ko-KR')}만 원
           </span>
         </div>
         <div>
           <span className="text-slate-700">실구매:</span>{' '}
           <span className="font-bold text-blue-700">
-            {netManWon.toLocaleString()}만 원
+            {netManWon.toLocaleString('ko-KR')}만 원
           </span>
         </div>
       </div>
@@ -838,12 +838,12 @@ export default function DepreciationCalculatorClient({
     const monthlyAvg = Math.round(savings / safeMonths / 10000) || 0;
     const sign = monthlyAvg >= 0 ? '+' : '';
     const verdict = monthlyAvg >= 0 ? '절약' : '추가 지출';
-    return `${sign}${monthlyAvg.toLocaleString()}만 원 ${verdict}`;
+    return `${sign}${monthlyAvg.toLocaleString('ko-KR')}만 원 ${verdict}`;
   }, [tcoResult?.totalCumulativeSavingsKrw, safeYears]);
 
   // Debounced live calculation announcement to prevent AT chatter during rapid slider scrubbing
   const safeResidualPctForAnnouncement = safeFiniteNumber(depResult.adjustedResidualPct, 0);
-  const rawLiveSummary = `${selectedModel.brand_name_ko} ${selectedModel.model_name} ${holdingYears}년 보유 기준 예상 잔존 시세는 ${formatNonNegativeManWon(depResult.estimatedResidualPriceKrw).toLocaleString()}만 원(잔존율 ${safeResidualPctForAnnouncement}%), 배터리 잔여 수명은 ${safeSohPct.toFixed(1)}%, ${holdingYears}개년 누적 절감액은 ${formatSignedManWon(tcoResult.totalCumulativeSavingsKrw ?? 0)}만 원입니다.`;
+  const rawLiveSummary = `${selectedModel.brand_name_ko} ${selectedModel.model_name} ${holdingYears}년 보유 기준 예상 잔존 시세는 ${formatNonNegativeManWon(depResult.estimatedResidualPriceKrw).toLocaleString('ko-KR')}만 원(잔존율 ${safeResidualPctForAnnouncement}%), 배터리 잔여 수명은 ${safeSohPct.toFixed(1)}%, ${holdingYears}개년 누적 절감액은 ${formatSignedManWon(tcoResult.totalCumulativeSavingsKrw ?? 0)}만 원입니다.`;
   const [liveSummaryAnnouncement, setLiveSummaryAnnouncement] = useState<string>(rawLiveSummary);
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1059,6 +1059,7 @@ export default function DepreciationCalculatorClient({
           id="panel-model-grid"
           role="tabpanel"
           aria-labelledby={`brand-tab-${activeBrand}`}
+          aria-busy={searchQuery !== deferredSearchQuery}
           tabIndex={0}
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[380px] overflow-y-auto pr-1 rounded-xl focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
         >
@@ -1191,7 +1192,7 @@ export default function DepreciationCalculatorClient({
                 연간 주행거리
               </label>
               <span className="text-sm font-extrabold text-blue-950 bg-blue-100 px-2 py-0.5 rounded">
-                {annualMileageKm.toLocaleString()} km/년
+                {annualMileageKm.toLocaleString('ko-KR')} km/년
               </span>
             </div>
             <input
@@ -1213,7 +1214,7 @@ export default function DepreciationCalculatorClient({
               aria-valuenow={annualMileageKm}
               aria-valuemin={5000}
               aria-valuemax={50000}
-              aria-valuetext={`연간 ${annualMileageKm.toLocaleString()}km 주행`}
+              aria-valuetext={`연간 ${annualMileageKm.toLocaleString('ko-KR')}km 주행`}
             />
             <div className="flex justify-between text-[11px] text-slate-700 px-0.5">
               <span>5천km</span>
@@ -1222,7 +1223,7 @@ export default function DepreciationCalculatorClient({
               <span>5만km</span>
             </div>
             <div id="annual-mileage-hint" className="text-[11px] text-slate-700 text-center font-medium bg-white py-1 rounded border border-slate-200">
-              총 누적: <strong className="text-slate-800">{totalMileage.toLocaleString()} km</strong>
+              총 누적: <strong className="text-slate-800">{totalMileage.toLocaleString('ko-KR')} km</strong>
             </div>
           </div>
 
@@ -1284,7 +1285,7 @@ export default function DepreciationCalculatorClient({
               <button
                 type="button"
                 onClick={() => setCustomPriceInput(null)}
-                className="text-[11px] text-blue-700 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded outline-none min-h-[44px] px-2 inline-flex items-center"
+                className="text-[11px] text-blue-700 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded outline-none min-h-[44px] min-w-[44px] px-2 inline-flex items-center justify-center"
                 aria-label="기본값 복원: 차량 기본 가격으로 초기화"
               >
                 기본값 복원
@@ -1375,7 +1376,7 @@ export default function DepreciationCalculatorClient({
             )}
 
             <div className="text-[11px] text-slate-700 text-center">
-              환산: <strong>{(currentPurchasePrice / 10000).toLocaleString()}만 원</strong>
+              환산: <strong>{(currentPurchasePrice / 10000).toLocaleString('ko-KR')}만 원</strong>
             </div>
           </div>
         </div>
@@ -1400,7 +1401,7 @@ export default function DepreciationCalculatorClient({
               {getDefenseTierBadge(selectedModel.resale_defense_tier)}
             </div>
             <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
-              {holdingYears}년차({totalMileage.toLocaleString()} km 주행) 예상 중고차 거래 시세 및 연차별 감가 추이
+              {holdingYears}년차({totalMileage.toLocaleString('ko-KR')} km 주행) 예상 중고차 거래 시세 및 연차별 감가 추이
             </p>
           </div>
 
@@ -1445,7 +1446,7 @@ export default function DepreciationCalculatorClient({
               {holdingYears}년차 예상 잔존 시세
             </div>
             <div className="text-lg sm:text-2xl font-black text-blue-950 mt-1 break-keep">
-              {formatNonNegativeManWon(depResult.estimatedResidualPriceKrw).toLocaleString()}{' '}
+              {formatNonNegativeManWon(depResult.estimatedResidualPriceKrw).toLocaleString('ko-KR')}{' '}
               <span className="text-xs sm:text-sm font-semibold text-blue-900">만 원</span>
             </div>
             <div className="text-[11px] text-blue-900 font-semibold mt-1">
@@ -1463,11 +1464,11 @@ export default function DepreciationCalculatorClient({
               <div className="bg-gradient-to-br from-slate-50 to-rose-50 border border-slate-200 rounded-xl p-3 sm:p-4">
                 <div className="text-xs font-bold text-slate-800">누적 감가 손실액</div>
                 <div className="text-lg sm:text-2xl font-black text-rose-800 mt-1 break-keep">
-                  {depManWon > 0 ? `-${depManWon.toLocaleString()}` : '0'}{' '}
+                  {depManWon > 0 ? `-${depManWon.toLocaleString('ko-KR')}` : '0'}{' '}
                   <span className="text-xs sm:text-sm font-semibold text-rose-900">만 원</span>
                 </div>
                 <div className="text-[11px] text-slate-700 mt-1">
-                  연평균 감가: {annualDepManWon > 0 ? `-${annualDepManWon.toLocaleString()}` : '0'}만 원/년
+                  연평균 감가: {annualDepManWon > 0 ? `-${annualDepManWon.toLocaleString('ko-KR')}` : '0'}만 원/년
                 </div>
               </div>
             );
@@ -1534,7 +1535,7 @@ export default function DepreciationCalculatorClient({
               </span>
             </div>
             <div className="text-slate-300">
-              * 기준 연간 {annualMileageKm.toLocaleString()}km 및 실거래 반영
+              * 기준 연간 {annualMileageKm.toLocaleString('ko-KR')}km 및 실거래 반영
             </div>
           </div>
 
@@ -1561,7 +1562,7 @@ export default function DepreciationCalculatorClient({
                 const y = 30 + i * 50;
                 const pct = 100 - i * 20;
                 const priceVal = Math.round((currentPurchasePrice * pct) / 100 / 10000);
-                const priceLabel = priceVal >= 100000 ? `${Math.round(priceVal / 10000).toLocaleString()}억` : `${priceVal.toLocaleString()}만`;
+                const priceLabel = priceVal >= 100000 ? `${Math.round(priceVal / 10000).toLocaleString('ko-KR')}억` : `${priceVal.toLocaleString('ko-KR')}만`;
                 return (
                   <g key={i}>
                     <line
@@ -1641,7 +1642,7 @@ export default function DepreciationCalculatorClient({
                       fill={isSelectedYear ? '#3b82f6' : '#2563eb'}
                       className="transition-all duration-300 motion-reduce:transition-none hover:opacity-90"
                     >
-                      <title>{`${selectedModel.model_name} ${pt.year}년차: ${chartViewMode === 'price' ? `${Math.round(safeEvPrice / 10000).toLocaleString()}만 원` : `${safeEvPct.toFixed(0)}%`}`}</title>
+                      <title>{`${selectedModel.model_name} ${pt.year}년차: ${chartViewMode === 'price' ? `${Math.round(safeEvPrice / 10000).toLocaleString('ko-KR')}만 원` : `${safeEvPct.toFixed(0)}%`}`}</title>
                     </rect>
                     <text
                       x={groupX - 19}
@@ -1652,7 +1653,7 @@ export default function DepreciationCalculatorClient({
                       fontWeight="bold"
                     >
                       {chartViewMode === 'price'
-                        ? `${formatNonNegativeManWon(safeEvPrice).toLocaleString()}`
+                        ? `${formatNonNegativeManWon(safeEvPrice).toLocaleString('ko-KR')}`
                         : `${safeFiniteNumber(safeEvPct, 0).toFixed(0)}%`}
                     </text>
 
@@ -1666,7 +1667,7 @@ export default function DepreciationCalculatorClient({
                       fill="#10b981"
                       className="transition-all duration-300 motion-reduce:transition-none hover:opacity-90"
                     >
-                      <title>{`${pt.year}년차 전기차 전체 평균: ${chartViewMode === 'price' ? `${Math.round(safeEvAvgPrice / 10000).toLocaleString()}만 원` : `${safeEvAvgPct.toFixed(0)}%`}`}</title>
+                      <title>{`${pt.year}년차 전기차 전체 평균: ${chartViewMode === 'price' ? `${Math.round(safeEvAvgPrice / 10000).toLocaleString('ko-KR')}만 원` : `${safeEvAvgPct.toFixed(0)}%`}`}</title>
                     </rect>
 
                     {/* Bar 3: ICE Benchmark */}
@@ -1679,7 +1680,7 @@ export default function DepreciationCalculatorClient({
                       fill="#94a3b8"
                       className="transition-all duration-300 motion-reduce:transition-none hover:opacity-90"
                     >
-                      <title>{`${pt.year}년차 동급 내연기관(가솔린): ${chartViewMode === 'price' ? `${Math.round(safeIcePrice / 10000).toLocaleString()}만 원` : `${safeIcePct.toFixed(0)}%`}`}</title>
+                      <title>{`${pt.year}년차 동급 내연기관(가솔린): ${chartViewMode === 'price' ? `${Math.round(safeIcePrice / 10000).toLocaleString('ko-KR')}만 원` : `${safeIcePct.toFixed(0)}%`}`}</title>
                     </rect>
 
                     {/* X-axis Year Label */}
@@ -1718,7 +1719,7 @@ export default function DepreciationCalculatorClient({
                   {multiYearProjection.map((pt) => (
                     <tr key={pt.year}>
                       <th scope="row">{pt.year}년차{pt.isCurrent ? ' (현재 선택)' : ''}</th>
-                      <td>{Math.round((Number.isFinite(pt.evResidualPriceKrw) ? pt.evResidualPriceKrw : 0) / 10000).toLocaleString()}만 원</td>
+                      <td>{Math.round((Number.isFinite(pt.evResidualPriceKrw) ? pt.evResidualPriceKrw : 0) / 10000).toLocaleString('ko-KR')}만 원</td>
                       <td>{(Number.isFinite(pt.evResidualPct) ? pt.evResidualPct : 0).toFixed(1)}%</td>
                       <td>{(Number.isFinite(pt.evClassAvgPct) ? pt.evClassAvgPct : 0).toFixed(1)}%</td>
                       <td>{(Number.isFinite(pt.iceBenchmarkPct) ? pt.iceBenchmarkPct : 0).toFixed(1)}%</td>
@@ -1929,7 +1930,7 @@ export default function DepreciationCalculatorClient({
               <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
                 <span className="text-xs text-slate-600 font-medium block">등가 완전충전 사이클</span>
                 <span className="text-lg font-bold text-blue-700">
-                  {safeFiniteNumber(batteryHealth.equivalentFullCycles, 0).toLocaleString()} 회
+                  {safeFiniteNumber(batteryHealth.equivalentFullCycles, 0).toLocaleString('ko-KR')} 회
                 </span>
               </div>
               <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
@@ -1953,7 +1954,7 @@ export default function DepreciationCalculatorClient({
               <div>
                 <div className="text-xs font-bold uppercase tracking-wide">
                   제조사 공식 배터리 보증 상태: {safeFiniteNumber(selectedModel.warranty?.years ?? 10, 10)}년 /{' '}
-                  {safeFiniteNumber(selectedModel.warranty?.km ?? 200_000, 200_000).toLocaleString()} km
+                  {safeFiniteNumber(selectedModel.warranty?.km ?? 200_000, 200_000).toLocaleString('ko-KR')} km
                 </div>
                 <div className="text-sm font-semibold mt-0.5">
                   {depResult.warrantyStatus.isExpired ? (
@@ -1963,12 +1964,12 @@ export default function DepreciationCalculatorClient({
                   ) : depResult.warrantyStatus.isApproachingCliff ? (
                     <span className="text-amber-950 font-extrabold">
                       <span aria-hidden="true">⚠️ </span>워런티 클리프 진입: 잔여 {safeFiniteNumber(depResult.warrantyStatus.remainingYears, 0)}년 /{' '}
-                      {safeFiniteNumber(depResult.warrantyStatus.remainingKm, 0).toLocaleString()} km
+                      {safeFiniteNumber(depResult.warrantyStatus.remainingKm, 0).toLocaleString('ko-KR')} km
                     </span>
                   ) : (
                     <span className="text-emerald-950 font-bold">
                       <span aria-hidden="true">✅ </span>보증 유효 안전 구간 (잔여 {safeFiniteNumber(depResult.warrantyStatus.remainingYears, 0)}년 /{' '}
-                      {safeFiniteNumber(depResult.warrantyStatus.remainingKm, 0).toLocaleString()} km)
+                      {safeFiniteNumber(depResult.warrantyStatus.remainingKm, 0).toLocaleString('ko-KR')} km)
                     </span>
                   )}
                 </div>
@@ -1997,10 +1998,10 @@ export default function DepreciationCalculatorClient({
                 <div className="bg-slate-800 p-3 rounded-lg border border-slate-700">
                   <span className="text-slate-300 block">순정 신품 팩 (공임·냉각수 포함)</span>
                   <span className="text-base font-extrabold text-white block mt-1">
-                    {formatNonNegativeManWon(replacementCostTier.costs?.total_new_installed_krw ?? 0).toLocaleString()}만 원
+                    {formatNonNegativeManWon(replacementCostTier.costs?.total_new_installed_krw ?? 0).toLocaleString('ko-KR')}만 원
                   </span>
                   <span className="text-[11px] text-blue-400 font-medium">
-                    ${safeFiniteNumber(replacementCostTier.costs?.total_new_installed_usd ?? 0, 0).toLocaleString()} USD
+                    ${safeFiniteNumber(replacementCostTier.costs?.total_new_installed_usd ?? 0, 0).toLocaleString('ko-KR')} USD
                   </span>
                 </div>
 
@@ -2008,12 +2009,12 @@ export default function DepreciationCalculatorClient({
                   <span className="text-slate-300 block">공식 재제조(Reman) 팩</span>
                   <span className="text-base font-extrabold text-slate-200 block mt-1">
                     {Number.isFinite(replacementCostTier.costs?.total_reman_installed_krw) && (replacementCostTier.costs?.total_reman_installed_krw ?? 0) > 0
-                      ? `${formatNonNegativeManWon(replacementCostTier.costs.total_reman_installed_krw ?? 0).toLocaleString()}만 원`
+                      ? `${formatNonNegativeManWon(replacementCostTier.costs.total_reman_installed_krw ?? 0).toLocaleString('ko-KR')}만 원`
                       : '공급 불가'}
                   </span>
                   <span className="text-[11px] text-slate-300 font-medium">
                     {Number.isFinite(replacementCostTier.costs?.total_reman_installed_usd) && (replacementCostTier.costs?.total_reman_installed_usd ?? 0) > 0
-                      ? `$${safeFiniteNumber(replacementCostTier.costs.total_reman_installed_usd ?? 0, 0).toLocaleString()} USD`
+                      ? `$${safeFiniteNumber(replacementCostTier.costs.total_reman_installed_usd ?? 0, 0).toLocaleString('ko-KR')} USD`
                       : '-'}
                   </span>
                 </div>
@@ -2021,10 +2022,10 @@ export default function DepreciationCalculatorClient({
                 <div className="bg-slate-800 p-3 rounded-lg border border-slate-700">
                   <span className="text-slate-300 block">순수 공임 및 냉각수 충진</span>
                   <span className="text-base font-extrabold text-slate-300 block mt-1">
-                    {formatNonNegativeManWon(replacementCostTier.costs?.labor_coolant_krw ?? 0).toLocaleString()}만 원
+                    {formatNonNegativeManWon(replacementCostTier.costs?.labor_coolant_krw ?? 0).toLocaleString('ko-KR')}만 원
                   </span>
                   <span className="text-[11px] text-slate-300 font-medium">
-                    ${safeFiniteNumber(replacementCostTier.costs?.labor_coolant_usd ?? 0, 0).toLocaleString()} USD
+                    ${safeFiniteNumber(replacementCostTier.costs?.labor_coolant_usd ?? 0, 0).toLocaleString('ko-KR')} USD
                   </span>
                 </div>
               </div>
@@ -2074,7 +2075,7 @@ export default function DepreciationCalculatorClient({
             <div className="font-bold">
               {clawbackResult.isExempt
                 ? '보조금 환수 면제 대상 (0원 납부)'
-                : `보조금 환수 대상 고지: 예상 환수액 ${safeFiniteNumber(clawbackResult.totalClawbackKrw, 0).toLocaleString()}원 (회수요율 ${(safeFiniteNumber(clawbackResult.effectiveClawbackRate, 0) * 100).toFixed(0)}% 적용)`}
+                : `보조금 환수 대상 고지: 예상 환수액 ${safeFiniteNumber(clawbackResult.totalClawbackKrw, 0).toLocaleString('ko-KR')}원 (회수요율 ${(safeFiniteNumber(clawbackResult.effectiveClawbackRate, 0) * 100).toFixed(0)}% 적용)`}
             </div>
             <p className={`leading-relaxed font-medium ${clawbackResult.isExempt ? 'text-emerald-950' : 'text-amber-950'}`}>
               {clawbackResult.explanation}
@@ -2175,12 +2176,12 @@ export default function DepreciationCalculatorClient({
                     aria-describedby={`transfer-desc-${item.id}`}
                     className="mt-0.5 text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"
                   />
-                  <div>
+                  <span className="block">
                     <span className="font-bold block cursor-pointer">
                       {item.title}
                     </span>
-                    <div id={`transfer-desc-${item.id}`} className="text-[11px] text-slate-700">{item.desc}</div>
-                  </div>
+                    <span id={`transfer-desc-${item.id}`} className="block text-[11px] text-slate-700">{item.desc}</span>
+                  </span>
                 </label>
               ))}
             </div>
@@ -2199,7 +2200,7 @@ export default function DepreciationCalculatorClient({
                       setCustomNationalSubsidyInput(null);
                       nationalSubsidyInputRef.current?.focus();
                     }}
-                    className="text-[11px] text-blue-400 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded min-h-[44px] px-2 inline-flex items-center"
+                    className="text-[11px] text-blue-400 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded min-h-[44px] min-w-[44px] px-2 inline-flex items-center justify-center"
                     aria-label="보조금 기본값 복원: 차량 기본 보조금으로 초기화"
                   >
                     기본값 복원
@@ -2290,14 +2291,14 @@ export default function DepreciationCalculatorClient({
                   clawbackResult.totalClawbackKrw > 0 ? 'text-amber-400' : 'text-emerald-400'
                 }`}
               >
-                {safeFiniteNumber(clawbackResult.totalClawbackKrw, 0).toLocaleString()}{' '}
+                {safeFiniteNumber(clawbackResult.totalClawbackKrw, 0).toLocaleString('ko-KR')}{' '}
                 <span className="text-sm font-semibold text-slate-300">원</span>
               </div>
               <div className="text-[11px] text-slate-300 mt-1">
                 회수요율: {(safeFiniteNumber(clawbackResult.effectiveClawbackRate, 0) * 100).toFixed(0)}% (
                 {clawbackResult.nationalClawbackKrw > 0
-                  ? `국비: ${clawbackResult.nationalClawbackKrw.toLocaleString()}원, 지방비: ${clawbackResult.localClawbackKrw.toLocaleString()}원`
-                  : `지방비: ${clawbackResult.localClawbackKrw.toLocaleString()}원`}
+                  ? `국비: ${clawbackResult.nationalClawbackKrw.toLocaleString('ko-KR')}원, 지방비: ${clawbackResult.localClawbackKrw.toLocaleString('ko-KR')}원`
+                  : `지방비: ${clawbackResult.localClawbackKrw.toLocaleString('ko-KR')}원`}
                 )
               </div>
             </div>
@@ -2363,8 +2364,8 @@ export default function DepreciationCalculatorClient({
                         <td className="py-2 px-3 text-center">
                           {(tier.clawback_rate * 100).toFixed(0)}%
                         </td>
-                        <td className="py-2 px-3">{localAmt.toLocaleString()}원</td>
-                        <td className="py-2 px-3">{totalAmt.toLocaleString()}원</td>
+                        <td className="py-2 px-3">{localAmt.toLocaleString('ko-KR')}원</td>
+                        <td className="py-2 px-3">{totalAmt.toLocaleString('ko-KR')}원</td>
                       </tr>
                     );
                   })}
@@ -2503,19 +2504,19 @@ export default function DepreciationCalculatorClient({
                       </span>
                     )}
                   </th>
-                  <td className="py-2 px-3">{safeFiniteNumber(row.cumulativeKm, 0).toLocaleString()} km</td>
-                  <td className="py-2 px-3">{formatNonNegativeManWon(row.evElectricityCostKrw).toLocaleString()}만 원</td>
-                  <td className="py-2 px-3">{formatNonNegativeManWon(row.iceFuelCostKrw).toLocaleString()}만 원</td>
+                  <td className="py-2 px-3">{safeFiniteNumber(row.cumulativeKm, 0).toLocaleString('ko-KR')} km</td>
+                  <td className="py-2 px-3">{formatNonNegativeManWon(row.evElectricityCostKrw).toLocaleString('ko-KR')}만 원</td>
+                  <td className="py-2 px-3">{formatNonNegativeManWon(row.iceFuelCostKrw).toLocaleString('ko-KR')}만 원</td>
                   <td className="py-2 px-3">
-                    {safeFiniteNumber(row.evAutomobileTaxKrw / 10000, 0).toLocaleString(undefined, { maximumFractionDigits: 1 })}만 원
+                    {safeFiniteNumber(row.evAutomobileTaxKrw / 10000, 0).toLocaleString('ko-KR', { maximumFractionDigits: 1 })}만 원
                   </td>
-                  <td className="py-2 px-3">{formatNonNegativeManWon(row.iceAutomobileTaxKrw).toLocaleString()}만 원</td>
+                  <td className="py-2 px-3">{formatNonNegativeManWon(row.iceAutomobileTaxKrw).toLocaleString('ko-KR')}만 원</td>
                   <td className="py-2 px-3">
                     {formatNonNegativeManWon(
                       safeFiniteNumber(row.tollSavingsKrw, 0) +
                         safeFiniteNumber(row.parkingSavingsKrw, 0) +
                         safeFiniteNumber(row.maintenanceSavingsKrw, 0)
-                    ).toLocaleString()}만 원
+                    ).toLocaleString('ko-KR')}만 원
                   </td>
                   <td className="py-2 px-3 text-right font-semibold text-emerald-800">
                     {formatSignedManWon(row.annualNetSavingsKrw)}만 원

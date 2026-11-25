@@ -243,7 +243,7 @@ class TestCycle18FrontendRemediations(unittest.TestCase):
 
         # In sr-report link, ensure tabIndex={-1} and aria-hidden="true" are removed, and aria-label is present
         # Find sr-report row snippet
-        self.assertIn("aria-label=\"게시글 원문 보기\"", src)
+        self.assertIn('aria-label="게시글 원문 보기', src)
         self.assertNotIn("tabIndex={-1} aria-hidden=\"true\" className=\"sr-only\"", src)
         self.assertNotIn("tabIndex={-1}\n                      aria-hidden=\"true\"\n                      className=\"sr-only\"", src)
 

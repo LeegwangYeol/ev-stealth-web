@@ -21,6 +21,13 @@ export function formatSentimentPercent(score: unknown): number {
   return Math.min(100, Math.max(0, Math.round(safe * 100)));
 }
 
+function maskReportPii(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const stripped = stripHtmlTags(raw).trim();
+  if (!stripped) return '';
+  return maskAuthor(stripped).replace(/\b\d{6}-[1-4]\d{6}\b/g, '******-*******');
+}
+
 /**
  * Normalizes vehicle brand name to standard canonical Korean representation.
  */
@@ -619,7 +626,8 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         }
         const slangList = (Array.isArray(rawSlang) ? rawSlang : [])
           .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
-          .map((t) => maskSensitiveData(t.trim()));
+          .map((t) => maskReportPii(t))
+          .filter(Boolean);
 
         // Safe JSON parsing for DSI breakdown if stringified
         let rawDsi: unknown = r.dsi_breakdown;
@@ -639,13 +647,14 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             }
           : undefined;
 
-        const maskedTitle = maskSensitiveData(stripHtmlTags(r.title || '전기차 결함 제보'));
-        const maskedSummary = maskSensitiveData(stripHtmlTags(r.summary || '결함 상세 내용 요약'));
-        const maskedQuote = maskSensitiveData(stripHtmlTags(r.verbatim_quote || '원문 없음'));
-        const maskedAuthor = r.author ? maskAuthor(stripHtmlTags(r.author)) : '익명 제보자';
-        const cleanModel = maskSensitiveData(stripHtmlTags(r.vehicle_model || '')).trim() || '미상 모델';
+        const maskedTitle = maskReportPii(r.title) || '전기차 결함 제보';
+        const maskedSummary = maskReportPii(r.summary) || '결함 상세 내용 요약';
+        const maskedQuote = maskReportPii(r.verbatim_quote) || '원문 없음';
+        const maskedAuthor = r.author ? maskAuthor(stripHtmlTags(r.author)).replace(/\b\d{6}-[1-4]\d{6}\b/g, '******-*******') : '익명 제보자';
+        const cleanModel = maskReportPii(r.vehicle_model) || '미상 모델';
         const normBrand = normalizeBrand(r.vehicle_brand);
-        const cleanBrand = maskSensitiveData(stripHtmlTags(r.vehicle_brand || '')).trim() || normBrand;
+        const cleanBrand = maskReportPii(r.vehicle_brand) || normBrand;
+        const safeCatKo = maskReportPii(catKo) || catKo;
 
         const searchTokens = [
           maskedTitle,
@@ -673,10 +682,11 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           }
         }
 
-        const safeId =
+        const rawSafeId =
           (typeof r.id === 'string' || typeof r.id === 'number') && String(r.id).trim()
             ? String(r.id).trim()
             : `report_${idx + 1}`;
+        const safeId = typeof r.id === 'string' ? (maskReportPii(rawSafeId) || `report_${idx + 1}`) : rawSafeId;
         const cleanSource =
           maskSensitiveData(stripHtmlTags(typeof r.source === 'string' ? r.source : ''))
             .trim()
@@ -690,7 +700,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           source: cleanSource,
           url: sanitizeReportUrl(r.url),
           defect_category: catCode,
-          defect_category_ko: catKo,
+          defect_category_ko: safeCatKo,
           vehicle_model: cleanModel,
           vehicle_brand: cleanBrand,
           title: maskedTitle,
@@ -752,10 +762,10 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
     }
 
     const safeTopModel = typeof rawStats?.top_model === 'string'
-      ? maskSensitiveData(stripHtmlTags(rawStats.top_model)).trim()
+      ? maskReportPii(rawStats.top_model)
       : '';
     const safeTopPlatform = typeof rawStats?.top_platform === 'string'
-      ? maskSensitiveData(stripHtmlTags(rawStats.top_platform)).trim()
+      ? maskReportPii(rawStats.top_platform)
       : '';
 
     return {
@@ -1640,9 +1650,11 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           )}
           <table aria-label="수집된 전기차 결함 제보 데이터 요약 표" className="w-full min-w-[760px] text-left text-xs text-slate-800 border-collapse">
             <caption>
-              {filteredReports.length === 0
-                ? `카테고리: ${CATEGORY_TABS.find((c) => c.code === selectedCategory)?.label || '전체'}, 수집된 결함 제보 없음 (총 0건)`
-                : `카테고리: ${CATEGORY_TABS.find((c) => c.code === selectedCategory)?.label || '전체'}, 총 ${filteredReports.length}건 중 ${validCurrentPage}페이지 (${(validCurrentPage - 1) * pageSize + 1} - ${Math.min(validCurrentPage * pageSize, filteredReports.length)}건)`}
+              <span className="block px-4 py-2.5 text-left text-xs font-semibold text-slate-700 bg-slate-50 border-b border-slate-200">
+                {filteredReports.length === 0
+                  ? `카테고리: ${CATEGORY_TABS.find((c) => c.code === selectedCategory)?.label || '전체'}, 수집된 결함 제보 없음 (총 0건)`
+                  : `카테고리: ${CATEGORY_TABS.find((c) => c.code === selectedCategory)?.label || '전체'}, 총 ${filteredReports.length}건 중 ${validCurrentPage}페이지 (${(validCurrentPage - 1) * pageSize + 1} - ${Math.min(validCurrentPage * pageSize, filteredReports.length)}건)`}
+              </span>
             </caption>
             <thead className="bg-slate-100 text-slate-900 font-bold border-b border-slate-200">
               <tr>
@@ -1693,7 +1705,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                               target="_blank"
                               rel="noopener noreferrer"
                               tabIndex={viewMode === 'table' ? undefined : -1}
-                              aria-label="게시글 원문 보기"
+                              aria-label="게시글 원문 보기 (원문 링크)"
                               aria-describedby={`report-table-title-${report._uid}`}
                               title="게시글 원문 보기 (새 창에서 열림)"
                               className="shrink-0 inline-flex items-center min-h-[44px] px-2 py-1 focus:bg-blue-700 focus:text-white rounded focus:outline-none focus:ring-2 focus:ring-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 text-blue-700 underline text-xs font-semibold"
@@ -1709,7 +1721,8 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                         {report.summary}
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap text-xs">
-                        <span className="font-mono font-bold text-rose-700" aria-label={`부정 감성 지수: ${formatSentimentPercent(report.sentiment_score)}%`}>
+                        <span className="font-mono font-bold text-rose-700">
+                          <span className="sr-only">부정 감성 지수: </span>
                           {formatSentimentPercent(report.sentiment_score)}%
                         </span>
                         <span className="ml-1 text-[10px] font-semibold px-1 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200" aria-hidden="true">
@@ -2125,7 +2138,7 @@ const DefectReportCard = memo(function DefectReportCard({
               href={safeUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:underline hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded inline-flex items-center py-2 min-h-[44px]"
+              className="hover:underline hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded inline-flex items-center py-2 min-h-[44px] max-w-full break-words"
             >
               {report.title}
               <span className="sr-only"> (새 창에서 열림)</span>

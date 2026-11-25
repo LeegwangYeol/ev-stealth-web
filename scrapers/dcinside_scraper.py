@@ -171,7 +171,7 @@ class DCInsideScraper:
         safe_gid = urllib.parse.quote(gid_clean, safe="")
         is_minor = GALLERIES.get(gid_clean, {}).get("is_minor", True)
         board_prefix = "mgallery/board" if is_minor else "board"
-        encoded_kw = urllib.parse.quote(str(keyword or ""))
+        encoded_kw = urllib.parse.quote(str(keyword or ""), safe="")
         try:
             eff_pages = max(1, int(max_pages))
         except (ValueError, TypeError, OverflowError):
@@ -434,17 +434,19 @@ class DCInsideScraper:
         """Extract title, metadata, body text, e_s_n_o, and comments from DC Inside HTML."""
         if not html_content or not isinstance(html_content, str):
             return {}
+        body_html_region = strip_non_body_html(html_content)
+
         # Title extraction
         title = ""
         title_match = re.search(
             r'<span\b[^>]*\bclass=["\'][^"\']*\btitle_subject\b[^"\']*["\'][^>]*>(.*?)</span>',
-            html_content,
+            body_html_region,
             re.DOTALL | re.IGNORECASE,
         )
         if not title_match:
             title_match = re.search(
                 r'<span\b[^>]*\bclass=["\'][^"\']*\btitle_headtext\b[^"\']*["\'][^>]*>.*?</span>\s*<span\b[^>]*>(.*?)</span>',
-                html_content,
+                body_html_region,
                 re.DOTALL | re.IGNORECASE,
             )
         if title_match:
@@ -457,12 +459,12 @@ class DCInsideScraper:
         author_type = "dc_fixed_nick"
         writer_open = re.search(
             r'<(td|div)\b[^>]*\bclass=["\'][^"\']*\bgall_writer\b[^"\']*["\'][^>]*>',
-            html_content,
+            body_html_region,
             re.IGNORECASE,
         )
         writer_region = (
             extract_balanced_tag_content(
-                html_content,
+                body_html_region,
                 r'<(?:td|div)\b[^>]*\bclass=["\'][^"\']*\bgall_writer\b[^"\']*["\'][^>]*>',
                 tag_name=writer_open.group(1),
             )
@@ -477,7 +479,7 @@ class DCInsideScraper:
             )
             if nick_match:
                 author_badge = clean_html_text(nick_match.group(1))
-        ip_search_region = writer_region if writer_open else html_content.split("writing_view_box", 1)[0]
+        ip_search_region = writer_region if writer_open else body_html_region.split("writing_view_box", 1)[0]
         ip_match = re.search(
             r'<span\b[^>]*\bclass=["\'][^"\']*\bip\b[^"\']*["\'][^>]*>\(([0-9.*]+)\)</span>',
             ip_search_region,
@@ -489,7 +491,7 @@ class DCInsideScraper:
         elif not author_badge:
             mob_author = re.search(
                 r'<span\b[^>]*\bclass=["\'][^"\']*\bginfo\b[^"\']*["\'][^>]*>(?:(?!</?(?:div|li|ul|section)\b).)*?<span\b[^>]*\bclass=["\'][^"\']*\buser\b[^"\']*["\'][^>]*>(.*?)</span>',
-                html_content,
+                body_html_region,
                 re.DOTALL | re.IGNORECASE,
             )
             if mob_author:
@@ -501,7 +503,7 @@ class DCInsideScraper:
         published_at = ""
         date_tag = re.search(
             r'<span\b[^>]*\bclass=["\'][^"\']*\bgall_date\b[^"\']*["\'][^>]*>(.*?)</span>',
-            html_content,
+            body_html_region,
             re.DOTALL | re.IGNORECASE,
         )
         if date_tag:
@@ -509,15 +511,14 @@ class DCInsideScraper:
             raw_date = title_attr.group(1) if title_attr else date_tag.group(1)
             published_at = clean_html_text(raw_date).replace(".", "-").replace("/", "-")
         if not published_at:
-            body_region = strip_non_body_html(html_content)
-            date_match = re.search(r'(\d{4}[.\-/]\d{2}[.\-/]\d{2}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)', body_region)
+            date_match = re.search(r'(\d{4}[.\-/]\d{2}[.\-/]\d{2}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)', body_html_region)
             if date_match:
                 published_at = clean_html_text(date_match.group(1)).replace(".", "-").replace("/", "-")
 
         view_count = 0
         view_match = re.search(
             r'<span\b[^>]*\bclass=["\'][^"\']*\bgall_count\b[^"\']*["\'][^>]*>조회수?\s*(?:<[^>]+>\s*)*([0-9,]+)',
-            html_content,
+            body_html_region,
             re.IGNORECASE,
         )
         if view_match:
@@ -529,13 +530,13 @@ class DCInsideScraper:
         upvote_count = 0
         upvote_match = re.search(
             r'<span\b[^>]*\bclass=["\'][^"\']*\bgall_reply_num\b[^"\']*["\'][^>]*>추천\s*(?:<[^>]+>\s*)*([0-9,]+)',
-            html_content,
+            body_html_region,
             re.IGNORECASE,
         )
         if not upvote_match:
             upvote_match = re.search(
                 r'<p\b[^>]*\bclass=["\'][^"\']*\bup_num\b[^"\']*["\'][^>]*>(?:<[^>]+>\s*)*([0-9,]+)',
-                html_content,
+                body_html_region,
                 re.IGNORECASE,
             )
         if upvote_match:
@@ -546,14 +547,13 @@ class DCInsideScraper:
 
         # e_s_n_o token for comment AJAX (handles arbitrary attribute ordering and quotes)
         e_s_n_o = ""
-        token_tag = re.search(r'<input\b[^>]*\b(?:id|name)=["\']e_s_n_o["\'][^>]*>', html_content, re.IGNORECASE)
+        token_tag = re.search(r'<input\b[^>]*\b(?:id|name)=["\']e_s_n_o["\'][^>]*>', body_html_region, re.IGNORECASE)
         if token_tag:
             val_match = re.search(r'\bvalue=["\']([^"\']+)["\']', token_tag.group(0), re.IGNORECASE)
             if val_match:
                 e_s_n_o = html.unescape(val_match.group(1))
 
         # Body extraction
-        body_html_region = strip_non_body_html(html_content)
         body_text = ""
         for open_pat in (
             r'<div\b[^>]*\bclass=["\'][^"\']*\bwriting_view_box\b[^"\']*["\'][^>]*>',
@@ -578,19 +578,19 @@ class DCInsideScraper:
         comments = []
         comment_matches = re.findall(
             r'<p\b[^>]*\bclass=["\'][^"\']*\busertxt\b[^"\']*["\'][^>]*>(.*?)</p>',
-            html_content,
+            body_html_region,
             re.DOTALL | re.IGNORECASE,
         )
         if not comment_matches:
             comment_matches = re.findall(
                 r'<p\b[^>]*\bclass=["\'][^"\']*\btxt\b[^"\']*["\'][^>]*>(.*?)</p>',
-                html_content,
+                body_html_region,
                 re.DOTALL | re.IGNORECASE,
             )
         if not comment_matches:
             comment_matches = re.findall(
                 r'<dd\b[^>]*\bclass=["\'][^"\']*\busertxt\b[^"\']*["\'][^>]*>(.*?)</dd>',
-                html_content,
+                body_html_region,
                 re.DOTALL | re.IGNORECASE,
             )
 

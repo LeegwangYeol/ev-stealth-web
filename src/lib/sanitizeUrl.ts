@@ -738,52 +738,81 @@ export function sanitizeText(text?: unknown): string {
 }
 
 const EXECUTABLE_BLOCK_TAGS = ['script', 'style', 'iframe', 'object', 'embed', 'svg', 'template'] as const;
+const EXECUTABLE_TAG_GROUP = EXECUTABLE_BLOCK_TAGS.join('|');
+const MAX_EXEC_OPEN_PREFIX = 9; // '<template'.length
+
+function findMatchingCloseEnd(str: string, tagName: string, searchFrom: number): number {
+  const closeRe = new RegExp(`</${tagName}(?:[\\s/>])`, 'gi');
+  closeRe.lastIndex = searchFrom;
+  const closeMatch = closeRe.exec(str);
+  if (!closeMatch) return -1;
+
+  let closeEnd = closeMatch.index + closeMatch[0].length;
+  if (!closeMatch[0].endsWith('>')) {
+    const gtIdx = str.indexOf('>', closeEnd);
+    if (gtIdx === -1) return -1;
+    closeEnd = gtIdx + 1;
+  }
+  return closeEnd;
+}
 
 /**
- * Strips `<tag ...>...</tag>` blocks in strictly O(N) time without catastrophic regex backtracking.
+ * Strips `<tag ...>...</tag>` blocks for all executable block tags in a single O(N) pass,
+ * handling arbitrarily deep nested/interleaved split tags without polynomial backtracking.
  */
-function stripTagBlock(str: string, tagName: string): string {
-  const openRe = new RegExp(`<${tagName}\\b`, 'gi');
-  const closeRe = new RegExp(`</${tagName}(?:\\s|>)`, 'gi');
+function stripExecutableBlocks(str: string): string {
+  if (!str.includes('</')) return str;
+
+  const openRe = new RegExp(`<(${EXECUTABLE_TAG_GROUP})\\b`, 'gi');
+  const boundaryRe = new RegExp(`^<(${EXECUTABLE_TAG_GROUP})\\b`, 'i');
   let result = '';
   let cursor = 0;
 
-  while (true) {
+  while (cursor < str.length) {
     openRe.lastIndex = cursor;
     const openMatch = openRe.exec(str);
     if (!openMatch) break;
 
-    closeRe.lastIndex = openMatch.index + openMatch[0].length;
-    const closeMatch = closeRe.exec(str);
-    if (!closeMatch) break;
-
-    let closeEnd = closeMatch.index + closeMatch[0].length;
-    if (!closeMatch[0].endsWith('>')) {
-      const gtIdx = str.indexOf('>', closeEnd);
-      if (gtIdx === -1) break;
-      closeEnd = gtIdx + 1;
+    const tagName = openMatch[1].toLowerCase();
+    const afterOpen = openMatch.index + openMatch[0].length;
+    const closeEnd = findMatchingCloseEnd(str, tagName, afterOpen);
+    if (closeEnd === -1) {
+      result += str.slice(cursor, afterOpen);
+      cursor = afterOpen;
+      continue;
     }
 
     result += str.slice(cursor, openMatch.index);
     cursor = closeEnd;
+
+    // Rewind across the cut in O(1) amortized time if removal glued a split tag (e.g. <scr + ipt> or <scr<sty...)
+    while (result.length > 0 && cursor < str.length) {
+      const tailStart = Math.max(0, result.length - MAX_EXEC_OPEN_PREFIX);
+      const tail = result.slice(tailStart);
+      const ltOffset = tail.lastIndexOf('<');
+      if (ltOffset === -1) break;
+
+      const tailFromLt = tail.slice(ltOffset);
+      if (tailFromLt.length >= MAX_EXEC_OPEN_PREFIX) break;
+
+      const boundary = tailFromLt + str.slice(cursor, cursor + MAX_EXEC_OPEN_PREFIX);
+      const boundaryMatch = boundaryRe.exec(boundary);
+      if (!boundaryMatch) break;
+
+      const consumedFromCursor = boundaryMatch[0].length - tailFromLt.length;
+      if (consumedFromCursor <= 0) break;
+
+      const rewoundTag = boundaryMatch[1].toLowerCase();
+      const nextCloseEnd = findMatchingCloseEnd(str, rewoundTag, cursor + consumedFromCursor);
+      if (nextCloseEnd === -1) break;
+
+      result = result.slice(0, tailStart + ltOffset);
+      cursor = nextCloseEnd;
+    }
   }
 
   if (cursor === 0) return str;
   return result + str.slice(cursor);
-}
-
-function stripExecutableBlocks(str: string): string {
-  if (!str.includes('</')) return str;
-  let current = str;
-  let prev = '';
-  while (current !== prev && current.includes('</')) {
-    prev = current;
-    for (const tag of EXECUTABLE_BLOCK_TAGS) {
-      current = stripTagBlock(current, tag);
-      if (!current.includes('</')) break;
-    }
-  }
-  return current;
 }
 
 /**
@@ -854,6 +883,11 @@ export function stripHtmlTags(input?: unknown): string {
   // 5. Decode common HTML entities (&quot;, &apos;, &amp;, &lt;, &gt;, &nbsp;, decimal, and hex entities)
   str = decodeHtmlEntities(str);
 
+  // Strip any entity-decoded control characters or Unicode bidirectional overrides
+  str = str
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/[\u202A-\u202E\u2066-\u2069]/g, '');
+
   // 6. Multi-pass tag removal in case decoding entities or nested structures revealed new tags (e.g. &lt;script&gt;)
   let prevPass = '';
   while (str.includes('<') && str !== prevPass) {
@@ -865,7 +899,7 @@ export function stripHtmlTags(input?: unknown): string {
 
   // 7. Neutralize any stray event handler attributes (e.g., onmouseover=, onerror=, onload=) or javascript: schemes
   str = str.replace(/\b(?:on\w+)\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '');
-  str = str.replace(/\bjavascript:\s*/gi, '');
+  str = str.replace(/\bjavascript\s*:\s*/gi, '');
 
   // 8. Normalize whitespace while preserving linebreaks (max 2 consecutive newlines)
   str = str

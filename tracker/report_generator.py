@@ -427,7 +427,7 @@ class ReportGenerator:
         """Generate formatted markdown table of popular EV models with national & regional subsidies."""
         if payload_or_models is None:
             models = []
-        elif isinstance(payload_or_models, list):
+        elif isinstance(payload_or_models, (list, tuple)):
             models = payload_or_models
         else:
             models = _get_field(payload_or_models, "popular_models_matrix", None)
@@ -502,7 +502,7 @@ class ReportGenerator:
             reports = []
             stats = {}
             gen_time = datetime.now(timezone.utc).isoformat()
-        elif isinstance(report_data, list):
+        elif isinstance(report_data, (list, tuple)):
             reports = report_data
             stats = {}
             gen_time = datetime.now(timezone.utc).isoformat()
@@ -617,7 +617,15 @@ class ReportGenerator:
                 except (ValueError, TypeError, OverflowError):
                     pass
 
-        avg_dsi = (sum(severity_scores) / len(severity_scores)) if severity_scores else 0.0
+        if severity_scores:
+            n_scores = len(severity_scores)
+            avg_dsi = sum(severity_scores) / n_scores
+            if math.isnan(avg_dsi) or math.isinf(avg_dsi):
+                avg_dsi = sum(s / n_scores for s in severity_scores)
+            if math.isnan(avg_dsi) or math.isinf(avg_dsi):
+                avg_dsi = 0.0
+        else:
+            avg_dsi = 0.0
 
         lines = [
             "# EV 결함 및 품질 빅데이터 통계 분석 보고서",

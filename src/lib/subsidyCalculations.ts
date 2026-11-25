@@ -291,8 +291,7 @@ const DEFAULT_COLLATOR = new Intl.Collator();
 
 interface RegionLookupIndex {
   length: number;
-  first: RegionEntry | undefined;
-  last: RegionEntry | undefined;
+  items: readonly (RegionEntry | undefined)[];
   idOrIsoMap: Map<string, RegionEntry>;
   exactAnyMap: Map<string, RegionEntry>;
   strippedKoMap: Map<string, RegionEntry>;
@@ -300,8 +299,7 @@ interface RegionLookupIndex {
 
 interface ModelLookupIndex {
   length: number;
-  first: PopularModelEntry | undefined;
-  last: PopularModelEntry | undefined;
+  items: readonly (PopularModelEntry | undefined)[];
   exactMap: Map<string, PopularModelEntry>;
   cleanExactMap: Map<string, PopularModelEntry>;
 }
@@ -311,19 +309,28 @@ const MODEL_LIST_INDEX_CACHE = new WeakMap<readonly PopularModelEntry[], ModelLo
 
 function getRegionLookupIndex(regions: readonly RegionEntry[]): RegionLookupIndex {
   const len = regions.length;
-  const first = len > 0 ? regions[0] : undefined;
-  const last = len > 0 ? regions[len - 1] : undefined;
   const cached = REGION_LIST_INDEX_CACHE.get(regions);
-  if (cached && cached.length === len && cached.first === first && cached.last === last) {
-    return cached;
+  if (cached && cached.length === len) {
+    let same = true;
+    for (let i = 0; i < len; i++) {
+      if (cached.items[i] !== regions[i]) {
+        same = false;
+        break;
+      }
+    }
+    if (same) {
+      return cached;
+    }
   }
 
+  const items = new Array<RegionEntry | undefined>(len);
   const idOrIsoMap = new Map<string, RegionEntry>();
   const exactAnyMap = new Map<string, RegionEntry>();
   const strippedKoMap = new Map<string, RegionEntry>();
 
   for (let i = 0; i < len; i++) {
     const r = regions[i];
+    items[i] = r;
     if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
     const rid = typeof r.region_id === 'string' ? r.region_id.trim().normalize('NFC').toLowerCase() : '';
     const iso = typeof r.iso_code === 'string' ? r.iso_code.trim().normalize('NFC').toLowerCase() : '';
@@ -350,8 +357,7 @@ function getRegionLookupIndex(regions: readonly RegionEntry[]): RegionLookupInde
 
   const index: RegionLookupIndex = {
     length: len,
-    first,
-    last,
+    items,
     idOrIsoMap,
     exactAnyMap,
     strippedKoMap,
@@ -362,18 +368,27 @@ function getRegionLookupIndex(regions: readonly RegionEntry[]): RegionLookupInde
 
 function getModelLookupIndex(models: readonly PopularModelEntry[]): ModelLookupIndex {
   const len = models.length;
-  const first = len > 0 ? models[0] : undefined;
-  const last = len > 0 ? models[len - 1] : undefined;
   const cached = MODEL_LIST_INDEX_CACHE.get(models);
-  if (cached && cached.length === len && cached.first === first && cached.last === last) {
-    return cached;
+  if (cached && cached.length === len) {
+    let same = true;
+    for (let i = 0; i < len; i++) {
+      if (cached.items[i] !== models[i]) {
+        same = false;
+        break;
+      }
+    }
+    if (same) {
+      return cached;
+    }
   }
 
+  const items = new Array<PopularModelEntry | undefined>(len);
   const exactMap = new Map<string, PopularModelEntry>();
   const cleanExactMap = new Map<string, PopularModelEntry>();
 
   for (let i = 0; i < len; i++) {
     const m = models[i];
+    items[i] = m;
     if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
     const idNorm = typeof m.model_id === 'string' ? m.model_id.trim().normalize('NFC').toLowerCase() : '';
     const koNorm = typeof m.name_ko === 'string' ? m.name_ko.trim().normalize('NFC').toLowerCase() : '';
@@ -392,8 +407,7 @@ function getModelLookupIndex(models: readonly PopularModelEntry[]): ModelLookupI
 
   const index: ModelLookupIndex = {
     length: len,
-    first,
-    last,
+    items,
     exactMap,
     cleanExactMap,
   };
@@ -1151,7 +1165,7 @@ function safeString(value: unknown): string {
 
 function safeNonEmptyString(value: unknown, fallback: string): string {
   if (typeof value !== 'string') return fallback;
-  const trimmed = value.trim();
+  const trimmed = value.trim().normalize('NFC');
   return trimmed.length > 0 ? trimmed : fallback;
 }
 
@@ -1356,13 +1370,13 @@ function extractRegionSortMetric(
   switch (normalizedSort) {
     case 'DEPLETION_DESC':
     case 'DEPLETION_ASC':
-      return typeof cat?.depletion_rate === 'number' && !Number.isNaN(cat.depletion_rate)
-        ? Math.max(0, cat.depletion_rate)
+      return typeof cat?.depletion_rate === 'number' && !Number.isNaN(cat.depletion_rate) && cat.depletion_rate >= 0
+        ? (cat.depletion_rate === 0 ? 0 : cat.depletion_rate)
         : calculateDepletionRate(cat?.applied_units, cat?.announced_units);
     case 'REMAINING_ASC':
     case 'REMAINING_DESC':
-      return typeof cat?.remaining_units === 'number' && !Number.isNaN(cat.remaining_units)
-        ? Math.max(0, cat.remaining_units)
+      return typeof cat?.remaining_units === 'number' && !Number.isNaN(cat.remaining_units) && cat.remaining_units >= 0
+        ? (cat.remaining_units === 0 ? 0 : cat.remaining_units)
         : calculateRemainingUnits(cat?.applied_units, cat?.announced_units);
     case 'LOCAL_SUBSIDY_DESC':
     case 'LOCAL_SUBSIDY_ASC':
@@ -1511,12 +1525,12 @@ export function rankRegionsByDepletion(
   for (let i = 0; i < sorted.length; i++) {
     const r = sorted[i];
     const cat = getSafeCategory(r.categories, categoryKey);
-    const rawRate = typeof cat?.depletion_rate === 'number' && !Number.isNaN(cat.depletion_rate)
-      ? Math.max(0, cat.depletion_rate)
+    const rawRate = typeof cat?.depletion_rate === 'number' && !Number.isNaN(cat.depletion_rate) && cat.depletion_rate >= 0
+      ? (cat.depletion_rate === 0 ? 0 : cat.depletion_rate)
       : calculateDepletionRate(cat?.applied_units, cat?.announced_units);
     const rate = round1Safe(rawRate);
-    const rem = typeof cat?.remaining_units === 'number' && !Number.isNaN(cat.remaining_units)
-      ? Math.max(0, cat.remaining_units)
+    const rem = typeof cat?.remaining_units === 'number' && !Number.isNaN(cat.remaining_units) && cat.remaining_units >= 0
+      ? (cat.remaining_units === 0 ? 0 : cat.remaining_units)
       : calculateRemainingUnits(cat?.applied_units, cat?.announced_units);
 
     const status = resolveAlertSeverity(cat?.status, rate);
@@ -1533,8 +1547,8 @@ export function rankRegionsByDepletion(
     ranked.push({
       ...r,
       rank: currentRank,
-      regionId: safeString(r.region_id),
-      nameKo: safeString(r.name_ko),
+      regionId: safeString(r.region_id).normalize('NFC'),
+      nameKo: safeString(r.name_ko).normalize('NFC'),
       depletionRate: rate,
       remainingUnits: rem,
       status,
@@ -1553,17 +1567,21 @@ function extractModelSortMetric(
 ): number {
   switch (normalizedSort) {
     case 'PRICE_ASC':
-    case 'NET_PRICE_ASC':
     case 'PRICE_DESC':
-    case 'NET_PRICE_DESC':
       return parseSubsidyNumber(model.base_price_krw, { defaultKrw: 54_100_000 });
+    case 'NET_PRICE_ASC':
+    case 'NET_PRICE_DESC': {
+      const basePrice = parseSubsidyNumber(model.base_price_krw, { defaultKrw: 54_100_000 });
+      const nationalSub = parseSubsidyNumber(model.national_subsidy_krw, { defaultKrw: 0 });
+      return Math.max(0, basePrice - nationalSub);
+    }
     case 'SUBSIDY_DESC':
     case 'SUBSIDY_ASC':
       return parseSubsidyNumber(model.national_subsidy_krw, { defaultKrw: 0 });
     case 'RANGE_DESC':
     case 'RANGE_ASC':
-      return typeof model.rated_range_km === 'number' && Number.isFinite(model.rated_range_km)
-        ? (model.rated_range_km === 0 ? 0 : model.rated_range_km)
+      return typeof model.rated_range_km === 'number' && Number.isFinite(model.rated_range_km) && model.rated_range_km > 0
+        ? model.rated_range_km
         : 0;
     default:
       return 0;

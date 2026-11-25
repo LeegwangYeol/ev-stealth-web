@@ -29,6 +29,8 @@ from filters.slang_lexicon import (
     NEWS_PATTERNS,
     OWNERSHIP_ANCHORS,
     STOCK_TERMS,
+    _RE_DEFECT_GOJANG,
+    _RE_DEFECT_IEUM,
     _RE_JEONSON,
     _RE_TCAM_KO,
     _RE_WATER_LEAK,
@@ -58,7 +60,7 @@ def sanitize_input(val: Any, max_len: int = MAX_TEXT_LENGTH) -> str:
 
     Prevents ReDoS, memory bloat, database insertion failure, surrogate crash, and regex error.
     """
-    if val is None or val is False:
+    if val is None or isinstance(val, bool):
         return ""
     if isinstance(val, (bytes, bytearray)):
         val_str = _decode_bytes_safely(val)
@@ -117,7 +119,7 @@ _RE_BOUNDED_CATEGORY_KEYWORDS: Dict[str, re.Pattern[str]] = {
 _RE_DEFECT_HAJA: re.Pattern[str] = re.compile(r"(?<![가-힣])하자(?!마자|고|면)")
 _RE_GLASS_KEYWORD: re.Pattern[str] = re.compile(r"(?<![불자])유리(?!하|한|할|해|함|히)")
 _BOUNDED_FINANCIAL_REGEXES: Dict[str, re.Pattern[str]] = {
-    "주가": re.compile(r"(?<![가-힣])주가|(?:[가-힣]{2,}차|(?![차입거자])[가-힣])주가"),
+    "주가": re.compile(r"(?<![가-힣])주가|(?:(?<=[가-힣]{2})차|(?![차입거자])[가-힣])주가"),
     "매도": re.compile(r"(?<![가-힣])매도|풀매도"),
     "매수": re.compile(r"(?<![가-힣])매수|풀매수"),
     "실적": re.compile(r"(?<![현사])실적"),
@@ -503,12 +505,20 @@ class SpamFilter:
             (_RE_DEFECT_HAJA.search(text_lower) is not None)
             if dk == "하자"
             else (
-                (_RE_JEONSON.search(text_lower) is not None)
-                if dk == "전손"
+                (_RE_DEFECT_GOJANG.search(text_lower) is not None)
+                if dk == "고장"
                 else (
-                    (_RE_WATER_LEAK.search(text_lower) is not None)
-                    if dk in ("물 새", "물 차", "물 고이")
-                    else (dk in text_lower)
+                    (_RE_DEFECT_IEUM.search(text_lower) is not None)
+                    if dk == "이음"
+                    else (
+                        (_RE_JEONSON.search(text_lower) is not None)
+                        if dk == "전손"
+                        else (
+                            (_RE_WATER_LEAK.search(text_lower) is not None)
+                            if dk in ("물 새", "물 차", "물 고이")
+                            else (dk in text_lower)
+                        )
+                    )
                 )
             )
             for dk in DEFECT_QUESTION_KEYWORDS
@@ -534,7 +544,9 @@ class SpamFilter:
         has_ownership_anchor = any(anchor and anchor in text_str for anchor in self.ownership_anchors)
 
         has_defect_symptom = has_defect_keyword or has_defect_slang or any(
-            (_RE_JEONSON.search(text_lower) is not None) if w == "전손" else (w in text_lower)
+            (_RE_JEONSON.search(text_lower) is not None)
+            if w == "전손"
+            else ((_RE_DEFECT_GOJANG.search(text_lower) is not None) if w == "고장" else (w in text_lower))
             for w in (
                 "고장", "결함", "누수", "소음", "파손",
                 "경고등", "먹통", "단차", "터짐", "멈춤",

@@ -1079,7 +1079,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         logger.warning("Subsidy tracker pipeline cancelled by user.")
         return 1
     except SystemExit as se:
-        return se.code if isinstance(se.code, int) else 1
+        if se.code is None:
+            return 0
+        return se.code if isinstance(se.code, int) and not isinstance(se.code, bool) else 1
     except Exception as exc:
         logger.exception("Fatal error in subsidy tracker pipeline: %s", exc)
         return 1

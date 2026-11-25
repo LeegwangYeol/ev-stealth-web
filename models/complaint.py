@@ -730,7 +730,11 @@ def validate_report_entry(entry: Any, strict: bool = False) -> Tuple[bool, str]:
 
     # 4. Defect category check if strict=True
     if strict:
-        cat = _get("defect_category") or _get("category")
+        raw_dc = _get("defect_category")
+        raw_c = _get("category")
+        if isinstance(raw_dc, bool) or (raw_dc is None and isinstance(raw_c, bool)):
+            return False, "Invalid bool value for defect_category"
+        cat = raw_dc if raw_dc not in (None, "") else raw_c
         if cat is not None and str(cat).strip():
             s_cat_nfc = unicodedata.normalize("NFC", str(cat)).strip()
             s_cat = s_cat_nfc.upper()
@@ -914,6 +918,8 @@ class ComplaintRecord:
         self.filter_reason = sanitize_string(self.filter_reason, 10_000)
         if self.severity is not None:
             self.severity = sanitize_string(self.severity, 64)
+        if self.dsi_breakdown is not None and not isinstance(self.dsi_breakdown, DSIBreakdown):
+            self.dsi_breakdown = DSIBreakdown.from_dict(self.dsi_breakdown)
 
         # Clamp and sanitize numeric bounds
         self.sentiment_polarity = _safe_round(_safe_clamp(self.sentiment_polarity, -1.0, 1.0, 0.0), 4)

@@ -447,7 +447,8 @@ class ScraperPipeline:
             self.read_timeout = 15.0
         self.enable_cache = enable_cache
         self.cache_fallback = cache_fallback
-        self._custom_cache_dir = Path(cache_dir) if cache_dir else None
+        raw_cache_dir = str(cache_dir).strip() if cache_dir is not None else ""
+        self._custom_cache_dir = Path(raw_cache_dir) if raw_cache_dir else None
         self.client = client or SafeHttpClient(
             min_delay=1.0,
             max_delay=2.5,
@@ -1063,7 +1064,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         logger.warning("Scraper runner cancelled by user.")
         return 1
     except SystemExit as se:
-        return se.code if isinstance(se.code, int) else 1
+        if se.code is None:
+            return 0
+        return se.code if isinstance(se.code, int) and not isinstance(se.code, bool) else 1
     except Exception as exc:
         logger.error(f"Fatal error during scraper execution: {exc}", exc_info=verbose)
         return 1

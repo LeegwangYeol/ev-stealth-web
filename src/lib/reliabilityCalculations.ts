@@ -94,6 +94,38 @@ function safeRound(value: number, factor: number): number {
   return Math.round(scaled) / factor + 0;
 }
 
+interface ScaledTotal {
+  total: number;
+  maxVal: number;
+  scaledTotal: number;
+}
+
+function buildScaledTotal(values: Iterable<number>): ScaledTotal {
+  let total = 0;
+  let maxVal = 0;
+  let scaledTotal = 0;
+  for (const v of values) {
+    total += v;
+    if (v > 0) {
+      if (v > maxVal) {
+        if (maxVal > 0) {
+          scaledTotal *= maxVal / v;
+        }
+        maxVal = v;
+      }
+      scaledTotal += v / maxVal;
+    }
+  }
+  return { total, maxVal, scaledTotal };
+}
+
+function calcSharePct(part: number, st: ScaledTotal): number {
+  const rawPct = Number.isFinite(st.total)
+    ? (st.total > 0 ? (part / st.total) * 100 : 0)
+    : (st.scaledTotal > 0 && st.maxVal > 0 ? ((part / st.maxVal) / st.scaledTotal) * 100 : 0);
+  return Number.isFinite(rawPct) ? Math.round(rawPct * 10) / 10 + 0 : 0.0;
+}
+
 const VALID_CATEGORY_KEYS: ReadonlySet<DefectCategoryKey> = new Set<DefectCategoryKey>([
   'BATTERY_CHARGING',
   'DRIVING_POWERTRAIN',
@@ -265,19 +297,13 @@ export function aggregateCategoryComplaintCounts(
     }
   }
 
-  let totalCount = 0;
-  for (const c of countMap.values()) {
-    const nextTotal = totalCount + c;
-    totalCount = Number.isFinite(nextTotal) ? nextTotal : Number.MAX_VALUE;
-  }
+  const scaledTotal = buildScaledTotal(countMap.values());
 
   const result: Record<string, { count: number; percentage: number }> = {};
   for (const [key, count] of countMap.entries()) {
-    const rawPct = totalCount > 0 ? (count / totalCount) * 100 : 0;
-    const percentage = Number.isFinite(rawPct) ? Math.round(rawPct * 10) / 10 + 0 : 0.0;
     result[key] = {
       count,
-      percentage,
+      percentage: calcSharePct(count, scaledTotal),
     };
   }
 
@@ -790,7 +816,7 @@ const SHORT_ASCII_BRAND_REGEX_CACHE = new Map<string, RegExp>();
 
 function matchesBrandTokenOrSubstring(haystackLower: string, needleLower: string): boolean {
   if (haystackLower.length < 2 || needleLower.length < 2) return false;
-  if (/^[a-z0-9]+$/.test(needleLower) && needleLower.length <= 3) {
+  if (/^[a-z0-9]+$/.test(needleLower) && needleLower.length <= 4) {
     let re = SHORT_ASCII_BRAND_REGEX_CACHE.get(needleLower);
     if (!re) {
       re = new RegExp(`\\b${needleLower}\\b`);
@@ -1571,7 +1597,7 @@ function accumulatePeriodEntry(
   year: number,
   subPeriod: number,
   metrics: { parsedCount: number; parsedDsi: number | null; catKey: string }
-): number {
+): void {
   if (!groups.has(periodKey)) {
     groups.set(periodKey, {
       year,
@@ -1609,22 +1635,18 @@ function accumulatePeriodEntry(
     const nextCat = prevCat + metrics.parsedCount;
     g.categoryCounts.set(metrics.catKey, Number.isFinite(nextCat) ? nextCat : Number.MAX_VALUE);
   }
-
-  return metrics.parsedCount;
 }
 
 function buildPeriodSummary(
   sortedKeys: string[],
   groups: Map<string, PeriodAccumulator>,
   index: number,
-  grandTotalComplaints: number
+  grandTotalScaled: ScaledTotal
 ) {
   const key = sortedKeys[index];
   const g = groups.get(key)!;
 
-  const safeGrandTotal = Number.isFinite(grandTotalComplaints) ? grandTotalComplaints : Number.MAX_VALUE;
-  const rawPct = safeGrandTotal > 0 ? (g.totalComplaints / safeGrandTotal) * 100 : 0;
-  const percentage = Number.isFinite(rawPct) ? Math.round(rawPct * 10) / 10 + 0 : 0.0;
+  const percentage = calcSharePct(g.totalComplaints, grandTotalScaled);
 
   let avgDsi = 50.0;
   if (g.dsiCount > 0 && Number.isFinite(g.dsiWeightedSum) && Number.isFinite(g.dsiCount)) {
@@ -1642,12 +1664,12 @@ function buildPeriodSummary(
   let topCategory: DefectCategoryKey | string = 'NONE';
   let maxCatCount = 0;
   const categoryDistribution: Record<string, { count: number; percentage: number }> = {};
+  const catScaledTotal = buildScaledTotal(g.categoryCounts.values());
 
   for (const [cat, cnt] of g.categoryCounts.entries()) {
-    const rawCatPct = g.totalComplaints > 0 ? (cnt / g.totalComplaints) * 100 : 0;
     categoryDistribution[cat] = {
       count: cnt,
-      percentage: Number.isFinite(rawCatPct) ? Math.round(rawCatPct * 10) / 10 + 0 : 0.0,
+      percentage: calcSharePct(cnt, catScaledTotal),
     };
     if (cnt > maxCatCount) {
       maxCatCount = cnt;
@@ -1661,12 +1683,21 @@ function buildPeriodSummary(
     : { ...STABLE_ZERO_TREND };
 
   const windowStart = Math.max(0, index - 2);
+  const windowCount = index - windowStart + 1;
   let windowSum = 0;
   for (let w = windowStart; w <= index; w++) {
-    const nextWin = windowSum + groups.get(sortedKeys[w])!.totalComplaints;
-    windowSum = Number.isFinite(nextWin) ? nextWin : Number.MAX_VALUE;
+    windowSum += groups.get(sortedKeys[w])!.totalComplaints;
   }
-  const rawMa = windowSum / (index - windowStart + 1);
+  let rawMa: number;
+  if (Number.isFinite(windowSum)) {
+    rawMa = windowSum / windowCount;
+  } else {
+    let ratioSum = 0;
+    for (let w = windowStart; w <= index; w++) {
+      ratioSum += groups.get(sortedKeys[w])!.totalComplaints / windowCount;
+    }
+    rawMa = ratioSum;
+  }
   const movingAverage3 = Number.isFinite(rawMa) ? safeRound(rawMa, 10) : 0;
 
   return {
@@ -1701,7 +1732,6 @@ export function aggregateQuarterlyDefectBreakdown(
   if (!Array.isArray(inputs) || inputs.length === 0) return [];
 
   const groups = new Map<string, PeriodAccumulator>();
-  let grandTotalComplaints = 0;
 
   for (const item of inputs) {
     if (!item || typeof item !== 'object') continue;
@@ -1743,7 +1773,7 @@ export function aggregateQuarterlyDefectBreakdown(
     if (!year || !quarter) continue;
 
     const periodKey = `${year}-Q${quarter}`;
-    grandTotalComplaints += accumulatePeriodEntry(
+    accumulatePeriodEntry(
       groups,
       periodKey,
       year,
@@ -1754,10 +1784,11 @@ export function aggregateQuarterlyDefectBreakdown(
 
   // Sort chronologically by year and quarter (YYYY-QX lexicographical order matches chronological order)
   const sortedKeys = Array.from(groups.keys()).sort();
+  const grandTotalScaled = buildScaledTotal(Array.from(groups.values(), (g) => g.totalComplaints));
 
   const results: QuarterlyDefectBreakdown[] = [];
   for (let i = 0; i < sortedKeys.length; i++) {
-    const summary = buildPeriodSummary(sortedKeys, groups, i, grandTotalComplaints);
+    const summary = buildPeriodSummary(sortedKeys, groups, i, grandTotalScaled);
     results.push({
       periodKey: summary.periodKey,
       year: summary.year,
@@ -1786,7 +1817,6 @@ export function aggregateMonthlyDefectBreakdown(
   if (!Array.isArray(inputs) || inputs.length === 0) return [];
 
   const groups = new Map<string, PeriodAccumulator>();
-  let grandTotalComplaints = 0;
 
   for (const item of inputs) {
     if (!item || typeof item !== 'object') continue;
@@ -1815,7 +1845,7 @@ export function aggregateMonthlyDefectBreakdown(
     if (!year || !month) continue;
 
     const periodKey = `${year}-${String(month).padStart(2, '0')}`;
-    grandTotalComplaints += accumulatePeriodEntry(
+    accumulatePeriodEntry(
       groups,
       periodKey,
       year,
@@ -1825,10 +1855,11 @@ export function aggregateMonthlyDefectBreakdown(
   }
 
   const sortedKeys = Array.from(groups.keys()).sort();
+  const grandTotalScaled = buildScaledTotal(Array.from(groups.values(), (g) => g.totalComplaints));
   const results: MonthlyDefectBreakdown[] = [];
 
   for (let i = 0; i < sortedKeys.length; i++) {
-    const summary = buildPeriodSummary(sortedKeys, groups, i, grandTotalComplaints);
+    const summary = buildPeriodSummary(sortedKeys, groups, i, grandTotalScaled);
     results.push({
       periodKey: summary.periodKey,
       year: summary.year,
