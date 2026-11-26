@@ -98,6 +98,8 @@ import {
   aggregateMonthlyDefectBreakdown,
   calculateModelYearDefectTrajectory,
   aggregateDefectTrendsByPeriod,
+  isPlainRecord,
+  copySafeOwnFields,
 } from './reliabilityCalculations.ts';
 
 export function getDsiSeverityLevel(dsi: number) {
@@ -218,7 +220,7 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
     return cachedTrendsDatabase;
   }
   try {
-    if (!rawTrendsData || typeof rawTrendsData !== 'object' || Array.isArray(rawTrendsData)) {
+    if (!isPlainRecord(rawTrendsData)) {
       return createDefaultFallbackDatabase();
     }
 
@@ -226,13 +228,13 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
 
     const brands: BrandReliability[] = Array.isArray(data.brands)
       ? data.brands
-          .filter((b): b is BrandReliability => Boolean(b && typeof b === 'object'))
+          .filter((b): b is BrandReliability => isPlainRecord(b))
           .map((b) => {
             const safeBrandId = typeof b.id === 'string' ? b.id : '';
             const rawReports = parseFiniteNumber(b.total_reports);
             const rawCritical = parseFiniteNumber(b.critical_issue_rate);
             return {
-              ...b,
+              ...copySafeOwnFields(b),
               id: safeBrandId,
               name_ko: typeof b.name_ko === 'string' ? b.name_ko : '',
               name_en: typeof b.name_en === 'string' ? b.name_en : '',
@@ -248,54 +250,58 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
               ) as Record<DefectCategoryKey, { count: number; percentage: number }>,
               models: Array.isArray(b.models)
                 ? b.models
-                    .filter((m): m is ModelReliability => Boolean(m && typeof m === 'object'))
-                    .map((m) => ({
-                      ...m,
-                      id: typeof m.id === 'string' ? m.id : '',
-                      name: typeof m.name === 'string' ? m.name : '',
-                      segment: typeof m.segment === 'string' ? m.segment : '',
-                      brand_id: typeof m.brand_id === 'string' && m.brand_id ? m.brand_id : safeBrandId,
-                      overall_grade: sanitizeGrade(m.overall_grade),
-                      avg_dsi: normalizeReliabilityScore(m.avg_dsi, 50.0),
-                      top_category: sanitizeCategoryKey(m.top_category),
-                      year_evaluations: Array.isArray(m.year_evaluations)
-                        ? m.year_evaluations
-                            .filter((y): y is YearEvaluation => Boolean(y && typeof y === 'object'))
-                            .map((y) => {
-                              const parsedYear = parseFiniteNumber(y.year);
-                              const parsedIncident = parseFiniteNumber(y.incident_rate);
-                              return {
-                                ...y,
-                                year: parsedYear !== null ? Math.floor(parsedYear) + 0 : 0,
-                                verdict: sanitizeVerdict(y.verdict),
-                                dsi_score: normalizeReliabilityScore(y.dsi_score, 50.0),
-                                incident_rate:
-                                  parsedIncident !== null
-                                    ? Math.max(0, Math.min(100, parsedIncident)) + 0
-                                    : 0,
-                                primary_defect:
-                                  typeof y.primary_defect === 'string' ? y.primary_defect : '',
-                                estimated_repair_cost:
-                                  typeof y.estimated_repair_cost === 'string'
-                                    ? y.estimated_repair_cost
-                                    : '',
-                                chronic_symptoms: Array.isArray(y.chronic_symptoms)
-                                  ? y.chronic_symptoms.filter(
-                                      (s): s is string => typeof s === 'string'
-                                    )
-                                  : [],
-                                raw_quote: typeof y.raw_quote === 'string' ? y.raw_quote : '',
-                              };
-                            })
-                        : [],
-                    }))
+                    .filter((m): m is ModelReliability => isPlainRecord(m))
+                    .map((m) => {
+                      const modelBrandId = typeof m.brand_id === 'string' ? m.brand_id.trim() : '';
+                      return {
+                        ...copySafeOwnFields(m),
+                        id: typeof m.id === 'string' ? m.id : '',
+                        name: typeof m.name === 'string' ? m.name : '',
+                        segment: typeof m.segment === 'string' ? m.segment : '',
+                        brand_id: modelBrandId ? modelBrandId : safeBrandId,
+                        overall_grade: sanitizeGrade(m.overall_grade),
+                        avg_dsi: normalizeReliabilityScore(m.avg_dsi, 50.0),
+                        top_category: sanitizeCategoryKey(m.top_category),
+                        year_evaluations: Array.isArray(m.year_evaluations)
+                          ? m.year_evaluations
+                              .filter((y): y is YearEvaluation => isPlainRecord(y))
+                              .map((y) => {
+                                const parsedYear = parseFiniteNumber(y.year);
+                                const parsedIncident = parseFiniteNumber(y.incident_rate);
+                                return {
+                                  ...copySafeOwnFields(y),
+                                  year: parsedYear !== null ? Math.floor(parsedYear) + 0 : 0,
+                                  verdict: sanitizeVerdict(y.verdict),
+                                  dsi_score: normalizeReliabilityScore(y.dsi_score, 50.0),
+                                  incident_rate:
+                                    parsedIncident !== null
+                                      ? Math.max(0, Math.min(100, parsedIncident)) + 0
+                                      : 0,
+                                  primary_defect:
+                                    typeof y.primary_defect === 'string' ? y.primary_defect : '',
+                                  estimated_repair_cost:
+                                    typeof y.estimated_repair_cost === 'string'
+                                      ? y.estimated_repair_cost
+                                      : '',
+                                  chronic_symptoms: Array.isArray(y.chronic_symptoms)
+                                    ? y.chronic_symptoms.filter(
+                                        (s): s is string => typeof s === 'string'
+                                      )
+                                    : [],
+                                  raw_quote: typeof y.raw_quote === 'string' ? y.raw_quote : '',
+                                };
+                              })
+                          : [],
+                      };
+                    })
                 : [],
             };
           })
       : [];
 
-    const rawMetaObj =
-      data.metadata && typeof data.metadata === 'object' ? data.metadata : undefined;
+    const rawMetaObj = isPlainRecord(data.metadata)
+      ? (data.metadata as ReliabilityTrendsDatabase['metadata'])
+      : undefined;
     const rawTotal =
       parseFiniteNumber(rawMetaObj?.total_records_analyzed) ??
       parseFiniteNumber(
@@ -350,12 +356,12 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
     const validCategories = rawCategories
       .filter(
         (c): c is DefectCategoryMetadata =>
-          Boolean(c && typeof c === 'object' && typeof c.code === 'string' && c.code.trim())
+          isPlainRecord(c) && typeof c.code === 'string' && c.code.trim().length > 0
       )
       .map((c) => {
         const share = parseFiniteNumber(c.industry_share_pct);
         return {
-          ...c,
+          ...copySafeOwnFields(c),
           code: sanitizeCategoryKey(c.code),
           label_ko: typeof c.label_ko === 'string' ? c.label_ko : '',
           description: typeof c.description === 'string' ? c.description : '',
@@ -374,10 +380,10 @@ export function getReliabilityTrendsData(): ReliabilityTrendsDatabase {
       ? data.repair_cost_matrix
           .filter(
             (r): r is RepairCostMatrixItem =>
-              Boolean(r && typeof r === 'object' && typeof r.component_name === 'string')
+              isPlainRecord(r) && typeof r.component_name === 'string'
           )
           .map((r) => ({
-            ...r,
+            ...copySafeOwnFields(r),
             affected_systems: typeof r.affected_systems === 'string' ? r.affected_systems : '',
             avg_cost_krw: typeof r.avg_cost_krw === 'string' ? r.avg_cost_krw : '',
             standard_warranty: typeof r.standard_warranty === 'string' ? r.standard_warranty : '',

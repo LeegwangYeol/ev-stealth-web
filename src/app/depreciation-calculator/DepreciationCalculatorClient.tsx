@@ -304,7 +304,7 @@ const ModelGridCard = memo(function ModelGridCard({
         <div className="flex flex-wrap items-center gap-1.5 mb-2">
           {getChemistryBadge(model.battery_specs?.chemistry ?? 'NCM_811')}
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-900 border border-slate-300">
-            {Number.isFinite(model.battery_specs?.capacity_kwh) ? model.battery_specs.capacity_kwh : 77.4} kWh
+            {Number.isFinite(model.battery_specs?.capacity_kwh) && model.battery_specs.capacity_kwh > 0 ? model.battery_specs.capacity_kwh : 77.4} kWh
           </span>
           <span
             className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold border ${
@@ -731,7 +731,8 @@ export default function DepreciationCalculatorClient({
     const dcfcRatioVal = dcfcRatio / 100;
     const ambientTempC = winterSeason ? -5 : 22;
     const modelChemistry = selectedModel.battery_specs?.chemistry ?? 'NCM_811';
-    const modelCapacity = selectedModel.battery_specs?.capacity_kwh ?? 77.4;
+    const rawCapacity = selectedModel.battery_specs?.capacity_kwh;
+    const modelCapacity = typeof rawCapacity === 'number' && Number.isFinite(rawCapacity) && rawCapacity > 0 ? rawCapacity : 77.4;
     const dbVersion = initialDatabase?.metadata?.version ?? 'default';
     const cacheKey = `${dbVersion}_${selectedModel.id}_${modelChemistry}_${holdingYears}_${totalMileage}_${annualMileageKm}_${dcfcRatioVal}_${ambientTempC}_${modelCapacity}`;
 
@@ -1540,6 +1541,9 @@ export default function DepreciationCalculatorClient({
           </div>
 
           {/* SVG Chart */}
+          <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+            {`차트 표시 단위: ${chartViewMode === 'price' ? '예상 시세 (만 원)' : '잔존가치율 (%)'}, ${selectedModel.model_name} ${Math.round(holdingYears)}년차 강조`}
+          </div>
           <div
             tabIndex={0}
             role="region"
@@ -1990,7 +1994,7 @@ export default function DepreciationCalculatorClient({
                   <span aria-hidden="true">🛠️</span> 공식 배터리 팩 교체 비용 견적 ({replacementCostTier.segment_name})
                 </span>
                 <span className="text-[11px] text-slate-300">
-                  용량 {Number.isFinite(selectedModel.battery_specs?.capacity_kwh) ? selectedModel.battery_specs.capacity_kwh : 77.4} kWh 기준
+                  용량 {Number.isFinite(selectedModel.battery_specs?.capacity_kwh) && selectedModel.battery_specs.capacity_kwh > 0 ? selectedModel.battery_specs.capacity_kwh : 77.4} kWh 기준
                 </span>
               </div>
 

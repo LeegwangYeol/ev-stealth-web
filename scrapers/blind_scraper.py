@@ -185,6 +185,57 @@ class BlindScraper:
         logger.info(f"Found {len(results)} posts in Blind topic '{topic_name}'.")
         return results
 
+    @staticmethod
+    def _extract_next_data(html_content: str) -> Optional[Dict[str, Any]]:
+        """Extract and parse __NEXT_DATA__ JSON while skipping HTML comments in O(N) time."""
+        if not html_content or not isinstance(html_content, str):
+            return None
+        lower_html = html_content.lower()
+        if "__next_data__" not in lower_html or "</script" not in lower_html:
+            return None
+        last_comment_end = html_content.rfind("-->")
+        open_re = re.compile(r"<!--|<script(?=[\s>/])", re.IGNORECASE)
+        close_script_re = re.compile(r"</script\s*>", re.IGNORECASE)
+        id_re = re.compile(
+            r'(?<![\w-])id\s*=\s*(?:"__NEXT_DATA__"|\'__NEXT_DATA__\'|__NEXT_DATA__(?=[\s>]))',
+            re.IGNORECASE,
+        )
+        pos = 0
+        n = len(html_content)
+        while pos < n:
+            m = open_re.search(html_content, pos)
+            if not m:
+                break
+            if m.group(0) == "<!--":
+                if last_comment_end == -1 or m.end() > last_comment_end:
+                    pos = m.end()
+                    continue
+                end_c = html_content.find("-->", m.end())
+                if end_c == -1:
+                    pos = m.end()
+                    continue
+                pos = end_c + 3
+                continue
+            gt_idx = html_content.find(">", m.end())
+            if gt_idx == -1:
+                break
+            attrs = html_content[m.end() : gt_idx]
+            if attrs.rstrip().endswith("/"):
+                pos = gt_idx + 1
+                continue
+            close_m = close_script_re.search(html_content, gt_idx + 1)
+            if not close_m:
+                break
+            if id_re.search(attrs):
+                try:
+                    data = json.loads(html_content[gt_idx + 1 : close_m.start()])
+                    return data if isinstance(data, dict) else None
+                except Exception as e:
+                    logger.debug(f"Failed to parse Blind __NEXT_DATA__: {e}")
+                    return None
+            pos = close_m.end()
+        return None
+
     def parse_topic_feed(self, html_content: str, topic_name: str = "자동차") -> List[Dict[str, Any]]:
         """Parse Blind topic list HTML / Next.js SSR state."""
         if not html_content or not isinstance(html_content, str):
@@ -192,14 +243,9 @@ class BlindScraper:
         items = []
 
         # Try extracting Next.js SSR __NEXT_DATA__
-        next_data_match = re.search(
-            r'<script\b[^>]*\bid=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>',
-            html_content,
-            re.IGNORECASE | re.DOTALL,
-        )
-        if next_data_match:
+        data = self._extract_next_data(html_content)
+        if data:
             try:
-                data = json.loads(next_data_match.group(1))
                 props = data.get("props") if isinstance(data, dict) else None
                 page_props = props.get("pageProps") if isinstance(props, dict) else {}
                 if not isinstance(page_props, dict):
@@ -207,10 +253,14 @@ class BlindScraper:
                 posts_list = page_props.get("articles") or page_props.get("posts") or []
                 if not isinstance(posts_list, list):
                     posts_list = []
+                seen_urls = set()
+                seen_ids = set()
                 for p in posts_list:
                     if not isinstance(p, dict):
                         continue
                     post_id = str(p.get("id") or p.get("article_id") or "")
+                    if post_id and post_id in seen_ids:
+                        continue
                     title = clean_html_text(str(p.get("title") or ""))
                     slug = str(p.get("slug") or "")
                     if slug.lower().startswith(("http://", "https://")) or slug.startswith("/"):
@@ -222,8 +272,11 @@ class BlindScraper:
                     else:
                         continue
                     url = normalize_scraper_url(raw_url, BLIND_BASE_URL)
-                    if not url or not is_allowed_domain_url(url, ("teamblind.com",)):
+                    if not url or not is_allowed_domain_url(url, ("teamblind.com",)) or url in seen_urls:
                         continue
+                    seen_urls.add(url)
+                    if post_id:
+                        seen_ids.add(post_id)
                     user_obj = p.get("user") if isinstance(p.get("user"), dict) else {}
                     author_obj = p.get("author") if isinstance(p.get("author"), dict) else {}
                     company = str(
@@ -245,10 +298,11 @@ class BlindScraper:
             except Exception as e:
                 logger.debug(f"Next.js SSR parsing notice for topic feed: {e}")
 
-        # Fallback to DOM regex extraction
+        # Fallback to DOM regex extraction on comment/script-stripped HTML
         # Pattern: <a ... href="/kr/post/..." or "https://www.teamblind.com/kr/post/..." ...>
+        body_html_region = strip_non_body_html(html_content)
         pattern = r'<a\b[^>]*\bhref=["\']((?:https?://(?:www\.)?teamblind\.com)?/kr/post/[^"\']+)["\'][^>]*>(.*?)</a>'
-        matches = re.findall(pattern, html_content, re.IGNORECASE | re.DOTALL)
+        matches = re.findall(pattern, body_html_region, re.IGNORECASE | re.DOTALL)
         seen_urls = set()
 
         for href, inner in matches:
@@ -312,14 +366,9 @@ class BlindScraper:
         if not html_content or not isinstance(html_content, str):
             return {}
         # 1. Attempt Next.js SSR JSON Extraction
-        next_data_match = re.search(
-            r'<script\b[^>]*\bid=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>',
-            html_content,
-            re.IGNORECASE | re.DOTALL,
-        )
-        if next_data_match:
+        data = self._extract_next_data(html_content)
+        if data:
             try:
-                data = json.loads(next_data_match.group(1))
                 props = data.get("props") if isinstance(data, dict) else None
                 page_props = props.get("pageProps") if isinstance(props, dict) else {}
                 if not isinstance(page_props, dict):
@@ -386,11 +435,17 @@ class BlindScraper:
             re.DOTALL | re.IGNORECASE,
         )
         if not company_match:
-            company_match = re.search(
-                r'<div\b[^>]*\bclass=["\'][^"\']*\bauthor-info\b[^"\']*["\'][^>]*>(?:(?!</div>).)*?<span\b[^>]*>(.*?)</span>',
+            author_info_html = extract_balanced_tag_content(
                 body_html_region,
-                re.DOTALL | re.IGNORECASE,
+                r'<div\b[^>]*\bclass=["\'][^"\']*\bauthor-info\b[^"\']*["\'][^>]*>',
+                tag_name="div",
             )
+            if author_info_html:
+                company_match = re.search(
+                    r'<span\b[^>]*>(.*?)</span>',
+                    author_info_html,
+                    re.DOTALL | re.IGNORECASE,
+                )
         if company_match:
             comp_clean = clean_html_text(company_match.group(1))
             if comp_clean:
@@ -410,11 +465,26 @@ class BlindScraper:
             body = extract_meta_content(html_content, "og:description")
 
         comments = []
-        comment_matches = re.findall(
-            r'<div\b[^>]*\bclass=["\'][^"\']*\bcomment-item\b[^"\']*["\'][^>]*>((?:(?!<div\b[^>]*\bcomment-item\b).)*?)</div>\s*<!--\s*//comment-item',
-            html_content,
-            re.DOTALL | re.IGNORECASE,
+        comment_matches = []
+        comment_item_re = re.compile(
+            r'<div\b[^>]*\bclass=["\'][^"\']*\bcomment-item\b[^"\']*["\'][^>]*>',
+            re.IGNORECASE,
         )
+        search_pos = 0
+        while True:
+            cm = comment_item_re.search(body_html_region, search_pos)
+            if not cm:
+                break
+            c_inner = extract_balanced_tag_content(
+                body_html_region[cm.start() :],
+                comment_item_re.pattern,
+                tag_name="div",
+            )
+            if c_inner:
+                comment_matches.append(c_inner)
+                search_pos = cm.end() + len(c_inner)
+            else:
+                search_pos = cm.end()
         if not comment_matches:
             comment_matches = re.findall(
                 r'<p\b[^>]*\bclass=["\'][^"\']*\bcomment-text\b[^"\']*["\'][^>]*>(.*?)</p>',
@@ -500,10 +570,12 @@ class BlindScraper:
                 c_comp_match = re.match(r"^\[([^\]]+)\]\s*(.*)", comment, re.DOTALL)
                 if c_comp_match:
                     c_badge = c_comp_match.group(1)
-                    c_text = c_comp_match.group(2)
+                    c_text = c_comp_match.group(2).strip()
                 else:
                     c_badge = "블라인드 직장인"
-                    c_text = comment
+                    c_text = comment.strip()
+                if len(c_text) < 5:
+                    continue
 
                 c_slang = extract_slang_terms(c_text, self.slang_dict)
                 rec_id = f"BLIND_{c_cat.upper()[:4]}_{int(hashlib.sha256((url + str(idx)).encode('utf-8', errors='replace')).hexdigest(), 16) % 100000:05d}"

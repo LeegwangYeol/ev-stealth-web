@@ -36,6 +36,11 @@ _SEVERITY_TIER_MAP: Dict[str, float] = {
 }
 
 
+def _reject_json_constant(constant: str) -> Any:
+    """Reject non-RFC-8259 JSON constants (NaN, Infinity, -Infinity)."""
+    raise ValueError(f"Non-standard JSON constant: {constant}")
+
+
 def _norm_text(val: Any) -> str:
     """Unwrap Enum values and normalize non-ASCII text (e.g. Hangul NFD/NFC) to NFC."""
     unwrapped = getattr(val, "value", val)
@@ -315,7 +320,7 @@ class DefectTracker:
             if not p.is_file() or p.stat().st_size == 0:
                 return None
             with open(p, "r", encoding="utf-8-sig") as f:
-                data = json.load(f)
+                data = json.load(f, parse_constant=_reject_json_constant)
             if not cls._validate_report_payload(data):
                 return None
             return data
@@ -329,7 +334,7 @@ class DefectTracker:
         if not raw_bytes:
             return False
         try:
-            data = json.loads(raw_bytes.decode("utf-8-sig"))
+            data = json.loads(raw_bytes.decode("utf-8-sig"), parse_constant=_reject_json_constant)
             return cls._validate_report_payload(data)
         except Exception:
             return False
@@ -394,6 +399,7 @@ class DefectTracker:
         self,
         file_path: Optional[Union[str, Path]] = None,
         quarantine_corrupted: bool = True,
+        strict_json: bool = True,
     ) -> Dict[str, Any]:
         """Load complete defect report dataset including statistics and metadata."""
         from tracker.atomic_writer import (
@@ -425,7 +431,10 @@ class DefectTracker:
             if not target.is_file() or target.stat().st_size == 0:
                 raise ValueError(f"Defect report file {target} is missing, a directory, or empty.")
             with open(target, "r", encoding="utf-8-sig") as f:
-                data = json.load(f)
+                if strict_json:
+                    data = json.load(f, parse_constant=_reject_json_constant)
+                else:
+                    data = json.load(f)
             if (
                 not isinstance(data, dict)
                 or "reports" not in data
@@ -446,7 +455,8 @@ class DefectTracker:
                         try:
                             return _read_and_validate()
                         except Exception:
-                            quarantine_corrupted_file(target)
+                            if quarantine_corrupted_file(target) is not None:
+                                self.invalidate_cache()
             return {"reports": [], "statistics": {}}
 
     def invalidate_cache(self) -> None:
@@ -474,6 +484,7 @@ class DefectTracker:
         self,
         file_path: Optional[Union[str, Path]] = None,
         copy_dicts: bool = False,
+        strict_json: bool = True,
     ) -> Optional[List[Dict[str, Any]]]:
         """Ensure in-memory report cache and category index are up to date; optionally return copied dicts."""
         is_primary = file_path is None
@@ -571,7 +582,15 @@ class DefectTracker:
             except (OSError, ValueError):
                 pre_stat = None
 
-        data = preloaded_data if preloaded_data is not None else self.load_full_report_data(file_path=target)
+        data = (
+            preloaded_data
+            if preloaded_data is not None
+            else (
+                self.load_full_report_data(file_path=target)
+                if strict_json
+                else self.load_full_report_data(file_path=target, strict_json=False)
+            )
+        )
         reports = data.get("reports", [])
 
         with self._cache_lock:
@@ -824,7 +843,11 @@ class DefectTracker:
             "load_full_report_data" not in self.__dict__
             and type(self).load_full_report_data is DefectTracker.load_full_report_data
         ):
-            self._ensure_reports_loaded(file_path=file_path, copy_dicts=False)
+            self._ensure_reports_loaded(
+                file_path=file_path,
+                copy_dicts=False,
+                strict_json=(file_path is None),
+            )
             resolved_req_path: Optional[Path] = None
             if file_path is not None:
                 try:
@@ -903,7 +926,8 @@ class DefectTracker:
                                 try:
                                     f_v = float(raw_item_cnt)
                                     if not (math.isnan(f_v) or math.isinf(f_v)):
-                                        cat_dist[str(item["category"])] = int(f_v)
+                                        cat_name = _norm_text(item["category"]).strip() or "UNKNOWN"
+                                        cat_dist[cat_name] = int(f_v)
                                 except (ValueError, TypeError, OverflowError):
                                     pass
                     elif isinstance(top_cats, dict):
@@ -920,7 +944,8 @@ class DefectTracker:
             else:
                 stat_copy["category_distribution"] = _coerce_count_map(stat_copy["category_distribution"])
 
-            return stat_copy
+            from tracker.atomic_writer import sanitize_nan_inf
+            return sanitize_nan_inf(stat_copy)
 
         # Compute on-the-fly from reports list
         reports = _extract_val(full_data, "reports", [])
@@ -954,6 +979,8 @@ class DefectTracker:
                 critical_count += 1
 
             neg = _extract_val(r, "negativity_score")
+            if neg is None or (isinstance(neg, str) and not neg.strip()):
+                neg = _extract_val(r, "sentiment_score")
             if neg is not None and not isinstance(neg, bool):
                 try:
                     f_neg = float(neg)
@@ -1069,6 +1096,9 @@ class DefectTracker:
         has_web_dir = bool(web_dir and str(web_dir).strip())
         root_path = self.get_root_reports_path()
         web_path = (Path(web_dir) / "daily_reports.json") if has_web_dir else self.get_web_reports_path()
+        if "\x00" in str(root_path) or "\x00" in str(web_path):
+            logger.warning("DefectTracker sync aborted due to invalid path containing null byte.")
+            return []
 
         public_path: Optional[Path] = None
         if has_web_dir and (Path(web_dir).parent / "public" / "data").exists():
@@ -1077,6 +1107,8 @@ class DefectTracker:
             public_path = Path(web_dir).parent.parent / "public" / "data" / "daily_reports.json"
         else:
             public_path = self.get_public_reports_path()
+        if public_path is not None and "\x00" in str(public_path):
+            public_path = None
 
         written_paths: List[str] = []
         quarantined_any = False

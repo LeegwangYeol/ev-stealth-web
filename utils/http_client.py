@@ -1057,8 +1057,9 @@ class SafeHttpClient:
         self._session_user_agent = user_agent or self.get_random_user_agent()
 
         # Cache directory setup
-        if cache_dir:
-            self.cache_dir = cache_dir
+        raw_cache_dir = str(cache_dir).strip() if cache_dir is not None else ""
+        if raw_cache_dir:
+            self.cache_dir = raw_cache_dir
         else:
             candidate_cache = os.path.join(
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", ".cache", "http"
@@ -1118,7 +1119,7 @@ class SafeHttpClient:
 
     def get_cached_response(self, url: str) -> Optional[Tuple[int, str, bytes]]:
         """Retrieve cached (status_code, decoded_text, raw_bytes) if present."""
-        if not self.enable_cache or not url:
+        if not self.enable_cache or not url or not str(url).strip():
             return None
         key = self._cache_key(url)
         # 1. In-memory cache
@@ -1165,7 +1166,7 @@ class SafeHttpClient:
         raw_bytes: bytes,
     ) -> None:
         """Cache response data in-memory and persistently to disk."""
-        if not self.enable_cache or not url or not decoded_text:
+        if not self.enable_cache or not url or not str(url).strip() or not decoded_text:
             return
         key = self._cache_key(url)
         raw_bytes_safe = bytes(raw_bytes) if raw_bytes is not None else b""

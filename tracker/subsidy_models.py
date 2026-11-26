@@ -8,7 +8,7 @@ popular vehicle price/subsidy matrices.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, localcontext
 from enum import Enum
 import math
 import re
@@ -83,6 +83,39 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
         return safe_default
 
 
+def _to_finite_decimal(val: Any) -> Optional[Decimal]:
+    """Convert numeric input to a finite Decimal, rejecting NaN, Inf, bool, and non-finite strings."""
+    if val is None or isinstance(val, bool):
+        return None
+    if isinstance(val, Decimal):
+        return val if val.is_finite() else None
+    if type(val) is int:
+        return Decimal(val)
+    if type(val) is float:
+        if math.isnan(val) or math.isinf(val):
+            return None
+        try:
+            return Decimal(str(val))
+        except (InvalidOperation, ValueError):
+            return None
+    cleaned = val.strip().replace(",", "") if isinstance(val, str) else val
+    if isinstance(cleaned, str):
+        if not cleaned or cleaned.lstrip("+-").lower() in ("inf", "infinity", "nan", "snan"):
+            return None
+        try:
+            d = Decimal(cleaned)
+            return d if d.is_finite() else None
+        except (InvalidOperation, ValueError):
+            return None
+    try:
+        f = float(cleaned)
+        if math.isnan(f) or math.isinf(f):
+            return None
+        return Decimal(str(f))
+    except (InvalidOperation, ValueError, TypeError, OverflowError):
+        return None
+
+
 def _safe_rate_percent(numerator: Any, denominator: Any) -> float:
     """Compute rounded percentage (1 decimal) scaling numerator first to avoid float drift."""
     if numerator is None or denominator is None or isinstance(numerator, bool) or isinstance(denominator, bool):
@@ -91,33 +124,41 @@ def _safe_rate_percent(numerator: Any, denominator: Any) -> float:
     clean_den = denominator.strip().replace(",", "") if isinstance(denominator, str) else denominator
     if clean_num == "" or clean_den == "":
         return 0.0
-    try:
-        if isinstance(clean_num, str) and _RE_PLAIN_INT.match(clean_num) and len(clean_num.lstrip("+-")) > 300:
-            raise OverflowError
-        if isinstance(clean_den, str) and _RE_PLAIN_INT.match(clean_den) and len(clean_den.lstrip("+-")) > 300:
-            raise OverflowError
-        num = float(clean_num)
-        den = float(clean_den)
-    except (ValueError, TypeError, OverflowError):
+    use_decimal = isinstance(clean_num, Decimal) or isinstance(clean_den, Decimal)
+    if not use_decimal:
         try:
-            n_val = int(clean_num) if isinstance(clean_num, str) and _RE_PLAIN_INT.match(clean_num) else (
-                int(clean_num) if isinstance(clean_num, Decimal) and clean_num.is_finite() else (
-                    clean_num if isinstance(clean_num, int) else int(float(clean_num))
-                )
-            )
-            d_val = int(clean_den) if isinstance(clean_den, str) and _RE_PLAIN_INT.match(clean_den) else (
-                int(clean_den) if isinstance(clean_den, Decimal) and clean_den.is_finite() else (
-                    clean_den if isinstance(clean_den, int) else int(float(clean_den))
-                )
-            )
-            if d_val > 0 and n_val > 0:
-                raw = (n_val * 100) / d_val
-                if math.isnan(raw) or math.isinf(raw):
-                    return 0.0
-                return max(0.0, round(raw, 1))
-        except (ValueError, TypeError, OverflowError, ZeroDivisionError, InvalidOperation):
+            if isinstance(clean_num, str) and _RE_PLAIN_INT.match(clean_num) and len(clean_num.lstrip("+-")) > 300:
+                raise OverflowError
+            if isinstance(clean_den, str) and _RE_PLAIN_INT.match(clean_den) and len(clean_den.lstrip("+-")) > 300:
+                raise OverflowError
+            num = float(clean_num)
+            den = float(clean_den)
+            if (
+                (math.isinf(num) and isinstance(clean_num, str) and clean_num.lstrip("+-").lower() not in ("inf", "infinity"))
+                or (math.isinf(den) and isinstance(clean_den, str) and clean_den.lstrip("+-").lower() not in ("inf", "infinity"))
+            ):
+                use_decimal = True
+        except OverflowError:
+            use_decimal = True
+        except (ValueError, TypeError):
             return 0.0
-        return 0.0
+
+    if use_decimal:
+        d_num = _to_finite_decimal(clean_num)
+        d_den = _to_finite_decimal(clean_den)
+        if d_num is None or d_den is None or d_den <= 0 or d_num <= 0:
+            return 0.0
+        try:
+            with localcontext() as ctx:
+                ctx.prec = 34
+                raw_dec = (d_num * Decimal(100)) / d_den
+            raw = float(raw_dec)
+        except (InvalidOperation, ZeroDivisionError, OverflowError):
+            return 0.0
+        if math.isnan(raw) or math.isinf(raw):
+            return 0.0
+        return max(0.0, round(raw, 1))
+
     if math.isnan(num) or math.isnan(den) or math.isinf(num) or math.isinf(den):
         return 0.0
     if den <= 0.0 or num <= 0.0:
@@ -135,6 +176,18 @@ def _first_not_none(data: Dict[str, Any], *keys: str, default: Any = None) -> An
         val = data.get(k)
         if val is not None:
             return val
+    return default
+
+
+def _first_non_blank(data: Dict[str, Any], *keys: str, default: Any = None) -> Any:
+    """Return the first value in `keys` that is neither None nor a whitespace-only string."""
+    for k in keys:
+        val = data.get(k)
+        if val is None:
+            continue
+        if isinstance(val, str) and not val.strip():
+            continue
+        return val
     return default
 
 
@@ -358,13 +411,13 @@ class CategoryMetrics:
         app = max(0, _safe_int(_first_not_none(data, "applied_units", "applied", default=0)))
         deliv = max(0, _safe_int(_first_not_none(data, "delivered_units", "delivered", default=0)))
 
-        rem_raw = _first_not_none(data, "remaining_units", "remaining")
+        rem_raw = _first_non_blank(data, "remaining_units", "remaining")
         if rem_raw is None:
             rem = max(0, ann - app)
         else:
             rem = max(0, _safe_int(rem_raw, 0))
 
-        rate_raw = _first_not_none(data, "depletion_rate", "rate")
+        rate_raw = _first_non_blank(data, "depletion_rate", "rate")
         if rate_raw is not None:
             dep_rate = max(0.0, _safe_float(rate_raw, 0.0))
         elif ann > 0 and app > 0:
@@ -372,7 +425,7 @@ class CategoryMetrics:
         else:
             dep_rate = 0.0
 
-        deliv_rate_raw = data.get("delivery_rate")
+        deliv_rate_raw = _first_non_blank(data, "delivery_rate")
         if deliv_rate_raw is not None:
             deliv_rate = max(0.0, _safe_float(deliv_rate_raw, 0.0))
         elif ann > 0 and deliv > 0:
@@ -471,13 +524,13 @@ class MunicipalityMetrics:
         app = max(0, _safe_int(_first_not_none(data, "applied_units", "applied", default=0)))
         deliv = max(0, _safe_int(_first_not_none(data, "delivered_units", "delivered", default=0)))
 
-        rem_raw = _first_not_none(data, "remaining_units", "remaining")
+        rem_raw = _first_non_blank(data, "remaining_units", "remaining")
         if rem_raw is None:
             rem = max(0, ann - app)
         else:
             rem = max(0, _safe_int(rem_raw, 0))
 
-        rate_raw = _first_not_none(data, "depletion_rate", "rate")
+        rate_raw = _first_non_blank(data, "depletion_rate", "rate")
         if rate_raw is not None:
             dep_rate = max(0.0, _safe_float(rate_raw, 0.0))
         elif ann > 0 and app > 0:
@@ -590,7 +643,7 @@ class RegionRecord:
         if cat is None:
             return 0
         if isinstance(cat, dict):
-            return max(0, _safe_int(cat.get("remaining_units", 0)))
+            return max(0, _safe_int(_first_not_none(cat, "remaining_units", "remaining", default=0)))
         return max(0, _safe_int(getattr(cat, "remaining_units", 0)))
 
     def get_depletion_rate(self, category_name: str = "passenger") -> float:
@@ -600,8 +653,10 @@ class RegionRecord:
         if cat is None:
             return fallback_rate
         if isinstance(cat, dict):
-            return max(0.0, _safe_float(cat.get("depletion_rate", fallback_rate), fallback_rate))
-        return max(0.0, _safe_float(getattr(cat, "depletion_rate", fallback_rate), fallback_rate))
+            val = _first_not_none(cat, "depletion_rate", "rate", default=fallback_rate)
+            return max(0.0, _safe_float(val, fallback_rate))
+        val = getattr(cat, "depletion_rate", fallback_rate)
+        return max(0.0, _safe_float(val if val is not None else fallback_rate, fallback_rate))
 
     def get_local_subsidy(self, category_name: str = "passenger") -> int:
         """Safely get max local subsidy KRW for category."""
@@ -609,8 +664,11 @@ class RegionRecord:
         if cat is None:
             return 0
         if isinstance(cat, dict):
-            return max(0, _safe_int(cat.get("max_local_subsidy_krw", cat.get("local_subsidy_krw", 0))))
-        return max(0, _safe_int(getattr(cat, "max_local_subsidy_krw", getattr(cat, "local_subsidy_krw", 0))))
+            return max(0, _safe_int(_first_not_none(cat, "max_local_subsidy_krw", "local_subsidy_krw", "local_subsidy", default=0)))
+        val = getattr(cat, "max_local_subsidy_krw", None)
+        if val is None:
+            val = getattr(cat, "local_subsidy_krw", 0)
+        return max(0, _safe_int(val))
 
     def get_total_subsidy(self, category_name: str = "passenger") -> int:
         """Safely get max total subsidy KRW for category."""
@@ -618,8 +676,11 @@ class RegionRecord:
         if cat is None:
             return 0
         if isinstance(cat, dict):
-            return max(0, _safe_int(cat.get("max_total_subsidy_krw", cat.get("total_subsidy_krw", 0))))
-        return max(0, _safe_int(getattr(cat, "max_total_subsidy_krw", getattr(cat, "total_subsidy_krw", 0))))
+            return max(0, _safe_int(_first_not_none(cat, "max_total_subsidy_krw", "total_subsidy_krw", "total_subsidy", default=0)))
+        val = getattr(cat, "max_total_subsidy_krw", None)
+        if val is None:
+            val = getattr(cat, "total_subsidy_krw", 0)
+        return max(0, _safe_int(val))
 
     def get_municipality(self, muni_name_or_id: str) -> Optional[MunicipalityMetrics]:
         """Safely lookup lower-tier municipality by ID or name (Korean/English)."""
@@ -716,9 +777,7 @@ class RegionRecord:
                     munis.append(MunicipalityMetrics.from_dict(muni_data))
 
         code_val = str(data.get("code") or data.get("region_id") or data.get("id") or "")
-        rate_val = data.get("overall_depletion_rate")
-        if rate_val is None:
-            rate_val = data.get("depletion_rate")
+        rate_val = _first_non_blank(data, "overall_depletion_rate", "depletion_rate")
         if rate_val is not None:
             overall_rate = max(0.0, _safe_float(rate_val, 0.0))
         elif cats:
@@ -1171,17 +1230,13 @@ class NationwideSummary:
         total_app = max(0, _safe_int(_first_not_none(data, "total_applied_units", "applied", default=0)))
         total_del = max(0, _safe_int(_first_not_none(data, "total_delivered_units", "delivered", default=0)))
 
-        rem_raw = data.get("total_remaining_units")
-        if rem_raw is None:
-            rem_raw = data.get("remaining")
+        rem_raw = _first_non_blank(data, "total_remaining_units", "remaining")
         if rem_raw is None:
             total_rem = max(0, total_ann - total_app)
         else:
             total_rem = max(0, _safe_int(rem_raw, 0))
 
-        rate_raw = data.get("nationwide_depletion_rate")
-        if rate_raw is None:
-            rate_raw = data.get("depletion_rate")
+        rate_raw = _first_non_blank(data, "nationwide_depletion_rate", "depletion_rate")
         if rate_raw is not None:
             dep_rate = max(0.0, _safe_float(rate_raw, 0.0))
         elif total_ann > 0 and total_app > 0:
@@ -1189,9 +1244,7 @@ class NationwideSummary:
         else:
             dep_rate = 0.0
 
-        tb_billion_raw = data.get("total_budget_billion_krw")
-        if tb_billion_raw is None:
-            tb_billion_raw = data.get("total_budget")
+        tb_billion_raw = _first_non_blank(data, "total_budget_billion_krw", "total_budget")
         if tb_billion_raw is not None:
             tb_billion = max(0.0, _safe_float(tb_billion_raw, 0.0))
         elif data.get("total_budget_krw") is not None:
@@ -1199,9 +1252,7 @@ class NationwideSummary:
         else:
             tb_billion = 0.0
 
-        db_billion_raw = data.get("disbursed_budget_billion_krw")
-        if db_billion_raw is None:
-            db_billion_raw = data.get("disbursed_budget")
+        db_billion_raw = _first_non_blank(data, "disbursed_budget_billion_krw", "disbursed_budget")
         if db_billion_raw is not None:
             db_billion = max(0.0, _safe_float(db_billion_raw, 0.0))
         elif data.get("disbursed_budget_krw") is not None:

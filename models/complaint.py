@@ -103,16 +103,17 @@ def validate_severity(sev: Any) -> bool:
 
 def normalize_severity(severity: Any, severity_index: Any = None, default: str = "LOW") -> str:
     """Normalize severity level string or compute from DSI index."""
-    if severity is not None and str(severity).strip():
-        s = str(severity).strip().upper()
-        if s in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
-            return s
-        if s in ("WARNING", "MAJOR", "URGENT"):
-            return "HIGH"
-        if s in ("CAUTION", "MODERATE", "MINOR"):
-            return "MEDIUM"
-        if s in ("INFO", "INFORMATIONAL", "NEGLIGIBLE", "LOW"):
-            return "LOW"
+    if severity is not None and not isinstance(severity, bool):
+        s = sanitize_string(severity, 64).upper()
+        if s:
+            if s in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
+                return s
+            if s in ("WARNING", "MAJOR", "URGENT"):
+                return "HIGH"
+            if s in ("CAUTION", "MODERATE", "MINOR"):
+                return "MEDIUM"
+            if s in ("INFO", "INFORMATIONAL", "NEGLIGIBLE", "LOW"):
+                return "LOW"
     if severity_index is not None and not isinstance(severity_index, bool):
         try:
             val = float(severity_index)
@@ -142,9 +143,11 @@ def validate_category(category: Any) -> bool:
 
 def normalize_category(category: Any, default: str = "BUILD_QUALITY") -> str:
     """Normalize category string (case-insensitive English, Korean, or aliases) to canonical uppercase English."""
-    if not category:
+    if category is None or isinstance(category, bool):
         return default
-    s = unicodedata.normalize("NFC", str(category)).strip()
+    s = sanitize_string(category, 256)
+    if not s:
+        return default
     s_upper = s.upper()
     if s_upper in DEFECT_CATEGORY_KO_MAP:
         return s_upper
@@ -556,11 +559,12 @@ class RawPost:
             return getattr(data, k, default)
 
         raw_comments = _get("comments") or _get("comment_list")
-        comments = (
-            [_coerce_raw_str(c) for c in raw_comments if c is not None and not isinstance(c, bool)]
-            if isinstance(raw_comments, (list, tuple, set))
-            else []
-        )
+        if isinstance(raw_comments, str):
+            comments: List[str] = [raw_comments] if raw_comments.strip() else []
+        elif isinstance(raw_comments, (list, tuple, set)):
+            comments = [_coerce_raw_str(c) for c in raw_comments if c is not None and not isinstance(c, bool)]
+        else:
+            comments = []
         pid = _get("post_id", None)
         if pid is None or isinstance(pid, bool) or (isinstance(pid, str) and not pid.strip()):
             for k in ("id", "postId", "article_id", "doc_id"):
@@ -609,6 +613,13 @@ class DSIBreakdown:
     economic: float = 0.0
     social: float = 0.0
     convenience: float = 0.0
+
+    def __post_init__(self) -> None:
+        self.safety = _safe_clamp(self.safety, 0.0, 10.0, 0.0)
+        self.functional = _safe_clamp(self.functional, 0.0, 10.0, 0.0)
+        self.economic = _safe_clamp(self.economic, 0.0, 10.0, 0.0)
+        self.social = _safe_clamp(self.social, 0.0, 10.0, 0.0)
+        self.convenience = _safe_clamp(self.convenience, 0.0, 10.0, 0.0)
 
     def to_dict(self) -> Dict[str, float]:
         return {
@@ -921,7 +932,13 @@ class ComplaintRecord:
         if self.dsi_breakdown is not None and not isinstance(self.dsi_breakdown, DSIBreakdown):
             self.dsi_breakdown = DSIBreakdown.from_dict(self.dsi_breakdown)
 
-        # Clamp and sanitize numeric bounds
+        # Clamp and sanitize numeric bounds and boolean flag
+        if self.is_authentic_defect is None:
+            self.is_authentic_defect = True
+        elif isinstance(self.is_authentic_defect, str):
+            self.is_authentic_defect = self.is_authentic_defect.strip().lower() not in ("false", "0", "no", "n", "")
+        else:
+            self.is_authentic_defect = bool(self.is_authentic_defect)
         self.sentiment_polarity = _safe_round(_safe_clamp(self.sentiment_polarity, -1.0, 1.0, 0.0), 4)
         self.negativity_score = _safe_round(_safe_clamp(self.negativity_score, 0.0, 1.0, 0.0), 4)
         self.severity_index = _safe_round(_safe_clamp(self.severity_index, 0.0, 100.0, 0.0), 2)
@@ -1189,11 +1206,11 @@ class ComplaintRecord:
                     break
 
         # 8. defect_category (support category or Korean category alias)
-        defect_cat = _get_str("defect_category", "category")
+        defect_cat = sanitize_string(_get_str("defect_category", "category"), 256)
         if defect_cat:
             defect_cat = normalize_category(defect_cat, default=defect_cat)
         else:
-            cat_ko = _get_str("defect_category_ko")
+            cat_ko = sanitize_string(_get_str("defect_category_ko"), 256)
             if cat_ko:
                 defect_cat = normalize_category(cat_ko, default="BUILD_QUALITY")
 
@@ -1255,7 +1272,7 @@ class ComplaintRecord:
         raw_sev = _get("severity")
         if raw_sev is None:
             raw_sev = _get("severity_tier")
-        severity = _coerce_raw_str(raw_sev).strip() if (raw_sev is not None and not isinstance(raw_sev, bool)) else None
+        severity = (sanitize_string(raw_sev, 64) or None) if (raw_sev is not None and not isinstance(raw_sev, bool)) else None
 
         # 19. confidence_score
         confidence_score = _safe_float(_get("confidence_score", 0.0), default=0.0)
@@ -1685,7 +1702,7 @@ class DailyReportPayload:
             return False, [f"Root payload must be an object, got {type(data).__name__}"]
 
         gen_at = data.get("generated_at")
-        if gen_at is None or isinstance(gen_at, bool) or not _coerce_raw_str(gen_at).strip():
+        if gen_at is None or isinstance(gen_at, bool) or not sanitize_string(gen_at, 128):
             errors.append("Missing required field: 'generated_at'")
         if "reports" not in data or not isinstance(data["reports"], list):
             errors.append("Missing or non-list field: 'reports'")

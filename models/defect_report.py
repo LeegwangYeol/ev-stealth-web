@@ -77,7 +77,17 @@ class DefectReport(ComplaintRecord):
             negativity_score=rec.negativity_score,
             severity_index=rec.severity_index,
             is_authentic_defect=rec.is_authentic_defect,
-            dsi_breakdown=DSIBreakdown.from_dict(rec.dsi_breakdown) if rec.dsi_breakdown else None,
+            dsi_breakdown=(
+                DSIBreakdown(
+                    safety=rec.dsi_breakdown.safety,
+                    functional=rec.dsi_breakdown.functional,
+                    economic=rec.dsi_breakdown.economic,
+                    social=rec.dsi_breakdown.social,
+                    convenience=rec.dsi_breakdown.convenience,
+                )
+                if rec.dsi_breakdown
+                else None
+            ),
             filter_reason=rec.filter_reason,
             severity=rec.severity,
             confidence_score=rec.confidence_score,

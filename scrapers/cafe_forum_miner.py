@@ -41,6 +41,7 @@ from scrapers.common_utils import (
     resolve_timeout_pair,
     robust_decode,
     save_complaints_json,
+    strip_non_body_html,
 )
 
 logger = logging.getLogger("CafeForumMiner")
@@ -150,7 +151,7 @@ class CafeForumMiner:
         """
         self._ensure_warm_up(POMPPU_BASE_URL)
         results = []
-        seen_urls: Set[str] = set()
+        seen_keys: Set[str] = set()
         kw_str = str(keyword or "")
         try:
             eff_pages = max(1, int(max_pages))
@@ -181,10 +182,17 @@ class CafeForumMiner:
             items = self.parse_pomppu_list(text)
             if not items:
                 break
-            new_items = [it for it in items if it.get("url") not in seen_urls]
+            new_items = [
+                it for it in items
+                if (it.get("post_no") or it.get("url")) not in seen_keys
+            ]
             if not new_items:
                 break
-            seen_urls.update(it["url"] for it in new_items if it.get("url"))
+            seen_keys.update(
+                str(it.get("post_no") or it.get("url"))
+                for it in new_items
+                if it.get("post_no") or it.get("url")
+            )
             results.extend(new_items)
 
         return results
@@ -193,16 +201,20 @@ class CafeForumMiner:
         """Parse Pomppu forum list HTML."""
         if not html_content or not isinstance(html_content, str):
             return []
+        body_html_region = strip_non_body_html(html_content)
         items = []
-        seen_urls: Set[str] = set()
+        seen_nos: Set[str] = set()
         matches = re.findall(
             r'<a\b[^>]*\bhref=["\']((?:(?:https?:)?//(?:www\.)?ppomppu\.co\.kr)?(?:/zboard/)?view\.php\?[^"\']*\bid=car\b[^"\']*)["\'][^>]*>(.*?)</a>',
-            html_content,
+            body_html_region,
             re.IGNORECASE | re.DOTALL,
         )
         for href, raw_title in matches:
             no_match = re.search(r"[?&](?:amp;)?no=(\d+)", href, re.IGNORECASE)
             if not no_match:
+                continue
+            post_no = no_match.group(1)
+            if post_no in seen_nos:
                 continue
             clean_title = clean_html_text(raw_title)
             if (
@@ -211,11 +223,10 @@ class CafeForumMiner:
                 or re.match(r"^(?:\[공지\]|공지(?:\s|$|:|-)|\[필독\])", clean_title)
             ):
                 continue
-            post_no = no_match.group(1)
             full_url = normalize_scraper_url(href, f"{POMPPU_BASE_URL}/zboard")
-            if not full_url or not is_allowed_domain_url(full_url, ("ppomppu.co.kr",)) or full_url in seen_urls:
+            if not full_url or not is_allowed_domain_url(full_url, ("ppomppu.co.kr",)):
                 continue
-            seen_urls.add(full_url)
+            seen_nos.add(post_no)
             items.append({
                 "platform": "pomppu",
                 "board_name": "뽐뿌 자동차포럼",
@@ -229,7 +240,7 @@ class CafeForumMiner:
         """Search Clien Allpark/Car board."""
         self._ensure_warm_up(CLIEN_BASE_URL)
         results = []
-        seen_urls: Set[str] = set()
+        seen_keys: Set[str] = set()
         kw_str = str(keyword or "")
         try:
             eff_pages = max(1, int(max_pages))
@@ -256,10 +267,17 @@ class CafeForumMiner:
             items = self.parse_clien_list(text)
             if not items:
                 break
-            new_items = [it for it in items if it.get("url") not in seen_urls]
+            new_items = [
+                it for it in items
+                if (it.get("post_id") or it.get("url")) not in seen_keys
+            ]
             if not new_items:
                 break
-            seen_urls.update(it["url"] for it in new_items if it.get("url"))
+            seen_keys.update(
+                str(it.get("post_id") or it.get("url"))
+                for it in new_items
+                if it.get("post_id") or it.get("url")
+            )
             results.extend(new_items)
 
         return results
@@ -268,11 +286,12 @@ class CafeForumMiner:
         """Parse Clien list HTML."""
         if not html_content or not isinstance(html_content, str):
             return []
+        body_html_region = strip_non_body_html(html_content)
         items = []
-        seen_urls: Set[str] = set()
+        seen_keys: Set[str] = set()
         matches = re.findall(
             r'<a\b([^>]*\bhref=["\']((?:https?://(?:www\.)?clien\.net)?/service/board/cm_car/\d+[^"\']*)["\'][^>]*)>(.*?)</a>',
-            html_content,
+            body_html_region,
             re.IGNORECASE | re.DOTALL,
         )
         for attrs, href, raw_title in matches:
@@ -283,15 +302,23 @@ class CafeForumMiner:
             if not clean_title or len(clean_title) < 4:
                 continue
             full_url = normalize_scraper_url(href, CLIEN_BASE_URL)
-            if not full_url or not is_allowed_domain_url(full_url, ("clien.net",)) or full_url in seen_urls:
+            if not full_url or not is_allowed_domain_url(full_url, ("clien.net",)):
                 continue
-            seen_urls.add(full_url)
-            items.append({
+            pid_match = re.search(r"/service/board/cm_car/(\d+)", full_url)
+            post_id = pid_match.group(1) if pid_match else ""
+            dedup_key = post_id or full_url
+            if dedup_key in seen_keys:
+                continue
+            seen_keys.add(dedup_key)
+            item: Dict[str, Any] = {
                 "platform": "clien",
                 "board_name": "클리앙 굴러간당",
                 "url": full_url,
-                "title": clean_title
-            })
+                "title": clean_title,
+            }
+            if post_id:
+                item["post_id"] = post_id
+            items.append(item)
         return items
 
     def normalize_record(

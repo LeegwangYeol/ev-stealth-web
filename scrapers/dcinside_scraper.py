@@ -218,6 +218,7 @@ class DCInsideScraper:
         """Extract post IDs, titles, authors, and URLs from gallery list HTML."""
         if not html_content or not isinstance(html_content, str):
             return []
+        body_html_region = strip_non_body_html(html_content)
         items = []
         is_minor = GALLERIES.get(gallery_id, {}).get("is_minor", True)
         board_prefix = "mgallery/board" if is_minor else "board"
@@ -227,7 +228,7 @@ class DCInsideScraper:
         # <td class="gall_tit ub-word"><a href="...">제목</a>
         tr_pattern = r'<tr\b([^>]*)\bdata-no=["\'](\d+)["\']([^>]*)>((?:(?!<tr\b).)*?)</tr>'
         tit_pattern = r'<td[^>]*class=["\'][^"\']*\bgall_tit\b[^"\']*["\'][^>]*>(?:(?!</td>).)*?<a\b[^>]*\bhref=["\']([^"\']+)["\'][^>]*>(.*?)</a>'
-        rows = re.findall(tr_pattern, html_content, re.IGNORECASE | re.DOTALL)
+        rows = re.findall(tr_pattern, body_html_region, re.IGNORECASE | re.DOTALL)
 
         seen_nos = set()
         for tr_pre, post_no, tr_post, row_body in rows:
@@ -565,14 +566,6 @@ class DCInsideScraper:
                 body_text = clean_html_text(inner_html)
                 if body_text:
                     break
-        if not body_text:
-            body_match = re.search(
-                r'<div\b[^>]*\bclass=["\'][^"\']*\bwriting_view_box\b[^"\']*["\'][^>]*>(.*?)</div>\s*<!--\s*//writing_view_box',
-                html_content,
-                re.DOTALL | re.IGNORECASE,
-            )
-            if body_match:
-                body_text = clean_html_text(body_match.group(1))
 
         # Comments extraction from DOM
         comments = []

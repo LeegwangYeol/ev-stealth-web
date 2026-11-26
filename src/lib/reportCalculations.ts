@@ -1,4 +1,4 @@
-import { sanitizeSafeUrl, sanitizeText, stripHtmlTags, sanitizeHtml, safeJsonParse } from './sanitizeUrl.ts';
+import { sanitizeSafeUrl, sanitizeText, stripHtmlTags, sanitizeHtml, safeJsonParse, isPrototypePollutionKey } from './sanitizeUrl.ts';
 
 export { stripHtmlTags, sanitizeHtml };
 
@@ -155,7 +155,11 @@ const FORBIDDEN_PROTOTYPE_KEYS = new Set([
 ]);
 
 function isForbiddenPrototypeKey(key: string): boolean {
-  return FORBIDDEN_PROTOTYPE_KEYS.has(key.toLowerCase()) || key in Object.prototype;
+  return (
+    FORBIDDEN_PROTOTYPE_KEYS.has(key.toLowerCase()) ||
+    key in Object.prototype ||
+    isPrototypePollutionKey(key)
+  );
 }
 
 /**
@@ -760,7 +764,7 @@ export function calculateKPIs(
     : [];
   const totalFiltered = safeReports.length;
   const criticalCount = safeReports.filter(
-    (r) => typeof r.severity === 'string' && r.severity.toUpperCase() === 'CRITICAL'
+    (r) => typeof r.severity === 'string' && r.severity.trim().toUpperCase() === 'CRITICAL'
   ).length;
 
   const totalScore = safeReports.reduce((acc, r) => {

@@ -219,6 +219,9 @@ def format_daily_report_payload(
             is_critical = (raw_sev == "CRITICAL" or sev_idx >= 8.0)
             raw_cat = record_dict.get("defect_category")
             cat_str = str(raw_cat).strip() if raw_cat is not None else ""
+            if not cat_str or cat_str == "None":
+                raw_cat_alias = record_dict.get("category")
+                cat_str = str(raw_cat_alias).strip() if raw_cat_alias is not None else ""
             category = cat_str if cat_str and cat_str != "None" else "BUILD_QUALITY"
         else:
             continue

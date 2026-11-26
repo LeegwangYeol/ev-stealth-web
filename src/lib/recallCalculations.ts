@@ -95,6 +95,23 @@ const ENGLISH_MONTH_MAP: Readonly<Record<string, number>> = Object.freeze({
   december: 12,
 });
 
+const RECALL_EXPLICIT_TZ_RE = /(?:(?:GMT|UTC)\s*([+-])(?:(\d{2})(\d{2})|(\d{1,2})(?::(\d{2}))?)|([+-])(\d{2}):?(\d{2})|\b(GMT|UTC|UT|EST|EDT|CST|CDT|MST|MDT|PST|PDT)|Z)(?:\s*\([^)]+\))?\s*$/i;
+const RECALL_TZ_OFFSET_MINUTES: Readonly<Record<string, number>> = {
+  Z: 0,
+  UT: 0,
+  UTC: 0,
+  GMT: 0,
+  EST: -300,
+  EDT: -240,
+  CST: -360,
+  CDT: -300,
+  MST: -420,
+  MDT: -360,
+  PST: -480,
+  PDT: -420,
+};
+const RECALL_NAMED_MONTH_DAY_RE = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b[^0-9]*(\d{1,2})\b|\b(\d{1,2})\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i;
+
 export const DEFAULT_RECALL_METADATA: Readonly<RecallDatabaseMetadata> = Object.freeze({
   version: '1.0.0',
   updated_at: '2026-01-01T00:00:00.000Z',
@@ -1015,7 +1032,7 @@ export function parseRecallDate(dateStr?: string | null): Date | null {
     return null;
   }
 
-  const leadingNumericDate = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?![0-9])/);
+  const leadingNumericDate = clean.match(/^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})(?![0-9])/);
   if (leadingNumericDate) {
     if (
       !buildValidatedUtcDate(
@@ -1058,13 +1075,47 @@ export function parseRecallDate(dateStr?: string | null): Date | null {
   }
 
   // Enforce UTC when no explicit timezone suffix is present so Date.parse never shifts dates via local TZ
-  const hasExplicitTz = /(?:Z|GMT|UTC|UT|[ECMP][SD]T|[+-]\d{2}:?\d{2})(?:\s*\([^)]+\))?\s*$/i.test(clean);
+  const tzMatch = RECALL_EXPLICIT_TZ_RE.exec(clean);
+  const hasExplicitTz = Boolean(tzMatch);
+  let offsetMinutes = 0;
+  const tzSign = tzMatch?.[1] ?? tzMatch?.[6];
+  if (tzMatch && tzSign) {
+    const tzHour = Number(tzMatch[2] ?? tzMatch[4] ?? tzMatch[7]);
+    const tzMin = Number(tzMatch[3] ?? tzMatch[5] ?? tzMatch[8] ?? 0);
+    if (tzHour > 23 || tzMin > 59) {
+      return null;
+    }
+    offsetMinutes = (tzSign === '+' ? 1 : -1) * (tzHour * 60 + tzMin);
+  } else if (tzMatch?.[9]) {
+    const abbr = tzMatch[9].toUpperCase();
+    if (Object.prototype.hasOwnProperty.call(RECALL_TZ_OFFSET_MINUTES, abbr)) {
+      offsetMinutes = RECALL_TZ_OFFSET_MINUTES[abbr];
+    }
+  }
+
   const timestamp = Date.parse(hasExplicitTz ? clean : `${clean} UTC`);
   if (isNaN(timestamp)) return null;
 
   const parsed = new Date(timestamp);
   const fullYear = parsed.getUTCFullYear();
   if (fullYear < 1990 || fullYear > 2040) return null;
+
+  const namedMatch = RECALL_NAMED_MONTH_DAY_RE.exec(clean);
+  if (namedMatch) {
+    const monthToken = (namedMatch[1] ?? namedMatch[4] ?? '').toLowerCase();
+    const dayToken = Number(namedMatch[2] ?? namedMatch[3]);
+    const expectedMonth = Object.prototype.hasOwnProperty.call(ENGLISH_MONTH_MAP, monthToken)
+      ? ENGLISH_MONTH_MAP[monthToken] - 1
+      : undefined;
+    if (expectedMonth !== undefined && Number.isInteger(dayToken)) {
+      const checkDt = offsetMinutes !== 0
+        ? new Date(parsed.getTime() + offsetMinutes * 60_000)
+        : parsed;
+      if (checkDt.getUTCMonth() !== expectedMonth || checkDt.getUTCDate() !== dayToken) {
+        return null;
+      }
+    }
+  }
 
   return parsed;
 }
@@ -1318,34 +1369,64 @@ export function isYearMatchForCampaign(year?: number, targetModelYears?: string)
 // 5. VIN DECODER & CROSS-REFERENCE ENGINE
 // ==========================================
 
-const SORTED_VIN_PREFIX_CACHE = new WeakMap<
-  VinPrefixMapping[],
-  {
-    snapshot: Array<{ ref: VinPrefixMapping; prefix: unknown }>;
-    sorted: Array<{ entry: VinPrefixMapping; prefixUpper: string }>;
-  }
->();
+interface VinPrefixIndex {
+  allEntriesFrozen: boolean;
+  snapshot: Array<{ ref: VinPrefixMapping; prefix: unknown }>;
+  prefixMap: Map<string, VinPrefixMapping>;
+  lengthsDesc: number[];
+}
 
-function getSortedVinPrefixes(
-  vinPrefixes: VinPrefixMapping[]
-): Array<{ entry: VinPrefixMapping; prefixUpper: string }> {
+const SORTED_VIN_PREFIX_CACHE = new WeakMap<VinPrefixMapping[], VinPrefixIndex>();
+
+function getVinPrefixIndex(vinPrefixes: VinPrefixMapping[]): VinPrefixIndex {
   const cached = SORTED_VIN_PREFIX_CACHE.get(vinPrefixes);
-  if (
-    cached &&
-    cached.snapshot.length === vinPrefixes.length &&
-    cached.snapshot.every((s, idx) => s.ref === vinPrefixes[idx] && s.prefix === vinPrefixes[idx]?.prefix)
-  ) {
-    return cached.sorted;
+  if (cached && cached.snapshot.length === vinPrefixes.length) {
+    if (cached.allEntriesFrozen && Object.isFrozen(vinPrefixes)) {
+      return cached;
+    }
+    if (cached.snapshot.every((s, idx) => s.ref === vinPrefixes[idx] && s.prefix === vinPrefixes[idx]?.prefix)) {
+      return cached;
+    }
   }
 
-  const snapshot = vinPrefixes.map((entry) => ({ ref: entry, prefix: entry?.prefix }));
-  const sorted = vinPrefixes
-    .filter((p) => p && typeof p.prefix === 'string' && p.prefix.trim().length > 0)
-    .map((entry) => ({ entry, prefixUpper: entry.prefix.trim().toUpperCase() }))
-    .sort((a, b) => b.prefixUpper.length - a.prefixUpper.length);
+  const snapshot = new Array<{ ref: VinPrefixMapping; prefix: unknown }>(vinPrefixes.length);
+  const prefixMap = new Map<string, VinPrefixMapping>();
+  const lengthSet = new Set<number>();
+  let allEntriesFrozen = Object.isFrozen(vinPrefixes);
 
-  SORTED_VIN_PREFIX_CACHE.set(vinPrefixes, { snapshot, sorted });
-  return sorted;
+  for (let i = 0; i < vinPrefixes.length; i++) {
+    const entry = vinPrefixes[i];
+    snapshot[i] = { ref: entry, prefix: entry?.prefix };
+    if (!entry || typeof entry !== 'object') continue;
+    if (allEntriesFrozen && !Object.isFrozen(entry)) {
+      allEntriesFrozen = false;
+    }
+    if (typeof entry.prefix !== 'string') continue;
+    const prefixUpper = entry.prefix.trim().toUpperCase();
+    if (!prefixUpper) continue;
+    if (!prefixMap.has(prefixUpper)) {
+      prefixMap.set(prefixUpper, entry);
+      lengthSet.add(prefixUpper.length);
+    }
+  }
+
+  const lengthsDesc = Array.from(lengthSet).sort((a, b) => b - a);
+  const index: VinPrefixIndex = { allEntriesFrozen, snapshot, prefixMap, lengthsDesc };
+  SORTED_VIN_PREFIX_CACHE.set(vinPrefixes, index);
+  return index;
+}
+
+function matchVinPrefix(vinPrefixes: VinPrefixMapping[], vin: string): VinPrefixMapping | undefined {
+  if (vinPrefixes.length === 0) return undefined;
+  const index = getVinPrefixIndex(vinPrefixes);
+  for (let i = 0; i < index.lengthsDesc.length; i++) {
+    const len = index.lengthsDesc[i];
+    if (vin.length >= len) {
+      const hit = index.prefixMap.get(vin.slice(0, len));
+      if (hit) return hit;
+    }
+  }
+  return undefined;
 }
 
 const BRAND_WORD_BOUNDARY_REGEX_CACHE = new Map<string, RegExp>();
@@ -1449,8 +1530,7 @@ export function decodeVinAndCheckRecalls(rawVin: string, db?: RecallDatabase): V
 
   // 2. Decode Prefix (WMI + VDS)
   const vinPrefixes = Array.isArray(activeDb.vin_prefixes) ? activeDb.vin_prefixes : [];
-  const sortedPrefixes = getSortedVinPrefixes(vinPrefixes);
-  const matchedPrefix = sortedPrefixes.find((p) => vin.startsWith(p.prefixUpper))?.entry;
+  const matchedPrefix = matchVinPrefix(vinPrefixes, vin);
 
   let decodedBrand = typeof matchedPrefix?.brand === 'string' ? matchedPrefix.brand.trim() || undefined : undefined;
   const decodedModel = typeof matchedPrefix?.model_name === 'string' ? matchedPrefix.model_name.trim() || undefined : undefined;
@@ -1951,9 +2031,7 @@ export function aggregateRecallsByManufacturer(
 
     if (typeof campaign.affected_kdm_units === 'number' && Number.isFinite(campaign.affected_kdm_units) && campaign.affected_kdm_units > 0) {
       const nextUnits = group.affectedUnits + campaign.affected_kdm_units;
-      if (Number.isFinite(nextUnits)) {
-        group.affectedUnits = nextUnits;
-      }
+      group.affectedUnits = Number.isFinite(nextUnits) ? nextUnits : Number.MAX_VALUE;
     }
   }
 
@@ -2014,9 +2092,7 @@ export function calculateRecallKPIs(db?: RecallDatabase): RecallKPIs {
 
     if (typeof campaign.affected_kdm_units === 'number' && Number.isFinite(campaign.affected_kdm_units) && campaign.affected_kdm_units > 0) {
       const nextTotal = totalAffectedVehicles + campaign.affected_kdm_units;
-      if (Number.isFinite(nextTotal)) {
-        totalAffectedVehicles = nextTotal;
-      }
+      totalAffectedVehicles = Number.isFinite(nextTotal) ? nextTotal : Number.MAX_VALUE;
     }
     const canonicalBrand = normalizeManufacturer(campaign.brand);
     const safeCanonicalBrand =

@@ -505,7 +505,7 @@ class DomainTokenizer:
             os.path.join(os.getcwd(), "..", "data", "slang_dict.json"),
         ]
         dict_path = next(
-            (p for p in dict_candidates if isinstance(p, (str, os.PathLike)) and str(p).strip() and os.path.exists(p)),
+            (p for p in dict_candidates if isinstance(p, (str, os.PathLike)) and str(p).strip() and os.path.isfile(p)),
             None,
         )
         if dict_path:

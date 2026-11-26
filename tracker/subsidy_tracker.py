@@ -7,7 +7,7 @@ nationwide aggregations, fallback resilience, and atomic persistence.
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal, InvalidOperation, ROUND_CEILING
+from decimal import Decimal, InvalidOperation, ROUND_CEILING, localcontext
 from fractions import Fraction
 import http.client
 import ipaddress
@@ -53,6 +53,7 @@ from tracker.subsidy_models import (
     RegionRecord,
     SubsidyMetadata,
     SubsidyPayload,
+    _to_finite_decimal,
 )
 
 logger = logging.getLogger("subsidy_tracker")
@@ -271,7 +272,7 @@ def _validate_endpoint_url(url: str, allow_private_ips: bool = False) -> Tuple[b
                 if not _is_safe_ip(resolved_ip):
                     return False, f"Domain '{host_ascii}' resolves to unsafe IP {resolved_ip}"
             except ValueError:
-                continue
+                return False, f"Domain '{host_ascii}' resolved to invalid IP {ip_str!r}"
     except socket.gaierror:
         pass
     except Exception as exc:
@@ -288,6 +289,11 @@ class _SafeEndpointRedirectHandler(urllib.request.HTTPRedirectHandler):
         self.allow_private_ips = allow_private_ips
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if isinstance(newurl, str) and _RE_URL_CONTROL_CHARS.search(newurl):
+            logger.warning("SSRF defense blocked redirect with control chars from %s", req.full_url)
+            raise urllib.error.HTTPError(
+                newurl, 403, "SSRF Blocked: Redirect URL contains control characters", headers, fp
+            )
         resolved_url = (
             urllib.parse.urljoin(req.full_url, newurl)
             if isinstance(newurl, str)
@@ -325,7 +331,7 @@ class _SafeEndpointRedirectHandler(urllib.request.HTTPRedirectHandler):
                 strip_referer = True
 
             if strip_credentials or strip_referer:
-                headers_to_strip = {"authorization", "proxy-authorization", "cookie"} if strip_credentials else set()
+                headers_to_strip = {"authorization", "proxy-authorization", "cookie", "host"} if strip_credentials else set()
                 if strip_referer:
                     headers_to_strip.add("referer")
                 for hdr in list(new_req.headers.keys()):
@@ -551,37 +557,47 @@ def calculate_depletion_rate(
             return 0.0
         clean_quota = _clean_num(target_quota)
         clean_applied = _clean_num(applied)
-        try:
-            if isinstance(clean_quota, str) and _RE_PLAIN_INT.match(clean_quota) and len(clean_quota.lstrip("+-")) > 300:
-                raise OverflowError
-            if isinstance(clean_applied, str) and _RE_PLAIN_INT.match(clean_applied) and len(clean_applied.lstrip("+-")) > 300:
-                raise OverflowError
-            quota_val = float(clean_quota)
-            applied_val = float(clean_applied)
-        except OverflowError:
-            q_int = _to_non_neg_int(clean_quota)
-            a_int = _to_non_neg_int(clean_applied)
-            if q_int is None or a_int is None or a_int <= 0:
+
+        use_decimal = isinstance(clean_quota, Decimal) or isinstance(clean_applied, Decimal)
+        if not use_decimal:
+            try:
+                if isinstance(clean_quota, str) and _RE_PLAIN_INT.match(clean_quota) and len(clean_quota.lstrip("+-")) > 300:
+                    raise OverflowError
+                if isinstance(clean_applied, str) and _RE_PLAIN_INT.match(clean_applied) and len(clean_applied.lstrip("+-")) > 300:
+                    raise OverflowError
+                quota_val = float(clean_quota)
+                applied_val = float(clean_applied)
+                if (
+                    (math.isinf(quota_val) and isinstance(clean_quota, str) and clean_quota.lstrip("+-").lower() not in ("inf", "infinity"))
+                    or (math.isinf(applied_val) and isinstance(clean_applied, str) and clean_applied.lstrip("+-").lower() not in ("inf", "infinity"))
+                ):
+                    use_decimal = True
+            except OverflowError:
+                use_decimal = True
+
+        if use_decimal:
+            d_quota = _to_finite_decimal(clean_quota)
+            d_applied = _to_finite_decimal(clean_applied)
+            if d_quota is None or d_applied is None or d_quota <= 0 or d_applied <= 0:
                 return 0.0
-            if q_int <= 0:
-                try:
-                    q_flt = float(clean_quota)
-                    if math.isnan(q_flt) or math.isinf(q_flt) or q_flt <= 0.0:
-                        return 0.0
-                    rate = 100.0 if (clamp_100 or clamp) else 0.0
-                except (ValueError, TypeError, OverflowError):
+            try:
+                with localcontext() as ctx:
+                    ctx.prec = 34
+                    raw_dec = (d_applied * Decimal(100)) / d_quota
+                raw_rate = float(raw_dec)
+            except (InvalidOperation, ZeroDivisionError, OverflowError):
+                raw_rate = float("inf")
+            if math.isnan(raw_rate):
+                return 0.0
+            if math.isinf(raw_rate):
+                if clamp_100 or clamp:
+                    rate = 100.0
+                else:
                     return 0.0
             else:
-                try:
-                    raw_rate = (a_int * 100) / q_int
-                    if math.isnan(raw_rate) or math.isinf(raw_rate):
-                        rate = 100.0 if (clamp_100 or clamp) else 0.0
-                    else:
-                        rate = max(0.0, round(raw_rate, 1))
-                        if clamp_100 or clamp:
-                            rate = min(100.0, rate)
-                except OverflowError:
-                    rate = 100.0 if (clamp_100 or clamp) else 0.0
+                rate = max(0.0, round(raw_rate, 1))
+                if clamp_100 or clamp:
+                    rate = min(100.0, rate)
         else:
             if math.isnan(quota_val) or math.isnan(applied_val) or math.isinf(quota_val) or math.isinf(applied_val):
                 return 0.0
@@ -760,6 +776,22 @@ def calculate_depletion_velocity(
             or isinstance(days, bool)
         ):
             return 0.0
+        d_start = _to_finite_decimal(applied_start)
+        d_end = _to_finite_decimal(applied_end)
+        d_days = _to_finite_decimal(days)
+        if d_start is not None and d_end is not None and d_days is not None:
+            if d_days <= 0:
+                return 0.0
+            needed_prec = max(28, min(1000, max(abs(d_start.adjusted()), abs(d_end.adjusted()), abs(d_days.adjusted())) + 16))
+            with localcontext() as ctx:
+                ctx.prec = needed_prec
+                d_diff = d_end - d_start
+                if d_diff <= 0:
+                    return 0.0
+                velocity = round(float(d_diff / d_days), 2)
+            if math.isnan(velocity) or math.isinf(velocity):
+                return 0.0
+            return max(0.0, velocity)
         f_start = float(_clean_num(applied_start))
         f_end = float(_clean_num(applied_end))
         f_days = float(_clean_num(days))

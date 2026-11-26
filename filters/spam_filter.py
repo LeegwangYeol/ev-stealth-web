@@ -127,7 +127,8 @@ _BOUNDED_FINANCIAL_REGEXES: Dict[str, re.Pattern[str]] = {
 }
 _NEUTRAL_FEATURE_SLANG_TERMS: Tuple[str, ...] = ("v2l", "깜빡이", "웨더스트립")
 _SPAM_SLANG_MALFUNCTION_CUES: Tuple[str, ...] = (
-    "오류", "차단", "과열", "먹통", "방전", "고장", "안 됨", "안됨", "에러",
+    "오류", "차단", "과열", "먹통", "방전", "고장", "안 됨", "안됨", "안 돼", "안돼",
+    "안 열려", "안 빠져", "안 켜져", "에러",
     "경고등", "중단", "안 켜", "미작동", "소리 안", "소리도 안", "소리안", "버튼식",
     "불량", "버그", "안 나", "꺼지", "꺼짐", "꺼졌", "이탈", "찢어", "빠져",
     "풍절음", "누수", "들뜸", "틈새",
@@ -161,8 +162,8 @@ def matches_category_keyword(category: str, keyword: str, text_lower: str) -> bo
 
 # Pre-compiled inquiry patterns
 INQUIRY_REGEXES: List[re.Pattern[str]] = [
-    re.compile(r"(?:나요|가요)\s*[\?？]"),
-    re.compile(r"(?:나요|가요)\s*$"),
+    re.compile(r"(?:나요|가요|까요)\s*[\?？]"),
+    re.compile(r"(?:나요|가요|까요)\s*$"),
 ]
 
 # External news domains that indicate news shares

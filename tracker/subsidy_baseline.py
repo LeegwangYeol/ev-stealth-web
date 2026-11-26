@@ -26,6 +26,7 @@ from tracker.subsidy_models import (
     RegionRecord,
     SubsidyMetadata,
     SubsidyPayload,
+    _safe_rate_percent,
 )
 
 # 2026 Maximum statutory national subsidy cap for passenger EVs (KRW)
@@ -261,50 +262,7 @@ def calculate_net_subsidy(
     }
 
 
-def _calc_rate_percent(numerator: Any, denominator: Any) -> float:
-    """Compute percentage rounded to 1 decimal place, scaling numerator first to prevent float drift."""
-    if numerator is None or denominator is None or isinstance(numerator, bool) or isinstance(denominator, bool):
-        return 0.0
-    clean_num = numerator.strip().replace(",", "") if isinstance(numerator, str) else numerator
-    clean_den = denominator.strip().replace(",", "") if isinstance(denominator, str) else denominator
-    if clean_num == "" or clean_den == "":
-        return 0.0
-    try:
-        if isinstance(clean_num, str) and _RE_PLAIN_INT.match(clean_num) and len(clean_num.lstrip("+-")) > 300:
-            raise OverflowError
-        if isinstance(clean_den, str) and _RE_PLAIN_INT.match(clean_den) and len(clean_den.lstrip("+-")) > 300:
-            raise OverflowError
-        num = float(clean_num)
-        den = float(clean_den)
-    except (ValueError, TypeError, OverflowError):
-        try:
-            n_val = int(clean_num) if isinstance(clean_num, str) and _RE_PLAIN_INT.match(clean_num) else (
-                int(clean_num) if isinstance(clean_num, Decimal) and clean_num.is_finite() else (
-                    clean_num if isinstance(clean_num, int) else int(float(clean_num))
-                )
-            )
-            d_val = int(clean_den) if isinstance(clean_den, str) and _RE_PLAIN_INT.match(clean_den) else (
-                int(clean_den) if isinstance(clean_den, Decimal) and clean_den.is_finite() else (
-                    clean_den if isinstance(clean_den, int) else int(float(clean_den))
-                )
-            )
-            if d_val > 0 and n_val > 0:
-                raw = (n_val * 100) / d_val
-                if math.isnan(raw) or math.isinf(raw):
-                    return 0.0
-                return max(0.0, round(raw, 1))
-        except (ValueError, TypeError, OverflowError, ZeroDivisionError, InvalidOperation):
-            return 0.0
-        return 0.0
-    if math.isnan(num) or math.isnan(den) or math.isinf(num) or math.isinf(den):
-        return 0.0
-    if den <= 0.0 or num <= 0.0:
-        return 0.0
-    scaled = num * 100.0
-    raw = (scaled / den) if not math.isinf(scaled) else ((num / den) * 100.0)
-    if math.isnan(raw) or math.isinf(raw):
-        return 0.0
-    return max(0.0, round(raw, 1))
+_calc_rate_percent = _safe_rate_percent
 
 
 def _calc_cat(

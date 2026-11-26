@@ -54,12 +54,12 @@ export const RELIABILITY_SORT_OPTIONS: { id: ReliabilitySortOption; label: strin
 ];
 
 const CATEGORY_BG_COLORS: Record<DefectCategoryKey, string> = {
-  BATTERY_CHARGING: 'bg-rose-500',
-  DRIVING_POWERTRAIN: 'bg-amber-500',
-  SOFTWARE_ELECTRONICS: 'bg-blue-500',
-  BUILD_QUALITY: 'bg-purple-500',
-  SERVICE_REPAIR_COST: 'bg-emerald-500',
-  COLD_WEATHER: 'bg-cyan-500',
+  BATTERY_CHARGING: 'bg-rose-600',
+  DRIVING_POWERTRAIN: 'bg-amber-600',
+  SOFTWARE_ELECTRONICS: 'bg-blue-600',
+  BUILD_QUALITY: 'bg-purple-600',
+  SERVICE_REPAIR_COST: 'bg-emerald-700',
+  COLD_WEATHER: 'bg-cyan-700',
 };
 
 const CATEGORY_TAG_COLORS: Record<DefectCategoryKey, { bg: string; text: string; border: string }> = {
@@ -391,7 +391,7 @@ const CategoryShareCard = React.memo(function CategoryShareCard({
     text: 'text-slate-700',
     border: 'border-slate-200',
   };
-  const dotColor = (cat?.code && CATEGORY_BG_COLORS[cat.code]) || 'bg-slate-500';
+  const dotColor = (cat?.code && CATEGORY_BG_COLORS[cat.code]) || 'bg-slate-600';
   const sharePct = Number.isFinite(cat?.industry_share_pct)
     ? Math.min(100, Math.max(0, cat.industry_share_pct)) + 0
     : 0;
@@ -425,6 +425,34 @@ const CategoryShareCard = React.memo(function CategoryShareCard({
     </button>
   );
 });
+
+function wrapRadarLabel(label: string): string[] {
+  const clean = (label || '').trim();
+  if (clean.length <= 11) return [clean];
+  const ampIdx = clean.indexOf(' & ');
+  if (ampIdx > 0 && ampIdx <= 12) {
+    return [clean.slice(0, ampIdx + 2).trim(), clean.slice(ampIdx + 2).trim()];
+  }
+  const mid = Math.ceil(clean.length / 2);
+  let splitIdx = -1;
+  let bestDist = Infinity;
+  for (let idx = 1; idx < clean.length - 1; idx++) {
+    if (clean[idx] === '·' || clean[idx] === ' ') {
+      const dist = Math.abs(idx - mid);
+      if (dist < bestDist) {
+        bestDist = dist;
+        splitIdx = idx;
+      }
+    }
+  }
+  if (splitIdx > 0) {
+    const sepOffset = clean[splitIdx] === '·' ? splitIdx + 1 : splitIdx;
+    const first = clean.slice(0, sepOffset).trim();
+    const second = clean.slice(sepOffset).trim();
+    if (first && second) return [first, second];
+  }
+  return [clean];
+}
 
 interface RepairCostMatrixRowProps {
   item: RepairCostMatrixItem;
@@ -808,34 +836,6 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
   const RADAR_CY = 235;
   const RADAR_RADIUS = 104;
   const RADAR_MAX_VAL = 55;
-
-  const wrapRadarLabel = (label: string): string[] => {
-    const clean = (label || '').trim();
-    if (clean.length <= 11) return [clean];
-    const ampIdx = clean.indexOf(' & ');
-    if (ampIdx > 0 && ampIdx <= 12) {
-      return [clean.slice(0, ampIdx + 2).trim(), clean.slice(ampIdx + 2).trim()];
-    }
-    const mid = Math.ceil(clean.length / 2);
-    let splitIdx = -1;
-    let bestDist = Infinity;
-    for (let idx = 1; idx < clean.length - 1; idx++) {
-      if (clean[idx] === '·' || clean[idx] === ' ') {
-        const dist = Math.abs(idx - mid);
-        if (dist < bestDist) {
-          bestDist = dist;
-          splitIdx = idx;
-        }
-      }
-    }
-    if (splitIdx > 0) {
-      const sepOffset = clean[splitIdx] === '·' ? splitIdx + 1 : splitIdx;
-      const first = clean.slice(0, sepOffset).trim();
-      const second = clean.slice(sepOffset).trim();
-      if (first && second) return [first, second];
-    }
-    return [clean];
-  };
 
   // Radar chart axes and coordinates computation
   const radarAxes = useMemo(() => {
@@ -1710,9 +1710,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                             <span className="text-[11px] px-2 py-0.5 rounded bg-slate-700 text-slate-200">{hoveredSvgBrand.country}</span>
                           </div>
                           <div className="text-slate-300 flex flex-wrap items-center gap-3">
-                            <span>종합 DSI: <strong className="text-white">{Number.isFinite(hoveredSvgBrand.overall_dsi) ? hoveredSvgBrand.overall_dsi : 0}점</strong></span>
-                            <span>치명 결함율: <strong className="text-rose-300">{Number.isFinite(hoveredSvgBrand.critical_issue_rate) ? hoveredSvgBrand.critical_issue_rate : 0}%</strong></span>
-                            <span>분석 제보: <strong className="text-white">{(Number.isFinite(hoveredSvgBrand.total_reports) ? hoveredSvgBrand.total_reports : 0).toLocaleString('ko-KR')}건</strong></span>
+                            <span>종합 DSI: <strong className="text-white">{Number.isFinite(hoveredSvgBrand.overall_dsi) ? Math.min(100, Math.max(0, hoveredSvgBrand.overall_dsi)) + 0 : 0}점</strong></span>
+                            <span>치명 결함율: <strong className="text-rose-300">{Number.isFinite(hoveredSvgBrand.critical_issue_rate) ? Math.min(100, Math.max(0, hoveredSvgBrand.critical_issue_rate)) + 0 : 0}%</strong></span>
+                            <span>분석 제보: <strong className="text-white">{(Number.isFinite(hoveredSvgBrand.total_reports) ? Math.max(0, Math.floor(hoveredSvgBrand.total_reports)) + 0 : 0).toLocaleString('ko-KR')}건</strong></span>
                             <span>모델 수: <strong className="text-white">{(Array.isArray(hoveredSvgBrand.models) ? hoveredSvgBrand.models : []).length}개</strong></span>
                           </div>
                         </div>
@@ -1807,7 +1807,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     >
                       {brands.map((b) => (
                         <option key={`compare-a-${b.id}`} value={b.id}>
-                          {b.name_ko} ({b.name_en}) · DSI {Number.isFinite(b.overall_dsi) ? b.overall_dsi : 0}점
+                          {b.name_ko} ({b.name_en}) · DSI {Number.isFinite(b.overall_dsi) ? Math.min(100, Math.max(0, b.overall_dsi)) + 0 : 0}점
                         </option>
                       ))}
                     </select>
@@ -1826,7 +1826,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     >
                       {brands.map((b) => (
                         <option key={`compare-b-${b.id}`} value={b.id}>
-                          {b.name_ko} ({b.name_en}) · DSI {Number.isFinite(b.overall_dsi) ? b.overall_dsi : 0}점
+                          {b.name_ko} ({b.name_en}) · DSI {Number.isFinite(b.overall_dsi) ? Math.min(100, Math.max(0, b.overall_dsi)) + 0 : 0}점
                         </option>
                       ))}
                     </select>
@@ -1852,6 +1852,11 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
               </div>
 
               {/* Radar Chart Visual Container */}
+              {brandAObj && brandBObj && (
+                <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                  {`브랜드 1:1 레이더 비교 업데이트: ${brandAObj.name_ko} 종합 DSI ${Number.isFinite(brandAObj.overall_dsi) ? Math.min(100, Math.max(0, brandAObj.overall_dsi)) + 0 : 0}점 대 ${brandBObj.name_ko} 종합 DSI ${Number.isFinite(brandBObj.overall_dsi) ? Math.min(100, Math.max(0, brandBObj.overall_dsi)) + 0 : 0}점`}
+                </div>
+              )}
               <div className="w-full border border-slate-800 rounded-2xl p-4 sm:p-6 bg-slate-900 text-white shadow-inner">
                 {/* Radar Legend */}
                 <ul
@@ -1860,11 +1865,11 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                 >
                   <li className="flex items-center gap-2">
                     <span className="w-3.5 h-3.5 rounded-full bg-blue-500 inline-block shadow-sm ring-2 ring-white/20" aria-hidden="true" />
-                    <span className="text-blue-300">{brandAObj?.name_ko || '브랜드 A'} (DSI {brandAObj && Number.isFinite(brandAObj.overall_dsi) ? brandAObj.overall_dsi : 0}점)</span>
+                    <span className="text-blue-300">{brandAObj?.name_ko || '브랜드 A'} (DSI {brandAObj && Number.isFinite(brandAObj.overall_dsi) ? Math.min(100, Math.max(0, brandAObj.overall_dsi)) + 0 : 0}점)</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <span className="w-3.5 h-3.5 rounded-full bg-rose-500 inline-block shadow-sm ring-2 ring-white/20" aria-hidden="true" />
-                    <span className="text-rose-300">{brandBObj?.name_ko || '브랜드 B'} (DSI {brandBObj && Number.isFinite(brandBObj.overall_dsi) ? brandBObj.overall_dsi : 0}점)</span>
+                    <span className="text-rose-300">{brandBObj?.name_ko || '브랜드 B'} (DSI {brandBObj && Number.isFinite(brandBObj.overall_dsi) ? Math.min(100, Math.max(0, brandBObj.overall_dsi)) + 0 : 0}점)</span>
                   </li>
                   <li className="flex items-center gap-2 text-slate-300">
                     <span className="w-5 h-0.5 border-t-2 border-dashed border-slate-300 inline-block" aria-hidden="true" />
@@ -2421,12 +2426,15 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                     aria-label="결함 부문별 산업 점유율 범례"
                     className="flex flex-wrap items-center gap-x-4 gap-y-2 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 list-none m-0"
                   >
-                    {categories.map((cat) => (
-                      <li key={cat.code} className="flex items-center gap-1.5">
-                        <span className={`w-3 h-3 rounded-full ${CATEGORY_BG_COLORS[cat.code] || 'bg-slate-500'} inline-block shadow-sm`} aria-hidden="true" />
-                        <span>{cat.label_ko} ({cat.industry_share_pct}%)</span>
-                      </li>
-                    ))}
+                    {categories.map((cat) => {
+                      const sharePct = Number.isFinite(cat.industry_share_pct) ? Math.min(100, Math.max(0, cat.industry_share_pct)) + 0 : 0;
+                      return (
+                        <li key={cat.code} className="flex items-center gap-1.5">
+                          <span className={`w-3 h-3 rounded-full ${CATEGORY_BG_COLORS[cat.code] || 'bg-slate-600'} inline-block shadow-sm`} aria-hidden="true" />
+                          <span>{cat.label_ko} ({sharePct}%)</span>
+                        </li>
+                      );
+                    })}
                   </ul>
 
                   {/* Stacked Proportional Bar */}
@@ -2449,7 +2457,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           <div
                             key={cat.code}
                             style={{ width: `${normalizedWidth}%` }}
-                            className={`${CATEGORY_BG_COLORS[cat.code] || 'bg-slate-500'} transition-all hover:opacity-80 shrink-0`}
+                            className={`${CATEGORY_BG_COLORS[cat.code] || 'bg-slate-600'} transition-all hover:opacity-80 shrink-0`}
                             role="img"
                             aria-label={`${cat.label_ko} 점유율 ${safeShare}%`}
                             title={`${cat.label_ko}: ${safeShare}%`}
@@ -2474,7 +2482,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                           {categories.map((cat) => (
                             <tr key={cat.code}>
                               <th scope="row">{cat.label_ko}</th>
-                              <td>{cat.industry_share_pct}%</td>
+                              <td>{Number.isFinite(cat.industry_share_pct) ? Math.min(100, Math.max(0, cat.industry_share_pct)) + 0 : 0}%</td>
                               <td>{cat.avg_repair_cost_range}</td>
                               <td>{cat.description}</td>
                             </tr>
@@ -2625,7 +2633,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
             <option value="ALL">전체 브랜드 ({allModels.length}개 차종)</option>
             {brands.map((b) => (
               <option key={`mobile-opt-${b.id}`} value={b.id}>
-                {b.name_ko} ({Array.isArray(b.models) ? b.models.length : 0}개 모델) · DSI {Number.isFinite(b.overall_dsi) ? b.overall_dsi : 0}점
+                {b.name_ko} ({Array.isArray(b.models) ? b.models.length : 0}개 모델) · DSI {Number.isFinite(b.overall_dsi) ? Math.min(100, Math.max(0, b.overall_dsi)) + 0 : 0}점
               </option>
             ))}
           </select>

@@ -129,17 +129,32 @@ def is_allowed_domain_url(url: Optional[str], allowed_domains: Tuple[str, ...]) 
     """Return True if url is an http/https URL whose host matches one of allowed_domains or their subdomains."""
     if not url or not isinstance(url, str):
         return False
+    if any(ord(c) < 32 or ord(c) == 127 for c in url):
+        return False
     try:
         parsed = urllib.parse.urlsplit(url.strip())
     except Exception:
         return False
     if (parsed.scheme or "").lower() not in ("http", "https"):
         return False
+    if (
+        "\\" in (parsed.netloc or "")
+        or any(c.isspace() for c in (parsed.netloc or ""))
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        return False
+    try:
+        _ = parsed.port
+    except ValueError:
+        return False
     host = (parsed.hostname or "").lower().strip().rstrip(".")
     if not host:
         return False
     for domain in allowed_domains:
         dom = domain.lower().strip().rstrip(".")
+        if not dom:
+            continue
         if host == dom or host.endswith(f".{dom}"):
             return True
     return False
@@ -2119,9 +2134,9 @@ class SafeHttpClient:
         if not raw_bytes:
             return "utf-8"
 
-        # Check HTML meta charset in initial bytes (ignoring HTML comments)
+        # Check HTML meta charset in initial bytes (ignoring HTML comments and scripts/styles)
         head_bytes = bytes(raw_bytes[:16384]) if isinstance(raw_bytes, (bytearray, memoryview)) else raw_bytes[:16384]
-        prefix = _RE_HTML_COMMENT.sub(" ", head_bytes.decode("ascii", "ignore"))
+        prefix = _RE_COMMENT_OR_SCRIPT_STYLE.sub(" ", head_bytes.decode("ascii", "ignore"))
         meta_match = re.search(r'<meta\b[^>]*\bcharset\s*=\s*["\']?([\w\-]+)', prefix, re.IGNORECASE)
         if meta_match:
             return meta_match.group(1).strip().lower()
@@ -2208,6 +2223,8 @@ def extract_balanced_tag_content(
     m = re.search(open_tag_pattern, html_content, re.IGNORECASE | re.DOTALL)
     if not m:
         return ""
+    if m.group(0).rstrip().endswith("/>"):
+        return ""
     start = m.end()
     esc_tag = re.escape(tag_name)
     token_re = re.compile(
@@ -2255,12 +2272,12 @@ def encode_euc_kr_query(params: Dict[str, Any]) -> bytes:
         return b""
     encoded_pairs = []
     for k, v in params.items():
-        k_str = urllib.parse.quote(str(k))
+        k_str = urllib.parse.quote(str(k), safe="")
         v_str = str(v)
         try:
-            v_encoded = urllib.parse.quote(v_str.encode("euc-kr"))
+            v_encoded = urllib.parse.quote(v_str.encode("euc-kr"), safe="")
         except UnicodeEncodeError:
-            v_encoded = urllib.parse.quote(v_str.encode("cp949", errors="replace"))
+            v_encoded = urllib.parse.quote(v_str.encode("cp949", errors="replace"), safe="")
         encoded_pairs.append(f"{k_str}={v_encoded}")
     return "&".join(encoded_pairs).encode("ascii")
 
@@ -2269,10 +2286,15 @@ _RE_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 _RE_SCRIPT_STYLE = re.compile(
     r"<(script|style)\b[^>]*>(?:.*?</\1\s*>|.*$)", re.DOTALL | re.IGNORECASE
 )
-_RE_BLOCK_TAGS = re.compile(
-    r"<(br|p|/p|div|/div|li|/li|h\d|/h\d|tr|/tr|dt|/dt|dd|/dd)\b[^>]*>", re.IGNORECASE
+_RE_COMMENT_OR_SCRIPT_STYLE = re.compile(
+    r"<!--.*?-->|<(script|style)\b[^>]*>(?:.*?</\1\s*>|.*$)", re.DOTALL | re.IGNORECASE
 )
-_RE_ANY_TAG = re.compile(r"</?[a-zA-Z!?][^>]*>")
+_RE_HEAD_BLOCK = re.compile(r"<head\b[^>]*>.*?</head>", re.DOTALL | re.IGNORECASE)
+_RE_BLOCK_TAGS = re.compile(
+    r'''<(br|p|/p|div|/div|li|/li|h\d|/h\d|tr|/tr|dt|/dt|dd|/dd)\b(?:[^>"']|"[^"]{0,2000}"|'[^']{0,2000}')*>''',
+    re.IGNORECASE,
+)
+_RE_ANY_TAG = re.compile(r'''</?[a-zA-Z!?](?:[^>"']|"[^"]{0,2000}"|'[^']{0,2000}')*>''')
 _RE_TRAILING_TAG = re.compile(r"<[a-zA-Z/][^<]*$")
 _RE_HORIZONTAL_WS = re.compile(r"[ \t]+")
 
@@ -2289,8 +2311,7 @@ def clean_html_text(raw_html: Union[str, bytes, bytearray, memoryview, Any]) -> 
         return ""
 
     cleaned = raw_html.replace("\x00", " ")
-    cleaned = _RE_HTML_COMMENT.sub(" ", cleaned)
-    cleaned = _RE_SCRIPT_STYLE.sub(" ", cleaned)
+    cleaned = _RE_COMMENT_OR_SCRIPT_STYLE.sub(" ", cleaned)
     cleaned = _RE_BLOCK_TAGS.sub("\n", cleaned)
     cleaned = _RE_ANY_TAG.sub(" ", cleaned)
     cleaned = _RE_TRAILING_TAG.sub(" ", cleaned)
@@ -2311,8 +2332,7 @@ def extract_meta_content(html_content: str, prop_name: str) -> str:
     """Extract content from a <meta> tag matching property/name regardless of attribute order."""
     if not html_content or not isinstance(html_content, str) or not prop_name:
         return ""
-    scrubbed = _RE_HTML_COMMENT.sub(" ", html_content)
-    scrubbed = _RE_SCRIPT_STYLE.sub(" ", scrubbed)
+    scrubbed = _RE_COMMENT_OR_SCRIPT_STYLE.sub(" ", html_content)
     prop_pat = re.compile(
         rf'\b(?:property|name)\s*=\s*(?:"{re.escape(prop_name)}"|\'{re.escape(prop_name)}\')',
         re.IGNORECASE,
@@ -2332,9 +2352,8 @@ def strip_non_body_html(html_content: str) -> str:
     """Remove <head>, <script>, <style>, and HTML comments before fallback metadata searches."""
     if not html_content or not isinstance(html_content, str):
         return ""
-    cleaned = re.sub(r"<head\b[^>]*>.*?</head>", " ", html_content, flags=re.DOTALL | re.IGNORECASE)
-    cleaned = _RE_HTML_COMMENT.sub(" ", cleaned)
-    cleaned = _RE_SCRIPT_STYLE.sub(" ", cleaned)
+    cleaned = _RE_COMMENT_OR_SCRIPT_STYLE.sub(" ", html_content)
+    cleaned = _RE_HEAD_BLOCK.sub(" ", cleaned)
     return cleaned
 
 

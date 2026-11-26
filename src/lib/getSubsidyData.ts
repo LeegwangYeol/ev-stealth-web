@@ -366,7 +366,7 @@ function normalizeRegionEntry(raw: unknown): RegionEntry | null {
   return {
     region_id: regionId,
     iso_code: isoCode,
-    ...(typeof raw.code === 'string' && raw.code.trim() ? { code: raw.code.trim() } : {}),
+    ...(typeof raw.code === 'string' && raw.code.trim() ? { code: raw.code.trim().normalize('NFC') } : {}),
     name_ko: nameKo,
     name_en: nameEn,
     tier,
@@ -421,7 +421,7 @@ function normalizePopularModelEntry(raw: unknown): PopularModelEntry | null {
     name_ko: safeNonEmptyStr(raw.name_ko, '기본 모델'),
     manufacturer: safeNonEmptyStr(raw.manufacturer, '기타'),
     ...(typeof raw.manufacturer_ko === 'string' && raw.manufacturer_ko.trim()
-      ? { manufacturer_ko: raw.manufacturer_ko.trim() }
+      ? { manufacturer_ko: raw.manufacturer_ko.trim().normalize('NFC') }
       : {}),
     battery_type: safeNonEmptyStr(raw.battery_type, 'NCM 삼원계'),
     battery_capacity_kwh: parseNonNegFloat(raw.battery_capacity_kwh, 0),

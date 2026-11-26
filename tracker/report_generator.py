@@ -242,10 +242,12 @@ def format_percentage(val: Any, decimals: int = 1) -> str:
     f = _safe_float_val(val, 0.0)
     dec = min(15, max(0, _safe_int_val(decimals, 1)))
     rounded = round(f, dec)
+    if math.isnan(rounded) or math.isinf(rounded):
+        rounded = 0.0
     if rounded == 0.0:
         rounded = 0.0
     if dec <= 0:
-        return f"{int(rounded)}%"
+        return f"{int(rounded):,}%"
     fmt = f"{{:,.{dec}f}}%"
     return fmt.format(rounded)
 
@@ -270,7 +272,7 @@ class ReportGenerator:
 
         Maintains exact statutory formatting expected by downstream systems and CLI.
         """
-        summary = _get_field(payload, "nationwide_summary", None) or payload or {}
+        summary = _get_field(payload, "nationwide_summary", None) or _get_field(payload, "summary", None) or payload or {}
         metadata = _get_field(payload, "metadata", None)
         gen_time = str(
             _get_field(metadata, "generated_at", None)
@@ -349,10 +351,8 @@ class ReportGenerator:
             if tot_krw and not isinstance(tot_krw, bool):
                 tot_b = max(0.0, _safe_float_val(tot_krw) / 1_000_000_000)
 
-        disb_r = round(disb_b, 1)
-        tot_r = round(tot_b, 1)
-        disb_str = f"{disb_r:,.1f}" if (disb_r % 1 != 0) else f"{int(disb_r):,}"
-        tot_str = f"{tot_r:,.1f}" if (tot_r % 1 != 0) else f"{int(tot_r):,}"
+        disb_str = _format_scaled_unit(disb_b, "")
+        tot_str = _format_scaled_unit(tot_b, "")
         raw_dep_rate = _get_field(summary, "nationwide_depletion_rate", None)
         if raw_dep_rate is None:
             raw_dep_rate = _get_field(summary, "depletion_rate", None)
@@ -360,23 +360,26 @@ class ReportGenerator:
             raw_dep_rate = _get_field(summary, "rate", 0.0)
         dep_rate = max(0.0, _safe_float_val(raw_dep_rate, 0.0))
 
+        def _clean_status(val: Any) -> str:
+            return str(val or "N/A").replace("\n", " ").replace("\r", " ")
+
         p_ann = max(0, _safe_int_val(_metric_val(p_info, "announced_units", 0)))
         p_app = max(0, _safe_int_val(_metric_val(p_info, "applied_units", 0)))
         p_rate = max(0.0, _safe_float_val(_metric_val(p_info, "depletion_rate", 0.0)))
         p_rem = max(0, _safe_int_val(_metric_val(p_info, "remaining_units", 0)))
-        p_st = _metric_val(p_info, "status", "N/A") or "N/A"
+        p_st = _clean_status(_metric_val(p_info, "status", "N/A"))
 
         c_ann = max(0, _safe_int_val(_metric_val(c_info, "announced_units", 0)))
         c_app = max(0, _safe_int_val(_metric_val(c_info, "applied_units", 0)))
         c_rate = max(0.0, _safe_float_val(_metric_val(c_info, "depletion_rate", 0.0)))
         c_rem = max(0, _safe_int_val(_metric_val(c_info, "remaining_units", 0)))
-        c_st = _metric_val(c_info, "status", "N/A") or "N/A"
+        c_st = _clean_status(_metric_val(c_info, "status", "N/A"))
 
         b_ann = max(0, _safe_int_val(_metric_val(b_info, "announced_units", 0)))
         b_app = max(0, _safe_int_val(_metric_val(b_info, "applied_units", 0)))
         b_rate = max(0.0, _safe_float_val(_metric_val(b_info, "depletion_rate", 0.0)))
         b_rem = max(0, _safe_int_val(_metric_val(b_info, "remaining_units", 0)))
-        b_st = _metric_val(b_info, "status", "N/A") or "N/A"
+        b_st = _clean_status(_metric_val(b_info, "status", "N/A"))
 
         status_text = "FALLBACK_BASELINE (Resilient)" if fallback_used else "SUCCESS (Live Sync)"
 

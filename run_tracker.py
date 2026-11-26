@@ -272,14 +272,6 @@ def sync_defect_reports(
     is_custom_run = (root_dir is not None) or (web_dir is not None and not _is_project_data_dir(Path(web_dir), _CURRENT_DIR))
 
     if is_custom_run:
-        if web_dir:
-            w_path = Path(web_dir)
-            if (w_path / "src" / "data").is_dir():
-                web_reports_path = w_path / "src" / "data" / "daily_reports.json"
-            else:
-                web_reports_path = w_path / "daily_reports.json"
-        else:
-            web_reports_path = _CURRENT_DIR / "daily_reports.json"
         if root_dir:
             rp = Path(root_dir)
             root_reports_path = rp if (rp.suffix == ".json" and not rp.is_dir()) else rp / "daily_reports.json"
@@ -289,6 +281,15 @@ def sync_defect_reports(
             root_reports_path = repo_root / "data" / "daily_reports.json"
         else:
             root_reports_path = _CURRENT_DIR / "daily_reports.json"
+
+        if web_dir:
+            w_path = Path(web_dir)
+            if (w_path / "src" / "data").is_dir():
+                web_reports_path = w_path / "src" / "data" / "daily_reports.json"
+            else:
+                web_reports_path = w_path / "daily_reports.json"
+        else:
+            web_reports_path = root_reports_path
 
         external_web_only = (
             root_dir is None
@@ -371,13 +372,23 @@ def sync_defect_reports(
             try:
                 from run_scraper import ScraperPipeline
                 with ScraperPipeline() as pipeline:
-                    res = pipeline.run(
-                        sources="all",
-                        limit=10,
-                        sync_web=True,
-                        web_dir=web_dir,
-                        dry_run=dry_run,
-                    )
+                    if is_custom_run:
+                        res = pipeline.run(
+                            sources="all",
+                            limit=10,
+                            output_path=str(root_reports_path) if root_dir is not None else None,
+                            sync_web=bool(web_dir is not None),
+                            web_dir=web_dir,
+                            dry_run=dry_run,
+                        )
+                    else:
+                        res = pipeline.run(
+                            sources="all",
+                            limit=10,
+                            sync_web=True,
+                            web_dir=web_dir,
+                            dry_run=dry_run,
+                        )
                     written_paths.extend(res.get("written_paths", []))
             except Exception as exc:
                 logger.warning(

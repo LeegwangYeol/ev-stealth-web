@@ -437,7 +437,7 @@ export default function Latest2026Page() {
                     href="https://m.bobaedream.co.kr/board/bbs_view/national/2328953/2/1"
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="기아 EV3 결함 보배드림 커뮤니티 원문 (새 창에서 열림)"
+                    aria-label="기아 EV3 결함 요약 표 출처 보배드림 (새 창에서 열림)"
                     className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] min-w-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>보배드림</span>
@@ -499,7 +499,7 @@ export default function Latest2026Page() {
                     href="https://www.bobaedream.co.kr/view?code=cnews&No=872"
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="테슬라 모델 Y 주니퍼 보배드림 문 열림 결함 보도 (새 창에서 열림)"
+                    aria-label="테슬라 모델 Y 주니퍼 요약 표 출처 보배드림 (새 창에서 열림)"
                     className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] min-w-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>보배드림</span>
@@ -530,7 +530,7 @@ export default function Latest2026Page() {
                     href="https://www.bobaedream.co.kr/view?code=best&No=888548"
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="BYD 시라이언 7 보배드림 조기 녹(부식) 현상 제보 (새 창에서 열림)"
+                    aria-label="BYD 시라이언 7 요약 표 출처 보배드림 (새 창에서 열림)"
                     className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] min-w-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>보배드림</span>
@@ -561,7 +561,7 @@ export default function Latest2026Page() {
                     href="https://m.bobaedream.co.kr/board/bbs_view/best/1008916/2/8?cmt=1"
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="현대 아이오닉 9 보배드림 아이오닉9 배터리 결함 제보 (새 창에서 열림)"
+                    aria-label="현대 아이오닉 9 요약 표 출처 보배드림 (새 창에서 열림)"
                     className="text-blue-700 hover:text-blue-800 hover:underline font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 rounded-lg inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] min-w-[44px] bg-blue-50/60 hover:bg-blue-100/70 border border-blue-200/60 transition"
                   >
                     <span>보배드림</span>

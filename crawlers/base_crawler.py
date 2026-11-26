@@ -17,7 +17,7 @@ import re
 import threading
 import urllib.parse
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
 
 from utils.http_client import SafeHttpClient, is_safe_url, robust_decode
 
@@ -28,6 +28,14 @@ _RE_SEMICOLON_HTML_ENTITY = re.compile(r"&(?:#\d+|#x[0-9a-fA-F]+|[a-zA-Z][a-zA-Z
 _RE_OPEN_COMMENT_OR_SCRIPT = re.compile(r"<!--|<(script|style)\b[^>]*>", re.IGNORECASE)
 _RE_CLOSE_SCRIPT = re.compile(r"</script\s*>", re.IGNORECASE)
 _RE_CLOSE_STYLE = re.compile(r"</style\s*>", re.IGNORECASE)
+_RE_CLASS_ATTR = re.compile(
+    r'(?<![\w-])class\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))',
+    re.IGNORECASE,
+)
+_RE_ID_ATTR = re.compile(
+    r'(?<![\w-])id\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))',
+    re.IGNORECASE,
+)
 
 
 def _mask_comments_and_scripts(html_str: str) -> str:
@@ -38,6 +46,9 @@ def _mask_comments_and_scripts(html_str: str) -> str:
     if "<!--" not in html_str and "<script" not in lower_html and "<style" not in lower_html:
         return html_str
 
+    last_gt = html_str.rfind(">")
+    if last_gt == -1:
+        return html_str
     last_comment_end = html_str.rfind("-->")
     has_close_tag = {"script": True, "style": True}
     parts: List[str] = []
@@ -45,6 +56,9 @@ def _mask_comments_and_scripts(html_str: str) -> str:
     n = len(html_str)
 
     while pos < n:
+        if pos >= last_gt:
+            parts.append(html_str[pos:])
+            break
         m = _RE_OPEN_COMMENT_OR_SCRIPT.search(html_str, pos)
         if not m:
             parts.append(html_str[pos:])
@@ -94,6 +108,235 @@ def _slice_to_last_close_tag(html_str: str, close_prefix: str) -> str:
     if gt_idx == -1:
         return ""
     return html_str[: gt_idx + 1]
+
+
+def _extract_attr_value(attrs: str, attr_name: str) -> Optional[str]:
+    """Extract an HTML attribute value (double-quoted, single-quoted, or unquoted) from a tag's attributes."""
+    if not attrs:
+        return None
+    if attr_name == "class":
+        m = _RE_CLASS_ATTR.search(attrs)
+    elif attr_name == "id":
+        m = _RE_ID_ATTR.search(attrs)
+    else:
+        m = re.search(
+            rf'(?<![\w-]){re.escape(attr_name)}\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))',
+            attrs,
+            re.IGNORECASE,
+        )
+    if not m:
+        return None
+    for g in m.groups():
+        if g is not None:
+            return g
+    return None
+
+
+def _has_class_token(attrs: str, token: str, partial: bool = False) -> bool:
+    """Return True if the tag's class attribute matches token (exact whitespace token or substring)."""
+    cls_val = _extract_attr_value(attrs, "class")
+    if not cls_val:
+        return False
+    tok_lower = token.lower()
+    cls_lower = cls_val.lower()
+    if partial:
+        return tok_lower in cls_lower
+    return tok_lower in cls_lower.split()
+
+
+def _iter_open_tags(
+    masked_html: str,
+    tag_names: Union[str, Tuple[str, ...]],
+    start_pos: int = 0,
+) -> Iterator[Tuple[str, int, int, str]]:
+    """Yield (tag_name, tag_start, body_start, attrs) for opening tags in strict O(N) time."""
+    if not masked_html:
+        return
+    tags_alt = re.escape(tag_names) if isinstance(tag_names, str) else "|".join(re.escape(t) for t in tag_names)
+    open_re = re.compile(rf"<({tags_alt})(?=[\s>/])", re.IGNORECASE)
+    pos = start_pos
+    n = len(masked_html)
+    while pos < n:
+        m = open_re.search(masked_html, pos)
+        if not m:
+            break
+        gt_idx = masked_html.find(">", m.end())
+        if gt_idx == -1:
+            break
+        yield m.group(1), m.start(), gt_idx + 1, masked_html[m.end() : gt_idx]
+        pos = gt_idx + 1
+
+
+def _extract_balanced_from_masked(
+    orig_html: str,
+    masked_html: str,
+    tag_names: Union[str, Tuple[str, ...]],
+    attr_predicate: Callable[[str], bool],
+    find_all: bool = False,
+) -> List[str]:
+    """Extract inner HTML of balanced container(s) matching attr_predicate in strict O(N) time."""
+    if not orig_html or not masked_html:
+        return []
+    tags_alt = re.escape(tag_names) if isinstance(tag_names, str) else "|".join(re.escape(t) for t in tag_names)
+    open_re = re.compile(rf"<({tags_alt})(?=[\s>/])", re.IGNORECASE)
+    results: List[str] = []
+    pos = 0
+    n = len(masked_html)
+
+    while pos < n:
+        m = open_re.search(masked_html, pos)
+        if not m:
+            break
+        gt_idx = masked_html.find(">", m.end())
+        if gt_idx == -1:
+            break
+        attrs = masked_html[m.end() : gt_idx]
+        body_start = gt_idx + 1
+        if attrs.rstrip().endswith("/") or not attr_predicate(attrs):
+            pos = body_start
+            continue
+
+        t_esc = re.escape(m.group(1))
+        token_re = re.compile(rf"<(/?){t_esc}(?=[\s>/])", re.IGNORECASE)
+        depth = 1
+        end_idx = n
+        next_pos = n
+        scan_pos = body_start
+        while scan_pos < n:
+            tm = token_re.search(masked_html, scan_pos)
+            if not tm:
+                break
+            t_gt = masked_html.find(">", tm.end())
+            if t_gt == -1:
+                break
+            t_attrs = masked_html[tm.end() : t_gt]
+            scan_pos = t_gt + 1
+            if tm.group(1):
+                depth -= 1
+                if depth == 0:
+                    end_idx = tm.start()
+                    next_pos = t_gt + 1
+                    break
+            elif not t_attrs.rstrip().endswith("/"):
+                depth += 1
+
+        results.append(orig_html[body_start:end_idx])
+        if not find_all:
+            return results
+        pos = next_pos
+
+    return results
+
+
+def _iter_tag_elements(
+    orig_html: str,
+    masked_html: str,
+    tag_names: Union[str, Tuple[str, ...]],
+    allow_nesting: bool = True,
+) -> Iterator[Tuple[str, str, str]]:
+    """Yield (tag_name_lower, attrs, inner_html) for matched <tag>...</tag> pairs in strict O(N) time."""
+    if not orig_html or not masked_html:
+        return
+    tags_alt = re.escape(tag_names) if isinstance(tag_names, str) else "|".join(re.escape(t) for t in tag_names)
+    token_re = re.compile(rf"<(/?)({tags_alt})(?=[\s>/])", re.IGNORECASE)
+    stacks: Dict[str, List[Tuple[str, int]]] = {}
+    pos = 0
+    n = len(masked_html)
+    while pos < n:
+        m = token_re.search(masked_html, pos)
+        if not m:
+            break
+        gt_idx = masked_html.find(">", m.end())
+        if gt_idx == -1:
+            break
+        is_close = bool(m.group(1))
+        tname = m.group(2).lower()
+        pos = gt_idx + 1
+        if is_close:
+            stk = stacks.get(tname)
+            if stk:
+                attrs, body_start = stk.pop()
+                yield tname, attrs, orig_html[body_start:m.start()]
+        else:
+            attrs = masked_html[m.end() : gt_idx]
+            if attrs.rstrip().endswith("/"):
+                continue
+            stk = stacks.setdefault(tname, [])
+            if not allow_nesting:
+                stk.clear()
+            stk.append((attrs, gt_idx + 1))
+
+
+def _strip_elements_by_class(
+    html_str: str,
+    tag_names: Tuple[str, ...],
+    class_token: str,
+    partial: bool = True,
+) -> str:
+    """Remove balanced elements matching class_token in strict O(N) time."""
+    if not html_str or class_token.lower() not in html_str.lower():
+        return html_str
+    tags_alt = "|".join(re.escape(t) for t in tag_names)
+    open_re = re.compile(rf"<({tags_alt})(?=[\s>/])", re.IGNORECASE)
+    parts: List[str] = []
+    pos = 0
+    n = len(html_str)
+    while pos < n:
+        m = open_re.search(html_str, pos)
+        if not m:
+            parts.append(html_str[pos:])
+            break
+        gt_idx = html_str.find(">", m.end())
+        if gt_idx == -1:
+            parts.append(html_str[pos:])
+            break
+        attrs = html_str[m.end() : gt_idx]
+        if attrs.rstrip().endswith("/") or not _has_class_token(attrs, class_token, partial=partial):
+            parts.append(html_str[pos : gt_idx + 1])
+            pos = gt_idx + 1
+            continue
+        t_esc = re.escape(m.group(1))
+        token_re = re.compile(rf"<(/?){t_esc}(?=[\s>/])", re.IGNORECASE)
+        depth = 1
+        scan_pos = gt_idx + 1
+        close_end = -1
+        while scan_pos < n:
+            tm = token_re.search(html_str, scan_pos)
+            if not tm:
+                break
+            t_gt = html_str.find(">", tm.end())
+            if t_gt == -1:
+                break
+            t_attrs = html_str[tm.end() : t_gt]
+            scan_pos = t_gt + 1
+            if tm.group(1):
+                depth -= 1
+                if depth == 0:
+                    close_end = t_gt + 1
+                    break
+            elif not t_attrs.rstrip().endswith("/"):
+                depth += 1
+        if close_end == -1:
+            parts.append(html_str[pos : gt_idx + 1])
+            pos = gt_idx + 1
+        else:
+            parts.append(html_str[pos : m.start()])
+            pos = close_end
+    return "".join(parts)
+
+
+def _extract_meta_content(masked_html: str, meta_keys: Tuple[str, ...]) -> Optional[str]:
+    """Extract content attribute from the first matching <meta property|name="..."> in O(N) time."""
+    if not masked_html:
+        return None
+    keys_lower = {k.lower() for k in meta_keys}
+    for _, _, _, attrs in _iter_open_tags(masked_html, "meta"):
+        prop = _extract_attr_value(attrs, "property") or _extract_attr_value(attrs, "name")
+        if prop and prop.strip().lower() in keys_lower:
+            val = _extract_attr_value(attrs, "content")
+            if val is not None:
+                return val
+    return None
 
 
 def _unescape_url_entities(raw_url: str) -> str:

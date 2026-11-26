@@ -149,17 +149,18 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
         r"|(?:테슬라\s+)메기"
         r"|(?:테슬라\s*|tesla\s*)m3(?![0-9])"
         r"|(?<!bmw\s)(?<!bmw)(?<!비엠\s)(?<!비엠)(?<!비엠더블유\s)(?<!비엠더블유)(?<!sm)(?<!애플\s)(?<!애플)(?<!맥\s)(?<!맥)(?<!맥북\s)(?<!맥북)(?<!아이맥\s)(?<!아이맥)(?<!아이패드\s)(?<!아이패드)(?<!mac\s)(?<!mac)(?<!macbook\s)(?<!macbook)(?<!imac\s)(?<!imac)(?<!ipad\s)(?<!ipad)"
-        r"(?<![a-zA-Z0-9])m3(?=[은는이가을를의에과와도만로랑처조마나한께보부까]|으로|보다|부터|까지|처럼|조차|마저|한테|입|했|하|인|임|일)"
-        r"|(?<!bmw\s)(?<!bmw)(?<!비엠\s)(?<!비엠)(?<!비엠더블유\s)(?<!비엠더블유)(?<!sm)(?<!애플\s)(?<!애플)(?<!맥\s)(?<!맥)(?<!맥북\s)(?<!맥북)(?<!아이맥\s)(?<!아이맥)(?<!아이패드\s)(?<!아이패드)(?<!mac\s)(?<!mac)(?<!macbook\s)(?<!macbook)(?<!imac\s)(?<!imac)(?<!ipad\s)(?<!ipad)"
-        r"(?<![a-zA-Z0-9])m3\s*(?:rwd|awd|lwd|lr|p|롱레인지|롱레|스탠다드|스탠|퍼포먼스|퍼포|차주|오너|출고|인도|계약|단차|결함|승차감|전비|충전|배터리)"
-        r"|(?<!bmw\s)(?<!bmw)(?<!비엠\s)(?<!비엠)(?<!비엠더블유\s)(?<!비엠더블유)(?<!sm)(?<!애플\s)(?<!애플)(?<!맥\s)(?<!맥)(?<!맥북\s)(?<!맥북)(?<!아이맥\s)(?<!아이맥)(?<!아이패드\s)(?<!아이패드)(?<!mac\s)(?<!mac)(?<!macbook\s)(?<!macbook)(?<!imac\s)(?<!imac)(?<!ipad\s)(?<!ipad)"
-        r"(?<![a-zA-Z0-9])m3(?!\s*(?:맥북|macbook|칩|chip|프로|pro|max|맥스|울트라|ultra|컴페티션|competition))(?=\s|$|[^a-zA-Z0-9가-힣])"
+        r"(?<![a-zA-Z0-9])m3(?:"
+        r"(?=[은는이가을를의에과와도만로랑처조마나한께보부까]|으로|보다|부터|까지|처럼|조차|마저|한테|입|했|하|인|임|일)"
+        r"|\s*(?:rwd|awd|lwd|lr|p|롱레인지|롱레|스탠다드|스탠|퍼포먼스|퍼포|차주|오너|출고|인도|계약|단차|결함|승차감|전비|충전|배터리)"
+        r"|(?!\s*(?:맥북|macbook|칩|chip|프로|pro|max|맥스|울트라|ultra|컴페티션|competition))(?=\s|$|[^a-zA-Z0-9가-힣])"
+        r")"
         r")",
         re.IGNORECASE,
     ), "Model 3", BRAND_TESLA),
     (re.compile(r"(모델\s*(?:y|와이)\s*(?:주니퍼|juniper)|model\s*y\s*(?:주니퍼|juniper)|my\s*(?:주니퍼|juniper)|(?<![가-힣a-zA-Z0-9])주니퍼(?!\s*(?:네트웍스|networks|라우터|router|스위치|switch))" + PARTICLE_LOOKAHEAD + r"|(?<![a-zA-Z0-9])juniper(?!\s*(?:networks|router|switch))(?![a-zA-Z0-9]))", re.IGNORECASE), "Model Y Juniper", BRAND_TESLA),
     (re.compile(
         r"(모델\s*y(?![a-zA-Z0-9])|model\s*y(?![a-zA-Z0-9])"
+        r"|모델\s*와이(?=(?:단차|결함|고장|출고|인도|시승|오너|차주|주니퍼|롱레인지|롱레|스탠다드|스탠|퍼포먼스|퍼포|전비|충전|배터리|승차감|보증|리콜|누수|소음|잡소리|풍절음|먹통))"
         r"|(?:모델\s*와이|(?:테슬라\s*(?:모와|모\s*[y와])|(?<![가-힣a-zA-Z0-9])모\s*y|(?<![가-힣a-zA-Z0-9])모와(?=\s*(?:rwd|awd|lwd|lr|p|롱레인지|롱레|스탠다드|스탠|퍼포먼스|퍼포|주니퍼|차주|오너|출고|인도|계약|단차|결함|승차감|전비|충전|배터리|사이드|시승|중고)|[은는이가을를의에과와도만로랑]))"
         r"|(?:테슬라\s*|tesla\s*)my"
         r"|\bmy(?=[은는이가을를의에과와도만로랑처조마나한께보부까]|으로|보다|부터|까지|처럼|조차|마저|한테|입|했|하|인|임|일)"
@@ -195,7 +196,7 @@ MODEL_RULES: List[Tuple[Pattern[str], str, str]] = [
     # BYD Models & Colloquialisms
     # -----------------------------------------------------------------
     (re.compile(r"(?<![a-zA-Z0-9])(t4k|티사케이)(?![a-zA-Z0-9])", re.IGNORECASE), "T4K", BRAND_BYD),
-    (re.compile(r"(아토\s*3|atto\s*3|atto3)", re.IGNORECASE), "Atto 3", BRAND_BYD),
+    (re.compile(r"((?<![가-힣a-zA-Z0-9])아토\s*3(?![0-9])|(?<![a-zA-Z0-9])atto\s*3(?![0-9]))", re.IGNORECASE), "Atto 3", BRAND_BYD),
     (re.compile(r"((?<!엔)돌핀|dolphin)", re.IGNORECASE), "돌핀", BRAND_BYD),
     (re.compile(
         r"((?:byd|비야디)\s*(?:의\s*)?(?:신차\s*|전기차\s*|세단\s*)?(?:씰|seal)"

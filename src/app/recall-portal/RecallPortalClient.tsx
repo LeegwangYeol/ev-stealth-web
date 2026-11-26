@@ -110,6 +110,15 @@ function normalizeVinInput(raw: unknown, maxLength?: number): string {
   return typeof maxLength === 'number' ? normalized.slice(0, maxLength) : normalized;
 }
 
+/**
+ * Clamps a numeric SoC limit percentage strictly to [0, 100], falling back to 100 when missing/invalid.
+ */
+function clampSocLimitPercent(val: unknown): number {
+  if (typeof val !== 'number' || !Number.isFinite(val)) return 100;
+  const clamped = Math.min(100, Math.max(0, Math.round(val)));
+  return clamped === 0 ? 0 : clamped;
+}
+
 function resolveBrand(inputBrand: string, availableBrands: string[]): string | undefined {
   if (!inputBrand || typeof inputBrand !== 'string' || !Array.isArray(availableBrands)) {
     return undefined;
@@ -470,7 +479,12 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
 
   // Keep Mode B brand/model aligned with available options in case database lacks defaults
   useEffect(() => {
-    if (availableBrands.length > 0 && !availableBrands.includes(selectedBrand)) {
+    if (availableBrands.length === 0) {
+      if (selectedBrand !== '') setSelectedBrand('');
+      if (selectedModel !== '') setSelectedModel('');
+      return;
+    }
+    if (!availableBrands.includes(selectedBrand)) {
       const nextBrand = availableBrands[0];
       setSelectedBrand(nextBrand);
       const nextModels = getModelsForBrand(nextBrand, initialDatabase);
@@ -837,7 +851,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
   // when blur occurs on an incomplete VIN, or when submitted.
   const cleanVinNormalized = normalizeVinInput(vinInput);
   const cleanVinLength = cleanVinNormalized.length;
-  const hasIllegalVinChars = /[IOQ]/i.test(vinInput);
+  const hasIllegalVinChars = /[IOQ]/i.test(cleanVinNormalized);
   const hasInvalidNonAlnumChars = cleanVinLength > 0 && /[^A-HJ-NPR-Z0-9]/.test(cleanVinNormalized);
   const showVinError =
     hasIllegalVinChars ||
@@ -1523,9 +1537,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                           {checkResult.batteryProfile.fire_incident_status_ko || '모니터링 대상'}
                         </span>
                         <span className="text-xs px-3 py-1 rounded-full font-bold bg-blue-950 text-blue-200 border border-blue-700">
-                          완충 권장 한도: {Number.isFinite(checkResult.batteryProfile.recommended_soc_limit)
-                            ? (checkResult.batteryProfile.recommended_soc_limit === 0 ? 0 : checkResult.batteryProfile.recommended_soc_limit)
-                            : 100}%
+                          완충 권장 한도: {clampSocLimitPercent(checkResult.batteryProfile.recommended_soc_limit)}%
                         </span>
                       </div>
                     </div>
@@ -2092,9 +2104,7 @@ export const BatterySafetyCard = React.memo(function BatterySafetyCard({
   const cellSupplier = p.cell_supplier || '정보 없음';
   const cellChemistry = p.cell_chemistry || '정보 없음';
   const statusKo = p.fire_incident_status_ko || '모니터링 대상';
-  const socLimit = Number.isFinite(p.recommended_soc_limit)
-    ? (p.recommended_soc_limit === 0 ? 0 : p.recommended_soc_limit)
-    : 100;
+  const socLimit = clampSocLimitPercent(p.recommended_soc_limit);
   const advisory = p.underground_parking_advisory || '아파트 관리사무소 화재 예방 수칙 준수 권장';
   const bmsFeatures = p.bms_safety_features || 'BMS 안전 제어 시스템 탑재';
 
@@ -2379,9 +2389,7 @@ export const BatterySafetyTableView = React.memo(function BatterySafetyTableView
                   </span>
                 </td>
                 <td className="p-3.5 text-center font-bold text-blue-300 whitespace-nowrap">
-                  {Number.isFinite(p.recommended_soc_limit)
-                    ? `${p.recommended_soc_limit === 0 ? 0 : p.recommended_soc_limit}%`
-                    : '100%'}
+                  {clampSocLimitPercent(p.recommended_soc_limit)}%
                 </td>
                 <td className="p-3.5 text-xs text-slate-300 min-w-[220px] max-w-sm whitespace-normal leading-relaxed">
                   {p.underground_parking_advisory || '화재 예방 수칙 준수'}

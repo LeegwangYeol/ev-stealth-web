@@ -21,6 +21,7 @@ import logging
 import math
 import os
 from pathlib import Path
+import stat
 import tempfile
 import threading
 import time
@@ -72,8 +73,12 @@ def is_pid_alive(pid: Any) -> bool:
 
 def read_lock_metadata(lock_path: Union[str, Path]) -> Tuple[Optional[int], Optional[float]]:
     """Read PID and timestamp metadata from lock file if present."""
+    if not lock_path:
+        return None, None
     try:
         lp = str(lock_path)
+        if not lp.strip() or "\x00" in lp:
+            return None, None
         if not os.path.isfile(lp) or os.path.getsize(lp) == 0:
             return None, None
         with open(lp, "r", encoding="utf-8", errors="ignore") as f:
@@ -97,7 +102,7 @@ def read_lock_metadata(lock_path: Union[str, Path]) -> Tuple[Optional[int], Opti
                 except (ValueError, TypeError):
                     pass
         return pid, ts
-    except OSError:
+    except (OSError, ValueError):
         return None, None
 
 
@@ -565,10 +570,13 @@ def cleanup_stale_temp_files(
     max_age_seconds: float = 3600.0,
 ) -> int:
     """Defensively unlink orphaned temporary files older than max_age_seconds."""
-    if not directory or not str(directory).strip():
+    if not directory or not str(directory).strip() or "\x00" in str(directory):
         return 0
-    d = Path(directory)
-    if not d.is_dir():
+    try:
+        d = Path(directory)
+        if not d.is_dir():
+            return 0
+    except (OSError, ValueError):
         return 0
     prefixes = _normalize_prefixes(prefix)
     if not prefixes:
@@ -581,12 +589,14 @@ def cleanup_stale_temp_files(
             if any(entry.name.startswith(p) for p in prefixes):
                 try:
                     st = entry.lstat()
+                    if stat.S_ISDIR(st.st_mode):
+                        continue
                     if (now - st.st_mtime) > safe_max_age:
                         entry.unlink(missing_ok=True)
                         cleaned += 1
                 except OSError:
                     pass
-    except OSError:
+    except (OSError, ValueError):
         pass
     return cleaned
 
@@ -598,10 +608,13 @@ def cleanup_stale_lock_files(
     max_age_seconds: float = 3600.0,
 ) -> int:
     """Defensively clean up orphaned advisory lock files older than max_age_seconds if unheld."""
-    if not directory or not str(directory).strip():
+    if not directory or not str(directory).strip() or "\x00" in str(directory):
         return 0
-    d = Path(directory)
-    if not d.is_dir():
+    try:
+        d = Path(directory)
+        if not d.is_dir():
+            return 0
+    except (OSError, ValueError):
         return 0
     safe_max_age = _sanitize_max_age(max_age_seconds)
     prefixes = _normalize_prefixes(prefix)
@@ -700,7 +713,7 @@ def cleanup_stale_lock_files(
                     cleaned += 1
             except OSError:
                 pass
-    except OSError:
+    except (OSError, ValueError):
         pass
     return cleaned
 
@@ -729,17 +742,32 @@ def quarantine_corrupted_file(
     cross-device EXDEV fallback, POSIX directory fsync durability,
     and standard permissions (0o644).
     """
-    if not file_path or not str(file_path).strip():
+    if not file_path or not str(file_path).strip() or "\x00" in str(file_path):
         return None
-    p = Path(file_path).resolve()
+    try:
+        p = Path(file_path).resolve()
+    except (OSError, ValueError):
+        return None
     if not p.exists() or p.is_dir():
         return None
     if is_corrupted_or_quarantined_filename(p):
         return p
     try:
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
-        if suffix:
-            s = suffix if suffix.startswith(".") else f".{suffix}"
+        safe_suffix = ""
+        if suffix and isinstance(suffix, str):
+            cleaned_suffix = suffix.strip()
+            if (
+                cleaned_suffix
+                and cleaned_suffix not in (".", "..")
+                and "/" not in cleaned_suffix
+                and "\\" not in cleaned_suffix
+                and ".." not in cleaned_suffix
+                and "\x00" not in cleaned_suffix
+            ):
+                safe_suffix = cleaned_suffix
+        if safe_suffix:
+            s = safe_suffix if safe_suffix.startswith(".") else f".{safe_suffix}"
             if s == ".corrupted":
                 target_name = f"{p.stem}.corrupt_{ts}.corrupted"
             else:
@@ -951,13 +979,14 @@ def _json_default(obj: Any) -> Any:
         return obj.decode("utf-8", errors="replace")
     if isinstance(obj, uuid.UUID):
         return str(obj)
-    for meth in ("to_dict", "as_dict", "model_dump", "dict", "tolist", "item"):
-        fn = getattr(obj, meth, None)
-        if callable(fn):
-            try:
-                return sanitize_nan_inf(fn())
-            except TypeError:
-                pass
+    if not isinstance(obj, type):
+        for meth in ("to_dict", "as_dict", "model_dump", "dict", "tolist", "item"):
+            fn = getattr(obj, meth, None)
+            if callable(fn):
+                try:
+                    return sanitize_nan_inf(fn())
+                except TypeError:
+                    pass
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         return sanitize_nan_inf(dataclasses.asdict(obj))
     if isinstance(obj, Mapping):

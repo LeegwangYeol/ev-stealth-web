@@ -21,8 +21,13 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from crawlers.base_crawler import (
     BaseCrawler,
+    _extract_attr_value,
+    _extract_balanced_from_masked,
+    _extract_meta_content,
+    _has_class_token,
     _has_unsafe_authority,
     _is_safe_client_url,
+    _iter_tag_elements,
     _mask_comments_and_scripts,
     _normalize_limit,
     _normalize_pages,
@@ -108,44 +113,20 @@ def extract_container_content(html_str: str, tag_name: str, class_name: str) -> 
     Extract the inner content of an HTML container by tracking balanced tag depth.
     Resilient against nested tags of the same name, self-closing tags, unclosed child tags,
     and dummy closing tags inside HTML comments or scripts.
-    Supports double quotes, single quotes, and unquoted class names.
+    Supports double quotes, single quotes, and unquoted class names in O(N) time.
     """
     if not html_str or not isinstance(html_str, str) or not tag_name or not class_name:
         return ""
 
-    # Mask comments and scripts with equal-length whitespace in a single left-to-right pass
-    # so dummy tags or comment tokens inside scripts do not corrupt offsets or depth counters.
     masked = _mask_comments_and_scripts(html_str)
-
-    cls_esc = re.escape(class_name)
-    pattern = re.compile(
-        rf"<{re.escape(tag_name)}\b[^>]*?(?<=\s)class\s*=\s*(?:[\"'](?:[^\"']*\s)?{cls_esc}(?:\s[^\"']*)?[\"']|{cls_esc}(?=[\s>]))[^>]*>",
-        re.IGNORECASE,
+    matches = _extract_balanced_from_masked(
+        html_str,
+        masked,
+        tag_name,
+        lambda attrs: _has_class_token(attrs, class_name),
+        find_all=False,
     )
-    match = pattern.search(masked)
-    if not match:
-        return ""
-    if match.group(0).rstrip(">").rstrip().endswith("/"):
-        return ""
-
-    start_idx = match.end()
-    depth = 1
-    tag_re = re.compile(rf"<(/?)({re.escape(tag_name)})\b([^>]*)>", re.IGNORECASE)
-
-    for m in tag_re.finditer(masked, start_idx):
-        is_closing = bool(m.group(1))
-        tag_attrs = m.group(3)
-        if is_closing:
-            depth -= 1
-            if depth == 0:
-                return html_str[start_idx : m.start()]
-        else:
-            # Skip self-closing tags (e.g. <div ... />)
-            if tag_attrs and tag_attrs.rstrip().endswith("/"):
-                continue
-            depth += 1
-
-    return html_str[start_idx:]
+    return matches[0] if matches else ""
 
 
 def clean_title_text(raw_title: Optional[str]) -> str:
@@ -208,16 +189,25 @@ def is_deleted_or_restricted(html_content: Optional[str]) -> Tuple[bool, str]:
     masked_html = _mask_comments_and_scripts(html_content)
     has_large_body = False
     for body_cls in ("bodyCont", "content01"):
-        body_inner = extract_container_content(html_content, "div", body_cls)
-        if body_inner and len(clean_html_text(body_inner)) > 50:
+        found = _extract_balanced_from_masked(
+            html_content,
+            masked_html,
+            "div",
+            lambda attrs, tok=body_cls: _has_class_token(attrs, tok),
+            find_all=False,
+        )
+        if found and len(clean_html_text(found[0])) > 50:
             has_large_body = True
             break
     if not has_large_body:
-        body_match = re.search(r'(?<=\s)class=["\']bodyCont["\'][^>]*>(.*?)</div>', masked_html, re.DOTALL | re.IGNORECASE)
-        if not body_match:
-            body_match = re.search(r'<div\b[^>]*?(?<=\s)id=["\']print_area["\'][^>]*>(.*?)</div>', masked_html, re.DOTALL | re.IGNORECASE)
-        body_inner = body_match.group(1) if body_match else ""
-        if body_inner and len(clean_html_text(body_inner)) > 50:
+        print_area = _extract_balanced_from_masked(
+            html_content,
+            masked_html,
+            "div",
+            lambda attrs: (_extract_attr_value(attrs, "id") or "").lower() == "print_area",
+            find_all=False,
+        )
+        if print_area and len(clean_html_text(print_area[0])) > 50:
             has_large_body = True
 
     if not has_large_body:
@@ -668,12 +658,12 @@ class BobaeDreamCrawler(BaseCrawler):
         items: List[Dict[str, Any]] = []
         seen_nos = set()
 
-        def _append_item(raw_href_val: str, post_no_val: str, code_val: str, raw_title_val: str) -> None:
+        def _collect_item(raw_href_val: str, post_no_val: str, code_val: str, raw_title_val: str) -> Optional[Dict[str, Any]]:
             if not post_no_val or post_no_val in seen_nos:
-                return
+                return None
             full_url = _canonicalize_bobaedream_href(raw_href_val)
             if not full_url:
-                return
+                return None
 
             clean_title = clean_title_text(raw_title_val)
             # Strip trailing comment count badges e.g. "(14)", "[28]" in list titles
@@ -690,70 +680,66 @@ class BobaeDreamCrawler(BaseCrawler):
                 or '<b class="notice">' in raw_title_val
                 or re.match(r"^\s*(?:\[(?:공지|필독|운영안내)\]|(?:공지|필독|운영안내)(?:[:\s\]-]|$))", clean_title)
             ):
-                return
+                return None
 
             seen_nos.add(post_no_val)
-            items.append({
+            return {
                 "post_id": post_no_val,
                 "board_code": code_val or board_code,
                 "url": full_url,
                 "title": clean_title,
-            })
+            }
 
-        # Resilient link pattern matching desktop, PHP script, and mobile view URLs
-        link_pattern = re.compile(
-            r'<a\b[^>]*\bhref\s*=\s*["\']?([^"\'\s>]*view(?:\.php)?\?[^"\'\s>]*|[^"\'\s>]*/(?:bbs_view|view)/[^"\'\s>]*)["\']?[^>]*>(.*?)</a>',
-            re.IGNORECASE | re.DOTALL,
-        )
+        # Linear-time O(N) anchor scanning across desktop, PHP script, and mobile view URLs
+        primary_view_re = re.compile(r"(?:view(?:\.php)?\?|/(?:bbs_view|view)/)", re.IGNORECASE)
+        no_re = re.compile(r"(?:[?&](?:b_|bm_)?no=(\d+)|/(?:bbs_view/[^/]+/|view/)(\d+))", re.IGNORECASE)
+        code_re = re.compile(r"[?&]code=([a-zA-Z0-9_-]+)", re.IGNORECASE)
+        path_code_re = re.compile(r"/(?:bbs_view|list)/([a-zA-Z0-9_-]+)/", re.IGNORECASE)
+        alt_no_re = re.compile(r"[?&](?:b_|bm_)?no=(\d+)", re.IGNORECASE)
 
-        for match in link_pattern.finditer(a_scan_html):
-            raw_href = match.group(1)
-            raw_title = match.group(2)
-
-            full_href = _unescape_url_entities(raw_href.strip()).strip()
-            # Extract post_no from query param (No=, no=, b_no=, bm_no=) or path (/bbs_view/.../123, /view/123)
-            no_match = re.search(
-                r"(?:[?&](?:b_|bm_)?no=(\d+)|/(?:bbs_view/[^/]+/|view/)(\d+))",
-                full_href,
-                re.IGNORECASE,
-            )
-            if not no_match:
+        fallback_candidates: List[Tuple[str, str, str, str]] = []
+        for _, a_attrs, raw_title in _iter_tag_elements(a_scan_html, a_scan_html, "a", allow_nesting=False):
+            raw_href = _extract_attr_value(a_attrs, "href")
+            if not raw_href:
                 continue
-            post_no = no_match.group(1) or no_match.group(2)
+            full_href = _unescape_url_entities(raw_href.strip()).strip()
+            if not full_href:
+                continue
 
-            # Extract board code from query param or path
-            code_match = re.search(r"[?&]code=([a-zA-Z0-9_-]+)", full_href, re.IGNORECASE)
-            if not code_match:
-                code_match = re.search(r"/(?:bbs_view|list)/([a-zA-Z0-9_-]+)/", full_href, re.IGNORECASE)
-            extracted_code = code_match.group(1) if code_match else board_code
-
-            _append_item(raw_href, post_no, extracted_code, raw_title)
-
-        # Fallback regex if href parameters were ordered differently or single quotes (linear-time, ReDoS-safe)
-        if not items:
-            alt_anchor_re = re.compile(
-                r'<a\s+[^>]*\bhref\s*=\s*(?:"([^"]*)"|\'([^\']*)\')[^>]*>(.*?)</a>',
-                re.IGNORECASE | re.DOTALL,
-            )
-            for dq_href, sq_href, raw_title in alt_anchor_re.findall(a_scan_html):
-                full_href_raw = _unescape_url_entities((dq_href or sq_href).strip()).strip()
-                if not full_href_raw or "view" not in full_href_raw.lower():
+            if primary_view_re.search(full_href):
+                no_match = no_re.search(full_href)
+                if no_match:
+                    post_no = no_match.group(1) or no_match.group(2)
+                    code_match = code_re.search(full_href) or path_code_re.search(full_href)
+                    extracted_code = code_match.group(1) if code_match else board_code
+                    item = _collect_item(raw_href, post_no, extracted_code, raw_title)
+                    if item:
+                        items.append(item)
                     continue
-                no_m = re.search(r"[?&](?:b_|bm_)?no=(\d+)", full_href_raw, re.IGNORECASE)
-                code_m = re.search(r"[?&]code=([a-zA-Z0-9_-]+)", full_href_raw, re.IGNORECASE)
+
+            if "view" in full_href.lower():
+                no_m = alt_no_re.search(full_href)
+                code_m = code_re.search(full_href)
                 if no_m and code_m:
-                    _append_item(full_href_raw, no_m.group(1), code_m.group(1), raw_title)
+                    fallback_candidates.append((full_href, no_m.group(1), code_m.group(1), raw_title))
+
+        if not items and fallback_candidates:
+            for full_href_raw, post_no, extracted_code, raw_title in fallback_candidates:
+                item = _collect_item(full_href_raw, post_no, extracted_code, raw_title)
+                if item:
+                    items.append(item)
 
         return items
 
     @staticmethod
     def _extract_balanced_matches(html_str: str, tag_name: str, open_pattern: re.Pattern[str]) -> List[str]:
-        """Extract inner HTML of all matched tags using balanced depth tracking."""
+        """Extract inner HTML of all matched tags using balanced depth tracking in O(N) time."""
         masked = _mask_comments_and_scripts(html_str)
-        tag_re = re.compile(rf"<(/?)({re.escape(tag_name)})\b([^>]*)>", re.IGNORECASE)
+        token_re = re.compile(rf"<(/?)({re.escape(tag_name)})(?=[\s>/])", re.IGNORECASE)
         results: List[str] = []
         pos = 0
-        while True:
+        n = len(masked)
+        while pos < n:
             match = open_pattern.search(masked, pos)
             if not match:
                 break
@@ -762,20 +748,25 @@ class BobaeDreamCrawler(BaseCrawler):
                 continue
             start_idx = match.end()
             depth = 1
-            end_idx = len(html_str)
-            next_pos = len(html_str)
-            for m in tag_re.finditer(masked, start_idx):
-                is_closing = bool(m.group(1))
-                tag_attrs = m.group(3)
-                if is_closing:
+            end_idx = n
+            next_pos = n
+            scan_pos = start_idx
+            while scan_pos < n:
+                m = token_re.search(masked, scan_pos)
+                if not m:
+                    break
+                gt_idx = masked.find(">", m.end())
+                if gt_idx == -1:
+                    break
+                tag_attrs = masked[m.end() : gt_idx]
+                scan_pos = gt_idx + 1
+                if m.group(1):
                     depth -= 1
                     if depth == 0:
                         end_idx = m.start()
-                        next_pos = m.end()
+                        next_pos = gt_idx + 1
                         break
-                else:
-                    if tag_attrs and tag_attrs.rstrip().endswith("/"):
-                        continue
+                elif not tag_attrs.rstrip().endswith("/"):
                     depth += 1
             results.append(html_str[start_idx:end_idx])
             pos = next_pos
@@ -787,30 +778,40 @@ class BobaeDreamCrawler(BaseCrawler):
         if not comment_html or not isinstance(comment_html, str):
             return comments
 
+        masked = _mask_comments_and_scripts(comment_html)
+        cmt_id_re = re.compile(r"cmt_\d+", re.IGNORECASE)
         # Pattern 1: <dd class="...comment..."> or <dd id="cmt_...">
-        comment_matches = self._extract_balanced_matches(
+        comment_matches = _extract_balanced_from_masked(
             comment_html,
+            masked,
             "dd",
-            re.compile(r'<dd\b[^>]*?(?<=\s)class\s*=\s*["\'][^"\']*comment[^"\']*["\'][^>]*>', re.IGNORECASE),
+            lambda attrs: _has_class_token(attrs, "comment", partial=True),
+            find_all=True,
         )
         if not comment_matches:
-            comment_matches = self._extract_balanced_matches(
+            comment_matches = _extract_balanced_from_masked(
                 comment_html,
+                masked,
                 "dd",
-                re.compile(r'<dd\b[^>]*?(?<=\s)id\s*=\s*["\']cmt_\d+["\'][^>]*>', re.IGNORECASE),
+                lambda attrs: bool(cmt_id_re.fullmatch(_extract_attr_value(attrs, "id") or "")),
+                find_all=True,
             )
         if not comment_matches:
             # Pattern 2: comment body container (balanced for nested divs)
-            comment_matches = self._extract_balanced_matches(
+            comment_matches = _extract_balanced_from_masked(
                 comment_html,
+                masked,
                 "div",
-                re.compile(r'<div\b[^>]*?(?<=\s)class\s*=\s*["\'][^"\']*comment_memo[^"\']*["\'][^>]*>', re.IGNORECASE),
+                lambda attrs: _has_class_token(attrs, "comment_memo", partial=True),
+                find_all=True,
             )
         if not comment_matches:
-            comment_matches = self._extract_balanced_matches(
+            comment_matches = _extract_balanced_from_masked(
                 comment_html,
+                masked,
                 "li",
-                re.compile(r'<li\b[^>]*?(?<=\s)class\s*=\s*["\'][^"\']*comment[^"\']*["\'][^>]*>', re.IGNORECASE),
+                lambda attrs: _has_class_token(attrs, "comment", partial=True),
+                find_all=True,
             )
 
         for c_html in comment_matches:
@@ -831,6 +832,8 @@ class BobaeDreamCrawler(BaseCrawler):
           $("#cmt_list").load("/board_renew/bulletin/comment_list.php?tb=uni_cmt_2609&code=national&No=2415510&Answer=78...", ...)
         """
         if not html_content or not isinstance(html_content, str):
+            return None
+        if "comment_list.php" not in html_content.lower():
             return None
 
         # Match load("/board_renew/bulletin/comment_list.php?...") or load("http...")
@@ -965,53 +968,79 @@ class BobaeDreamCrawler(BaseCrawler):
         # Mask comments/scripts for DOM metadata extraction (keep raw html_content for AJAX script URL)
         masked_html = _mask_comments_and_scripts(html_content)
 
-        # 2. Title - resilient against attribute order, tag structures, empty leading tags, and entities
+        # 2. Title - resilient against attribute order, tag structures, empty leading tags, and entities (O(N))
         title = ""
-        for pat in (
-            r'<strong\b(?=[^>]*?(?<=\s)class=["\']?[^"\'>]*\btitle\b)[^>]*>(.*?)</strong>',
-            r'<dt\b(?=[^>]*?(?<=\s)class=["\']?[^"\'>]*\btit\b)[^>]*>(.*?)</dt>',
-            r'<(?P<tag>h[1-3])\b(?=[^>]*?(?<=\s)class=["\']?[^"\'>]*title)[^>]*>(.*?)</(?P=tag)>',
-            r'<meta\b(?=[^>]*?(?<=\s)property=["\']og:title["\'])[^>]*?(?<=\s)content=(?:"([^"]*)"|\'([^\']*)\')',
-            r'<meta\b(?=[^>]*?(?<=\s)content=(?:"([^"]*)"|\'([^\']*)\'))[^>]*?(?<=\s)property=["\']og:title["\']',
-        ):
-            m = re.search(pat, masked_html, re.DOTALL | re.IGNORECASE)
-            if m:
-                raw_cand = next((g for g in m.groups() if g is not None and g != m.groupdict().get("tag")), "")
-                candidate = clean_title_text(raw_cand)
+        title_candidates: List[str] = []
+        title_candidates.extend(
+            _extract_balanced_from_masked(
+                html_content, masked_html, "strong", lambda a: _has_class_token(a, "title"), find_all=True
+            )
+        )
+        if not any(clean_title_text(c) for c in title_candidates):
+            title_candidates.extend(
+                _extract_balanced_from_masked(
+                    html_content, masked_html, "dt", lambda a: _has_class_token(a, "tit"), find_all=True
+                )
+            )
+        if not any(clean_title_text(c) for c in title_candidates):
+            title_candidates.extend(
+                _extract_balanced_from_masked(
+                    html_content,
+                    masked_html,
+                    ("h1", "h2", "h3"),
+                    lambda a: _has_class_token(a, "title", partial=True),
+                    find_all=True,
+                )
+            )
+        for raw_cand in title_candidates:
+            candidate = clean_title_text(raw_cand)
+            if candidate:
+                title = candidate
+                break
+        if not title:
+            og_title = _extract_meta_content(masked_html, ("og:title",))
+            if og_title:
+                candidate = clean_title_text(og_title)
                 if candidate:
                     title = candidate
-                    break
         if not title:
-            title_tag = re.search(r'<title[^>]*>(.*?)</title>', masked_html, re.DOTALL | re.IGNORECASE)
-            if title_tag:
-                clean_t = clean_title_text(title_tag.group(1))
+            for _, _, raw_t in _iter_tag_elements(html_content, masked_html, "title", allow_nesting=False):
+                clean_t = clean_title_text(raw_t)
                 clean_t = re.sub(r"\s*-\s*보배드림.*$", "", clean_t).strip()
                 if clean_t:
                     title = clean_t
+                    break
 
         # 3. Author & Date
         author = ""
-        for apat in (
-            r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\bauthor\b)[^>]*>(.*?)</span>',
-            r'<span\b(?=[^>]*\bclass=["\']?[^"\'>]*\buserNick\b)[^>]*>(.*?)</span>',
-            r'<dt\b(?=[^>]*\bclass=["\']?[^"\'>]*\bwriter\b)[^>]*>(.*?)</dt>',
-        ):
-            am = re.search(apat, masked_html, re.DOTALL | re.IGNORECASE)
-            if am:
-                cand_author = clean_title_text(am.group(1))
+        for tag_n, cls_tok in (("span", "author"), ("span", "userNick"), ("dt", "writer")):
+            for raw_a in _extract_balanced_from_masked(
+                html_content,
+                masked_html,
+                tag_n,
+                lambda a, tok=cls_tok: _has_class_token(a, tok),
+                find_all=True,
+            ):
+                cand_author = clean_title_text(raw_a)
                 if cand_author:
                     author = cand_author
                     break
+            if author:
+                break
 
         raw_date = ""
         # Support <span>, <td>, <em>, <p>, or <div> containing class="date"
-        date_match = re.search(
-            r'<(?P<tag>span|td|em|div|p)\b[^>]*?(?<=\s)class=["\'][^"\']*\bdate\b[^"\']*["\'][^>]*>(.*?)</(?P=tag)>',
+        for raw_d in _extract_balanced_from_masked(
+            html_content,
             masked_html,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if date_match:
-            raw_date = clean_html_text(date_match.group(2))
+            ("span", "td", "em", "div", "p"),
+            lambda a: _has_class_token(a, "date"),
+            find_all=True,
+        ):
+            cand_date = clean_html_text(raw_d)
+            if cand_date:
+                raw_date = cand_date
+                break
         if not raw_date:
             generic_date = re.search(r'(\d{4}[.\-/]\d{2}[.\-/]\d{2}(?:[\sT]+\d{2}:\d{2}(?::\d{2})?)?)', masked_html)
             if generic_date:
@@ -1021,27 +1050,37 @@ class BobaeDreamCrawler(BaseCrawler):
 
         # 4. Article body from bodyCont (uses balanced container parser to preserve nested divs)
         content = ""
-        body_extracted = extract_container_content(html_content, "div", "bodyCont")
-        if body_extracted:
-            content = clean_html_text(body_extracted).replace("\xa0", " ").strip()
+        for body_cls in ("bodyCont",):
+            body_extracted = _extract_balanced_from_masked(
+                html_content,
+                masked_html,
+                "div",
+                lambda a, tok=body_cls: _has_class_token(a, tok),
+                find_all=False,
+            )
+            if body_extracted:
+                content = clean_html_text(body_extracted[0]).replace("\xa0", " ").strip()
 
         if not content:
-            # Fallback 1: check with comment anchor
-            body_match = re.search(r'<div\b[^>]*?(?<=\s)class=["\']bodyCont["\'][^>]*>(.*?)</div>\s*<!--\s*//bodyCont', html_content, re.DOTALL | re.IGNORECASE)
-            if not body_match:
-                body_match = re.search(r'<div\b[^>]*?(?<=\s)class=["\']bodyCont["\'][^>]*>(.*?)</div>', masked_html, re.DOTALL | re.IGNORECASE)
-            if not body_match:
-                body_match = re.search(r'<div\b[^>]*?(?<=\s)id=["\']print_area["\'][^>]*>(.*?)</div>', masked_html, re.DOTALL | re.IGNORECASE)
-            if body_match:
-                content = clean_html_text(body_match.group(1)).replace("\xa0", " ").strip()
-            if not content:
-                content01_extracted = extract_container_content(html_content, "div", "content01")
-                if content01_extracted:
-                    content = clean_html_text(content01_extracted).replace("\xa0", " ").strip()
-            if not content:
-                body_match = re.search(r'<div\b[^>]*?(?<=\s)class=["\']content01["\'][^>]*>(.*?)</div>', masked_html, re.DOTALL | re.IGNORECASE)
-                if body_match:
-                    content = clean_html_text(body_match.group(1)).replace("\xa0", " ").strip()
+            print_area = _extract_balanced_from_masked(
+                html_content,
+                masked_html,
+                "div",
+                lambda a: (_extract_attr_value(a, "id") or "").lower() == "print_area",
+                find_all=False,
+            )
+            if print_area:
+                content = clean_html_text(print_area[0]).replace("\xa0", " ").strip()
+        if not content:
+            content01 = _extract_balanced_from_masked(
+                html_content,
+                masked_html,
+                "div",
+                lambda a: _has_class_token(a, "content01"),
+                find_all=False,
+            )
+            if content01:
+                content = clean_html_text(content01[0]).replace("\xa0", " ").strip()
 
         # 5. Comments (Static + Dynamic AJAX)
         comments: List[str] = []
@@ -1218,7 +1257,13 @@ class BobaeDreamCrawler(BaseCrawler):
                 break
 
             is_blocked, block_reason = is_deleted_or_restricted(text)
-            if is_blocked:
+            if is_blocked and block_reason in (
+                "cloudflare_challenge",
+                "abnormal_access_blocked",
+                "ip_blocked",
+                "captcha_challenge",
+                "access_denied",
+            ):
                 logger.warning(f"BobaeDream list page unavailable ({block_reason}) on page {page}")
                 break
 

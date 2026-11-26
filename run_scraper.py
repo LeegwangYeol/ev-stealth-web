@@ -842,13 +842,24 @@ class ScraperPipeline:
                 custom_out = str(custom_p / "daily_reports.json")
             target_paths.append(os.path.abspath(custom_out))
         if sync_web:
-            resolved_web_path = _resolve_web_reports_path(web_dir)
+            effective_web_dir: Optional[Union[str, Path]] = web_dir
+            if effective_web_dir is None or str(effective_web_dir).strip() in ("", "."):
+                env_web = (
+                    os.getenv("EV_SCRAPER_WEB_DIR")
+                    or os.getenv("EV_TRACKER_WEB_DIR")
+                    or os.getenv("EV_WEB_DIR")
+                    or ""
+                ).strip()
+                if env_web and env_web != ".":
+                    effective_web_dir = env_web
+
+            resolved_web_path = _resolve_web_reports_path(effective_web_dir)
             target_paths.append(os.path.abspath(str(resolved_web_path)))
 
             is_custom_web_dir = False
-            if web_dir is not None and str(web_dir).strip() not in ("", "."):
+            if effective_web_dir is not None and str(effective_web_dir).strip() not in ("", "."):
                 try:
-                    w_res = Path(web_dir).resolve()
+                    w_res = Path(str(effective_web_dir).strip()).resolve()
                     project_web_candidates = {
                         (REPO_ROOT / "ev-stealth-web").resolve(),
                         (REPO_ROOT / "ev-stealth-web" / "src" / "data").resolve(),
@@ -861,16 +872,17 @@ class ScraperPipeline:
                     is_custom_web_dir = True
 
             if is_custom_web_dir:
-                w_base = Path(str(web_dir).strip())
-                for pub_cand in (
-                    w_base / "public" / "data" / "daily_reports.json",
-                    w_base.parent / "public" / "data" / "daily_reports.json",
-                    w_base.parent.parent / "public" / "data" / "daily_reports.json",
-                ):
+                w_base = Path(str(effective_web_dir).strip())
+                pub_candidates = [w_base / "public" / "data" / "daily_reports.json"]
+                if w_base.name in ("src", "data"):
+                    pub_candidates.append(w_base.parent / "public" / "data" / "daily_reports.json")
+                if w_base.name == "data" and w_base.parent.name == "src":
+                    pub_candidates.append(w_base.parent.parent / "public" / "data" / "daily_reports.json")
+                for pub_cand in pub_candidates:
                     if pub_cand.parent.exists():
                         target_paths.append(os.path.abspath(str(pub_cand)))
             else:
-                resolved_public_path = _resolve_public_reports_path(web_dir)
+                resolved_public_path = _resolve_public_reports_path(effective_web_dir)
                 target_paths.append(os.path.abspath(str(resolved_public_path)))
                 resolved_root_path = _resolve_root_reports_path()
                 target_paths.append(os.path.abspath(str(resolved_root_path)))

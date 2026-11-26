@@ -217,7 +217,8 @@ def _matches_compound_phrase(phrase: str, text_lower: str) -> bool:
 
 # Malfunction cues that disambiguate neutral EV features from actual defect complaints
 MALFUNCTION_CUES: Tuple[str, ...] = (
-    "오류", "차단", "과열", "먹통", "방전", "고장", "안 됨", "안됨", "에러",
+    "오류", "차단", "과열", "먹통", "방전", "고장", "안 됨", "안됨", "안 돼", "안돼",
+    "안 열려", "안 빠져", "안 켜져", "에러",
     "경고등", "중단", "안 켜", "미작동", "소리 안", "소리도 안", "소리안", "버튼식",
     "불량", "버그", "안 나", "꺼지", "꺼짐", "꺼졌"
 )
@@ -276,6 +277,11 @@ _UNSPACED_AN_NA_PERCEPTION: Tuple[str, ...] = (
     "안남", "안나옴", "안나와", "안나요", "안납니다", "안나네", "안나고", "안나서", "안나는", "안나면", "안나오",
 )
 _WATER_SYMPTOM_KEYS: Tuple[str, ...] = ("물 새", "물 샜", "물 차", "물 고이")
+_RE_CONCESSIVE_HANDE: re.Pattern[str] = re.compile(r"(?<![가-힣])한데")
+_RE_OPERATIONAL_MALFUNCTION: re.Pattern[str] = re.compile(
+    r"(?:브레이크|제동|페달)(?:[가이도은는]|\s)+안\s*들"
+    r"|(?:충전|작동|동작|인식|연결|업데이트|제동|조향|가속|회생제동)(?:[이도은는]|\s)+안\s*(?:되|돼|됨|됐)"
+)
 
 
 def _has_symptom_predicate(text_str: str) -> bool:
@@ -286,7 +292,7 @@ def _has_symptom_predicate(text_str: str) -> bool:
                 return True
         elif symptom in text_str:
             return True
-    return False
+    return _RE_OPERATIONAL_MALFUNCTION.search(text_str) is not None
 _SPACED_EOPDA_SUBJECTS: Tuple[str, ...] = (
     "대책", "대책이", "대책도",
     "답", "답이", "답도",
@@ -842,7 +848,11 @@ class DefectClassifier:
                     break
                 split_done = False
                 for conc in sorted_concs:
-                    idx = c.find(conc)
+                    if conc == "한데":
+                        m_conc = _RE_CONCESSIVE_HANDE.search(c)
+                        idx = m_conc.start() if m_conc is not None else -1
+                    else:
+                        idx = c.find(conc)
                     if idx > 0:
                         end_idx = idx + len(conc)
                         tail = c[end_idx:].strip()
@@ -865,7 +875,10 @@ class DefectClassifier:
                 continue
 
             starts_with_conc = any(clause.startswith(conc) for conc in self.concessives)
-            has_conc = starts_with_conc or any(conc in clause for conc in self.concessives)
+            has_conc = starts_with_conc or any(
+                (_RE_CONCESSIVE_HANDE.search(clause) is not None) if conc == "한데" else (conc in clause)
+                for conc in self.concessives
+            )
             if starts_with_conc:
                 is_post_concessive = True
 

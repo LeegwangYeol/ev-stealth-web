@@ -337,7 +337,7 @@ def validate_subsidy_data(file_path: Union[str, Path]) -> Tuple[bool, List[str],
                 errors.append(
                     f"Nationwide depletion rate ({dep_rate}%) must be 0.0 when total_announced_units is 0"
                 )
-        stats["nationwide_depletion_rate"] = dep_rate if _is_finite_number(dep_rate) else 0.0
+        stats["nationwide_depletion_rate"] = (0.0 if dep_rate == 0.0 else dep_rate) if _is_finite_number(dep_rate) else 0.0
 
     # 4. Regions validation (17 statutory regions)
     regions = data.get("regions")
@@ -966,11 +966,13 @@ def validate_all_datasets(
 
     # 6. Triple Directory Mirror Parity
     extra_dirs = []
+    known_resolved = {p.resolve() for p in (root_data, web_src_data, web_pub_data) if p.exists()}
     web_data = root / "ev-stealth-web" / "data"
-    if web_data.is_dir():
+    if web_data.is_dir() and web_data.resolve() not in known_resolved:
         extra_dirs.append(("web_data", web_data))
+        known_resolved.add(web_data.resolve())
     root_public = root / "public" / "data"
-    if root_public.is_dir():
+    if root_public.is_dir() and root_public.resolve() not in known_resolved:
         extra_dirs.append(("root_public", root_public))
 
     v6, e6, s6 = validate_data_parity(

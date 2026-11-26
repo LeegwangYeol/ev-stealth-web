@@ -69,11 +69,14 @@ export function parseSafeDate(rawDate?: string): number {
   const trimmed = rawDate.trim();
   if (!trimmed) return 0;
 
-  // Clean Korean date separators (e.g. "2026. 09. 08.", "2026년 9월 8일 14:30:00") while keeping space before time
+  // Clean Korean date/time separators (e.g. "2026. 09. 08.", "2026년 9월 8일 14시 30분") while keeping space before time
   const cleaned = trimmed
     .replace(/년\s*/g, '-')
     .replace(/월\s*/g, '-')
     .replace(/일\s*/g, ' ')
+    .replace(/(\d{1,2})\s*시\s*(\d{1,2})\s*분(?:\s*(\d{1,2})\s*초)?/g, (_, h, m, s) =>
+      s !== undefined ? `${h}:${m.padStart(2, '0')}:${s.padStart(2, '0')}` : `${h}:${m.padStart(2, '0')}`
+    )
     .trim();
 
   // Normalize dot/slash Y-M-D date separators (e.g. 2026. 09. 08. -> 2026-09-08) without mangling timezone offsets
@@ -671,8 +674,8 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         const searchIndex = searchTokens.join(' ').normalize('NFC').toLowerCase();
         const spacelessIndex = searchIndex.replace(/\s+/g, '');
 
-        // Standardize clean display date YYYY-MM-DD (validating calendar bounds)
-        const rawDateStr = (rawDateField || (rawCreatedAt ? rawCreatedAt.slice(0, 10) : '')).trim();
+        // Standardize clean display date YYYY-MM-DD (validating calendar bounds without truncating Korean formats)
+        const rawDateStr = (rawDateField || rawCreatedAt).trim();
         const ymdMatch = rawDateStr.match(/^(\d{4})[.\-/\s년]+(\d{1,2})[.\-/\s월]+(\d{1,2})/);
         let displayDate = parsed > 0 ? new Date(parsed).toISOString().slice(0, 10) : '날짜 미상';
         if (ymdMatch) {
@@ -1679,7 +1682,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
                 </tr>
               ) : (
                 paginatedReports.map((report, idx) => {
-                  const safeUrl = sanitizeReportUrl(report.url);
+                  const safeUrl = report.url || '#';
                   const isExt = isExternalUrl(safeUrl);
                   const overallIdx = (validCurrentPage - 1) * pageSize + idx + 1;
                   return (
@@ -2073,7 +2076,7 @@ const DefectReportCard = memo(function DefectReportCard({
   onOpenModal,
 }: DefectReportCardProps) {
   const safeSentimentPct = formatSentimentPercent(report.sentiment_score);
-  const safeUrl = sanitizeReportUrl(report.url);
+  const safeUrl = report.url || '#';
   const isExternal = isExternalUrl(safeUrl);
 
   const handleOpenModalClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {

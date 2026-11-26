@@ -220,10 +220,11 @@ class BobaedreamScraper:
         """Extract post items from a Bobaedream board list view."""
         if not html_content or not isinstance(html_content, str):
             return []
+        body_html_region = strip_non_body_html(html_content)
         items = []
         # Match list entries with view links without polynomial regex backtracking
         pattern = r'<a\b[^>]*\bhref=["\']([^"\'>\s]*view(?:\.php)?\?[^"\'>\s]*)["\'][^>]*>(.*?)</a>'
-        matches = re.findall(pattern, html_content, re.IGNORECASE | re.DOTALL)
+        matches = re.findall(pattern, body_html_region, re.IGNORECASE | re.DOTALL)
 
         seen_nos = set()
         for href, raw_title in matches:
@@ -271,7 +272,7 @@ class BobaedreamScraper:
         except (ValueError, TypeError, OverflowError):
             eff_pages = 1
 
-        seen_urls = set()
+        seen_keys = set()
         for page in range(1, eff_pages + 1):
             logger.info(f"Searching Bobaedream community search for '{kw_str}' (Page {page})...")
             post_data = encode_euc_kr_query({
@@ -300,11 +301,16 @@ class BobaedreamScraper:
                 logger.info(f"No more search results for '{keyword}' on page {page}")
                 break
 
-            new_items = [it for it in items if it.get("url") not in seen_urls]
+            def _item_key(it: Dict[str, Any]) -> str:
+                if it.get("post_no"):
+                    return f"{it.get('board_code')}:{it.get('post_no')}"
+                return str(it.get("url") or "")
+
+            new_items = [it for it in items if _item_key(it) not in seen_keys]
             if not new_items:
                 logger.info(f"Search page {page} repeated previously seen items. Halting loop.")
                 break
-            seen_urls.update(it["url"] for it in new_items if it.get("url"))
+            seen_keys.update(_item_key(it) for it in new_items)
             results.extend(new_items)
 
         logger.info(f"Found {len(results)} search items for keyword '{keyword}' on Bobaedream.")
@@ -314,10 +320,11 @@ class BobaedreamScraper:
         """Parse search results page HTML and extract post metadata."""
         if not html_content or not isinstance(html_content, str):
             return []
+        body_html_region = strip_non_body_html(html_content)
         items = []
         seen_keys = set()
         pattern = r'<dt[^>]*>\s*<a\b[^>]*\bhref=["\']([^"\']*view(?:\.php)?\?[^"\']*)["\'][^>]*>(.*?)</a>'
-        matches = re.findall(pattern, html_content, re.IGNORECASE | re.DOTALL)
+        matches = re.findall(pattern, body_html_region, re.IGNORECASE | re.DOTALL)
 
         for href, raw_title in matches:
             clean_title = clean_html_text(raw_title)
@@ -422,10 +429,18 @@ class BobaedreamScraper:
             author = clean_html_text(author_match.group(1))
 
         published_at = ""
-        date_container_html = extract_balanced_tag_content(
+        count_container_html = extract_balanced_tag_content(
             body_html_region,
-            r'<span\b[^>]*\bclass=["\'][^"\']*\b(?:countGroup|date|regdate|writerInfo)\b[^"\']*["\'][^>]*>',
+            r'<span\b[^>]*\bclass=["\'][^"\']*\b(?:countGroup|writerInfo)\b[^"\']*["\'][^>]*>',
             tag_name="span",
+        )
+        date_container_html = (
+            count_container_html
+            or extract_balanced_tag_content(
+                body_html_region,
+                r'<span\b[^>]*\bclass=["\'][^"\']*\b(?:date|regdate)\b[^"\']*["\'][^>]*>',
+                tag_name="span",
+            )
         )
         date_search_target = date_container_html if date_container_html else body_html_region
         date_match = re.search(r'(\d{4}[.\-/]\d{2}[.\-/]\d{2}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)', date_search_target)
@@ -434,10 +449,11 @@ class BobaedreamScraper:
         if date_match:
             published_at = date_match.group(1).replace(".", "-").replace("/", "-")
 
+        count_search_target = count_container_html or date_container_html
         view_count = 0
         view_match = (
-            re.search(r'조회수?\s*[:]?\s*(?:<[^>]+>\s*)*([0-9,]+)', date_container_html)
-            if date_container_html
+            re.search(r'조회수?\s*[:]?\s*(?:<[^>]+>\s*)*([0-9,]+)', count_search_target)
+            if count_search_target
             else None
         )
         if not view_match:
@@ -450,8 +466,8 @@ class BobaedreamScraper:
 
         upvote_count = 0
         upvote_match = (
-            re.search(r'추천\s*[:]?\s*(?:<[^>]+>\s*)*([0-9,]+)', date_container_html)
-            if date_container_html
+            re.search(r'추천\s*[:]?\s*(?:<[^>]+>\s*)*([0-9,]+)', count_search_target)
+            if count_search_target
             else None
         )
         if not upvote_match:
@@ -474,14 +490,6 @@ class BobaedreamScraper:
                 body_text = clean_html_text(inner_html)
                 if body_text:
                     break
-        if not body_text:
-            body_match = re.search(
-                r'<div\b[^>]*\bclass=["\'][^"\']*\bbodyCont\b[^"\']*["\'][^>]*>(.*?)</div>\s*<!--\s*//bodyCont',
-                html_content,
-                re.DOTALL | re.IGNORECASE,
-            )
-            if body_match:
-                body_text = clean_html_text(body_match.group(1))
 
         # Comments extraction
         comments = []

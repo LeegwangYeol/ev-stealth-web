@@ -414,12 +414,12 @@ class StatisticalRanker:
 
             # Mean DSI
             if matching_dsi_vals:
-                mean_dsi = round(sum(matching_dsi_vals) / len(matching_dsi_vals), 1)
+                mean_dsi = round(sum(matching_dsi_vals) / len(matching_dsi_vals), 1) + 0.0
             else:
                 mean_dsi = default_dsi
 
             # Composite Complaint Score (CCS)
-            ccs_score = round((raw_count ** 0.85) * smooth_idf * domain_weight, 2)
+            ccs_score = round((raw_count ** 0.85) * smooth_idf * domain_weight, 2) + 0.0
 
             # Representative Quote
             best_quote = quotes_pool[0] if quotes_pool else f"{topic_name} 관련 실사용자 불만 코멘트"
@@ -456,7 +456,7 @@ class StatisticalRanker:
             return []
         raw_recs = records if records is not None else self.records
         recs = [r for r in raw_recs if isinstance(r, dict)] if isinstance(raw_recs, (list, tuple)) else []
-        brand_lower = str(brand or "").lower()
+        brand_lower = str(brand or "").strip().lower()
 
         filtered_recs = []
         for r in recs:
@@ -549,7 +549,7 @@ class StatisticalRanker:
             weight = DOMAIN_SEVERITY_MAP.get(term, 1.2)
             ccs = (count ** 0.85) * smooth_idf * weight
             dsi_vals = sub_term_dsi_values.get(term, [7.0])
-            mean_dsi = round(sum(dsi_vals) / len(dsi_vals), 1) if dsi_vals else 7.0
+            mean_dsi = (round(sum(dsi_vals) / len(dsi_vals), 1) + 0.0) if dsi_vals else 7.0
             category = TERM_CATEGORY_MAP.get(term, "General Defect")
             quotes = sub_term_sample_quotes.get(term, [])
             sample_q = re.sub(r'\s+', ' ', quotes[0]).strip() if quotes else f"{term} 관련 결함 이슈"

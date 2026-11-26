@@ -136,13 +136,30 @@ const VALID_CATEGORY_KEYS: ReadonlySet<DefectCategoryKey> = new Set<DefectCatego
 ]);
 
 export function sanitizeVerdict(val: unknown): ModelYearVerdict {
-  return val === 'BUY_SAFE' || val === 'CAUTION' || val === 'AVOID' ? val : 'CAUTION';
+  if (typeof val === 'string') {
+    const upper = val.trim().toUpperCase();
+    if (upper === 'BUY_SAFE' || upper === 'CAUTION' || upper === 'AVOID') {
+      return upper;
+    }
+  }
+  return 'CAUTION';
 }
 
 export function sanitizeGrade(val: unknown): OverallReliabilityGrade {
-  return val === 'A+' || val === 'A' || val === 'B' || val === 'C' || val === 'D' || val === 'F'
-    ? val
-    : 'C';
+  if (typeof val === 'string') {
+    const upper = val.trim().toUpperCase();
+    if (
+      upper === 'A+' ||
+      upper === 'A' ||
+      upper === 'B' ||
+      upper === 'C' ||
+      upper === 'D' ||
+      upper === 'F'
+    ) {
+      return upper;
+    }
+  }
+  return 'C';
 }
 
 export function sanitizeCategoryKey(
@@ -551,25 +568,39 @@ export function calculateReliabilityKPIs(data?: ReliabilityTrendsDatabase | null
 // 3. MODEL & BRAND RETRIEVAL UTILITIES
 // ==========================================
 
+export function isPlainRecord(val: unknown): val is Record<string, unknown> {
+  return val !== null && typeof val === 'object' && !Array.isArray(val);
+}
+
+export function copySafeOwnFields<T extends object>(source: T): T {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(source)) {
+    if (FORBIDDEN_RECORD_KEYS.has(k.toLowerCase())) continue;
+    out[k] = v;
+  }
+  return out as T;
+}
+
 function enrichModelItem(brand: BrandReliability, model: ModelReliability): EnrichedModelItem {
   const safeBrandId = typeof brand.id === 'string' ? brand.id : '';
+  const modelBrandId = typeof model.brand_id === 'string' ? model.brand_id.trim() : '';
   return {
-    ...model,
+    ...copySafeOwnFields(model),
     id: typeof model.id === 'string' ? model.id : '',
     name: typeof model.name === 'string' ? model.name : '',
     segment: typeof model.segment === 'string' ? model.segment : '',
-    brand_id: typeof model.brand_id === 'string' && model.brand_id ? model.brand_id : safeBrandId,
+    brand_id: modelBrandId ? modelBrandId : safeBrandId,
     overall_grade: sanitizeGrade(model.overall_grade),
     avg_dsi: normalizeReliabilityScore(model.avg_dsi, 0),
     top_category: sanitizeCategoryKey(model.top_category),
     year_evaluations: Array.isArray(model.year_evaluations)
       ? model.year_evaluations
-          .filter((y): y is YearEvaluation => Boolean(y && typeof y === 'object'))
+          .filter((y): y is YearEvaluation => isPlainRecord(y))
           .map((y) => {
             const parsedYear = parseFiniteNumber(y.year);
             const parsedIncident = parseFiniteNumber(y.incident_rate);
             return {
-              ...y,
+              ...copySafeOwnFields(y),
               year: parsedYear !== null ? Math.floor(parsedYear) + 0 : 0,
               ...(typeof y.verdict === 'string' && y.verdict.trim()
                 ? { verdict: sanitizeVerdict(y.verdict) }
@@ -1473,7 +1504,7 @@ function parsePeriodicDate(
 
   // 2. Full or partial delimited date: YYYY-MM-DD, YYYY.MM.DD, YYYY/MM/DD, YYYY-MM, and ISO-8601 timestamps
   const fullMatch = dateStr.match(
-    /^(\d{4})[-/. ](\d{1,2})(?:[-/. ](\d{1,2})(?:$|(?:T|\s+)(\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:\s*(?:(Z)|([+-])(\d{2}):?(\d{2})))?))?$/i
+    /^(\d{4})[-/. ](\d{1,2})(?:[-/. ](\d{1,2})(?:$|(?:T|\s+)(\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:\s*(?:(Z)|([+-])(\d{2})(?::?(\d{2}))?))?))?$/i
   );
   if (fullMatch) {
     const parsedY = Number(fullMatch[1]);
@@ -1489,12 +1520,12 @@ function parsePeriodicDate(
         const second = fullMatch[6] !== undefined ? Number(fullMatch[6]) : 0;
         if (hour > 23 || minute > 59 || second > 59) return null;
 
-        // Convert explicit-offset ISO timestamps (Z or ±HH:MM) to UTC
+        // Convert explicit-offset ISO timestamps (Z or ±HH:MM / ±HH) to UTC
         if (fullMatch[7] !== undefined || fullMatch[8] !== undefined) {
           let offsetMinutes = 0;
           if (fullMatch[8] !== undefined) {
             const tzHour = Number(fullMatch[9]);
-            const tzMin = Number(fullMatch[10]);
+            const tzMin = fullMatch[10] !== undefined ? Number(fullMatch[10]) : 0;
             if (tzHour > 23 || tzMin > 59) return null;
             const sign = fullMatch[8] === '-' ? -1 : 1;
             offsetMinutes = sign * (tzHour * 60 + tzMin);
@@ -1519,13 +1550,16 @@ function parsePeriodicDate(
     };
   }
 
-  // 2b. Korean spaced dot notation: "2024. 3. 18." or "2024. 03. 18"
-  const spacedDotMatch = dateStr.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?$/);
+  // 2b. Korean spaced dot notation: "2024. 3. 18.", "2024. 03. 18", "2024. 3.", "2024.03."
+  const spacedDotMatch = dateStr.match(/^(\d{4})\.\s*(\d{1,2})(?:\.\s*(\d{1,2}))?\.?$/);
   if (spacedDotMatch) {
     const parsedY = Number(spacedDotMatch[1]);
     const parsedM = Number(spacedDotMatch[2]);
-    const parsedD = Number(spacedDotMatch[3]);
-    if (!isValidCalendarDate(parsedY, parsedM, parsedD)) return null;
+    if (parsedY < 1990 || parsedY > 2100 || parsedM < 1 || parsedM > 12) return null;
+    if (spacedDotMatch[3] !== undefined) {
+      const parsedD = Number(spacedDotMatch[3]);
+      if (!isValidCalendarDate(parsedY, parsedM, parsedD)) return null;
+    }
     return {
       year: parsedY,
       month: parsedM,
@@ -1909,21 +1943,30 @@ export function calculateModelYearDefectTrajectory(
 
   const evalByYear = new Map<number, YearEvaluation>();
   for (const e of evals) {
-    if (!e || typeof e !== 'object') continue;
+    if (!isPlainRecord(e)) continue;
     const parsedYear = parseFiniteNumber(e.year);
     if (parsedYear === null) continue;
     const yr = Math.floor(parsedYear) + 0;
     if (yr < 1900 || yr > 2100) continue;
     const parsedIncident = parseFiniteNumber(e.incident_rate);
     const currSymptoms = Array.isArray(e.chronic_symptoms)
-      ? e.chronic_symptoms.filter((s): s is string => typeof s === 'string')
+      ? e.chronic_symptoms
+          .filter((s): s is string => typeof s === 'string')
+          .map((s) => s.trim().replace(/\s+/g, ' '))
+          .filter(Boolean)
       : [];
     const existing = evalByYear.get(yr);
-    const mergedSymptoms = existing
-      ? Array.from(new Set([...(existing.chronic_symptoms || []), ...currSymptoms]))
-      : currSymptoms;
+    const mergedSymptoms: string[] = [];
+    const seenMerged = new Set<string>();
+    for (const sym of [...(existing?.chronic_symptoms || []), ...currSymptoms]) {
+      const key = sym.toLowerCase();
+      if (!seenMerged.has(key)) {
+        seenMerged.add(key);
+        mergedSymptoms.push(sym);
+      }
+    }
     evalByYear.set(yr, {
-      ...e,
+      ...copySafeOwnFields(e),
       year: yr,
       dsi_score: normalizeReliabilityScore(e.dsi_score, 50.0),
       incident_rate: parsedIncident !== null ? Math.max(0, Math.min(100, parsedIncident)) + 0 : 0,
@@ -1969,6 +2012,7 @@ export function calculateModelYearDefectTrajectory(
   let safestDsi = validEvals[0].dsi_score;
 
   const chronicMap = new Map<string, number>();
+  const symptomDisplayNames = new Map<string, string>();
   const progression: ModelYearTrajectory['yearOverYearProgression'] = [];
 
   for (let i = 0; i < validEvals.length; i++) {
@@ -1986,10 +2030,14 @@ export function calculateModelYearDefectTrajectory(
       const seenInYear = new Set<string>();
       for (const sym of curr.chronic_symptoms) {
         if (typeof sym === 'string') {
-          const cleanSym = sym.trim();
-          if (cleanSym && !seenInYear.has(cleanSym)) {
-            seenInYear.add(cleanSym);
-            chronicMap.set(cleanSym, (chronicMap.get(cleanSym) || 0) + 1);
+          const cleanSym = sym.trim().replace(/\s+/g, ' ');
+          const normKey = cleanSym.toLowerCase();
+          if (cleanSym && !seenInYear.has(normKey)) {
+            seenInYear.add(normKey);
+            if (!symptomDisplayNames.has(normKey)) {
+              symptomDisplayNames.set(normKey, cleanSym);
+            }
+            chronicMap.set(normKey, (chronicMap.get(normKey) || 0) + 1);
           }
         }
       }
@@ -2008,10 +2056,7 @@ export function calculateModelYearDefectTrajectory(
           isStable: true,
         };
 
-    const validVerdict: ModelYearVerdict =
-      curr.verdict === 'BUY_SAFE' || curr.verdict === 'CAUTION' || curr.verdict === 'AVOID'
-        ? curr.verdict
-        : 'CAUTION';
+    const validVerdict: ModelYearVerdict = sanitizeVerdict(curr.verdict);
 
     progression.push({
       year: curr.year,
@@ -2042,7 +2087,7 @@ export function calculateModelYearDefectTrajectory(
   const chronicCategories = Array.from(chronicMap.entries())
     .filter(([, count]) => count >= 2)
     .sort((a, b) => b[1] - a[1])
-    .map(([sym]) => sym);
+    .map(([normKey]) => symptomDisplayNames.get(normKey) ?? normKey);
 
   return {
     modelId: mId,

@@ -165,7 +165,7 @@ class CrossAggregator:
             title = str(r.get("post_title") or "").lower()
             combined = f"{veh} {quote} {title}"
 
-            tier = str(r.get("sentiment_tier") or "NEGATIVE").strip() or "NEGATIVE"
+            tier = str(r.get("sentiment_tier") or "").strip().upper() or "NEGATIVE"
             cat = str(r.get("category") or "parking").strip() or "parking"
             dsi = _safe_finite_float(r.get("dsi_score"), 5.0)
             pol = _safe_finite_float(r.get("polarity_score"), -0.5)
@@ -195,7 +195,7 @@ class CrossAggregator:
 
         for key, grp in brand_groups.items():
             cnt = grp["count"]
-            mean_dsi = round(grp["dsi_sum"] / cnt, 2) if cnt > 0 else 0.0
+            mean_dsi = (round(grp["dsi_sum"] / cnt, 2) + 0.0) if cnt > 0 else 0.0
             volume_share = round((cnt / total_all) * 100, 1)
 
             # Brand Defect Density (BDD) = Mean DSI
@@ -246,7 +246,7 @@ class CrossAggregator:
         quote_tok_len_cache: Dict[str, int] = {}
         for r in clean_records:
             plat = (str(r.get("platform") or "").strip() or "unknown").lower()
-            tier = str(r.get("sentiment_tier") or "NEGATIVE")
+            tier = str(r.get("sentiment_tier") or "").strip().upper() or "NEGATIVE"
             dsi = _safe_finite_float(r.get("dsi_score"), 5.0)
             board = str(r.get("board_name") or "")
             quote = str(r.get("raw_quote") or "")
@@ -276,7 +276,7 @@ class CrossAggregator:
 
         for plat, grp in platform_groups.items():
             cnt = grp["count"]
-            mean_dsi = round(grp["dsi_sum"] / cnt, 2) if cnt > 0 else 0.0
+            mean_dsi = (round(grp["dsi_sum"] / cnt, 2) + 0.0) if cnt > 0 else 0.0
             volume_share = round((cnt / total_all) * 100, 1)
 
             # Sentiment percentages
@@ -388,7 +388,7 @@ class CrossAggregator:
 
         for veh, grp in vehicle_groups.items():
             cnt = grp["count"]
-            mean_dsi = round(grp["dsi_sum"] / cnt, 2) if cnt > 0 else 0.0
+            mean_dsi = (round(grp["dsi_sum"] / cnt, 2) + 0.0) if cnt > 0 else 0.0
             share_pct = round((cnt / total_all) * 100, 1)
 
             best_cat = max(grp["category_counts"].items(), key=lambda x: x[1])
@@ -450,11 +450,14 @@ class CrossAggregator:
         for r in clean_records:
             meta = r.get("platform_metadata")
             post_date = meta.get("post_date") if isinstance(meta, dict) else ""
-            ts = str(r.get("collected_at") or r.get("date") or post_date or "")
+            ts = next(
+                (str(v).strip() for v in (r.get("collected_at"), r.get("date"), post_date) if v is not None and str(v).strip()),
+                "",
+            )
             match = re.search(r"(?<!\d)(202[4-6])(?:(?!\d)|(?=\d{4}(?!\d)))", ts)
             year = match.group(1) if match else "2026"
 
-            tier = str(r.get("sentiment_tier") or "NEGATIVE").strip() or "NEGATIVE"
+            tier = str(r.get("sentiment_tier") or "").strip().upper() or "NEGATIVE"
             cat = str(r.get("category") or "parking").strip() or "parking"
             dsi = _safe_finite_float(r.get("dsi_score"), 5.0)
 
@@ -469,7 +472,7 @@ class CrossAggregator:
 
         for yr, grp in sorted(temporal_groups.items()):
             cnt = grp["count"]
-            mean_dsi = round(grp["dsi_sum"] / cnt, 2) if cnt > 0 else 0.0
+            mean_dsi = (round(grp["dsi_sum"] / cnt, 2) + 0.0) if cnt > 0 else 0.0
             volume_share = round((cnt / total_all) * 100, 1)
 
             neg_strong_cnt = grp["sentiment_counts"]["NEGATIVE"] + grp["sentiment_counts"]["STRONGLY_NEGATIVE"]
@@ -539,8 +542,8 @@ class CrossAggregator:
                 brand_idx = brand_idx_map["BYD_Chinese"]
 
             p_idx = plat_idx_map.get(plat)
-            t_idx = tier_idx_map.get(tier) if isinstance(tier, str) else None
-            c_idx = cat_idx_map.get(cat) if isinstance(cat, str) else None
+            t_idx = tier_idx_map.get(tier.strip().upper()) if isinstance(tier, str) else None
+            c_idx = cat_idx_map.get(cat.strip().lower()) if isinstance(cat, str) else None
 
             if p_idx is not None and t_idx is not None:
                 plat_sent_matrix[p_idx][t_idx] += 1

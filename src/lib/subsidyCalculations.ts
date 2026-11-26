@@ -267,8 +267,24 @@ const REGION_SUFFIX_RE = /(특별시|광역시|특별자치시|특별자치도|�
 const MODEL_CLEAN_RE = /[\s\-_]+/g;
 const DATE_ONLY_RE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})(?:\s*(?:Z|UTC|GMT))?$/i;
 const US_DATE_ONLY_RE = /^(\d{1,2})([-/.])(\d{1,2})\2(\d{4})(?:\s*(?:Z|UTC|GMT))?$/i;
-const DATETIME_RE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})[Tt ](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:\s*(?:(Z|UTC|GMT)|(?:UTC|GMT)?\s*([+-])(?:(\d{2})(\d{2})|(\d{1,2})(?::(\d{2}))?)))?$/i;
-const EXPLICIT_TZ_RE = /(?:(?:GMT|UTC)\s*([+-])(?:(\d{2})(\d{2})|(\d{1,2})(?::(\d{2}))?)|([+-])(\d{2}):?(\d{2})|GMT|UTC|Z)(?:\s*\([^)]*\))?\s*$/i;
+const DATETIME_RE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})[Tt ](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:\s*(?:(Z|UTC|GMT)|(?:UTC|GMT)?\s*([+-])(?:(\d{2})(\d{2})|(\d{1,2})(?::(\d{2}))?)))?(?:\s*\([^)]*\))?$/i;
+const EXPLICIT_TZ_RE = /(?:(?:GMT|UTC)\s*([+-])(?:(\d{2})(\d{2})|(\d{1,2})(?::(\d{2}))?)|([+-])(\d{2}):?(\d{2})|\b(GMT|UTC|UT|EST|EDT|CST|CDT|MST|MDT|PST|PDT)|Z)(?:\s*\([^)]*\))?\s*$/i;
+const TZ_ABBR_OFFSET_MINUTES: Readonly<Record<string, number>> = {
+  Z: 0,
+  UT: 0,
+  UTC: 0,
+  GMT: 0,
+  EST: -300,
+  EDT: -240,
+  CST: -360,
+  CDT: -300,
+  MST: -420,
+  MDT: -360,
+  PST: -480,
+  PDT: -420,
+};
+const LEADING_YMD_RE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})(?![0-9])/;
+const LEADING_MDY_RE = /^(\d{1,2})([-/.])(\d{1,2})\2(\d{4})(?![0-9])/;
 const SHORT_NUMERIC_ONLY_RE = /^[+-]?\d{1,3}$/;
 const ISO_YEAR_MONTH_RE = /^\d{4}(?:-\d{2})?$/;
 const NAMED_MONTH_DAY_RE = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b[^0-9]*(\d{1,2})\b|\b(\d{1,2})\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i;
@@ -291,17 +307,21 @@ const DEFAULT_COLLATOR = new Intl.Collator();
 
 interface RegionLookupIndex {
   length: number;
+  allEntriesFrozen: boolean;
   items: readonly (RegionEntry | undefined)[];
   idOrIsoMap: Map<string, RegionEntry>;
   exactAnyMap: Map<string, RegionEntry>;
   strippedKoMap: Map<string, RegionEntry>;
+  koEntries: Array<{ region: RegionEntry; lowerKo: string; rStripped: string }>;
 }
 
 interface ModelLookupIndex {
   length: number;
+  allEntriesFrozen: boolean;
   items: readonly (PopularModelEntry | undefined)[];
   exactMap: Map<string, PopularModelEntry>;
   cleanExactMap: Map<string, PopularModelEntry>;
+  normalizedEntries: Array<{ model: PopularModelEntry; lowerKo: string; cleanId: string; cleanKo: string }>;
 }
 
 const REGION_LIST_INDEX_CACHE = new WeakMap<readonly RegionEntry[], RegionLookupIndex>();
@@ -311,6 +331,9 @@ function getRegionLookupIndex(regions: readonly RegionEntry[]): RegionLookupInde
   const len = regions.length;
   const cached = REGION_LIST_INDEX_CACHE.get(regions);
   if (cached && cached.length === len) {
+    if (cached.allEntriesFrozen && Object.isFrozen(regions)) {
+      return cached;
+    }
     let same = true;
     for (let i = 0; i < len; i++) {
       if (cached.items[i] !== regions[i]) {
@@ -327,11 +350,16 @@ function getRegionLookupIndex(regions: readonly RegionEntry[]): RegionLookupInde
   const idOrIsoMap = new Map<string, RegionEntry>();
   const exactAnyMap = new Map<string, RegionEntry>();
   const strippedKoMap = new Map<string, RegionEntry>();
+  const koEntries: Array<{ region: RegionEntry; lowerKo: string; rStripped: string }> = [];
+  let allEntriesFrozen = Object.isFrozen(regions);
 
   for (let i = 0; i < len; i++) {
     const r = regions[i];
     items[i] = r;
     if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
+    if (allEntriesFrozen && !Object.isFrozen(r)) {
+      allEntriesFrozen = false;
+    }
     const rid = typeof r.region_id === 'string' ? r.region_id.trim().normalize('NFC').toLowerCase() : '';
     const iso = typeof r.iso_code === 'string' ? r.iso_code.trim().normalize('NFC').toLowerCase() : '';
     const ko = typeof r.name_ko === 'string' ? r.name_ko.trim().normalize('NFC').toLowerCase() : '';
@@ -352,15 +380,18 @@ function getRegionLookupIndex(regions: readonly RegionEntry[]): RegionLookupInde
       if (rStripped && !strippedKoMap.has(rStripped)) {
         strippedKoMap.set(rStripped, r);
       }
+      koEntries.push({ region: r, lowerKo: ko, rStripped });
     }
   }
 
   const index: RegionLookupIndex = {
     length: len,
+    allEntriesFrozen,
     items,
     idOrIsoMap,
     exactAnyMap,
     strippedKoMap,
+    koEntries,
   };
   REGION_LIST_INDEX_CACHE.set(regions, index);
   return index;
@@ -370,6 +401,9 @@ function getModelLookupIndex(models: readonly PopularModelEntry[]): ModelLookupI
   const len = models.length;
   const cached = MODEL_LIST_INDEX_CACHE.get(models);
   if (cached && cached.length === len) {
+    if (cached.allEntriesFrozen && Object.isFrozen(models)) {
+      return cached;
+    }
     let same = true;
     for (let i = 0; i < len; i++) {
       if (cached.items[i] !== models[i]) {
@@ -385,31 +419,43 @@ function getModelLookupIndex(models: readonly PopularModelEntry[]): ModelLookupI
   const items = new Array<PopularModelEntry | undefined>(len);
   const exactMap = new Map<string, PopularModelEntry>();
   const cleanExactMap = new Map<string, PopularModelEntry>();
+  const normalizedEntries: Array<{ model: PopularModelEntry; lowerKo: string; cleanId: string; cleanKo: string }> = [];
+  let allEntriesFrozen = Object.isFrozen(models);
 
   for (let i = 0; i < len; i++) {
     const m = models[i];
     items[i] = m;
     if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
-    const idNorm = typeof m.model_id === 'string' ? m.model_id.trim().normalize('NFC').toLowerCase() : '';
-    const koNorm = typeof m.name_ko === 'string' ? m.name_ko.trim().normalize('NFC').toLowerCase() : '';
+    if (allEntriesFrozen && !Object.isFrozen(m)) {
+      allEntriesFrozen = false;
+    }
+    const idRawLower = typeof m.model_id === 'string' ? m.model_id.normalize('NFC').toLowerCase() : '';
+    const koRawLower = typeof m.name_ko === 'string' ? m.name_ko.normalize('NFC').toLowerCase() : '';
+    const idNorm = idRawLower.trim();
+    const koNorm = koRawLower.trim();
 
     if (idNorm && !exactMap.has(idNorm)) exactMap.set(idNorm, m);
     if (koNorm && !exactMap.has(koNorm)) exactMap.set(koNorm, m);
-    if (idNorm) {
-      const cleanId = idNorm.replace(MODEL_CLEAN_RE, '');
-      if (cleanId && !cleanExactMap.has(cleanId)) cleanExactMap.set(cleanId, m);
-    }
-    if (koNorm) {
-      const cleanKo = koNorm.replace(MODEL_CLEAN_RE, '');
-      if (cleanKo && !cleanExactMap.has(cleanKo)) cleanExactMap.set(cleanKo, m);
-    }
+    const cleanId = idRawLower ? idRawLower.replace(MODEL_CLEAN_RE, '') : '';
+    if (cleanId && !cleanExactMap.has(cleanId)) cleanExactMap.set(cleanId, m);
+    const cleanKo = koRawLower ? koRawLower.replace(MODEL_CLEAN_RE, '') : '';
+    if (cleanKo && !cleanExactMap.has(cleanKo)) cleanExactMap.set(cleanKo, m);
+
+    normalizedEntries.push({
+      model: m,
+      lowerKo: koRawLower,
+      cleanId,
+      cleanKo,
+    });
   }
 
   const index: ModelLookupIndex = {
     length: len,
+    allEntriesFrozen,
     items,
     exactMap,
     cleanExactMap,
+    normalizedEntries,
   };
   MODEL_LIST_INDEX_CACHE.set(models, index);
   return index;
@@ -465,18 +511,16 @@ export function getRegionByIdFromList(
       return index.strippedKoMap.get(stripped);
     }
 
-    for (let i = 0; i < regions.length; i++) {
-      const r = regions[i];
-      if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
-      if (!r.name_ko || typeof r.name_ko !== 'string') continue;
-      const lowerKo = r.name_ko.trim().normalize('NFC').toLowerCase();
-      const rStripped = lowerKo.replace(REGION_SUFFIX_RE, '');
+    const koEntries = index.koEntries;
+    for (let i = 0; i < koEntries.length; i++) {
+      const entry = koEntries[i];
+      const { lowerKo, rStripped } = entry;
       if (
         (rStripped && rStripped === stripped) ||
         lowerKo.includes(stripped) ||
         (rStripped && stripped.includes(rStripped))
       ) {
-        return r;
+        return entry.region;
       }
     }
   }
@@ -504,11 +548,11 @@ export function getModelByIdFromList(
   if (exactMatch) return exactMatch;
 
   // 1b. Substring match on name_ko
-  for (let i = 0; i < models.length; i++) {
-    const m = models[i];
-    if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
-    if (typeof m.name_ko === 'string' && m.name_ko.normalize('NFC').toLowerCase().includes(normalized)) {
-      return m;
+  const entries = index.normalizedEntries;
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if (entry.lowerKo && entry.lowerKo.includes(normalized)) {
+      return entry.model;
     }
   }
 
@@ -519,17 +563,10 @@ export function getModelByIdFromList(
   const cleanExactMatch = index.cleanExactMap.get(cleanQuery);
   if (cleanExactMatch) return cleanExactMatch;
 
-  for (let i = 0; i < models.length; i++) {
-    const m = models[i];
-    if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
-    const cleanId = typeof m.model_id === 'string'
-      ? m.model_id.normalize('NFC').toLowerCase().replace(MODEL_CLEAN_RE, '')
-      : '';
-    const cleanKo = typeof m.name_ko === 'string'
-      ? m.name_ko.normalize('NFC').toLowerCase().replace(MODEL_CLEAN_RE, '')
-      : '';
-    if ((cleanId && cleanId.includes(cleanQuery)) || (cleanKo && cleanKo.includes(cleanQuery))) {
-      return m;
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if ((entry.cleanId && entry.cleanId.includes(cleanQuery)) || (entry.cleanKo && entry.cleanKo.includes(cleanQuery))) {
+      return entry.model;
     }
   }
 
@@ -881,6 +918,20 @@ function parseUtcStartDate(startDate?: Date | string | null): Date | null {
     return null;
   }
 
+  const leadingYmd = LEADING_YMD_RE.exec(s);
+  if (leadingYmd) {
+    if (!buildValidatedUtcDate(Number(leadingYmd[1]), Number(leadingYmd[3]), Number(leadingYmd[4]), 0, 0, 0, 0)) {
+      return null;
+    }
+  } else {
+    const leadingMdy = LEADING_MDY_RE.exec(s);
+    if (leadingMdy) {
+      if (!buildValidatedUtcDate(Number(leadingMdy[4]), Number(leadingMdy[1]), Number(leadingMdy[3]), 0, 0, 0, 0)) {
+        return null;
+      }
+    }
+  }
+
   const parsed = new Date(s);
   if (Number.isNaN(parsed.getTime())) {
     return null;
@@ -897,6 +948,11 @@ function parseUtcStartDate(startDate?: Date | string | null): Date | null {
       return null;
     }
     offsetMinutes = (tzSign === '+' ? 1 : -1) * (tzHour * 60 + tzMin);
+  } else if (tzMatch?.[9]) {
+    const abbr = tzMatch[9].toUpperCase();
+    if (Object.prototype.hasOwnProperty.call(TZ_ABBR_OFFSET_MINUTES, abbr)) {
+      offsetMinutes = TZ_ABBR_OFFSET_MINUTES[abbr];
+    }
   }
 
   const namedMatch = NAMED_MONTH_DAY_RE.exec(s);

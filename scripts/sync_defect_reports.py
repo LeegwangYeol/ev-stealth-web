@@ -182,13 +182,20 @@ def build_composite_key(report: Dict[str, Any]) -> str:
     return f"comp::{source}::{model}::{date_val}::{title}"
 
 
+_INVALID_ID_STRINGS = frozenset({"none", "null", "undefined", "0", "nan", "inf", "-inf", "+inf", "infinity", "-infinity", "+infinity", ""})
+
+
 def get_report_primary_id(report: Dict[str, Any]) -> Optional[str]:
     """Extract report ID if valid and non-trivial."""
     raw_id = report.get("id")
-    if isinstance(raw_id, bool) or (isinstance(raw_id, float) and not math.isfinite(raw_id)):
+    if (
+        not isinstance(raw_id, (str, int, float))
+        or isinstance(raw_id, bool)
+        or (isinstance(raw_id, float) and not math.isfinite(raw_id))
+    ):
         return None
-    rep_id = str(raw_id or "").strip()
-    if rep_id and rep_id.lower() not in ("none", "null", "undefined", "0", "nan", "inf", "-inf", ""):
+    rep_id = str(raw_id).strip()
+    if rep_id and rep_id.lower() not in _INVALID_ID_STRINGS:
         return rep_id
     return None
 
@@ -406,11 +413,11 @@ def normalize_report_item(item: Dict[str, Any], default_idx: int = 1) -> Dict[st
     # Required: id (string)
     raw_id = item.get("id")
     is_valid_id_scalar = (
-        raw_id is not None
+        isinstance(raw_id, (str, int, float))
         and not isinstance(raw_id, bool)
         and not (isinstance(raw_id, float) and not math.isfinite(raw_id))
     )
-    if is_valid_id_scalar and str(raw_id).strip().lower() not in ("", "none", "null", "undefined", "nan", "inf", "-inf"):
+    if is_valid_id_scalar and str(raw_id).strip().lower() not in _INVALID_ID_STRINGS:
         normalized["id"] = str(raw_id).strip()
     else:
         # Generate deterministic stable ID from composite key
@@ -635,7 +642,7 @@ def compute_top_categories(reports: List[Dict[str, Any]]) -> List[Dict[str, Any]
         return []
     total = len(clean_reports)
     cat_counts = Counter(
-        str(r.get("defect_category") or r.get("category") or "BUILD_QUALITY")
+        _first_non_empty_str(r.get("defect_category"), r.get("category"), default="BUILD_QUALITY")
         for r in clean_reports
     )
     categories_list = []
@@ -840,11 +847,12 @@ def get_default_known_paths(
     if is_custom_run:
         additional: List[Path] = []
         if has_web_dir:
-            w_parent = Path(str(web_dir).strip()).parent
-            if (w_parent / "public" / "data").is_dir():
-                additional.append(w_parent / "public" / "data" / "daily_reports.json")
-            if (w_parent / "data").is_dir():
-                additional.append(w_parent / "data" / "daily_reports.json")
+            w_base = Path(str(web_dir).strip())
+            for cand_root in (w_base, w_base.parent, w_base.parent.parent):
+                if (cand_root / "public" / "data").is_dir():
+                    additional.append(cand_root / "public" / "data" / "daily_reports.json")
+                if (cand_root / "data").is_dir():
+                    additional.append(cand_root / "data" / "daily_reports.json")
         if has_root_dir:
             r_parent = Path(str(root_dir).strip()).parent
             if (r_parent / "public" / "data").is_dir():

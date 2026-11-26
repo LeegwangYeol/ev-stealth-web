@@ -471,6 +471,19 @@ function isPlainRecord(val: unknown): val is Record<string, unknown> {
   return val !== null && typeof val === 'object' && !Array.isArray(val);
 }
 
+const FORBIDDEN_RECORD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function mergeSafeRecord<T extends object>(base: T, override: unknown): T {
+  const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
+  if (isPlainRecord(override)) {
+    for (const [k, v] of Object.entries(override)) {
+      if (FORBIDDEN_RECORD_KEYS.has(k.toLowerCase()) || k in Object.prototype || v === undefined) continue;
+      out[k] = v;
+    }
+  }
+  return out as T;
+}
+
 let cachedDatabase: DepreciationDatabase | null = null;
 
 /**
@@ -591,31 +604,49 @@ export function getDepreciationDatabase(): DepreciationDatabase {
         }
       }
 
+      const normalizedTransferRules = {
+        ...fb.subsidy_clawback_schedule.transfer_rules,
+      } as SubsidyClawbackSchedule['transfer_rules'];
+      if (isPlainRecord(rawClawback.transfer_rules)) {
+        for (const ruleKey of Object.keys(fb.subsidy_clawback_schedule.transfer_rules) as TransferType[]) {
+          const candidateRule = rawClawback.transfer_rules[ruleKey];
+          if (isPlainRecord(candidateRule)) {
+            normalizedTransferRules[ruleKey] = mergeSafeRecord(
+              fb.subsidy_clawback_schedule.transfer_rules[ruleKey],
+              candidateRule
+            );
+          }
+        }
+      }
+
+      const normalizedSoftwareOta: Record<string, number> = {
+        ...(fb.adjustment_factors.software_ota as Record<string, number>),
+      };
+      if (isPlainRecord(rawAdjFactors.software_ota)) {
+        for (const [otaKey, otaVal] of Object.entries(rawAdjFactors.software_ota)) {
+          if (FORBIDDEN_RECORD_KEYS.has(otaKey.toLowerCase()) || otaKey in Object.prototype) continue;
+          if (typeof otaVal === 'number' && Number.isFinite(otaVal)) {
+            normalizedSoftwareOta[otaKey] = otaVal;
+          }
+        }
+      }
+
       cachedDatabase = {
-        metadata: isPlainRecord(rawDepreciationData.metadata)
-          ? ({ ...fb.metadata, ...rawDepreciationData.metadata } as unknown as DepreciationDatabase['metadata'])
-          : fb.metadata,
-        market_context: isPlainRecord(rawDepreciationData.market_context)
-          ? ({ ...fb.market_context, ...rawDepreciationData.market_context } as unknown as DepreciationDatabase['market_context'])
-          : fb.market_context,
+        metadata: mergeSafeRecord(fb.metadata, rawDepreciationData.metadata) as unknown as DepreciationDatabase['metadata'],
+        market_context: mergeSafeRecord(fb.market_context, rawDepreciationData.market_context) as unknown as DepreciationDatabase['market_context'],
         adjustment_factors: {
           ...fb.adjustment_factors,
-          warranty_cliff: isPlainRecord(rawAdjFactors.warranty_cliff)
-            ? ({ ...fb.adjustment_factors.warranty_cliff, ...rawAdjFactors.warranty_cliff } as WarrantyCliffAdjustment)
-            : fb.adjustment_factors.warranty_cliff,
+          warranty_cliff: mergeSafeRecord(fb.adjustment_factors.warranty_cliff, rawAdjFactors.warranty_cliff),
           battery_chemistry: normalizedAdjBatteryChem as AdjustmentFactors['battery_chemistry'],
-          facelift_hardware: isPlainRecord(rawAdjFactors.facelift_hardware)
-            ? ({ ...fb.adjustment_factors.facelift_hardware, ...rawAdjFactors.facelift_hardware } as FaceliftHardwareAdjustment)
-            : fb.adjustment_factors.facelift_hardware,
-          software_ota: isPlainRecord(rawAdjFactors.software_ota)
-            ? ({
-                ...(fb.adjustment_factors.software_ota as Record<string, number>),
-                ...(rawAdjFactors.software_ota as Record<string, number>),
-              } as AdjustmentFactors['software_ota'])
-            : fb.adjustment_factors.software_ota,
-          mileage_sensitivity: isPlainRecord(rawAdjFactors.mileage_sensitivity)
-            ? ({ ...fb.adjustment_factors.mileage_sensitivity, ...rawAdjFactors.mileage_sensitivity } as MileageSensitivityAdjustment)
-            : fb.adjustment_factors.mileage_sensitivity,
+          facelift_hardware: mergeSafeRecord(
+            fb.adjustment_factors.facelift_hardware!,
+            rawAdjFactors.facelift_hardware
+          ),
+          software_ota: normalizedSoftwareOta as AdjustmentFactors['software_ota'],
+          mileage_sensitivity: mergeSafeRecord(
+            fb.adjustment_factors.mileage_sensitivity,
+            rawAdjFactors.mileage_sensitivity
+          ),
         },
         chemistries: normalizedChemistries,
         battery_replacement_costs:
@@ -637,30 +668,25 @@ export function getDepreciationDatabase(): DepreciationDatabase {
             validClawbackTiers.length > 0
               ? (validClawbackTiers as unknown as ClawbackTier[])
               : fb.subsidy_clawback_schedule.tiers,
-          transfer_rules: isPlainRecord(rawClawback.transfer_rules)
-            ? ({ ...fb.subsidy_clawback_schedule.transfer_rules, ...rawClawback.transfer_rules } as SubsidyClawbackSchedule['transfer_rules'])
-            : fb.subsidy_clawback_schedule.transfer_rules,
+          transfer_rules: normalizedTransferRules,
         },
         tco_parameters: {
-          fuel_tariffs: isPlainRecord(rawTco.fuel_tariffs)
-            ? ({ ...fb.tco_parameters.fuel_tariffs, ...rawTco.fuel_tariffs } as TcoFuelTariffs)
-            : fb.tco_parameters.fuel_tariffs,
-          efficiency_baselines: isPlainRecord(rawTco.efficiency_baselines)
-            ? ({ ...fb.tco_parameters.efficiency_baselines, ...rawTco.efficiency_baselines } as TcoEfficiencyBaselines)
-            : fb.tco_parameters.efficiency_baselines,
-          tax_parameters: isPlainRecord(rawTco.tax_parameters)
-            ? ({
-                ...fb.tco_parameters.tax_parameters,
-                ...(rawTaxParams as Partial<TcoTaxParameters>),
-                ice_displacement_tiers:
-                  validDisplacementTiers.length > 0
-                    ? (validDisplacementTiers as unknown as IceDisplacementTier[])
-                    : fb.tco_parameters.tax_parameters.ice_displacement_tiers,
-              } as TcoTaxParameters)
-            : fb.tco_parameters.tax_parameters,
-          auxiliary_benefits: isPlainRecord(rawTco.auxiliary_benefits)
-            ? ({ ...fb.tco_parameters.auxiliary_benefits, ...rawTco.auxiliary_benefits } as TcoAuxiliaryBenefits)
-            : fb.tco_parameters.auxiliary_benefits,
+          fuel_tariffs: mergeSafeRecord(fb.tco_parameters.fuel_tariffs, rawTco.fuel_tariffs),
+          efficiency_baselines: mergeSafeRecord(
+            fb.tco_parameters.efficiency_baselines,
+            rawTco.efficiency_baselines
+          ),
+          tax_parameters: {
+            ...mergeSafeRecord(fb.tco_parameters.tax_parameters, rawTaxParams),
+            ice_displacement_tiers:
+              validDisplacementTiers.length > 0
+                ? (validDisplacementTiers as unknown as IceDisplacementTier[])
+                : fb.tco_parameters.tax_parameters.ice_displacement_tiers,
+          },
+          auxiliary_benefits: mergeSafeRecord(
+            fb.tco_parameters.auxiliary_benefits,
+            rawTco.auxiliary_benefits
+          ),
         },
         models: validModels.length > 0 ? (validModels as unknown as EvModelDepreciation[]) : fb.models,
       };
