@@ -589,7 +589,7 @@ export default function PdiChecklistClient() {
       stats[cat] = { total: 0, checked: 0 };
     }
     for (const item of items) {
-      if (stats[item.category]) {
+      if (Object.prototype.hasOwnProperty.call(stats, item.category)) {
         stats[item.category].total += 1;
         if (item.checked) stats[item.category].checked += 1;
       }
@@ -796,7 +796,9 @@ export default function PdiChecklistClient() {
       >
         {categories.map((category, idx) => {
           const isCategoryActive = selectedCategory === 'ALL' || selectedCategory === category;
-          const isCollapsed = Boolean(collapsedCategories[category]);
+          const isCollapsed = Boolean(
+            Object.prototype.hasOwnProperty.call(collapsedCategories, category) && collapsedCategories[category]
+          );
           const contentId = `pdi-category-items-${idx}`;
           const buttonId = `pdi-cat-btn-${idx}`;
           return (

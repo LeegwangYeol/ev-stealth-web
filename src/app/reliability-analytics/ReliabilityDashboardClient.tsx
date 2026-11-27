@@ -101,7 +101,11 @@ export function resolveBrandId(input: string, brands: BrandReliability[] = []): 
   if (clean.includes('bmw')) return 'bmw';
   if (clean.includes('polestar') || clean.includes('폴스타')) return 'polestar';
   if (/(?:^|[^a-z])gm(?:[^a-z]|$)/.test(clean) || clean.includes('chevrolet') || clean.includes('쉐보레')) {
-    return brands.find((b) => b.id.toLowerCase().includes('gm'))?.id || 'gm-chevrolet';
+    return (
+      brands.find(
+        (b) => typeof b?.id === 'string' && /(?:^|[^a-z])gm(?:[^a-z]|$)/.test(b.id.toLowerCase())
+      )?.id || 'gm-chevrolet'
+    );
   }
 
   return null;
@@ -385,13 +389,18 @@ const CategoryShareCard = React.memo(function CategoryShareCard({
   isSelected,
   onToggle,
 }: CategoryShareCardProps) {
-  const codeKey = cat?.code || 'UNKNOWN';
-  const color = (cat?.code && CATEGORY_TAG_COLORS[cat.code]) || {
-    bg: 'bg-slate-50',
-    text: 'text-slate-700',
-    border: 'border-slate-200',
-  };
-  const dotColor = (cat?.code && CATEGORY_BG_COLORS[cat.code]) || 'bg-slate-600';
+  const color =
+    cat?.code && Object.prototype.hasOwnProperty.call(CATEGORY_TAG_COLORS, cat.code)
+      ? CATEGORY_TAG_COLORS[cat.code]
+      : {
+          bg: 'bg-slate-50',
+          text: 'text-slate-700',
+          border: 'border-slate-200',
+        };
+  const dotColor =
+    cat?.code && Object.prototype.hasOwnProperty.call(CATEGORY_BG_COLORS, cat.code)
+      ? CATEGORY_BG_COLORS[cat.code]
+      : 'bg-slate-600';
   const sharePct = Number.isFinite(cat?.industry_share_pct)
     ? Math.min(100, Math.max(0, cat.industry_share_pct)) + 0
     : 0;
@@ -399,7 +408,7 @@ const CategoryShareCard = React.memo(function CategoryShareCard({
   return (
     <button
       type="button"
-      onClick={() => onToggle(codeKey)}
+      onClick={() => onToggle(cat.code)}
       aria-pressed={isSelected}
       aria-labelledby={`cat-title-${cat.code}`}
       aria-describedby={`cat-desc-${cat.code} cat-cost-${cat.code}`}
@@ -601,9 +610,9 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
 
   // All enriched models loaded from initialData with pre-computed search & filter indexes
   const allModels: IndexedModelItem[] = useMemo(() => {
-    const rawModels = getAllEnrichedModels(initialData);
+    const rawModels = initialData ? getAllEnrichedModels(initialData) : [];
     return rawModels.map((m) => {
-      const yearEvals = m.year_evaluations || [];
+      const yearEvals = Array.isArray(m.year_evaluations) ? m.year_evaluations : [];
       const categoryMatch = new Set<string>();
       if (m.top_category) {
         categoryMatch.add(m.top_category);
@@ -766,7 +775,13 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
         F: 6,
       };
       sorted.sort((a, b) => {
-        const diff = (gradeOrder[a.overall_grade] || 99) - (gradeOrder[b.overall_grade] || 99);
+        const orderA = Object.prototype.hasOwnProperty.call(gradeOrder, a.overall_grade)
+          ? gradeOrder[a.overall_grade]
+          : 99;
+        const orderB = Object.prototype.hasOwnProperty.call(gradeOrder, b.overall_grade)
+          ? gradeOrder[b.overall_grade]
+          : 99;
+        const diff = orderA - orderB;
         if (diff !== 0) return diff;
         const dsiA = Number.isFinite(a.avg_dsi) ? a.avg_dsi : 0;
         const dsiB = Number.isFinite(b.avg_dsi) ? b.avg_dsi : 0;
@@ -850,8 +865,18 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
 
-      const distA = brandAObj?.category_distribution?.[cat.code];
-      const distB = brandBObj?.category_distribution?.[cat.code];
+      const distA =
+        brandAObj?.category_distribution &&
+        cat?.code &&
+        Object.prototype.hasOwnProperty.call(brandAObj.category_distribution, cat.code)
+          ? brandAObj.category_distribution[cat.code]
+          : undefined;
+      const distB =
+        brandBObj?.category_distribution &&
+        cat?.code &&
+        Object.prototype.hasOwnProperty.call(brandBObj.category_distribution, cat.code)
+          ? brandBObj.category_distribution[cat.code]
+          : undefined;
 
       const rawShareA = typeof distA === 'object' && distA ? Number(distA.percentage) : 0;
       const shareA = Number.isFinite(rawShareA) ? Math.max(0, rawShareA) : 0;
@@ -1312,7 +1337,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   tabIndex={isSelected ? 0 : -1}
                   onKeyDown={(e) => handleChartTabKeyDown(e, idx)}
                   onClick={() => setActiveChartTab(tab.id)}
-                  className={`px-3.5 py-1.5 min-h-[44px] inline-flex items-center justify-center text-xs sm:text-sm font-semibold rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  className={`px-3.5 py-1.5 min-h-[44px] inline-flex items-center justify-center whitespace-nowrap shrink-0 text-xs sm:text-sm font-semibold rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                     isSelected
                       ? 'bg-white text-indigo-700 shadow-sm'
                       : 'text-slate-700 hover:text-slate-900'
@@ -2242,7 +2267,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         className="w-full bg-slate-200 border border-slate-300 rounded-full h-3 overflow-hidden"
                       >
                         <div
-                          className={`h-full rounded-full transition-all duration-300 ${getDsiSeverityLevel(safeDsiA).barBgClass}`}
+                          className={`h-full rounded-full transition-all duration-300 motion-reduce:transition-none ${getDsiSeverityLevel(safeDsiA).barBgClass}`}
                           style={{ width: `${Math.min(100, Math.max(10, safeDsiA))}%` }}
                         />
                       </div>
@@ -2264,7 +2289,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         className="w-full bg-slate-200 border border-slate-300 rounded-full h-2.5 overflow-hidden"
                       >
                         <div
-                          className="h-full rounded-full bg-rose-600 transition-all duration-300"
+                          className="h-full rounded-full bg-rose-600 transition-all duration-300 motion-reduce:transition-none"
                           style={{ width: `${Math.min(100, Math.max(5, safeCritA))}%` }}
                         />
                       </div>
@@ -2331,7 +2356,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         className="w-full bg-slate-200 border border-slate-300 rounded-full h-3 overflow-hidden"
                       >
                         <div
-                          className={`h-full rounded-full transition-all duration-300 ${getDsiSeverityLevel(safeDsiB).barBgClass}`}
+                          className={`h-full rounded-full transition-all duration-300 motion-reduce:transition-none ${getDsiSeverityLevel(safeDsiB).barBgClass}`}
                           style={{ width: `${Math.min(100, Math.max(10, safeDsiB))}%` }}
                         />
                       </div>
@@ -2353,7 +2378,7 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         className="w-full bg-slate-200 border border-slate-300 rounded-full h-2.5 overflow-hidden"
                       >
                         <div
-                          className="h-full rounded-full bg-rose-600 transition-all duration-300"
+                          className="h-full rounded-full bg-rose-600 transition-all duration-300 motion-reduce:transition-none"
                           style={{ width: `${Math.min(100, Math.max(5, safeCritB))}%` }}
                         />
                       </div>
@@ -2428,9 +2453,13 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                   >
                     {categories.map((cat) => {
                       const sharePct = Number.isFinite(cat.industry_share_pct) ? Math.min(100, Math.max(0, cat.industry_share_pct)) + 0 : 0;
+                      const catBg =
+                        cat.code && Object.prototype.hasOwnProperty.call(CATEGORY_BG_COLORS, cat.code)
+                          ? CATEGORY_BG_COLORS[cat.code]
+                          : 'bg-slate-600';
                       return (
                         <li key={cat.code} className="flex items-center gap-1.5">
-                          <span className={`w-3 h-3 rounded-full ${CATEGORY_BG_COLORS[cat.code] || 'bg-slate-600'} inline-block shadow-sm`} aria-hidden="true" />
+                          <span className={`w-3 h-3 rounded-full ${catBg} inline-block shadow-sm`} aria-hidden="true" />
                           <span>{cat.label_ko} ({sharePct}%)</span>
                         </li>
                       );
@@ -2453,11 +2482,15 @@ export default function ReliabilityDashboardClient({ initialData }: ReliabilityD
                         if (safeShare === 0) return null;
                         const baseTotal = totalCategoryShare > 0 ? totalCategoryShare : 100;
                         const normalizedWidth = (safeShare / baseTotal) * 100;
+                        const catBg =
+                          cat.code && Object.prototype.hasOwnProperty.call(CATEGORY_BG_COLORS, cat.code)
+                            ? CATEGORY_BG_COLORS[cat.code]
+                            : 'bg-slate-600';
                         return (
                           <div
                             key={cat.code}
                             style={{ width: `${normalizedWidth}%` }}
-                            className={`${CATEGORY_BG_COLORS[cat.code] || 'bg-slate-600'} transition-all hover:opacity-80 shrink-0`}
+                            className={`${catBg} transition-all motion-reduce:transition-none hover:opacity-80 shrink-0`}
                             role="img"
                             aria-label={`${cat.label_ko} 점유율 ${safeShare}%`}
                             title={`${cat.label_ko}: ${safeShare}%`}
@@ -2925,16 +2958,16 @@ const ModelCardItem = React.memo(function ModelCardItem({ model }: ModelCardItem
   return (
     <article
       aria-labelledby={`model-title-${model.id}`}
-      className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between"
+      className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 motion-reduce:transition-none flex flex-col justify-between"
     >
       <div className="space-y-4">
         {/* Card Header */}
         <div className="flex items-start justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <div className="text-xs font-semibold text-blue-800 tracking-wide uppercase">
               {[model.brand_name_ko, model.segment].filter(Boolean).join(' · ')}
             </div>
-            <h3 id={`model-title-${model.id}`} className="text-xl font-extrabold text-slate-900 mt-0.5 tracking-tight">
+            <h3 id={`model-title-${model.id}`} className="text-xl font-extrabold text-slate-900 mt-0.5 tracking-tight break-words">
               {model.name}
             </h3>
           </div>

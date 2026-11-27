@@ -533,9 +533,12 @@ const DEDUP_NOISE_PARAMS = new Set([
 
 function canonicalizeReportUrlForDedup(rawUrl: string): string {
   try {
-    const parsed = new URL(rawUrl);
-    const host = parsed.hostname.toLowerCase().replace(/\.+$/, '');
-    const pathname = parsed.pathname.replace(/\/+$/, '');
+    const isRelative = rawUrl.startsWith('/');
+    const parsed = isRelative ? new URL(rawUrl, 'http://safe-internal.local') : new URL(rawUrl);
+    const host = isRelative ? '' : parsed.hostname.toLowerCase().replace(/\.+$/, '');
+    const pathname = isRelative
+      ? (parsed.pathname.replace(/\/+$/, '') || '/')
+      : parsed.pathname.replace(/\/+$/, '');
     const keptParams: Array<[string, string]> = [];
     for (const [rawKey, rawVal] of parsed.searchParams.entries()) {
       const key = rawKey.toLowerCase();
@@ -1079,8 +1082,10 @@ export function getDailyReports(options?: { useMockOnEmpty?: boolean }): DailyRe
     if (canTrustUpstreamAggregates && Array.isArray(rawData?.top_defect_categories)) {
       for (const cat of rawData.top_defect_categories) {
         if (!cat || typeof cat !== 'object' || Array.isArray(cat)) continue;
-        if (typeof cat.category !== 'string' || !cat.category.trim()) continue;
-        const resolved = resolveCategory(cat.category);
+        if (typeof cat.category !== 'string') continue;
+        const cleanedCategory = sanitizeText(cat.category);
+        if (!cleanedCategory || isForbiddenPrototypeKey(cleanedCategory)) continue;
+        const resolved = resolveCategory(cleanedCategory);
         const safeCount = typeof cat.count === 'number' && Number.isFinite(cat.count) ? Math.floor(Math.max(0, cat.count)) : 0;
         const rawRatio = cat.ratio;
         const rawPct = cat.percentage;

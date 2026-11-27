@@ -83,7 +83,7 @@ export default function RecallPortalError({ error, reset }: RecallErrorProps) {
             type="button"
             onClick={handleRetry}
             aria-label="통합 리콜 현황 다시 시도"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 min-h-[44px] rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 min-h-[44px] rounded-xl bg-rose-700 hover:bg-rose-800 text-white font-bold shadow-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2"
           >
             <span aria-hidden="true">🔄</span> 다시 시도
           </button>

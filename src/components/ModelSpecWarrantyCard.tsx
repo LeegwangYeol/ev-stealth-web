@@ -20,6 +20,12 @@ export interface ModelSpecWarrantyProps {
   };
 }
 
+const safeTrim = (value: unknown, fallback = ''): string => {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  return trimmed || fallback;
+};
+
 export const ModelSpecWarrantyCard = memo(function ModelSpecWarrantyCard({
   modelName,
   badge,
@@ -29,19 +35,19 @@ export const ModelSpecWarrantyCard = memo(function ModelSpecWarrantyCard({
   batterySpecs,
   warranty,
 }: ModelSpecWarrantyProps) {
-  const safeModelName = modelName?.trim() || '전기차 모델';
-  const safeBadge = badge?.trim();
-  const safeMsrpRange = msrpRange?.trim() || '-';
-  const safeEffectivePriceRange = effectivePriceRange?.trim() || '-';
-  const safeUsedPriceRange = usedPriceRange?.trim();
-  const safeCapacity = batterySpecs?.capacity?.trim() || '-';
-  const safeChemistry = batterySpecs?.chemistry?.trim() || '-';
-  const safeVoltage = batterySpecs?.voltage?.trim() || '-';
-  const safeRange = batterySpecs?.range?.trim() || '-';
-  const safeBatteryYearsKm = warranty?.batteryYearsKm?.trim() || '-';
-  const safeBatteryGuaranteeSoh = warranty?.batteryGuaranteeSoh?.trim();
-  const safeGeneralYearsKm = warranty?.generalYearsKm?.trim() || '-';
-  const safeOutOfWarrantyRisk = warranty?.outOfWarrantyRisk?.trim();
+  const safeModelName = safeTrim(modelName, '전기차 모델');
+  const safeBadge = safeTrim(badge);
+  const safeMsrpRange = safeTrim(msrpRange, '-');
+  const safeEffectivePriceRange = safeTrim(effectivePriceRange, '-');
+  const safeUsedPriceRange = safeTrim(usedPriceRange);
+  const safeCapacity = safeTrim(batterySpecs?.capacity, '-');
+  const safeChemistry = safeTrim(batterySpecs?.chemistry, '-');
+  const safeVoltage = safeTrim(batterySpecs?.voltage, '-');
+  const safeRange = safeTrim(batterySpecs?.range, '-');
+  const safeBatteryYearsKm = safeTrim(warranty?.batteryYearsKm, '-');
+  const safeBatteryGuaranteeSoh = safeTrim(warranty?.batteryGuaranteeSoh);
+  const safeGeneralYearsKm = safeTrim(warranty?.generalYearsKm, '-');
+  const safeOutOfWarrantyRisk = safeTrim(warranty?.outOfWarrantyRisk);
 
   const renderSpecValue = (val: string) =>
     val === '-' ? (
@@ -94,7 +100,9 @@ export const ModelSpecWarrantyCard = memo(function ModelSpecWarrantyCard({
             {safeUsedPriceRange && (
               <div className="flex justify-between items-baseline gap-2 pt-1 border-t border-blue-200/50">
                 <dt className="text-slate-600 font-medium shrink-0">중고차 시세:</dt>
-                <dd className="font-semibold text-emerald-800 text-right break-words min-w-0">{safeUsedPriceRange}</dd>
+                <dd className="font-semibold text-emerald-800 text-right break-words min-w-0">
+                  {renderSpecValue(safeUsedPriceRange)}
+                </dd>
               </div>
             )}
           </dl>
@@ -146,7 +154,9 @@ export const ModelSpecWarrantyCard = memo(function ModelSpecWarrantyCard({
             {safeBatteryGuaranteeSoh && (
               <div className="flex justify-between items-baseline gap-2">
                 <dt className="text-slate-600 font-medium shrink-0">성능 보증:</dt>
-                <dd className="font-medium text-slate-700 text-right break-words min-w-0">{safeBatteryGuaranteeSoh}</dd>
+                <dd className="font-medium text-slate-700 text-right break-words min-w-0">
+                  {renderSpecValue(safeBatteryGuaranteeSoh)}
+                </dd>
               </div>
             )}
             <div className="flex justify-between items-baseline gap-2">

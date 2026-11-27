@@ -1745,7 +1745,9 @@ def find_matching_slang(text: Any, max_length: int = 50_000) -> List[SlangEntry]
         limit = max(0, int(max_length)) if (max_length is not None and not isinstance(max_length, bool)) else 50_000
     except (ValueError, TypeError, OverflowError):
         limit = 50_000
-    if limit and len(raw_str) > limit:
+    if limit == 0:
+        return []
+    if len(raw_str) > limit:
         raw_str = raw_str[:limit]
 
     # Strip invalid control characters, zero-width spaces, BiDi overrides

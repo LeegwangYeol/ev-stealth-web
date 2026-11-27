@@ -26,6 +26,10 @@ import SubsidyErrorBoundary from '@/components/subsidy/SubsidyErrorBoundary';
 import SubsidyBadge from '@/components/subsidy/SubsidyBadge';
 import SubsidyProgressBar from '@/components/subsidy/SubsidyProgressBar';
 
+// Pure Helper: Safe own-property lookup to prevent prototype pollution / prototype chain lookups
+const hasOwn = (obj: object, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(obj, key);
+
 // Pure Helper: Normalize numeric metrics to finite non-negative numbers without -0
 const toSafeNonNeg = (value: unknown): number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
@@ -431,30 +435,35 @@ const TrackerHeader = React.memo(function TrackerHeader({
               <strong className="text-rose-100 font-semibold">마감 임박 특보 (소진율 95% 이상):</strong>
             </div>
             <div className="flex flex-wrap gap-1.5 ml-1">
-              {criticalRegions.map((crit, idx) => {
-                const critCat = crit.categories?.[selectedCategory] || crit.categories?.passenger;
-                const critAnn = Number.isFinite(critCat?.announced_units) ? Math.max(0, critCat.announced_units) : 0;
-                const critApp = Number.isFinite(critCat?.applied_units) ? Math.max(0, critCat.applied_units) : 0;
-                const critRate = Number.isFinite(critCat?.depletion_rate)
-                  ? Math.max(0, critCat.depletion_rate)
-                  : critAnn > 0
-                  ? (critApp / critAnn) * 100
-                  : 0;
-                const critKey = crit.region_id || crit.iso_code || crit.name_ko || `crit-${idx}`;
-                const critName = crit.name_ko || '해당 지역';
-                return (
-                  <button
-                    key={critKey}
-                    type="button"
-                    onClick={() => onSelectCriticalRegion(crit.name_ko || '', crit.region_id || critKey)}
-                    aria-label={`${critName} 소진율 ${critRate.toFixed(1)}%, 보조금 계산기로 이동`}
-                    className="px-2.5 py-1.5 min-h-[44px] min-w-[44px] inline-flex items-center rounded bg-rose-900 border border-rose-500/50 text-rose-200 hover:bg-rose-800 hover:text-white transition font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-                    title={`${critName} 보조금 계산기로 이동`}
-                  >
-                    {critName} ({critRate.toFixed(1)}%)
-                  </button>
-                );
-              })}
+              {(() => {
+                const seenCritKeys = new Set<string>();
+                return criticalRegions.map((crit, idx) => {
+                  const critCat = crit.categories?.[selectedCategory] || crit.categories?.passenger;
+                  const critAnn = Number.isFinite(critCat?.announced_units) ? Math.max(0, critCat.announced_units) : 0;
+                  const critApp = Number.isFinite(critCat?.applied_units) ? Math.max(0, critCat.applied_units) : 0;
+                  const critRate = Number.isFinite(critCat?.depletion_rate)
+                    ? Math.max(0, critCat.depletion_rate)
+                    : critAnn > 0
+                    ? (critApp / critAnn) * 100
+                    : 0;
+                  const baseCritKey = crit.region_id || crit.iso_code || crit.name_ko || `crit-${idx}`;
+                  const critKey = seenCritKeys.has(baseCritKey) ? `${baseCritKey}-${idx}` : baseCritKey;
+                  seenCritKeys.add(critKey);
+                  const critName = crit.name_ko || '해당 지역';
+                  return (
+                    <button
+                      key={critKey}
+                      type="button"
+                      onClick={() => onSelectCriticalRegion(crit.name_ko || '', crit.region_id || critKey)}
+                      aria-label={`${critName} 소진율 ${critRate.toFixed(1)}%, 보조금 계산기로 이동`}
+                      className="px-2.5 py-1.5 min-h-[44px] min-w-[44px] inline-flex items-center rounded bg-rose-900 border border-rose-500/50 text-rose-200 hover:bg-rose-800 hover:text-white transition font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                      title={`${critName} 보조금 계산기로 이동`}
+                    >
+                      {critName} ({critRate.toFixed(1)}%)
+                    </button>
+                  );
+                });
+              })()}
             </div>
           </div>
           <a
@@ -497,7 +506,7 @@ const AlertLegendSection = React.memo(function AlertLegendSection({
 
       <div role="group" aria-label="경보 등급별 필터" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
         {ALERT_TIER_ORDER.map((key) => {
-          const t = thresholds[key] || FALLBACK_THRESHOLDS[key];
+          const t = (hasOwn(thresholds, key) ? thresholds[key] : undefined) || FALLBACK_THRESHOLDS[key];
           const isSelected = alertFilter === key;
           return (
             <button
@@ -708,9 +717,12 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   }, []);
 
   const toggleRegionExpand = useCallback((regionId: string) => {
+    if (!regionId || regionId === '__proto__' || regionId === 'constructor' || regionId === 'prototype') {
+      return;
+    }
     setExpandedRegions((prev) => ({
       ...prev,
-      [regionId]: !prev[regionId],
+      [regionId]: !(hasOwn(prev, regionId) && Boolean(prev[regionId])),
     }));
   }, []);
 
@@ -815,19 +827,22 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
   // Performance & Stability: Memoized regional cards to prevent re-render cascades (skipped in table mode)
   const renderedGridCards = useMemo(() => {
     if (viewMode !== 'grid') return null;
+    const seenKeys = new Set<string>();
     return filteredRegions.map((regionItem, idx) => {
-      const regionKey =
+      const baseKey =
         (typeof regionItem.region_id === 'string' && regionItem.region_id.trim()) ||
         (typeof regionItem.iso_code === 'string' && regionItem.iso_code.trim()) ||
         (typeof regionItem.name_ko === 'string' && regionItem.name_ko.trim()) ||
         `region-${idx}`;
+      const regionKey = seenKeys.has(baseKey) ? `${baseKey}-${idx}` : baseKey;
+      seenKeys.add(regionKey);
       return (
         <RegionCard
           key={regionKey}
           region={regionItem}
           regionKey={regionKey}
           selectedCategory={selectedCategory}
-          isExpanded={Boolean(expandedRegions[regionKey])}
+          isExpanded={hasOwn(expandedRegions, regionKey) ? Boolean(expandedRegions[regionKey]) : false}
           toggleRegionExpand={toggleRegionExpand}
           onSelectForCalc={handleSelectRegionForCalc}
         />
@@ -1001,9 +1016,9 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
         <div className="flex items-center justify-between text-xs text-slate-300 pt-2 border-t border-slate-800">
           <span id="filter-feedback-status" role="status" aria-live="polite" aria-atomic="true">
             {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || deferredSearchQuery.trim() !== '' || supplementaryOnly) ? (
-              <>{activeCategoryShortLabel} · 필터 적용 중: 총 <strong>{filteredRegions.length}</strong>개 지역 표시 중 ({SORT_OPTION_LABELS[sortOption] || ''})</>
+              <>{activeCategoryShortLabel} · 필터 적용 중: 총 <strong>{filteredRegions.length}</strong>개 지역 표시 중 ({hasOwn(SORT_OPTION_LABELS, sortOption) ? SORT_OPTION_LABELS[sortOption] : ''})</>
             ) : (
-              <>{activeCategoryShortLabel} · 전체 <strong>{filteredRegions.length}</strong>개 지역 표시 중 ({SORT_OPTION_LABELS[sortOption] || ''})</>
+              <>{activeCategoryShortLabel} · 전체 <strong>{filteredRegions.length}</strong>개 지역 표시 중 ({hasOwn(SORT_OPTION_LABELS, sortOption) ? SORT_OPTION_LABELS[sortOption] : ''})</>
             )}
           </span>
           {(zoneFilter !== 'ALL' || alertFilter !== 'ALL' || searchQuery.trim() !== '' || supplementaryOnly) && (
@@ -1114,7 +1129,7 @@ export default function SubsidyTrackerClient({ initialData }: SubsidyTrackerClie
               )}
               {alertFilter !== 'ALL' && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-200">
-                  <span>경보: <strong>{thresholds[alertFilter]?.label_ko || alertFilter}</strong></span>
+                  <span>경보: <strong>{(hasOwn(thresholds, alertFilter) ? thresholds[alertFilter]?.label_ko : undefined) || alertFilter}</strong></span>
                   <button
                     type="button"
                     onClick={handleClearAlertFilter}
@@ -1251,7 +1266,7 @@ const RegionCard = React.memo(function RegionCard({
     regionName;
   const expandKey = regionKey || regionId;
   const safeDomId =
-    String((typeof region?.region_id === 'string' && region.region_id.trim()) || expandKey)
+    String(expandKey)
       .trim()
       .replace(/\s+/g, '-') || 'unknown';
   const munis = useMemo(
@@ -1279,6 +1294,7 @@ const RegionCard = React.memo(function RegionCard({
   const shouldRenderMunis = isExpanded || hasBeenExpanded;
   const renderedMunis = useMemo(() => {
     if (!shouldRenderMunis) return null;
+    const seenMuniKeys = new Set<string>();
     return munis.map((muni, idx) => {
       if (!muni || typeof muni !== 'object') return null;
       const muniAnnounced = Number.isFinite(muni.announced_units) ? Math.max(0, muni.announced_units) : 0;
@@ -1294,10 +1310,13 @@ const RegionCard = React.memo(function RegionCard({
       const muniLocalSubsidy = Number.isFinite(muni.local_subsidy_krw) ? Math.max(0, muni.local_subsidy_krw) : 0;
       const muniRawStatus = typeof muni.status === 'string' ? muni.status.trim() : '';
       const muniStatus = normalizeAlertSeverity(muniRawStatus, muniDepletion);
+      const baseMuniKey = muni.muni_id || `${regionId}-${muni.name_ko || idx}`;
+      const muniKey = seenMuniKeys.has(baseMuniKey) ? `${baseMuniKey}-${idx}` : baseMuniKey;
+      seenMuniKeys.add(muniKey);
 
       return (
         <div
-          key={muni.muni_id || `${regionId}-${muni.name_ko || idx}`}
+          key={muniKey}
           className="p-2 rounded bg-slate-950 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px]"
         >
           <div>
@@ -1686,7 +1705,7 @@ const SubsidyCalculator = React.memo(function SubsidyCalculator({
               ) : (
                 models.map((model, idx) => (
                   <option key={model.model_id || `model-${idx}`} value={model.model_id || model.name_ko || ''}>
-                    {model.manufacturer || ''} - {model.name_ko || model.model_id} (출고가 {((Number.isFinite(model.base_price_krw) ? Math.max(0, model.base_price_krw) : 0) / 10000).toLocaleString()}만 원)
+                    {model.manufacturer ? `${model.manufacturer} - ` : ''}{model.name_ko || model.model_id || '차량 모델'} (출고가 {((Number.isFinite(model.base_price_krw) ? Math.max(0, model.base_price_krw) : 0) / 10000).toLocaleString()}만 원)
                   </option>
                 ))
               )}

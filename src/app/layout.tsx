@@ -239,7 +239,7 @@ export default function RootLayout({
               <Link href="/2026-latest" prefetch={false} aria-label="2026 최신 결함 분석" className="text-slate-200 hover:text-white font-medium transition min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
                 2026 최신 결함
               </Link>
-              <Link href="/pdi-checklist" prefetch={false} aria-label="신차 출고 전 점검(PDI) 체크리스트" className="text-slate-200 hover:text-white font-medium transition min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
+              <Link href="/pdi-checklist" prefetch={false} aria-label="PDI 체크리스트 (신차 출고 전 점검)" className="text-slate-200 hover:text-white font-medium transition min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
                 PDI 체크리스트
               </Link>
               <Link href="/hyundai-kia" prefetch={false} aria-label="현대/기아 연식별 피하기 가이드" className="text-slate-200 hover:text-white font-medium transition min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-2.5 py-1.5 rounded hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 aria-[current=page]:bg-slate-800 aria-[current=page]:text-white aria-[current=page]:font-bold aria-[current=page]:ring-1 aria-[current=page]:ring-blue-400/50">
@@ -333,7 +333,7 @@ export default function RootLayout({
                 <Link
                   href="/pdi-checklist"
                   prefetch={false}
-                  aria-label="신차 출고 전 점검(PDI) 체크리스트"
+                  aria-label="PDI 체크리스트 (신차 출고 전 점검)"
                   className="px-3 py-2 min-h-[44px] rounded-lg hover:bg-slate-800 text-slate-200 hover:text-white font-medium transition flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 aria-[current=page]:ring-2 aria-[current=page]:ring-blue-400 aria-[current=page]:bg-slate-800"
                 >
                   <span aria-hidden="true">✅</span> PDI 체크리스트

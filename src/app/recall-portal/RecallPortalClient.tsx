@@ -489,6 +489,8 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
       setSelectedBrand(nextBrand);
       const nextModels = getModelsForBrand(nextBrand, initialDatabase);
       setSelectedModel(nextModels[0] || '');
+    } else if (availableModels.length === 0 && selectedModel !== '') {
+      setSelectedModel('');
     } else if (availableModels.length > 0 && !availableModels.includes(selectedModel)) {
       setSelectedModel(availableModels[0]);
     }
@@ -1148,7 +1150,7 @@ export default function RecallPortalClient({ initialDatabase }: RecallPortalClie
                     </span>
                     <span className="text-xs font-mono text-slate-300">
                       <span className="sr-only">
-                        현재 입력된 자리수: {vinInput.replace(/[\s-]/g, '').length} / 17
+                        현재 입력된 자리수: {cleanVinLength} / 17
                       </span>
                       <span aria-hidden="true">
                         {vinInput.replace(/[\s-]/g, '').length}/17
@@ -2193,6 +2195,7 @@ export const RecallCard = React.memo(function RecallCard({
 
   const targetModel = campaign.target_model || '해당 차종';
   const brand = campaign.brand || '해당 제조사';
+  const defectTitle = campaign.defect_title || '안전 리콜 캠페인';
   const years = campaign.target_model_years || '전체 연식';
   const defectDetail = campaign.defect_detail || '공식 결함 정보 공시 대조 중입니다.';
   const remedyAction = campaign.remedy_action || '제조사 공식 서비스센터 방문 무상 점검 및 시정 조치';
@@ -2254,7 +2257,7 @@ export const RecallCard = React.memo(function RecallCard({
           type="button"
           aria-expanded={isExpanded}
           aria-controls={`${panelIdPrefix}${campaign.id}`}
-          aria-label={`${targetModel} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '상세 및 행동요령 펼치기'}`}
+          aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 닫기' : '상세 및 행동요령 펼치기'}`}
           onClick={() => toggleRecallExpansion(campaign.id)}
           className="self-start text-xs text-blue-300 hover:text-blue-200 font-semibold px-2.5 py-1 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded bg-slate-800 border border-slate-700 hover:bg-slate-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
         >
@@ -2302,7 +2305,7 @@ export const RecallCard = React.memo(function RecallCard({
                 href={safeLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label={`${brand} ${campaign.defect_title} 공식 웹사이트 바로가기 (새 창에서 열림)`}
+                aria-label={`${brand} ${defectTitle} 공식 웹사이트 바로가기 (새 창에서 열림)`}
                 className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 min-h-[44px] px-2 rounded-lg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
               >
                 공식 웹사이트 바로가기 &rarr;
@@ -2311,7 +2314,7 @@ export const RecallCard = React.memo(function RecallCard({
             ) : (
               <a
                 href={safeLink}
-                aria-label={`${brand} ${campaign.defect_title} 관련 안내 바로가기`}
+                aria-label={`${brand} ${defectTitle} 관련 안내 바로가기`}
                 className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 min-h-[44px] px-2 rounded-lg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
               >
                 관련 안내 바로가기 &rarr;
@@ -2448,19 +2451,22 @@ export const RecallTableView = React.memo(function RecallTableView({
             const isExpanded = expandedRecallIds.has(campaign.id);
             const safeLink = sanitizeSafeUrl(campaign.official_link);
             const isExternal = isExternalUrl(safeLink);
+            const brand = campaign.brand || '해당 제조사';
+            const targetModel = campaign.target_model || '해당 차종';
+            const defectTitle = campaign.defect_title || '안전 리콜 캠페인';
             return (
               <React.Fragment key={campaign.id || `${campaign.campaign_no}-${idx}`}>
                 <tr className={`transition hover:bg-slate-900/60 ${isExpanded ? 'bg-slate-900/40' : ''}`}>
                   <th scope="row" className="p-3.5 font-mono text-blue-300 font-bold whitespace-nowrap">
                     {campaign.campaign_no || '미부여'}
                   </th>
-                  <td className="p-3.5 text-slate-200 whitespace-nowrap">{campaign.brand || '해당 제조사'}</td>
+                  <td className="p-3.5 text-slate-200 whitespace-nowrap">{brand}</td>
                   <td className="p-3.5 font-medium text-white whitespace-nowrap">
-                    {campaign.target_model || '해당 차종'}{' '}
+                    {targetModel}{' '}
                     <span className="text-xs text-slate-300">({campaign.target_model_years || '전체 연식'})</span>
                   </td>
-                  <td className="p-3.5 text-slate-200 max-w-xs truncate" title={campaign.defect_title || '안전 리콜 캠페인'}>
-                    {campaign.defect_title || '안전 리콜 캠페인'}
+                  <td className="p-3.5 text-slate-200 max-w-xs truncate" title={defectTitle}>
+                    {defectTitle}
                   </td>
                   <td className="p-3.5 text-center whitespace-nowrap">
                     <span
@@ -2505,7 +2511,7 @@ export const RecallTableView = React.memo(function RecallTableView({
                       id={`table-toggle-${campaign.id}`}
                       aria-expanded={isExpanded}
                       aria-controls={`${panelIdPrefix}${campaign.id}`}
-                      aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 접기' : '상세 펼치기'}`}
+                      aria-label={`${campaign.target_model} ${campaign.defect_title} ${isExpanded ? '상세 닫기' : '상세 펼치기'}`}
                       onClick={() => toggleRecallExpansion(campaign.id)}
                       onKeyDown={(e) => {
                         if (e.key === 'Escape' && isExpanded) {
@@ -2569,7 +2575,7 @@ export const RecallTableView = React.memo(function RecallTableView({
                                 href={safeLink}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                aria-label={`${campaign.brand} ${campaign.defect_title} 공식 웹사이트 바로가기 (새 창에서 열림)`}
+                                aria-label={`${brand} ${defectTitle} 공식 웹사이트 바로가기 (새 창에서 열림)`}
                                 className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 min-h-[44px] px-2 rounded-lg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                               >
                                 공식 웹사이트 바로가기 &rarr;
@@ -2578,7 +2584,7 @@ export const RecallTableView = React.memo(function RecallTableView({
                             ) : (
                               <a
                                 href={safeLink}
-                                aria-label={`${campaign.brand} ${campaign.defect_title} 관련 안내 바로가기`}
+                                aria-label={`${brand} ${defectTitle} 관련 안내 바로가기`}
                                 className="text-blue-300 hover:text-blue-200 inline-flex items-center gap-1 min-h-[44px] px-2 rounded-lg hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                               >
                                 관련 안내 바로가기 &rarr;

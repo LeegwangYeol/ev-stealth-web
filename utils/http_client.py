@@ -323,7 +323,7 @@ def encode_euc_kr_query(param: Union[str, Dict[str, Any], None]) -> str:
 
 
 _RE_HTML_COMMENT = re.compile(r"<!--.*?-->", flags=re.DOTALL)
-_RE_HTML_SCRIPT_STYLE = re.compile(r"<(script|style)[^>]*>(?:.*?</\1>|.*$)", flags=re.DOTALL | re.IGNORECASE)
+_RE_HTML_SCRIPT_STYLE = re.compile(r"<(script|style)[^>]*>(?:.*?(</\1>)|.*$)", flags=re.DOTALL | re.IGNORECASE)
 _RE_HTML_BLOCK_TAGS = re.compile(r"<(br|p|/p|div|/div|li|/li|h\d|/h\d|tr|/tr|dt|/dt|dd|/dd)[^>]*>", flags=re.IGNORECASE)
 _RE_HTML_TAGS = re.compile(r"<[^>]+>")
 _RE_HTML_TRAILING = re.compile(r"<[a-zA-Z/][^<]*$")
@@ -360,8 +360,20 @@ def clean_html_text(raw_html: Union[str, bytes, Any]) -> str:
     if last_comment_end != -1:
         end_idx = last_comment_end + 3
         cleaned = _RE_HTML_COMMENT.sub(" ", cleaned[:end_idx]) + cleaned[end_idx:]
-    # Remove script and style elements (handling unclosed tags gracefully)
-    cleaned = _RE_HTML_SCRIPT_STYLE.sub(" ", cleaned)
+    # Remove script and style elements (bound scan to last '>' to prevent O(N^2) backtracking on unclosed '<script'/'<style')
+    last_gt = cleaned.rfind(">")
+    if last_gt != -1:
+        end_idx = last_gt + 1
+        unclosed_tail = False
+
+        def _replace_script_style(m: re.Match[str]) -> str:
+            nonlocal unclosed_tail
+            if m.group(2) is None:
+                unclosed_tail = True
+            return " "
+
+        cleaned_prefix = _RE_HTML_SCRIPT_STYLE.sub(_replace_script_style, cleaned[:end_idx])
+        cleaned = cleaned_prefix if unclosed_tail else (cleaned_prefix + cleaned[end_idx:])
     # Replace block level tags with newlines (bound scan to last '>' to prevent O(N^2) backtracking)
     last_gt = cleaned.rfind(">")
     if last_gt != -1:
@@ -535,12 +547,21 @@ class ResilientHTTPSConnection(http.client.HTTPSConnection):
             self.source_address,
             allow_private_ips=self._allow_private_ips,
         )
-        if self._read_timeout is not None:
-            self.sock.settimeout(self._read_timeout)
-        if self._tunnel_host:
-            self._tunnel()
-        server_hostname = (self._tunnel_host or self.host) if ssl.HAS_SNI else None
-        self.sock = self._context.wrap_socket(self.sock, server_hostname=server_hostname)
+        try:
+            if self._read_timeout is not None:
+                self.sock.settimeout(self._read_timeout)
+            if self._tunnel_host:
+                self._tunnel()
+            server_hostname = (self._tunnel_host or self.host) if ssl.HAS_SNI else None
+            self.sock = self._context.wrap_socket(self.sock, server_hostname=server_hostname)
+        except Exception:
+            if self.sock is not None:
+                try:
+                    self.sock.close()
+                except OSError:
+                    pass
+                self.sock = None
+            raise
 
 
 class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -1501,8 +1522,14 @@ class SafeHttpClient:
 
         has_custom_ua = bool(
             self.user_agent
-            or (self.default_headers and any(k.lower() == "user-agent" for k in self.default_headers))
-            or (headers and any(k.lower() == "user-agent" for k in headers))
+            or (
+                self.default_headers
+                and any(v is not None and str(k).strip().lower() == "user-agent" for k, v in self.default_headers.items())
+            )
+            or (
+                headers
+                and any(v is not None and str(k).strip().lower() == "user-agent" for k, v in headers.items())
+            )
         )
 
         payload_bytes: Optional[bytes] = None

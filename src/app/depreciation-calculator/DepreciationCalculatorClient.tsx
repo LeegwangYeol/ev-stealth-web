@@ -288,20 +288,20 @@ const ModelGridCard = memo(function ModelGridCard({
           : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
       }`}
     >
-      <div>
-        <div className="flex items-center justify-between gap-1 mb-1">
+      <span className="block">
+        <span className="flex items-center justify-between gap-1 mb-1">
           <span className="text-xs font-semibold text-slate-700">
             {model.brand_name_ko} ({model.brand_name_en})
           </span>
           {getDefenseTierBadge(model.resale_defense_tier)}
-        </div>
+        </span>
 
-        <div className="text-sm font-bold text-slate-900 line-clamp-1">
+        <span className="block text-sm font-bold text-slate-900 line-clamp-1">
           {model.model_name}
-        </div>
-        <div className="text-xs text-slate-700 mb-2">{model.segment}</div>
+        </span>
+        <span className="block text-xs text-slate-700 mb-2">{model.segment}</span>
 
-        <div className="flex flex-wrap items-center gap-1.5 mb-2">
+        <span className="flex flex-wrap items-center gap-1.5 mb-2">
           {getChemistryBadge(model.battery_specs?.chemistry ?? 'NCM_811')}
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-900 border border-slate-300">
             {Number.isFinite(model.battery_specs?.capacity_kwh) && model.battery_specs.capacity_kwh > 0 ? model.battery_specs.capacity_kwh : 77.4} kWh
@@ -315,28 +315,28 @@ const ModelGridCard = memo(function ModelGridCard({
           >
             {model.battery_specs?.voltage_architecture ?? '400V'}
           </span>
-        </div>
-      </div>
+        </span>
+      </span>
 
-      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-        <div>
+      <span className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+        <span>
           <span className="text-slate-700">출고가:</span>{' '}
           <span className="font-semibold text-slate-800">
             {msrpManWon.toLocaleString('ko-KR')}만 원
           </span>
-        </div>
-        <div>
+        </span>
+        <span>
           <span className="text-slate-700">실구매:</span>{' '}
           <span className="font-bold text-blue-700">
             {netManWon.toLocaleString('ko-KR')}만 원
           </span>
-        </div>
-      </div>
+        </span>
+      </span>
 
       {isSelected && (
-        <div aria-hidden="true" className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow">
+        <span aria-hidden="true" className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow">
           ✓
-        </div>
+        </span>
       )}
     </button>
   );
@@ -657,12 +657,16 @@ export default function DepreciationCalculatorClient({
 
   const evDiff = useMemo(() => {
     const raw = depResult.adjustedResidualPct - currentEvBenchmark;
-    return Number.isFinite(raw) && Math.abs(raw) >= 0.05 ? raw : 0;
+    if (!Number.isFinite(raw)) return 0;
+    const rounded = Math.round(raw * 10) / 10;
+    return Object.is(rounded, -0) || rounded === 0 ? 0 : rounded;
   }, [depResult.adjustedResidualPct, currentEvBenchmark]);
 
   const iceDiff = useMemo(() => {
     const raw = depResult.adjustedResidualPct - currentIceBenchmark;
-    return Number.isFinite(raw) && Math.abs(raw) >= 0.05 ? raw : 0;
+    if (!Number.isFinite(raw)) return 0;
+    const rounded = Math.round(raw * 10) / 10;
+    return Object.is(rounded, -0) || rounded === 0 ? 0 : rounded;
   }, [depResult.adjustedResidualPct, currentIceBenchmark]);
 
   // Multi-year comparison projection (1~5 years)
@@ -1062,7 +1066,7 @@ export default function DepreciationCalculatorClient({
           aria-labelledby={`brand-tab-${activeBrand}`}
           aria-busy={searchQuery !== deferredSearchQuery}
           tabIndex={0}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[380px] overflow-y-auto pr-1 rounded-xl focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[380px] overflow-y-auto pt-2 pr-2 pb-1 rounded-xl focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
         >
           {filteredModels.length === 0 ? (
             <div className="col-span-full py-12 px-4 text-center text-slate-700 bg-slate-50 rounded-xl border border-dashed border-slate-300">
@@ -1563,7 +1567,7 @@ export default function DepreciationCalculatorClient({
               <desc id="dep-chart-desc">1년차부터 5년차까지 {selectedModel.model_name}의 연차별 예상 잔존 시세 및 잔존율을 전기차 전체 평균 및 동급 가솔린 내연기관 차량과 비교하는 시각화 차트입니다.</desc>
               {/* Grid Lines */}
               {[0, 1, 2, 3, 4].map((i) => {
-                const y = 30 + i * 50;
+                const y = 30 + i * 40;
                 const pct = 100 - i * 20;
                 const priceVal = Math.round((currentPurchasePrice * pct) / 100 / 10000);
                 const priceLabel = priceVal >= 100000 ? `${Math.round(priceVal / 10000).toLocaleString('ko-KR')}억` : `${priceVal.toLocaleString('ko-KR')}만`;
@@ -1646,7 +1650,7 @@ export default function DepreciationCalculatorClient({
                       fill={isSelectedYear ? '#3b82f6' : '#2563eb'}
                       className="transition-all duration-300 motion-reduce:transition-none hover:opacity-90"
                     >
-                      <title>{`${selectedModel.model_name} ${pt.year}년차: ${chartViewMode === 'price' ? `${Math.round(safeEvPrice / 10000).toLocaleString('ko-KR')}만 원` : `${safeEvPct.toFixed(0)}%`}`}</title>
+                      <title>{`${selectedModel.model_name} ${pt.year}년차: ${chartViewMode === 'price' ? `${formatNonNegativeManWon(safeEvPrice).toLocaleString('ko-KR')}만 원` : `${safeEvPct.toFixed(0)}%`}`}</title>
                     </rect>
                     <text
                       x={groupX - 19}
@@ -1671,7 +1675,7 @@ export default function DepreciationCalculatorClient({
                       fill="#10b981"
                       className="transition-all duration-300 motion-reduce:transition-none hover:opacity-90"
                     >
-                      <title>{`${pt.year}년차 전기차 전체 평균: ${chartViewMode === 'price' ? `${Math.round(safeEvAvgPrice / 10000).toLocaleString('ko-KR')}만 원` : `${safeEvAvgPct.toFixed(0)}%`}`}</title>
+                      <title>{`${pt.year}년차 전기차 전체 평균: ${chartViewMode === 'price' ? `${formatNonNegativeManWon(safeEvAvgPrice).toLocaleString('ko-KR')}만 원` : `${safeEvAvgPct.toFixed(0)}%`}`}</title>
                     </rect>
 
                     {/* Bar 3: ICE Benchmark */}
@@ -1684,7 +1688,7 @@ export default function DepreciationCalculatorClient({
                       fill="#94a3b8"
                       className="transition-all duration-300 motion-reduce:transition-none hover:opacity-90"
                     >
-                      <title>{`${pt.year}년차 동급 내연기관(가솔린): ${chartViewMode === 'price' ? `${Math.round(safeIcePrice / 10000).toLocaleString('ko-KR')}만 원` : `${safeIcePct.toFixed(0)}%`}`}</title>
+                      <title>{`${pt.year}년차 동급 내연기관(가솔린): ${chartViewMode === 'price' ? `${formatNonNegativeManWon(safeIcePrice).toLocaleString('ko-KR')}만 원` : `${safeIcePct.toFixed(0)}%`}`}</title>
                     </rect>
 
                     {/* X-axis Year Label */}
@@ -1704,6 +1708,9 @@ export default function DepreciationCalculatorClient({
 
               {/* Bottom Baseline */}
               <line x1="60" y1="230" x2="680" y2="230" stroke="#64748b" strokeWidth="2" />
+              <text x="50" y="234" textAnchor="end" fill="#cbd5e1" fontSize="11">
+                {chartViewMode === 'price' ? '0만' : '0%'}
+              </text>
             </svg>
 
             {/* Screen Reader Accessible Data Table Alternative */}
@@ -1723,7 +1730,7 @@ export default function DepreciationCalculatorClient({
                   {multiYearProjection.map((pt) => (
                     <tr key={pt.year}>
                       <th scope="row">{pt.year}년차{pt.isCurrent ? ' (현재 선택)' : ''}</th>
-                      <td>{Math.round((Number.isFinite(pt.evResidualPriceKrw) ? pt.evResidualPriceKrw : 0) / 10000).toLocaleString('ko-KR')}만 원</td>
+                      <td>{formatNonNegativeManWon(pt.evResidualPriceKrw).toLocaleString('ko-KR')}만 원</td>
                       <td>{(Number.isFinite(pt.evResidualPct) ? pt.evResidualPct : 0).toFixed(1)}%</td>
                       <td>{(Number.isFinite(pt.evClassAvgPct) ? pt.evClassAvgPct : 0).toFixed(1)}%</td>
                       <td>{(Number.isFinite(pt.iceBenchmarkPct) ? pt.iceBenchmarkPct : 0).toFixed(1)}%</td>
@@ -2548,7 +2555,7 @@ export default function DepreciationCalculatorClient({
           </div>
 
           <div className="bg-white px-4 py-2 rounded-lg border border-slate-300 font-extrabold text-slate-900 text-sm whitespace-normal sm:whitespace-nowrap break-keep text-center sm:text-right">
-            순 경제적 이점: <span className="text-blue-700">{formatSignedManWon(tcoResult.totalCumulativeSavingsKrw)}만 원</span>
+            순 경제적 이점: <span className={tcoResult.totalCumulativeSavingsKrw < 0 ? 'text-rose-700' : 'text-blue-700'}>{formatSignedManWon(tcoResult.totalCumulativeSavingsKrw)}만 원</span>
           </div>
         </div>
       </section>

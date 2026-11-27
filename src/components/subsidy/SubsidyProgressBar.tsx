@@ -24,29 +24,30 @@ export interface SubsidyProgressBarProps {
  * - Healthy (< 60% or 'HEALTHY' / 'AVAILABLE'): emerald-400 text, bg-emerald-500 bar
  */
 export const getDepletionColor = (rate: number, status?: string) => {
+  const safeRate = typeof rate === 'number' && Number.isFinite(rate) ? rate : 0;
   const norm = (status || '').trim().toUpperCase();
-  if (norm === 'DEPLETED' || norm === 'EXHAUSTED' || norm === 'CLOSED' || norm === 'END' || rate >= 100) {
+  if (norm === 'DEPLETED' || norm === 'EXHAUSTED' || norm === 'CLOSED' || norm === 'END' || safeRate >= 100) {
     return {
       text: 'text-slate-300',
       bar: 'bg-slate-500',
       dot: 'bg-slate-500',
     };
   }
-  if (norm === 'CRITICAL' || norm === 'DANGER' || norm === 'EMERGENCY' || rate >= 95) {
+  if (norm === 'CRITICAL' || norm === 'DANGER' || norm === 'EMERGENCY' || safeRate >= 95) {
     return {
       text: 'text-rose-400',
       bar: 'bg-rose-500',
       dot: 'bg-rose-500',
     };
   }
-  if (norm === 'WARNING' || rate >= 80) {
+  if (norm === 'WARNING' || safeRate >= 80) {
     return {
       text: 'text-orange-400',
       bar: 'bg-orange-500',
       dot: 'bg-orange-500',
     };
   }
-  if (norm === 'CAUTION' || rate >= 60) {
+  if (norm === 'CAUTION' || safeRate >= 60) {
     return {
       text: 'text-amber-400',
       bar: 'bg-amber-400',

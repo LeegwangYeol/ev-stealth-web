@@ -905,6 +905,8 @@ def build_initial_baseline(regions: Optional[List[Any]] = None) -> SubsidyPayloa
     """Construct full initial baseline SubsidyPayload."""
     if regions is None:
         regions = build_baseline_regions()
+    else:
+        regions = [r for r in regions if r is not None]
     popular_models = build_popular_models()
     history = build_historical_trajectory()
 

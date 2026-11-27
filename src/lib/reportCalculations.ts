@@ -532,9 +532,12 @@ const DEDUP_NOISE_PARAMS = new Set([
 
 function canonicalizeReportUrlForDedup(rawUrl: string): string {
   try {
-    const parsed = new URL(rawUrl);
-    const host = parsed.hostname.toLowerCase().replace(/\.+$/, '');
-    const pathname = parsed.pathname.replace(/\/+$/, '');
+    const isRelative = rawUrl.startsWith('/');
+    const parsed = isRelative ? new URL(rawUrl, 'http://safe-internal.local') : new URL(rawUrl);
+    const host = isRelative ? '' : parsed.hostname.toLowerCase().replace(/\.+$/, '');
+    const pathname = isRelative
+      ? (parsed.pathname.replace(/\/+$/, '') || '/')
+      : parsed.pathname.replace(/\/+$/, '');
     const keptParams: Array<[string, string]> = [];
     for (const [rawKey, rawVal] of parsed.searchParams.entries()) {
       const key = rawKey.toLowerCase();

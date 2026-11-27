@@ -97,26 +97,25 @@ RE_ESNO_INPUT = re.compile(
 )
 
 
+_RE_TD_OPEN = re.compile(r"<td(?=[\s>/])", re.IGNORECASE)
+_RE_TD_CLOSE = re.compile(r"</td\s*>", re.IGNORECASE)
+
+
 def _extract_td_inner_by_class(row_html: str, class_token: str) -> Optional[str]:
     """Extract inner HTML of the first <td> with class_token in strict O(N) time."""
     if not row_html or not class_token:
         return None
-    lower_html = row_html.lower()
     token_lower = class_token.lower()
     pos = 0
-    n = len(lower_html)
+    n = len(row_html)
     while pos < n:
-        td_start = lower_html.find("<td", pos)
-        if td_start == -1:
+        m = _RE_TD_OPEN.search(row_html, pos)
+        if not m:
             return None
-        after_td = td_start + 3
-        if after_td < n and lower_html[after_td] not in (" ", "\t", "\n", "\r", ">", "/"):
-            pos = after_td
-            continue
-        gt_idx = lower_html.find(">", after_td)
+        gt_idx = row_html.find(">", m.end())
         if gt_idx == -1:
             return None
-        attrs = row_html[after_td:gt_idx]
+        attrs = row_html[m.end() : gt_idx]
         if token_lower in attrs.lower():
             cls_m = re.search(
                 r'(?<![\w-])class\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))',
@@ -125,10 +124,10 @@ def _extract_td_inner_by_class(row_html: str, class_token: str) -> Optional[str]
             )
             cls_val = (cls_m.group(1) or cls_m.group(2) or cls_m.group(3) or "") if cls_m else ""
             if token_lower in cls_val.lower().split():
-                close_idx = lower_html.find("</td>", gt_idx + 1)
-                if close_idx == -1:
+                close_m = _RE_TD_CLOSE.search(row_html, gt_idx + 1)
+                if not close_m:
                     return None
-                return row_html[gt_idx + 1 : close_idx]
+                return row_html[gt_idx + 1 : close_m.start()]
         pos = gt_idx + 1
     return None
 
@@ -748,7 +747,7 @@ class DCInsideCrawler(BaseCrawler):
             a_scan_html = _slice_to_last_close_tag(scan_html, "</a")
             if a_scan_html:
                 alt_no_re = re.compile(
-                    r'(?:view/?\?[^\s"\'>]*?(?:^|[?&])no=|/(?:board|mgallery(?:/board)?|mini(?:/board)?)/[\w\-]+/|/view/)(\d+)',
+                    r'(?:view/?(?=\?)[^\s"\'>]*?[?&]no=|/(?:board|mgallery(?:/board)?|mini(?:/board)?)/[\w\-]+/|/view/)(\d+)',
                     re.IGNORECASE,
                 )
                 for _, a_attrs, raw_title in _iter_tag_elements(a_scan_html, a_scan_html, "a", allow_nesting=False):

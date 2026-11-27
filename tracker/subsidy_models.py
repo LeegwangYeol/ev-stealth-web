@@ -1471,6 +1471,24 @@ class SubsidyPayload:
         """Alias for get_model."""
         return self.get_model(model_id_or_name)
 
+    @staticmethod
+    def _extract_status_and_rate(region: Any) -> tuple[str, float]:
+        """Extract normalized status string and depletion rate from a RegionRecord or dict."""
+        if isinstance(region, dict):
+            st_raw = _first_non_blank(region, "overall_status", "status", default="")
+            rate_raw = _first_non_blank(region, "overall_depletion_rate", "depletion_rate", default=0.0)
+        else:
+            st_raw = getattr(region, "overall_status", None)
+            if st_raw is None or (isinstance(st_raw, str) and not st_raw.strip()):
+                st_raw = getattr(region, "status", "")
+            rate_raw = getattr(region, "overall_depletion_rate", None)
+            if rate_raw is None:
+                rate_raw = getattr(region, "depletion_rate", 0.0)
+        st = getattr(st_raw, "value", st_raw)
+        st_str = str(st or "").split(".")[-1].strip().upper()
+        rate = max(0.0, _safe_float(rate_raw, 0.0))
+        return st_str, rate
+
     def get_critical_regions(self) -> List[RegionRecord]:
         """Return list of regions categorized as CRITICAL or DEPLETED (depletion rate >= 95%)."""
         if not self.regions or not isinstance(self.regions, (list, tuple)):
@@ -1479,10 +1497,7 @@ class SubsidyPayload:
         for r in self.regions:
             if r is None:
                 continue
-            st_raw = r.get("overall_status", "") if hasattr(r, "get") else getattr(r, "overall_status", "")
-            st = getattr(st_raw, "value", st_raw)
-            st_str = str(st).split(".")[-1].strip().upper()
-            rate = _safe_float(r.get("overall_depletion_rate", 0.0) if hasattr(r, "get") else getattr(r, "overall_depletion_rate", 0.0))
+            st_str, rate = self._extract_status_and_rate(r)
             if st_str in ("CRITICAL", "DEPLETED") or rate >= 95.0:
                 res.append(r if isinstance(r, RegionRecord) else RegionRecord.from_dict(r))
         return res
@@ -1495,10 +1510,7 @@ class SubsidyPayload:
         for r in self.regions:
             if r is None:
                 continue
-            st_raw = r.get("overall_status", "") if hasattr(r, "get") else getattr(r, "overall_status", "")
-            st = getattr(st_raw, "value", st_raw)
-            st_str = str(st).split(".")[-1].strip().upper()
-            rate = _safe_float(r.get("overall_depletion_rate", 0.0) if hasattr(r, "get") else getattr(r, "overall_depletion_rate", 0.0))
+            st_str, rate = self._extract_status_and_rate(r)
             if st_str in ("CRITICAL", "DEPLETED") or rate >= 95.0:
                 continue
             if st_str == "WARNING" or (80.0 <= rate < 95.0):
@@ -1513,10 +1525,7 @@ class SubsidyPayload:
         for r in self.regions:
             if r is None:
                 continue
-            st_raw = r.get("overall_status", "") if hasattr(r, "get") else getattr(r, "overall_status", "")
-            st = getattr(st_raw, "value", st_raw)
-            st_str = str(st).split(".")[-1].strip().upper()
-            rate = _safe_float(r.get("overall_depletion_rate", 0.0) if hasattr(r, "get") else getattr(r, "overall_depletion_rate", 0.0))
+            st_str, rate = self._extract_status_and_rate(r)
             if st_str not in ("CRITICAL", "DEPLETED", "WARNING") and rate < 80.0:
                 res.append(r if isinstance(r, RegionRecord) else RegionRecord.from_dict(r))
         return res

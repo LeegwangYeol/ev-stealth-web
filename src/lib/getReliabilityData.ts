@@ -455,7 +455,7 @@ export function getBrandReliabilityById(
   brandId: string,
   data?: ReliabilityTrendsDatabase | null
 ): BrandReliability | undefined {
-  return getBrandReliabilityByIdPure(brandId, data === undefined ? getReliabilityTrendsData() : data);
+  return getBrandReliabilityByIdPure(brandId, data === undefined ? ensureTrendsDatabaseLoaded() : data);
 }
 
 /**
@@ -478,7 +478,7 @@ export function resolveBrandReliability(
   brandQuery: string,
   data?: ReliabilityTrendsDatabase | null
 ): BrandReliability | undefined {
-  return resolveBrandReliabilityPure(brandQuery, data === undefined ? getReliabilityTrendsData() : data);
+  return resolveBrandReliabilityPure(brandQuery, data === undefined ? ensureTrendsDatabaseLoaded() : data);
 }
 
 /**
@@ -490,7 +490,7 @@ export function getBrandWithFallback(
   fallback?: BrandReliability,
   data?: ReliabilityTrendsDatabase | null
 ): BrandReliability {
-  return getBrandWithFallbackPure(brandId, fallback, data === undefined ? getReliabilityTrendsData() : data);
+  return getBrandWithFallbackPure(brandId, fallback, data === undefined ? ensureTrendsDatabaseLoaded() : data);
 }
 
 /**

@@ -18,6 +18,7 @@ Authoritative reference:
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import unicodedata
@@ -222,6 +223,16 @@ MALFUNCTION_CUES: Tuple[str, ...] = (
     "경고등", "중단", "안 켜", "미작동", "소리 안", "소리도 안", "소리안", "버튼식",
     "불량", "버그", "안 나", "꺼지", "꺼짐", "꺼졌"
 )
+_WEATHERSTRIP_MALFUNCTION_CUES: Tuple[str, ...] = (
+    *MALFUNCTION_CUES,
+    "이탈", "찢어", "빠져", "빠졌", "빠짐", "덜렁", "들뜸", "들떠", "틈새", "풍절음", "누수",
+)
+
+
+def _has_feature_malfunction_cue(term_lower: str, text_lower: str) -> bool:
+    """Return True if a neutral feature term is accompanied by a relevant malfunction cue."""
+    cues = _WEATHERSTRIP_MALFUNCTION_CUES if term_lower == "웨더스트립" else MALFUNCTION_CUES
+    return any(mc in text_lower for mc in cues)
 
 # Pre-sorted immutable collections for zero-overhead inner loop evaluation
 _SORTED_COMPOUND_RULES: Dict[str, Tuple[str, ...]] = {
@@ -472,8 +483,9 @@ class DefectClassifier:
         feature_terms = {"v2l", "깜빡이", "웨더스트립"}
         for e in matched_slang:
             if e.defect_category is not None:
-                if e.term.lower() in feature_terms:
-                    if any(mc in text_lower for mc in MALFUNCTION_CUES):
+                term_lower = e.term.lower()
+                if term_lower in feature_terms:
+                    if _has_feature_malfunction_cue(term_lower, text_lower):
                         has_symptom = True
                         break
                 else:
@@ -638,9 +650,13 @@ class DefectClassifier:
             ):
                 continue
 
-            # Double-negation / persistent defect: '안 없어지고', '안 없어져요', '없어지지 않고'
+            # Double-negation / persistent defect: '안 없어지고', '안없어지고', '안 없어져요', '없어지지 않고', '없어지지않고'
+            if w_strip.startswith(("안없어", "못없어")):
+                continue
             if w_strip.startswith(("없어지", "없어져", "없어졌", "없어진")) or "없어지" in w_strip or "없어졌" in w_strip:
                 if j > 0 and window[j - 1] == "안":
+                    continue
+                if any(p in w_strip for p in ("지않", "질않", "진않", "도않", "지못", "질못")):
                     continue
                 if j + 1 < len(window) and any(
                     window[j + 1].startswith(p) for p in ("않", "못", "안")
@@ -807,12 +823,8 @@ class DefectClassifier:
         # Pre-filter lexicon entries once at document level so per-clause scans only check relevant terms
         if slang_matches is not None:
             matched_slang_terms = {e.term for e in slang_matches}
-            doc_lower = text_str.lower() if text_str is not None else ""
             doc_slang_pairs = tuple(
-                p
-                for p in _SLANG_TERM_LOWER_PAIRS
-                if p[0].term in matched_slang_terms
-                or (p[0].term in ("씰", "밥솥") and (text_str is None or p[2] in doc_lower))
+                p for p in _SLANG_TERM_LOWER_PAIRS if p[0].term in matched_slang_terms
             )
         elif text_str is not None:
             doc_lower = text_str.lower()
@@ -889,8 +901,8 @@ class DefectClassifier:
 
             for slang_entry, slang_nfc, slang_lower in doc_slang_pairs:
                 term = slang_entry.term
-                if term.lower() in ("v2l", "깜빡이", "웨더스트립"):
-                    if not any(mc in clause_lower for mc in MALFUNCTION_CUES):
+                if slang_lower in ("v2l", "깜빡이", "웨더스트립"):
+                    if not _has_feature_malfunction_cue(slang_lower, clause_lower):
                         continue
                 if not matches_slang_entry(slang_entry, clause, clause_lower, term_lower=slang_lower):
                     continue
@@ -997,13 +1009,17 @@ class DefectClassifier:
         text_lower: str,
     ) -> List[SlangEntry]:
         """Exclude neutral feature terms unless accompanied by a malfunction cue."""
-        has_malfunction_cue: Optional[bool] = None
+        cue_cache: Dict[str, bool] = {}
         filtered: List[SlangEntry] = []
         for entry in slang_matches:
-            if entry.term.lower() in ("v2l", "깜빡이", "웨더스트립"):
-                if has_malfunction_cue is None:
-                    has_malfunction_cue = any(mc in text_lower for mc in MALFUNCTION_CUES)
-                if not has_malfunction_cue:
+            term_lower = entry.term.lower()
+            if term_lower in ("v2l", "깜빡이", "웨더스트립"):
+                cue_key = "웨더스트립" if term_lower == "웨더스트립" else "default"
+                has_cue = cue_cache.get(cue_key)
+                if has_cue is None:
+                    has_cue = _has_feature_malfunction_cue(term_lower, text_lower)
+                    cue_cache[cue_key] = has_cue
+                if not has_cue:
                     continue
             filtered.append(entry)
         return filtered
@@ -1106,18 +1122,24 @@ class DefectClassifier:
         text_lower = text_str.lower()
         actionable_slang = self._filter_actionable_slang(slang_matches, text_lower)
 
+        cat_key = category if isinstance(category, str) else ""
+        if isinstance(polarity, bool) or not isinstance(polarity, (int, float)) or not math.isfinite(polarity):
+            safe_polarity = 0.0
+        else:
+            safe_polarity = float(polarity)
+
         confidence = 0.0
 
         # 1. Technical component keyword from category map
         has_comp_kw = any(
-            matches_category_keyword(category, kw, text_lower)
-            for kw in CATEGORY_KEYWORD_MAP.get(category, [])
+            matches_category_keyword(cat_key, kw, text_lower)
+            for kw in CATEGORY_KEYWORD_MAP.get(cat_key, [])
         )
         if has_comp_kw:
             confidence += 0.20
 
         # 2. Defect slang entry for this category
-        cat_slang = [e for e in actionable_slang if e.defect_category == category]
+        cat_slang = [e for e in actionable_slang if e.defect_category == cat_key]
         if cat_slang:
             max_sev = max(e.severity_weight for e in cat_slang)
             confidence += 0.25 * (max_sev / 5.0)
@@ -1135,15 +1157,15 @@ class DefectClassifier:
             confidence += 0.15
 
         # 5. High-precision compound defect match
-        category_compounds = COMPOUND_DEFECT_RULES.get(category, [])
+        category_compounds = COMPOUND_DEFECT_RULES.get(cat_key, [])
         if any(_matches_compound_phrase(cp, text_lower) for cp in category_compounds):
             confidence += 0.20
 
         # False-positive suppression penalties
         if negated_defects:
             confidence -= 0.40
-        if polarity > 0.0:
-            confidence -= 0.30 * polarity
+        if safe_polarity > 0.0:
+            confidence -= 0.30 * safe_polarity
         if len(text_str) < 25:
             confidence -= 0.15
 

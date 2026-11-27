@@ -101,10 +101,29 @@ def _mask_comments_and_scripts(html_str: str) -> str:
 
 def _slice_to_last_close_tag(html_str: str, close_prefix: str) -> str:
     """Bound regex dotall scans to the last matching closing tag (e.g. '</a', '</tr') to prevent O(N^2) ReDoS."""
-    idx = html_str.lower().rfind(close_prefix)
-    if idx == -1:
+    if not html_str or not close_prefix:
         return ""
-    gt_idx = html_str.find(">", idx)
+    if close_prefix.startswith("</"):
+        prefix_lower = close_prefix.lower()
+        plen = len(prefix_lower)
+        pos = len(html_str)
+        while pos > 0:
+            idx = html_str.rfind("</", 0, pos)
+            if idx == -1:
+                return ""
+            if html_str[idx : idx + plen].lower() == prefix_lower:
+                gt_idx = html_str.find(">", idx + plen)
+                if gt_idx == -1:
+                    return ""
+                return html_str[: gt_idx + 1]
+            pos = idx
+        return ""
+    last_idx = -1
+    for m in re.finditer(re.escape(close_prefix), html_str, re.IGNORECASE):
+        last_idx = m.start()
+    if last_idx == -1:
+        return ""
+    gt_idx = html_str.find(">", last_idx + len(close_prefix))
     if gt_idx == -1:
         return ""
     return html_str[: gt_idx + 1]
@@ -274,54 +293,50 @@ def _strip_elements_by_class(
     partial: bool = True,
 ) -> str:
     """Remove balanced elements matching class_token in strict O(N) time."""
-    if not html_str or class_token.lower() not in html_str.lower():
+    if not html_str or not tag_names or not class_token or class_token.lower() not in html_str.lower():
         return html_str
     tags_alt = "|".join(re.escape(t) for t in tag_names)
-    open_re = re.compile(rf"<({tags_alt})(?=[\s>/])", re.IGNORECASE)
-    parts: List[str] = []
+    token_re = re.compile(rf"<(/?)({tags_alt})(?=[\s>/])", re.IGNORECASE)
+    stacks: Dict[str, List[Tuple[int, bool]]] = {}
+    spans: List[Tuple[int, int]] = []
     pos = 0
     n = len(html_str)
     while pos < n:
-        m = open_re.search(html_str, pos)
+        m = token_re.search(html_str, pos)
         if not m:
-            parts.append(html_str[pos:])
             break
         gt_idx = html_str.find(">", m.end())
         if gt_idx == -1:
-            parts.append(html_str[pos:])
             break
-        attrs = html_str[m.end() : gt_idx]
-        if attrs.rstrip().endswith("/") or not _has_class_token(attrs, class_token, partial=partial):
-            parts.append(html_str[pos : gt_idx + 1])
-            pos = gt_idx + 1
-            continue
-        t_esc = re.escape(m.group(1))
-        token_re = re.compile(rf"<(/?){t_esc}(?=[\s>/])", re.IGNORECASE)
-        depth = 1
-        scan_pos = gt_idx + 1
-        close_end = -1
-        while scan_pos < n:
-            tm = token_re.search(html_str, scan_pos)
-            if not tm:
-                break
-            t_gt = html_str.find(">", tm.end())
-            if t_gt == -1:
-                break
-            t_attrs = html_str[tm.end() : t_gt]
-            scan_pos = t_gt + 1
-            if tm.group(1):
-                depth -= 1
-                if depth == 0:
-                    close_end = t_gt + 1
-                    break
-            elif not t_attrs.rstrip().endswith("/"):
-                depth += 1
-        if close_end == -1:
-            parts.append(html_str[pos : gt_idx + 1])
-            pos = gt_idx + 1
+        is_close = bool(m.group(1))
+        tname = m.group(2).lower()
+        pos = gt_idx + 1
+        if is_close:
+            stk = stacks.get(tname)
+            if stk:
+                open_start, is_target = stk.pop()
+                if is_target:
+                    spans.append((open_start, pos))
         else:
-            parts.append(html_str[pos : m.start()])
-            pos = close_end
+            attrs = html_str[m.end() : gt_idx]
+            if attrs.rstrip().endswith("/"):
+                continue
+            is_target = _has_class_token(attrs, class_token, partial=partial)
+            stacks.setdefault(tname, []).append((m.start(), is_target))
+
+    if not spans:
+        return html_str
+    spans.sort()
+    parts: List[str] = []
+    cursor = 0
+    for s, e in spans:
+        if e <= cursor:
+            continue
+        if s > cursor:
+            parts.append(html_str[cursor:s])
+        cursor = e
+    if cursor < n:
+        parts.append(html_str[cursor:])
     return "".join(parts)
 
 

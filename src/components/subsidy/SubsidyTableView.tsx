@@ -170,6 +170,7 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
   const shouldRenderMunis = isExpanded || hasBeenExpanded;
   const renderedMunis = useMemo(() => {
     if (!shouldRenderMunis) return null;
+    const seenMuniKeys = new Set<string>();
     return munis.map((muni, idx) => {
       if (!muni || typeof muni !== 'object') return null;
       const muniAnnounced = toSafeNonNeg(muni.announced_units);
@@ -184,9 +185,12 @@ const SubsidyTableRow = memo(function SubsidyTableRow({
         : 0;
       const muniLocalSubsidy = toSafeNonNeg(muni.local_subsidy_krw);
       const muniStatus = normalizeTableStatus(muni.status, muniDepletion);
+      const baseMuniKey = muni.muni_id || `${regionId}-${muni.name_ko || 'muni'}-${idx}`;
+      const muniKey = seenMuniKeys.has(baseMuniKey) ? `${baseMuniKey}-${idx}` : baseMuniKey;
+      seenMuniKeys.add(muniKey);
 
       return (
-        <tr key={muni.muni_id || `${regionId}-${muni.name_ko || 'muni'}-${idx}`} className="group hover:bg-slate-900/50">
+        <tr key={muniKey} className="group hover:bg-slate-900/50">
           <th scope="row" className="p-2 font-medium text-slate-200 sticky left-0 bg-slate-950 group-hover:bg-slate-900 z-10 border-r border-slate-800">
             {muni.name_ko || '세부 지자체'}
           </th>
@@ -431,19 +435,25 @@ export const SubsidyTableView = memo(function SubsidyTableView({
   );
 
   const renderedRows = useMemo(() => {
+    const seenKeys = new Set<string>();
     return validRegions.map((region, idx) => {
-      const regionKey =
+      const baseKey =
         (typeof region.region_id === 'string' && region.region_id.trim()) ||
         (typeof region.iso_code === 'string' && region.iso_code.trim()) ||
         (typeof region.name_ko === 'string' && region.name_ko.trim()) ||
         `region-${idx}`;
+      const regionKey = seenKeys.has(baseKey) ? `${baseKey}-${idx}` : baseKey;
+      seenKeys.add(regionKey);
+      const isExpanded = Object.prototype.hasOwnProperty.call(expandedRegions, regionKey)
+        ? Boolean(expandedRegions[regionKey])
+        : false;
       return (
         <SubsidyTableRow
           key={regionKey}
           region={region}
           regionKey={regionKey}
           selectedCategory={selectedCategory}
-          isExpanded={Boolean(expandedRegions[regionKey])}
+          isExpanded={isExpanded}
           onToggleExpand={onToggleExpand}
           onSelectForCalc={onSelectForCalc}
         />

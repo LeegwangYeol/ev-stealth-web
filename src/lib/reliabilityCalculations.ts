@@ -784,7 +784,9 @@ export function getModelReliabilityById(
   data?: ReliabilityTrendsDatabase | null
 ): EnrichedModelItem | undefined {
   if (!modelId || typeof modelId !== 'string' || !data || !Array.isArray(data.brands)) return undefined;
-  const normalized = modelId.trim().toLowerCase().replace(/[\s\-_]+/g, '');
+  const trimmedLower = modelId.trim().toLowerCase();
+  if (!trimmedLower || FORBIDDEN_RECORD_KEYS.has(trimmedLower)) return undefined;
+  const normalized = trimmedLower.replace(/[\s\-_]+/g, '');
   if (!normalized) return undefined;
 
   let exactNameMatch: { brand: BrandReliability; model: ModelReliability } | undefined;
@@ -869,7 +871,7 @@ export function getBrandReliabilityById(
 ): BrandReliability | undefined {
   if (!brandId || typeof brandId !== 'string') return undefined;
   const normalized = brandId.trim().toLowerCase();
-  if (!normalized) return undefined;
+  if (!normalized || FORBIDDEN_RECORD_KEYS.has(normalized)) return undefined;
   const brands = Array.isArray(data?.brands)
     ? data.brands.filter((b): b is BrandReliability => Boolean(b && typeof b === 'object'))
     : [];
@@ -1318,7 +1320,7 @@ export function resolveBrandReliability(
 ): BrandReliability | undefined {
   if (!brandQuery || typeof brandQuery !== 'string') return undefined;
   const clean = brandQuery.trim().toLowerCase();
-  if (!clean || clean === 'all') return undefined;
+  if (!clean || clean === 'all' || FORBIDDEN_RECORD_KEYS.has(clean)) return undefined;
 
   const brands = Array.isArray(data?.brands)
     ? data.brands.filter((b): b is BrandReliability => Boolean(b && typeof b === 'object'))
@@ -1779,7 +1781,10 @@ export function aggregateQuarterlyDefectBreakdown(
       year = Math.floor(directYear);
     }
 
-    if (item.quarter !== undefined && item.quarter !== null) {
+    if (
+      (typeof item.quarter === 'number' && Number.isFinite(item.quarter)) ||
+      typeof item.quarter === 'string'
+    ) {
       const qStr = String(item.quarter).trim().toUpperCase();
       const match = qStr.match(/^(?:Q)?([1-4])$/);
       if (match) {

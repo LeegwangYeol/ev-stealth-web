@@ -753,9 +753,9 @@ export function getCategoryDepletion(
     remainingUnits: safeRemaining,
     depletionRate: safeRate,
     status,
-    formattedRemaining: safeRemaining.toLocaleString(),
-    formattedAnnounced: safeAnnounced.toLocaleString(),
-    formattedApplied: safeApplied.toLocaleString(),
+    formattedRemaining: safeRemaining.toLocaleString('ko-KR'),
+    formattedAnnounced: safeAnnounced.toLocaleString('ko-KR'),
+    formattedApplied: safeApplied.toLocaleString('ko-KR'),
   };
 }
 

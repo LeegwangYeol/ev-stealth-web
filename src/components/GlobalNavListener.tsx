@@ -33,9 +33,15 @@ export const GlobalNavListener = memo(function GlobalNavListener() {
 
   // Route change synchronization: update aria-current="page" and auto-close mobile drawer
   useEffect(() => {
-    const currentPath = normalizePath(pathname);
+    const rawPath =
+      typeof pathname === 'string' && pathname.length > 0
+        ? pathname
+        : typeof window !== 'undefined'
+        ? window.location.pathname
+        : null;
     const header = document.querySelector('header');
-    if (header) {
+    if (header && rawPath) {
+      const currentPath = normalizePath(rawPath);
       const allNavLinks = header.querySelectorAll<HTMLAnchorElement>(
         'nav a, #mobile-nav-panel a, a[aria-label*="Global EV Hub"]'
       );
@@ -196,7 +202,7 @@ export const GlobalNavListener = memo(function GlobalNavListener() {
           )
         ).filter(
           (el) =>
-            (el.offsetParent !== null || el === summary) &&
+            (el.offsetParent !== null || el.getClientRects().length > 0 || el === summary) &&
             !el.hasAttribute('hidden') &&
             el.getAttribute('aria-hidden') !== 'true'
         );

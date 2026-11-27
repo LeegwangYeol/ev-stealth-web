@@ -96,7 +96,7 @@ export type {
 export const DEFAULT_FALLBACK_DEPRECIATION_DATABASE: DepreciationDatabase = {
   metadata: {
     version: '1.0.0-fallback',
-    generated_at: new Date().toISOString(),
+    generated_at: '2026-01-01T00:00:00.000Z',
     total_models: 0,
     brands_count: 0,
     currency: 'KRW',
@@ -561,10 +561,7 @@ export function getDepreciationDatabase(): DepreciationDatabase {
       for (const chemKey of Object.keys(fb.chemistries) as BatteryChemistryType[]) {
         const candidate = rawChemistries[chemKey];
         if (isPlainRecord(candidate)) {
-          normalizedChemistries[chemKey] = {
-            ...fb.chemistries[chemKey],
-            ...(candidate as Partial<BatteryChemistryProfile>),
-          };
+          normalizedChemistries[chemKey] = mergeSafeRecord(fb.chemistries[chemKey], candidate);
         }
       }
       const rawTaxParams: Record<string, unknown> = isPlainRecord(rawTco.tax_parameters)
@@ -582,9 +579,8 @@ export function getDepreciationDatabase(): DepreciationDatabase {
       >;
       for (const [chemKey, candidate] of Object.entries(rawAdjBatteryChem)) {
         if (
-          chemKey === '__proto__' ||
-          chemKey === 'constructor' ||
-          chemKey === 'prototype'
+          FORBIDDEN_RECORD_KEYS.has(chemKey.toLowerCase()) ||
+          chemKey in Object.prototype
         ) {
           continue;
         }
@@ -592,15 +588,15 @@ export function getDepreciationDatabase(): DepreciationDatabase {
           const baseEntry = Object.prototype.hasOwnProperty.call(fb.adjustment_factors.battery_chemistry, chemKey)
             ? (fb.adjustment_factors.battery_chemistry as Record<string, BatteryChemistryAdjustment>)[chemKey]
             : undefined;
-          normalizedAdjBatteryChem[chemKey] = {
-            ...(baseEntry ?? {
+          normalizedAdjBatteryChem[chemKey] = mergeSafeRecord(
+            baseEntry ?? {
               cycle_life_bonus_yr3_5: 0,
               winter_seasonal_discount: -0.01,
               fire_safety_reputation_bonus: 0,
               description: '',
-            }),
-            ...(candidate as Partial<BatteryChemistryAdjustment>),
-          };
+            },
+            candidate
+          );
         }
       }
 

@@ -10,6 +10,7 @@ import hashlib
 import html
 import json
 import logging
+import math
 import os
 import random
 import re
@@ -46,6 +47,18 @@ from scrapers.common_utils import (
 )
 
 logger = logging.getLogger("DCInsideScraper")
+
+
+def _is_truthy_flag(value: Any) -> bool:
+    """Interpret boolean, numeric, and string flags without treating '0'/'N'/'false' as True."""
+    if value is None or isinstance(value, bool):
+        return bool(value)
+    if isinstance(value, (int, float)):
+        return math.isfinite(value) and value != 0
+    if isinstance(value, str):
+        norm = value.strip().lower()
+        return norm not in ("", "0", "n", "no", "false", "none", "null")
+    return bool(value)
 
 DC_BASE_URL = "https://gall.dcinside.com"
 DC_MOBILE_BASE_URL = "https://m.dcinside.com"
@@ -336,7 +349,10 @@ class DCInsideScraper:
                 for c in comments_data:
                     if not isinstance(c, dict):
                         continue
-                    if str(c.get("del_yn") or "").upper() == "Y" or bool(c.get("is_delete")):
+                    if (
+                        str(c.get("del_yn") or "").strip().upper() == "Y"
+                        or _is_truthy_flag(c.get("is_delete"))
+                    ):
                         continue
                     memo = c.get("memo") or c.get("comment_memo") or c.get("msg") or ""
                     cleaned = clean_html_text(str(memo))

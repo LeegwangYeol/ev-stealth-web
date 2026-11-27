@@ -16,7 +16,7 @@ import json
 import math
 from pathlib import Path
 import re
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import unicodedata
 import uuid
 
@@ -554,7 +554,7 @@ class RawPost:
         if data is None or isinstance(data, (int, float, bool, list, tuple, set, frozenset, str, bytes, bytearray, memoryview, range, complex)):
             return cls()
         def _get(k: str, default: Any = "") -> Any:
-            if isinstance(data, dict):
+            if isinstance(data, Mapping):
                 return data.get(k, default)
             return getattr(data, k, default)
 
@@ -695,7 +695,7 @@ def validate_report_entry(entry: Any, strict: bool = False) -> Tuple[bool, str]:
         return False, f"Invalid entry type: {type(entry).__name__}, expected dict or mapping"
 
     def _get(k: str, default: Any = None) -> Any:
-        if isinstance(entry, dict):
+        if isinstance(entry, Mapping):
             return entry.get(k, default)
         return getattr(entry, k, default)
 
@@ -758,7 +758,7 @@ def validate_report_entry(entry: Any, strict: bool = False) -> Tuple[bool, str]:
 def quarantine_entry(entry: Any, reason: str = "") -> Dict[str, Any]:
     """Wraps an invalid report entry into a quarantined record container."""
     now_iso = datetime.now(timezone.utc).isoformat()
-    if isinstance(entry, dict):
+    if isinstance(entry, Mapping):
         raw_data = dict(entry)
     elif hasattr(entry, "to_dict") and callable(entry.to_dict):
         raw_data = entry.to_dict()
@@ -1122,7 +1122,7 @@ class ComplaintRecord:
             data = {}
 
         def _get(key: str, default: Any = None) -> Any:
-            if isinstance(data, dict):
+            if isinstance(data, Mapping):
                 return data.get(key, default)
             return getattr(data, key, default)
 
@@ -1450,7 +1450,7 @@ class DailyReportStatistics:
                 avg_negativity_score=_safe_float(data.avg_negativity_score),
                 critical_defect_count=max(0, _safe_int(data.critical_defect_count)),
             )
-        if not isinstance(data, dict):
+        if not isinstance(data, Mapping):
             return cls()
         return cls(
             total_scraped=max(0, _safe_int(data.get("total_scraped", 0))),
@@ -1502,7 +1502,7 @@ def _serialize_report_entry(r: Any) -> Dict[str, Any]:
         return _sanitize_json_value(r.to_admin_report_dict())
     if hasattr(r, "to_dict") and callable(r.to_dict):
         return _sanitize_json_value(r.to_dict())
-    if isinstance(r, dict):
+    if isinstance(r, Mapping):
         return _sanitize_json_value(r)
     return {}
 
@@ -1593,11 +1593,11 @@ class DailyReportPayload:
             "pipeline_version": sanitize_string(self.pipeline_version, max_len=64) or "1.0.0",
             "statistics": stats_dict,
             "total_complaints_today": max(0, _safe_int(self.total_complaints_today)),
-            "top_defect_categories": [_sanitize_json_value(c) for c in top_cats if isinstance(c, dict)],
+            "top_defect_categories": [_sanitize_json_value(c) for c in top_cats if isinstance(c, Mapping)],
             "reports": [_serialize_report_entry(r) for r in reports_list],
         }
         if quarantined_list:
-            res["quarantined_reports"] = [_sanitize_json_value(q) for q in quarantined_list if isinstance(q, dict)]
+            res["quarantined_reports"] = [_sanitize_json_value(q) for q in quarantined_list if isinstance(q, Mapping)]
         return res
 
     @classmethod
@@ -1628,7 +1628,7 @@ class DailyReportPayload:
                 empty.quarantine_entry(str(data)[:1000], f"Corrupt JSON payload: {e}")
                 return empty
 
-        if not isinstance(data, dict):
+        if not isinstance(data, Mapping):
             empty = cls(generated_at=datetime.now(timezone.utc).isoformat())
             if data is not None:
                 empty.quarantine_entry(data, f"Invalid payload type: {type(data).__name__}")
@@ -1640,7 +1640,7 @@ class DailyReportPayload:
         raw_stats = data.get("statistics")
         if isinstance(raw_stats, DailyReportStatistics):
             stats = DailyReportStatistics.from_dict(raw_stats)
-        elif isinstance(raw_stats, dict):
+        elif isinstance(raw_stats, Mapping):
             stats = DailyReportStatistics.from_dict(raw_stats)
         else:
             stats = DailyReportStatistics()
@@ -1653,7 +1653,7 @@ class DailyReportPayload:
         raw_pre_quarantined = data.get("quarantined_reports")
         if isinstance(raw_pre_quarantined, (list, tuple)):
             for q in raw_pre_quarantined:
-                if isinstance(q, dict):
+                if isinstance(q, Mapping):
                     quarantined.append(dict(q))
 
         if isinstance(raw_reports, (list, tuple)):
@@ -1668,7 +1668,7 @@ class DailyReportPayload:
                     valid_reports.append(_serialize_report_entry(r))
 
         raw_cats = data.get("top_defect_categories")
-        top_cats = [dict(c) for c in raw_cats if isinstance(c, dict)] if isinstance(raw_cats, (list, tuple)) else []
+        top_cats = [dict(c) for c in raw_cats if isinstance(c, Mapping)] if isinstance(raw_cats, (list, tuple)) else []
 
         tot_complaints = max(0, _safe_int(data.get("total_complaints_today", len(valid_reports))))
 

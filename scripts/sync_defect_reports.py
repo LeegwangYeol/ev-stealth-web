@@ -854,9 +854,9 @@ def get_default_known_paths(
                 if (cand_root / "data").is_dir():
                     additional.append(cand_root / "data" / "daily_reports.json")
         if has_root_dir:
-            r_parent = Path(str(root_dir).strip()).parent
-            if (r_parent / "public" / "data").is_dir():
-                additional.append(r_parent / "public" / "data" / "daily_reports.json")
+            for root_pub_base in (root_path.parent, root_path.parent.parent):
+                if (root_pub_base / "public" / "data").is_dir():
+                    additional.append(root_pub_base / "public" / "data" / "daily_reports.json")
     else:
         additional = [
             repo_root / "ev-stealth-web" / "data" / "daily_reports.json",

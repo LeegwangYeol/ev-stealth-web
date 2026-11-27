@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import logging
+import math
 import os
 from pathlib import Path
 import shutil
@@ -305,8 +306,10 @@ def sync_defect_reports(
             public_reports_paths.append(Path(web_dir).parent / "public" / "data" / "daily_reports.json")
         if web_dir and (Path(web_dir).parent.parent / "public" / "data").exists():
             public_reports_paths.append(Path(web_dir).parent.parent / "public" / "data" / "daily_reports.json")
-        if root_dir and (Path(root_dir).parent / "public" / "data").exists():
-            public_reports_paths.append(Path(root_dir).parent / "public" / "data" / "daily_reports.json")
+        if root_dir:
+            for root_pub_base in (root_reports_path.parent, root_reports_path.parent.parent):
+                if (root_pub_base / "public" / "data").exists():
+                    public_reports_paths.append(root_pub_base / "public" / "data" / "daily_reports.json")
     else:
         external_web_only = False
         if web_dir:
@@ -359,15 +362,29 @@ def sync_defect_reports(
             seen_pub.add(r_str)
             deduped_public.append(p)
 
+    def _sanitize_timeout(val: Any, default: float) -> float:
+        if isinstance(val, bool) or val is None:
+            return default
+        try:
+            num = float(val)
+            if math.isfinite(num) and num > 0:
+                return num
+        except (TypeError, ValueError):
+            pass
+        return default
+
+    safe_lock_timeout = _sanitize_timeout(lock_timeout, 15.0)
+    safe_stale_timeout = _sanitize_timeout(stale_timeout, 60.0)
+
     lock_base_dir = web_reports_path.parent if external_web_only else root_reports_path.parent
     sync_lock_path = lock_base_dir / ".sync_defect_reports.lock"
     if not external_web_only:
-        cleanup_stale_lock_files(root_reports_path.parent, prefix=(".sync_",), max_age_seconds=stale_timeout)
+        cleanup_stale_lock_files(root_reports_path.parent, prefix=(".sync_",), max_age_seconds=safe_stale_timeout)
     if web_reports_path.parent.is_dir() and (external_web_only or web_reports_path.parent != root_reports_path.parent):
-        cleanup_stale_lock_files(web_reports_path.parent, prefix=(".sync_",), max_age_seconds=stale_timeout)
+        cleanup_stale_lock_files(web_reports_path.parent, prefix=(".sync_",), max_age_seconds=safe_stale_timeout)
     written_paths: List[str] = []
 
-    with FileLock(sync_lock_path, timeout=lock_timeout, stale_timeout=stale_timeout):
+    with FileLock(sync_lock_path, timeout=safe_lock_timeout, stale_timeout=safe_stale_timeout):
         if run_crawler:
             try:
                 from run_scraper import ScraperPipeline

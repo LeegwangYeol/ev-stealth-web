@@ -1621,6 +1621,25 @@ class SubsidyTracker:
                     f"Cache content must be a JSON object (dict), got {type(cached_dict).__name__}"
                 )
 
+            if validate:
+                raw_regions = cached_dict.get("regions")
+                if raw_regions is None:
+                    raw_regions = cached_dict.get("regional_subsidies")
+                if not isinstance(raw_regions, list) or len(raw_regions) < 17:
+                    raise ValueError(
+                        f"Invalid cache schema: expected >= 17 regions, found {len(raw_regions) if isinstance(raw_regions, list) else 0}"
+                    )
+                for idx, raw_r in enumerate(raw_regions):
+                    if not isinstance(raw_r, dict):
+                        raise ValueError(
+                            f"Corrupted region record at index {idx}: expected dict, got {type(raw_r).__name__}"
+                        )
+                    raw_cats = raw_r.get("categories")
+                    if raw_cats is None or not isinstance(raw_cats, dict):
+                        raise ValueError(
+                            f"Corrupted region record at index {idx}: missing categories dictionary"
+                        )
+
             payload = SubsidyPayload.from_dict(cached_dict)
 
             if validate:

@@ -1919,7 +1919,7 @@ export function calculateNetSubsidyPure(
   } else if (depletionRate >= 80.0) {
     warningNotice = `⚠️ ${regionDisplayName}의 승용 보조금 소진율이 ${depletionRate.toFixed(1)}%에 달해 조기 마감 위험이 높습니다.`;
   } else {
-    warningNotice = `✅ ${regionDisplayName}의 보조금 잔여량이 비교적 여유롭습니다 (${safeRemainingUnits.toLocaleString()}대 잔여).`;
+    warningNotice = `✅ ${regionDisplayName}의 보조금 잔여량이 비교적 여유롭습니다 (${safeRemainingUnits.toLocaleString('ko-KR')}대 잔여).`;
   }
 
   return {
@@ -2105,18 +2105,18 @@ export function calculateSubsidyStatistics(dataset?: Partial<EVSubsidyDataset> |
 
 export function formatCurrencyKrw(krw: number): string {
   if (!Number.isFinite(krw) || krw <= 0) return '0원';
-  return `${Math.round(krw).toLocaleString()}원`;
+  return `${Math.round(krw).toLocaleString('ko-KR')}원`;
 }
 
 export function formatManwon(krw: number): string {
   if (!Number.isFinite(krw) || krw <= 0) return '0만 원';
   const manwon = Math.round(krw / 10_000);
-  return `${manwon.toLocaleString()}만 원`;
+  return `${manwon.toLocaleString('ko-KR')}만 원`;
 }
 
 export function formatBillionKrw(billion: number): string {
   if (!Number.isFinite(billion) || billion <= 0) return '0억 원';
-  return `${billion.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}억 원`;
+  return `${billion.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}억 원`;
 }
 
 export function formatDepletionRate(rate: number): string {

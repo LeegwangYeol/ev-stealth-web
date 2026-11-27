@@ -659,6 +659,16 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
         const cleanBrand = maskReportPii(r.vehicle_brand) || normBrand;
         const safeCatKo = maskReportPii(catKo) || catKo;
 
+        const rawSafeId =
+          (typeof r.id === 'string' || typeof r.id === 'number') && String(r.id).trim()
+            ? String(r.id).trim()
+            : `report_${idx + 1}`;
+        const safeId = typeof r.id === 'string' ? (maskReportPii(rawSafeId) || `report_${idx + 1}`) : rawSafeId;
+        const cleanSource =
+          maskSensitiveData(stripHtmlTags(typeof r.source === 'string' ? r.source : ''))
+            .trim()
+            .toLowerCase() || 'bobaedream';
+
         const searchTokens = [
           maskedTitle,
           maskedSummary,
@@ -667,8 +677,8 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           cleanBrand,
           normBrand,
           maskedAuthor,
-          r.id ? String(r.id) : '',
-          catKo,
+          safeId ? String(safeId) : '',
+          safeCatKo,
           ...slangList,
         ];
         const searchIndex = searchTokens.join(' ').normalize('NFC').toLowerCase();
@@ -684,16 +694,6 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             displayDate = candidateYmd;
           }
         }
-
-        const rawSafeId =
-          (typeof r.id === 'string' || typeof r.id === 'number') && String(r.id).trim()
-            ? String(r.id).trim()
-            : `report_${idx + 1}`;
-        const safeId = typeof r.id === 'string' ? (maskReportPii(rawSafeId) || `report_${idx + 1}`) : rawSafeId;
-        const cleanSource =
-          maskSensitiveData(stripHtmlTags(typeof r.source === 'string' ? r.source : ''))
-            .trim()
-            .toLowerCase() || 'bobaedream';
 
         return {
           ...r,
@@ -734,7 +734,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
 
     const criticalCount = typeof rawStats?.critical_defect_count === 'number' && Number.isFinite(rawStats.critical_defect_count)
       ? Math.max(0, Math.floor(rawStats.critical_defect_count)) + 0
-      : reports.filter((r) => String(r.severity || '').toUpperCase() === 'CRITICAL').length;
+      : reports.filter((r) => String(r.severity || '').trim().toUpperCase().includes('CRITICAL')).length;
 
     const avgScore = typeof rawStats?.avg_negativity_score === 'number' && Number.isFinite(rawStats.avg_negativity_score)
       ? getSafeSentimentScore(rawStats.avg_negativity_score, 0.85)
@@ -979,8 +979,12 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
           }
           const sevA = String(a.severity || '').trim().toUpperCase();
           const sevB = String(b.severity || '').trim().toUpperCase();
-          const weightA = SEVERITY_WEIGHT[sevA] ?? 0;
-          const weightB = SEVERITY_WEIGHT[sevB] ?? 0;
+          const weightA = Object.prototype.hasOwnProperty.call(SEVERITY_WEIGHT, sevA)
+            ? SEVERITY_WEIGHT[sevA]
+            : 0;
+          const weightB = Object.prototype.hasOwnProperty.call(SEVERITY_WEIGHT, sevB)
+            ? SEVERITY_WEIGHT[sevB]
+            : 0;
           if (weightB !== weightA) return weightB - weightA;
           if ((b.sentiment_score || 0) !== (a.sentiment_score || 0)) {
             return (b.sentiment_score || 0) - (a.sentiment_score || 0);
@@ -1271,7 +1275,7 @@ export default function AdminDashboardClient({ initialData }: AdminDashboardClie
             className="mt-2 w-full bg-slate-50 rounded-full h-2 overflow-hidden border border-slate-300"
           >
             <div
-              className="bg-amber-600 h-2 rounded-full transition-all duration-500"
+              className="bg-amber-700 h-2 rounded-full transition-all duration-500 motion-reduce:transition-none"
               style={{ width: `${Math.round(safeScore * 100)}%` }}
             />
           </div>
